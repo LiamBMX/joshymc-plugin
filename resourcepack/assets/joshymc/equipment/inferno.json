@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "joshymc:inferno"
+      }
+    ],
+    "humanoid_leggings": [
+      {
+        "texture": "joshymc:inferno"
+      }
+    ]
+  }
+}

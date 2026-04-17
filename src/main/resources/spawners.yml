@@ -1,0 +1,124 @@
+# Custom Spawners — these are SEPARATE from vanilla spawners.
+# Vanilla spawners (found in dungeons, mineshafts, etc.) still work normally:
+# they spawn mobs, can be silk-touched, and have no GUI.
+#
+# Custom spawners are bought from /spawner (shop GUI) or given by admins. They:
+#   - Don't spawn mobs (they generate drops directly into a storage chest)
+#   - Have a right-click GUI for storage / sell-all / disable
+#   - Are owner-locked (only the player who placed it can pick it up)
+#   - Stack on top of each other
+#   - Integrate with hoppers (place a hopper below to auto-extract)
+#
+# Each spawner type below defines its mob, drops, timing, and shop price.
+#
+# Fields:
+#   display-name: Item name in inventory and GUI title
+#   mob: Vanilla EntityType used for the spinning mob inside the spawner
+#   interval-seconds: How often drops are generated (default 30)
+#   buy-price: Cost to purchase from /spawner shop (omit or set to -1 to hide)
+#   drops-per-interval:
+#     min: Minimum drop rolls per interval
+#     max: Maximum drop rolls per interval (random in range)
+#   drops:
+#     - material: Bukkit Material name
+#       amount: How many per roll (default 1)
+#       sell-price: Sell value per item via "Sell All"
+#       chance: 0.0-1.0 probability (default 1.0)
+
+spawners:
+  zombie:
+    display-name: "&aZombie Spawner"
+    mob: ZOMBIE
+    interval-seconds: 30
+    buy-price: 25000
+    drops-per-interval:
+      min: 1
+      max: 3
+    drops:
+      - material: ROTTEN_FLESH
+        amount: 2
+        sell-price: 5
+      - material: IRON_INGOT
+        amount: 1
+        sell-price: 50
+        chance: 0.15
+      - material: CARROT
+        amount: 1
+        sell-price: 8
+        chance: 0.30
+
+  skeleton:
+    display-name: "&fSkeleton Spawner"
+    mob: SKELETON
+    interval-seconds: 30
+    buy-price: 30000
+    drops-per-interval:
+      min: 1
+      max: 3
+    drops:
+      - material: BONE
+        amount: 1
+        sell-price: 8
+      - material: ARROW
+        amount: 2
+        sell-price: 3
+
+  spider:
+    display-name: "&8Spider Spawner"
+    mob: SPIDER
+    interval-seconds: 30
+    buy-price: 35000
+    drops-per-interval:
+      min: 1
+      max: 2
+    drops:
+      - material: STRING
+        amount: 1
+        sell-price: 6
+      - material: SPIDER_EYE
+        amount: 1
+        sell-price: 12
+        chance: 0.4
+
+  creeper:
+    display-name: "&2Creeper Spawner"
+    mob: CREEPER
+    interval-seconds: 30
+    buy-price: 50000
+    drops-per-interval:
+      min: 1
+      max: 2
+    drops:
+      - material: GUNPOWDER
+        amount: 1
+        sell-price: 15
+
+  blaze:
+    display-name: "&6Blaze Spawner"
+    mob: BLAZE
+    interval-seconds: 30
+    buy-price: 100000
+    drops-per-interval:
+      min: 1
+      max: 2
+    drops:
+      - material: BLAZE_ROD
+        amount: 1
+        sell-price: 75
+
+  iron_golem:
+    display-name: "&7Iron Golem Spawner"
+    mob: IRON_GOLEM
+    interval-seconds: 30
+    buy-price: 250000
+    drops-per-interval:
+      min: 1
+      max: 2
+    drops:
+      - material: IRON_INGOT
+        amount: 1
+        sell-price: 50
+      - material: POPPY
+        amount: 1
+        sell-price: 2
+        chance: 0.5

@@ -1,0 +1,253 @@
+# Resource pack — served automatically by the plugin
+# The plugin bundles the pack and hosts it via a built-in HTTP server.
+# port: the port the HTTP server listens on (default 8163)
+# host: the hostname/IP players use to download the pack
+#       leave blank for "localhost" (local testing)
+#       set to your server's public IP or domain for production
+resource-pack:
+  port: 8163
+  host: ""
+
+# Global prefix for all in-game plugin messages
+prefix: "&b&lJoshyMC &8» &r"
+
+# Feature Toggles — set to false to disable a system entirely
+features:
+  talismans: true
+  custom-fishing: true
+  skills: true
+  quests: true
+  market: true
+  trails: true
+  kill-effects: true
+  join-effects: true
+  emotes: true
+  glow: true
+  gadgets: true
+  custom-enchants: true
+  anticheat: true
+  combat-log-npc: true
+  resource-world: true
+  voting: true
+  portals: true
+  arenas: true
+
+# Chat formatting
+chat:
+  # Format for player messages. Placeholders: {prefix}, {suffix}, {tag}, {player}, {message}
+  format: "{prefix}{tag}{player}{suffix} &8» &f{message}"
+
+discord:
+  # Bot token from https://discord.com/developers/applications
+  token: "YOUR_BOT_TOKEN_HERE"
+
+  # Channel ID for chat bridge + events (all in one channel)
+  channel-id: "000000000000000000"
+
+  # Format for messages sent TO Discord from Minecraft
+  # Placeholders: {player}, {message}
+  chat-format: "**{player}** » {message}"
+
+  # Format for messages sent TO Minecraft from Discord
+  # Placeholders: {name}, {message}
+  minecraft-format: "&9[Discord] &f{name} &7» &f{message}"
+
+# Recipe Blocker — block players from crafting specific items
+# Use material names from: https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Material.html
+recipe-blocker:
+  blocked-items:
+    # - TNT
+    # - END_CRYSTAL
+
+# Combat — PvP toggle, combat tagging, flight/elytra disable
+combat:
+  tag-duration-seconds: 15
+
+# Lag Cleaner — entity-threshold-based, only clears when needed
+# Checks entity counts every check-interval-seconds
+# Triggers a 30s countdown (with warnings at 30s, 10s, 3s) when thresholds are exceeded
+# Protected entities: villagers, NPCs, ender dragon, wither, armor stands, named/leashed mobs
+lag-cleaner:
+  enabled: true
+  entity-threshold: 500
+  item-threshold: 200
+  check-interval-seconds: 30
+
+# Mining — Veinminer, Auto Smelt, Tree Feller
+mining:
+  veinminer-max-blocks: 64
+  treefeller-max-logs: 128
+
+# Warps — player warps limit (server warps are unlimited, admin only)
+warps:
+  player-max-per-player: 3
+
+# Homes
+homes:
+  max-per-player: 3
+
+# AFK
+afk:
+  world: "afk"
+  reward:
+    enabled: true
+    item: DIRT
+    amount: 1
+    interval: 10
+    unit: "seconds"  # "seconds" or "minutes"
+
+# Player Vaults
+vaults:
+  max: 10
+
+# RTP — Random Teleport
+rtp:
+  min-range: 500
+  max-range: 5000
+  cooldown-seconds: 60
+
+# Auction House
+auction:
+  listing-duration-hours: 48
+  max-listings-per-player: 10
+  min-price: 1
+  max-price: 1000000
+  tax-percent: 5
+
+# Spawn World — auto-loads a schematic into a flat world
+spawn-world:
+  enabled: true
+  schematic: "GETAWXY_LOBBY.schem"
+  paste-x: 0
+  paste-y: 64
+  paste-z: 0
+
+# World Borders — per-dimension, in blocks (full diameter)
+# Applied on plugin start. The resource world also re-applies on regen.
+world-borders:
+  overworld: 10000
+  resource: 10000
+  nether: 10000
+  end: 10000
+
+# Resource World — resets periodically, has all structures
+resource-world:
+  enabled: true
+  reset-interval-hours: 24
+  world-name: "resource"
+  border-size: 5000
+
+# Auto Announcements — rotating broadcast messages
+# Two formats are supported per message:
+#   - "plain text"                                  (uses default-sound)
+#   - text: "..."  sound: ENTITY_EXPERIENCE_ORB_PICKUP  volume: 1.0  pitch: 1.5
+# Sound names: https://jd.papermc.io/paper/1.21/org/bukkit/Sound.html
+announcements:
+  enabled: true
+  interval-seconds: 300
+  default-sound: BLOCK_NOTE_BLOCK_BELL
+  messages:
+    - text: "&fCHECK OUT &6/SHOP &fFOR GREAT DEALS!"
+      sound: ENTITY_EXPERIENCE_ORB_PICKUP
+      volume: 1.0
+      pitch: 1.0
+    - text: "&fJOIN OUR DISCORD FOR UPDATES!"
+      sound: BLOCK_NOTE_BLOCK_PLING
+      volume: 1.0
+      pitch: 1.5
+    - "&fUSE &6/TPA &fTO TELEPORT TO FRIENDS!"
+    - "&fPROTECT YOUR BUILDS WITH &6/CLAIM&f!"
+    - "&fSELL ITEMS QUICKLY WITH &6/SELL&f!"
+
+# Welcome / MOTD — join/leave messages
+welcome:
+  first-join-message: "&6&l★ &eWelcome &f{player} &eto JoshyMC! &6&l★"
+  first-join-broadcast: true
+  join-format: "&8[&a+&8] &7{player}"
+  leave-format: "&8[&c-&8] &7{player}"
+  motd:
+    - ""
+    - "&b&lWelcome to JoshyMC!"
+    - "&7Type &6/shop &7to buy items"
+    - "&7Type &6/claim &7to protect your builds"
+    - "&7Type &6/kit &7to get starter items"
+    - ""
+
+# Voting — reward players for voting
+voting:
+  enabled: true
+  port: 8192
+  secret-key: "change-me-to-a-random-string"
+  vote-links:
+    - name: "MinecraftServers.org"
+      url: "https://minecraftservers.org/vote/joshymc"
+    - name: "Planet Minecraft"
+      url: "https://planetminecraft.com/server/joshymc/vote"
+  rewards:
+    money: 25000
+    claim-blocks: 50
+    items:
+      - "money_pouch_small:1"
+  streak-bonuses:
+    7: 100000
+    14: 250000
+    30: 1000000
+
+# Claims — block-based land protection with golden shovel
+claims:
+  starting-blocks: 500     # Claim blocks each player starts with
+  blocks-per-hour: 100     # Blocks earned per hour of playtime
+  max-blocks: 50000        # Maximum total claim blocks a player can have
+
+# Ranks — displayed as chat tags before the player's name
+# Tag uses & color codes (e.g., &c = red, &l = bold, &a = green)
+# OR hex colors with &#RRGGBB format (e.g., &#FF5555&lAdmin for hex red bold)
+# Weight determines display priority (higher = more important)
+ranks:
+  list:
+    owner:
+      tag: "&4&lOwner"
+      weight: 100
+    admin:
+      tag: "&c&lAdmin"
+      weight: 90
+    mod:
+      tag: "&9&lMod"
+      weight: 80
+    helper:
+      tag: "&a&lHelper"
+      weight: 70
+    vip:
+      tag: "&6&lVIP"
+      weight: 50
+    member:
+      tag: "&7Member"
+      weight: 10
+    default:
+      tag: "&8Player"
+      weight: 0
+
+# AntiCheat — server-side cheat detection
+anticheat:
+  enabled: true
+  alert-vl: 20          # VL threshold to alert staff
+  kick-vl: 150          # VL threshold to kick player (very high to avoid false kicks)
+  alert-cooldown-ms: 3000  # Cooldown between alerts per check per player
+  checks:
+    flight: true         # Detects fly hacks (sustained air time, ascending without jump)
+    speed: true          # Detects speed hacks (moving faster than possible)
+    nofall: true         # Detects NoFall (spoofing ground status to avoid fall damage)
+    jesus: true          # Detects water/lava walking
+    phase: true          # Detects noclip/phase through solid blocks
+    timer: true          # Detects timer hacks (modified tick rate, >20 packets/sec)
+    killaura: true       # Detects KillAura (attack rate, hitting behind back)
+    reach: true          # Detects reach hacks (hitting/breaking from too far)
+    autoclick: true      # Detects autoclickers (>22 CPS)
+    velocity: true       # Detects anti-knockback (not moving after being hit)
+    fastbreak: true      # Detects fast block breaking
+    fastplace: true      # Detects fast block placing (>18 blocks/sec)
+    scaffold: true       # Detects scaffold hacks (bridging at impossible speed)
+    nuker: true          # Detects nuker (breaking >80 blocks/sec)
+    badpackets: true     # Detects invalid packets (impossible pitch, actions while dead)
+    illegitems: true     # Detects illegal items (over-enchanted, stacked unstackables)
+    inventory: true      # Detects inventory hacks (>25 clicks/sec)

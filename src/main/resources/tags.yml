@@ -1,0 +1,2501 @@
+# Chat Tags Configuration
+# Players can equip one tag that displays before their name in chat.
+# display: Text shown in chat using & color codes (trailing space included)
+# permission: Permission node required (null = free for all)
+
+tags:
+  prestige:
+    mvp:
+      display: "&6[MVP] "
+      permission: "joshymc.tag.prestige"
+    mvp_plus:
+      display: "&6[MVP&e+&6] "
+      permission: "joshymc.tag.prestige"
+    mvp_plus_plus:
+      display: "&6[MVP&e++&6] "
+      permission: "joshymc.tag.prestige"
+    elite:
+      display: "&6[Elite] "
+      permission: "joshymc.tag.prestige"
+    elite_plus:
+      display: "&6[Elite&e+&6] "
+      permission: "joshymc.tag.prestige"
+    supreme:
+      display: "&e[Supreme] "
+      permission: "joshymc.tag.prestige"
+    legendary:
+      display: "&6[Legendary] "
+      permission: "joshymc.tag.prestige"
+    mythic:
+      display: "&e[Mythic] "
+      permission: "joshymc.tag.prestige"
+    immortal:
+      display: "&6[Immortal] "
+      permission: "joshymc.tag.prestige"
+    titan:
+      display: "&e[Titan] "
+      permission: "joshymc.tag.prestige"
+    champion:
+      display: "&6[Champion] "
+      permission: "joshymc.tag.prestige"
+    conqueror:
+      display: "&e[Conqueror] "
+      permission: "joshymc.tag.prestige"
+    overlord:
+      display: "&6[Overlord] "
+      permission: "joshymc.tag.prestige"
+    transcendent:
+      display: "&e[Transcendent] "
+      permission: "joshymc.tag.prestige"
+    godlike:
+      display: "&6[Godlike] "
+      permission: "joshymc.tag.prestige"
+
+  og:
+    og:
+      display: "&3[OG] "
+      permission: "joshymc.tag.og"
+    veteran:
+      display: "&3[Veteran] "
+      permission: "joshymc.tag.og"
+    founder:
+      display: "&3[Founder] "
+      permission: "joshymc.tag.og"
+    pioneer:
+      display: "&3[Pioneer] "
+      permission: "joshymc.tag.og"
+    ancient:
+      display: "&3[Ancient] "
+      permission: "joshymc.tag.og"
+    classic:
+      display: "&3[Classic] "
+      permission: "joshymc.tag.og"
+    legacy:
+      display: "&3[Legacy] "
+      permission: "joshymc.tag.og"
+    first_gen:
+      display: "&3[First Gen] "
+      permission: "joshymc.tag.og"
+    day_one:
+      display: "&3[Day One] "
+      permission: "joshymc.tag.og"
+    relic:
+      display: "&3[Relic] "
+      permission: "joshymc.tag.og"
+
+  skill:
+    pro:
+      display: "&c[Pro] "
+      permission: null
+    sweat:
+      display: "&4[Sweat] "
+      permission: null
+    tryhard:
+      display: "&c[Tryhard] "
+      permission: null
+    grinder:
+      display: "&4[Grinder] "
+      permission: null
+    carry:
+      display: "&c[Carry] "
+      permission: null
+    clutch:
+      display: "&4[Clutch] "
+      permission: null
+    ace:
+      display: "&c[Ace] "
+      permission: null
+    goated:
+      display: "&4[Goated] "
+      permission: null
+    cracked:
+      display: "&c[Cracked] "
+      permission: null
+    built_different:
+      display: "&4[Built Different] "
+      permission: null
+    no_life:
+      display: "&c[No Life] "
+      permission: null
+    demon:
+      display: "&4[Demon] "
+      permission: null
+    machine:
+      display: "&c[Machine] "
+      permission: null
+    beast:
+      display: "&4[Beast] "
+      permission: null
+    warrior:
+      display: "&c[Warrior] "
+      permission: null
+    fighter:
+      display: "&4[Fighter] "
+      permission: null
+    gladiator:
+      display: "&c[Gladiator] "
+      permission: null
+    duelist:
+      display: "&4[Duelist] "
+      permission: null
+    marksman:
+      display: "&c[Marksman] "
+      permission: null
+    assassin:
+      display: "&4[Assassin] "
+      permission: null
+
+  vibe:
+    chill:
+      display: "&d[Chill] "
+      permission: null
+    vibes:
+      display: "&d[Vibes] "
+      permission: null
+    zen:
+      display: "&d[Zen] "
+      permission: null
+    cozy:
+      display: "&d[Cozy] "
+      permission: null
+    sleepy:
+      display: "&d[Sleepy] "
+      permission: null
+    chaos:
+      display: "&d[Chaos] "
+      permission: null
+    toxic:
+      display: "&d[Toxic] "
+      permission: null
+    salty:
+      display: "&d[Salty] "
+      permission: null
+    wholesome:
+      display: "&d[Wholesome] "
+      permission: null
+    blessed:
+      display: "&d[Blessed] "
+      permission: null
+    cursed:
+      display: "&d[Cursed] "
+      permission: null
+    lucky:
+      display: "&d[Lucky] "
+      permission: null
+    unlucky:
+      display: "&d[Unlucky] "
+      permission: null
+    menace:
+      display: "&d[Menace] "
+      permission: null
+    gremlin:
+      display: "&d[Gremlin] "
+      permission: null
+    ghost:
+      display: "&d[Ghost] "
+      permission: null
+    shadow:
+      display: "&d[Shadow] "
+      permission: null
+    phantom:
+      display: "&d[Phantom] "
+      permission: null
+    specter:
+      display: "&d[Specter] "
+      permission: null
+    wraith:
+      display: "&d[Wraith] "
+      permission: null
+
+  nature:
+    fire:
+      display: "&2[Fire] "
+      permission: null
+    ice:
+      display: "&a[Ice] "
+      permission: null
+    thunder:
+      display: "&2[Thunder] "
+      permission: null
+    storm:
+      display: "&a[Storm] "
+      permission: null
+    blaze:
+      display: "&2[Blaze] "
+      permission: null
+    frost:
+      display: "&a[Frost] "
+      permission: null
+    ember:
+      display: "&2[Ember] "
+      permission: null
+    inferno:
+      display: "&a[Inferno] "
+      permission: null
+    glacier:
+      display: "&2[Glacier] "
+      permission: null
+    tornado:
+      display: "&a[Tornado] "
+      permission: null
+    hurricane:
+      display: "&2[Hurricane] "
+      permission: null
+    tsunami:
+      display: "&a[Tsunami] "
+      permission: null
+    earthquake:
+      display: "&2[Earthquake] "
+      permission: null
+    volcano:
+      display: "&a[Volcano] "
+      permission: null
+    eclipse:
+      display: "&2[Eclipse] "
+      permission: null
+
+  cosmic:
+    nova:
+      display: "&5[Nova] "
+      permission: null
+    nebula:
+      display: "&5[Nebula] "
+      permission: null
+    stellar:
+      display: "&5[Stellar] "
+      permission: null
+    cosmic:
+      display: "&5[Cosmic] "
+      permission: null
+    astral:
+      display: "&5[Astral] "
+      permission: null
+    solar:
+      display: "&5[Solar] "
+      permission: null
+    lunar:
+      display: "&5[Lunar] "
+      permission: null
+    void:
+      display: "&5[Void] "
+      permission: null
+    galaxy:
+      display: "&5[Galaxy] "
+      permission: null
+    comet:
+      display: "&5[Comet] "
+      permission: null
+    supernova:
+      display: "&5[Supernova] "
+      permission: null
+    celestial:
+      display: "&5[Celestial] "
+      permission: null
+    orbital:
+      display: "&5[Orbital] "
+      permission: null
+    pulsar:
+      display: "&5[Pulsar] "
+      permission: null
+    quasar:
+      display: "&5[Quasar] "
+      permission: null
+
+  gem:
+    diamond:
+      display: "&b[Diamond] "
+      permission: null
+    emerald:
+      display: "&b[Emerald] "
+      permission: null
+    ruby:
+      display: "&b[Ruby] "
+      permission: null
+    sapphire:
+      display: "&b[Sapphire] "
+      permission: null
+    amethyst:
+      display: "&b[Amethyst] "
+      permission: null
+    obsidian:
+      display: "&b[Obsidian] "
+      permission: null
+    crystal:
+      display: "&b[Crystal] "
+      permission: null
+    opal:
+      display: "&b[Opal] "
+      permission: null
+    topaz:
+      display: "&b[Topaz] "
+      permission: null
+    pearl:
+      display: "&b[Pearl] "
+      permission: null
+    onyx:
+      display: "&b[Onyx] "
+      permission: null
+    jade:
+      display: "&b[Jade] "
+      permission: null
+
+  animal:
+    wolf:
+      display: "&e[Wolf] "
+      permission: null
+    dragon:
+      display: "&e[Dragon] "
+      permission: null
+    phoenix:
+      display: "&e[Phoenix] "
+      permission: null
+    hawk:
+      display: "&e[Hawk] "
+      permission: null
+    viper:
+      display: "&e[Viper] "
+      permission: null
+    shark:
+      display: "&e[Shark] "
+      permission: null
+    bear:
+      display: "&e[Bear] "
+      permission: null
+    lion:
+      display: "&e[Lion] "
+      permission: null
+    tiger:
+      display: "&e[Tiger] "
+      permission: null
+    eagle:
+      display: "&e[Eagle] "
+      permission: null
+    falcon:
+      display: "&e[Falcon] "
+      permission: null
+    panther:
+      display: "&e[Panther] "
+      permission: null
+    cobra:
+      display: "&e[Cobra] "
+      permission: null
+    raven:
+      display: "&e[Raven] "
+      permission: null
+    scorpion:
+      display: "&e[Scorpion] "
+      permission: null
+
+  food:
+    cookie:
+      display: "&f[Cookie] "
+      permission: null
+    potato:
+      display: "&f[Potato] "
+      permission: null
+    taco:
+      display: "&f[Taco] "
+      permission: null
+    pizza:
+      display: "&f[Pizza] "
+      permission: null
+    waffle:
+      display: "&f[Waffle] "
+      permission: null
+    pancake:
+      display: "&f[Pancake] "
+      permission: null
+    burrito:
+      display: "&f[Burrito] "
+      permission: null
+    sushi:
+      display: "&f[Sushi] "
+      permission: null
+    noodle:
+      display: "&f[Noodle] "
+      permission: null
+    toast:
+      display: "&f[Toast] "
+      permission: null
+
+  meme:
+    bruh:
+      display: "&7[Bruh] "
+      permission: null
+    sheesh:
+      display: "&7[Sheesh] "
+      permission: null
+    bussin:
+      display: "&7[Bussin] "
+      permission: null
+    sus:
+      display: "&7[Sus] "
+      permission: null
+    based:
+      display: "&7[Based] "
+      permission: null
+    l:
+      display: "&7[L] "
+      permission: null
+    w:
+      display: "&7[W] "
+      permission: null
+    ratio:
+      display: "&7[Ratio] "
+      permission: null
+    no_cap:
+      display: "&7[No Cap] "
+      permission: null
+    big_brain:
+      display: "&7[Big Brain] "
+      permission: null
+    smooth_brain:
+      display: "&7[Smooth Brain] "
+      permission: null
+    touch_grass:
+      display: "&7[Touch Grass] "
+      permission: null
+    afk:
+      display: "&7[AFK] "
+      permission: null
+    gg:
+      display: "&7[GG] "
+      permission: null
+    ez:
+      display: "&7[EZ] "
+      permission: null
+
+  color:
+    red:
+      display: "&c[Red] "
+      permission: null
+    blue:
+      display: "&9[Blue] "
+      permission: null
+    green:
+      display: "&a[Green] "
+      permission: null
+    gold:
+      display: "&6[Gold] "
+      permission: null
+    purple:
+      display: "&5[Purple] "
+      permission: null
+    pink:
+      display: "&d[Pink] "
+      permission: null
+    cyan:
+      display: "&3[Cyan] "
+      permission: null
+    white:
+      display: "&f[White] "
+      permission: null
+    black:
+      display: "&8[Black] "
+      permission: null
+    orange:
+      display: "&6[Orange] "
+      permission: null
+    yellow:
+      display: "&e[Yellow] "
+      permission: null
+    lime:
+      display: "&a[Lime] "
+      permission: null
+    aqua:
+      display: "&b[Aqua] "
+      permission: null
+    magenta:
+      display: "&d[Magenta] "
+      permission: null
+    crimson:
+      display: "&4[Crimson] "
+      permission: null
+    azure:
+      display: "&9[Azure] "
+      permission: null
+    violet:
+      display: "&5[Violet] "
+      permission: null
+    coral:
+      display: "&c[Coral] "
+      permission: null
+    silver:
+      display: "&7[Silver] "
+      permission: null
+    bronze:
+      display: "&6[Bronze] "
+      permission: null
+
+  role:
+    builder:
+      display: "&a[Builder] "
+      permission: null
+    miner:
+      display: "&a[Miner] "
+      permission: null
+    farmer:
+      display: "&a[Farmer] "
+      permission: null
+    trader:
+      display: "&a[Trader] "
+      permission: null
+    explorer:
+      display: "&a[Explorer] "
+      permission: null
+    hunter:
+      display: "&a[Hunter] "
+      permission: null
+    crafter:
+      display: "&a[Crafter] "
+      permission: null
+    alchemist:
+      display: "&a[Alchemist] "
+      permission: null
+    enchanter:
+      display: "&a[Enchanter] "
+      permission: null
+    blacksmith:
+      display: "&a[Blacksmith] "
+      permission: null
+    architect:
+      display: "&a[Architect] "
+      permission: null
+    engineer:
+      display: "&a[Engineer] "
+      permission: null
+    merchant:
+      display: "&a[Merchant] "
+      permission: null
+    captain:
+      display: "&a[Captain] "
+      permission: null
+    admiral:
+      display: "&a[Admiral] "
+      permission: null
+
+  season:
+    spring:
+      display: "&a[Spring] "
+      permission: null
+    summer:
+      display: "&e[Summer] "
+      permission: null
+    autumn:
+      display: "&6[Autumn] "
+      permission: null
+    winter:
+      display: "&b[Winter] "
+      permission: null
+    harvest:
+      display: "&6[Harvest] "
+      permission: null
+    frosty:
+      display: "&b[Frosty] "
+      permission: null
+    sunny:
+      display: "&e[Sunny] "
+      permission: null
+    spooky:
+      display: "&5[Spooky] "
+      permission: null
+
+  rare:
+    ultra:
+      display: "&6&l[Ultra] "
+      permission: "joshymc.tag.rare"
+    omega:
+      display: "&6&l[Omega] "
+      permission: "joshymc.tag.rare"
+    alpha:
+      display: "&6&l[Alpha] "
+      permission: "joshymc.tag.rare"
+    sigma:
+      display: "&6&l[Sigma] "
+      permission: "joshymc.tag.rare"
+    delta:
+      display: "&6&l[Delta] "
+      permission: "joshymc.tag.rare"
+    gamma:
+      display: "&6&l[Gamma] "
+      permission: "joshymc.tag.rare"
+    beta:
+      display: "&6&l[Beta] "
+      permission: "joshymc.tag.rare"
+    epsilon:
+      display: "&6&l[Epsilon] "
+      permission: "joshymc.tag.rare"
+    zeta:
+      display: "&6&l[Zeta] "
+      permission: "joshymc.tag.rare"
+    theta:
+      display: "&6&l[Theta] "
+      permission: "joshymc.tag.rare"
+
+  mythical:
+    dragon_lord:
+      display: "&5[Dragon Lord] "
+      permission: null
+    phoenix_mythical:
+      display: "&5[Phoenix] "
+      permission: null
+    griffin:
+      display: "&5[Griffin] "
+      permission: null
+    unicorn:
+      display: "&5[Unicorn] "
+      permission: null
+    hydra:
+      display: "&5[Hydra] "
+      permission: null
+    basilisk:
+      display: "&5[Basilisk] "
+      permission: null
+    cerberus:
+      display: "&5[Cerberus] "
+      permission: null
+    minotaur:
+      display: "&5[Minotaur] "
+      permission: null
+    kraken:
+      display: "&5[Kraken] "
+      permission: null
+    leviathan:
+      display: "&5[Leviathan] "
+      permission: null
+    chimera:
+      display: "&5[Chimera] "
+      permission: null
+    manticore:
+      display: "&5[Manticore] "
+      permission: null
+    wyvern:
+      display: "&5[Wyvern] "
+      permission: null
+    pegasus:
+      display: "&5[Pegasus] "
+      permission: null
+    sphinx:
+      display: "&5[Sphinx] "
+      permission: null
+    valkyrie:
+      display: "&5[Valkyrie] "
+      permission: null
+    banshee:
+      display: "&5[Banshee] "
+      permission: null
+    golem:
+      display: "&5[Golem] "
+      permission: null
+    djinn:
+      display: "&5[Djinn] "
+      permission: null
+    wendigo:
+      display: "&5[Wendigo] "
+      permission: null
+    behemoth:
+      display: "&5[Behemoth] "
+      permission: null
+    lich:
+      display: "&5[Lich] "
+      permission: null
+    sylph:
+      display: "&5[Sylph] "
+      permission: null
+    nymph:
+      display: "&5[Nymph] "
+      permission: null
+    dryad:
+      display: "&5[Dryad] "
+      permission: null
+
+  military:
+    recruit:
+      display: "&2[Recruit] "
+      permission: null
+    private:
+      display: "&2[Private] "
+      permission: null
+    corporal:
+      display: "&2[Corporal] "
+      permission: null
+    sergeant:
+      display: "&2[Sergeant] "
+      permission: null
+    lieutenant:
+      display: "&2[Lieutenant] "
+      permission: null
+    captain_military:
+      display: "&2[Captain] "
+      permission: null
+    major:
+      display: "&2[Major] "
+      permission: null
+    colonel:
+      display: "&2[Colonel] "
+      permission: null
+    general:
+      display: "&2[General] "
+      permission: null
+    commander:
+      display: "&2[Commander] "
+      permission: null
+    marshal:
+      display: "&2[Marshal] "
+      permission: null
+    sniper:
+      display: "&2[Sniper] "
+      permission: null
+    medic:
+      display: "&2[Medic] "
+      permission: null
+    pilot:
+      display: "&2[Pilot] "
+      permission: null
+    gunner:
+      display: "&2[Gunner] "
+      permission: null
+    ranger:
+      display: "&2[Ranger] "
+      permission: null
+    commando:
+      display: "&2[Commando] "
+      permission: null
+    operative:
+      display: "&2[Operative] "
+      permission: null
+    trooper:
+      display: "&2[Trooper] "
+      permission: null
+    sentinel:
+      display: "&2[Sentinel] "
+      permission: null
+    guardian:
+      display: "&2[Guardian] "
+      permission: null
+    warden:
+      display: "&2[Warden] "
+      permission: null
+    enforcer:
+      display: "&2[Enforcer] "
+      permission: null
+    vanguard:
+      display: "&2[Vanguard] "
+      permission: null
+    recon:
+      display: "&2[Recon] "
+      permission: null
+
+  pirate:
+    pirate:
+      display: "&6[Pirate] "
+      permission: null
+    captain_hook:
+      display: "&6[Captain Hook] "
+      permission: null
+    buccaneer:
+      display: "&6[Buccaneer] "
+      permission: null
+    corsair:
+      display: "&6[Corsair] "
+      permission: null
+    swashbuckler:
+      display: "&6[Swashbuckler] "
+      permission: null
+    marauder:
+      display: "&6[Marauder] "
+      permission: null
+    privateer:
+      display: "&6[Privateer] "
+      permission: null
+    seafarer:
+      display: "&6[Seafarer] "
+      permission: null
+    navigator:
+      display: "&6[Navigator] "
+      permission: null
+    shipwright:
+      display: "&6[Shipwright] "
+      permission: null
+    deckhand:
+      display: "&6[Deckhand] "
+      permission: null
+    first_mate:
+      display: "&6[First Mate] "
+      permission: null
+    quartermaster:
+      display: "&6[Quartermaster] "
+      permission: null
+    plunderer:
+      display: "&6[Plunderer] "
+      permission: null
+    sea_dog:
+      display: "&6[Sea Dog] "
+      permission: null
+    castaway:
+      display: "&6[Castaway] "
+      permission: null
+    treasure_hunter:
+      display: "&6[Treasure Hunter] "
+      permission: null
+    anchor:
+      display: "&6[Anchor] "
+      permission: null
+    krewmate:
+      display: "&6[Krewmate] "
+      permission: null
+    voyager:
+      display: "&6[Voyager] "
+      permission: null
+
+  medieval:
+    king:
+      display: "&e[King] "
+      permission: null
+    queen:
+      display: "&e[Queen] "
+      permission: null
+    prince:
+      display: "&e[Prince] "
+      permission: null
+    princess:
+      display: "&e[Princess] "
+      permission: null
+    duke:
+      display: "&e[Duke] "
+      permission: null
+    duchess:
+      display: "&e[Duchess] "
+      permission: null
+    baron:
+      display: "&e[Baron] "
+      permission: null
+    baroness:
+      display: "&e[Baroness] "
+      permission: null
+    lord:
+      display: "&e[Lord] "
+      permission: null
+    lady:
+      display: "&e[Lady] "
+      permission: null
+    squire:
+      display: "&e[Squire] "
+      permission: null
+    peasant:
+      display: "&e[Peasant] "
+      permission: null
+    jester:
+      display: "&e[Jester] "
+      permission: null
+    herald:
+      display: "&e[Herald] "
+      permission: null
+    noble:
+      display: "&e[Noble] "
+      permission: null
+    serf:
+      display: "&e[Serf] "
+      permission: null
+    crusader:
+      display: "&e[Crusader] "
+      permission: null
+    templar:
+      display: "&e[Templar] "
+      permission: null
+    inquisitor:
+      display: "&e[Inquisitor] "
+      permission: null
+    paladin:
+      display: "&e[Paladin] "
+      permission: null
+    monk:
+      display: "&e[Monk] "
+      permission: null
+    friar:
+      display: "&e[Friar] "
+      permission: null
+    bishop:
+      display: "&e[Bishop] "
+      permission: null
+    cardinal:
+      display: "&e[Cardinal] "
+      permission: null
+    pope:
+      display: "&e[Pope] "
+      permission: null
+
+  cyberpunk:
+    hacker:
+      display: "&3[Hacker] "
+      permission: null
+    netrunner:
+      display: "&3[Netrunner] "
+      permission: null
+    cyborg:
+      display: "&3[Cyborg] "
+      permission: null
+    android:
+      display: "&3[Android] "
+      permission: null
+    synth:
+      display: "&3[Synth] "
+      permission: null
+    glitch:
+      display: "&3[Glitch] "
+      permission: null
+    neon:
+      display: "&3[Neon] "
+      permission: null
+    chrome:
+      display: "&3[Chrome] "
+      permission: null
+    datastream:
+      display: "&3[Datastream] "
+      permission: null
+    firewall:
+      display: "&3[Firewall] "
+      permission: null
+    virus:
+      display: "&3[Virus] "
+      permission: null
+    trojan:
+      display: "&3[Trojan] "
+      permission: null
+    mainframe:
+      display: "&3[Mainframe] "
+      permission: null
+    pixel:
+      display: "&3[Pixel] "
+      permission: null
+    binary:
+      display: "&3[Binary] "
+      permission: null
+    quantum:
+      display: "&3[Quantum] "
+      permission: null
+    hologram:
+      display: "&3[Hologram] "
+      permission: null
+    laser:
+      display: "&3[Laser] "
+      permission: null
+    plasma:
+      display: "&3[Plasma] "
+      permission: null
+    photon:
+      display: "&3[Photon] "
+      permission: null
+
+  music:
+    dj:
+      display: "&d[DJ] "
+      permission: null
+    rockstar:
+      display: "&d[Rockstar] "
+      permission: null
+    rapper:
+      display: "&d[Rapper] "
+      permission: null
+    vocalist:
+      display: "&d[Vocalist] "
+      permission: null
+    bassist:
+      display: "&d[Bassist] "
+      permission: null
+    drummer:
+      display: "&d[Drummer] "
+      permission: null
+    guitarist:
+      display: "&d[Guitarist] "
+      permission: null
+    maestro:
+      display: "&d[Maestro] "
+      permission: null
+    virtuoso:
+      display: "&d[Virtuoso] "
+      permission: null
+    prodigy:
+      display: "&d[Prodigy] "
+      permission: null
+    remix:
+      display: "&d[Remix] "
+      permission: null
+    encore:
+      display: "&d[Encore] "
+      permission: null
+    solo:
+      display: "&d[Solo] "
+      permission: null
+    duet:
+      display: "&d[Duet] "
+      permission: null
+    symphony:
+      display: "&d[Symphony] "
+      permission: null
+    melody:
+      display: "&d[Melody] "
+      permission: null
+    harmony:
+      display: "&d[Harmony] "
+      permission: null
+    rhythm:
+      display: "&d[Rhythm] "
+      permission: null
+    tempo:
+      display: "&d[Tempo] "
+      permission: null
+    crescendo:
+      display: "&d[Crescendo] "
+      permission: null
+
+  weather:
+    sunny_weather:
+      display: "&b[Sunny] "
+      permission: null
+    cloudy:
+      display: "&b[Cloudy] "
+      permission: null
+    rainy:
+      display: "&b[Rainy] "
+      permission: null
+    foggy:
+      display: "&b[Foggy] "
+      permission: null
+    windy:
+      display: "&b[Windy] "
+      permission: null
+    stormy:
+      display: "&b[Stormy] "
+      permission: null
+    snowy:
+      display: "&b[Snowy] "
+      permission: null
+    hail:
+      display: "&b[Hail] "
+      permission: null
+    misty:
+      display: "&b[Misty] "
+      permission: null
+    drizzle:
+      display: "&b[Drizzle] "
+      permission: null
+    blizzard:
+      display: "&b[Blizzard] "
+      permission: null
+    monsoon:
+      display: "&b[Monsoon] "
+      permission: null
+    cyclone:
+      display: "&b[Cyclone] "
+      permission: null
+    typhoon:
+      display: "&b[Typhoon] "
+      permission: null
+    aurora:
+      display: "&b[Aurora] "
+      permission: null
+
+  space:
+    astronaut:
+      display: "&9[Astronaut] "
+      permission: null
+    cosmonaut:
+      display: "&9[Cosmonaut] "
+      permission: null
+    alien:
+      display: "&9[Alien] "
+      permission: null
+    martian:
+      display: "&9[Martian] "
+      permission: null
+    starship:
+      display: "&9[Starship] "
+      permission: null
+    meteor:
+      display: "&9[Meteor] "
+      permission: null
+    asteroid:
+      display: "&9[Asteroid] "
+      permission: null
+    satellite:
+      display: "&9[Satellite] "
+      permission: null
+    stardust:
+      display: "&9[Stardust] "
+      permission: null
+    moonwalker:
+      display: "&9[Moonwalker] "
+      permission: null
+    voyager_ii:
+      display: "&9[Voyager II] "
+      permission: null
+    pioneer:
+      display: "&9[Pioneer] "
+      permission: null
+    apollo:
+      display: "&9[Apollo] "
+      permission: null
+    horizon:
+      display: "&9[Horizon] "
+      permission: null
+    infinity:
+      display: "&9[Infinity] "
+      permission: null
+    warp:
+      display: "&9[Warp] "
+      permission: null
+    lightspeed:
+      display: "&9[Lightspeed] "
+      permission: null
+    hyperion:
+      display: "&9[Hyperion] "
+      permission: null
+    andromeda:
+      display: "&9[Andromeda] "
+      permission: null
+    constellation:
+      display: "&9[Constellation] "
+      permission: null
+
+  sport:
+    striker:
+      display: "&a[Striker] "
+      permission: null
+    goalkeeper:
+      display: "&a[Goalkeeper] "
+      permission: null
+    defender:
+      display: "&a[Defender] "
+      permission: null
+    midfielder:
+      display: "&a[Midfielder] "
+      permission: null
+    quarterback:
+      display: "&a[Quarterback] "
+      permission: null
+    pitcher:
+      display: "&a[Pitcher] "
+      permission: null
+    slugger:
+      display: "&a[Slugger] "
+      permission: null
+    sprinter:
+      display: "&a[Sprinter] "
+      permission: null
+    marathon:
+      display: "&a[Marathon] "
+      permission: null
+    olympian:
+      display: "&a[Olympian] "
+      permission: null
+    gymnast:
+      display: "&a[Gymnast] "
+      permission: null
+    boxer:
+      display: "&a[Boxer] "
+      permission: null
+    wrestler:
+      display: "&a[Wrestler] "
+      permission: null
+    fencer:
+      display: "&a[Fencer] "
+      permission: null
+    archer_ii:
+      display: "&a[Archer II] "
+      permission: null
+    skater:
+      display: "&a[Skater] "
+      permission: null
+    surfer:
+      display: "&a[Surfer] "
+      permission: null
+    climber:
+      display: "&a[Climber] "
+      permission: null
+    cyclist:
+      display: "&a[Cyclist] "
+      permission: null
+    triathlete:
+      display: "&a[Triathlete] "
+      permission: null
+    diver:
+      display: "&a[Diver] "
+      permission: null
+    swimmer:
+      display: "&a[Swimmer] "
+      permission: null
+    racer:
+      display: "&a[Racer] "
+      permission: null
+    champ:
+      display: "&a[Champ] "
+      permission: null
+    rookie:
+      display: "&a[Rookie] "
+      permission: null
+
+  horror:
+    vampire:
+      display: "&4[Vampire] "
+      permission: null
+    werewolf:
+      display: "&4[Werewolf] "
+      permission: null
+    zombie:
+      display: "&4[Zombie] "
+      permission: null
+    skeleton:
+      display: "&4[Skeleton] "
+      permission: null
+    ghoul:
+      display: "&4[Ghoul] "
+      permission: null
+    specter_ii:
+      display: "&4[Specter II] "
+      permission: null
+    reaper:
+      display: "&4[Reaper] "
+      permission: null
+    phantom_ii:
+      display: "&4[Phantom II] "
+      permission: null
+    demon_ii:
+      display: "&4[Demon II] "
+      permission: null
+    devil:
+      display: "&4[Devil] "
+      permission: null
+    witch:
+      display: "&4[Witch] "
+      permission: null
+    warlock:
+      display: "&4[Warlock] "
+      permission: null
+    necromancer:
+      display: "&4[Necromancer] "
+      permission: null
+    poltergeist:
+      display: "&4[Poltergeist] "
+      permission: null
+    harbinger:
+      display: "&4[Harbinger] "
+      permission: null
+    dread:
+      display: "&4[Dread] "
+      permission: null
+    terror:
+      display: "&4[Terror] "
+      permission: null
+    horror:
+      display: "&4[Horror] "
+      permission: null
+    nightmare:
+      display: "&4[Nightmare] "
+      permission: null
+    abyss:
+      display: "&4[Abyss] "
+      permission: null
+
+  royalty:
+    emperor:
+      display: "&6&l[Emperor] "
+      permission: "joshymc.tag.royalty"
+    empress:
+      display: "&6&l[Empress] "
+      permission: "joshymc.tag.royalty"
+    pharaoh:
+      display: "&6&l[Pharaoh] "
+      permission: "joshymc.tag.royalty"
+    sultan:
+      display: "&6&l[Sultan] "
+      permission: "joshymc.tag.royalty"
+    czar:
+      display: "&6&l[Czar] "
+      permission: "joshymc.tag.royalty"
+    shogun:
+      display: "&6&l[Shogun] "
+      permission: "joshymc.tag.royalty"
+    khan:
+      display: "&6&l[Khan] "
+      permission: "joshymc.tag.royalty"
+    warlord:
+      display: "&6&l[Warlord] "
+      permission: "joshymc.tag.royalty"
+    chieftain:
+      display: "&6&l[Chieftain] "
+      permission: "joshymc.tag.royalty"
+    regent:
+      display: "&6&l[Regent] "
+      permission: "joshymc.tag.royalty"
+    sovereign:
+      display: "&6&l[Sovereign] "
+      permission: "joshymc.tag.royalty"
+    monarch:
+      display: "&6&l[Monarch] "
+      permission: "joshymc.tag.royalty"
+    highness:
+      display: "&6&l[Highness] "
+      permission: "joshymc.tag.royalty"
+    majesty:
+      display: "&6&l[Majesty] "
+      permission: "joshymc.tag.royalty"
+    grace:
+      display: "&6&l[Grace] "
+      permission: "joshymc.tag.royalty"
+
+  emoji_style:
+    star:
+      display: "&f[Star] "
+      permission: null
+    crown:
+      display: "&f[Crown] "
+      permission: null
+    heart:
+      display: "&f[Heart] "
+      permission: null
+    skull:
+      display: "&f[Skull] "
+      permission: null
+    sword:
+      display: "&f[Sword] "
+      permission: null
+    shield:
+      display: "&f[Shield] "
+      permission: null
+    flame_ii:
+      display: "&f[Flame II] "
+      permission: null
+    bolt:
+      display: "&f[Bolt] "
+      permission: null
+    moon_ii:
+      display: "&f[Moon II] "
+      permission: null
+    sun:
+      display: "&f[Sun] "
+      permission: null
+    arrow_ii:
+      display: "&f[Arrow II] "
+      permission: null
+    cross:
+      display: "&f[Cross] "
+      permission: null
+    clover:
+      display: "&f[Clover] "
+      permission: null
+    spade:
+      display: "&f[Spade] "
+      permission: null
+    club:
+      display: "&f[Club] "
+      permission: null
+    ace_emoji:
+      display: "&f[Ace] "
+      permission: null
+    joker:
+      display: "&f[Joker] "
+      permission: null
+    wild:
+      display: "&f[Wild] "
+      permission: null
+    lucky_ii:
+      display: "&f[Lucky II] "
+      permission: null
+    fortune:
+      display: "&f[Fortune] "
+      permission: null
+    destiny:
+      display: "&f[Destiny] "
+      permission: null
+    fate:
+      display: "&f[Fate] "
+      permission: null
+    doom:
+      display: "&f[Doom] "
+      permission: null
+    glory:
+      display: "&f[Glory] "
+      permission: null
+    honor:
+      display: "&f[Honor] "
+      permission: null
+
+  food2:
+    ramen:
+      display: "&f[Ramen] "
+      permission: null
+    dumpling:
+      display: "&f[Dumpling] "
+      permission: null
+    croissant:
+      display: "&f[Croissant] "
+      permission: null
+    bagel:
+      display: "&f[Bagel] "
+      permission: null
+    donut:
+      display: "&f[Donut] "
+      permission: null
+    pretzel:
+      display: "&f[Pretzel] "
+      permission: null
+    muffin:
+      display: "&f[Muffin] "
+      permission: null
+    cupcake:
+      display: "&f[Cupcake] "
+      permission: null
+    brownie:
+      display: "&f[Brownie] "
+      permission: null
+    macaron:
+      display: "&f[Macaron] "
+      permission: null
+    churro:
+      display: "&f[Churro] "
+      permission: null
+    gelato:
+      display: "&f[Gelato] "
+      permission: null
+    sorbet:
+      display: "&f[Sorbet] "
+      permission: null
+    smoothie:
+      display: "&f[Smoothie] "
+      permission: null
+    latte:
+      display: "&f[Latte] "
+      permission: null
+    mocha:
+      display: "&f[Mocha] "
+      permission: null
+    espresso:
+      display: "&f[Espresso] "
+      permission: null
+    matcha:
+      display: "&f[Matcha] "
+      permission: null
+    boba:
+      display: "&f[Boba] "
+      permission: null
+    milkshake:
+      display: "&f[Milkshake] "
+      permission: null
+
+  gaming:
+    speedrunner:
+      display: "&c[Speedrunner] "
+      permission: null
+    completionist:
+      display: "&c[Completionist] "
+      permission: null
+    hardcore:
+      display: "&c[Hardcore] "
+      permission: null
+    ironman:
+      display: "&c[Ironman] "
+      permission: null
+    permadeath:
+      display: "&c[Permadeath] "
+      permission: null
+    respawn:
+      display: "&c[Respawn] "
+      permission: null
+    checkpoint:
+      display: "&c[Checkpoint] "
+      permission: null
+    prestige_ii:
+      display: "&c[Prestige II] "
+      permission: null
+    max_level:
+      display: "&c[Max Level] "
+      permission: null
+    endgame:
+      display: "&c[Endgame] "
+      permission: null
+    boss:
+      display: "&c[Boss] "
+      permission: null
+    miniboss:
+      display: "&c[Miniboss] "
+      permission: null
+    npc:
+      display: "&c[NPC] "
+      permission: null
+    mob:
+      display: "&c[Mob] "
+      permission: null
+    loot:
+      display: "&c[Loot] "
+      permission: null
+    crit:
+      display: "&c[Crit] "
+      permission: null
+    combo:
+      display: "&c[Combo] "
+      permission: null
+    killstreak:
+      display: "&c[Killstreak] "
+      permission: null
+    rampage:
+      display: "&c[Rampage] "
+      permission: null
+    unstoppable:
+      display: "&c[Unstoppable] "
+      permission: null
+    godmode:
+      display: "&c[Godmode] "
+      permission: null
+    aimbot:
+      display: "&c[Aimbot] "
+      permission: null
+    wallhack:
+      display: "&c[Wallhack] "
+      permission: null
+    laggy:
+      display: "&c[Laggy] "
+      permission: null
+    buffed:
+      display: "&c[Buffed] "
+      permission: null
+
+  nature2:
+    forest:
+      display: "&2[Forest] "
+      permission: null
+    mountain:
+      display: "&2[Mountain] "
+      permission: null
+    ocean:
+      display: "&2[Ocean] "
+      permission: null
+    desert:
+      display: "&2[Desert] "
+      permission: null
+    tundra:
+      display: "&2[Tundra] "
+      permission: null
+    jungle:
+      display: "&2[Jungle] "
+      permission: null
+    savanna:
+      display: "&2[Savanna] "
+      permission: null
+    swamp:
+      display: "&2[Swamp] "
+      permission: null
+    river:
+      display: "&2[River] "
+      permission: null
+    lake:
+      display: "&2[Lake] "
+      permission: null
+    waterfall:
+      display: "&2[Waterfall] "
+      permission: null
+    canyon:
+      display: "&2[Canyon] "
+      permission: null
+    cavern:
+      display: "&2[Cavern] "
+      permission: null
+    meadow:
+      display: "&2[Meadow] "
+      permission: null
+    prairie:
+      display: "&2[Prairie] "
+      permission: null
+    dune:
+      display: "&2[Dune] "
+      permission: null
+    reef:
+      display: "&2[Reef] "
+      permission: null
+    lagoon:
+      display: "&2[Lagoon] "
+      permission: null
+    oasis:
+      display: "&2[Oasis] "
+      permission: null
+    valley:
+      display: "&2[Valley] "
+      permission: null
+
+  science:
+    atom:
+      display: "&3[Atom] "
+      permission: null
+    molecule:
+      display: "&3[Molecule] "
+      permission: null
+    nucleus:
+      display: "&3[Nucleus] "
+      permission: null
+    proton:
+      display: "&3[Proton] "
+      permission: null
+    neutron:
+      display: "&3[Neutron] "
+      permission: null
+    electron:
+      display: "&3[Electron] "
+      permission: null
+    catalyst:
+      display: "&3[Catalyst] "
+      permission: null
+    reactor:
+      display: "&3[Reactor] "
+      permission: null
+    isotope:
+      display: "&3[Isotope] "
+      permission: null
+    element:
+      display: "&3[Element] "
+      permission: null
+    compound:
+      display: "&3[Compound] "
+      permission: null
+    formula:
+      display: "&3[Formula] "
+      permission: null
+    theory:
+      display: "&3[Theory] "
+      permission: null
+    einstein:
+      display: "&3[Einstein] "
+      permission: null
+    newton:
+      display: "&3[Newton] "
+      permission: null
+    tesla:
+      display: "&3[Tesla] "
+      permission: null
+    darwin:
+      display: "&3[Darwin] "
+      permission: null
+    hypothesis:
+      display: "&3[Hypothesis] "
+      permission: null
+    experiment:
+      display: "&3[Experiment] "
+      permission: null
+    discovery:
+      display: "&3[Discovery] "
+      permission: null
+
+  zodiac:
+    aries:
+      display: "&d[Aries] "
+      permission: null
+    taurus:
+      display: "&d[Taurus] "
+      permission: null
+    gemini:
+      display: "&d[Gemini] "
+      permission: null
+    cancer:
+      display: "&d[Cancer] "
+      permission: null
+    leo:
+      display: "&d[Leo] "
+      permission: null
+    virgo:
+      display: "&d[Virgo] "
+      permission: null
+    libra:
+      display: "&d[Libra] "
+      permission: null
+    scorpio:
+      display: "&d[Scorpio] "
+      permission: null
+    sagittarius:
+      display: "&d[Sagittarius] "
+      permission: null
+    capricorn:
+      display: "&d[Capricorn] "
+      permission: null
+    aquarius:
+      display: "&d[Aquarius] "
+      permission: null
+    pisces:
+      display: "&d[Pisces] "
+      permission: null
+
+  emotion:
+    happy:
+      display: "&e[Happy] "
+      permission: null
+    sad:
+      display: "&e[Sad] "
+      permission: null
+    angry:
+      display: "&e[Angry] "
+      permission: null
+    calm:
+      display: "&e[Calm] "
+      permission: null
+    excited:
+      display: "&e[Excited] "
+      permission: null
+    bored:
+      display: "&e[Bored] "
+      permission: null
+    nervous:
+      display: "&e[Nervous] "
+      permission: null
+    confident:
+      display: "&e[Confident] "
+      permission: null
+    shy:
+      display: "&e[Shy] "
+      permission: null
+    bold:
+      display: "&e[Bold] "
+      permission: null
+    fierce:
+      display: "&e[Fierce] "
+      permission: null
+    gentle:
+      display: "&e[Gentle] "
+      permission: null
+    wild_ii:
+      display: "&e[Wild II] "
+      permission: null
+    free:
+      display: "&e[Free] "
+      permission: null
+    brave:
+      display: "&e[Brave] "
+      permission: null
+    fearless:
+      display: "&e[Fearless] "
+      permission: null
+    humble:
+      display: "&e[Humble] "
+      permission: null
+    proud:
+      display: "&e[Proud] "
+      permission: null
+    patient:
+      display: "&e[Patient] "
+      permission: null
+    restless:
+      display: "&e[Restless] "
+      permission: null
+
+  crime:
+    outlaw:
+      display: "&8[Outlaw] "
+      permission: null
+    bandit:
+      display: "&8[Bandit] "
+      permission: null
+    thief:
+      display: "&8[Thief] "
+      permission: null
+    rogue:
+      display: "&8[Rogue] "
+      permission: null
+    smuggler:
+      display: "&8[Smuggler] "
+      permission: null
+    fugitive:
+      display: "&8[Fugitive] "
+      permission: null
+    hitman:
+      display: "&8[Hitman] "
+      permission: null
+    bounty_ii:
+      display: "&8[Bounty II] "
+      permission: null
+    kingpin:
+      display: "&8[Kingpin] "
+      permission: null
+    mobster:
+      display: "&8[Mobster] "
+      permission: null
+    gangster:
+      display: "&8[Gangster] "
+      permission: null
+    mastermind:
+      display: "&8[Mastermind] "
+      permission: null
+    heist:
+      display: "&8[Heist] "
+      permission: null
+    escapee:
+      display: "&8[Escapee] "
+      permission: null
+    vigilante:
+      display: "&8[Vigilante] "
+      permission: null
+
+  legendary:
+    ascended:
+      display: "&6&l[Ascended] "
+      permission: "joshymc.tag.legendary"
+    exalted:
+      display: "&6&l[Exalted] "
+      permission: "joshymc.tag.legendary"
+    eternal:
+      display: "&6&l[Eternal] "
+      permission: "joshymc.tag.legendary"
+    infinite:
+      display: "&6&l[Infinite] "
+      permission: "joshymc.tag.legendary"
+    absolute:
+      display: "&6&l[Absolute] "
+      permission: "joshymc.tag.legendary"
+    supreme_ii:
+      display: "&6&l[Supreme II] "
+      permission: "joshymc.tag.legendary"
+    apex:
+      display: "&6&l[Apex] "
+      permission: "joshymc.tag.legendary"
+    pinnacle:
+      display: "&6&l[Pinnacle] "
+      permission: "joshymc.tag.legendary"
+    zenith:
+      display: "&6&l[Zenith] "
+      permission: "joshymc.tag.legendary"
+    paragon:
+      display: "&6&l[Paragon] "
+      permission: "joshymc.tag.legendary"
+    icon:
+      display: "&6&l[Icon] "
+      permission: "joshymc.tag.legendary"
+    chosen:
+      display: "&6&l[Chosen] "
+      permission: "joshymc.tag.legendary"
+    anointed:
+      display: "&6&l[Anointed] "
+      permission: "joshymc.tag.legendary"
+    hallowed:
+      display: "&6&l[Hallowed] "
+      permission: "joshymc.tag.legendary"
+    revered:
+      display: "&6&l[Revered] "
+      permission: "joshymc.tag.legendary"
+
+  misc:
+    potato_ii:
+      display: "&f[Potato II] "
+      permission: null
+    rubber_duck:
+      display: "&f[Rubber Duck] "
+      permission: null
+    toaster:
+      display: "&f[Toaster] "
+      permission: null
+    sock:
+      display: "&f[Sock] "
+      permission: null
+    spoon:
+      display: "&f[Spoon] "
+      permission: null
+    fork:
+      display: "&f[Fork] "
+      permission: null
+    doorknob:
+      display: "&f[Doorknob] "
+      permission: null
+    lampshade:
+      display: "&f[Lampshade] "
+      permission: null
+    cactus_ii:
+      display: "&f[Cactus II] "
+      permission: null
+    pineapple:
+      display: "&f[Pineapple] "
+      permission: null
+    coconut:
+      display: "&f[Coconut] "
+      permission: null
+    avocado:
+      display: "&f[Avocado] "
+      permission: null
+    banana:
+      display: "&f[Banana] "
+      permission: null
+    mango:
+      display: "&f[Mango] "
+      permission: null
+    kiwi:
+      display: "&f[Kiwi] "
+      permission: null
+    grape:
+      display: "&f[Grape] "
+      permission: null
+    lemon:
+      display: "&f[Lemon] "
+      permission: null
+    cherry:
+      display: "&f[Cherry] "
+      permission: null
+
+  profession:
+    doctor:
+      display: "&a[Doctor] "
+      permission: null
+    lawyer:
+      display: "&a[Lawyer] "
+      permission: null
+    chef:
+      display: "&a[Chef] "
+      permission: null
+    artist:
+      display: "&a[Artist] "
+      permission: null
+    scientist:
+      display: "&a[Scientist] "
+      permission: null
+    teacher:
+      display: "&a[Teacher] "
+      permission: null
+    detective:
+      display: "&a[Detective] "
+      permission: null
+    journalist:
+      display: "&a[Journalist] "
+      permission: null
+    firefighter:
+      display: "&a[Firefighter] "
+      permission: null
+    paramedic:
+      display: "&a[Paramedic] "
+      permission: null
+    mechanic:
+      display: "&a[Mechanic] "
+      permission: null
+    electrician:
+      display: "&a[Electrician] "
+      permission: null
+    plumber:
+      display: "&a[Plumber] "
+      permission: null
+    carpenter:
+      display: "&a[Carpenter] "
+      permission: null
+    baker:
+      display: "&a[Baker] "
+      permission: null
+    butcher:
+      display: "&a[Butcher] "
+      permission: null
+    librarian:
+      display: "&a[Librarian] "
+      permission: null
+    astronomer:
+      display: "&a[Astronomer] "
+      permission: null
+    botanist:
+      display: "&a[Botanist] "
+      permission: null
+    geologist:
+      display: "&a[Geologist] "
+      permission: null
+
+  deity:
+    zeus:
+      display: "&e[Zeus] "
+      permission: null
+    poseidon:
+      display: "&e[Poseidon] "
+      permission: null
+    hades:
+      display: "&e[Hades] "
+      permission: null
+    athena:
+      display: "&e[Athena] "
+      permission: null
+    ares:
+      display: "&e[Ares] "
+      permission: null
+    apollo_deity:
+      display: "&e[Apollo] "
+      permission: null
+    artemis:
+      display: "&e[Artemis] "
+      permission: null
+    hermes:
+      display: "&e[Hermes] "
+      permission: null
+    odin:
+      display: "&e[Odin] "
+      permission: null
+    thor:
+      display: "&e[Thor] "
+      permission: null
+    loki:
+      display: "&e[Loki] "
+      permission: null
+    freya:
+      display: "&e[Freya] "
+      permission: null
+    anubis:
+      display: "&e[Anubis] "
+      permission: null
+    ra:
+      display: "&e[Ra] "
+      permission: null
+    isis:
+      display: "&e[Isis] "
+      permission: null
+    osiris:
+      display: "&e[Osiris] "
+      permission: null
+    amaterasu:
+      display: "&e[Amaterasu] "
+      permission: null
+    vishnu:
+      display: "&e[Vishnu] "
+      permission: null
+    shiva:
+      display: "&e[Shiva] "
+      permission: null
+    gaia:
+      display: "&e[Gaia] "
+      permission: null
+
+  ocean_life:
+    dolphin:
+      display: "&b[Dolphin] "
+      permission: null
+    whale:
+      display: "&b[Whale] "
+      permission: null
+    octopus:
+      display: "&b[Octopus] "
+      permission: null
+    jellyfish:
+      display: "&b[Jellyfish] "
+      permission: null
+    seahorse:
+      display: "&b[Seahorse] "
+      permission: null
+    starfish:
+      display: "&b[Starfish] "
+      permission: null
+    coral_reef:
+      display: "&b[Coral Reef] "
+      permission: null
+    orca:
+      display: "&b[Orca] "
+      permission: null
+    stingray:
+      display: "&b[Stingray] "
+      permission: null
+    lobster:
+      display: "&b[Lobster] "
+      permission: null
+    clownfish:
+      display: "&b[Clownfish] "
+      permission: null
+    swordfish:
+      display: "&b[Swordfish] "
+      permission: null
+    barracuda:
+      display: "&b[Barracuda] "
+      permission: null
+    manatee:
+      display: "&b[Manatee] "
+      permission: null
+    narwhal:
+      display: "&b[Narwhal] "
+      permission: null
+    turtle:
+      display: "&b[Turtle] "
+      permission: null
+    crab:
+      display: "&b[Crab] "
+      permission: null
+    shrimp:
+      display: "&b[Shrimp] "
+      permission: null
+    anglerfish:
+      display: "&b[Anglerfish] "
+      permission: null
+    manta_ray:
+      display: "&b[Manta Ray] "
+      permission: null
+
+  ninja:
+    shinobi:
+      display: "&8[Shinobi] "
+      permission: null
+    samurai:
+      display: "&8[Samurai] "
+      permission: null
+    ronin:
+      display: "&8[Ronin] "
+      permission: null
+    sensei:
+      display: "&8[Sensei] "
+      permission: null
+    senpai:
+      display: "&8[Senpai] "
+      permission: null
+    daimyo:
+      display: "&8[Daimyo] "
+      permission: null
+    bushido:
+      display: "&8[Bushido] "
+      permission: null
+    katana:
+      display: "&8[Katana] "
+      permission: null
+    shuriken:
+      display: "&8[Shuriken] "
+      permission: null
+    kunai:
+      display: "&8[Kunai] "
+      permission: null
+    shadow_blade:
+      display: "&8[Shadow Blade] "
+      permission: null
+    silent_strike:
+      display: "&8[Silent Strike] "
+      permission: null
+    nightfall:
+      display: "&8[Nightfall] "
+      permission: null
+    swift:
+      display: "&8[Swift] "
+      permission: null
+    stealth:
+      display: "&8[Stealth] "
+      permission: null
+    blade_dancer:
+      display: "&8[Blade Dancer] "
+      permission: null
+    wind_walker:
+      display: "&8[Wind Walker] "
+      permission: null
+    death_lotus:
+      display: "&8[Death Lotus] "
+      permission: null
+    iron_fist:
+      display: "&8[Iron Fist] "
+      permission: null
+    dragon_claw:
+      display: "&8[Dragon Claw] "
+      permission: null
+
+  christmas:
+    santa:
+      display: "&c[Santa] "
+      permission: "joshymc.tag.holiday"
+    elf:
+      display: "&a[Elf] "
+      permission: "joshymc.tag.holiday"
+    rudolph:
+      display: "&c[Rudolph] "
+      permission: "joshymc.tag.holiday"
+    grinch:
+      display: "&a[Grinch] "
+      permission: "joshymc.tag.holiday"
+    snowman:
+      display: "&c[Snowman] "
+      permission: "joshymc.tag.holiday"
+    frosty:
+      display: "&a[Frosty] "
+      permission: "joshymc.tag.holiday"
+    candy_cane:
+      display: "&c[Candy Cane] "
+      permission: "joshymc.tag.holiday"
+    jingle:
+      display: "&a[Jingle] "
+      permission: "joshymc.tag.holiday"
+    noel:
+      display: "&c[Noel] "
+      permission: "joshymc.tag.holiday"
+    mistletoe:
+      display: "&a[Mistletoe] "
+      permission: "joshymc.tag.holiday"
+    north_pole:
+      display: "&c[North Pole] "
+      permission: "joshymc.tag.holiday"
+    nutcracker:
+      display: "&a[Nutcracker] "
+      permission: "joshymc.tag.holiday"
+    scrooge:
+      display: "&c[Scrooge] "
+      permission: "joshymc.tag.holiday"
+    krampus:
+      display: "&a[Krampus] "
+      permission: "joshymc.tag.holiday"
+    yule:
+      display: "&c[Yule] "
+      permission: "joshymc.tag.holiday"
+
+  halloween:
+    spooky_ii:
+      display: "&6[Spooky II] "
+      permission: "joshymc.tag.holiday"
+    pumpkin:
+      display: "&5[Pumpkin] "
+      permission: "joshymc.tag.holiday"
+    witch_ii:
+      display: "&6[Witch II] "
+      permission: "joshymc.tag.holiday"
+    ghost_ii:
+      display: "&5[Ghost II] "
+      permission: "joshymc.tag.holiday"
+    vampire_ii:
+      display: "&6[Vampire II] "
+      permission: "joshymc.tag.holiday"
+    werewolf_ii:
+      display: "&5[Werewolf II] "
+      permission: "joshymc.tag.holiday"
+    mummy:
+      display: "&6[Mummy] "
+      permission: "joshymc.tag.holiday"
+    frankenstein:
+      display: "&5[Frankenstein] "
+      permission: "joshymc.tag.holiday"
+    dracula:
+      display: "&6[Dracula] "
+      permission: "joshymc.tag.holiday"
+    haunted:
+      display: "&5[Haunted] "
+      permission: "joshymc.tag.holiday"
+    trick:
+      display: "&6[Trick] "
+      permission: "joshymc.tag.holiday"
+    treat:
+      display: "&5[Treat] "
+      permission: "joshymc.tag.holiday"
+    candy:
+      display: "&6[Candy] "
+      permission: "joshymc.tag.holiday"
+    scarecrow:
+      display: "&5[Scarecrow] "
+      permission: "joshymc.tag.holiday"
+    boo:
+      display: "&6[Boo] "
+      permission: "joshymc.tag.holiday"
+
+  valentines:
+    cupid:
+      display: "&c[Cupid] "
+      permission: "joshymc.tag.holiday"
+    sweetheart:
+      display: "&d[Sweetheart] "
+      permission: "joshymc.tag.holiday"
+    lovebird:
+      display: "&c[Lovebird] "
+      permission: "joshymc.tag.holiday"
+    romeo:
+      display: "&d[Romeo] "
+      permission: "joshymc.tag.holiday"
+    juliet:
+      display: "&c[Juliet] "
+      permission: "joshymc.tag.holiday"
+    valentine:
+      display: "&d[Valentine] "
+      permission: "joshymc.tag.holiday"
+    heartbreaker:
+      display: "&c[Heartbreaker] "
+      permission: "joshymc.tag.holiday"
+    soulmate:
+      display: "&d[Soulmate] "
+      permission: "joshymc.tag.holiday"
+    darling:
+      display: "&c[Darling] "
+      permission: "joshymc.tag.holiday"
+    beloved:
+      display: "&d[Beloved] "
+      permission: "joshymc.tag.holiday"
+
+  easter_holiday:
+    bunny:
+      display: "&d[Bunny] "
+      permission: "joshymc.tag.holiday"
+    easter_chick:
+      display: "&e[Easter Chick] "
+      permission: "joshymc.tag.holiday"
+    egg_hunter:
+      display: "&d[Egg Hunter] "
+      permission: "joshymc.tag.holiday"
+    spring_bloom:
+      display: "&e[Spring Bloom] "
+      permission: "joshymc.tag.holiday"
+    pastel:
+      display: "&d[Pastel] "
+      permission: "joshymc.tag.holiday"
+    basket:
+      display: "&e[Basket] "
+      permission: "joshymc.tag.holiday"
+    springtime:
+      display: "&d[Springtime] "
+      permission: "joshymc.tag.holiday"
+    tulip:
+      display: "&e[Tulip] "
+      permission: "joshymc.tag.holiday"
+    lamb:
+      display: "&d[Lamb] "
+      permission: "joshymc.tag.holiday"
+    daffodil:
+      display: "&e[Daffodil] "
+      permission: "joshymc.tag.holiday"
+
+  stpatricks:
+    leprechaun:
+      display: "&a[Leprechaun] "
+      permission: "joshymc.tag.holiday"
+    shamrock:
+      display: "&a[Shamrock] "
+      permission: "joshymc.tag.holiday"
+    lucky_iii:
+      display: "&a[Lucky III] "
+      permission: "joshymc.tag.holiday"
+    irish:
+      display: "&a[Irish] "
+      permission: "joshymc.tag.holiday"
+    rainbow_ii:
+      display: "&a[Rainbow II] "
+      permission: "joshymc.tag.holiday"
+    pot_of_gold:
+      display: "&a[Pot of Gold] "
+      permission: "joshymc.tag.holiday"
+    celtic:
+      display: "&a[Celtic] "
+      permission: "joshymc.tag.holiday"
+    emerald_ii:
+      display: "&a[Emerald II] "
+      permission: "joshymc.tag.holiday"
+    clover_ii:
+      display: "&a[Clover II] "
+      permission: "joshymc.tag.holiday"
+    dublin:
+      display: "&a[Dublin] "
+      permission: "joshymc.tag.holiday"
+
+  july4th:
+    patriot:
+      display: "&c[Patriot] "
+      permission: "joshymc.tag.holiday"
+    firework:
+      display: "&f[Firework] "
+      permission: "joshymc.tag.holiday"
+    liberty:
+      display: "&9[Liberty] "
+      permission: "joshymc.tag.holiday"
+    freedom:
+      display: "&c[Freedom] "
+      permission: "joshymc.tag.holiday"
+    eagle_ii:
+      display: "&f[Eagle II] "
+      permission: "joshymc.tag.holiday"
+    stars:
+      display: "&9[Stars] "
+      permission: "joshymc.tag.holiday"
+    stripes:
+      display: "&c[Stripes] "
+      permission: "joshymc.tag.holiday"
+    sparkler:
+      display: "&f[Sparkler] "
+      permission: "joshymc.tag.holiday"
+    independence:
+      display: "&9[Independence] "
+      permission: "joshymc.tag.holiday"
+    revolution:
+      display: "&c[Revolution] "
+      permission: "joshymc.tag.holiday"
+
+  thanksgiving:
+    pilgrim:
+      display: "&6[Pilgrim] "
+      permission: "joshymc.tag.holiday"
+    turkey:
+      display: "&e[Turkey] "
+      permission: "joshymc.tag.holiday"
+    harvest_ii:
+      display: "&6[Harvest II] "
+      permission: "joshymc.tag.holiday"
+    cornucopia:
+      display: "&e[Cornucopia] "
+      permission: "joshymc.tag.holiday"
+    grateful:
+      display: "&6[Grateful] "
+      permission: "joshymc.tag.holiday"
+    thankful:
+      display: "&e[Thankful] "
+      permission: "joshymc.tag.holiday"
+    autumn_ii:
+      display: "&6[Autumn II] "
+      permission: "joshymc.tag.holiday"
+    feast:
+      display: "&e[Feast] "
+      permission: "joshymc.tag.holiday"
+    pumpkin_pie:
+      display: "&6[Pumpkin Pie] "
+      permission: "joshymc.tag.holiday"
+    gobble:
+      display: "&e[Gobble] "
+      permission: "joshymc.tag.holiday"
+
+  newyears:
+    countdown:
+      display: "&6&l[Countdown] "
+      permission: "joshymc.tag.holiday"
+    midnight:
+      display: "&6&l[Midnight] "
+      permission: "joshymc.tag.holiday"
+    resolution:
+      display: "&6&l[Resolution] "
+      permission: "joshymc.tag.holiday"
+    champagne:
+      display: "&6&l[Champagne] "
+      permission: "joshymc.tag.holiday"
+    confetti:
+      display: "&6&l[Confetti] "
+      permission: "joshymc.tag.holiday"
+    fireworks:
+      display: "&6&l[Fireworks] "
+      permission: "joshymc.tag.holiday"
+    new_dawn:
+      display: "&6&l[New Dawn] "
+      permission: "joshymc.tag.holiday"
+    fresh_start:
+      display: "&6&l[Fresh Start] "
+      permission: "joshymc.tag.holiday"
+    ball_drop:
+      display: "&6&l[Ball Drop] "
+      permission: "joshymc.tag.holiday"
+    cheers:
+      display: "&6&l[Cheers] "
+      permission: "joshymc.tag.holiday"
+
+  winter:
+    snowflake:
+      display: "&b[Snowflake] "
+      permission: "joshymc.tag.holiday"
+    ice_queen:
+      display: "&b[Ice Queen] "
+      permission: "joshymc.tag.holiday"
+    ice_king:
+      display: "&b[Ice King] "
+      permission: "joshymc.tag.holiday"
+    blizzard_ii:
+      display: "&b[Blizzard II] "
+      permission: "joshymc.tag.holiday"
+    polar:
+      display: "&b[Polar] "
+      permission: "joshymc.tag.holiday"
+    arctic:
+      display: "&b[Arctic] "
+      permission: "joshymc.tag.holiday"
+    frozen:
+      display: "&b[Frozen] "
+      permission: "joshymc.tag.holiday"
+    icicle:
+      display: "&b[Icicle] "
+      permission: "joshymc.tag.holiday"
+    sleet:
+      display: "&b[Sleet] "
+      permission: "joshymc.tag.holiday"
+    permafrost:
+      display: "&b[Permafrost] "
+      permission: "joshymc.tag.holiday"

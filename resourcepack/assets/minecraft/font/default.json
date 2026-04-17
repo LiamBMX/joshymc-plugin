@@ -1,0 +1,13 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "joshymc:font/logo.png",
+      "ascent": 18,
+      "height": 22,
+      "chars": [
+        "\uE000"
+      ]
+    }
+  ]
+}

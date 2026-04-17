@@ -1,0 +1,7801 @@
+quests:
+  mining_001:
+    name: "Quest 001: Mining Challenge"
+    description: "Mine 144 Stone"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 144
+    rewards:
+      money: 5000
+      xp: 50
+      items: []
+    prerequisite: null
+  mining_002:
+    name: "Quest 002: Mining Challenge"
+    description: "Mine 16 Coal"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "COAL_ORE"
+    amount: 16
+    rewards:
+      money: 5416
+      xp: 54
+      items: []
+    prerequisite: null
+  mining_003:
+    name: "Quest 003: Mining Challenge"
+    description: "Excavate 160 Blocks"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: ""
+    amount: 160
+    rewards:
+      money: 5833
+      xp: 58
+      items: []
+    prerequisite: null
+  mining_004:
+    name: "Quest 004: Mining Challenge"
+    description: "Mine 160 Stone"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 160
+    rewards:
+      money: 6250
+      xp: 62
+      items: []
+    prerequisite: null
+  mining_005:
+    name: "Quest 005: Mining Challenge"
+    description: "Mine 16 Coal"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "COAL_ORE"
+    amount: 16
+    rewards:
+      money: 6666
+      xp: 66
+      items: []
+    prerequisite: null
+  mining_006:
+    name: "Quest 006: Mining Challenge"
+    description: "Excavate 176 Blocks"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: ""
+    amount: 176
+    rewards:
+      money: 7083
+      xp: 70
+      items: []
+    prerequisite: null
+  mining_007:
+    name: "Quest 007: Mining Challenge"
+    description: "Mine 176 Stone"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 176
+    rewards:
+      money: 7500
+      xp: 75
+      items: []
+    prerequisite: null
+  mining_008:
+    name: "Quest 008: Mining Challenge"
+    description: "Mine 16 Coal"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "COAL_ORE"
+    amount: 16
+    rewards:
+      money: 7916
+      xp: 79
+      items: []
+    prerequisite: null
+  mining_009:
+    name: "Quest 009: Mining Challenge"
+    description: "Excavate 192 Blocks"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: ""
+    amount: 192
+    rewards:
+      money: 8333
+      xp: 83
+      items: []
+    prerequisite: null
+  mining_010:
+    name: "Quest 010: Mining Challenge"
+    description: "Mine 192 Stone"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 192
+    rewards:
+      money: 8750
+      xp: 87
+      items: []
+    prerequisite: null
+  mining_011:
+    name: "Quest 011: Mining Challenge"
+    description: "Mine 16 Coal"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "COAL_ORE"
+    amount: 16
+    rewards:
+      money: 9166
+      xp: 91
+      items: []
+    prerequisite: null
+  mining_012:
+    name: "Quest 012: Mining Challenge"
+    description: "Excavate 208 Blocks"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: ""
+    amount: 208
+    rewards:
+      money: 9583
+      xp: 95
+      items: []
+    prerequisite: null
+  mining_013:
+    name: "Quest 013: Mining Challenge"
+    description: "Mine 224 Stone"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 224
+    rewards:
+      money: 10000
+      xp: 100
+      items: []
+    prerequisite: null
+  mining_014:
+    name: "Quest 014: Mining Challenge"
+    description: "Mine 16 Coal"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "COAL_ORE"
+    amount: 16
+    rewards:
+      money: 10416
+      xp: 104
+      items: []
+    prerequisite: null
+  mining_015:
+    name: "Quest 015: Mining Challenge"
+    description: "Excavate 240 Blocks"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: ""
+    amount: 240
+    rewards:
+      money: 10833
+      xp: 108
+      items: []
+    prerequisite: null
+  mining_016:
+    name: "Quest 016: Mining Challenge"
+    description: "Mine 240 Stone"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 240
+    rewards:
+      money: 11250
+      xp: 112
+      items: []
+    prerequisite: null
+  mining_017:
+    name: "Quest 017: Mining Challenge"
+    description: "Mine 16 Coal"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "COAL_ORE"
+    amount: 16
+    rewards:
+      money: 11666
+      xp: 116
+      items: []
+    prerequisite: null
+  mining_018:
+    name: "Quest 018: Mining Challenge"
+    description: "Excavate 256 Blocks"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: ""
+    amount: 256
+    rewards:
+      money: 12083
+      xp: 120
+      items: []
+    prerequisite: null
+  mining_019:
+    name: "Quest 019: Mining Challenge"
+    description: "Mine 272 Stone"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 272
+    rewards:
+      money: 12500
+      xp: 125
+      items: []
+    prerequisite: null
+  mining_020:
+    name: "Quest 020: Mining Challenge"
+    description: "Mine 16 Coal"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "COAL_ORE"
+    amount: 16
+    rewards:
+      money: 12916
+      xp: 129
+      items: []
+    prerequisite: null
+  mining_021:
+    name: "Quest 021: Mining Challenge"
+    description: "Excavate 288 Blocks"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: ""
+    amount: 288
+    rewards:
+      money: 13333
+      xp: 133
+      items: []
+    prerequisite: null
+  mining_022:
+    name: "Quest 022: Mining Challenge"
+    description: "Mine 288 Stone"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 288
+    rewards:
+      money: 13750
+      xp: 137
+      items: []
+    prerequisite: null
+  mining_023:
+    name: "Quest 023: Mining Challenge"
+    description: "Mine 32 Coal"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "COAL_ORE"
+    amount: 32
+    rewards:
+      money: 14166
+      xp: 141
+      items: []
+    prerequisite: null
+  mining_024:
+    name: "Quest 024: Mining Challenge"
+    description: "Excavate 320 Blocks"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: ""
+    amount: 320
+    rewards:
+      money: 14583
+      xp: 145
+      items: []
+    prerequisite: null
+  mining_025:
+    name: "Quest 025: Mining Challenge"
+    description: "Mine 320 Stone"
+    category: MINING
+    difficulty: EASY
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 320
+    rewards:
+      money: 15000
+      xp: 150
+      items: []
+    prerequisite: null
+  mining_026:
+    name: "Quest 026: Mining Challenge"
+    description: "Mine 32 Copper Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "COPPER_ORE"
+    amount: 32
+    rewards:
+      money: 20000
+      xp: 200
+      items: []
+    prerequisite: null
+  mining_027:
+    name: "Quest 027: Mining Challenge"
+    description: "Collect 240 Gravel"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "GRAVEL"
+    amount: 240
+    rewards:
+      money: 22500
+      xp: 212
+      items: []
+    prerequisite: null
+  mining_028:
+    name: "Quest 028: Mining Challenge"
+    description: "Mine 32 Iron Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "IRON_ORE"
+    amount: 32
+    rewards:
+      money: 25000
+      xp: 225
+      items: []
+    prerequisite: null
+  mining_029:
+    name: "Quest 029: Mining Challenge"
+    description: "Mine 32 Copper Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "COPPER_ORE"
+    amount: 32
+    rewards:
+      money: 27500
+      xp: 237
+      items: []
+    prerequisite: null
+  mining_030:
+    name: "Quest 030: Mining Challenge"
+    description: "Collect 272 Gravel"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "GRAVEL"
+    amount: 272
+    rewards:
+      money: 30000
+      xp: 250
+      items: []
+    prerequisite: null
+  mining_031:
+    name: "Quest 031: Mining Challenge"
+    description: "Mine 32 Iron Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "IRON_ORE"
+    amount: 32
+    rewards:
+      money: 32500
+      xp: 262
+      items: []
+    prerequisite: null
+  mining_032:
+    name: "Quest 032: Mining Challenge"
+    description: "Mine 32 Copper Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "COPPER_ORE"
+    amount: 32
+    rewards:
+      money: 35000
+      xp: 275
+      items: []
+    prerequisite: null
+  mining_033:
+    name: "Quest 033: Mining Challenge"
+    description: "Collect 320 Gravel"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "GRAVEL"
+    amount: 320
+    rewards:
+      money: 37500
+      xp: 287
+      items: []
+    prerequisite: null
+  mining_034:
+    name: "Quest 034: Mining Challenge"
+    description: "Mine 32 Iron Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "IRON_ORE"
+    amount: 32
+    rewards:
+      money: 40000
+      xp: 300
+      items: []
+    prerequisite: null
+  mining_035:
+    name: "Quest 035: Mining Challenge"
+    description: "Mine 32 Copper Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "COPPER_ORE"
+    amount: 32
+    rewards:
+      money: 42500
+      xp: 312
+      items: []
+    prerequisite: null
+  mining_036:
+    name: "Quest 036: Mining Challenge"
+    description: "Collect 368 Gravel"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "GRAVEL"
+    amount: 368
+    rewards:
+      money: 45000
+      xp: 325
+      items: []
+    prerequisite: null
+  mining_037:
+    name: "Quest 037: Mining Challenge"
+    description: "Mine 48 Iron Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "IRON_ORE"
+    amount: 48
+    rewards:
+      money: 47500
+      xp: 337
+      items: []
+    prerequisite: null
+  mining_038:
+    name: "Quest 038: Mining Challenge"
+    description: "Mine 48 Copper Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "COPPER_ORE"
+    amount: 48
+    rewards:
+      money: 50000
+      xp: 350
+      items: []
+    prerequisite: null
+  mining_039:
+    name: "Quest 039: Mining Challenge"
+    description: "Collect 432 Gravel"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "GRAVEL"
+    amount: 432
+    rewards:
+      money: 52500
+      xp: 362
+      items: []
+    prerequisite: null
+  mining_040:
+    name: "Quest 040: Mining Challenge"
+    description: "Mine 48 Iron Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "IRON_ORE"
+    amount: 48
+    rewards:
+      money: 55000
+      xp: 375
+      items: []
+    prerequisite: null
+  mining_041:
+    name: "Quest 041: Mining Challenge"
+    description: "Mine 48 Copper Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "COPPER_ORE"
+    amount: 48
+    rewards:
+      money: 57500
+      xp: 387
+      items: []
+    prerequisite: null
+  mining_042:
+    name: "Quest 042: Mining Challenge"
+    description: "Collect 496 Gravel"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "GRAVEL"
+    amount: 496
+    rewards:
+      money: 60000
+      xp: 400
+      items: []
+    prerequisite: null
+  mining_043:
+    name: "Quest 043: Mining Challenge"
+    description: "Mine 48 Iron Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "IRON_ORE"
+    amount: 48
+    rewards:
+      money: 62500
+      xp: 412
+      items: []
+    prerequisite: null
+  mining_044:
+    name: "Quest 044: Mining Challenge"
+    description: "Mine 48 Copper Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "COPPER_ORE"
+    amount: 48
+    rewards:
+      money: 65000
+      xp: 425
+      items: []
+    prerequisite: null
+  mining_045:
+    name: "Quest 045: Mining Challenge"
+    description: "Collect 576 Gravel"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "GRAVEL"
+    amount: 576
+    rewards:
+      money: 67500
+      xp: 437
+      items: []
+    prerequisite: null
+  mining_046:
+    name: "Quest 046: Mining Challenge"
+    description: "Mine 64 Iron Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "IRON_ORE"
+    amount: 64
+    rewards:
+      money: 70000
+      xp: 450
+      items: []
+    prerequisite: null
+  mining_047:
+    name: "Quest 047: Mining Challenge"
+    description: "Mine 64 Copper Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "COPPER_ORE"
+    amount: 64
+    rewards:
+      money: 72500
+      xp: 462
+      items: []
+    prerequisite: null
+  mining_048:
+    name: "Quest 048: Mining Challenge"
+    description: "Collect 672 Gravel"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "GRAVEL"
+    amount: 672
+    rewards:
+      money: 75000
+      xp: 475
+      items: []
+    prerequisite: null
+  mining_049:
+    name: "Quest 049: Mining Challenge"
+    description: "Mine 64 Iron Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "IRON_ORE"
+    amount: 64
+    rewards:
+      money: 77500
+      xp: 487
+      items: []
+    prerequisite: null
+  mining_050:
+    name: "Quest 050: Mining Challenge"
+    description: "Mine 64 Copper Ore"
+    category: MINING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: "COPPER_ORE"
+    amount: 64
+    rewards:
+      money: 80000
+      xp: 500
+      items: []
+    prerequisite: null
+  mining_051:
+    name: "Quest 051: Mining Challenge"
+    description: "Mine 64 Lapis Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "LAPIS_ORE"
+    amount: 64
+    rewards:
+      money: 100000
+      xp: 500
+      items: []
+    prerequisite: null
+  mining_052:
+    name: "Quest 052: Mining Challenge"
+    description: "Mine 80 Gold Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "GOLD_ORE"
+    amount: 80
+    rewards:
+      money: 116666
+      xp: 562
+      items: []
+    prerequisite: null
+  mining_053:
+    name: "Quest 053: Mining Challenge"
+    description: "Mine 80 Redstone Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 80
+    rewards:
+      money: 133333
+      xp: 625
+      items: []
+    prerequisite: null
+  mining_054:
+    name: "Quest 054: Mining Challenge"
+    description: "Mine 80 Lapis Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "LAPIS_ORE"
+    amount: 80
+    rewards:
+      money: 150000
+      xp: 687
+      items: []
+    prerequisite: null
+  mining_055:
+    name: "Quest 055: Mining Challenge"
+    description: "Mine 80 Gold Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "GOLD_ORE"
+    amount: 80
+    rewards:
+      money: 166666
+      xp: 750
+      items: []
+    prerequisite: null
+  mining_056:
+    name: "Quest 056: Mining Challenge"
+    description: "Mine 96 Redstone Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 96
+    rewards:
+      money: 183333
+      xp: 812
+      items: []
+    prerequisite: null
+  mining_057:
+    name: "Quest 057: Mining Challenge"
+    description: "Mine 96 Lapis Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "LAPIS_ORE"
+    amount: 96
+    rewards:
+      money: 200000
+      xp: 875
+      items: []
+    prerequisite: null
+  mining_058:
+    name: "Quest 058: Mining Challenge"
+    description: "Mine 96 Gold Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "GOLD_ORE"
+    amount: 96
+    rewards:
+      money: 216666
+      xp: 937
+      items: []
+    prerequisite: null
+  mining_059:
+    name: "Quest 059: Mining Challenge"
+    description: "Mine 96 Redstone Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 96
+    rewards:
+      money: 233333
+      xp: 1000
+      items: []
+    prerequisite: null
+  mining_060:
+    name: "Quest 060: Mining Challenge"
+    description: "Mine 112 Lapis Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "LAPIS_ORE"
+    amount: 112
+    rewards:
+      money: 250000
+      xp: 1062
+      items: []
+    prerequisite: null
+  mining_061:
+    name: "Quest 061: Mining Challenge"
+    description: "Mine 112 Gold Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "GOLD_ORE"
+    amount: 112
+    rewards:
+      money: 266666
+      xp: 1125
+      items: []
+    prerequisite: null
+  mining_062:
+    name: "Quest 062: Mining Challenge"
+    description: "Mine 112 Redstone Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 112
+    rewards:
+      money: 283333
+      xp: 1187
+      items: []
+    prerequisite: null
+  mining_063:
+    name: "Quest 063: Mining Challenge"
+    description: "Mine 128 Lapis Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "LAPIS_ORE"
+    amount: 128
+    rewards:
+      money: 300000
+      xp: 1250
+      items: []
+    prerequisite: null
+  mining_064:
+    name: "Quest 064: Mining Challenge"
+    description: "Mine 128 Gold Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "GOLD_ORE"
+    amount: 128
+    rewards:
+      money: 316666
+      xp: 1312
+      items: []
+    prerequisite: null
+  mining_065:
+    name: "Quest 065: Mining Challenge"
+    description: "Mine 144 Redstone Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 144
+    rewards:
+      money: 333333
+      xp: 1375
+      items: []
+    prerequisite: null
+  mining_066:
+    name: "Quest 066: Mining Challenge"
+    description: "Mine 144 Lapis Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "LAPIS_ORE"
+    amount: 144
+    rewards:
+      money: 350000
+      xp: 1437
+      items: []
+    prerequisite: null
+  mining_067:
+    name: "Quest 067: Mining Challenge"
+    description: "Mine 160 Gold Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "GOLD_ORE"
+    amount: 160
+    rewards:
+      money: 366666
+      xp: 1500
+      items: []
+    prerequisite: null
+  mining_068:
+    name: "Quest 068: Mining Challenge"
+    description: "Mine 160 Redstone Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 160
+    rewards:
+      money: 383333
+      xp: 1562
+      items: []
+    prerequisite: null
+  mining_069:
+    name: "Quest 069: Mining Challenge"
+    description: "Mine 176 Lapis Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "LAPIS_ORE"
+    amount: 176
+    rewards:
+      money: 400000
+      xp: 1625
+      items: []
+    prerequisite: null
+  mining_070:
+    name: "Quest 070: Mining Challenge"
+    description: "Mine 176 Gold Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "GOLD_ORE"
+    amount: 176
+    rewards:
+      money: 416666
+      xp: 1687
+      items: []
+    prerequisite: null
+  mining_071:
+    name: "Quest 071: Mining Challenge"
+    description: "Mine 192 Redstone Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 192
+    rewards:
+      money: 433333
+      xp: 1750
+      items: []
+    prerequisite: null
+  mining_072:
+    name: "Quest 072: Mining Challenge"
+    description: "Mine 192 Lapis Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "LAPIS_ORE"
+    amount: 192
+    rewards:
+      money: 450000
+      xp: 1812
+      items: []
+    prerequisite: null
+  mining_073:
+    name: "Quest 073: Mining Challenge"
+    description: "Mine 208 Gold Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "GOLD_ORE"
+    amount: 208
+    rewards:
+      money: 466666
+      xp: 1875
+      items: []
+    prerequisite: null
+  mining_074:
+    name: "Quest 074: Mining Challenge"
+    description: "Mine 208 Redstone Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "STONE"
+    amount: 208
+    rewards:
+      money: 483333
+      xp: 1937
+      items: []
+    prerequisite: null
+  mining_075:
+    name: "Quest 075: Mining Challenge"
+    description: "Mine 224 Lapis Ore"
+    category: MINING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "LAPIS_ORE"
+    amount: 224
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  mining_076:
+    name: "Quest 076: Mining Challenge"
+    description: "Mine 240 Obsidian"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "OBSIDIAN"
+    amount: 240
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  mining_077:
+    name: "Quest 077: Mining Challenge"
+    description: "Mine 256 Diamond"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "DIAMOND_ORE"
+    amount: 256
+    rewards:
+      money: 687500
+      xp: 2333
+      items: []
+    prerequisite: null
+  mining_078:
+    name: "Quest 078: Mining Challenge"
+    description: "Mine 272 Obsidian"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "OBSIDIAN"
+    amount: 272
+    rewards:
+      money: 875000
+      xp: 2666
+      items: []
+    prerequisite: null
+  mining_079:
+    name: "Quest 079: Mining Challenge"
+    description: "Mine 304 Diamond"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "DIAMOND_ORE"
+    amount: 304
+    rewards:
+      money: 1062500
+      xp: 3000
+      items: []
+    prerequisite: null
+  mining_080:
+    name: "Quest 080: Mining Challenge"
+    description: "Mine 320 Obsidian"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "OBSIDIAN"
+    amount: 320
+    rewards:
+      money: 1250000
+      xp: 3333
+      items: []
+    prerequisite: null
+  mining_081:
+    name: "Quest 081: Mining Challenge"
+    description: "Mine 352 Diamond"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "DIAMOND_ORE"
+    amount: 352
+    rewards:
+      money: 1437500
+      xp: 3666
+      items: []
+    prerequisite: null
+  mining_082:
+    name: "Quest 082: Mining Challenge"
+    description: "Mine 384 Obsidian"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "OBSIDIAN"
+    amount: 384
+    rewards:
+      money: 1625000
+      xp: 4000
+      items: []
+    prerequisite: null
+  mining_083:
+    name: "Quest 083: Mining Challenge"
+    description: "Mine 400 Diamond"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "DIAMOND_ORE"
+    amount: 400
+    rewards:
+      money: 1812500
+      xp: 4333
+      items: []
+    prerequisite: null
+  mining_084:
+    name: "Quest 084: Mining Challenge"
+    description: "Mine 432 Obsidian"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "OBSIDIAN"
+    amount: 432
+    rewards:
+      money: 2000000
+      xp: 4666
+      items: []
+    prerequisite: null
+  mining_085:
+    name: "Quest 085: Mining Challenge"
+    description: "Mine 480 Diamond"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "DIAMOND_ORE"
+    amount: 480
+    rewards:
+      money: 2187500
+      xp: 5000
+      items: []
+    prerequisite: null
+  mining_086:
+    name: "Quest 086: Mining Challenge"
+    description: "Mine 512 Obsidian"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "OBSIDIAN"
+    amount: 512
+    rewards:
+      money: 2375000
+      xp: 5333
+      items: []
+    prerequisite: null
+  mining_087:
+    name: "Quest 087: Mining Challenge"
+    description: "Mine 560 Diamond"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "DIAMOND_ORE"
+    amount: 560
+    rewards:
+      money: 2562500
+      xp: 5666
+      items: []
+    prerequisite: null
+  mining_088:
+    name: "Quest 088: Mining Challenge"
+    description: "Mine 592 Obsidian"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "OBSIDIAN"
+    amount: 592
+    rewards:
+      money: 2750000
+      xp: 6000
+      items: []
+    prerequisite: null
+  mining_089:
+    name: "Quest 089: Mining Challenge"
+    description: "Mine 640 Diamond"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "DIAMOND_ORE"
+    amount: 640
+    rewards:
+      money: 2937500
+      xp: 6333
+      items: []
+    prerequisite: null
+  mining_090:
+    name: "Quest 090: Mining Challenge"
+    description: "Mine 704 Obsidian"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "OBSIDIAN"
+    amount: 704
+    rewards:
+      money: 3125000
+      xp: 6666
+      items: []
+    prerequisite: null
+  mining_091:
+    name: "Quest 091: Mining Challenge"
+    description: "Mine 3,760 Ancient Debris"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "ANCIENT_DEBRIS"
+    amount: 3760
+    rewards:
+      money: 3312500
+      xp: 7000
+      items: []
+    prerequisite: null
+  mining_092:
+    name: "Quest 092: Mining Challenge"
+    description: "Extract 816 Amethyst Shards"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "AMETHYST_CLUSTER"
+    amount: 816
+    rewards:
+      money: 3500000
+      xp: 7333
+      items: []
+    prerequisite: null
+  mining_093:
+    name: "Quest 093: Mining Challenge"
+    description: "Mine 880 Ancient Debris"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "ANCIENT_DEBRIS"
+    amount: 880
+    rewards:
+      money: 3687500
+      xp: 7666
+      items: []
+    prerequisite: null
+  mining_094:
+    name: "Quest 094: Mining Challenge"
+    description: "Extract 944 Amethyst Shards"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "AMETHYST_CLUSTER"
+    amount: 944
+    rewards:
+      money: 3875000
+      xp: 8000
+      items: []
+    prerequisite: null
+  mining_095:
+    name: "Quest 095: Mining Challenge"
+    description: "Mine 1,024 Ancient Debris"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "ANCIENT_DEBRIS"
+    amount: 1024
+    rewards:
+      money: 4062500
+      xp: 8333
+      items: []
+    prerequisite: null
+  mining_096:
+    name: "Quest 096: Mining Challenge"
+    description: "Extract 1,104 Amethyst Shards"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "AMETHYST_CLUSTER"
+    amount: 1104
+    rewards:
+      money: 4250000
+      xp: 8666
+      items: []
+    prerequisite: null
+  mining_097:
+    name: "Quest 097: Mining Challenge"
+    description: "Mine 1,200 Ancient Debris"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "ANCIENT_DEBRIS"
+    amount: 1200
+    rewards:
+      money: 4437500
+      xp: 9000
+      items: []
+    prerequisite: null
+  mining_098:
+    name: "Quest 098: Mining Challenge"
+    description: "Extract 1,296 Amethyst Shards"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "AMETHYST_CLUSTER"
+    amount: 1296
+    rewards:
+      money: 4625000
+      xp: 9333
+      items: []
+    prerequisite: null
+  mining_099:
+    name: "Quest 099: Mining Challenge"
+    description: "Mine 1,392 Ancient Debris"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "ANCIENT_DEBRIS"
+    amount: 1392
+    rewards:
+      money: 4812500
+      xp: 9666
+      items: []
+    prerequisite: null
+  mining_100:
+    name: "Quest 100: Mining Challenge"
+    description: "Extract 1,504 Amethyst Shards"
+    category: MINING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "AMETHYST_CLUSTER"
+    amount: 1504
+    rewards:
+      money: 5000000
+      xp: 10000
+      items: []
+    prerequisite: null
+  slaying_001:
+    name: "Quest 001: Slaying Challenge"
+    description: "Kill 16 Pigs"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "PIG"
+    amount: 16
+    rewards:
+      money: 5000
+      xp: 50
+      items: []
+    prerequisite: null
+  slaying_002:
+    name: "Quest 002: Slaying Challenge"
+    description: "Kill 16 Cows"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "COW"
+    amount: 16
+    rewards:
+      money: 5416
+      xp: 54
+      items: []
+    prerequisite: null
+  slaying_003:
+    name: "Quest 003: Slaying Challenge"
+    description: "Kill 16 Sheep"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "SHEEP"
+    amount: 16
+    rewards:
+      money: 5833
+      xp: 58
+      items: []
+    prerequisite: null
+  slaying_004:
+    name: "Quest 004: Slaying Challenge"
+    description: "Kill 16 Chickens"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "CHICKEN"
+    amount: 16
+    rewards:
+      money: 6250
+      xp: 62
+      items: []
+    prerequisite: null
+  slaying_005:
+    name: "Quest 005: Slaying Challenge"
+    description: "Kill 16 Rabbits"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "RABBIT"
+    amount: 16
+    rewards:
+      money: 6666
+      xp: 66
+      items: []
+    prerequisite: null
+  slaying_006:
+    name: "Quest 006: Slaying Challenge"
+    description: "Kill 16 Pigs"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "PIG"
+    amount: 16
+    rewards:
+      money: 7083
+      xp: 70
+      items: []
+    prerequisite: null
+  slaying_007:
+    name: "Quest 007: Slaying Challenge"
+    description: "Kill 16 Cows"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "COW"
+    amount: 16
+    rewards:
+      money: 7500
+      xp: 75
+      items: []
+    prerequisite: null
+  slaying_008:
+    name: "Quest 008: Slaying Challenge"
+    description: "Kill 16 Sheep"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "SHEEP"
+    amount: 16
+    rewards:
+      money: 7916
+      xp: 79
+      items: []
+    prerequisite: null
+  slaying_009:
+    name: "Quest 009: Slaying Challenge"
+    description: "Defeat 5 Players"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_PLAYER
+    target: ""
+    amount: 5
+    rewards:
+      money: 8333
+      xp: 83
+      items: []
+    prerequisite: null
+  slaying_010:
+    name: "Quest 010: Slaying Challenge"
+    description: "Kill 16 Rabbits"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "RABBIT"
+    amount: 16
+    rewards:
+      money: 8750
+      xp: 87
+      items: []
+    prerequisite: null
+  slaying_011:
+    name: "Quest 011: Slaying Challenge"
+    description: "Kill 16 Pigs"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "PIG"
+    amount: 16
+    rewards:
+      money: 9166
+      xp: 91
+      items: []
+    prerequisite: null
+  slaying_012:
+    name: "Quest 012: Slaying Challenge"
+    description: "Kill 16 Cows"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "COW"
+    amount: 16
+    rewards:
+      money: 9583
+      xp: 95
+      items: []
+    prerequisite: null
+  slaying_013:
+    name: "Quest 013: Slaying Challenge"
+    description: "Kill 16 Sheep"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "SHEEP"
+    amount: 16
+    rewards:
+      money: 10000
+      xp: 100
+      items: []
+    prerequisite: null
+  slaying_014:
+    name: "Quest 014: Slaying Challenge"
+    description: "Kill 16 Chickens"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "CHICKEN"
+    amount: 16
+    rewards:
+      money: 10416
+      xp: 104
+      items: []
+    prerequisite: null
+  slaying_015:
+    name: "Quest 015: Slaying Challenge"
+    description: "Kill 16 Rabbits"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "RABBIT"
+    amount: 16
+    rewards:
+      money: 10833
+      xp: 108
+      items: []
+    prerequisite: null
+  slaying_016:
+    name: "Quest 016: Slaying Challenge"
+    description: "Kill 16 Pigs"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "PIG"
+    amount: 16
+    rewards:
+      money: 11250
+      xp: 112
+      items: []
+    prerequisite: null
+  slaying_017:
+    name: "Quest 017: Slaying Challenge"
+    description: "Kill 16 Cows"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "COW"
+    amount: 16
+    rewards:
+      money: 11666
+      xp: 116
+      items: []
+    prerequisite: null
+  slaying_018:
+    name: "Quest 018: Slaying Challenge"
+    description: "Kill 16 Sheep"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "SHEEP"
+    amount: 16
+    rewards:
+      money: 12083
+      xp: 120
+      items: []
+    prerequisite: null
+  slaying_019:
+    name: "Quest 019: Slaying Challenge"
+    description: "Kill 16 Chickens"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "CHICKEN"
+    amount: 16
+    rewards:
+      money: 12500
+      xp: 125
+      items: []
+    prerequisite: null
+  slaying_020:
+    name: "Quest 020: Slaying Challenge"
+    description: "Kill 16 Rabbits"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "RABBIT"
+    amount: 16
+    rewards:
+      money: 12916
+      xp: 129
+      items: []
+    prerequisite: null
+  slaying_021:
+    name: "Quest 021: Slaying Challenge"
+    description: "Kill 16 Pigs"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "PIG"
+    amount: 16
+    rewards:
+      money: 13333
+      xp: 133
+      items: []
+    prerequisite: null
+  slaying_022:
+    name: "Quest 022: Slaying Challenge"
+    description: "Kill 32 Cows"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "COW"
+    amount: 32
+    rewards:
+      money: 13750
+      xp: 137
+      items: []
+    prerequisite: null
+  slaying_023:
+    name: "Quest 023: Slaying Challenge"
+    description: "Kill 32 Sheep"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "SHEEP"
+    amount: 32
+    rewards:
+      money: 14166
+      xp: 141
+      items: []
+    prerequisite: null
+  slaying_024:
+    name: "Quest 024: Slaying Challenge"
+    description: "Defeat 10 Players"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_PLAYER
+    target: ""
+    amount: 10
+    rewards:
+      money: 14583
+      xp: 145
+      items: []
+    prerequisite: null
+  slaying_025:
+    name: "Quest 025: Slaying Challenge"
+    description: "Kill 32 Rabbits"
+    category: COMBAT
+    difficulty: EASY
+    type: KILL_MOB
+    target: "RABBIT"
+    amount: 32
+    rewards:
+      money: 15000
+      xp: 150
+      items: []
+    prerequisite: null
+  slaying_026:
+    name: "Quest 026: Slaying Challenge"
+    description: "Slay 32 Zombies"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "ZOMBIE"
+    amount: 32
+    rewards:
+      money: 20000
+      xp: 200
+      items: []
+    prerequisite: null
+  slaying_027:
+    name: "Quest 027: Slaying Challenge"
+    description: "Kill 32 Skeletons"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "SKELETON"
+    amount: 32
+    rewards:
+      money: 22500
+      xp: 212
+      items: []
+    prerequisite: null
+  slaying_028:
+    name: "Quest 028: Slaying Challenge"
+    description: "Defeat 32 Creepers"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "CREEPER"
+    amount: 32
+    rewards:
+      money: 25000
+      xp: 225
+      items: []
+    prerequisite: null
+  slaying_029:
+    name: "Quest 029: Slaying Challenge"
+    description: "Slay 32 Spiders"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "SPIDER"
+    amount: 32
+    rewards:
+      money: 27500
+      xp: 237
+      items: []
+    prerequisite: null
+  slaying_030:
+    name: "Quest 030: Slaying Challenge"
+    description: "Slay 32 Drowned"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "DROWNED"
+    amount: 32
+    rewards:
+      money: 30000
+      xp: 250
+      items: []
+    prerequisite: null
+  slaying_031:
+    name: "Quest 031: Slaying Challenge"
+    description: "Slay 32 Zombies"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "ZOMBIE"
+    amount: 32
+    rewards:
+      money: 32500
+      xp: 262
+      items: []
+    prerequisite: null
+  slaying_032:
+    name: "Quest 032: Slaying Challenge"
+    description: "Kill 32 Skeletons"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "SKELETON"
+    amount: 32
+    rewards:
+      money: 35000
+      xp: 275
+      items: []
+    prerequisite: null
+  slaying_033:
+    name: "Quest 033: Slaying Challenge"
+    description: "Defeat 32 Creepers"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "CREEPER"
+    amount: 32
+    rewards:
+      money: 37500
+      xp: 287
+      items: []
+    prerequisite: null
+  slaying_034:
+    name: "Quest 034: Slaying Challenge"
+    description: "Slay 32 Spiders"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "SPIDER"
+    amount: 32
+    rewards:
+      money: 40000
+      xp: 300
+      items: []
+    prerequisite: null
+  slaying_035:
+    name: "Quest 035: Slaying Challenge"
+    description: "Slay 32 Drowned"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "DROWNED"
+    amount: 32
+    rewards:
+      money: 42500
+      xp: 312
+      items: []
+    prerequisite: null
+  slaying_036:
+    name: "Quest 036: Slaying Challenge"
+    description: "Slay 32 Zombies"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "ZOMBIE"
+    amount: 32
+    rewards:
+      money: 45000
+      xp: 325
+      items: []
+    prerequisite: null
+  slaying_037:
+    name: "Quest 037: Slaying Challenge"
+    description: "Kill 48 Skeletons"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "SKELETON"
+    amount: 48
+    rewards:
+      money: 47500
+      xp: 337
+      items: []
+    prerequisite: null
+  slaying_038:
+    name: "Quest 038: Slaying Challenge"
+    description: "Defeat 48 Creepers"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "CREEPER"
+    amount: 48
+    rewards:
+      money: 50000
+      xp: 350
+      items: []
+    prerequisite: null
+  slaying_039:
+    name: "Quest 039: Slaying Challenge"
+    description: "Defeat 25 Players"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_PLAYER
+    target: ""
+    amount: 25
+    rewards:
+      money: 52500
+      xp: 362
+      items: []
+    prerequisite: null
+  slaying_040:
+    name: "Quest 040: Slaying Challenge"
+    description: "Slay 48 Drowned"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "DROWNED"
+    amount: 48
+    rewards:
+      money: 55000
+      xp: 375
+      items: []
+    prerequisite: null
+  slaying_041:
+    name: "Quest 041: Slaying Challenge"
+    description: "Slay 48 Zombies"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "ZOMBIE"
+    amount: 48
+    rewards:
+      money: 57500
+      xp: 387
+      items: []
+    prerequisite: null
+  slaying_042:
+    name: "Quest 042: Slaying Challenge"
+    description: "Kill 48 Skeletons"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "SKELETON"
+    amount: 48
+    rewards:
+      money: 60000
+      xp: 400
+      items: []
+    prerequisite: null
+  slaying_043:
+    name: "Quest 043: Slaying Challenge"
+    description: "Defeat 48 Creepers"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "CREEPER"
+    amount: 48
+    rewards:
+      money: 62500
+      xp: 412
+      items: []
+    prerequisite: null
+  slaying_044:
+    name: "Quest 044: Slaying Challenge"
+    description: "Slay 48 Spiders"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "SPIDER"
+    amount: 48
+    rewards:
+      money: 65000
+      xp: 425
+      items: []
+    prerequisite: null
+  slaying_045:
+    name: "Quest 045: Slaying Challenge"
+    description: "Slay 48 Drowned"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "DROWNED"
+    amount: 48
+    rewards:
+      money: 67500
+      xp: 437
+      items: []
+    prerequisite: null
+  slaying_046:
+    name: "Quest 046: Slaying Challenge"
+    description: "Slay 64 Zombies"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "ZOMBIE"
+    amount: 64
+    rewards:
+      money: 70000
+      xp: 450
+      items: []
+    prerequisite: null
+  slaying_047:
+    name: "Quest 047: Slaying Challenge"
+    description: "Kill 64 Skeletons"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "SKELETON"
+    amount: 64
+    rewards:
+      money: 72500
+      xp: 462
+      items: []
+    prerequisite: null
+  slaying_048:
+    name: "Quest 048: Slaying Challenge"
+    description: "Defeat 64 Creepers"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "CREEPER"
+    amount: 64
+    rewards:
+      money: 75000
+      xp: 475
+      items: []
+    prerequisite: null
+  slaying_049:
+    name: "Quest 049: Slaying Challenge"
+    description: "Slay 64 Spiders"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "SPIDER"
+    amount: 64
+    rewards:
+      money: 77500
+      xp: 487
+      items: []
+    prerequisite: null
+  slaying_050:
+    name: "Quest 050: Slaying Challenge"
+    description: "Slay 64 Drowned"
+    category: COMBAT
+    difficulty: MEDIUM
+    type: KILL_MOB
+    target: "DROWNED"
+    amount: 64
+    rewards:
+      money: 80000
+      xp: 500
+      items: []
+    prerequisite: null
+  slaying_051:
+    name: "Quest 051: Slaying Challenge"
+    description: "Kill 64 Endermen"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "ENDERMAN"
+    amount: 64
+    rewards:
+      money: 100000
+      xp: 500
+      items: []
+    prerequisite: null
+  slaying_052:
+    name: "Quest 052: Slaying Challenge"
+    description: "Defeat 80 Witches"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "WITCH"
+    amount: 80
+    rewards:
+      money: 116666
+      xp: 562
+      items: []
+    prerequisite: null
+  slaying_053:
+    name: "Quest 053: Slaying Challenge"
+    description: "Kill 80 Blazes"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "BLAZE"
+    amount: 80
+    rewards:
+      money: 133333
+      xp: 625
+      items: []
+    prerequisite: null
+  slaying_054:
+    name: "Quest 054: Slaying Challenge"
+    description: "Defeat 50 Players"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_PLAYER
+    target: ""
+    amount: 50
+    rewards:
+      money: 150000
+      xp: 687
+      items: []
+    prerequisite: null
+  slaying_055:
+    name: "Quest 055: Slaying Challenge"
+    description: "Defeat 80 Strays"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "STRAY"
+    amount: 80
+    rewards:
+      money: 166666
+      xp: 750
+      items: []
+    prerequisite: null
+  slaying_056:
+    name: "Quest 056: Slaying Challenge"
+    description: "Kill 80 Endermen"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "ENDERMAN"
+    amount: 80
+    rewards:
+      money: 183333
+      xp: 812
+      items: []
+    prerequisite: null
+  slaying_057:
+    name: "Quest 057: Slaying Challenge"
+    description: "Defeat 96 Witches"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "WITCH"
+    amount: 96
+    rewards:
+      money: 200000
+      xp: 875
+      items: []
+    prerequisite: null
+  slaying_058:
+    name: "Quest 058: Slaying Challenge"
+    description: "Kill 96 Blazes"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "BLAZE"
+    amount: 96
+    rewards:
+      money: 216666
+      xp: 937
+      items: []
+    prerequisite: null
+  slaying_059:
+    name: "Quest 059: Slaying Challenge"
+    description: "Kill 96 Husks"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "HUSK"
+    amount: 96
+    rewards:
+      money: 233333
+      xp: 1000
+      items: []
+    prerequisite: null
+  slaying_060:
+    name: "Quest 060: Slaying Challenge"
+    description: "Defeat 96 Strays"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "STRAY"
+    amount: 96
+    rewards:
+      money: 250000
+      xp: 1062
+      items: []
+    prerequisite: null
+  slaying_061:
+    name: "Quest 061: Slaying Challenge"
+    description: "Kill 96 Endermen"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "ENDERMAN"
+    amount: 96
+    rewards:
+      money: 266666
+      xp: 1125
+      items: []
+    prerequisite: null
+  slaying_062:
+    name: "Quest 062: Slaying Challenge"
+    description: "Defeat 112 Witches"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "WITCH"
+    amount: 112
+    rewards:
+      money: 283333
+      xp: 1187
+      items: []
+    prerequisite: null
+  slaying_063:
+    name: "Quest 063: Slaying Challenge"
+    description: "Kill 112 Blazes"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "BLAZE"
+    amount: 112
+    rewards:
+      money: 300000
+      xp: 1250
+      items: []
+    prerequisite: null
+  slaying_064:
+    name: "Quest 064: Slaying Challenge"
+    description: "Kill 112 Husks"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "HUSK"
+    amount: 112
+    rewards:
+      money: 316666
+      xp: 1312
+      items: []
+    prerequisite: null
+  slaying_065:
+    name: "Quest 065: Slaying Challenge"
+    description: "Defeat 128 Strays"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "STRAY"
+    amount: 128
+    rewards:
+      money: 333333
+      xp: 1375
+      items: []
+    prerequisite: null
+  slaying_066:
+    name: "Quest 066: Slaying Challenge"
+    description: "Kill 128 Endermen"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "ENDERMAN"
+    amount: 128
+    rewards:
+      money: 350000
+      xp: 1437
+      items: []
+    prerequisite: null
+  slaying_067:
+    name: "Quest 067: Slaying Challenge"
+    description: "Defeat 128 Witches"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "WITCH"
+    amount: 128
+    rewards:
+      money: 366666
+      xp: 1500
+      items: []
+    prerequisite: null
+  slaying_068:
+    name: "Quest 068: Slaying Challenge"
+    description: "Kill 144 Blazes"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "BLAZE"
+    amount: 144
+    rewards:
+      money: 383333
+      xp: 1562
+      items: []
+    prerequisite: null
+  slaying_069:
+    name: "Quest 069: Slaying Challenge"
+    description: "Defeat 100 Players"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_PLAYER
+    target: ""
+    amount: 100
+    rewards:
+      money: 400000
+      xp: 1625
+      items: []
+    prerequisite: null
+  slaying_070:
+    name: "Quest 070: Slaying Challenge"
+    description: "Defeat 144 Strays"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "STRAY"
+    amount: 144
+    rewards:
+      money: 416666
+      xp: 1687
+      items: []
+    prerequisite: null
+  slaying_071:
+    name: "Quest 071: Slaying Challenge"
+    description: "Kill 160 Endermen"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "ENDERMAN"
+    amount: 160
+    rewards:
+      money: 433333
+      xp: 1750
+      items: []
+    prerequisite: null
+  slaying_072:
+    name: "Quest 072: Slaying Challenge"
+    description: "Defeat 160 Witches"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "WITCH"
+    amount: 160
+    rewards:
+      money: 450000
+      xp: 1812
+      items: []
+    prerequisite: null
+  slaying_073:
+    name: "Quest 073: Slaying Challenge"
+    description: "Kill 160 Blazes"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "BLAZE"
+    amount: 160
+    rewards:
+      money: 466666
+      xp: 1875
+      items: []
+    prerequisite: null
+  slaying_074:
+    name: "Quest 074: Slaying Challenge"
+    description: "Kill 176 Husks"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "HUSK"
+    amount: 176
+    rewards:
+      money: 483333
+      xp: 1937
+      items: []
+    prerequisite: null
+  slaying_075:
+    name: "Quest 075: Slaying Challenge"
+    description: "Defeat 176 Strays"
+    category: COMBAT
+    difficulty: HARD
+    type: KILL_MOB
+    target: "STRAY"
+    amount: 176
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  slaying_076:
+    name: "Quest 076: Slaying Challenge"
+    description: "Defeat 12 Elder Guardians"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "ELDER_GUARDIAN"
+    amount: 12
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  slaying_077:
+    name: "Quest 077: Slaying Challenge"
+    description: "Defeat 12 Withers"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WITHER"
+    amount: 12
+    rewards:
+      money: 687500
+      xp: 2333
+      items: []
+    prerequisite: null
+  slaying_078:
+    name: "Quest 078: Slaying Challenge"
+    description: "Defeat 13 Ender Dragons"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "ENDER_DRAGON"
+    amount: 13
+    rewards:
+      money: 875000
+      xp: 2666
+      items: []
+    prerequisite: null
+  slaying_079:
+    name: "Quest 079: Slaying Challenge"
+    description: "Defeat 14 Wardens"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 14
+    rewards:
+      money: 1062500
+      xp: 3000
+      items: []
+    prerequisite: null
+  slaying_080:
+    name: "Quest 080: Slaying Challenge"
+    description: "Defeat 15 Raid Captains"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "PILLAGER"
+    amount: 15
+    rewards:
+      money: 1250000
+      xp: 3333
+      items: []
+    prerequisite: null
+  slaying_081:
+    name: "Quest 081: Slaying Challenge"
+    description: "Defeat 16 Elder Guardians"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "ELDER_GUARDIAN"
+    amount: 16
+    rewards:
+      money: 1437500
+      xp: 3666
+      items: []
+    prerequisite: null
+  slaying_082:
+    name: "Quest 082: Slaying Challenge"
+    description: "Defeat 17 Withers"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WITHER"
+    amount: 17
+    rewards:
+      money: 1625000
+      xp: 4000
+      items: []
+    prerequisite: null
+  slaying_083:
+    name: "Quest 083: Slaying Challenge"
+    description: "Defeat 19 Ender Dragons"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "ENDER_DRAGON"
+    amount: 19
+    rewards:
+      money: 1812500
+      xp: 4333
+      items: []
+    prerequisite: null
+  slaying_084:
+    name: "Quest 084: Slaying Challenge"
+    description: "Defeat 150 Players"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_PLAYER
+    target: ""
+    amount: 150
+    rewards:
+      money: 2000000
+      xp: 4666
+      items: []
+    prerequisite: null
+  slaying_085:
+    name: "Quest 085: Slaying Challenge"
+    description: "Defeat 21 Raid Captains"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "PILLAGER"
+    amount: 21
+    rewards:
+      money: 2187500
+      xp: 5000
+      items: []
+    prerequisite: null
+  slaying_086:
+    name: "Quest 086: Slaying Challenge"
+    description: "Defeat 23 Elder Guardians"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "ELDER_GUARDIAN"
+    amount: 23
+    rewards:
+      money: 2375000
+      xp: 5333
+      items: []
+    prerequisite: null
+  slaying_087:
+    name: "Quest 087: Slaying Challenge"
+    description: "Defeat 25 Withers"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WITHER"
+    amount: 25
+    rewards:
+      money: 2562500
+      xp: 5666
+      items: []
+    prerequisite: null
+  slaying_088:
+    name: "Quest 088: Slaying Challenge"
+    description: "Defeat 26 Ender Dragons"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "ENDER_DRAGON"
+    amount: 26
+    rewards:
+      money: 2750000
+      xp: 6000
+      items: []
+    prerequisite: null
+  slaying_089:
+    name: "Quest 089: Slaying Challenge"
+    description: "Defeat 28 Wardens"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 28
+    rewards:
+      money: 2937500
+      xp: 6333
+      items: []
+    prerequisite: null
+  slaying_090:
+    name: "Quest 090: Slaying Challenge"
+    description: "Defeat 250 Players"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_PLAYER
+    target: ""
+    amount: 250
+    rewards:
+      money: 3125000
+      xp: 6666
+      items: []
+    prerequisite: null
+  slaying_091:
+    name: "Quest 091: Boss Encounter"
+    description: "Defeat Boss #1"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 1
+    rewards:
+      money: 3312500
+      xp: 7000
+      items: []
+    prerequisite: null
+  slaying_092:
+    name: "Quest 092: Boss Encounter"
+    description: "Defeat Boss #2"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 2
+    rewards:
+      money: 3500000
+      xp: 7333
+      items: []
+    prerequisite: null
+  slaying_093:
+    name: "Quest 093: Boss Encounter"
+    description: "Defeat 2x Boss #3"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 2
+    rewards:
+      money: 3687500
+      xp: 7666
+      items: []
+    prerequisite: null
+  slaying_094:
+    name: "Quest 094: Boss Encounter"
+    description: "Defeat 2x Boss #4"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 2
+    rewards:
+      money: 3875000
+      xp: 8000
+      items: []
+    prerequisite: null
+  slaying_095:
+    name: "Quest 095: Boss Encounter"
+    description: "Defeat 3x Boss #5"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 3
+    rewards:
+      money: 4062500
+      xp: 8333
+      items: []
+    prerequisite: null
+  slaying_096:
+    name: "Quest 096: Boss Encounter"
+    description: "Defeat 3x Boss #6"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 3
+    rewards:
+      money: 4250000
+      xp: 8666
+      items: []
+    prerequisite: null
+  slaying_097:
+    name: "Quest 097: Boss Encounter"
+    description: "Defeat 4x Boss #7"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 4
+    rewards:
+      money: 4437500
+      xp: 9000
+      items: []
+    prerequisite: null
+  slaying_098:
+    name: "Quest 098: Boss Encounter"
+    description: "Defeat 5x Boss #8"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 5
+    rewards:
+      money: 4625000
+      xp: 9333
+      items: []
+    prerequisite: null
+  slaying_099:
+    name: "Quest 099: Boss Encounter"
+    description: "Defeat 6x Boss #9"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 6
+    rewards:
+      money: 4812500
+      xp: 9666
+      items: []
+    prerequisite: null
+  slaying_100:
+    name: "Quest 100: Boss Encounter"
+    description: "Defeat 8x Boss #10"
+    category: COMBAT
+    difficulty: LEGENDARY
+    type: KILL_MOB
+    target: "WARDEN"
+    amount: 8
+    rewards:
+      money: 5000000
+      xp: 10000
+      items: []
+    prerequisite: null
+  exploring_001:
+    name: "Quest 001: Exploring Challenge"
+    description: "Walk 250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 250
+    rewards:
+      money: 5000
+      xp: 50
+      items: []
+    prerequisite: null
+  exploring_002:
+    name: "Quest 002: Exploring Challenge"
+    description: "Walk 500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 500
+    rewards:
+      money: 5416
+      xp: 54
+      items: []
+    prerequisite: null
+  exploring_003:
+    name: "Quest 003: Exploring Challenge"
+    description: "Walk 750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 750
+    rewards:
+      money: 5833
+      xp: 58
+      items: []
+    prerequisite: null
+  exploring_004:
+    name: "Quest 004: Exploring Challenge"
+    description: "Walk 1,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 1000
+    rewards:
+      money: 6250
+      xp: 62
+      items: []
+    prerequisite: null
+  exploring_005:
+    name: "Quest 005: Exploring Challenge"
+    description: "Walk 1,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 1250
+    rewards:
+      money: 6666
+      xp: 66
+      items: []
+    prerequisite: null
+  exploring_006:
+    name: "Quest 006: Exploring Challenge"
+    description: "Walk 1,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 1500
+    rewards:
+      money: 7083
+      xp: 70
+      items: []
+    prerequisite: null
+  exploring_007:
+    name: "Quest 007: Exploring Challenge"
+    description: "Walk 1,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 1750
+    rewards:
+      money: 7500
+      xp: 75
+      items: []
+    prerequisite: null
+  exploring_008:
+    name: "Quest 008: Exploring Challenge"
+    description: "Walk 2,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 2000
+    rewards:
+      money: 7916
+      xp: 79
+      items: []
+    prerequisite: null
+  exploring_009:
+    name: "Quest 009: Exploring Challenge"
+    description: "Walk 2,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 2250
+    rewards:
+      money: 8333
+      xp: 83
+      items: []
+    prerequisite: null
+  exploring_010:
+    name: "Quest 010: Exploring Challenge"
+    description: "Walk 2,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 2500
+    rewards:
+      money: 8750
+      xp: 87
+      items: []
+    prerequisite: null
+  exploring_011:
+    name: "Quest 011: Exploring Challenge"
+    description: "Walk 2,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 2750
+    rewards:
+      money: 9166
+      xp: 91
+      items: []
+    prerequisite: null
+  exploring_012:
+    name: "Quest 012: Exploring Challenge"
+    description: "Walk 3,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 3000
+    rewards:
+      money: 9583
+      xp: 95
+      items: []
+    prerequisite: null
+  exploring_013:
+    name: "Quest 013: Exploring Challenge"
+    description: "Walk 3,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 3250
+    rewards:
+      money: 10000
+      xp: 100
+      items: []
+    prerequisite: null
+  exploring_014:
+    name: "Quest 014: Exploring Challenge"
+    description: "Walk 3,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 3500
+    rewards:
+      money: 10416
+      xp: 104
+      items: []
+    prerequisite: null
+  exploring_015:
+    name: "Quest 015: Exploring Challenge"
+    description: "Walk 3,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 3750
+    rewards:
+      money: 10833
+      xp: 108
+      items: []
+    prerequisite: null
+  exploring_016:
+    name: "Quest 016: Exploring Challenge"
+    description: "Walk 4,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 4000
+    rewards:
+      money: 11250
+      xp: 112
+      items: []
+    prerequisite: null
+  exploring_017:
+    name: "Quest 017: Exploring Challenge"
+    description: "Walk 4,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 4250
+    rewards:
+      money: 11666
+      xp: 116
+      items: []
+    prerequisite: null
+  exploring_018:
+    name: "Quest 018: Exploring Challenge"
+    description: "Walk 4,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 4500
+    rewards:
+      money: 12083
+      xp: 120
+      items: []
+    prerequisite: null
+  exploring_019:
+    name: "Quest 019: Exploring Challenge"
+    description: "Walk 4,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 4750
+    rewards:
+      money: 12500
+      xp: 125
+      items: []
+    prerequisite: null
+  exploring_020:
+    name: "Quest 020: Exploring Challenge"
+    description: "Walk 5,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 5000
+    rewards:
+      money: 12916
+      xp: 129
+      items: []
+    prerequisite: null
+  exploring_021:
+    name: "Quest 021: Exploring Challenge"
+    description: "Walk 5,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 5250
+    rewards:
+      money: 13333
+      xp: 133
+      items: []
+    prerequisite: null
+  exploring_022:
+    name: "Quest 022: Exploring Challenge"
+    description: "Walk 5,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 5500
+    rewards:
+      money: 13750
+      xp: 137
+      items: []
+    prerequisite: null
+  exploring_023:
+    name: "Quest 023: Exploring Challenge"
+    description: "Walk 5,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 5750
+    rewards:
+      money: 14166
+      xp: 141
+      items: []
+    prerequisite: null
+  exploring_024:
+    name: "Quest 024: Exploring Challenge"
+    description: "Walk 6,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 6000
+    rewards:
+      money: 14583
+      xp: 145
+      items: []
+    prerequisite: null
+  exploring_025:
+    name: "Quest 025: Exploring Challenge"
+    description: "Walk 6,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 6250
+    rewards:
+      money: 15000
+      xp: 150
+      items: []
+    prerequisite: null
+  exploring_026:
+    name: "Quest 026: Exploring Challenge"
+    description: "Walk 6,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 6750
+    rewards:
+      money: 20000
+      xp: 200
+      items: []
+    prerequisite: null
+  exploring_027:
+    name: "Quest 027: Exploring Challenge"
+    description: "Walk 7,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 7250
+    rewards:
+      money: 22500
+      xp: 212
+      items: []
+    prerequisite: null
+  exploring_028:
+    name: "Quest 028: Exploring Challenge"
+    description: "Walk 7,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 7750
+    rewards:
+      money: 25000
+      xp: 225
+      items: []
+    prerequisite: null
+  exploring_029:
+    name: "Quest 029: Exploring Challenge"
+    description: "Walk 8,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 8250
+    rewards:
+      money: 27500
+      xp: 237
+      items: []
+    prerequisite: null
+  exploring_030:
+    name: "Quest 030: Exploring Challenge"
+    description: "Walk 8,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 8750
+    rewards:
+      money: 30000
+      xp: 250
+      items: []
+    prerequisite: null
+  exploring_031:
+    name: "Quest 031: Exploring Challenge"
+    description: "Walk 9,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 9250
+    rewards:
+      money: 32500
+      xp: 262
+      items: []
+    prerequisite: null
+  exploring_032:
+    name: "Quest 032: Exploring Challenge"
+    description: "Walk 9,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 9750
+    rewards:
+      money: 35000
+      xp: 275
+      items: []
+    prerequisite: null
+  exploring_033:
+    name: "Quest 033: Exploring Challenge"
+    description: "Walk 10,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 10250
+    rewards:
+      money: 37500
+      xp: 287
+      items: []
+    prerequisite: null
+  exploring_034:
+    name: "Quest 034: Exploring Challenge"
+    description: "Walk 10,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 10750
+    rewards:
+      money: 40000
+      xp: 300
+      items: []
+    prerequisite: null
+  exploring_035:
+    name: "Quest 035: Exploring Challenge"
+    description: "Walk 11,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 11250
+    rewards:
+      money: 42500
+      xp: 312
+      items: []
+    prerequisite: null
+  exploring_036:
+    name: "Quest 036: Exploring Challenge"
+    description: "Walk 11,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 11750
+    rewards:
+      money: 45000
+      xp: 325
+      items: []
+    prerequisite: null
+  exploring_037:
+    name: "Quest 037: Exploring Challenge"
+    description: "Walk 12,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 12250
+    rewards:
+      money: 47500
+      xp: 337
+      items: []
+    prerequisite: null
+  exploring_038:
+    name: "Quest 038: Exploring Challenge"
+    description: "Walk 12,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 12750
+    rewards:
+      money: 50000
+      xp: 350
+      items: []
+    prerequisite: null
+  exploring_039:
+    name: "Quest 039: Exploring Challenge"
+    description: "Walk 13,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 13250
+    rewards:
+      money: 52500
+      xp: 362
+      items: []
+    prerequisite: null
+  exploring_040:
+    name: "Quest 040: Exploring Challenge"
+    description: "Walk 13,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 13750
+    rewards:
+      money: 55000
+      xp: 375
+      items: []
+    prerequisite: null
+  exploring_041:
+    name: "Quest 041: Exploring Challenge"
+    description: "Walk 14,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 14250
+    rewards:
+      money: 57500
+      xp: 387
+      items: []
+    prerequisite: null
+  exploring_042:
+    name: "Quest 042: Exploring Challenge"
+    description: "Walk 14,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 14750
+    rewards:
+      money: 60000
+      xp: 400
+      items: []
+    prerequisite: null
+  exploring_043:
+    name: "Quest 043: Exploring Challenge"
+    description: "Walk 15,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 15250
+    rewards:
+      money: 62500
+      xp: 412
+      items: []
+    prerequisite: null
+  exploring_044:
+    name: "Quest 044: Exploring Challenge"
+    description: "Walk 15,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 15750
+    rewards:
+      money: 65000
+      xp: 425
+      items: []
+    prerequisite: null
+  exploring_045:
+    name: "Quest 045: Exploring Challenge"
+    description: "Walk 16,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 16250
+    rewards:
+      money: 67500
+      xp: 437
+      items: []
+    prerequisite: null
+  exploring_046:
+    name: "Quest 046: Exploring Challenge"
+    description: "Walk 16,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 16750
+    rewards:
+      money: 70000
+      xp: 450
+      items: []
+    prerequisite: null
+  exploring_047:
+    name: "Quest 047: Exploring Challenge"
+    description: "Walk 17,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 17250
+    rewards:
+      money: 72500
+      xp: 462
+      items: []
+    prerequisite: null
+  exploring_048:
+    name: "Quest 048: Exploring Challenge"
+    description: "Walk 17,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 17750
+    rewards:
+      money: 75000
+      xp: 475
+      items: []
+    prerequisite: null
+  exploring_049:
+    name: "Quest 049: Exploring Challenge"
+    description: "Walk 18,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 18250
+    rewards:
+      money: 77500
+      xp: 487
+      items: []
+    prerequisite: null
+  exploring_050:
+    name: "Quest 050: Exploring Challenge"
+    description: "Walk 18,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 18750
+    rewards:
+      money: 80000
+      xp: 500
+      items: []
+    prerequisite: null
+  exploring_051:
+    name: "Quest 051: Exploring Challenge"
+    description: "Walk 19,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 19500
+    rewards:
+      money: 100000
+      xp: 500
+      items: []
+    prerequisite: null
+  exploring_052:
+    name: "Quest 052: Exploring Challenge"
+    description: "Walk 20,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 20250
+    rewards:
+      money: 116666
+      xp: 562
+      items: []
+    prerequisite: null
+  exploring_053:
+    name: "Quest 053: Exploring Challenge"
+    description: "Walk 21,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 21000
+    rewards:
+      money: 133333
+      xp: 625
+      items: []
+    prerequisite: null
+  exploring_054:
+    name: "Quest 054: Exploring Challenge"
+    description: "Walk 21,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 21750
+    rewards:
+      money: 150000
+      xp: 687
+      items: []
+    prerequisite: null
+  exploring_055:
+    name: "Quest 055: Exploring Challenge"
+    description: "Walk 22,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 22500
+    rewards:
+      money: 166666
+      xp: 750
+      items: []
+    prerequisite: null
+  exploring_056:
+    name: "Quest 056: Exploring Challenge"
+    description: "Walk 23,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 23250
+    rewards:
+      money: 183333
+      xp: 812
+      items: []
+    prerequisite: null
+  exploring_057:
+    name: "Quest 057: Exploring Challenge"
+    description: "Walk 24,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 24000
+    rewards:
+      money: 200000
+      xp: 875
+      items: []
+    prerequisite: null
+  exploring_058:
+    name: "Quest 058: Exploring Challenge"
+    description: "Walk 24,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 24750
+    rewards:
+      money: 216666
+      xp: 937
+      items: []
+    prerequisite: null
+  exploring_059:
+    name: "Quest 059: Exploring Challenge"
+    description: "Walk 25,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 25500
+    rewards:
+      money: 233333
+      xp: 1000
+      items: []
+    prerequisite: null
+  exploring_060:
+    name: "Quest 060: Exploring Challenge"
+    description: "Walk 26,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 26250
+    rewards:
+      money: 250000
+      xp: 1062
+      items: []
+    prerequisite: null
+  exploring_061:
+    name: "Quest 061: Exploring Challenge"
+    description: "Walk 27,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 27000
+    rewards:
+      money: 266666
+      xp: 1125
+      items: []
+    prerequisite: null
+  exploring_062:
+    name: "Quest 062: Exploring Challenge"
+    description: "Walk 27,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 27750
+    rewards:
+      money: 283333
+      xp: 1187
+      items: []
+    prerequisite: null
+  exploring_063:
+    name: "Quest 063: Exploring Challenge"
+    description: "Walk 28,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 28500
+    rewards:
+      money: 300000
+      xp: 1250
+      items: []
+    prerequisite: null
+  exploring_064:
+    name: "Quest 064: Exploring Challenge"
+    description: "Walk 29,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 29250
+    rewards:
+      money: 316666
+      xp: 1312
+      items: []
+    prerequisite: null
+  exploring_065:
+    name: "Quest 065: Exploring Challenge"
+    description: "Walk 30,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 30000
+    rewards:
+      money: 333333
+      xp: 1375
+      items: []
+    prerequisite: null
+  exploring_066:
+    name: "Quest 066: Exploring Challenge"
+    description: "Walk 30,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 30750
+    rewards:
+      money: 350000
+      xp: 1437
+      items: []
+    prerequisite: null
+  exploring_067:
+    name: "Quest 067: Exploring Challenge"
+    description: "Walk 31,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 31500
+    rewards:
+      money: 366666
+      xp: 1500
+      items: []
+    prerequisite: null
+  exploring_068:
+    name: "Quest 068: Exploring Challenge"
+    description: "Walk 32,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 32250
+    rewards:
+      money: 383333
+      xp: 1562
+      items: []
+    prerequisite: null
+  exploring_069:
+    name: "Quest 069: Exploring Challenge"
+    description: "Walk 33,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 33000
+    rewards:
+      money: 400000
+      xp: 1625
+      items: []
+    prerequisite: null
+  exploring_070:
+    name: "Quest 070: Exploring Challenge"
+    description: "Walk 33,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 33750
+    rewards:
+      money: 416666
+      xp: 1687
+      items: []
+    prerequisite: null
+  exploring_071:
+    name: "Quest 071: Exploring Challenge"
+    description: "Walk 34,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 34500
+    rewards:
+      money: 433333
+      xp: 1750
+      items: []
+    prerequisite: null
+  exploring_072:
+    name: "Quest 072: Exploring Challenge"
+    description: "Walk 35,250 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 35250
+    rewards:
+      money: 450000
+      xp: 1812
+      items: []
+    prerequisite: null
+  exploring_073:
+    name: "Quest 073: Exploring Challenge"
+    description: "Walk 36,000 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 36000
+    rewards:
+      money: 466666
+      xp: 1875
+      items: []
+    prerequisite: null
+  exploring_074:
+    name: "Quest 074: Exploring Challenge"
+    description: "Walk 36,750 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 36750
+    rewards:
+      money: 483333
+      xp: 1937
+      items: []
+    prerequisite: null
+  exploring_075:
+    name: "Quest 075: Exploring Challenge"
+    description: "Walk 37,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: HARD
+    type: WALK_DISTANCE
+    target: ""
+    amount: 37500
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  exploring_076:
+    name: "Quest 076: Exploring Challenge"
+    description: "Walk 38,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 38500
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  exploring_077:
+    name: "Quest 077: Exploring Challenge"
+    description: "Walk 39,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 39500
+    rewards:
+      money: 687500
+      xp: 2333
+      items: []
+    prerequisite: null
+  exploring_078:
+    name: "Quest 078: Exploring Challenge"
+    description: "Walk 40,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 40500
+    rewards:
+      money: 875000
+      xp: 2666
+      items: []
+    prerequisite: null
+  exploring_079:
+    name: "Quest 079: Exploring Challenge"
+    description: "Walk 41,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 41500
+    rewards:
+      money: 1062500
+      xp: 3000
+      items: []
+    prerequisite: null
+  exploring_080:
+    name: "Quest 080: Exploring Challenge"
+    description: "Walk 42,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 42500
+    rewards:
+      money: 1250000
+      xp: 3333
+      items: []
+    prerequisite: null
+  exploring_081:
+    name: "Quest 081: Exploring Challenge"
+    description: "Walk 43,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 43500
+    rewards:
+      money: 1437500
+      xp: 3666
+      items: []
+    prerequisite: null
+  exploring_082:
+    name: "Quest 082: Exploring Challenge"
+    description: "Walk 44,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 44500
+    rewards:
+      money: 1625000
+      xp: 4000
+      items: []
+    prerequisite: null
+  exploring_083:
+    name: "Quest 083: Exploring Challenge"
+    description: "Walk 45,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 45500
+    rewards:
+      money: 1812500
+      xp: 4333
+      items: []
+    prerequisite: null
+  exploring_084:
+    name: "Quest 084: Exploring Challenge"
+    description: "Walk 46,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 46500
+    rewards:
+      money: 2000000
+      xp: 4666
+      items: []
+    prerequisite: null
+  exploring_085:
+    name: "Quest 085: Exploring Challenge"
+    description: "Walk 47,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 47500
+    rewards:
+      money: 2187500
+      xp: 5000
+      items: []
+    prerequisite: null
+  exploring_086:
+    name: "Quest 086: Exploring Challenge"
+    description: "Walk 48,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 48500
+    rewards:
+      money: 2375000
+      xp: 5333
+      items: []
+    prerequisite: null
+  exploring_087:
+    name: "Quest 087: Exploring Challenge"
+    description: "Walk 49,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 49500
+    rewards:
+      money: 2562500
+      xp: 5666
+      items: []
+    prerequisite: null
+  exploring_088:
+    name: "Quest 088: Exploring Challenge"
+    description: "Walk 50,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 50500
+    rewards:
+      money: 2750000
+      xp: 6000
+      items: []
+    prerequisite: null
+  exploring_089:
+    name: "Quest 089: Exploring Challenge"
+    description: "Walk 51,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 51500
+    rewards:
+      money: 2937500
+      xp: 6333
+      items: []
+    prerequisite: null
+  exploring_090:
+    name: "Quest 090: Exploring Challenge"
+    description: "Walk 52,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 52500
+    rewards:
+      money: 3125000
+      xp: 6666
+      items: []
+    prerequisite: null
+  exploring_091:
+    name: "Quest 091: Exploring Challenge"
+    description: "Walk 53,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 53500
+    rewards:
+      money: 3312500
+      xp: 7000
+      items: []
+    prerequisite: null
+  exploring_092:
+    name: "Quest 092: Exploring Challenge"
+    description: "Walk 54,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 54500
+    rewards:
+      money: 3500000
+      xp: 7333
+      items: []
+    prerequisite: null
+  exploring_093:
+    name: "Quest 093: Exploring Challenge"
+    description: "Walk 55,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 55500
+    rewards:
+      money: 3687500
+      xp: 7666
+      items: []
+    prerequisite: null
+  exploring_094:
+    name: "Quest 094: Exploring Challenge"
+    description: "Walk 56,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 56500
+    rewards:
+      money: 3875000
+      xp: 8000
+      items: []
+    prerequisite: null
+  exploring_095:
+    name: "Quest 095: Exploring Challenge"
+    description: "Walk 57,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 57500
+    rewards:
+      money: 4062500
+      xp: 8333
+      items: []
+    prerequisite: null
+  exploring_096:
+    name: "Quest 096: Exploring Challenge"
+    description: "Walk 58,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 58500
+    rewards:
+      money: 4250000
+      xp: 8666
+      items: []
+    prerequisite: null
+  exploring_097:
+    name: "Quest 097: Exploring Challenge"
+    description: "Walk 59,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 59500
+    rewards:
+      money: 4437500
+      xp: 9000
+      items: []
+    prerequisite: null
+  exploring_098:
+    name: "Quest 098: Exploring Challenge"
+    description: "Walk 60,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 60500
+    rewards:
+      money: 4625000
+      xp: 9333
+      items: []
+    prerequisite: null
+  exploring_099:
+    name: "Quest 099: Exploring Challenge"
+    description: "Walk 61,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 61500
+    rewards:
+      money: 4812500
+      xp: 9666
+      items: []
+    prerequisite: null
+  exploring_100:
+    name: "Quest 100: Exploring Challenge"
+    description: "Walk 62,500 Blocks on Foot"
+    category: EXPLORATION
+    difficulty: LEGENDARY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 62500
+    rewards:
+      money: 5000000
+      xp: 10000
+      items: []
+    prerequisite: null
+  farming_001:
+    name: "Quest 001: Farming Challenge"
+    description: "Harvest 64 Wheat"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "WHEAT"
+    amount: 64
+    rewards:
+      money: 5000
+      xp: 50
+      items: []
+    prerequisite: null
+  farming_002:
+    name: "Quest 002: Farming Challenge"
+    description: "Grow 32 Carrots"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "CARROTS"
+    amount: 32
+    rewards:
+      money: 5416
+      xp: 54
+      items: []
+    prerequisite: null
+  farming_003:
+    name: "Quest 003: Farming Challenge"
+    description: "Plant 160 Seeds"
+    category: FARMING
+    difficulty: EASY
+    type: PLACE_BLOCK
+    target: ""
+    amount: 160
+    rewards:
+      money: 5833
+      xp: 58
+      items: []
+    prerequisite: null
+  farming_004:
+    name: "Quest 004: Farming Challenge"
+    description: "Harvest 80 Wheat"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "WHEAT"
+    amount: 80
+    rewards:
+      money: 6250
+      xp: 62
+      items: []
+    prerequisite: null
+  farming_005:
+    name: "Quest 005: Farming Challenge"
+    description: "Grow 32 Carrots"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "CARROTS"
+    amount: 32
+    rewards:
+      money: 6666
+      xp: 66
+      items: []
+    prerequisite: null
+  farming_006:
+    name: "Quest 006: Farming Challenge"
+    description: "Plant 176 Seeds"
+    category: FARMING
+    difficulty: EASY
+    type: PLACE_BLOCK
+    target: ""
+    amount: 176
+    rewards:
+      money: 7083
+      xp: 70
+      items: []
+    prerequisite: null
+  farming_007:
+    name: "Quest 007: Farming Challenge"
+    description: "Harvest 96 Wheat"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "WHEAT"
+    amount: 96
+    rewards:
+      money: 7500
+      xp: 75
+      items: []
+    prerequisite: null
+  farming_008:
+    name: "Quest 008: Farming Challenge"
+    description: "Grow 32 Carrots"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "CARROTS"
+    amount: 32
+    rewards:
+      money: 7916
+      xp: 79
+      items: []
+    prerequisite: null
+  farming_009:
+    name: "Quest 009: Farming Challenge"
+    description: "Plant 192 Seeds"
+    category: FARMING
+    difficulty: EASY
+    type: PLACE_BLOCK
+    target: ""
+    amount: 192
+    rewards:
+      money: 8333
+      xp: 83
+      items: []
+    prerequisite: null
+  farming_010:
+    name: "Quest 010: Farming Challenge"
+    description: "Harvest 96 Wheat"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "WHEAT"
+    amount: 96
+    rewards:
+      money: 8750
+      xp: 87
+      items: []
+    prerequisite: null
+  farming_011:
+    name: "Quest 011: Farming Challenge"
+    description: "Grow 32 Carrots"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "CARROTS"
+    amount: 32
+    rewards:
+      money: 9166
+      xp: 91
+      items: []
+    prerequisite: null
+  farming_012:
+    name: "Quest 012: Farming Challenge"
+    description: "Plant 208 Seeds"
+    category: FARMING
+    difficulty: EASY
+    type: PLACE_BLOCK
+    target: ""
+    amount: 208
+    rewards:
+      money: 9583
+      xp: 95
+      items: []
+    prerequisite: null
+  farming_013:
+    name: "Quest 013: Farming Challenge"
+    description: "Harvest 112 Wheat"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "WHEAT"
+    amount: 112
+    rewards:
+      money: 10000
+      xp: 100
+      items: []
+    prerequisite: null
+  farming_014:
+    name: "Quest 014: Farming Challenge"
+    description: "Grow 32 Carrots"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "CARROTS"
+    amount: 32
+    rewards:
+      money: 10416
+      xp: 104
+      items: []
+    prerequisite: null
+  farming_015:
+    name: "Quest 015: Farming Challenge"
+    description: "Plant 240 Seeds"
+    category: FARMING
+    difficulty: EASY
+    type: PLACE_BLOCK
+    target: ""
+    amount: 240
+    rewards:
+      money: 10833
+      xp: 108
+      items: []
+    prerequisite: null
+  farming_016:
+    name: "Quest 016: Farming Challenge"
+    description: "Harvest 128 Wheat"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "WHEAT"
+    amount: 128
+    rewards:
+      money: 11250
+      xp: 112
+      items: []
+    prerequisite: null
+  farming_017:
+    name: "Quest 017: Farming Challenge"
+    description: "Grow 32 Carrots"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "CARROTS"
+    amount: 32
+    rewards:
+      money: 11666
+      xp: 116
+      items: []
+    prerequisite: null
+  farming_018:
+    name: "Quest 018: Farming Challenge"
+    description: "Plant 256 Seeds"
+    category: FARMING
+    difficulty: EASY
+    type: PLACE_BLOCK
+    target: ""
+    amount: 256
+    rewards:
+      money: 12083
+      xp: 120
+      items: []
+    prerequisite: null
+  farming_019:
+    name: "Quest 019: Farming Challenge"
+    description: "Harvest 128 Wheat"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "WHEAT"
+    amount: 128
+    rewards:
+      money: 12500
+      xp: 125
+      items: []
+    prerequisite: null
+  farming_020:
+    name: "Quest 020: Farming Challenge"
+    description: "Grow 32 Carrots"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "CARROTS"
+    amount: 32
+    rewards:
+      money: 12916
+      xp: 129
+      items: []
+    prerequisite: null
+  farming_021:
+    name: "Quest 021: Farming Challenge"
+    description: "Plant 288 Seeds"
+    category: FARMING
+    difficulty: EASY
+    type: PLACE_BLOCK
+    target: ""
+    amount: 288
+    rewards:
+      money: 13333
+      xp: 133
+      items: []
+    prerequisite: null
+  farming_022:
+    name: "Quest 022: Farming Challenge"
+    description: "Harvest 144 Wheat"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "WHEAT"
+    amount: 144
+    rewards:
+      money: 13750
+      xp: 137
+      items: []
+    prerequisite: null
+  farming_023:
+    name: "Quest 023: Farming Challenge"
+    description: "Grow 32 Carrots"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "CARROTS"
+    amount: 32
+    rewards:
+      money: 14166
+      xp: 141
+      items: []
+    prerequisite: null
+  farming_024:
+    name: "Quest 024: Farming Challenge"
+    description: "Plant 320 Seeds"
+    category: FARMING
+    difficulty: EASY
+    type: PLACE_BLOCK
+    target: ""
+    amount: 320
+    rewards:
+      money: 14583
+      xp: 145
+      items: []
+    prerequisite: null
+  farming_025:
+    name: "Quest 025: Farming Challenge"
+    description: "Harvest 160 Wheat"
+    category: FARMING
+    difficulty: EASY
+    type: HARVEST_CROP
+    target: "WHEAT"
+    amount: 160
+    rewards:
+      money: 15000
+      xp: 150
+      items: []
+    prerequisite: null
+  farming_026:
+    name: "Quest 026: Farming Challenge"
+    description: "Grow 32 Melons"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "MELON"
+    amount: 32
+    rewards:
+      money: 20000
+      xp: 200
+      items: []
+    prerequisite: null
+  farming_027:
+    name: "Quest 027: Farming Challenge"
+    description: "Harvest 176 Pumpkins"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "PUMPKIN"
+    amount: 176
+    rewards:
+      money: 22500
+      xp: 212
+      items: []
+    prerequisite: null
+  farming_028:
+    name: "Quest 028: Farming Challenge"
+    description: "Collect 48 Apples"
+    category: FARMING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: ""
+    amount: 48
+    rewards:
+      money: 25000
+      xp: 225
+      items: []
+    prerequisite: null
+  farming_029:
+    name: "Quest 029: Farming Challenge"
+    description: "Grow 48 Melons"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "MELON"
+    amount: 48
+    rewards:
+      money: 27500
+      xp: 237
+      items: []
+    prerequisite: null
+  farming_030:
+    name: "Quest 030: Farming Challenge"
+    description: "Harvest 208 Pumpkins"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "PUMPKIN"
+    amount: 208
+    rewards:
+      money: 30000
+      xp: 250
+      items: []
+    prerequisite: null
+  farming_031:
+    name: "Quest 031: Farming Challenge"
+    description: "Collect 48 Apples"
+    category: FARMING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: ""
+    amount: 48
+    rewards:
+      money: 32500
+      xp: 262
+      items: []
+    prerequisite: null
+  farming_032:
+    name: "Quest 032: Farming Challenge"
+    description: "Grow 48 Melons"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "MELON"
+    amount: 48
+    rewards:
+      money: 35000
+      xp: 275
+      items: []
+    prerequisite: null
+  farming_033:
+    name: "Quest 033: Farming Challenge"
+    description: "Harvest 240 Pumpkins"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "PUMPKIN"
+    amount: 240
+    rewards:
+      money: 37500
+      xp: 287
+      items: []
+    prerequisite: null
+  farming_034:
+    name: "Quest 034: Farming Challenge"
+    description: "Collect 48 Apples"
+    category: FARMING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: ""
+    amount: 48
+    rewards:
+      money: 40000
+      xp: 300
+      items: []
+    prerequisite: null
+  farming_035:
+    name: "Quest 035: Farming Challenge"
+    description: "Grow 64 Melons"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "MELON"
+    amount: 64
+    rewards:
+      money: 42500
+      xp: 312
+      items: []
+    prerequisite: null
+  farming_036:
+    name: "Quest 036: Farming Challenge"
+    description: "Harvest 272 Pumpkins"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "PUMPKIN"
+    amount: 272
+    rewards:
+      money: 45000
+      xp: 325
+      items: []
+    prerequisite: null
+  farming_037:
+    name: "Quest 037: Farming Challenge"
+    description: "Collect 64 Apples"
+    category: FARMING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: ""
+    amount: 64
+    rewards:
+      money: 47500
+      xp: 337
+      items: []
+    prerequisite: null
+  farming_038:
+    name: "Quest 038: Farming Challenge"
+    description: "Grow 64 Melons"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "MELON"
+    amount: 64
+    rewards:
+      money: 50000
+      xp: 350
+      items: []
+    prerequisite: null
+  farming_039:
+    name: "Quest 039: Farming Challenge"
+    description: "Harvest 320 Pumpkins"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "PUMPKIN"
+    amount: 320
+    rewards:
+      money: 52500
+      xp: 362
+      items: []
+    prerequisite: null
+  farming_040:
+    name: "Quest 040: Farming Challenge"
+    description: "Collect 64 Apples"
+    category: FARMING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: ""
+    amount: 64
+    rewards:
+      money: 55000
+      xp: 375
+      items: []
+    prerequisite: null
+  farming_041:
+    name: "Quest 041: Farming Challenge"
+    description: "Grow 64 Melons"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "MELON"
+    amount: 64
+    rewards:
+      money: 57500
+      xp: 387
+      items: []
+    prerequisite: null
+  farming_042:
+    name: "Quest 042: Farming Challenge"
+    description: "Harvest 368 Pumpkins"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "PUMPKIN"
+    amount: 368
+    rewards:
+      money: 60000
+      xp: 400
+      items: []
+    prerequisite: null
+  farming_043:
+    name: "Quest 043: Farming Challenge"
+    description: "Collect 80 Apples"
+    category: FARMING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: ""
+    amount: 80
+    rewards:
+      money: 62500
+      xp: 412
+      items: []
+    prerequisite: null
+  farming_044:
+    name: "Quest 044: Farming Challenge"
+    description: "Grow 80 Melons"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "MELON"
+    amount: 80
+    rewards:
+      money: 65000
+      xp: 425
+      items: []
+    prerequisite: null
+  farming_045:
+    name: "Quest 045: Farming Challenge"
+    description: "Harvest 432 Pumpkins"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "PUMPKIN"
+    amount: 432
+    rewards:
+      money: 67500
+      xp: 437
+      items: []
+    prerequisite: null
+  farming_046:
+    name: "Quest 046: Farming Challenge"
+    description: "Collect 80 Apples"
+    category: FARMING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: ""
+    amount: 80
+    rewards:
+      money: 70000
+      xp: 450
+      items: []
+    prerequisite: null
+  farming_047:
+    name: "Quest 047: Farming Challenge"
+    description: "Grow 96 Melons"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "MELON"
+    amount: 96
+    rewards:
+      money: 72500
+      xp: 462
+      items: []
+    prerequisite: null
+  farming_048:
+    name: "Quest 048: Farming Challenge"
+    description: "Harvest 496 Pumpkins"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "PUMPKIN"
+    amount: 496
+    rewards:
+      money: 75000
+      xp: 475
+      items: []
+    prerequisite: null
+  farming_049:
+    name: "Quest 049: Farming Challenge"
+    description: "Collect 96 Apples"
+    category: FARMING
+    difficulty: MEDIUM
+    type: BREAK_BLOCK
+    target: ""
+    amount: 96
+    rewards:
+      money: 77500
+      xp: 487
+      items: []
+    prerequisite: null
+  farming_050:
+    name: "Quest 050: Farming Challenge"
+    description: "Grow 96 Melons"
+    category: FARMING
+    difficulty: MEDIUM
+    type: HARVEST_CROP
+    target: "MELON"
+    amount: 96
+    rewards:
+      money: 80000
+      xp: 500
+      items: []
+    prerequisite: null
+  farming_051:
+    name: "Quest 051: Farming Challenge"
+    description: "Brew 112 Potions"
+    category: FARMING
+    difficulty: HARD
+    type: CRAFT_ITEM
+    target: ""
+    amount: 112
+    rewards:
+      money: 100000
+      xp: 500
+      items: []
+    prerequisite: null
+  farming_052:
+    name: "Quest 052: Farming Challenge"
+    description: "Collect 112 Mushrooms"
+    category: FARMING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "BROWN_MUSHROOM"
+    amount: 112
+    rewards:
+      money: 116666
+      xp: 562
+      items: []
+    prerequisite: null
+  farming_053:
+    name: "Quest 053: Farming Challenge"
+    description: "Harvest 112 Cocoa Beans"
+    category: FARMING
+    difficulty: HARD
+    type: HARVEST_CROP
+    target: "COCOA"
+    amount: 112
+    rewards:
+      money: 133333
+      xp: 625
+      items: []
+    prerequisite: null
+  farming_054:
+    name: "Quest 054: Farming Challenge"
+    description: "Brew 128 Potions"
+    category: FARMING
+    difficulty: HARD
+    type: CRAFT_ITEM
+    target: ""
+    amount: 128
+    rewards:
+      money: 150000
+      xp: 687
+      items: []
+    prerequisite: null
+  farming_055:
+    name: "Quest 055: Farming Challenge"
+    description: "Collect 128 Mushrooms"
+    category: FARMING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "BROWN_MUSHROOM"
+    amount: 128
+    rewards:
+      money: 166666
+      xp: 750
+      items: []
+    prerequisite: null
+  farming_056:
+    name: "Quest 056: Farming Challenge"
+    description: "Harvest 128 Cocoa Beans"
+    category: FARMING
+    difficulty: HARD
+    type: HARVEST_CROP
+    target: "COCOA"
+    amount: 128
+    rewards:
+      money: 183333
+      xp: 812
+      items: []
+    prerequisite: null
+  farming_057:
+    name: "Quest 057: Farming Challenge"
+    description: "Brew 144 Potions"
+    category: FARMING
+    difficulty: HARD
+    type: CRAFT_ITEM
+    target: ""
+    amount: 144
+    rewards:
+      money: 200000
+      xp: 875
+      items: []
+    prerequisite: null
+  farming_058:
+    name: "Quest 058: Farming Challenge"
+    description: "Collect 144 Mushrooms"
+    category: FARMING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "BROWN_MUSHROOM"
+    amount: 144
+    rewards:
+      money: 216666
+      xp: 937
+      items: []
+    prerequisite: null
+  farming_059:
+    name: "Quest 059: Farming Challenge"
+    description: "Harvest 160 Cocoa Beans"
+    category: FARMING
+    difficulty: HARD
+    type: HARVEST_CROP
+    target: "COCOA"
+    amount: 160
+    rewards:
+      money: 233333
+      xp: 1000
+      items: []
+    prerequisite: null
+  farming_060:
+    name: "Quest 060: Farming Challenge"
+    description: "Brew 160 Potions"
+    category: FARMING
+    difficulty: HARD
+    type: CRAFT_ITEM
+    target: ""
+    amount: 160
+    rewards:
+      money: 250000
+      xp: 1062
+      items: []
+    prerequisite: null
+  farming_061:
+    name: "Quest 061: Farming Challenge"
+    description: "Collect 176 Mushrooms"
+    category: FARMING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "BROWN_MUSHROOM"
+    amount: 176
+    rewards:
+      money: 266666
+      xp: 1125
+      items: []
+    prerequisite: null
+  farming_062:
+    name: "Quest 062: Farming Challenge"
+    description: "Harvest 176 Cocoa Beans"
+    category: FARMING
+    difficulty: HARD
+    type: HARVEST_CROP
+    target: "COCOA"
+    amount: 176
+    rewards:
+      money: 283333
+      xp: 1187
+      items: []
+    prerequisite: null
+  farming_063:
+    name: "Quest 063: Farming Challenge"
+    description: "Brew 192 Potions"
+    category: FARMING
+    difficulty: HARD
+    type: CRAFT_ITEM
+    target: ""
+    amount: 192
+    rewards:
+      money: 300000
+      xp: 1250
+      items: []
+    prerequisite: null
+  farming_064:
+    name: "Quest 064: Farming Challenge"
+    description: "Collect 192 Mushrooms"
+    category: FARMING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "BROWN_MUSHROOM"
+    amount: 192
+    rewards:
+      money: 316666
+      xp: 1312
+      items: []
+    prerequisite: null
+  farming_065:
+    name: "Quest 065: Farming Challenge"
+    description: "Harvest 208 Cocoa Beans"
+    category: FARMING
+    difficulty: HARD
+    type: HARVEST_CROP
+    target: "COCOA"
+    amount: 208
+    rewards:
+      money: 333333
+      xp: 1375
+      items: []
+    prerequisite: null
+  farming_066:
+    name: "Quest 066: Farming Challenge"
+    description: "Brew 224 Potions"
+    category: FARMING
+    difficulty: HARD
+    type: CRAFT_ITEM
+    target: ""
+    amount: 224
+    rewards:
+      money: 350000
+      xp: 1437
+      items: []
+    prerequisite: null
+  farming_067:
+    name: "Quest 067: Farming Challenge"
+    description: "Collect 224 Mushrooms"
+    category: FARMING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "BROWN_MUSHROOM"
+    amount: 224
+    rewards:
+      money: 366666
+      xp: 1500
+      items: []
+    prerequisite: null
+  farming_068:
+    name: "Quest 068: Farming Challenge"
+    description: "Harvest 240 Cocoa Beans"
+    category: FARMING
+    difficulty: HARD
+    type: HARVEST_CROP
+    target: "COCOA"
+    amount: 240
+    rewards:
+      money: 383333
+      xp: 1562
+      items: []
+    prerequisite: null
+  farming_069:
+    name: "Quest 069: Farming Challenge"
+    description: "Brew 256 Potions"
+    category: FARMING
+    difficulty: HARD
+    type: CRAFT_ITEM
+    target: ""
+    amount: 256
+    rewards:
+      money: 400000
+      xp: 1625
+      items: []
+    prerequisite: null
+  farming_070:
+    name: "Quest 070: Farming Challenge"
+    description: "Collect 272 Mushrooms"
+    category: FARMING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "BROWN_MUSHROOM"
+    amount: 272
+    rewards:
+      money: 416666
+      xp: 1687
+      items: []
+    prerequisite: null
+  farming_071:
+    name: "Quest 071: Farming Challenge"
+    description: "Harvest 272 Cocoa Beans"
+    category: FARMING
+    difficulty: HARD
+    type: HARVEST_CROP
+    target: "COCOA"
+    amount: 272
+    rewards:
+      money: 433333
+      xp: 1750
+      items: []
+    prerequisite: null
+  farming_072:
+    name: "Quest 072: Farming Challenge"
+    description: "Brew 288 Potions"
+    category: FARMING
+    difficulty: HARD
+    type: CRAFT_ITEM
+    target: ""
+    amount: 288
+    rewards:
+      money: 450000
+      xp: 1812
+      items: []
+    prerequisite: null
+  farming_073:
+    name: "Quest 073: Farming Challenge"
+    description: "Collect 304 Mushrooms"
+    category: FARMING
+    difficulty: HARD
+    type: BREAK_BLOCK
+    target: "BROWN_MUSHROOM"
+    amount: 304
+    rewards:
+      money: 466666
+      xp: 1875
+      items: []
+    prerequisite: null
+  farming_074:
+    name: "Quest 074: Farming Challenge"
+    description: "Harvest 320 Cocoa Beans"
+    category: FARMING
+    difficulty: HARD
+    type: HARVEST_CROP
+    target: "COCOA"
+    amount: 320
+    rewards:
+      money: 483333
+      xp: 1937
+      items: []
+    prerequisite: null
+  farming_075:
+    name: "Quest 075: Farming Challenge"
+    description: "Brew 336 Potions"
+    category: FARMING
+    difficulty: HARD
+    type: CRAFT_ITEM
+    target: ""
+    amount: 336
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  farming_076:
+    name: "Quest 076: Farming Challenge"
+    description: "Collect 352 Kelp"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "KELP"
+    amount: 352
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  farming_077:
+    name: "Quest 077: Farming Challenge"
+    description: "Harvest 384 Sweet Berries"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "SWEET_BERRY_BUSH"
+    amount: 384
+    rewards:
+      money: 687500
+      xp: 2333
+      items: []
+    prerequisite: null
+  farming_078:
+    name: "Quest 078: Farming Challenge"
+    description: "Collect 416 Kelp"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "KELP"
+    amount: 416
+    rewards:
+      money: 875000
+      xp: 2666
+      items: []
+    prerequisite: null
+  farming_079:
+    name: "Quest 079: Farming Challenge"
+    description: "Harvest 448 Sweet Berries"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "SWEET_BERRY_BUSH"
+    amount: 448
+    rewards:
+      money: 1062500
+      xp: 3000
+      items: []
+    prerequisite: null
+  farming_080:
+    name: "Quest 080: Farming Challenge"
+    description: "Collect 480 Kelp"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "KELP"
+    amount: 480
+    rewards:
+      money: 1250000
+      xp: 3333
+      items: []
+    prerequisite: null
+  farming_081:
+    name: "Quest 081: Farming Challenge"
+    description: "Harvest 528 Sweet Berries"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "SWEET_BERRY_BUSH"
+    amount: 528
+    rewards:
+      money: 1437500
+      xp: 3666
+      items: []
+    prerequisite: null
+  farming_082:
+    name: "Quest 082: Farming Challenge"
+    description: "Collect 560 Kelp"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "KELP"
+    amount: 560
+    rewards:
+      money: 1625000
+      xp: 4000
+      items: []
+    prerequisite: null
+  farming_083:
+    name: "Quest 083: Farming Challenge"
+    description: "Harvest 608 Sweet Berries"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "SWEET_BERRY_BUSH"
+    amount: 608
+    rewards:
+      money: 1812500
+      xp: 4333
+      items: []
+    prerequisite: null
+  farming_084:
+    name: "Quest 084: Farming Challenge"
+    description: "Collect 656 Kelp"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "KELP"
+    amount: 656
+    rewards:
+      money: 2000000
+      xp: 4666
+      items: []
+    prerequisite: null
+  farming_085:
+    name: "Quest 085: Farming Challenge"
+    description: "Harvest 704 Sweet Berries"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "SWEET_BERRY_BUSH"
+    amount: 704
+    rewards:
+      money: 2187500
+      xp: 5000
+      items: []
+    prerequisite: null
+  farming_086:
+    name: "Quest 086: Farming Challenge"
+    description: "Collect 768 Kelp"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "KELP"
+    amount: 768
+    rewards:
+      money: 2375000
+      xp: 5333
+      items: []
+    prerequisite: null
+  farming_087:
+    name: "Quest 087: Farming Challenge"
+    description: "Harvest 832 Sweet Berries"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "SWEET_BERRY_BUSH"
+    amount: 832
+    rewards:
+      money: 2562500
+      xp: 5666
+      items: []
+    prerequisite: null
+  farming_088:
+    name: "Quest 088: Farming Challenge"
+    description: "Collect 896 Kelp"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "KELP"
+    amount: 896
+    rewards:
+      money: 2750000
+      xp: 6000
+      items: []
+    prerequisite: null
+  farming_089:
+    name: "Quest 089: Farming Challenge"
+    description: "Harvest 960 Sweet Berries"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "SWEET_BERRY_BUSH"
+    amount: 960
+    rewards:
+      money: 2937500
+      xp: 6333
+      items: []
+    prerequisite: null
+  farming_090:
+    name: "Quest 090: Farming Challenge"
+    description: "Collect 1,040 Kelp"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "KELP"
+    amount: 1040
+    rewards:
+      money: 3125000
+      xp: 6666
+      items: []
+    prerequisite: null
+  farming_091:
+    name: "Quest 091: Farming Challenge"
+    description: "Harvest 1,120 Nether Wart"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "NETHER_WART"
+    amount: 1120
+    rewards:
+      money: 3312500
+      xp: 7000
+      items: []
+    prerequisite: null
+  farming_092:
+    name: "Quest 092: Farming Challenge"
+    description: "Collect 1,216 Chorus Fruit"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "CHORUS_PLANT"
+    amount: 1216
+    rewards:
+      money: 3500000
+      xp: 7333
+      items: []
+    prerequisite: null
+  farming_093:
+    name: "Quest 093: Farming Challenge"
+    description: "Harvest 1,312 Nether Wart"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "NETHER_WART"
+    amount: 1312
+    rewards:
+      money: 3687500
+      xp: 7666
+      items: []
+    prerequisite: null
+  farming_094:
+    name: "Quest 094: Farming Challenge"
+    description: "Collect 1,424 Chorus Fruit"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "CHORUS_PLANT"
+    amount: 1424
+    rewards:
+      money: 3875000
+      xp: 8000
+      items: []
+    prerequisite: null
+  farming_095:
+    name: "Quest 095: Farming Challenge"
+    description: "Harvest 1,536 Nether Wart"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "NETHER_WART"
+    amount: 1536
+    rewards:
+      money: 4062500
+      xp: 8333
+      items: []
+    prerequisite: null
+  farming_096:
+    name: "Quest 096: Farming Challenge"
+    description: "Collect 1,664 Chorus Fruit"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "CHORUS_PLANT"
+    amount: 1664
+    rewards:
+      money: 4250000
+      xp: 8666
+      items: []
+    prerequisite: null
+  farming_097:
+    name: "Quest 097: Farming Challenge"
+    description: "Harvest 1,792 Nether Wart"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "NETHER_WART"
+    amount: 1792
+    rewards:
+      money: 4437500
+      xp: 9000
+      items: []
+    prerequisite: null
+  farming_098:
+    name: "Quest 098: Farming Challenge"
+    description: "Collect 1,936 Chorus Fruit"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "CHORUS_PLANT"
+    amount: 1936
+    rewards:
+      money: 4625000
+      xp: 9333
+      items: []
+    prerequisite: null
+  farming_099:
+    name: "Quest 099: Farming Challenge"
+    description: "Harvest 2,080 Nether Wart"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: HARVEST_CROP
+    target: "NETHER_WART"
+    amount: 2080
+    rewards:
+      money: 4812500
+      xp: 9666
+      items: []
+    prerequisite: null
+  farming_100:
+    name: "Quest 100: Farming Challenge"
+    description: "Collect 2,256 Chorus Fruit"
+    category: FARMING
+    difficulty: LEGENDARY
+    type: BREAK_BLOCK
+    target: "CHORUS_PLANT"
+    amount: 2256
+    rewards:
+      money: 5000000
+      xp: 10000
+      items: []
+    prerequisite: null
+  fishing_001:
+    name: "Quest 001: Fishing Challenge"
+    description: "Catch 32 Pond Minnows"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 32
+    rewards:
+      money: 5000
+      xp: 50
+      items: []
+    prerequisite: null
+  fishing_002:
+    name: "Quest 002: Fishing Challenge"
+    description: "Catch 12.2 lbs of Creek Chubs"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 12
+    rewards:
+      money: 5416
+      xp: 54
+      items: []
+    prerequisite: null
+  fishing_003:
+    name: "Quest 003: Fishing Challenge"
+    description: "Catch 16 Mud Catfish"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 16
+    rewards:
+      money: 5833
+      xp: 58
+      items: []
+    prerequisite: null
+  fishing_004:
+    name: "Quest 004: Fishing Challenge"
+    description: "Catch 9.6 lbs of Lake Perch"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 9
+    rewards:
+      money: 6250
+      xp: 62
+      items: []
+    prerequisite: null
+  fishing_005:
+    name: "Quest 005: Fishing Challenge"
+    description: "Catch 16 River Trout"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 16
+    rewards:
+      money: 6666
+      xp: 66
+      items: []
+    prerequisite: null
+  fishing_006:
+    name: "Quest 006: Fishing Challenge"
+    description: "Catch 6.6 lbs of Sunfish"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 6
+    rewards:
+      money: 7083
+      xp: 70
+      items: []
+    prerequisite: null
+  fishing_007:
+    name: "Quest 007: Fishing Challenge"
+    description: "Catch 16 Bluegill"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 16
+    rewards:
+      money: 7500
+      xp: 75
+      items: []
+    prerequisite: null
+  fishing_008:
+    name: "Quest 008: Fishing Challenge"
+    description: "Catch 20.6 lbs of Carp"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 20
+    rewards:
+      money: 7916
+      xp: 79
+      items: []
+    prerequisite: null
+  fishing_009:
+    name: "Quest 009: Fishing Challenge"
+    description: "Catch 16 Shad"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 16
+    rewards:
+      money: 8333
+      xp: 83
+      items: []
+    prerequisite: null
+  fishing_010:
+    name: "Quest 010: Fishing Challenge"
+    description: "Catch 5.3 lbs of Smelt"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 5
+    rewards:
+      money: 8750
+      xp: 87
+      items: []
+    prerequisite: null
+  fishing_011:
+    name: "Quest 011: Fishing Challenge"
+    description: "Catch 16 Anchovies"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 16
+    rewards:
+      money: 9166
+      xp: 91
+      items: []
+    prerequisite: null
+  fishing_012:
+    name: "Quest 012: Fishing Challenge"
+    description: "Catch 5.5 lbs of Sardines"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 5
+    rewards:
+      money: 9583
+      xp: 95
+      items: []
+    prerequisite: null
+  fishing_013:
+    name: "Quest 013: Fishing Challenge"
+    description: "Catch 16 Herring"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 16
+    rewards:
+      money: 10000
+      xp: 100
+      items: []
+    prerequisite: null
+  fishing_014:
+    name: "Quest 014: Fishing Challenge"
+    description: "Catch 19.1 lbs of Whitefish"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 19
+    rewards:
+      money: 10416
+      xp: 104
+      items: []
+    prerequisite: null
+  fishing_015:
+    name: "Quest 015: Fishing Challenge"
+    description: "Catch 16 Dace"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 16
+    rewards:
+      money: 10833
+      xp: 108
+      items: []
+    prerequisite: null
+  fishing_016:
+    name: "Quest 016: Fishing Challenge"
+    description: "Catch 11.8 lbs of Rudd"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 11
+    rewards:
+      money: 11250
+      xp: 112
+      items: []
+    prerequisite: null
+  fishing_017:
+    name: "Quest 017: Fishing Challenge"
+    description: "Catch 16 Roach"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 16
+    rewards:
+      money: 11666
+      xp: 116
+      items: []
+    prerequisite: null
+  fishing_018:
+    name: "Quest 018: Fishing Challenge"
+    description: "Catch 20.3 lbs of Bream"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 20
+    rewards:
+      money: 12083
+      xp: 120
+      items: []
+    prerequisite: null
+  fishing_019:
+    name: "Quest 019: Fishing Challenge"
+    description: "Catch 16 Gudgeon"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 16
+    rewards:
+      money: 12500
+      xp: 125
+      items: []
+    prerequisite: null
+  fishing_020:
+    name: "Quest 020: Fishing Challenge"
+    description: "Catch 6.3 lbs of Minnows"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 6
+    rewards:
+      money: 12916
+      xp: 129
+      items: []
+    prerequisite: null
+  fishing_021:
+    name: "Quest 021: Fishing Challenge"
+    description: "Catch 48 Pond Minnows"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 48
+    rewards:
+      money: 13333
+      xp: 133
+      items: []
+    prerequisite: null
+  fishing_022:
+    name: "Quest 022: Fishing Challenge"
+    description: "Catch 17.2 lbs of Creek Chubs"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 17
+    rewards:
+      money: 13750
+      xp: 137
+      items: []
+    prerequisite: null
+  fishing_023:
+    name: "Quest 023: Fishing Challenge"
+    description: "Catch 32 Mud Catfish"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 32
+    rewards:
+      money: 14166
+      xp: 141
+      items: []
+    prerequisite: null
+  fishing_024:
+    name: "Quest 024: Fishing Challenge"
+    description: "Catch 13.3 lbs of Lake Perch"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 13
+    rewards:
+      money: 14583
+      xp: 145
+      items: []
+    prerequisite: null
+  fishing_025:
+    name: "Quest 025: Fishing Challenge"
+    description: "Catch 32 River Trout"
+    category: FISHING
+    difficulty: EASY
+    type: CATCH_FISH
+    target: ""
+    amount: 32
+    rewards:
+      money: 15000
+      xp: 150
+      items: []
+    prerequisite: null
+  fishing_026:
+    name: "Quest 026: Fishing Challenge"
+    description: "Catch 75.0 lbs of Yellowtail"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 75
+    rewards:
+      money: 20000
+      xp: 200
+      items: []
+    prerequisite: null
+  fishing_027:
+    name: "Quest 027: Fishing Challenge"
+    description: "Catch 32 Mackerel"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 32
+    rewards:
+      money: 22500
+      xp: 212
+      items: []
+    prerequisite: null
+  fishing_028:
+    name: "Quest 028: Fishing Challenge"
+    description: "Catch 78.1 lbs of Sea Bass"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 78
+    rewards:
+      money: 25000
+      xp: 225
+      items: []
+    prerequisite: null
+  fishing_029:
+    name: "Quest 029: Fishing Challenge"
+    description: "Catch 32 Flounder"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 32
+    rewards:
+      money: 27500
+      xp: 237
+      items: []
+    prerequisite: null
+  fishing_030:
+    name: "Quest 030: Fishing Challenge"
+    description: "Catch 113.8 lbs of Halibut"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 113
+    rewards:
+      money: 30000
+      xp: 250
+      items: []
+    prerequisite: null
+  fishing_031:
+    name: "Quest 031: Fishing Challenge"
+    description: "Catch 32 Rainbow Trout"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 32
+    rewards:
+      money: 32500
+      xp: 262
+      items: []
+    prerequisite: null
+  fishing_032:
+    name: "Quest 032: Fishing Challenge"
+    description: "Catch 101.2 lbs of Largemouth Bass"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 101
+    rewards:
+      money: 35000
+      xp: 275
+      items: []
+    prerequisite: null
+  fishing_033:
+    name: "Quest 033: Fishing Challenge"
+    description: "Catch 32 Smallmouth Bass"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 32
+    rewards:
+      money: 37500
+      xp: 287
+      items: []
+    prerequisite: null
+  fishing_034:
+    name: "Quest 034: Fishing Challenge"
+    description: "Catch 87.5 lbs of Walleye"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 87
+    rewards:
+      money: 40000
+      xp: 300
+      items: []
+    prerequisite: null
+  fishing_035:
+    name: "Quest 035: Fishing Challenge"
+    description: "Catch 32 Northern Pike"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 32
+    rewards:
+      money: 42500
+      xp: 312
+      items: []
+    prerequisite: null
+  fishing_036:
+    name: "Quest 036: Fishing Challenge"
+    description: "Catch 126.9 lbs of Channel Catfish"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 126
+    rewards:
+      money: 45000
+      xp: 325
+      items: []
+    prerequisite: null
+  fishing_037:
+    name: "Quest 037: Fishing Challenge"
+    description: "Catch 48 Crappie"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 48
+    rewards:
+      money: 47500
+      xp: 337
+      items: []
+    prerequisite: null
+  fishing_038:
+    name: "Quest 038: Fishing Challenge"
+    description: "Catch 67.5 lbs of Tilapia"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 67
+    rewards:
+      money: 50000
+      xp: 350
+      items: []
+    prerequisite: null
+  fishing_039:
+    name: "Quest 039: Fishing Challenge"
+    description: "Catch 48 Red Snapper"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 48
+    rewards:
+      money: 52500
+      xp: 362
+      items: []
+    prerequisite: null
+  fishing_040:
+    name: "Quest 040: Fishing Challenge"
+    description: "Catch 135.6 lbs of Grouper"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 135
+    rewards:
+      money: 55000
+      xp: 375
+      items: []
+    prerequisite: null
+  fishing_041:
+    name: "Quest 041: Fishing Challenge"
+    description: "Catch 48 Yellowtail"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 48
+    rewards:
+      money: 57500
+      xp: 387
+      items: []
+    prerequisite: null
+  fishing_042:
+    name: "Quest 042: Fishing Challenge"
+    description: "Catch 72.0 lbs of Mackerel"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 72
+    rewards:
+      money: 60000
+      xp: 400
+      items: []
+    prerequisite: null
+  fishing_043:
+    name: "Quest 043: Fishing Challenge"
+    description: "Catch 48 Sea Bass"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 48
+    rewards:
+      money: 62500
+      xp: 412
+      items: []
+    prerequisite: null
+  fishing_044:
+    name: "Quest 044: Fishing Challenge"
+    description: "Catch 82.5 lbs of Flounder"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 82
+    rewards:
+      money: 65000
+      xp: 425
+      items: []
+    prerequisite: null
+  fishing_045:
+    name: "Quest 045: Fishing Challenge"
+    description: "Catch 48 Halibut"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 48
+    rewards:
+      money: 67500
+      xp: 437
+      items: []
+    prerequisite: null
+  fishing_046:
+    name: "Quest 046: Fishing Challenge"
+    description: "Catch 85.0 lbs of Rainbow Trout"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 85
+    rewards:
+      money: 70000
+      xp: 450
+      items: []
+    prerequisite: null
+  fishing_047:
+    name: "Quest 047: Fishing Challenge"
+    description: "Catch 64 Largemouth Bass"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 64
+    rewards:
+      money: 72500
+      xp: 462
+      items: []
+    prerequisite: null
+  fishing_048:
+    name: "Quest 048: Fishing Challenge"
+    description: "Catch 109.4 lbs of Smallmouth Bass"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 109
+    rewards:
+      money: 75000
+      xp: 475
+      items: []
+    prerequisite: null
+  fishing_049:
+    name: "Quest 049: Fishing Challenge"
+    description: "Catch 64 Walleye"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 64
+    rewards:
+      money: 77500
+      xp: 487
+      items: []
+    prerequisite: null
+  fishing_050:
+    name: "Quest 050: Fishing Challenge"
+    description: "Catch 157.5 lbs of Northern Pike"
+    category: FISHING
+    difficulty: MEDIUM
+    type: CATCH_FISH
+    target: ""
+    amount: 157
+    rewards:
+      money: 80000
+      xp: 500
+      items: []
+    prerequisite: null
+  fishing_051:
+    name: "Quest 051: Fishing Challenge"
+    description: "Catch 32 Ember Catfish"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 32
+    rewards:
+      money: 100000
+      xp: 500
+      items: []
+    prerequisite: null
+  fishing_052:
+    name: "Quest 052: Fishing Challenge"
+    description: "Catch 91.9 lbs of Storm Eels"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 91
+    rewards:
+      money: 116666
+      xp: 562
+      items: []
+    prerequisite: null
+  fishing_053:
+    name: "Quest 053: Fishing Challenge"
+    description: "Catch 32 Coral Wrasse"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 32
+    rewards:
+      money: 133333
+      xp: 625
+      items: []
+    prerequisite: null
+  fishing_054:
+    name: "Quest 054: Fishing Challenge"
+    description: "Catch 111.6 lbs of Jade Perch"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 111
+    rewards:
+      money: 150000
+      xp: 687
+      items: []
+    prerequisite: null
+  fishing_055:
+    name: "Quest 055: Fishing Challenge"
+    description: "Catch 48 Twilight Salmon"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 48
+    rewards:
+      money: 166666
+      xp: 750
+      items: []
+    prerequisite: null
+  fishing_056:
+    name: "Quest 056: Fishing Challenge"
+    description: "Catch 115.9 lbs of Obsidian Cod"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 115
+    rewards:
+      money: 183333
+      xp: 812
+      items: []
+    prerequisite: null
+  fishing_057:
+    name: "Quest 057: Fishing Challenge"
+    description: "Catch 48 Ancient Sturgeon"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 48
+    rewards:
+      money: 200000
+      xp: 875
+      items: []
+    prerequisite: null
+  fishing_058:
+    name: "Quest 058: Fishing Challenge"
+    description: "Catch 154.7 lbs of Sapphire Marlin"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 154
+    rewards:
+      money: 216666
+      xp: 937
+      items: []
+    prerequisite: null
+  fishing_059:
+    name: "Quest 059: Fishing Challenge"
+    description: "Catch 48 Ruby Snapper"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 48
+    rewards:
+      money: 233333
+      xp: 1000
+      items: []
+    prerequisite: null
+  fishing_060:
+    name: "Quest 060: Fishing Challenge"
+    description: "Catch 106.9 lbs of Phantom Shad"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 106
+    rewards:
+      money: 250000
+      xp: 1062
+      items: []
+    prerequisite: null
+  fishing_061:
+    name: "Quest 061: Fishing Challenge"
+    description: "Catch 64 Golden Carp"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 64
+    rewards:
+      money: 266666
+      xp: 1125
+      items: []
+    prerequisite: null
+  fishing_062:
+    name: "Quest 062: Fishing Challenge"
+    description: "Catch 129.1 lbs of Crystal Bass"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 129
+    rewards:
+      money: 283333
+      xp: 1187
+      items: []
+    prerequisite: null
+  fishing_063:
+    name: "Quest 063: Fishing Challenge"
+    description: "Catch 64 Moonfish"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 64
+    rewards:
+      money: 300000
+      xp: 1250
+      items: []
+    prerequisite: null
+  fishing_064:
+    name: "Quest 064: Fishing Challenge"
+    description: "Catch 152.5 lbs of Shadow Trout"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 152
+    rewards:
+      money: 316666
+      xp: 1312
+      items: []
+    prerequisite: null
+  fishing_065:
+    name: "Quest 065: Fishing Challenge"
+    description: "Catch 64 Frost Pike"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 64
+    rewards:
+      money: 333333
+      xp: 1375
+      items: []
+    prerequisite: null
+  fishing_066:
+    name: "Quest 066: Fishing Challenge"
+    description: "Catch 137.8 lbs of Ember Catfish"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 137
+    rewards:
+      money: 350000
+      xp: 1437
+      items: []
+    prerequisite: null
+  fishing_067:
+    name: "Quest 067: Fishing Challenge"
+    description: "Catch 80 Storm Eels"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 80
+    rewards:
+      money: 366666
+      xp: 1500
+      items: []
+    prerequisite: null
+  fishing_068:
+    name: "Quest 068: Fishing Challenge"
+    description: "Catch 121.9 lbs of Coral Wrasse"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 121
+    rewards:
+      money: 383333
+      xp: 1562
+      items: []
+    prerequisite: null
+  fishing_069:
+    name: "Quest 069: Fishing Challenge"
+    description: "Catch 80 Jade Perch"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 80
+    rewards:
+      money: 400000
+      xp: 1625
+      items: []
+    prerequisite: null
+  fishing_070:
+    name: "Quest 070: Fishing Challenge"
+    description: "Catch 167.5 lbs of Twilight Salmon"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 167
+    rewards:
+      money: 416666
+      xp: 1687
+      items: []
+    prerequisite: null
+  fishing_071:
+    name: "Quest 071: Fishing Challenge"
+    description: "Catch 96 Obsidian Cod"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 96
+    rewards:
+      money: 433333
+      xp: 1750
+      items: []
+    prerequisite: null
+  fishing_072:
+    name: "Quest 072: Fishing Challenge"
+    description: "Catch 215.6 lbs of Ancient Sturgeon"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 215
+    rewards:
+      money: 450000
+      xp: 1812
+      items: []
+    prerequisite: null
+  fishing_073:
+    name: "Quest 073: Fishing Challenge"
+    description: "Catch 96 Sapphire Marlin"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 96
+    rewards:
+      money: 466666
+      xp: 1875
+      items: []
+    prerequisite: null
+  fishing_074:
+    name: "Quest 074: Fishing Challenge"
+    description: "Catch 177.5 lbs of Ruby Snapper"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 177
+    rewards:
+      money: 483333
+      xp: 1937
+      items: []
+    prerequisite: null
+  fishing_075:
+    name: "Quest 075: Fishing Challenge"
+    description: "Catch 112 Phantom Shad"
+    category: FISHING
+    difficulty: HARD
+    type: CATCH_FISH
+    target: ""
+    amount: 112
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  fishing_076:
+    name: "Quest 076: Fishing Challenge"
+    description: "Catch 150.0 lbs of Void Eels"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 150
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  fishing_077:
+    name: "Quest 077: Fishing Challenge"
+    description: "Catch 64 Lava Serpents"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 64
+    rewards:
+      money: 687500
+      xp: 2333
+      items: []
+    prerequisite: null
+  fishing_078:
+    name: "Quest 078: Fishing Challenge"
+    description: "Catch 156.2 lbs of Thunder Barracuda"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 156
+    rewards:
+      money: 875000
+      xp: 2666
+      items: []
+    prerequisite: null
+  fishing_079:
+    name: "Quest 079: Fishing Challenge"
+    description: "Catch 80 Glacial Swordfish"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 80
+    rewards:
+      money: 1062500
+      xp: 3000
+      items: []
+    prerequisite: null
+  fishing_080:
+    name: "Quest 080: Fishing Challenge"
+    description: "Catch 178.8 lbs of Nether Pike"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 178
+    rewards:
+      money: 1250000
+      xp: 3333
+      items: []
+    prerequisite: null
+  fishing_081:
+    name: "Quest 081: Fishing Challenge"
+    description: "Catch 80 End Bass"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 80
+    rewards:
+      money: 1437500
+      xp: 3666
+      items: []
+    prerequisite: null
+  fishing_082:
+    name: "Quest 082: Fishing Challenge"
+    description: "Catch 219.4 lbs of Warden's Catch"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 219
+    rewards:
+      money: 1625000
+      xp: 4000
+      items: []
+    prerequisite: null
+  fishing_083:
+    name: "Quest 083: Fishing Challenge"
+    description: "Catch 96 Soul Salmon"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 96
+    rewards:
+      money: 1812500
+      xp: 4333
+      items: []
+    prerequisite: null
+  fishing_084:
+    name: "Quest 084: Fishing Challenge"
+    description: "Catch 192.5 lbs of Crimson Anglers"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 192
+    rewards:
+      money: 2000000
+      xp: 4666
+      items: []
+    prerequisite: null
+  fishing_085:
+    name: "Quest 085: Fishing Challenge"
+    description: "Catch 112 Abyssal Cod"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 112
+    rewards:
+      money: 2187500
+      xp: 5000
+      items: []
+    prerequisite: null
+  fishing_086:
+    name: "Quest 086: Fishing Challenge"
+    description: "Catch 181.2 lbs of Spectral Trout"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 181
+    rewards:
+      money: 2375000
+      xp: 5333
+      items: []
+    prerequisite: null
+  fishing_087:
+    name: "Quest 087: Fishing Challenge"
+    description: "Catch 144 Enchanted Koi"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 144
+    rewards:
+      money: 2562500
+      xp: 5666
+      items: []
+    prerequisite: null
+  fishing_088:
+    name: "Quest 088: Fishing Challenge"
+    description: "Catch 187.5 lbs of Leviathan's Scale"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 187
+    rewards:
+      money: 2750000
+      xp: 6000
+      items: []
+    prerequisite: null
+  fishing_089:
+    name: "Quest 089: Fishing Challenge"
+    description: "Catch 81 Kraken Tentacles"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 81
+    rewards:
+      money: 2937500
+      xp: 6333
+      items: []
+    prerequisite: null
+  fishing_090:
+    name: "Quest 090: Fishing Challenge"
+    description: "Catch 232.5 lbs of Dragon Koi"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 232
+    rewards:
+      money: 3125000
+      xp: 6666
+      items: []
+    prerequisite: null
+  fishing_091:
+    name: "Quest 091: Fishing Challenge"
+    description: "Catch 47 The One Fish"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 47
+    rewards:
+      money: 3312500
+      xp: 7000
+      items: []
+    prerequisite: null
+  fishing_092:
+    name: "Quest 092: Fishing Challenge"
+    description: "Catch 360.0 lbs of Primordial Leviathan"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 360
+    rewards:
+      money: 3500000
+      xp: 7333
+      items: []
+    prerequisite: null
+  fishing_093:
+    name: "Quest 093: Fishing Challenge"
+    description: "Catch 55 God's Bait"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 55
+    rewards:
+      money: 3687500
+      xp: 7666
+      items: []
+    prerequisite: null
+  fishing_094:
+    name: "Quest 094: Fishing Challenge"
+    description: "Catch 391.9 lbs of Infinity Carp"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 391
+    rewards:
+      money: 3875000
+      xp: 8000
+      items: []
+    prerequisite: null
+  fishing_095:
+    name: "Quest 095: Fishing Challenge"
+    description: "Catch 64 The Uncatchable"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 64
+    rewards:
+      money: 4062500
+      xp: 8333
+      items: []
+    prerequisite: null
+  fishing_096:
+    name: "Quest 096: Fishing Challenge"
+    description: "Catch 340.0 lbs of The One Fish"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 340
+    rewards:
+      money: 4250000
+      xp: 8666
+      items: []
+    prerequisite: null
+  fishing_097:
+    name: "Quest 097: Fishing Challenge"
+    description: "Catch 75 Primordial Leviathan"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 75
+    rewards:
+      money: 4437500
+      xp: 9000
+      items: []
+    prerequisite: null
+  fishing_098:
+    name: "Quest 098: Fishing Challenge"
+    description: "Catch 371.9 lbs of God's Bait"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 371
+    rewards:
+      money: 4625000
+      xp: 9333
+      items: []
+    prerequisite: null
+  fishing_099:
+    name: "Quest 099: Fishing Challenge"
+    description: "Catch 87 Infinity Carp"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 87
+    rewards:
+      money: 4812500
+      xp: 9666
+      items: []
+    prerequisite: null
+  fishing_100:
+    name: "Quest 100: Fishing Challenge"
+    description: "Catch 450.0 lbs of The Uncatchable"
+    category: FISHING
+    difficulty: LEGENDARY
+    type: CATCH_FISH
+    target: ""
+    amount: 450
+    rewards:
+      money: 5000000
+      xp: 10000
+      items: []
+    prerequisite: null
+  timeplayed_001:
+    name: "Quest 001: Time Played Challenge"
+    description: "Play for 1h"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 3600
+    rewards:
+      money: 5000
+      xp: 50
+      items: []
+    prerequisite: null
+  timeplayed_002:
+    name: "Quest 002: Time Played Challenge"
+    description: "Play for 2h"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 7200
+    rewards:
+      money: 5416
+      xp: 54
+      items: []
+    prerequisite: null
+  timeplayed_003:
+    name: "Quest 003: Time Played Challenge"
+    description: "Play for 3h"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 10800
+    rewards:
+      money: 5833
+      xp: 58
+      items: []
+    prerequisite: null
+  timeplayed_004:
+    name: "Quest 004: Time Played Challenge"
+    description: "Play for 6h"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 21600
+    rewards:
+      money: 6250
+      xp: 62
+      items: []
+    prerequisite: null
+  timeplayed_005:
+    name: "Quest 005: Time Played Challenge"
+    description: "Play for 12h"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 43200
+    rewards:
+      money: 6666
+      xp: 66
+      items: []
+    prerequisite: null
+  timeplayed_006:
+    name: "Quest 006: Time Played Challenge"
+    description: "Play for 16h"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 57600
+    rewards:
+      money: 7083
+      xp: 70
+      items: []
+    prerequisite: null
+  timeplayed_007:
+    name: "Quest 007: Time Played Challenge"
+    description: "Play for 1d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 86400
+    rewards:
+      money: 7500
+      xp: 75
+      items: []
+    prerequisite: null
+  timeplayed_008:
+    name: "Quest 008: Time Played Challenge"
+    description: "Play for 1d 12h"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 129600
+    rewards:
+      money: 7916
+      xp: 79
+      items: []
+    prerequisite: null
+  timeplayed_009:
+    name: "Quest 009: Time Played Challenge"
+    description: "Play for 2d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 172800
+    rewards:
+      money: 8333
+      xp: 83
+      items: []
+    prerequisite: null
+  timeplayed_010:
+    name: "Quest 010: Time Played Challenge"
+    description: "Play for 2d 12h"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 216000
+    rewards:
+      money: 8750
+      xp: 87
+      items: []
+    prerequisite: null
+  timeplayed_011:
+    name: "Quest 011: Time Played Challenge"
+    description: "Play for 3d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 259200
+    rewards:
+      money: 9166
+      xp: 91
+      items: []
+    prerequisite: null
+  timeplayed_012:
+    name: "Quest 012: Time Played Challenge"
+    description: "Play for 3d 12h"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 302400
+    rewards:
+      money: 9583
+      xp: 95
+      items: []
+    prerequisite: null
+  timeplayed_013:
+    name: "Quest 013: Time Played Challenge"
+    description: "Play for 4d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 345600
+    rewards:
+      money: 10000
+      xp: 100
+      items: []
+    prerequisite: null
+  timeplayed_014:
+    name: "Quest 014: Time Played Challenge"
+    description: "Play for 4d 12h"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 388800
+    rewards:
+      money: 10416
+      xp: 104
+      items: []
+    prerequisite: null
+  timeplayed_015:
+    name: "Quest 015: Time Played Challenge"
+    description: "Play for 5d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 432000
+    rewards:
+      money: 10833
+      xp: 108
+      items: []
+    prerequisite: null
+  timeplayed_016:
+    name: "Quest 016: Time Played Challenge"
+    description: "Play for 6d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 518400
+    rewards:
+      money: 11250
+      xp: 112
+      items: []
+    prerequisite: null
+  timeplayed_017:
+    name: "Quest 017: Time Played Challenge"
+    description: "Play for 7d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 604800
+    rewards:
+      money: 11666
+      xp: 116
+      items: []
+    prerequisite: null
+  timeplayed_018:
+    name: "Quest 018: Time Played Challenge"
+    description: "Play for 8d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 691200
+    rewards:
+      money: 12083
+      xp: 120
+      items: []
+    prerequisite: null
+  timeplayed_019:
+    name: "Quest 019: Time Played Challenge"
+    description: "Play for 9d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 777600
+    rewards:
+      money: 12500
+      xp: 125
+      items: []
+    prerequisite: null
+  timeplayed_020:
+    name: "Quest 020: Time Played Challenge"
+    description: "Play for 10d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 864000
+    rewards:
+      money: 12916
+      xp: 129
+      items: []
+    prerequisite: null
+  timeplayed_021:
+    name: "Quest 021: Time Played Challenge"
+    description: "Play for 11d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 950400
+    rewards:
+      money: 13333
+      xp: 133
+      items: []
+    prerequisite: null
+  timeplayed_022:
+    name: "Quest 022: Time Played Challenge"
+    description: "Play for 12d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 1036800
+    rewards:
+      money: 13750
+      xp: 137
+      items: []
+    prerequisite: null
+  timeplayed_023:
+    name: "Quest 023: Time Played Challenge"
+    description: "Play for 13d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 1123200
+    rewards:
+      money: 14166
+      xp: 141
+      items: []
+    prerequisite: null
+  timeplayed_024:
+    name: "Quest 024: Time Played Challenge"
+    description: "Play for 14d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 1209600
+    rewards:
+      money: 14583
+      xp: 145
+      items: []
+    prerequisite: null
+  timeplayed_025:
+    name: "Quest 025: Time Played Challenge"
+    description: "Play for 15d"
+    category: TIME_PLAYED
+    difficulty: EASY
+    type: TIME_PLAYED
+    target: ""
+    amount: 1296000
+    rewards:
+      money: 15000
+      xp: 150
+      items: []
+    prerequisite: null
+  timeplayed_026:
+    name: "Quest 026: Time Played Challenge"
+    description: "Play for 16d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 1382400
+    rewards:
+      money: 20000
+      xp: 200
+      items: []
+    prerequisite: null
+  timeplayed_027:
+    name: "Quest 027: Time Played Challenge"
+    description: "Play for 17d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 1468800
+    rewards:
+      money: 22500
+      xp: 212
+      items: []
+    prerequisite: null
+  timeplayed_028:
+    name: "Quest 028: Time Played Challenge"
+    description: "Play for 18d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 1555200
+    rewards:
+      money: 25000
+      xp: 225
+      items: []
+    prerequisite: null
+  timeplayed_029:
+    name: "Quest 029: Time Played Challenge"
+    description: "Play for 19d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 1641600
+    rewards:
+      money: 27500
+      xp: 237
+      items: []
+    prerequisite: null
+  timeplayed_030:
+    name: "Quest 030: Time Played Challenge"
+    description: "Play for 20d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 1728000
+    rewards:
+      money: 30000
+      xp: 250
+      items: []
+    prerequisite: null
+  timeplayed_031:
+    name: "Quest 031: Time Played Challenge"
+    description: "Play for 21d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 1814400
+    rewards:
+      money: 32500
+      xp: 262
+      items: []
+    prerequisite: null
+  timeplayed_032:
+    name: "Quest 032: Time Played Challenge"
+    description: "Play for 22d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 1900800
+    rewards:
+      money: 35000
+      xp: 275
+      items: []
+    prerequisite: null
+  timeplayed_033:
+    name: "Quest 033: Time Played Challenge"
+    description: "Play for 23d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 1987200
+    rewards:
+      money: 37500
+      xp: 287
+      items: []
+    prerequisite: null
+  timeplayed_034:
+    name: "Quest 034: Time Played Challenge"
+    description: "Play for 24d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 2073600
+    rewards:
+      money: 40000
+      xp: 300
+      items: []
+    prerequisite: null
+  timeplayed_035:
+    name: "Quest 035: Time Played Challenge"
+    description: "Play for 25d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 2160000
+    rewards:
+      money: 42500
+      xp: 312
+      items: []
+    prerequisite: null
+  timeplayed_036:
+    name: "Quest 036: Time Played Challenge"
+    description: "Play for 27d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 2332800
+    rewards:
+      money: 45000
+      xp: 325
+      items: []
+    prerequisite: null
+  timeplayed_037:
+    name: "Quest 037: Time Played Challenge"
+    description: "Play for 29d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 2505600
+    rewards:
+      money: 47500
+      xp: 337
+      items: []
+    prerequisite: null
+  timeplayed_038:
+    name: "Quest 038: Time Played Challenge"
+    description: "Play for 31d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 2678400
+    rewards:
+      money: 50000
+      xp: 350
+      items: []
+    prerequisite: null
+  timeplayed_039:
+    name: "Quest 039: Time Played Challenge"
+    description: "Play for 33d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 2851200
+    rewards:
+      money: 52500
+      xp: 362
+      items: []
+    prerequisite: null
+  timeplayed_040:
+    name: "Quest 040: Time Played Challenge"
+    description: "Play for 35d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 3024000
+    rewards:
+      money: 55000
+      xp: 375
+      items: []
+    prerequisite: null
+  timeplayed_041:
+    name: "Quest 041: Time Played Challenge"
+    description: "Play for 37d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 3196800
+    rewards:
+      money: 57500
+      xp: 387
+      items: []
+    prerequisite: null
+  timeplayed_042:
+    name: "Quest 042: Time Played Challenge"
+    description: "Play for 39d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 3369600
+    rewards:
+      money: 60000
+      xp: 400
+      items: []
+    prerequisite: null
+  timeplayed_043:
+    name: "Quest 043: Time Played Challenge"
+    description: "Play for 41d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 3542400
+    rewards:
+      money: 62500
+      xp: 412
+      items: []
+    prerequisite: null
+  timeplayed_044:
+    name: "Quest 044: Time Played Challenge"
+    description: "Play for 43d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 3715200
+    rewards:
+      money: 65000
+      xp: 425
+      items: []
+    prerequisite: null
+  timeplayed_045:
+    name: "Quest 045: Time Played Challenge"
+    description: "Play for 45d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 3888000
+    rewards:
+      money: 67500
+      xp: 437
+      items: []
+    prerequisite: null
+  timeplayed_046:
+    name: "Quest 046: Time Played Challenge"
+    description: "Play for 47d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 4060800
+    rewards:
+      money: 70000
+      xp: 450
+      items: []
+    prerequisite: null
+  timeplayed_047:
+    name: "Quest 047: Time Played Challenge"
+    description: "Play for 49d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 4233600
+    rewards:
+      money: 72500
+      xp: 462
+      items: []
+    prerequisite: null
+  timeplayed_048:
+    name: "Quest 048: Time Played Challenge"
+    description: "Play for 51d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 4406400
+    rewards:
+      money: 75000
+      xp: 475
+      items: []
+    prerequisite: null
+  timeplayed_049:
+    name: "Quest 049: Time Played Challenge"
+    description: "Play for 53d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 4579200
+    rewards:
+      money: 77500
+      xp: 487
+      items: []
+    prerequisite: null
+  timeplayed_050:
+    name: "Quest 050: Time Played Challenge"
+    description: "Play for 55d"
+    category: TIME_PLAYED
+    difficulty: MEDIUM
+    type: TIME_PLAYED
+    target: ""
+    amount: 4752000
+    rewards:
+      money: 80000
+      xp: 500
+      items: []
+    prerequisite: null
+  timeplayed_051:
+    name: "Quest 051: Time Played Challenge"
+    description: "Play for 57d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 4924800
+    rewards:
+      money: 100000
+      xp: 500
+      items: []
+    prerequisite: null
+  timeplayed_052:
+    name: "Quest 052: Time Played Challenge"
+    description: "Play for 59d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 5097600
+    rewards:
+      money: 116666
+      xp: 562
+      items: []
+    prerequisite: null
+  timeplayed_053:
+    name: "Quest 053: Time Played Challenge"
+    description: "Play for 61d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 5270400
+    rewards:
+      money: 133333
+      xp: 625
+      items: []
+    prerequisite: null
+  timeplayed_054:
+    name: "Quest 054: Time Played Challenge"
+    description: "Play for 63d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 5443200
+    rewards:
+      money: 150000
+      xp: 687
+      items: []
+    prerequisite: null
+  timeplayed_055:
+    name: "Quest 055: Time Played Challenge"
+    description: "Play for 65d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 5616000
+    rewards:
+      money: 166666
+      xp: 750
+      items: []
+    prerequisite: null
+  timeplayed_056:
+    name: "Quest 056: Time Played Challenge"
+    description: "Play for 68d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 5875200
+    rewards:
+      money: 183333
+      xp: 812
+      items: []
+    prerequisite: null
+  timeplayed_057:
+    name: "Quest 057: Time Played Challenge"
+    description: "Play for 71d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 6134400
+    rewards:
+      money: 200000
+      xp: 875
+      items: []
+    prerequisite: null
+  timeplayed_058:
+    name: "Quest 058: Time Played Challenge"
+    description: "Play for 74d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 6393600
+    rewards:
+      money: 216666
+      xp: 937
+      items: []
+    prerequisite: null
+  timeplayed_059:
+    name: "Quest 059: Time Played Challenge"
+    description: "Play for 77d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 6652800
+    rewards:
+      money: 233333
+      xp: 1000
+      items: []
+    prerequisite: null
+  timeplayed_060:
+    name: "Quest 060: Time Played Challenge"
+    description: "Play for 80d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 6912000
+    rewards:
+      money: 250000
+      xp: 1062
+      items: []
+    prerequisite: null
+  timeplayed_061:
+    name: "Quest 061: Time Played Challenge"
+    description: "Play for 83d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 7171200
+    rewards:
+      money: 266666
+      xp: 1125
+      items: []
+    prerequisite: null
+  timeplayed_062:
+    name: "Quest 062: Time Played Challenge"
+    description: "Play for 86d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 7430400
+    rewards:
+      money: 283333
+      xp: 1187
+      items: []
+    prerequisite: null
+  timeplayed_063:
+    name: "Quest 063: Time Played Challenge"
+    description: "Play for 89d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 7689600
+    rewards:
+      money: 300000
+      xp: 1250
+      items: []
+    prerequisite: null
+  timeplayed_064:
+    name: "Quest 064: Time Played Challenge"
+    description: "Play for 92d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 7948800
+    rewards:
+      money: 316666
+      xp: 1312
+      items: []
+    prerequisite: null
+  timeplayed_065:
+    name: "Quest 065: Time Played Challenge"
+    description: "Play for 95d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 8208000
+    rewards:
+      money: 333333
+      xp: 1375
+      items: []
+    prerequisite: null
+  timeplayed_066:
+    name: "Quest 066: Time Played Challenge"
+    description: "Play for 98d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 8467200
+    rewards:
+      money: 350000
+      xp: 1437
+      items: []
+    prerequisite: null
+  timeplayed_067:
+    name: "Quest 067: Time Played Challenge"
+    description: "Play for 101d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 8726400
+    rewards:
+      money: 366666
+      xp: 1500
+      items: []
+    prerequisite: null
+  timeplayed_068:
+    name: "Quest 068: Time Played Challenge"
+    description: "Play for 104d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 8985600
+    rewards:
+      money: 383333
+      xp: 1562
+      items: []
+    prerequisite: null
+  timeplayed_069:
+    name: "Quest 069: Time Played Challenge"
+    description: "Play for 107d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 9244800
+    rewards:
+      money: 400000
+      xp: 1625
+      items: []
+    prerequisite: null
+  timeplayed_070:
+    name: "Quest 070: Time Played Challenge"
+    description: "Play for 110d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 9504000
+    rewards:
+      money: 416666
+      xp: 1687
+      items: []
+    prerequisite: null
+  timeplayed_071:
+    name: "Quest 071: Time Played Challenge"
+    description: "Play for 113d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 9763200
+    rewards:
+      money: 433333
+      xp: 1750
+      items: []
+    prerequisite: null
+  timeplayed_072:
+    name: "Quest 072: Time Played Challenge"
+    description: "Play for 116d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 10022400
+    rewards:
+      money: 450000
+      xp: 1812
+      items: []
+    prerequisite: null
+  timeplayed_073:
+    name: "Quest 073: Time Played Challenge"
+    description: "Play for 119d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 10281600
+    rewards:
+      money: 466666
+      xp: 1875
+      items: []
+    prerequisite: null
+  timeplayed_074:
+    name: "Quest 074: Time Played Challenge"
+    description: "Play for 122d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 10540800
+    rewards:
+      money: 483333
+      xp: 1937
+      items: []
+    prerequisite: null
+  timeplayed_075:
+    name: "Quest 075: Time Played Challenge"
+    description: "Play for 125d"
+    category: TIME_PLAYED
+    difficulty: HARD
+    type: TIME_PLAYED
+    target: ""
+    amount: 10800000
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  timeplayed_076:
+    name: "Quest 076: Time Played Challenge"
+    description: "Play for 130d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 11232000
+    rewards:
+      money: 500000
+      xp: 2000
+      items: []
+    prerequisite: null
+  timeplayed_077:
+    name: "Quest 077: Time Played Challenge"
+    description: "Play for 135d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 11664000
+    rewards:
+      money: 687500
+      xp: 2333
+      items: []
+    prerequisite: null
+  timeplayed_078:
+    name: "Quest 078: Time Played Challenge"
+    description: "Play for 140d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 12096000
+    rewards:
+      money: 875000
+      xp: 2666
+      items: []
+    prerequisite: null
+  timeplayed_079:
+    name: "Quest 079: Time Played Challenge"
+    description: "Play for 145d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 12528000
+    rewards:
+      money: 1062500
+      xp: 3000
+      items: []
+    prerequisite: null
+  timeplayed_080:
+    name: "Quest 080: Time Played Challenge"
+    description: "Play for 150d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 12960000
+    rewards:
+      money: 1250000
+      xp: 3333
+      items: []
+    prerequisite: null
+  timeplayed_081:
+    name: "Quest 081: Time Played Challenge"
+    description: "Play for 155d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 13392000
+    rewards:
+      money: 1437500
+      xp: 3666
+      items: []
+    prerequisite: null
+  timeplayed_082:
+    name: "Quest 082: Time Played Challenge"
+    description: "Play for 160d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 13824000
+    rewards:
+      money: 1625000
+      xp: 4000
+      items: []
+    prerequisite: null
+  timeplayed_083:
+    name: "Quest 083: Time Played Challenge"
+    description: "Play for 165d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 14256000
+    rewards:
+      money: 1812500
+      xp: 4333
+      items: []
+    prerequisite: null
+  timeplayed_084:
+    name: "Quest 084: Time Played Challenge"
+    description: "Play for 170d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 14688000
+    rewards:
+      money: 2000000
+      xp: 4666
+      items: []
+    prerequisite: null
+  timeplayed_085:
+    name: "Quest 085: Time Played Challenge"
+    description: "Play for 175d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 15120000
+    rewards:
+      money: 2187500
+      xp: 5000
+      items: []
+    prerequisite: null
+  timeplayed_086:
+    name: "Quest 086: Time Played Challenge"
+    description: "Play for 180d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 15552000
+    rewards:
+      money: 2375000
+      xp: 5333
+      items: []
+    prerequisite: null
+  timeplayed_087:
+    name: "Quest 087: Time Played Challenge"
+    description: "Play for 185d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 15984000
+    rewards:
+      money: 2562500
+      xp: 5666
+      items: []
+    prerequisite: null
+  timeplayed_088:
+    name: "Quest 088: Time Played Challenge"
+    description: "Play for 190d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 16416000
+    rewards:
+      money: 2750000
+      xp: 6000
+      items: []
+    prerequisite: null
+  timeplayed_089:
+    name: "Quest 089: Time Played Challenge"
+    description: "Play for 195d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 16848000
+    rewards:
+      money: 2937500
+      xp: 6333
+      items: []
+    prerequisite: null
+  timeplayed_090:
+    name: "Quest 090: Time Played Challenge"
+    description: "Play for 200d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 17280000
+    rewards:
+      money: 3125000
+      xp: 6666
+      items: []
+    prerequisite: null
+  timeplayed_091:
+    name: "Quest 091: Time Played Challenge"
+    description: "Play for 205d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 17712000
+    rewards:
+      money: 3312500
+      xp: 7000
+      items: []
+    prerequisite: null
+  timeplayed_092:
+    name: "Quest 092: Time Played Challenge"
+    description: "Play for 210d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 18144000
+    rewards:
+      money: 3500000
+      xp: 7333
+      items: []
+    prerequisite: null
+  timeplayed_093:
+    name: "Quest 093: Time Played Challenge"
+    description: "Play for 215d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 18576000
+    rewards:
+      money: 3687500
+      xp: 7666
+      items: []
+    prerequisite: null
+  timeplayed_094:
+    name: "Quest 094: Time Played Challenge"
+    description: "Play for 220d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 19008000
+    rewards:
+      money: 3875000
+      xp: 8000
+      items: []
+    prerequisite: null
+  timeplayed_095:
+    name: "Quest 095: Time Played Challenge"
+    description: "Play for 225d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 19440000
+    rewards:
+      money: 4062500
+      xp: 8333
+      items: []
+    prerequisite: null
+  timeplayed_096:
+    name: "Quest 096: Time Played Challenge"
+    description: "Play for 230d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 19872000
+    rewards:
+      money: 4250000
+      xp: 8666
+      items: []
+    prerequisite: null
+  timeplayed_097:
+    name: "Quest 097: Time Played Challenge"
+    description: "Play for 235d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 20304000
+    rewards:
+      money: 4437500
+      xp: 9000
+      items: []
+    prerequisite: null
+  timeplayed_098:
+    name: "Quest 098: Time Played Challenge"
+    description: "Play for 240d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 20736000
+    rewards:
+      money: 4625000
+      xp: 9333
+      items: []
+    prerequisite: null
+  timeplayed_099:
+    name: "Quest 099: Time Played Challenge"
+    description: "Play for 245d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 21168000
+    rewards:
+      money: 4812500
+      xp: 9666
+      items: []
+    prerequisite: null
+  timeplayed_100:
+    name: "Quest 100: Time Played Challenge"
+    description: "Play for 250d"
+    category: TIME_PLAYED
+    difficulty: LEGENDARY
+    type: TIME_PLAYED
+    target: ""
+    amount: 21600000
+    rewards:
+      money: 5000000
+      xp: 10000
+      items: []
+    prerequisite: null

@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "joshymc:bunny"
+      }
+    ],
+    "humanoid_leggings": [
+      {
+        "texture": "joshymc:bunny"
+      }
+    ]
+  }
+}

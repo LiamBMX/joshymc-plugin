@@ -1,0 +1,1644 @@
+# JoshyMC Shop Configuration
+# Economy philosophy: Grind-heavy, farming-meta, high numbers
+# - $10M = "rich", billions achievable with heavy grinding, trillions nearly impossible
+# - Farming/renewable resources are THE BEST money makers ($500K/hr target for good farms)
+# - Processed items worth more than raw materials
+# - Buy prices are 2.5-3x sell prices
+# buy = price players pay to purchase, sell = price players receive for selling
+# buy: 0 means not buyable, sell: 0 means not sellable
+
+categories:
+  farming:
+    name: "Farming"
+    icon: WHEAT
+    items:
+      # === Crops (THE money makers - farming is the meta) ===
+      WHEAT:
+        buy: 150
+        sell: 50
+      CARROT:
+        buy: 150
+        sell: 50
+      POTATO:
+        buy: 150
+        sell: 50
+      BEETROOT:
+        buy: 150
+        sell: 50
+      SUGAR_CANE:
+        buy: 240
+        sell: 80
+      MELON_SLICE:
+        buy: 90
+        sell: 30
+      MELON:
+        buy: 300
+        sell: 100
+      PUMPKIN:
+        buy: 300
+        sell: 100
+      CACTUS:
+        buy: 180
+        sell: 60
+      BAMBOO:
+        buy: 90
+        sell: 30
+      COCOA_BEANS:
+        buy: 210
+        sell: 70
+      NETHER_WART:
+        buy: 360
+        sell: 120
+      SWEET_BERRIES:
+        buy: 180
+        sell: 60
+      GLOW_BERRIES:
+        buy: 270
+        sell: 90
+      KELP:
+        buy: 90
+        sell: 30
+      DRIED_KELP:
+        buy: 150
+        sell: 50
+      CHORUS_FRUIT:
+        buy: 500
+        sell: 180
+      BROWN_MUSHROOM:
+        buy: 210
+        sell: 70
+      RED_MUSHROOM:
+        buy: 210
+        sell: 70
+      SUGAR:
+        buy: 120
+        sell: 40
+      # === Bee Products ===
+      HONEY_BOTTLE:
+        buy: 600
+        sell: 200
+      HONEYCOMB:
+        buy: 450
+        sell: 150
+      HONEYCOMB_BLOCK:
+        buy: 1650
+        sell: 550
+      # === Bone Meal & Fertilizer ===
+      BONE_MEAL:
+        buy: 120
+        sell: 40
+      # === Seeds (sell-only, byproducts) ===
+      WHEAT_SEEDS:
+        buy: 0
+        sell: 10
+      BEETROOT_SEEDS:
+        buy: 0
+        sell: 10
+      MELON_SEEDS:
+        buy: 0
+        sell: 20
+      PUMPKIN_SEEDS:
+        buy: 0
+        sell: 20
+      TORCHFLOWER_SEEDS:
+        buy: 0
+        sell: 30
+      PITCHER_POD:
+        buy: 0
+        sell: 30
+      # === Flowers (sell-only mostly) ===
+      POPPY:
+        buy: 0
+        sell: 20
+      DANDELION:
+        buy: 0
+        sell: 20
+      BLUE_ORCHID:
+        buy: 0
+        sell: 30
+      ALLIUM:
+        buy: 0
+        sell: 30
+      AZURE_BLUET:
+        buy: 0
+        sell: 20
+      RED_TULIP:
+        buy: 0
+        sell: 20
+      ORANGE_TULIP:
+        buy: 0
+        sell: 20
+      WHITE_TULIP:
+        buy: 0
+        sell: 20
+      PINK_TULIP:
+        buy: 0
+        sell: 20
+      OXEYE_DAISY:
+        buy: 0
+        sell: 20
+      CORNFLOWER:
+        buy: 0
+        sell: 20
+      LILY_OF_THE_VALLEY:
+        buy: 0
+        sell: 30
+      SUNFLOWER:
+        buy: 0
+        sell: 30
+      LILAC:
+        buy: 0
+        sell: 30
+      ROSE_BUSH:
+        buy: 0
+        sell: 30
+      PEONY:
+        buy: 0
+        sell: 30
+      TORCHFLOWER:
+        buy: 0
+        sell: 50
+      PITCHER_PLANT:
+        buy: 0
+        sell: 50
+      WITHER_ROSE:
+        buy: 750
+        sell: 250
+      SPORE_BLOSSOM:
+        buy: 0
+        sell: 100
+      # === Vines & Misc Growables ===
+      VINE:
+        buy: 75
+        sell: 25
+      LILY_PAD:
+        buy: 75
+        sell: 25
+      SEA_PICKLE:
+        buy: 120
+        sell: 40
+      MOSS_CARPET:
+        buy: 0
+        sell: 20
+      HANGING_ROOTS:
+        buy: 0
+        sell: 10
+      SMALL_DRIPLEAF:
+        buy: 150
+        sell: 50
+      BIG_DRIPLEAF:
+        buy: 225
+        sell: 75
+
+  food:
+    name: "Food"
+    icon: COOKED_BEEF
+    items:
+      # === Cooked Meats (processed = more valuable) ===
+      COOKED_BEEF:
+        buy: 750
+        sell: 250
+      COOKED_PORKCHOP:
+        buy: 750
+        sell: 250
+      COOKED_CHICKEN:
+        buy: 500
+        sell: 175
+      COOKED_MUTTON:
+        buy: 500
+        sell: 175
+      COOKED_RABBIT:
+        buy: 500
+        sell: 175
+      COOKED_SALMON:
+        buy: 400
+        sell: 140
+      COOKED_COD:
+        buy: 400
+        sell: 140
+      # === Baked & Crafted Foods ===
+      BREAD:
+        buy: 600
+        sell: 200
+      BAKED_POTATO:
+        buy: 300
+        sell: 100
+      COOKIE:
+        buy: 200
+        sell: 70
+      PUMPKIN_PIE:
+        buy: 1050
+        sell: 350
+      CAKE:
+        buy: 2400
+        sell: 800
+      RABBIT_STEW:
+        buy: 700
+        sell: 250
+      MUSHROOM_STEW:
+        buy: 500
+        sell: 180
+      BEETROOT_SOUP:
+        buy: 400
+        sell: 150
+      SUSPICIOUS_STEW:
+        buy: 400
+        sell: 150
+      DRIED_KELP_BLOCK:
+        buy: 0
+        sell: 400
+      # === Fruit & Simple Foods ===
+      APPLE:
+        buy: 200
+        sell: 70
+      CHORUS_FRUIT:
+        buy: 500
+        sell: 180
+      # === Golden Foods ===
+      GOLDEN_CARROT:
+        buy: 1800
+        sell: 600
+      GOLDEN_APPLE:
+        buy: 12000
+        sell: 4000
+      ENCHANTED_GOLDEN_APPLE:
+        buy: 200000
+        sell: 0
+      # === Ingredients ===
+      GLISTERING_MELON_SLICE:
+        buy: 0
+        sell: 200
+      FERMENTED_SPIDER_EYE:
+        buy: 0
+        sell: 150
+
+  animal_products:
+    name: "Animal Products"
+    icon: LEATHER
+    items:
+      # === Raw Meats ===
+      BEEF:
+        buy: 240
+        sell: 80
+      PORKCHOP:
+        buy: 240
+        sell: 80
+      CHICKEN:
+        buy: 150
+        sell: 50
+      MUTTON:
+        buy: 180
+        sell: 60
+      RABBIT:
+        buy: 150
+        sell: 50
+      COD:
+        buy: 120
+        sell: 40
+      SALMON:
+        buy: 180
+        sell: 60
+      TROPICAL_FISH:
+        buy: 0
+        sell: 150
+      PUFFERFISH:
+        buy: 0
+        sell: 100
+      # === Animal Byproducts ===
+      LEATHER:
+        buy: 300
+        sell: 100
+      FEATHER:
+        buy: 120
+        sell: 40
+      EGG:
+        buy: 150
+        sell: 50
+      WHITE_WOOL:
+        buy: 180
+        sell: 60
+      ORANGE_WOOL:
+        buy: 180
+        sell: 60
+      MAGENTA_WOOL:
+        buy: 180
+        sell: 60
+      LIGHT_BLUE_WOOL:
+        buy: 180
+        sell: 60
+      YELLOW_WOOL:
+        buy: 180
+        sell: 60
+      LIME_WOOL:
+        buy: 180
+        sell: 60
+      PINK_WOOL:
+        buy: 180
+        sell: 60
+      GRAY_WOOL:
+        buy: 180
+        sell: 60
+      LIGHT_GRAY_WOOL:
+        buy: 180
+        sell: 60
+      CYAN_WOOL:
+        buy: 180
+        sell: 60
+      PURPLE_WOOL:
+        buy: 180
+        sell: 60
+      BLUE_WOOL:
+        buy: 180
+        sell: 60
+      BROWN_WOOL:
+        buy: 180
+        sell: 60
+      GREEN_WOOL:
+        buy: 180
+        sell: 60
+      RED_WOOL:
+        buy: 180
+        sell: 60
+      BLACK_WOOL:
+        buy: 180
+        sell: 60
+      RABBIT_HIDE:
+        buy: 120
+        sell: 40
+      RABBIT_FOOT:
+        buy: 600
+        sell: 200
+      INK_SAC:
+        buy: 150
+        sell: 50
+      GLOW_INK_SAC:
+        buy: 375
+        sell: 125
+      STRING:
+        buy: 120
+        sell: 40
+      TURTLE_SCUTE:
+        buy: 0
+        sell: 300
+      PHANTOM_MEMBRANE:
+        buy: 0
+        sell: 250
+      MILK_BUCKET:
+        buy: 450
+        sell: 0
+      HONEYCOMB:
+        buy: 450
+        sell: 150
+      HONEY_BOTTLE:
+        buy: 600
+        sell: 200
+
+  ores:
+    name: "Ores & Minerals"
+    icon: DIAMOND
+    items:
+      # === Raw Ores ===
+      COAL:
+        buy: 90
+        sell: 30
+      RAW_IRON:
+        buy: 375
+        sell: 125
+      RAW_GOLD:
+        buy: 600
+        sell: 200
+      RAW_COPPER:
+        buy: 225
+        sell: 75
+      # === Ingots (processed = more value) ===
+      IRON_INGOT:
+        buy: 600
+        sell: 200
+      GOLD_INGOT:
+        buy: 1200
+        sell: 400
+      COPPER_INGOT:
+        buy: 375
+        sell: 125
+      # === Gems & Crystals ===
+      DIAMOND:
+        buy: 7500
+        sell: 2500
+      EMERALD:
+        buy: 2400
+        sell: 800
+      LAPIS_LAZULI:
+        buy: 180
+        sell: 60
+      REDSTONE:
+        buy: 120
+        sell: 40
+      QUARTZ:
+        buy: 180
+        sell: 60
+      AMETHYST_SHARD:
+        buy: 300
+        sell: 100
+      # === Netherite Tier ===
+      NETHERITE_INGOT:
+        buy: 150000
+        sell: 50000
+      NETHERITE_SCRAP:
+        buy: 45000
+        sell: 15000
+      ANCIENT_DEBRIS:
+        buy: 45000
+        sell: 15000
+      # === Ore Blocks (bulk) ===
+      COAL_BLOCK:
+        buy: 750
+        sell: 250
+      IRON_BLOCK:
+        buy: 5000
+        sell: 1700
+      GOLD_BLOCK:
+        buy: 10000
+        sell: 3400
+      DIAMOND_BLOCK:
+        buy: 65000
+        sell: 22000
+      EMERALD_BLOCK:
+        buy: 20000
+        sell: 7000
+      LAPIS_BLOCK:
+        buy: 1500
+        sell: 500
+      REDSTONE_BLOCK:
+        buy: 1000
+        sell: 340
+      COPPER_BLOCK:
+        buy: 3300
+        sell: 1100
+      RAW_IRON_BLOCK:
+        buy: 3300
+        sell: 1100
+      RAW_GOLD_BLOCK:
+        buy: 5000
+        sell: 1700
+      RAW_COPPER_BLOCK:
+        buy: 2000
+        sell: 650
+      NETHERITE_BLOCK:
+        buy: 1300000
+        sell: 440000
+      # === Misc Mineral Items ===
+      FLINT:
+        buy: 60
+        sell: 20
+      GLOWSTONE_DUST:
+        buy: 120
+        sell: 40
+
+  mob_drops:
+    name: "Mob Drops"
+    icon: ROTTEN_FLESH
+    items:
+      # === Common Drops ===
+      ROTTEN_FLESH:
+        buy: 0
+        sell: 10
+      BONE:
+        buy: 0
+        sell: 25
+      SPIDER_EYE:
+        buy: 0
+        sell: 50
+      GUNPOWDER:
+        buy: 0
+        sell: 80
+      SLIME_BALL:
+        buy: 0
+        sell: 100
+      MAGMA_CREAM:
+        buy: 0
+        sell: 150
+      # === Nether Drops ===
+      BLAZE_ROD:
+        buy: 0
+        sell: 400
+      BLAZE_POWDER:
+        buy: 0
+        sell: 250
+      GHAST_TEAR:
+        buy: 0
+        sell: 800
+      GOLD_NUGGET:
+        buy: 0
+        sell: 45
+      # === Ender Drops ===
+      ENDER_PEARL:
+        buy: 3000
+        sell: 1000
+      ENDER_EYE:
+        buy: 0
+        sell: 1500
+      DRAGON_BREATH:
+        buy: 0
+        sell: 2500
+      # === Ocean Drops ===
+      PRISMARINE_SHARD:
+        buy: 0
+        sell: 100
+      PRISMARINE_CRYSTALS:
+        buy: 0
+        sell: 150
+      NAUTILUS_SHELL:
+        buy: 0
+        sell: 750
+      HEART_OF_THE_SEA:
+        buy: 0
+        sell: 15000
+      # === Rare Drops ===
+      SHULKER_SHELL:
+        buy: 0
+        sell: 5000
+      WITHER_SKELETON_SKULL:
+        buy: 0
+        sell: 10000
+      NETHER_STAR:
+        buy: 0
+        sell: 75000
+      TRIDENT:
+        buy: 0
+        sell: 30000
+      TOTEM_OF_UNDYING:
+        buy: 0
+        sell: 25000
+      # === Heads ===
+      CREEPER_HEAD:
+        buy: 0
+        sell: 3000
+      ZOMBIE_HEAD:
+        buy: 0
+        sell: 2500
+      SKELETON_SKULL:
+        buy: 0
+        sell: 2500
+      PIGLIN_HEAD:
+        buy: 0
+        sell: 3000
+      DRAGON_HEAD:
+        buy: 0
+        sell: 50000
+      # === Arrows & Projectiles ===
+      ARROW:
+        buy: 75
+        sell: 25
+      SPECTRAL_ARROW:
+        buy: 150
+        sell: 50
+      # === Music Discs ===
+      MUSIC_DISC_13:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_CAT:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_BLOCKS:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_CHIRP:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_FAR:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_MALL:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_MELLOHI:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_STAL:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_STRAD:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_WARD:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_11:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_WAIT:
+        buy: 0
+        sell: 1500
+      MUSIC_DISC_OTHERSIDE:
+        buy: 0
+        sell: 2500
+      MUSIC_DISC_PIGSTEP:
+        buy: 0
+        sell: 3000
+      MUSIC_DISC_5:
+        buy: 0
+        sell: 2500
+      MUSIC_DISC_RELIC:
+        buy: 0
+        sell: 3000
+      MUSIC_DISC_CREATOR:
+        buy: 0
+        sell: 2500
+      MUSIC_DISC_CREATOR_MUSIC_BOX:
+        buy: 0
+        sell: 2500
+      MUSIC_DISC_PRECIPICE:
+        buy: 0
+        sell: 2500
+      # === Misc Mob Items ===
+      SADDLE:
+        buy: 1800
+        sell: 600
+      NAME_TAG:
+        buy: 2250
+        sell: 750
+      LEAD:
+        buy: 450
+        sell: 150
+      BONE_BLOCK:
+        buy: 450
+        sell: 150
+      SLIME_BLOCK:
+        buy: 0
+        sell: 800
+      EXPERIENCE_BOTTLE:
+        buy: 900
+        sell: 300
+      COBWEB:
+        buy: 0
+        sell: 100
+      ARMADILLO_SCUTE:
+        buy: 0
+        sell: 150
+      BREEZE_ROD:
+        buy: 0
+        sell: 500
+
+  building:
+    name: "Building Blocks"
+    icon: OAK_PLANKS
+    items:
+      # === Logs ===
+      OAK_LOG:
+        buy: 50
+        sell: 20
+      SPRUCE_LOG:
+        buy: 50
+        sell: 20
+      BIRCH_LOG:
+        buy: 50
+        sell: 20
+      JUNGLE_LOG:
+        buy: 50
+        sell: 20
+      ACACIA_LOG:
+        buy: 50
+        sell: 20
+      DARK_OAK_LOG:
+        buy: 50
+        sell: 20
+      MANGROVE_LOG:
+        buy: 50
+        sell: 20
+      CHERRY_LOG:
+        buy: 75
+        sell: 30
+      CRIMSON_STEM:
+        buy: 75
+        sell: 30
+      WARPED_STEM:
+        buy: 75
+        sell: 30
+      # === Stripped Logs ===
+      STRIPPED_OAK_LOG:
+        buy: 65
+        sell: 25
+      STRIPPED_SPRUCE_LOG:
+        buy: 65
+        sell: 25
+      STRIPPED_BIRCH_LOG:
+        buy: 65
+        sell: 25
+      STRIPPED_JUNGLE_LOG:
+        buy: 65
+        sell: 25
+      STRIPPED_ACACIA_LOG:
+        buy: 65
+        sell: 25
+      STRIPPED_DARK_OAK_LOG:
+        buy: 65
+        sell: 25
+      STRIPPED_MANGROVE_LOG:
+        buy: 65
+        sell: 25
+      STRIPPED_CHERRY_LOG:
+        buy: 90
+        sell: 35
+      STRIPPED_CRIMSON_STEM:
+        buy: 90
+        sell: 35
+      STRIPPED_WARPED_STEM:
+        buy: 90
+        sell: 35
+      # === Planks ===
+      OAK_PLANKS:
+        buy: 15
+        sell: 5
+      SPRUCE_PLANKS:
+        buy: 15
+        sell: 5
+      BIRCH_PLANKS:
+        buy: 15
+        sell: 5
+      JUNGLE_PLANKS:
+        buy: 15
+        sell: 5
+      ACACIA_PLANKS:
+        buy: 15
+        sell: 5
+      DARK_OAK_PLANKS:
+        buy: 15
+        sell: 5
+      MANGROVE_PLANKS:
+        buy: 15
+        sell: 5
+      CHERRY_PLANKS:
+        buy: 20
+        sell: 8
+      CRIMSON_PLANKS:
+        buy: 20
+        sell: 8
+      WARPED_PLANKS:
+        buy: 20
+        sell: 8
+      BAMBOO_PLANKS:
+        buy: 20
+        sell: 8
+      # === Stone Types ===
+      COBBLESTONE:
+        buy: 10
+        sell: 3
+      STONE:
+        buy: 25
+        sell: 8
+      SMOOTH_STONE:
+        buy: 40
+        sell: 15
+      STONE_BRICKS:
+        buy: 40
+        sell: 15
+      MOSSY_STONE_BRICKS:
+        buy: 60
+        sell: 20
+      CRACKED_STONE_BRICKS:
+        buy: 60
+        sell: 20
+      CHISELED_STONE_BRICKS:
+        buy: 60
+        sell: 20
+      DEEPSLATE:
+        buy: 30
+        sell: 10
+      COBBLED_DEEPSLATE:
+        buy: 15
+        sell: 5
+      POLISHED_DEEPSLATE:
+        buy: 40
+        sell: 15
+      DEEPSLATE_BRICKS:
+        buy: 60
+        sell: 20
+      DEEPSLATE_TILES:
+        buy: 60
+        sell: 20
+      GRANITE:
+        buy: 15
+        sell: 5
+      POLISHED_GRANITE:
+        buy: 30
+        sell: 10
+      DIORITE:
+        buy: 15
+        sell: 5
+      POLISHED_DIORITE:
+        buy: 30
+        sell: 10
+      ANDESITE:
+        buy: 15
+        sell: 5
+      POLISHED_ANDESITE:
+        buy: 30
+        sell: 10
+      TUFF:
+        buy: 20
+        sell: 8
+      TUFF_BRICKS:
+        buy: 40
+        sell: 15
+      CALCITE:
+        buy: 60
+        sell: 20
+      # === Dirt & Earth ===
+      DIRT:
+        buy: 5
+        sell: 1
+      GRASS_BLOCK:
+        buy: 20
+        sell: 7
+      COARSE_DIRT:
+        buy: 10
+        sell: 3
+      ROOTED_DIRT:
+        buy: 10
+        sell: 3
+      PODZOL:
+        buy: 25
+        sell: 8
+      MYCELIUM:
+        buy: 60
+        sell: 20
+      MUD:
+        buy: 20
+        sell: 7
+      PACKED_MUD:
+        buy: 25
+        sell: 8
+      MUD_BRICKS:
+        buy: 40
+        sell: 15
+      CLAY:
+        buy: 225
+        sell: 75
+      CLAY_BALL:
+        buy: 75
+        sell: 25
+      # === Sand & Sandstone ===
+      SAND:
+        buy: 25
+        sell: 8
+      RED_SAND:
+        buy: 40
+        sell: 15
+      SANDSTONE:
+        buy: 40
+        sell: 15
+      SMOOTH_SANDSTONE:
+        buy: 60
+        sell: 20
+      CUT_SANDSTONE:
+        buy: 60
+        sell: 20
+      RED_SANDSTONE:
+        buy: 60
+        sell: 20
+      SMOOTH_RED_SANDSTONE:
+        buy: 75
+        sell: 25
+      # === Gravel & Misc ===
+      GRAVEL:
+        buy: 25
+        sell: 8
+      # === Bricks & Terracotta ===
+      BRICKS:
+        buy: 90
+        sell: 30
+      BRICK:
+        buy: 30
+        sell: 10
+      NETHER_BRICKS:
+        buy: 75
+        sell: 25
+      RED_NETHER_BRICKS:
+        buy: 90
+        sell: 30
+      TERRACOTTA:
+        buy: 60
+        sell: 20
+      WHITE_TERRACOTTA:
+        buy: 60
+        sell: 20
+      ORANGE_TERRACOTTA:
+        buy: 60
+        sell: 20
+      MAGENTA_TERRACOTTA:
+        buy: 60
+        sell: 20
+      LIGHT_BLUE_TERRACOTTA:
+        buy: 60
+        sell: 20
+      YELLOW_TERRACOTTA:
+        buy: 60
+        sell: 20
+      LIME_TERRACOTTA:
+        buy: 60
+        sell: 20
+      PINK_TERRACOTTA:
+        buy: 60
+        sell: 20
+      GRAY_TERRACOTTA:
+        buy: 60
+        sell: 20
+      LIGHT_GRAY_TERRACOTTA:
+        buy: 60
+        sell: 20
+      CYAN_TERRACOTTA:
+        buy: 60
+        sell: 20
+      PURPLE_TERRACOTTA:
+        buy: 60
+        sell: 20
+      BLUE_TERRACOTTA:
+        buy: 60
+        sell: 20
+      BROWN_TERRACOTTA:
+        buy: 60
+        sell: 20
+      GREEN_TERRACOTTA:
+        buy: 60
+        sell: 20
+      RED_TERRACOTTA:
+        buy: 60
+        sell: 20
+      BLACK_TERRACOTTA:
+        buy: 60
+        sell: 20
+      WHITE_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      ORANGE_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      MAGENTA_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      LIGHT_BLUE_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      YELLOW_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      LIME_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      PINK_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      GRAY_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      LIGHT_GRAY_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      CYAN_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      PURPLE_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      BLUE_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      BROWN_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      GREEN_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      RED_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      BLACK_GLAZED_TERRACOTTA:
+        buy: 120
+        sell: 40
+      # === Concrete ===
+      WHITE_CONCRETE:
+        buy: 75
+        sell: 25
+      ORANGE_CONCRETE:
+        buy: 75
+        sell: 25
+      MAGENTA_CONCRETE:
+        buy: 75
+        sell: 25
+      LIGHT_BLUE_CONCRETE:
+        buy: 75
+        sell: 25
+      YELLOW_CONCRETE:
+        buy: 75
+        sell: 25
+      LIME_CONCRETE:
+        buy: 75
+        sell: 25
+      PINK_CONCRETE:
+        buy: 75
+        sell: 25
+      GRAY_CONCRETE:
+        buy: 75
+        sell: 25
+      LIGHT_GRAY_CONCRETE:
+        buy: 75
+        sell: 25
+      CYAN_CONCRETE:
+        buy: 75
+        sell: 25
+      PURPLE_CONCRETE:
+        buy: 75
+        sell: 25
+      BLUE_CONCRETE:
+        buy: 75
+        sell: 25
+      BROWN_CONCRETE:
+        buy: 75
+        sell: 25
+      GREEN_CONCRETE:
+        buy: 75
+        sell: 25
+      RED_CONCRETE:
+        buy: 75
+        sell: 25
+      BLACK_CONCRETE:
+        buy: 75
+        sell: 25
+      WHITE_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      ORANGE_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      MAGENTA_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      LIGHT_BLUE_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      YELLOW_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      LIME_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      PINK_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      GRAY_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      LIGHT_GRAY_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      CYAN_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      PURPLE_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      BLUE_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      BROWN_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      GREEN_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      RED_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      BLACK_CONCRETE_POWDER:
+        buy: 60
+        sell: 20
+      # === Glass ===
+      GLASS:
+        buy: 60
+        sell: 20
+      WHITE_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      ORANGE_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      MAGENTA_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      LIGHT_BLUE_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      YELLOW_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      LIME_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      PINK_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      GRAY_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      LIGHT_GRAY_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      CYAN_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      PURPLE_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      BLUE_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      BROWN_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      GREEN_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      RED_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      BLACK_STAINED_GLASS:
+        buy: 75
+        sell: 25
+      TINTED_GLASS:
+        buy: 300
+        sell: 100
+      # === Lighting ===
+      GLOWSTONE:
+        buy: 450
+        sell: 150
+      SEA_LANTERN:
+        buy: 525
+        sell: 175
+      SHROOMLIGHT:
+        buy: 375
+        sell: 125
+      JACK_O_LANTERN:
+        buy: 300
+        sell: 100
+      LANTERN:
+        buy: 225
+        sell: 75
+      SOUL_LANTERN:
+        buy: 300
+        sell: 100
+      # === Ice ===
+      ICE:
+        buy: 60
+        sell: 20
+      PACKED_ICE:
+        buy: 225
+        sell: 75
+      BLUE_ICE:
+        buy: 600
+        sell: 200
+      # === Special Blocks ===
+      OBSIDIAN:
+        buy: 1200
+        sell: 400
+      CRYING_OBSIDIAN:
+        buy: 1500
+        sell: 500
+      PRISMARINE:
+        buy: 300
+        sell: 100
+      PRISMARINE_BRICKS:
+        buy: 375
+        sell: 125
+      DARK_PRISMARINE:
+        buy: 375
+        sell: 125
+      MOSS_BLOCK:
+        buy: 225
+        sell: 75
+      DRIPSTONE_BLOCK:
+        buy: 150
+        sell: 50
+      END_STONE:
+        buy: 150
+        sell: 50
+      END_STONE_BRICKS:
+        buy: 225
+        sell: 75
+      PURPUR_BLOCK:
+        buy: 225
+        sell: 75
+      PURPUR_PILLAR:
+        buy: 270
+        sell: 90
+      BLACKSTONE:
+        buy: 40
+        sell: 15
+      POLISHED_BLACKSTONE:
+        buy: 60
+        sell: 20
+      POLISHED_BLACKSTONE_BRICKS:
+        buy: 75
+        sell: 25
+      BASALT:
+        buy: 30
+        sell: 10
+      POLISHED_BASALT:
+        buy: 50
+        sell: 18
+      SMOOTH_BASALT:
+        buy: 50
+        sell: 18
+      SOUL_SAND:
+        buy: 30
+        sell: 10
+      SOUL_SOIL:
+        buy: 30
+        sell: 10
+      NETHERRACK:
+        buy: 5
+        sell: 1
+      QUARTZ_BLOCK:
+        buy: 675
+        sell: 225
+      SMOOTH_QUARTZ:
+        buy: 750
+        sell: 250
+      QUARTZ_BRICKS:
+        buy: 750
+        sell: 250
+      QUARTZ_PILLAR:
+        buy: 750
+        sell: 250
+      COPPER_BLOCK:
+        buy: 3300
+        sell: 1100
+      CUT_COPPER:
+        buy: 3450
+        sell: 1150
+      AMETHYST_BLOCK:
+        buy: 1125
+        sell: 375
+
+  redstone:
+    name: "Redstone"
+    icon: REDSTONE
+    items:
+      REDSTONE:
+        buy: 120
+        sell: 40
+      REDSTONE_TORCH:
+        buy: 75
+        sell: 25
+      REDSTONE_BLOCK:
+        buy: 1000
+        sell: 340
+      REPEATER:
+        buy: 225
+        sell: 75
+      COMPARATOR:
+        buy: 300
+        sell: 100
+      PISTON:
+        buy: 375
+        sell: 125
+      STICKY_PISTON:
+        buy: 600
+        sell: 200
+      HOPPER:
+        buy: 900
+        sell: 300
+      DROPPER:
+        buy: 300
+        sell: 100
+      DISPENSER:
+        buy: 300
+        sell: 100
+      OBSERVER:
+        buy: 375
+        sell: 125
+      LEVER:
+        buy: 30
+        sell: 10
+      STONE_BUTTON:
+        buy: 30
+        sell: 10
+      OAK_BUTTON:
+        buy: 30
+        sell: 10
+      TRIPWIRE_HOOK:
+        buy: 75
+        sell: 25
+      DAYLIGHT_DETECTOR:
+        buy: 225
+        sell: 75
+      TARGET:
+        buy: 375
+        sell: 125
+      NOTE_BLOCK:
+        buy: 150
+        sell: 50
+      JUKEBOX:
+        buy: 900
+        sell: 300
+      TNT:
+        buy: 1200
+        sell: 400
+      REDSTONE_LAMP:
+        buy: 375
+        sell: 125
+      IRON_TRAPDOOR:
+        buy: 300
+        sell: 100
+      IRON_DOOR:
+        buy: 375
+        sell: 125
+      # === Rails ===
+      RAIL:
+        buy: 120
+        sell: 40
+      POWERED_RAIL:
+        buy: 300
+        sell: 100
+      DETECTOR_RAIL:
+        buy: 300
+        sell: 100
+      ACTIVATOR_RAIL:
+        buy: 300
+        sell: 100
+      # === Minecarts ===
+      MINECART:
+        buy: 450
+        sell: 150
+      CHEST_MINECART:
+        buy: 525
+        sell: 175
+      HOPPER_MINECART:
+        buy: 750
+        sell: 250
+      TNT_MINECART:
+        buy: 750
+        sell: 250
+      FURNACE_MINECART:
+        buy: 525
+        sell: 175
+      # === Misc Redstone ===
+      SCULK_SENSOR:
+        buy: 450
+        sell: 150
+      CALIBRATED_SCULK_SENSOR:
+        buy: 600
+        sell: 200
+      LIGHTNING_ROD:
+        buy: 300
+        sell: 100
+      BELL:
+        buy: 1200
+        sell: 400
+      TRAPPED_CHEST:
+        buy: 225
+        sell: 75
+
+  dyes:
+    name: "Dyes"
+    icon: RED_DYE
+    items:
+      WHITE_DYE:
+        buy: 120
+        sell: 40
+      ORANGE_DYE:
+        buy: 120
+        sell: 40
+      MAGENTA_DYE:
+        buy: 120
+        sell: 40
+      LIGHT_BLUE_DYE:
+        buy: 120
+        sell: 40
+      YELLOW_DYE:
+        buy: 120
+        sell: 40
+      LIME_DYE:
+        buy: 120
+        sell: 40
+      PINK_DYE:
+        buy: 120
+        sell: 40
+      GRAY_DYE:
+        buy: 120
+        sell: 40
+      LIGHT_GRAY_DYE:
+        buy: 120
+        sell: 40
+      CYAN_DYE:
+        buy: 120
+        sell: 40
+      PURPLE_DYE:
+        buy: 120
+        sell: 40
+      BLUE_DYE:
+        buy: 120
+        sell: 40
+      BROWN_DYE:
+        buy: 120
+        sell: 40
+      GREEN_DYE:
+        buy: 120
+        sell: 40
+      RED_DYE:
+        buy: 120
+        sell: 40
+      BLACK_DYE:
+        buy: 120
+        sell: 40
+
+  misc:
+    name: "Miscellaneous"
+    icon: EXPERIENCE_BOTTLE
+    items:
+      # === Paper & Books ===
+      BOOK:
+        buy: 150
+        sell: 50
+      PAPER:
+        buy: 75
+        sell: 25
+      WRITABLE_BOOK:
+        buy: 225
+        sell: 75
+      # === Navigation ===
+      MAP:
+        buy: 225
+        sell: 0
+      COMPASS:
+        buy: 300
+        sell: 0
+      CLOCK:
+        buy: 450
+        sell: 0
+      SPYGLASS:
+        buy: 600
+        sell: 0
+      RECOVERY_COMPASS:
+        buy: 3000
+        sell: 0
+      # === Buckets ===
+      BUCKET:
+        buy: 300
+        sell: 75
+      LAVA_BUCKET:
+        buy: 1200
+        sell: 0
+      WATER_BUCKET:
+        buy: 225
+        sell: 0
+      POWDER_SNOW_BUCKET:
+        buy: 450
+        sell: 0
+      # === Projectiles & Misc ===
+      FIRE_CHARGE:
+        buy: 225
+        sell: 75
+      FIREWORK_ROCKET:
+        buy: 300
+        sell: 100
+      FIREWORK_STAR:
+        buy: 225
+        sell: 75
+      END_ROD:
+        buy: 600
+        sell: 200
+      END_CRYSTAL:
+        buy: 7500
+        sell: 2500
+      # === Bottles & Brewing ===
+      GLASS_BOTTLE:
+        buy: 30
+        sell: 10
+      BREWING_STAND:
+        buy: 900
+        sell: 300
+      CAULDRON:
+        buy: 600
+        sell: 200
+      # === Workstations ===
+      ENCHANTING_TABLE:
+        buy: 7500
+        sell: 0
+      ANVIL:
+        buy: 4500
+        sell: 0
+      BEACON:
+        buy: 100000
+        sell: 0
+      ENDER_CHEST:
+        buy: 4500
+        sell: 0
+      CRAFTING_TABLE:
+        buy: 30
+        sell: 10
+      FURNACE:
+        buy: 75
+        sell: 25
+      BLAST_FURNACE:
+        buy: 600
+        sell: 200
+      SMOKER:
+        buy: 600
+        sell: 200
+      SMITHING_TABLE:
+        buy: 450
+        sell: 150
+      FLETCHING_TABLE:
+        buy: 300
+        sell: 100
+      CARTOGRAPHY_TABLE:
+        buy: 300
+        sell: 100
+      LOOM:
+        buy: 225
+        sell: 75
+      STONECUTTER:
+        buy: 300
+        sell: 100
+      GRINDSTONE:
+        buy: 375
+        sell: 125
+      LECTERN:
+        buy: 450
+        sell: 150
+      COMPOSTER:
+        buy: 150
+        sell: 50
+      BARREL:
+        buy: 225
+        sell: 75
+      CHEST:
+        buy: 150
+        sell: 50
+      # === Misc Items ===
+      TORCH:
+        buy: 15
+        sell: 5
+      SOUL_TORCH:
+        buy: 30
+        sell: 10
+      CANDLE:
+        buy: 75
+        sell: 25
+      CHAIN:
+        buy: 225
+        sell: 75
+      SCAFFOLDING:
+        buy: 75
+        sell: 25
+      LADDER:
+        buy: 30
+        sell: 10
+      PAINTING:
+        buy: 150
+        sell: 50
+      ITEM_FRAME:
+        buy: 150
+        sell: 50
+      GLOW_ITEM_FRAME:
+        buy: 300
+        sell: 100
+      ARMOR_STAND:
+        buy: 300
+        sell: 100
+      FLOWER_POT:
+        buy: 75
+        sell: 25
+      BOWL:
+        buy: 15
+        sell: 5
+      STICK:
+        buy: 8
+        sell: 3
+      CHARCOAL:
+        buy: 75
+        sell: 25
+      # === Shulker Boxes ===
+      SHULKER_BOX:
+        buy: 12000
+        sell: 0
+      # === Banner Patterns & Misc ===
+      GLOBE_BANNER_PATTERN:
+        buy: 3000
+        sell: 750
+      # === Special Items (buy only) ===
+      ELYTRA:
+        buy: 150000
+        sell: 50000
+      CONDUIT:
+        buy: 30000
+        sell: 7500
+      LODESTONE:
+        buy: 7500
+        sell: 2500
+      RESPAWN_ANCHOR:
+        buy: 6000
+        sell: 2000
+      SPONGE:
+        buy: 3000
+        sell: 1000

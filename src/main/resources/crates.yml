@@ -1,0 +1,90 @@
+# Crate definitions for JoshyMC
+# Each crate type has a unique ID, display name, key settings, animation glass, and rewards.
+# Reward weight determines drop chance relative to other rewards in the same crate.
+
+## Crate Config Reference:
+# mode: "random" (auto-pick weighted reward) or "select" (player chooses one reward, uses 1 key)
+# animation-type: "spin" (scrolling slots), "pulse" (items vanish until winner remains), "instant" (no animation)
+# idle-particle: particle shown above crate block (e.g. END_ROD, FLAME, SOUL_FIRE_FLAME, CHERRY_LEAVES, HEART)
+# win-particle: particle burst on reward (e.g. FIREWORK, TOTEM_OF_UNDYING, EXPLOSION, HEART)
+
+crates:
+  common:
+    display-name: "Common Crate"
+    key-material: TRIPWIRE_HOOK
+    key-name: "Common Key"
+    animation-glass: LIME_STAINED_GLASS_PANE
+    mode: random
+    animation-type: spin
+    idle-particle: END_ROD
+    win-particle: FIREWORK
+    rewards:
+      diamonds:
+        material: DIAMOND
+        amount: 4
+        weight: 30
+        display-name: "Diamonds"
+      iron:
+        material: IRON_INGOT
+        amount: 16
+        weight: 40
+        display-name: "Iron Ingots"
+      golden_apple:
+        material: GOLDEN_APPLE
+        amount: 3
+        weight: 20
+        display-name: "Golden Apples"
+      emeralds:
+        material: EMERALD
+        amount: 8
+        weight: 25
+        display-name: "Emeralds"
+      lapis:
+        material: LAPIS_LAZULI
+        amount: 16
+        weight: 35
+        display-name: "Lapis Lazuli"
+
+  rare:
+    display-name: "Rare Crate"
+    key-material: TRIPWIRE_HOOK
+    key-name: "Rare Key"
+    animation-glass: PURPLE_STAINED_GLASS_PANE
+    mode: random
+    animation-type: pulse
+    idle-particle: SOUL_FIRE_FLAME
+    win-particle: TOTEM_OF_UNDYING
+    rewards:
+      netherite:
+        material: NETHERITE_INGOT
+        amount: 1
+        weight: 5
+        display-name: "Netherite Ingot"
+      elytra:
+        material: ELYTRA
+        amount: 1
+        weight: 3
+        display-name: "Elytra"
+      enchanted_pickaxe:
+        material: DIAMOND_PICKAXE
+        amount: 1
+        weight: 15
+        display-name: "Enchanted Pickaxe"
+        enchantments:
+          efficiency: 5
+          unbreaking: 3
+          fortune: 3
+      enchanted_sword:
+        material: DIAMOND_SWORD
+        amount: 1
+        weight: 15
+        display-name: "Enchanted Sword"
+        enchantments:
+          sharpness: 5
+          unbreaking: 3
+          looting: 3
+      xp_bottles:
+        material: EXPERIENCE_BOTTLE
+        amount: 32
+        weight: 25
+        display-name: "XP Bottles"

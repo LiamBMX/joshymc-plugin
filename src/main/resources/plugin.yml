@@ -1,0 +1,803 @@
+name: joshymc
+version: '${version}'
+main: com.liam.joshymc.Joshymc
+api-version: '1.21'
+description: Custom plugin for Joshy's server
+authors: [liam]
+
+commands:
+  joshymc:
+    description: Main command for JoshyMC plugin
+    usage: /joshymc <give|reload>
+  link:
+    description: Link your Discord account
+    usage: /link
+  unlink:
+    description: Unlink your Discord account
+    usage: /unlink
+  settings:
+    description: Open player settings GUI
+    usage: /settings
+  nightvision:
+    description: Toggle night vision
+    usage: /nightvision [on|off]
+    aliases: [nv]
+  pvp:
+    description: Toggle PvP combat
+    usage: /pvp [on|off]
+  sit:
+    description: Sit down where you are
+    usage: /sit
+  spawn:
+    description: Teleport to spawn
+    usage: /spawn
+  setspawn:
+    description: Set the server spawn
+    usage: /setspawn
+  warp:
+    description: Open server warps GUI or teleport to a warp
+    usage: /warp [name]
+    aliases: [warps]
+  setwarp:
+    description: Create a server warp (admin)
+    usage: /setwarp <name>
+  delwarp:
+    description: Delete a server warp (admin)
+    usage: /delwarp <name>
+    aliases: [deletewarp, removewarp]
+  editwarp:
+    description: Set the icon for a server warp (hold the item)
+    usage: /editwarp <name>
+  pwarp:
+    description: Player warps GUI and management
+    usage: /pwarp [set|delete|<name>]
+    aliases: [playerwarp, pwarps, pw]
+  home:
+    description: Teleport to your home
+    usage: /home [name]
+    aliases: [h]
+  sethome:
+    description: Set a home at your location
+    usage: /sethome [name]
+  delhome:
+    description: Delete a home
+    usage: /delhome [name]
+    aliases: [deletehome, removehome]
+  rtp:
+    description: Random teleport
+    usage: /rtp
+    aliases: [randomtp, wild]
+  afk:
+    description: Toggle AFK status
+    usage: /afk
+  kit:
+    description: Open kit GUI or claim a kit
+    usage: /kit [name]
+    aliases: [kits]
+  createkit:
+    description: Create a new kit
+    usage: /createkit <name>
+  deletekit:
+    description: Delete a kit
+    usage: /deletekit <name>
+    aliases: [delkit, removekit]
+  trade:
+    description: Send a trade request
+    usage: /trade <player>
+  pv:
+    description: Open player vault
+    usage: /pv [number]
+    aliases: [playervault, vault]
+  holo:
+    description: Manage holograms
+    usage: /holo <create|delete|addline|removeline|setline|move|list>
+    aliases: [hologram, holograms]
+  npc:
+    description: Manage NPCs
+    usage: /npc <create|delete|setcommand|setname|move|list>
+    aliases: [npcs]
+  crate:
+    description: Manage and open crates
+    usage: /crate <setlocation|removelocation|givekey|list|preview>
+    aliases: [crates]
+  crateeditor:
+    description: In-game crate editor
+    usage: /crateeditor
+    aliases: [ce-edit, editcrate]
+  trash:
+    description: Open a disposable trash inventory
+    usage: /trash
+    aliases: [bin, dispose]
+  ah:
+    description: Open the auction house
+    usage: /ah [sell <price>]
+    aliases: [auction, auctionhouse]
+  eco:
+    description: Manage player economy
+    usage: /eco <give|take|set|reset> <player> <amount>
+  balance:
+    description: Check your balance
+    usage: /balance [player]
+    aliases: [bal, money]
+  pay:
+    description: Send money to another player
+    usage: /pay <player> <amount>
+  baltop:
+    description: View richest players
+    usage: /baltop
+    aliases: [balancetop]
+  chestshop:
+    description: Chest shop (sign-based) help and management
+    usage: /chestshop [help|example|info|remove]
+    aliases: [cs, signshop]
+  shop:
+    description: Open the server shop
+    usage: /shop
+  sell:
+    description: Sell items for money
+    usage: /sell [hand|all]
+  sellwand:
+    description: Give a sell wand with custom multiplier and uses
+    usage: /sellwand <multiplier> <uses> [player]
+  chatcolor:
+    description: Change your chat message color
+    usage: /chatcolor [color|reset]
+    aliases: [cc, messagecolor]
+  market:
+    description: View the dynamic stock market
+    usage: /market [price|trends|info]
+    aliases: [stocks]
+  quests:
+    description: Browse and track quests
+    usage: /quests [list|progress|info]
+    aliases: [quest, q]
+  cosmetics:
+    description: Open the cosmetics hub
+    usage: /cosmetics
+  trail:
+    description: Manage particle trails
+    usage: /trail [remove]
+    aliases: [trails]
+  killeffect:
+    description: Manage kill effects
+    usage: /killeffect [remove]
+    aliases: [ke]
+  joineffect:
+    description: Manage join effects
+    usage: /joineffect
+    aliases: [je]
+  emote:
+    description: Play an emote
+    usage: /emote <name>
+    aliases: [emotes]
+  glow:
+    description: Manage glow outline
+    usage: /glow [remove]
+  gadget:
+    description: Manage gadgets
+    usage: /gadget
+    aliases: [gadgets]
+  fish:
+    description: View your fish collection
+    usage: /fish [stats|leaderboard]
+    aliases: [fishing, fishcollection]
+  skills:
+    description: View your skills and levels
+    usage: /skills [skill|top]
+    aliases: [skill, sl]
+  rewards:
+    description: Claim all quest rewards
+    usage: /rewards
+  talisman:
+    description: Equip talismans and relics
+    usage: /talisman [equip|unequip|info|list]
+    aliases: [talismans, relic, relics]
+  tag:
+    description: Browse and equip chat tags
+    usage: /tag [remove|tagname]
+    aliases: [tags, chattag]
+  nick:
+    description: Set your nickname
+    usage: /nick <set|reset|other>
+    aliases: [nickname]
+  announce:
+    description: Broadcast an announcement
+    usage: /announce <message>
+    aliases: [broadcast, bc]
+  help:
+    description: Open the help menu GUI
+    usage: /help
+  rules:
+    description: View the server rules
+    usage: /rules
+  back:
+    description: Teleport to your last location
+    usage: /back
+  gamemode:
+    description: Change gamemode
+    usage: /gamemode <c|s|a|sp> [player]
+    aliases: [gm]
+  gmc:
+    description: Creative mode
+    usage: /gmc [player]
+  gms:
+    description: Survival mode
+    usage: /gms [player]
+  gma:
+    description: Adventure mode
+    usage: /gma [player]
+  gmsp:
+    description: Spectator mode
+    usage: /gmsp [player]
+  fly:
+    description: Toggle flight
+    usage: /fly [player]
+  heal:
+    description: Heal a player
+    usage: /heal [player]
+  feed:
+    description: Feed a player
+    usage: /feed [player]
+  god:
+    description: Toggle god mode
+    usage: /god [player]
+  speed:
+    description: Set walk/fly speed
+    usage: /speed <0-10> [fly|walk]
+  tp:
+    description: Teleport to player or coords
+    usage: /tp <player|x y z>
+  tphere:
+    description: Teleport player to you
+    usage: /tphere <player>
+    aliases: [tph, s2p]
+  invsee:
+    description: View another player's inventory
+    usage: /invsee <player>
+  enderchest:
+    description: Open ender chest
+    usage: /enderchest [player]
+    aliases: [ec, echest]
+  hat:
+    description: Wear held item as hat
+    usage: /hat
+  craft:
+    description: Open crafting table
+    usage: /craft
+    aliases: [workbench, wb]
+  anvil:
+    description: Open anvil
+    usage: /anvil
+  gencave:
+    description: Generate a natural cave
+    usage: /gencave <radius>
+  world:
+    description: World management commands
+    usage: /world <create|delete|list|tp|setspawn|import|info>
+    aliases: [worlds]
+  arena:
+    description: Manage PvP arenas
+    usage: /arena <wand|create|delete|list|info|enable|disable|points|undo|clear|tp>
+  portal:
+    description: Manage custom portals
+    usage: /portal <wand|create|delete|action|cooldown|message|list|info|tp>
+    aliases: [portals]
+  vote:
+    description: Vote for the server
+    usage: /vote [top|streak]
+  spawndecor:
+    description: Manage spawn decorations
+    usage: /spawndecor <hologram|particle|beacon> <add|remove|list>
+  worldflag:
+    description: Manage world protection flags
+    usage: /worldflag <flag|list|reset> [value] [world]
+    aliases: [wf, flags]
+  admin:
+    description: Open the admin panel
+    usage: /admin [player|logs|freeze|snapshot|rollback|banlist|mutelist]
+    aliases: [staffpanel, modpanel]
+  enchant:
+    description: Enchant held item (no limits)
+    usage: /enchant <enchantment> [level]
+  smite:
+    description: Strike lightning
+    usage: /smite [player]
+    aliases: [lightning]
+  top:
+    description: Teleport to highest block
+    usage: /top
+  sudo:
+    description: Force a player to run a command
+    usage: /sudo <player> <command>
+  msg:
+    description: Send a private message
+    usage: /msg <player> <message>
+    aliases: [tell, w, whisper, pm, dm]
+  reply:
+    description: Reply to last message
+    usage: /reply <message>
+    aliases: [r]
+  resource:
+    description: Teleport to the resource world
+    usage: /resource
+    aliases: [rw, resourceworld]
+  ban:
+    description: Permanently ban a player
+    usage: /ban <player> [reason]
+  tempban:
+    description: Temporarily ban a player
+    usage: /tempban <player> <duration> [reason]
+  unban:
+    description: Unban a player
+    usage: /unban <player>
+    aliases: [pardon]
+  mute:
+    description: Permanently mute a player
+    usage: /mute <player> [reason]
+  tempmute:
+    description: Temporarily mute a player
+    usage: /tempmute <player> <duration> [reason]
+  unmute:
+    description: Unmute a player
+    usage: /unmute <player>
+  warn:
+    description: Warn a player
+    usage: /warn <player> [reason]
+  pkick:
+    description: Kick a player with reason
+    usage: /pkick <player> [reason]
+  history:
+    description: View punishment history
+    usage: /history <player>
+  vanish:
+    description: Toggle vanish mode
+    usage: /vanish [player]
+    aliases: [v]
+  report:
+    description: Report a player
+    usage: /report <player> <reason>
+  reports:
+    description: View reports
+    usage: /reports [player]
+  playtime:
+    description: Check playtime
+    usage: /playtime [player]
+    aliases: [pt]
+  playtimetop:
+    description: Top playtimes
+    usage: /playtimetop
+    aliases: [pttop]
+  tpa:
+    description: Request to teleport to a player
+    usage: /tpa <player>
+  tpahere:
+    description: Request a player to teleport to you
+    usage: /tpahere <player>
+  tpaccept:
+    description: Accept a TPA request
+    usage: /tpaccept [player]
+    aliases: [tpyes]
+  tpdeny:
+    description: Deny a TPA request
+    usage: /tpdeny [player]
+    aliases: [tpno]
+  tpacancel:
+    description: Cancel your outgoing TPA request
+    usage: /tpacancel
+  claim:
+    description: Claim land
+    usage: /claim [team|personal|map|info|list]
+  unclaim:
+    description: Unclaim land
+    usage: /unclaim
+  subclaim:
+    description: Manage subclaims within your claims
+    usage: /subclaim <wand|create|add|remove|delete|list>
+  rank:
+    description: Manage player ranks
+    usage: /rank <set|remove|list|check>
+    aliases: [ranks]
+  hopper:
+    description: View and manage upgraded hoppers
+    usage: /hopper <info|reset>
+  spawner:
+    description: Open the spawner shop, or admin spawner commands
+    usage: /spawner [shop|give|list]
+    aliases: [spawners]
+  team:
+    description: Team management
+    usage: /team <subcommand>
+    aliases: [t, teams]
+  bounty:
+    description: Place and manage bounties
+    usage: /bounty <set|list|cancel>
+  customenchant:
+    description: Apply custom enchants to items
+    usage: /customenchant <add|remove|list|info>
+    aliases: [ce, cenchant]
+
+permissions:
+  joshymc.give:
+    description: Allows giving custom items
+    default: op
+  joshymc.reload:
+    description: Allows reloading the plugin config
+    default: op
+  joshymc.nightvision:
+    description: Allows using /nightvision
+    default: true
+  joshymc.gsit:
+    description: Allows sitting on blocks
+    default: true
+  joshymc.deathcoords:
+    description: Shows death coordinates
+    default: true
+  joshymc.chatitem:
+    description: Allows using [i] to show items in chat
+    default: true
+  joshymc.recipeblocker.bypass:
+    description: Bypass blocked recipes
+    default: op
+  joshymc.pvp:
+    description: Allows toggling PvP
+    default: true
+  joshymc.sit:
+    description: Allows using /sit
+    default: true
+  joshymc.veinminer:
+    description: Allows using veinminer
+    default: true
+  joshymc.autosmelt:
+    description: Allows using auto smelt
+    default: true
+  joshymc.treefeller:
+    description: Allows using tree feller
+    default: true
+  joshymc.spawn:
+    description: Allows teleporting to spawn
+    default: true
+  joshymc.setspawn:
+    description: Allows setting the server spawn
+    default: op
+  joshymc.warp:
+    description: Allows using server warps
+    default: true
+  joshymc.setwarp:
+    description: Allows creating server warps (admin)
+    default: op
+  joshymc.delwarp:
+    description: Allows deleting server warps (admin)
+    default: op
+  joshymc.editwarp:
+    description: Allows editing server warp icons (admin)
+    default: op
+  joshymc.pwarp:
+    description: Allows using player warps
+    default: true
+  joshymc.pwarp.set:
+    description: Allows creating player warps
+    default: true
+  joshymc.pwarp.set.unlimited:
+    description: Bypass player warp limit
+    default: op
+  joshymc.pwarp.delete.others:
+    description: Allows deleting any player warp
+    default: op
+  joshymc.home:
+    description: Allows using homes
+    default: true
+  joshymc.sethome:
+    description: Allows setting homes
+    default: true
+  joshymc.sethome.unlimited:
+    description: Bypass home limit
+    default: op
+  joshymc.delhome:
+    description: Allows deleting homes
+    default: true
+  joshymc.rtp:
+    description: Allows random teleport
+    default: true
+  joshymc.afk:
+    description: Allows toggling AFK
+    default: true
+  joshymc.kit:
+    description: Allows using kits
+    default: true
+  joshymc.kit.cooldown.bypass:
+    description: Bypass cooldowns on all kits
+    default: op
+  joshymc.kit.bypass.*:
+    description: Bypass cooldowns on all kits (wildcard)
+    default: op
+  joshymc.createkit:
+    description: Allows creating kits
+    default: op
+  joshymc.deletekit:
+    description: Allows deleting kits
+    default: op
+  joshymc.trade:
+    description: Allows trading with other players
+    default: true
+  joshymc.pv:
+    description: Allows using player vaults
+    default: true
+  joshymc.holo:
+    description: Allows managing holograms
+    default: op
+  joshymc.npc:
+    description: Allows managing NPCs
+    default: op
+  joshymc.crate.admin:
+    description: Allows managing crate locations and giving keys
+    default: op
+  joshymc.crate.use:
+    description: Allows opening and previewing crates
+    default: true
+  joshymc.crateeditor:
+    description: In-game crate editor access
+    default: op
+  joshymc.trash:
+    description: Open the trash inventory
+    default: true
+  joshymc.ah:
+    description: Access the auction house
+    default: true
+  joshymc.ah.sell:
+    description: List items on the auction house
+    default: true
+  joshymc.eco:
+    description: Manage economy (admin)
+    default: op
+  joshymc.balance:
+    description: Check balance
+    default: true
+  joshymc.pay:
+    description: Send money to players
+    default: true
+  joshymc.baltop:
+    description: View balance leaderboard
+    default: true
+  joshymc.shop:
+    description: Access the server shop
+    default: true
+  joshymc.sell:
+    description: Sell items
+    default: true
+  joshymc.chatcolor:
+    description: Use chat colors
+    default: true
+  joshymc.chatcolor.special:
+    description: Use rainbow and gradient chat colors
+    default: op
+  joshymc.market:
+    description: Use the stock market
+    default: true
+  joshymc.quests:
+    description: Use the quest system
+    default: true
+  joshymc.cosmetics:
+    description: Open cosmetics hub
+    default: true
+  joshymc.trail:
+    description: Use trail commands
+    default: true
+  joshymc.killeffect:
+    description: Use kill effect commands
+    default: true
+  joshymc.joineffect:
+    description: Use join effect commands
+    default: true
+  joshymc.emote:
+    description: Use emote commands
+    default: true
+  joshymc.glow:
+    description: Use glow commands
+    default: true
+  joshymc.gadget:
+    description: Use gadget commands
+    default: true
+  joshymc.fish:
+    description: Use fishing collection
+    default: true
+  joshymc.skills:
+    description: View skills
+    default: true
+  joshymc.talisman:
+    description: Use talismans
+    default: true
+  joshymc.talisman.admin:
+    description: Admin talisman management
+    default: op
+  joshymc.tag:
+    description: Use chat tags
+    default: true
+  joshymc.nick:
+    description: Set own nickname
+    default: true
+  joshymc.nick.others:
+    description: Set other players' nicknames
+    default: op
+  joshymc.announce:
+    description: Send custom announcements
+    default: op
+  joshymc.back:
+    description: Use /back
+    default: true
+  joshymc.gamemode:
+    description: Change own gamemode
+    default: op
+  joshymc.gamemode.others:
+    description: Change others' gamemode
+    default: op
+  joshymc.fly:
+    description: Toggle flight
+    default: op
+  joshymc.heal:
+    description: Heal players
+    default: op
+  joshymc.feed:
+    description: Feed players
+    default: op
+  joshymc.god:
+    description: Toggle god mode
+    default: op
+  joshymc.speed:
+    description: Set speed
+    default: op
+  joshymc.tp:
+    description: Teleport to players/coords
+    default: op
+  joshymc.tp.others:
+    description: Teleport other players
+    default: op
+  joshymc.tphere:
+    description: Teleport players to you
+    default: op
+  joshymc.invsee:
+    description: View player inventories
+    default: op
+  joshymc.enderchest:
+    description: Open ender chest
+    default: op
+  joshymc.enderchest.others:
+    description: Open others' ender chests
+    default: op
+  joshymc.hat:
+    description: Wear items as hats
+    default: true
+  joshymc.craft:
+    description: Open portable crafting table
+    default: true
+  joshymc.anvil:
+    description: Open portable anvil
+    default: op
+  joshymc.gencave:
+    description: Generate caves
+    default: op
+  joshymc.world:
+    description: World management commands
+    default: op
+  joshymc.arena:
+    description: Manage PvP arenas
+    default: op
+  joshymc.portal:
+    description: Manage portals
+    default: op
+  joshymc.vote:
+    description: Vote commands
+    default: true
+  joshymc.spawndecor:
+    description: Manage spawn decorations
+    default: op
+  joshymc.worldflag:
+    description: Manage world flags
+    default: op
+  joshymc.worldflag.bypass:
+    description: Bypass world flag restrictions
+    default: op
+  joshymc.admin:
+    description: Full admin panel access (Owner/Admin)
+    default: op
+  joshymc.admin.moderate:
+    description: Moderation actions - kick, mute, tempmute, warn, freeze, history (Mod)
+    default: op
+  joshymc.admin.helper:
+    description: View player info and logs only (Helper)
+    default: op
+  joshymc.enchant:
+    description: Use /enchant command (no level limits)
+    default: op
+  joshymc.smite:
+    description: Strike lightning
+    default: op
+  joshymc.top:
+    description: Teleport to top
+    default: true
+  joshymc.sudo:
+    description: Force player commands
+    default: op
+  joshymc.resource:
+    description: Teleport to resource world
+    default: true
+  joshymc.ban:
+    description: Ban players
+    default: op
+  joshymc.tempban:
+    description: Temporarily ban players
+    default: op
+  joshymc.unban:
+    description: Unban players
+    default: op
+  joshymc.mute:
+    description: Mute players
+    default: op
+  joshymc.tempmute:
+    description: Temporarily mute players
+    default: op
+  joshymc.unmute:
+    description: Unmute players
+    default: op
+  joshymc.warn:
+    description: Warn players
+    default: op
+  joshymc.kick:
+    description: Kick players
+    default: op
+  joshymc.history:
+    description: View punishment history
+    default: op
+  joshymc.punishment.notify:
+    description: Receive punishment notifications
+    default: op
+  joshymc.vanish:
+    description: Toggle vanish mode
+    default: op
+  joshymc.report:
+    description: Report players
+    default: true
+  joshymc.reports.view:
+    description: View reports
+    default: op
+  joshymc.reports.notify:
+    description: Receive report notifications
+    default: op
+  joshymc.playtime:
+    description: Check playtime
+    default: true
+  joshymc.tpa:
+    description: Send and receive TPA requests
+    default: true
+  joshymc.claim:
+    description: Claim and manage land
+    default: true
+  joshymc.claim.admin:
+    description: Admin claim management (unclaim others, bypass)
+    default: op
+  joshymc.claim.bypass:
+    description: Bypass claim protection
+    default: op
+  joshymc.rank:
+    description: Use rank commands
+    default: op
+  joshymc.rank.set:
+    description: Set/remove player ranks
+    default: op
+  joshymc.sellwand.give:
+    description: Give sell wands to players
+    default: op
+  joshymc.sellwand.use:
+    description: Use sell wands
+    default: true
+  joshymc.customenchant:
+    description: Apply custom enchants via command
+    default: op
+  joshymc.anticheat.bypass:
+    description: Bypass all anticheat checks
+    default: op
+  joshymc.tp.nocooldown:
+    description: Bypass teleport cooldown
+    default: op
+  joshymc.anticheat.alerts:
+    description: Receive anticheat violation alerts
+    default: op
