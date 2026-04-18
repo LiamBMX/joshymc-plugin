@@ -41,7 +41,17 @@ kotlin {
     jvmToolchain(targetJavaVersion)
 }
 
+// Write final JARs into a top-level `jar/` directory so collaborators can grab
+// the built artifact straight from git without running Gradle themselves.
+val jarOutputDir = layout.projectDirectory.dir("jar")
+
+tasks.jar {
+    destinationDirectory.set(jarOutputDir)
+}
+
 tasks.shadowJar {
+    destinationDirectory.set(jarOutputDir)
+
     // Relocate JDA and its transitive dependencies to avoid conflicts
     // with Paper's bundled SLF4J, OkHttp, Gson, etc.
     relocate("net.dv8tion.jda", "com.liam.joshymc.libs.jda")
