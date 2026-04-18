@@ -56,7 +56,8 @@ enum class QuestType {
     SELL_ITEMS,
     EARN_MONEY,
     TAME_ANIMAL,
-    TIME_PLAYED
+    TIME_PLAYED,
+    VISIT_BIOME
 }
 
 enum class QuestDifficulty(val color: String, val displayName: String) {
@@ -114,6 +115,7 @@ class QuestManager(private val plugin: Joshymc) : Listener {
     private val quests = mutableMapOf<String, Quest>()
     private val progressCache = ConcurrentHashMap<UUID, MutableMap<String, PlayerQuestProgress>>()
     private val distanceAccumulator = ConcurrentHashMap<UUID, Double>()
+    private val visitedBiomes = ConcurrentHashMap<UUID, MutableSet<String>>()
 
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
         editMeta { it.displayName(Component.empty()) }
@@ -136,6 +138,14 @@ class QuestManager(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS quest_biomes (
+                uuid TEXT NOT NULL,
+                biome TEXT NOT NULL,
+                PRIMARY KEY (uuid, biome)
+            )
+        """.trimIndent())
+
         loadQuests()
 
         // Periodic flush every 5 minutes (6000 ticks)
@@ -152,6 +162,15 @@ class QuestManager(private val plugin: Joshymc) : Listener {
             }
         }, 1200L, 1200L)
 
+        // Biome discovery tick: every 3 seconds, check each online player's current biome
+        // and record it if they haven't visited it before.
+        Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+            for (player in Bukkit.getOnlinePlayers()) {
+                if (isExempt(player)) continue
+                recordBiome(player)
+            }
+        }, 60L, 60L)
+
         plugin.logger.info("[Quests] Loaded ${quests.size} quests.")
     }
 
@@ -159,6 +178,36 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         flushAllProgress()
         progressCache.clear()
         distanceAccumulator.clear()
+        visitedBiomes.clear()
+    }
+
+    // ── Biome Tracking ─────────────────────────────────────────
+
+    private fun recordBiome(player: Player) {
+        val uuid = player.uniqueId
+        val biome = player.location.block.biome.key.toString() // e.g. "minecraft:plains"
+        val set = visitedBiomes.getOrPut(uuid) { loadBiomes(uuid) }
+        if (set.add(biome)) {
+            plugin.databaseManager.execute(
+                "INSERT OR IGNORE INTO quest_biomes (uuid, biome) VALUES (?, ?)",
+                uuid.toString(), biome
+            )
+            // Bump every active VISIT_BIOME quest by 1.
+            findMatchingQuests(QuestType.VISIT_BIOME, "").forEach { quest ->
+                if (canStart(uuid, quest.id)) incrementProgress(player, quest.id, 1)
+            }
+        }
+    }
+
+    private fun loadBiomes(uuid: UUID): MutableSet<String> {
+        val set = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        plugin.databaseManager.query(
+            "SELECT biome FROM quest_biomes WHERE uuid = ?",
+            uuid.toString()
+        ) { rs ->
+            set.add(rs.getString("biome"))
+        }
+        return set
     }
 
     // ── Quest Registry ─────────────────────────────────────────
@@ -726,6 +775,7 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         flushProgress(uuid)
         progressCache.remove(uuid)
         distanceAccumulator.remove(uuid)
+        visitedBiomes.remove(uuid)
     }
 
     // ── Internals ──────────────────────────────────────────────
@@ -751,40 +801,11 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         ))
     }
 
-    /** Map block-only materials to their item equivalent for display in GUIs. */
-    private fun blockMaterialToItem(mat: Material?): Material? {
-        if (mat == null) return null
-        return when (mat) {
-            Material.SWEET_BERRY_BUSH -> Material.SWEET_BERRIES
-            Material.COCOA -> Material.COCOA_BEANS
-            Material.CARROTS -> Material.CARROT
-            Material.POTATOES -> Material.POTATO
-            Material.BEETROOTS -> Material.BEETROOT
-            Material.NETHER_WART -> Material.NETHER_WART
-            Material.CHORUS_PLANT, Material.CHORUS_FLOWER -> Material.CHORUS_FRUIT
-            Material.MELON_STEM, Material.ATTACHED_MELON_STEM -> Material.MELON_SLICE
-            Material.PUMPKIN_STEM, Material.ATTACHED_PUMPKIN_STEM -> Material.PUMPKIN_SEEDS
-            Material.KELP_PLANT -> Material.KELP
-            Material.BAMBOO_SAPLING -> Material.BAMBOO
-            else -> if (mat.isItem) mat else null
-        }
-    }
-
     private fun questIcon(quest: Quest, progress: PlayerQuestProgress, canStartQuest: Boolean): ItemStack {
-        // Determine icon material
-        val iconMaterial = when {
-            progress.completed && progress.claimedReward -> Material.GREEN_STAINED_GLASS_PANE
-            progress.completed -> Material.LIME_STAINED_GLASS_PANE
-            progress.progress > 0 -> Material.YELLOW_STAINED_GLASS_PANE
-            !canStartQuest -> Material.RED_STAINED_GLASS_PANE
-            else -> {
-                // Try to use the target material, fall back to category icon
-                val targetMat = Material.getMaterial(quest.target.uppercase())
-                // Some materials are block-only (e.g., SWEET_BERRY_BUSH, COCOA, CHORUS_PLANT)
-                // and cannot be used as items. Use the item form or fall back to category icon.
-                val safeTarget = targetMat?.takeIf { it.isItem }
-                safeTarget ?: blockMaterialToItem(targetMat) ?: quest.category.icon
-            }
+        val iconMaterial = if (progress.completed) {
+            Material.GREEN_STAINED_GLASS_PANE
+        } else {
+            Material.YELLOW_STAINED_GLASS_PANE
         }
 
         val item = try {

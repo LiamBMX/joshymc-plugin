@@ -26,12 +26,16 @@ class AFKManager(private val plugin: Joshymc) {
     private val preAfkLocations = ConcurrentHashMap<UUID, Location>()
     private val teleporting = ConcurrentHashMap.newKeySet<UUID>()
 
+    data class RewardItem(val material: Material, val amount: Int, val chance: Int)
+
     private var worldName = "afk"
     private var rewardEnabled = true
-    private var rewardMaterial = Material.DIRT
-    private var rewardAmount = 1
+    private var rewardMoney = 0.0
+    private var rewardXp = 0
+    private var rewardItems: List<RewardItem> = emptyList()
     private var rewardIntervalTicks = 200L
     private var rewardIntervalSeconds = 10L
+    private val random = Random()
 
     private var rewardTaskId = -1
     private var countdownTaskId = -1
@@ -45,10 +49,9 @@ class AFKManager(private val plugin: Joshymc) {
         worldName = plugin.config.getString("afk.world", "afk") ?: "afk"
         rewardEnabled = plugin.config.getBoolean("afk.reward.enabled", true)
 
-        val materialName = plugin.config.getString("afk.reward.item", "DIRT") ?: "DIRT"
-        rewardMaterial = Material.matchMaterial(materialName) ?: Material.DIRT
-
-        rewardAmount = plugin.config.getInt("afk.reward.amount", 1)
+        rewardMoney = plugin.config.getDouble("afk.reward.money", 0.0)
+        rewardXp = plugin.config.getInt("afk.reward.xp", 0)
+        rewardItems = loadRewardItems()
 
         val interval = plugin.config.getLong("afk.reward.interval", 10)
         val unit = plugin.config.getString("afk.reward.unit", "seconds") ?: "seconds"
@@ -73,7 +76,31 @@ class AFKManager(private val plugin: Joshymc) {
             }, 20L, 20L)
         }
 
-        plugin.logger.info("[AFK] Manager started (world=$worldName, reward=${if (rewardEnabled) "$rewardAmount ${rewardMaterial.name} every ${rewardIntervalSeconds}s" else "disabled"}).")
+        plugin.logger.info("[AFK] Manager started (world=$worldName, reward=${if (rewardEnabled) "${rewardItems.size} item type(s) / money=$rewardMoney / xp=$rewardXp every ${rewardIntervalSeconds}s" else "disabled"}).")
+    }
+
+    /**
+     * Load reward items from `afk.reward.items` list. Falls back to the legacy
+     * single-item fields (`afk.reward.item` + `amount`) so older configs keep working.
+     */
+    private fun loadRewardItems(): List<RewardItem> {
+        val list = plugin.config.getMapList("afk.reward.items")
+        if (list.isNotEmpty()) {
+            val parsed = mutableListOf<RewardItem>()
+            for (entry in list) {
+                val matName = (entry["material"] as? String) ?: continue
+                val mat = Material.matchMaterial(matName) ?: continue
+                val amt = (entry["amount"] as? Number)?.toInt()?.coerceAtLeast(1) ?: 1
+                val chance = (entry["chance"] as? Number)?.toInt()?.coerceIn(0, 100) ?: 100
+                parsed.add(RewardItem(mat, amt, chance))
+            }
+            if (parsed.isNotEmpty()) return parsed
+        }
+
+        val legacyName = plugin.config.getString("afk.reward.item", "DIRT") ?: "DIRT"
+        val legacyMat = Material.matchMaterial(legacyName) ?: Material.DIRT
+        val legacyAmt = plugin.config.getInt("afk.reward.amount", 1).coerceAtLeast(1)
+        return listOf(RewardItem(legacyMat, legacyAmt, 100))
     }
 
     fun stop() {
@@ -190,20 +217,38 @@ class AFKManager(private val plugin: Joshymc) {
         val now = System.currentTimeMillis()
         for (uuid in afkPlayers) {
             val player = Bukkit.getPlayer(uuid) ?: continue
-            val item = ItemStack(rewardMaterial, rewardAmount)
-            val leftover = player.inventory.addItem(item)
-            if (leftover.isNotEmpty()) {
-                leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+
+            val granted = mutableListOf<String>()
+
+            if (rewardMoney > 0.0) {
+                plugin.economyManager.deposit(uuid, rewardMoney)
+                granted.add("+${plugin.economyManager.format(rewardMoney)}")
+            }
+
+            if (rewardXp > 0) {
+                player.giveExpLevels(rewardXp)
+                granted.add("+$rewardXp XP")
+            }
+
+            for (reward in rewardItems) {
+                if (reward.chance < 100 && random.nextInt(100) >= reward.chance) continue
+                val stack = ItemStack(reward.material, reward.amount)
+                val leftover = player.inventory.addItem(stack)
+                if (leftover.isNotEmpty()) {
+                    leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+                }
+                granted.add("+${reward.amount} ${reward.material.name.lowercase().replace('_', ' ')}")
             }
 
             // Reset countdown
             nextRewardTime[uuid] = now + (rewardIntervalSeconds * 1000)
 
-            // Flash reward notification
-            plugin.commsManager.sendActionBar(player,
-                Component.text("+$rewardAmount ${rewardMaterial.name.lowercase().replace('_', ' ')}", NamedTextColor.GREEN)
-                    .decoration(TextDecoration.BOLD, true)
-            )
+            if (granted.isNotEmpty()) {
+                plugin.commsManager.sendActionBar(player,
+                    Component.text(granted.joinToString("  "), NamedTextColor.GREEN)
+                        .decoration(TextDecoration.BOLD, true)
+                )
+            }
         }
     }
 

@@ -31,6 +31,7 @@ features:
   voting: true
   portals: true
   arenas: true
+  npcs: false
 
 # Chat formatting
 chat:
@@ -86,15 +87,29 @@ warps:
 homes:
   max-per-player: 3
 
-# AFK
+# AFK — rewards per interval while AFK. Configure any combination of money,
+# items, and XP. Leave a reward at 0 / empty to skip it.
 afk:
   world: "afk"
   reward:
     enabled: true
+    interval: 10
+    unit: "seconds"       # "seconds" or "minutes"
+    money: 0              # money paid per interval (0 = none)
+    xp: 0                 # vanilla XP levels per interval (0 = none)
+    # Legacy single-item fields (kept for backwards compatibility).
+    # If `items` below is non-empty it takes precedence and these are ignored.
     item: DIRT
     amount: 1
-    interval: 10
-    unit: "seconds"  # "seconds" or "minutes"
+    # Full items list — each entry supports material, amount, chance (0-100).
+    # Entries with chance < 100 roll independently each interval.
+    items:
+      - material: DIRT
+        amount: 1
+        chance: 100
+      # - material: IRON_INGOT
+      #   amount: 1
+      #   chance: 25
 
 # Player Vaults
 vaults:

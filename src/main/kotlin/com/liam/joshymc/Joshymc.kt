@@ -179,6 +179,7 @@ class Joshymc : JavaPlugin() {
     lateinit var marketManager: MarketManager
         private set
     lateinit var vanishCommand: VanishCommand
+    lateinit var rtpCommand: com.liam.joshymc.command.RtpCommand
     lateinit var questManager: QuestManager
         private set
     lateinit var talismanManager: TalismanManager
@@ -298,7 +299,7 @@ class Joshymc : JavaPlugin() {
         kitManager.start()
         storageManager.start()
         hologramManager.start()
-        npcManager.start()
+        if (isFeatureEnabled("npcs")) npcManager.start()
         crateManager.start()
         auctionManager.start()
         signShopManager.start()
@@ -427,7 +428,7 @@ class Joshymc : JavaPlugin() {
         kitManager.start()
         storageManager.start()
         hologramManager.start()
-        npcManager.start()
+        if (isFeatureEnabled("npcs")) npcManager.start()
         crateManager.start()
         auctionManager.start()
         signShopManager.start()

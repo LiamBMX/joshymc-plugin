@@ -521,7 +521,7 @@ permissions:
     default: true
   joshymc.pv:
     description: Allows using player vaults
-    default: true
+    default: op
   joshymc.holo:
     description: Allows managing holograms
     default: op
@@ -566,7 +566,7 @@ permissions:
     default: true
   joshymc.chatcolor:
     description: Use chat colors
-    default: true
+    default: op
   joshymc.chatcolor.special:
     description: Use rainbow and gradient chat colors
     default: op
@@ -614,7 +614,7 @@ permissions:
     default: true
   joshymc.nick:
     description: Set own nickname
-    default: true
+    default: op
   joshymc.nick.others:
     description: Set other players' nicknames
     default: op
@@ -665,10 +665,10 @@ permissions:
     default: op
   joshymc.hat:
     description: Wear items as hats
-    default: true
+    default: op
   joshymc.craft:
     description: Open portable crafting table
-    default: true
+    default: op
   joshymc.anvil:
     description: Open portable anvil
     default: op

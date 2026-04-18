@@ -2601,12 +2601,12 @@ quests:
     prerequisite: null
   exploring_001:
     name: "Quest 001: Exploring Challenge"
-    description: "Walk 250 Blocks on Foot"
+    description: "Discover 1 unique biome"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 250
+    amount: 1
     rewards:
       money: 5000
       xp: 50
@@ -2614,12 +2614,12 @@ quests:
     prerequisite: null
   exploring_002:
     name: "Quest 002: Exploring Challenge"
-    description: "Walk 500 Blocks on Foot"
+    description: "Discover 2 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 500
+    amount: 2
     rewards:
       money: 5416
       xp: 54
@@ -2627,12 +2627,12 @@ quests:
     prerequisite: null
   exploring_003:
     name: "Quest 003: Exploring Challenge"
-    description: "Walk 750 Blocks on Foot"
+    description: "Discover 3 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 750
+    amount: 3
     rewards:
       money: 5833
       xp: 58
@@ -2640,12 +2640,12 @@ quests:
     prerequisite: null
   exploring_004:
     name: "Quest 004: Exploring Challenge"
-    description: "Walk 1,000 Blocks on Foot"
+    description: "Discover 4 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 1000
+    amount: 4
     rewards:
       money: 6250
       xp: 62
@@ -2653,12 +2653,12 @@ quests:
     prerequisite: null
   exploring_005:
     name: "Quest 005: Exploring Challenge"
-    description: "Walk 1,250 Blocks on Foot"
+    description: "Discover 5 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 1250
+    amount: 5
     rewards:
       money: 6666
       xp: 66
@@ -2666,12 +2666,12 @@ quests:
     prerequisite: null
   exploring_006:
     name: "Quest 006: Exploring Challenge"
-    description: "Walk 1,500 Blocks on Foot"
+    description: "Discover 6 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 1500
+    amount: 6
     rewards:
       money: 7083
       xp: 70
@@ -2679,12 +2679,12 @@ quests:
     prerequisite: null
   exploring_007:
     name: "Quest 007: Exploring Challenge"
-    description: "Walk 1,750 Blocks on Foot"
+    description: "Discover 7 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 1750
+    amount: 7
     rewards:
       money: 7500
       xp: 75
@@ -2692,12 +2692,12 @@ quests:
     prerequisite: null
   exploring_008:
     name: "Quest 008: Exploring Challenge"
-    description: "Walk 2,000 Blocks on Foot"
+    description: "Discover 8 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 2000
+    amount: 8
     rewards:
       money: 7916
       xp: 79
@@ -2705,12 +2705,12 @@ quests:
     prerequisite: null
   exploring_009:
     name: "Quest 009: Exploring Challenge"
-    description: "Walk 2,250 Blocks on Foot"
+    description: "Discover 9 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 2250
+    amount: 9
     rewards:
       money: 8333
       xp: 83
@@ -2718,12 +2718,12 @@ quests:
     prerequisite: null
   exploring_010:
     name: "Quest 010: Exploring Challenge"
-    description: "Walk 2,500 Blocks on Foot"
+    description: "Discover 10 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 2500
+    amount: 10
     rewards:
       money: 8750
       xp: 87
@@ -2731,12 +2731,12 @@ quests:
     prerequisite: null
   exploring_011:
     name: "Quest 011: Exploring Challenge"
-    description: "Walk 2,750 Blocks on Foot"
+    description: "Discover 11 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 2750
+    amount: 11
     rewards:
       money: 9166
       xp: 91
@@ -2744,12 +2744,12 @@ quests:
     prerequisite: null
   exploring_012:
     name: "Quest 012: Exploring Challenge"
-    description: "Walk 3,000 Blocks on Foot"
+    description: "Discover 12 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 3000
+    amount: 12
     rewards:
       money: 9583
       xp: 95
@@ -2757,12 +2757,12 @@ quests:
     prerequisite: null
   exploring_013:
     name: "Quest 013: Exploring Challenge"
-    description: "Walk 3,250 Blocks on Foot"
+    description: "Discover 13 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 3250
+    amount: 13
     rewards:
       money: 10000
       xp: 100
@@ -2770,12 +2770,12 @@ quests:
     prerequisite: null
   exploring_014:
     name: "Quest 014: Exploring Challenge"
-    description: "Walk 3,500 Blocks on Foot"
+    description: "Discover 14 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 3500
+    amount: 14
     rewards:
       money: 10416
       xp: 104
@@ -2783,12 +2783,12 @@ quests:
     prerequisite: null
   exploring_015:
     name: "Quest 015: Exploring Challenge"
-    description: "Walk 3,750 Blocks on Foot"
+    description: "Discover 15 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 3750
+    amount: 15
     rewards:
       money: 10833
       xp: 108
@@ -2796,12 +2796,12 @@ quests:
     prerequisite: null
   exploring_016:
     name: "Quest 016: Exploring Challenge"
-    description: "Walk 4,000 Blocks on Foot"
+    description: "Discover 16 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 4000
+    amount: 16
     rewards:
       money: 11250
       xp: 112
@@ -2809,12 +2809,12 @@ quests:
     prerequisite: null
   exploring_017:
     name: "Quest 017: Exploring Challenge"
-    description: "Walk 4,250 Blocks on Foot"
+    description: "Discover 17 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 4250
+    amount: 17
     rewards:
       money: 11666
       xp: 116
@@ -2822,12 +2822,12 @@ quests:
     prerequisite: null
   exploring_018:
     name: "Quest 018: Exploring Challenge"
-    description: "Walk 4,500 Blocks on Foot"
+    description: "Discover 18 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 4500
+    amount: 18
     rewards:
       money: 12083
       xp: 120
@@ -2835,12 +2835,12 @@ quests:
     prerequisite: null
   exploring_019:
     name: "Quest 019: Exploring Challenge"
-    description: "Walk 4,750 Blocks on Foot"
+    description: "Discover 19 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 4750
+    amount: 19
     rewards:
       money: 12500
       xp: 125
@@ -2848,12 +2848,12 @@ quests:
     prerequisite: null
   exploring_020:
     name: "Quest 020: Exploring Challenge"
-    description: "Walk 5,000 Blocks on Foot"
+    description: "Discover 20 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 5000
+    amount: 20
     rewards:
       money: 12916
       xp: 129
@@ -2861,12 +2861,12 @@ quests:
     prerequisite: null
   exploring_021:
     name: "Quest 021: Exploring Challenge"
-    description: "Walk 5,250 Blocks on Foot"
+    description: "Discover 21 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 5250
+    amount: 21
     rewards:
       money: 13333
       xp: 133
@@ -2874,12 +2874,12 @@ quests:
     prerequisite: null
   exploring_022:
     name: "Quest 022: Exploring Challenge"
-    description: "Walk 5,500 Blocks on Foot"
+    description: "Discover 22 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 5500
+    amount: 22
     rewards:
       money: 13750
       xp: 137
@@ -2887,12 +2887,12 @@ quests:
     prerequisite: null
   exploring_023:
     name: "Quest 023: Exploring Challenge"
-    description: "Walk 5,750 Blocks on Foot"
+    description: "Discover 23 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 5750
+    amount: 23
     rewards:
       money: 14166
       xp: 141
@@ -2900,12 +2900,12 @@ quests:
     prerequisite: null
   exploring_024:
     name: "Quest 024: Exploring Challenge"
-    description: "Walk 6,000 Blocks on Foot"
+    description: "Discover 24 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 6000
+    amount: 24
     rewards:
       money: 14583
       xp: 145
@@ -2913,12 +2913,12 @@ quests:
     prerequisite: null
   exploring_025:
     name: "Quest 025: Exploring Challenge"
-    description: "Walk 6,250 Blocks on Foot"
+    description: "Discover 25 unique biomes"
     category: EXPLORATION
     difficulty: EASY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 6250
+    amount: 25
     rewards:
       money: 15000
       xp: 150
@@ -2926,12 +2926,12 @@ quests:
     prerequisite: null
   exploring_026:
     name: "Quest 026: Exploring Challenge"
-    description: "Walk 6,750 Blocks on Foot"
+    description: "Discover 26 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 6750
+    amount: 26
     rewards:
       money: 20000
       xp: 200
@@ -2939,12 +2939,12 @@ quests:
     prerequisite: null
   exploring_027:
     name: "Quest 027: Exploring Challenge"
-    description: "Walk 7,250 Blocks on Foot"
+    description: "Discover 27 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 7250
+    amount: 27
     rewards:
       money: 22500
       xp: 212
@@ -2952,12 +2952,12 @@ quests:
     prerequisite: null
   exploring_028:
     name: "Quest 028: Exploring Challenge"
-    description: "Walk 7,750 Blocks on Foot"
+    description: "Discover 28 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 7750
+    amount: 28
     rewards:
       money: 25000
       xp: 225
@@ -2965,12 +2965,12 @@ quests:
     prerequisite: null
   exploring_029:
     name: "Quest 029: Exploring Challenge"
-    description: "Walk 8,250 Blocks on Foot"
+    description: "Discover 29 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 8250
+    amount: 29
     rewards:
       money: 27500
       xp: 237
@@ -2978,12 +2978,12 @@ quests:
     prerequisite: null
   exploring_030:
     name: "Quest 030: Exploring Challenge"
-    description: "Walk 8,750 Blocks on Foot"
+    description: "Discover 30 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 8750
+    amount: 30
     rewards:
       money: 30000
       xp: 250
@@ -2991,12 +2991,12 @@ quests:
     prerequisite: null
   exploring_031:
     name: "Quest 031: Exploring Challenge"
-    description: "Walk 9,250 Blocks on Foot"
+    description: "Discover 31 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 9250
+    amount: 31
     rewards:
       money: 32500
       xp: 262
@@ -3004,12 +3004,12 @@ quests:
     prerequisite: null
   exploring_032:
     name: "Quest 032: Exploring Challenge"
-    description: "Walk 9,750 Blocks on Foot"
+    description: "Discover 32 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 9750
+    amount: 32
     rewards:
       money: 35000
       xp: 275
@@ -3017,12 +3017,12 @@ quests:
     prerequisite: null
   exploring_033:
     name: "Quest 033: Exploring Challenge"
-    description: "Walk 10,250 Blocks on Foot"
+    description: "Discover 33 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 10250
+    amount: 33
     rewards:
       money: 37500
       xp: 287
@@ -3030,12 +3030,12 @@ quests:
     prerequisite: null
   exploring_034:
     name: "Quest 034: Exploring Challenge"
-    description: "Walk 10,750 Blocks on Foot"
+    description: "Discover 34 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 10750
+    amount: 34
     rewards:
       money: 40000
       xp: 300
@@ -3043,12 +3043,12 @@ quests:
     prerequisite: null
   exploring_035:
     name: "Quest 035: Exploring Challenge"
-    description: "Walk 11,250 Blocks on Foot"
+    description: "Discover 35 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 11250
+    amount: 35
     rewards:
       money: 42500
       xp: 312
@@ -3056,12 +3056,12 @@ quests:
     prerequisite: null
   exploring_036:
     name: "Quest 036: Exploring Challenge"
-    description: "Walk 11,750 Blocks on Foot"
+    description: "Discover 36 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 11750
+    amount: 36
     rewards:
       money: 45000
       xp: 325
@@ -3069,12 +3069,12 @@ quests:
     prerequisite: null
   exploring_037:
     name: "Quest 037: Exploring Challenge"
-    description: "Walk 12,250 Blocks on Foot"
+    description: "Discover 37 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 12250
+    amount: 37
     rewards:
       money: 47500
       xp: 337
@@ -3082,12 +3082,12 @@ quests:
     prerequisite: null
   exploring_038:
     name: "Quest 038: Exploring Challenge"
-    description: "Walk 12,750 Blocks on Foot"
+    description: "Discover 38 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 12750
+    amount: 38
     rewards:
       money: 50000
       xp: 350
@@ -3095,12 +3095,12 @@ quests:
     prerequisite: null
   exploring_039:
     name: "Quest 039: Exploring Challenge"
-    description: "Walk 13,250 Blocks on Foot"
+    description: "Discover 39 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 13250
+    amount: 39
     rewards:
       money: 52500
       xp: 362
@@ -3108,12 +3108,12 @@ quests:
     prerequisite: null
   exploring_040:
     name: "Quest 040: Exploring Challenge"
-    description: "Walk 13,750 Blocks on Foot"
+    description: "Discover 40 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 13750
+    amount: 40
     rewards:
       money: 55000
       xp: 375
@@ -3121,12 +3121,12 @@ quests:
     prerequisite: null
   exploring_041:
     name: "Quest 041: Exploring Challenge"
-    description: "Walk 14,250 Blocks on Foot"
+    description: "Discover 41 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 14250
+    amount: 41
     rewards:
       money: 57500
       xp: 387
@@ -3134,12 +3134,12 @@ quests:
     prerequisite: null
   exploring_042:
     name: "Quest 042: Exploring Challenge"
-    description: "Walk 14,750 Blocks on Foot"
+    description: "Discover 42 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 14750
+    amount: 42
     rewards:
       money: 60000
       xp: 400
@@ -3147,12 +3147,12 @@ quests:
     prerequisite: null
   exploring_043:
     name: "Quest 043: Exploring Challenge"
-    description: "Walk 15,250 Blocks on Foot"
+    description: "Discover 43 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 15250
+    amount: 43
     rewards:
       money: 62500
       xp: 412
@@ -3160,12 +3160,12 @@ quests:
     prerequisite: null
   exploring_044:
     name: "Quest 044: Exploring Challenge"
-    description: "Walk 15,750 Blocks on Foot"
+    description: "Discover 44 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 15750
+    amount: 44
     rewards:
       money: 65000
       xp: 425
@@ -3173,12 +3173,12 @@ quests:
     prerequisite: null
   exploring_045:
     name: "Quest 045: Exploring Challenge"
-    description: "Walk 16,250 Blocks on Foot"
+    description: "Discover 45 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 16250
+    amount: 45
     rewards:
       money: 67500
       xp: 437
@@ -3186,12 +3186,12 @@ quests:
     prerequisite: null
   exploring_046:
     name: "Quest 046: Exploring Challenge"
-    description: "Walk 16,750 Blocks on Foot"
+    description: "Discover 46 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 16750
+    amount: 46
     rewards:
       money: 70000
       xp: 450
@@ -3199,12 +3199,12 @@ quests:
     prerequisite: null
   exploring_047:
     name: "Quest 047: Exploring Challenge"
-    description: "Walk 17,250 Blocks on Foot"
+    description: "Discover 47 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 17250
+    amount: 47
     rewards:
       money: 72500
       xp: 462
@@ -3212,12 +3212,12 @@ quests:
     prerequisite: null
   exploring_048:
     name: "Quest 048: Exploring Challenge"
-    description: "Walk 17,750 Blocks on Foot"
+    description: "Discover 48 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 17750
+    amount: 48
     rewards:
       money: 75000
       xp: 475
@@ -3225,12 +3225,12 @@ quests:
     prerequisite: null
   exploring_049:
     name: "Quest 049: Exploring Challenge"
-    description: "Walk 18,250 Blocks on Foot"
+    description: "Discover 49 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 18250
+    amount: 49
     rewards:
       money: 77500
       xp: 487
@@ -3238,12 +3238,12 @@ quests:
     prerequisite: null
   exploring_050:
     name: "Quest 050: Exploring Challenge"
-    description: "Walk 18,750 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 18750
+    amount: 50
     rewards:
       money: 80000
       xp: 500
@@ -3251,12 +3251,12 @@ quests:
     prerequisite: null
   exploring_051:
     name: "Quest 051: Exploring Challenge"
-    description: "Walk 19,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 19500
+    amount: 50
     rewards:
       money: 100000
       xp: 500
@@ -3264,12 +3264,12 @@ quests:
     prerequisite: null
   exploring_052:
     name: "Quest 052: Exploring Challenge"
-    description: "Walk 20,250 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 20250
+    amount: 50
     rewards:
       money: 116666
       xp: 562
@@ -3277,12 +3277,12 @@ quests:
     prerequisite: null
   exploring_053:
     name: "Quest 053: Exploring Challenge"
-    description: "Walk 21,000 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 21000
+    amount: 50
     rewards:
       money: 133333
       xp: 625
@@ -3290,12 +3290,12 @@ quests:
     prerequisite: null
   exploring_054:
     name: "Quest 054: Exploring Challenge"
-    description: "Walk 21,750 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 21750
+    amount: 50
     rewards:
       money: 150000
       xp: 687
@@ -3303,12 +3303,12 @@ quests:
     prerequisite: null
   exploring_055:
     name: "Quest 055: Exploring Challenge"
-    description: "Walk 22,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 22500
+    amount: 50
     rewards:
       money: 166666
       xp: 750
@@ -3316,12 +3316,12 @@ quests:
     prerequisite: null
   exploring_056:
     name: "Quest 056: Exploring Challenge"
-    description: "Walk 23,250 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 23250
+    amount: 50
     rewards:
       money: 183333
       xp: 812
@@ -3329,12 +3329,12 @@ quests:
     prerequisite: null
   exploring_057:
     name: "Quest 057: Exploring Challenge"
-    description: "Walk 24,000 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 24000
+    amount: 50
     rewards:
       money: 200000
       xp: 875
@@ -3342,12 +3342,12 @@ quests:
     prerequisite: null
   exploring_058:
     name: "Quest 058: Exploring Challenge"
-    description: "Walk 24,750 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 24750
+    amount: 50
     rewards:
       money: 216666
       xp: 937
@@ -3355,12 +3355,12 @@ quests:
     prerequisite: null
   exploring_059:
     name: "Quest 059: Exploring Challenge"
-    description: "Walk 25,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 25500
+    amount: 50
     rewards:
       money: 233333
       xp: 1000
@@ -3368,12 +3368,12 @@ quests:
     prerequisite: null
   exploring_060:
     name: "Quest 060: Exploring Challenge"
-    description: "Walk 26,250 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 26250
+    amount: 50
     rewards:
       money: 250000
       xp: 1062
@@ -3381,12 +3381,12 @@ quests:
     prerequisite: null
   exploring_061:
     name: "Quest 061: Exploring Challenge"
-    description: "Walk 27,000 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 27000
+    amount: 50
     rewards:
       money: 266666
       xp: 1125
@@ -3394,12 +3394,12 @@ quests:
     prerequisite: null
   exploring_062:
     name: "Quest 062: Exploring Challenge"
-    description: "Walk 27,750 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 27750
+    amount: 50
     rewards:
       money: 283333
       xp: 1187
@@ -3407,12 +3407,12 @@ quests:
     prerequisite: null
   exploring_063:
     name: "Quest 063: Exploring Challenge"
-    description: "Walk 28,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 28500
+    amount: 50
     rewards:
       money: 300000
       xp: 1250
@@ -3420,12 +3420,12 @@ quests:
     prerequisite: null
   exploring_064:
     name: "Quest 064: Exploring Challenge"
-    description: "Walk 29,250 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 29250
+    amount: 50
     rewards:
       money: 316666
       xp: 1312
@@ -3433,12 +3433,12 @@ quests:
     prerequisite: null
   exploring_065:
     name: "Quest 065: Exploring Challenge"
-    description: "Walk 30,000 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 30000
+    amount: 50
     rewards:
       money: 333333
       xp: 1375
@@ -3446,12 +3446,12 @@ quests:
     prerequisite: null
   exploring_066:
     name: "Quest 066: Exploring Challenge"
-    description: "Walk 30,750 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 30750
+    amount: 50
     rewards:
       money: 350000
       xp: 1437
@@ -3459,12 +3459,12 @@ quests:
     prerequisite: null
   exploring_067:
     name: "Quest 067: Exploring Challenge"
-    description: "Walk 31,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 31500
+    amount: 50
     rewards:
       money: 366666
       xp: 1500
@@ -3472,12 +3472,12 @@ quests:
     prerequisite: null
   exploring_068:
     name: "Quest 068: Exploring Challenge"
-    description: "Walk 32,250 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 32250
+    amount: 50
     rewards:
       money: 383333
       xp: 1562
@@ -3485,12 +3485,12 @@ quests:
     prerequisite: null
   exploring_069:
     name: "Quest 069: Exploring Challenge"
-    description: "Walk 33,000 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 33000
+    amount: 50
     rewards:
       money: 400000
       xp: 1625
@@ -3498,12 +3498,12 @@ quests:
     prerequisite: null
   exploring_070:
     name: "Quest 070: Exploring Challenge"
-    description: "Walk 33,750 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 33750
+    amount: 50
     rewards:
       money: 416666
       xp: 1687
@@ -3511,12 +3511,12 @@ quests:
     prerequisite: null
   exploring_071:
     name: "Quest 071: Exploring Challenge"
-    description: "Walk 34,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 34500
+    amount: 50
     rewards:
       money: 433333
       xp: 1750
@@ -3524,12 +3524,12 @@ quests:
     prerequisite: null
   exploring_072:
     name: "Quest 072: Exploring Challenge"
-    description: "Walk 35,250 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 35250
+    amount: 50
     rewards:
       money: 450000
       xp: 1812
@@ -3537,12 +3537,12 @@ quests:
     prerequisite: null
   exploring_073:
     name: "Quest 073: Exploring Challenge"
-    description: "Walk 36,000 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 36000
+    amount: 50
     rewards:
       money: 466666
       xp: 1875
@@ -3550,12 +3550,12 @@ quests:
     prerequisite: null
   exploring_074:
     name: "Quest 074: Exploring Challenge"
-    description: "Walk 36,750 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 36750
+    amount: 50
     rewards:
       money: 483333
       xp: 1937
@@ -3563,12 +3563,12 @@ quests:
     prerequisite: null
   exploring_075:
     name: "Quest 075: Exploring Challenge"
-    description: "Walk 37,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: HARD
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 37500
+    amount: 50
     rewards:
       money: 500000
       xp: 2000
@@ -3576,12 +3576,12 @@ quests:
     prerequisite: null
   exploring_076:
     name: "Quest 076: Exploring Challenge"
-    description: "Walk 38,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 38500
+    amount: 50
     rewards:
       money: 500000
       xp: 2000
@@ -3589,12 +3589,12 @@ quests:
     prerequisite: null
   exploring_077:
     name: "Quest 077: Exploring Challenge"
-    description: "Walk 39,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 39500
+    amount: 50
     rewards:
       money: 687500
       xp: 2333
@@ -3602,12 +3602,12 @@ quests:
     prerequisite: null
   exploring_078:
     name: "Quest 078: Exploring Challenge"
-    description: "Walk 40,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 40500
+    amount: 50
     rewards:
       money: 875000
       xp: 2666
@@ -3615,12 +3615,12 @@ quests:
     prerequisite: null
   exploring_079:
     name: "Quest 079: Exploring Challenge"
-    description: "Walk 41,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 41500
+    amount: 50
     rewards:
       money: 1062500
       xp: 3000
@@ -3628,12 +3628,12 @@ quests:
     prerequisite: null
   exploring_080:
     name: "Quest 080: Exploring Challenge"
-    description: "Walk 42,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 42500
+    amount: 50
     rewards:
       money: 1250000
       xp: 3333
@@ -3641,12 +3641,12 @@ quests:
     prerequisite: null
   exploring_081:
     name: "Quest 081: Exploring Challenge"
-    description: "Walk 43,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 43500
+    amount: 50
     rewards:
       money: 1437500
       xp: 3666
@@ -3654,12 +3654,12 @@ quests:
     prerequisite: null
   exploring_082:
     name: "Quest 082: Exploring Challenge"
-    description: "Walk 44,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 44500
+    amount: 50
     rewards:
       money: 1625000
       xp: 4000
@@ -3667,12 +3667,12 @@ quests:
     prerequisite: null
   exploring_083:
     name: "Quest 083: Exploring Challenge"
-    description: "Walk 45,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 45500
+    amount: 50
     rewards:
       money: 1812500
       xp: 4333
@@ -3680,12 +3680,12 @@ quests:
     prerequisite: null
   exploring_084:
     name: "Quest 084: Exploring Challenge"
-    description: "Walk 46,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 46500
+    amount: 50
     rewards:
       money: 2000000
       xp: 4666
@@ -3693,12 +3693,12 @@ quests:
     prerequisite: null
   exploring_085:
     name: "Quest 085: Exploring Challenge"
-    description: "Walk 47,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 47500
+    amount: 50
     rewards:
       money: 2187500
       xp: 5000
@@ -3706,12 +3706,12 @@ quests:
     prerequisite: null
   exploring_086:
     name: "Quest 086: Exploring Challenge"
-    description: "Walk 48,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 48500
+    amount: 50
     rewards:
       money: 2375000
       xp: 5333
@@ -3719,12 +3719,12 @@ quests:
     prerequisite: null
   exploring_087:
     name: "Quest 087: Exploring Challenge"
-    description: "Walk 49,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 49500
+    amount: 50
     rewards:
       money: 2562500
       xp: 5666
@@ -3732,12 +3732,12 @@ quests:
     prerequisite: null
   exploring_088:
     name: "Quest 088: Exploring Challenge"
-    description: "Walk 50,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 50500
+    amount: 50
     rewards:
       money: 2750000
       xp: 6000
@@ -3745,12 +3745,12 @@ quests:
     prerequisite: null
   exploring_089:
     name: "Quest 089: Exploring Challenge"
-    description: "Walk 51,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 51500
+    amount: 50
     rewards:
       money: 2937500
       xp: 6333
@@ -3758,12 +3758,12 @@ quests:
     prerequisite: null
   exploring_090:
     name: "Quest 090: Exploring Challenge"
-    description: "Walk 52,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 52500
+    amount: 50
     rewards:
       money: 3125000
       xp: 6666
@@ -3771,12 +3771,12 @@ quests:
     prerequisite: null
   exploring_091:
     name: "Quest 091: Exploring Challenge"
-    description: "Walk 53,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 53500
+    amount: 50
     rewards:
       money: 3312500
       xp: 7000
@@ -3784,12 +3784,12 @@ quests:
     prerequisite: null
   exploring_092:
     name: "Quest 092: Exploring Challenge"
-    description: "Walk 54,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 54500
+    amount: 50
     rewards:
       money: 3500000
       xp: 7333
@@ -3797,12 +3797,12 @@ quests:
     prerequisite: null
   exploring_093:
     name: "Quest 093: Exploring Challenge"
-    description: "Walk 55,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 55500
+    amount: 50
     rewards:
       money: 3687500
       xp: 7666
@@ -3810,12 +3810,12 @@ quests:
     prerequisite: null
   exploring_094:
     name: "Quest 094: Exploring Challenge"
-    description: "Walk 56,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 56500
+    amount: 50
     rewards:
       money: 3875000
       xp: 8000
@@ -3823,12 +3823,12 @@ quests:
     prerequisite: null
   exploring_095:
     name: "Quest 095: Exploring Challenge"
-    description: "Walk 57,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 57500
+    amount: 50
     rewards:
       money: 4062500
       xp: 8333
@@ -3836,12 +3836,12 @@ quests:
     prerequisite: null
   exploring_096:
     name: "Quest 096: Exploring Challenge"
-    description: "Walk 58,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 58500
+    amount: 50
     rewards:
       money: 4250000
       xp: 8666
@@ -3849,12 +3849,12 @@ quests:
     prerequisite: null
   exploring_097:
     name: "Quest 097: Exploring Challenge"
-    description: "Walk 59,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 59500
+    amount: 50
     rewards:
       money: 4437500
       xp: 9000
@@ -3862,12 +3862,12 @@ quests:
     prerequisite: null
   exploring_098:
     name: "Quest 098: Exploring Challenge"
-    description: "Walk 60,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 60500
+    amount: 50
     rewards:
       money: 4625000
       xp: 9333
@@ -3875,12 +3875,12 @@ quests:
     prerequisite: null
   exploring_099:
     name: "Quest 099: Exploring Challenge"
-    description: "Walk 61,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 61500
+    amount: 50
     rewards:
       money: 4812500
       xp: 9666
@@ -3888,12 +3888,12 @@ quests:
     prerequisite: null
   exploring_100:
     name: "Quest 100: Exploring Challenge"
-    description: "Walk 62,500 Blocks on Foot"
+    description: "Discover 50 unique biomes"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: WALK_DISTANCE
+    type: VISIT_BIOME
     target: ""
-    amount: 62500
+    amount: 50
     rewards:
       money: 5000000
       xp: 10000

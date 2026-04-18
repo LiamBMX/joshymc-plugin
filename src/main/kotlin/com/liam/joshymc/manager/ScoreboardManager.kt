@@ -244,10 +244,28 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     // ── Utility ─────────────────────────────────────────────────────
 
     /**
-     * Translates `&` color codes to [ChatColor] for legacy scoreboard strings.
+     * Translates `&` color codes AND `&#RRGGBB` hex codes into Bukkit legacy
+     * section-sign format so scoreboard/title strings render colors correctly.
+     * The built-in [ChatColor.translateAlternateColorCodes] only knows the 16
+     * named codes, so without this pre-pass a tag like `&#FF5555Admin` would
+     * appear as raw text on the sidebar.
      */
     private fun colorize(text: String): String {
-        return ChatColor.translateAlternateColorCodes('&', text)
+        val hex = HEX_PATTERN.replace(text) { match ->
+            val rgb = match.groupValues[1]
+            buildString {
+                append("\u00A7x")
+                for (c in rgb) {
+                    append('\u00A7')
+                    append(c.lowercaseChar())
+                }
+            }
+        }
+        return ChatColor.translateAlternateColorCodes('&', hex)
+    }
+
+    companion object {
+        private val HEX_PATTERN = Regex("&#([0-9A-Fa-f]{6})")
     }
 
     private fun formatCompact(amount: Double): String {

@@ -306,7 +306,10 @@ class PortalManager(private val plugin: Joshymc) : Listener {
                 player.teleport(Location(world, x, y, z, player.location.yaw, player.location.pitch))
             }
             "rtp" -> {
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "rtp ${player.name}")
+                // Optional action data: world name to RTP in; blank = main overworld
+                val worldName = portal.actionData.trim()
+                val world = if (worldName.isEmpty()) null else Bukkit.getWorld(worldName)
+                plugin.rtpCommand.startForPlayer(player, world)
             }
             "world" -> {
                 val world = Bukkit.getWorld(portal.actionData.trim()) ?: return

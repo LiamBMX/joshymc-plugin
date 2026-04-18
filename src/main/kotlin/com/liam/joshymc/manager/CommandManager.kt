@@ -182,7 +182,8 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
-        plugin.getCommand("rtp")?.setExecutor(RtpCommand(plugin))
+        plugin.rtpCommand = RtpCommand(plugin)
+        plugin.getCommand("rtp")?.setExecutor(plugin.rtpCommand)
 
         plugin.getCommand("afk")?.setExecutor(AFKCommand(plugin))
 

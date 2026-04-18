@@ -201,6 +201,27 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
         findSafeLocation(player, world, minRange, maxRange, 0)
     }
 
+    /**
+     * Kick off RTP for [player] directly, bypassing the GUI and the /rtp cooldown.
+     * If [world] is null, uses the main overworld. Safe to call from other systems
+     * (e.g., portals) where the trigger already gated the action.
+     */
+    fun startForPlayer(player: Player, world: World? = null) {
+        val resourceWorldName = plugin.config.getString("resource-world.world-name", "resource") ?: "resource"
+        val target = world ?: Bukkit.getWorlds().firstOrNull {
+            it.environment == World.Environment.NORMAL &&
+                it.name != "spawn" &&
+                it.name != resourceWorldName &&
+                it.name != "afk" &&
+                it.name != "dungeon"
+        }
+        if (target == null) {
+            plugin.commsManager.send(player, Component.text("No overworld found.", NamedTextColor.RED))
+            return
+        }
+        startRtp(player, target)
+    }
+
     private fun findSafeLocation(player: Player, world: World, minRange: Int, maxRange: Int, attempt: Int) {
         if (attempt >= 15) {
             plugin.commsManager.send(player, Component.text("Could not find a safe location. Try again.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
