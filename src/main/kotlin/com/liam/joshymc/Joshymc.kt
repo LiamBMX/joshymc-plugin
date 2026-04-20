@@ -219,6 +219,7 @@ class Joshymc : JavaPlugin() {
         instance = this
 
         saveDefaultConfig()
+        migrateConfig()
 
         databaseManager = DatabaseManager(this)
         databaseManager.start()
@@ -686,5 +687,34 @@ class Joshymc : JavaPlugin() {
             default = true,
             permission = "joshymc.treefeller"
         ))
+    }
+
+    /**
+     * Backfill any config keys that exist in the bundled default config.yml but
+     * are missing from the player-edited file on disk. Bukkit's saveDefaultConfig
+     * only writes when the file is absent — without this, users upgrading from
+     * older versions never see new sections (e.g. afk.reward.money).
+     *
+     * We touch only missing keys, so hand-edited values are left alone.
+     */
+    private fun migrateConfig() {
+        val defaultStream = getResource("config.yml") ?: return
+        val defaults = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+            defaultStream.bufferedReader()
+        )
+
+        var changed = 0
+        for (key in defaults.getKeys(true)) {
+            if (defaults.isConfigurationSection(key)) continue
+            if (!config.contains(key, true)) {
+                config.set(key, defaults.get(key))
+                changed++
+            }
+        }
+
+        if (changed > 0) {
+            saveConfig()
+            logger.info("[ConfigMigrator] Backfilled $changed missing config key(s) from defaults.")
+        }
     }
 }

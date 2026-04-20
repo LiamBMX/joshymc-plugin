@@ -66,8 +66,18 @@ class KitManager(private val plugin: Joshymc) {
     private fun loadKits() {
         kits.clear()
         if (!kitsFile.exists()) {
-            kitsFile.parentFile.mkdirs()
-            kitsFile.createNewFile()
+            // Extract the bundled kits.yml from the jar if we're on a fresh install.
+            // Falls back to an empty file if the resource isn't present.
+            try {
+                plugin.saveResource("kits.yml", false)
+            } catch (_: IllegalArgumentException) {
+                kitsFile.parentFile.mkdirs()
+                kitsFile.createNewFile()
+            }
+            // saveResource writes to <dataFolder>/kits.yml regardless of the path our
+            // configFile() helper resolved to; re-resolve in case the file now exists
+            // where we expected it on disk.
+            kitsFile = plugin.configFile("kits.yml")
         }
         kitsConfig = YamlConfiguration.loadConfiguration(kitsFile)
 

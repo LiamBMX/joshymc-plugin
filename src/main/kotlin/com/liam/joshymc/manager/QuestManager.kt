@@ -838,7 +838,7 @@ class QuestManager(private val plugin: Joshymc) : Listener {
                     .decoration(TextDecoration.ITALIC, false))
             } else {
                 // Progress bar
-                lore.add(plugin.commsManager.parseLegacy("  ${progressBar(progress.progress, quest.amount)}")
+                lore.add(plugin.commsManager.parseLegacy("  ${progressBar(progress.progress, quest.amount, quest.type)}")
                     .decoration(TextDecoration.ITALIC, false))
             }
 
@@ -895,11 +895,28 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         QuestDifficulty.LEGENDARY -> TextColor.color(0xFFAA00)
     }
 
-    private fun progressBar(current: Int, max: Int): String {
+    private fun progressBar(current: Int, max: Int, type: QuestType = QuestType.BREAK_BLOCK): String {
         val bars = 10
         val filled = ((current.toDouble() / max) * bars).toInt().coerceIn(0, bars)
         val empty = bars - filled
-        return "&a" + "\u2588".repeat(filled) + "&7" + "\u2591".repeat(empty) + " &f$current/$max"
+        val label = when (type) {
+            // TIME_PLAYED amounts are in seconds — display as human time so the
+            // quest description ("Play for 1h") matches what the bar shows.
+            QuestType.TIME_PLAYED -> "${formatSecondsShort(current)}/${formatSecondsShort(max)}"
+            else -> "$current/$max"
+        }
+        return "&a" + "\u2588".repeat(filled) + "&7" + "\u2591".repeat(empty) + " &f$label"
+    }
+
+    private fun formatSecondsShort(total: Int): String {
+        if (total < 60) return "${total}s"
+        val hours = total / 3600
+        val minutes = (total % 3600) / 60
+        return when {
+            hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+            hours > 0 -> "${hours}h"
+            else -> "${minutes}m"
+        }
     }
 
     /**
