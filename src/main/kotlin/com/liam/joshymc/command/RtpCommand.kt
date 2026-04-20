@@ -193,20 +193,23 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
-    private fun startRtp(player: Player, world: World) {
+    private fun startRtp(player: Player, world: World, skipWarmup: Boolean = false) {
         val minRange = plugin.config.getInt("rtp.min-range", 500)
         val maxRange = plugin.config.getInt("rtp.max-range", 5000)
 
         plugin.commsManager.sendActionBar(player, Component.text("Finding a safe location...", NamedTextColor.YELLOW))
-        findSafeLocation(player, world, minRange, maxRange, 0)
+        findSafeLocation(player, world, minRange, maxRange, 0, skipWarmup)
     }
 
     /**
      * Kick off RTP for [player] directly, bypassing the GUI and the /rtp cooldown.
-     * If [world] is null, uses the main overworld. Safe to call from other systems
-     * (e.g., portals) where the trigger already gated the action.
+     * If [world] is null, uses the main overworld.
+     *
+     * Set [skipWarmup] to true when the trigger context is short-lived and the
+     * player may already be moving (e.g., walking into a portal) — the normal
+     * "stand still for 3 seconds" check would immediately cancel.
      */
-    fun startForPlayer(player: Player, world: World? = null) {
+    fun startForPlayer(player: Player, world: World? = null, skipWarmup: Boolean = false) {
         val resourceWorldName = plugin.config.getString("resource-world.world-name", "resource") ?: "resource"
         val target = world ?: Bukkit.getWorlds().firstOrNull {
             it.environment == World.Environment.NORMAL &&
@@ -219,10 +222,10 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
             plugin.commsManager.send(player, Component.text("No overworld found.", NamedTextColor.RED))
             return
         }
-        startRtp(player, target)
+        startRtp(player, target, skipWarmup)
     }
 
-    private fun findSafeLocation(player: Player, world: World, minRange: Int, maxRange: Int, attempt: Int) {
+    private fun findSafeLocation(player: Player, world: World, minRange: Int, maxRange: Int, attempt: Int, skipWarmup: Boolean = false) {
         if (attempt >= 15) {
             plugin.commsManager.send(player, Component.text("Could not find a safe location. Try again.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
             return
@@ -239,10 +242,10 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
                     // Nether: search for a safe spot between y=30 and y=100
                     val safeLoc = findNetherSafe(world, x, z)
                     if (safeLoc == null) {
-                        findSafeLocation(player, world, minRange, maxRange, attempt + 1)
+                        findSafeLocation(player, world, minRange, maxRange, attempt + 1, skipWarmup)
                         return@Runnable
                     }
-                    startWarmup(player, safeLoc)
+                    startWarmup(player, safeLoc, skipWarmup)
                     return@Runnable
                 }
 
@@ -250,17 +253,17 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
                     // End: search from y=50 upward for end stone platform
                     val safeLoc = findEndSafe(world, x, z)
                     if (safeLoc == null) {
-                        findSafeLocation(player, world, minRange, maxRange, attempt + 1)
+                        findSafeLocation(player, world, minRange, maxRange, attempt + 1, skipWarmup)
                         return@Runnable
                     }
-                    startWarmup(player, safeLoc)
+                    startWarmup(player, safeLoc, skipWarmup)
                     return@Runnable
                 }
 
                 // Overworld / Resource: use highest block
                 val highestY = world.getHighestBlockYAt(x, z)
                 if (highestY < world.minHeight + 1) {
-                    findSafeLocation(player, world, minRange, maxRange, attempt + 1)
+                    findSafeLocation(player, world, minRange, maxRange, attempt + 1, skipWarmup)
                     return@Runnable
                 }
 
@@ -279,14 +282,14 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
 
                 if (ground.type in unsafeGround || isLeaves ||
                     !ground.type.isSolid || above1.type.isSolid || above2.type.isSolid) {
-                    findSafeLocation(player, world, minRange, maxRange, attempt + 1)
+                    findSafeLocation(player, world, minRange, maxRange, attempt + 1, skipWarmup)
                     return@Runnable
                 }
 
                 val safeLoc = Location(world, x + 0.5, highestY + 1.0, z + 0.5,
                     player.location.yaw, player.location.pitch)
 
-                startWarmup(player, safeLoc)
+                startWarmup(player, safeLoc, skipWarmup)
             })
         }
     }
@@ -320,7 +323,16 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
         return null
     }
 
-    private fun startWarmup(player: Player, destination: Location) {
+    private fun startWarmup(player: Player, destination: Location, skipWarmup: Boolean = false) {
+        // Portals (and other auto-triggered contexts) can't require stand-still,
+        // since the player is already moving through the trigger region.
+        if (skipWarmup) {
+            player.teleport(destination)
+            plugin.commsManager.sendActionBar(player, Component.text("Teleported!", NamedTextColor.GREEN))
+            cooldowns[player.uniqueId] = System.currentTimeMillis()
+            return
+        }
+
         val startLoc = player.location.clone()
 
         object : BukkitRunnable() {

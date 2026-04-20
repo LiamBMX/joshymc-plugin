@@ -306,10 +306,12 @@ class PortalManager(private val plugin: Joshymc) : Listener {
                 player.teleport(Location(world, x, y, z, player.location.yaw, player.location.pitch))
             }
             "rtp" -> {
-                // Optional action data: world name to RTP in; blank = main overworld
+                // Optional action data: world name to RTP in; blank = main overworld.
+                // skipWarmup=true because the player is walking through the portal —
+                // requiring stand-still would immediately cancel the teleport.
                 val worldName = portal.actionData.trim()
                 val world = if (worldName.isEmpty()) null else Bukkit.getWorld(worldName)
-                plugin.rtpCommand.startForPlayer(player, world)
+                plugin.rtpCommand.startForPlayer(player, world, skipWarmup = true)
             }
             "world" -> {
                 val world = Bukkit.getWorld(portal.actionData.trim()) ?: return

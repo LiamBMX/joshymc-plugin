@@ -4,7 +4,6 @@ import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
-import org.bukkit.ChatColor
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
@@ -107,8 +106,8 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val board = Bukkit.getScoreboardManager().newScoreboard
         val objective = board.registerNewObjective(
             "joshymc_sidebar",
-            "dummy",
-            colorize("&6&lJOSHYMC SURVIVAL")
+            org.bukkit.scoreboard.Criteria.DUMMY,
+            plugin.commsManager.parseLegacy("&6&lJOSHYMC SURVIVAL")
         )
         objective.displaySlot = DisplaySlot.SIDEBAR
         // Hide the red score numbers
@@ -120,63 +119,77 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val board = player.scoreboard
         val objective = board.getObjective("joshymc_sidebar") ?: return
 
-        // Clear existing entries
+        // Clear existing line teams + score entries from the previous tick
         for (entry in board.entries.toSet()) {
             board.resetScores(entry)
+        }
+        for (t in board.teams.toList()) {
+            if (t.name.startsWith("sbline_")) t.unregister()
         }
 
         val balance = formatCompact(plugin.economyManager.getBalance(player))
         val rank = plugin.rankManager.getPlayerRank(player)
-        val rankTag = rank?.displayTag?.let { colorize(it) } ?: colorize("&7None")
+        val rankTagComponent = rank?.displayTag?.let { plugin.commsManager.parseLegacy(it) }
+            ?: plugin.commsManager.parseLegacy("&7None")
         val team = plugin.teamManager.getPlayerTeam(player.uniqueId) ?: "None"
         val playerKills = kills.getOrDefault(player.uniqueId, 0)
         val playtime = formatPlaytime(plugin.playtimeManager.getPlaytime(player.uniqueId))
         val ping = player.ping
 
-        // Date/time
         val now = java.time.LocalDateTime.now()
         val dateFmt = java.time.format.DateTimeFormatter.ofPattern("MM/dd/yyyy hh:mma")
         val dateStr = now.format(dateFmt)
 
-        // Lines matching the TAB style from the screenshot
-        val lines = mutableListOf<String>()
-        lines.add(colorize("&6&m                         ") + uniquePad(0))  // top separator
-        lines.add(colorize("&7$dateStr"))                                      // date/time
-        lines.add(colorize("&r") + uniquePad(1))                              // blank
-        lines.add(colorize("&6&l${player.name}"))                             // player name bold gold
-        lines.add(colorize("&6| &7\u1D18\u026A\u0274\u0262&6: &3$ping"))     // | ᴘɪɴɢ: value
-        lines.add(colorize("&6| &7\u0280\u1D00\u0274\u1D0B&6:&r ") + rankTag) // | ʀᴀɴᴋ: [tag]
+        // Build each line as an Adventure Component so hex codes like &#FF5555
+        // on rank tags render via the same native-RGB path as the tab list
+        // (instead of legacy §x which Minecraft may render slightly differently).
+        val lines = mutableListOf<Component>()
+        lines.add(plugin.commsManager.parseLegacy("&6&m                         "))
+        lines.add(plugin.commsManager.parseLegacy("&7$dateStr"))
+        lines.add(Component.empty())
+        lines.add(plugin.commsManager.parseLegacy("&6&l${player.name}"))
+        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D18\u026A\u0274\u0262&6: &3$ping"))
+        lines.add(
+            plugin.commsManager.parseLegacy("&6| &7\u0280\u1D00\u0274\u1D0B&6:&r ")
+                .append(rankTagComponent)
+        )
         if (team != "None") {
-            lines.add(colorize("&6| &7\u1D1B\u1D07\u1D00\u1D0D&6: &b$team")) // | ᴛᴇᴀᴍ: name
+            lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D1B\u1D07\u1D00\u1D0D&6: &b$team"))
         }
-        lines.add(colorize("&r") + uniquePad(2))                              // blank
-        lines.add(colorize("&6&lStats:"))                                     // Stats header
-        lines.add(colorize("&6| &7\u1D0D\u1D0F\u0274\u1D07\u028F&6: &a$$balance"))  // | ᴍᴏɴᴇʏ: $value
-        lines.add(colorize("&6| &7\u1D0B\u026A\u029F\u029F\uA731&6: &c$playerKills"))  // | ᴋɪʟʟs: value
-        lines.add(colorize("&6| &7\u1D18\u029F\u1D00\u028F\u1D1B\u026A\u1D0D\u1D07&6: &e$playtime"))  // | ᴘʟᴀʏᴛɪᴍᴇ: value
-        lines.add(colorize("&r") + uniquePad(3))                              // blank
-        lines.add(colorize("&7\u1D05\u026A\uA731\u1D04\u1D0F\u0280\u1D05.\u0262\u0262/\u1D0A\u1D0F\uA731\u029C\u028F\u1D0D\u1D04"))  // ᴅɪsᴄᴏʀᴅ.ɢɢ/ᴊᴏsʜʏᴍᴄ
-        lines.add(colorize("&6&m                         ") + uniquePad(4))  // bottom separator
+        lines.add(Component.empty())
+        lines.add(plugin.commsManager.parseLegacy("&6&lStats:"))
+        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D0D\u1D0F\u0274\u1D07\u028F&6: &a$$balance"))
+        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D0B\u026A\u029F\u029F\uA731&6: &c$playerKills"))
+        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D18\u029F\u1D00\u028F\u1D1B\u026A\u1D0D\u1D07&6: &e$playtime"))
+        lines.add(Component.empty())
+        lines.add(plugin.commsManager.parseLegacy("&7\u1D05\u026A\uA731\u1D04\u1D0F\u0280\u1D05.\u0262\u0262/\u1D0A\u1D0F\uA731\u029C\u028F\u1D0D\u1D04"))
+        lines.add(plugin.commsManager.parseLegacy("&6&m                         "))
 
-        // Set scores: top line gets highest score
-        for ((index, line) in lines.withIndex()) {
-            objective.getScore(line).score = lines.size - index
+        // Team-prefix trick: each line is rendered as a team's prefix (Component)
+        // attached to a unique invisible "entry" string. Top line gets the highest score.
+        for ((index, component) in lines.withIndex()) {
+            val entry = lineEntry(index)
+            val teamName = "sbline_$index"
+            val sbTeam = board.registerNewTeam(teamName)
+            sbTeam.addEntry(entry)
+            sbTeam.prefix(component)
+
+            objective.getScore(entry).score = lines.size - index
         }
+    }
+
+    /** Unique, visually-empty entry string per sidebar row (combo of two color codes). */
+    private fun lineEntry(index: Int): String {
+        val hex = "0123456789abcdef"
+        val a = hex[(index / 16) and 0xF]
+        val b = hex[index and 0xF]
+        return "\u00A7$a\u00A7$b"
     }
 
     private fun formatPlaytime(seconds: Long): String {
         val days = seconds / 86400
         val hours = (seconds % 86400) / 3600
         return "${days}d ${hours}h"
-    }
-
-    /**
-     * Creates an invisible unique padding string using color code pairs.
-     * Each call with a different [index] produces a visually blank but unique string.
-     */
-    private fun uniquePad(index: Int): String {
-        val colors = arrayOf("§a", "§b", "§c", "§d", "§e", "§f")
-        return colors.getOrElse(index) { "§${index}" } + "§r"
     }
 
     // ── Tab List ────────────────────────────────────────────────────
@@ -242,31 +255,6 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     }
 
     // ── Utility ─────────────────────────────────────────────────────
-
-    /**
-     * Translates `&` color codes AND `&#RRGGBB` hex codes into Bukkit legacy
-     * section-sign format so scoreboard/title strings render colors correctly.
-     * The built-in [ChatColor.translateAlternateColorCodes] only knows the 16
-     * named codes, so without this pre-pass a tag like `&#FF5555Admin` would
-     * appear as raw text on the sidebar.
-     */
-    private fun colorize(text: String): String {
-        val hex = HEX_PATTERN.replace(text) { match ->
-            val rgb = match.groupValues[1]
-            buildString {
-                append("\u00A7x")
-                for (c in rgb) {
-                    append('\u00A7')
-                    append(c.lowercaseChar())
-                }
-            }
-        }
-        return ChatColor.translateAlternateColorCodes('&', hex)
-    }
-
-    companion object {
-        private val HEX_PATTERN = Regex("&#([0-9A-Fa-f]{6})")
-    }
 
     private fun formatCompact(amount: Double): String {
         return when {
