@@ -218,17 +218,35 @@ class KitManager(private val plugin: Joshymc) {
         val slots = mutableListOf<Int>()
         for (row in 1..3) for (col in 1..7) slots.add(row * 9 + col)
 
+        var rendered = 0
         for ((idx, kitDef) in kits.values.withIndex()) {
             if (idx >= slots.size) break
             val slot = slots[idx]
 
-            val onCooldown = !canClaim(player, kitDef.name)
-            val hasPermission = player.hasPermission(kitDef.permission)
+            try {
+                renderKitIcon(gui, slot, player, kitDef)
+                rendered++
+            } catch (e: Exception) {
+                plugin.logger.warning("[KitManager] Failed to render kit '${kitDef.name}' at slot $slot: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+        if (rendered < kits.size) {
+            plugin.logger.warning("[KitManager] Rendered $rendered/${kits.size} kits in GUI (others failed — see stack traces above).")
+        }
 
-            val displayMat = if (onCooldown) Material.RED_STAINED_GLASS_PANE else kitDef.icon
-            val item = ItemStack(displayMat)
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
 
-            item.editMeta { meta ->
+    private fun renderKitIcon(gui: CustomGui, slot: Int, player: Player, kitDef: KitDef) {
+        val onCooldown = !canClaim(player, kitDef.name)
+        val hasPermission = player.hasPermission(kitDef.permission)
+
+        val displayMat = if (onCooldown) Material.RED_STAINED_GLASS_PANE else kitDef.icon
+        val item = ItemStack(displayMat)
+
+        item.editMeta { meta ->
                 val nameColor = if (onCooldown) NamedTextColor.RED else NamedTextColor.AQUA
                 meta.displayName(
                     Component.text(kitDef.name, nameColor)
@@ -276,15 +294,11 @@ class KitManager(private val plugin: Joshymc) {
                 }
             }
 
-            val kitName = kitDef.name
-            gui.setItem(slot, item) { p, _ ->
-                p.closeInventory()
-                claimKit(p, kitName)
-            }
+        val kitName = kitDef.name
+        gui.setItem(slot, item) { p, _ ->
+            p.closeInventory()
+            claimKit(p, kitName)
         }
-
-        plugin.guiManager.open(player, gui)
-        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
     fun openCreateKitGui(player: Player, kitName: String) {

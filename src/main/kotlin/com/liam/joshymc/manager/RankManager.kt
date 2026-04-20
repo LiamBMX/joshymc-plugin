@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import java.util.UUID
 
@@ -111,6 +112,11 @@ class RankManager(private val plugin: Joshymc) {
 
     /**
      * Set a player's rank. Pass null to remove their rank.
+     *
+     * If LuckPerms is installed, this also updates the player's parent group so
+     * permissions configured on the LP group (e.g. joshymc.anvil on "warrior")
+     * actually apply — otherwise our /rank only changes the chat tag while LP's
+     * permission state stays on whatever group was previously assigned.
      */
     fun setPlayerRank(uuid: UUID, rankId: String?) {
         if (rankId == null) {
@@ -122,6 +128,26 @@ class RankManager(private val plugin: Joshymc) {
                 "INSERT OR REPLACE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
                 uuid.toString(), rankId
             )
+        }
+
+        syncWithLuckPerms(uuid, rankId)
+    }
+
+    private fun syncWithLuckPerms(uuid: UUID, rankId: String?) {
+        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) return
+
+        val name = Bukkit.getOfflinePlayer(uuid).name ?: return
+        // Use LP's console command surface — avoids a hard compile-time dep and
+        // sidesteps the full LP UserManager/NodeBuilder reflection dance.
+        val cmd = if (rankId == null) {
+            "lp user $name parent set default"
+        } else {
+            "lp user $name parent set $rankId"
+        }
+        try {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Ranks] LuckPerms sync failed for $name ($rankId): ${e.message}")
         }
     }
 

@@ -147,6 +147,7 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         """.trimIndent())
 
         loadQuests()
+        reconcileStaleProgress()
 
         // Periodic flush every 5 minutes (6000 ticks)
         Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, Runnable { flushAllProgress() }, 6000L, 6000L)
@@ -179,6 +180,39 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         progressCache.clear()
         distanceAccumulator.clear()
         visitedBiomes.clear()
+    }
+
+    /**
+     * When a quest's amount or type changes between releases, previously saved
+     * progress rows can end up with `completed = 1` even though the new goal is
+     * much larger (e.g. old WALK_DISTANCE amount=500 → new TIME_PLAYED amount=3600).
+     *
+     * This pass walks the quest_progress table, clamps progress to the current
+     * amount, and clears the completed flag for any row where progress < amount
+     * (but leaves claimedReward=0 so players aren't awarded anything twice). Rows
+     * with unchanged quests are untouched.
+     */
+    private fun reconcileStaleProgress() {
+        var fixed = 0
+        plugin.databaseManager.query(
+            "SELECT uuid, quest_id, progress, completed FROM quest_progress WHERE completed = 1"
+        ) { rs ->
+            val uuid = rs.getString("uuid")
+            val questId = rs.getString("quest_id")
+            val progress = rs.getInt("progress")
+            val quest = quests[questId]
+            if (quest != null && progress < quest.amount) {
+                // Stale completion from an old definition — unclaim + uncomplete.
+                plugin.databaseManager.execute(
+                    "UPDATE quest_progress SET completed = 0, claimed = 0 WHERE uuid = ? AND quest_id = ?",
+                    uuid, questId
+                )
+                fixed++
+            }
+        }
+        if (fixed > 0) {
+            plugin.logger.info("[Quests] Reconciled $fixed stale quest completion(s) after definition changes.")
+        }
     }
 
     // ── Biome Tracking ─────────────────────────────────────────
@@ -949,11 +983,16 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         quests.clear()
 
         val file = plugin.configFile("quests.yml")
-        if (!file.exists()) {
-            try {
-                plugin.saveResource("quests.yml", false)
-            } catch (_: Exception) {
-                plugin.logger.warning("[Quests] quests.yml not found in JAR — no quests loaded. Add quests.yml and reload.")
+        // quests.yml is plugin-managed (we generate it). Always overwrite so that
+        // quest type / amount fixes in new releases actually reach live servers —
+        // otherwise saveResource(false) would leave stale entries in place forever
+        // (e.g. timeplayed_001 stuck as WALK_DISTANCE with amount 500 from an old
+        // build even after we fix it in source).
+        try {
+            plugin.saveResource("quests.yml", true)
+        } catch (_: Exception) {
+            if (!file.exists()) {
+                plugin.logger.warning("[Quests] quests.yml not found in JAR — no quests loaded.")
                 return
             }
         }
