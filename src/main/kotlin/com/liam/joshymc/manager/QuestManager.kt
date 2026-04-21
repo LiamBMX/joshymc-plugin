@@ -187,34 +187,80 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
     /**
      * When a quest's amount or type changes between releases, previously saved
-     * progress rows can end up with `completed = 1` even though the new goal is
-     * much larger (e.g. old WALK_DISTANCE amount=500 → new TIME_PLAYED amount=3600).
+     * progress rows can fall out of sync with the new definition. Two cases:
      *
-     * This pass walks the quest_progress table, clamps progress to the current
-     * amount, and clears the completed flag for any row where progress < amount
-     * (but leaves claimedReward=0 so players aren't awarded anything twice). Rows
-     * with unchanged quests are untouched.
+     *  1. amount grew (e.g. WALK_DISTANCE 500 → TIME_PLAYED 3600): old rows with
+     *     completed=1 now have progress < amount. Unclaim + uncomplete.
+     *  2. type changed and amount shrank (e.g. WALK_DISTANCE amount=700 →
+     *     VISIT_BIOME amount=50): stored progress like "320 walked blocks" is
+     *     nonsense for the new type and blows past the new max, so UIs show
+     *     "320/50". For VISIT_BIOME we recompute from the authoritative
+     *     quest_biomes table; for everything else we clamp to amount.
      */
     private fun reconcileStaleProgress() {
-        var fixed = 0
+        // Build uuid → distinct biome count so we can recompute VISIT_BIOME
+        // progress from the authoritative table rather than trusting stale rows.
+        val biomeCountByUuid = mutableMapOf<String, Int>()
         plugin.databaseManager.query(
-            "SELECT uuid, quest_id, progress, completed FROM quest_progress WHERE completed = 1"
+            "SELECT uuid, COUNT(*) AS n FROM quest_biomes GROUP BY uuid"
+        ) { rs ->
+            biomeCountByUuid[rs.getString("uuid")] = rs.getInt("n")
+        }
+
+        data class Update(
+            val uuid: String,
+            val questId: String,
+            val newProgress: Int,
+            val newCompleted: Boolean,
+            val clearClaimed: Boolean
+        )
+
+        val updates = mutableListOf<Update>()
+        plugin.databaseManager.query(
+            "SELECT uuid, quest_id, progress, completed, claimed FROM quest_progress"
         ) { rs ->
             val uuid = rs.getString("uuid")
             val questId = rs.getString("quest_id")
             val progress = rs.getInt("progress")
-            val quest = quests[questId]
-            if (quest != null && progress < quest.amount) {
-                // Stale completion from an old definition — unclaim + uncomplete.
+            val completed = rs.getInt("completed") == 1
+            val claimed = rs.getInt("claimed") == 1
+            val quest = quests[questId] ?: return@query
+
+            val effective = if (quest.type == QuestType.VISIT_BIOME) {
+                biomeCountByUuid[uuid] ?: 0
+            } else {
+                progress
+            }
+            val clamped = effective.coerceAtMost(quest.amount).coerceAtLeast(0)
+            val shouldBeCompleted = clamped >= quest.amount
+
+            if (clamped == progress && shouldBeCompleted == completed) return@query
+
+            updates += Update(
+                uuid = uuid,
+                questId = questId,
+                newProgress = clamped,
+                newCompleted = shouldBeCompleted,
+                clearClaimed = !shouldBeCompleted && claimed
+            )
+        }
+
+        for (u in updates) {
+            if (u.clearClaimed) {
                 plugin.databaseManager.execute(
-                    "UPDATE quest_progress SET completed = 0, claimed = 0 WHERE uuid = ? AND quest_id = ?",
-                    uuid, questId
+                    "UPDATE quest_progress SET progress = ?, completed = ?, claimed = 0 WHERE uuid = ? AND quest_id = ?",
+                    u.newProgress, if (u.newCompleted) 1 else 0, u.uuid, u.questId
                 )
-                fixed++
+            } else {
+                plugin.databaseManager.execute(
+                    "UPDATE quest_progress SET progress = ?, completed = ? WHERE uuid = ? AND quest_id = ?",
+                    u.newProgress, if (u.newCompleted) 1 else 0, u.uuid, u.questId
+                )
             }
         }
-        if (fixed > 0) {
-            plugin.logger.info("[Quests] Reconciled $fixed stale quest completion(s) after definition changes.")
+
+        if (updates.isNotEmpty()) {
+            plugin.logger.info("[Quests] Reconciled ${updates.size} stale quest progress row(s) after definition changes.")
         }
     }
 
