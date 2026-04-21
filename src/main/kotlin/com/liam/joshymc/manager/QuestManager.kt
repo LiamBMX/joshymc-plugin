@@ -10,6 +10,7 @@ import net.kyori.adventure.title.Title
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.Sound
+import org.bukkit.Statistic
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.Player
@@ -116,6 +117,9 @@ class QuestManager(private val plugin: Joshymc) : Listener {
     private val progressCache = ConcurrentHashMap<UUID, MutableMap<String, PlayerQuestProgress>>()
     private val distanceAccumulator = ConcurrentHashMap<UUID, Double>()
     private val visitedBiomes = ConcurrentHashMap<UUID, MutableSet<String>>()
+    // TIME_PLAYED quests without an explicit prerequisite get chained by ascending
+    // amount so only the next-tier quest is active (others show as locked).
+    private val implicitPrerequisites = mutableMapOf<String, String>()
 
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
         editMeta { it.displayName(Component.empty()) }
@@ -152,14 +156,13 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         // Periodic flush every 5 minutes (6000 ticks)
         Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, Runnable { flushAllProgress() }, 6000L, 6000L)
 
-        // TIME_PLAYED tick: every 60 seconds (1200 ticks), add 1 to each online player's
-        // active TIME_PLAYED quest progress (counts elapsed seconds played).
+        // TIME_PLAYED sync: every 60 seconds, set each online player's TIME_PLAYED
+        // quest progress from their real PLAY_ONE_MINUTE statistic. Using the live
+        // stat (instead of incrementing) keeps every quest in sync with the same
+        // number and wipes stale progress left over from old quest definitions.
         Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
             for (player in Bukkit.getOnlinePlayers()) {
-                if (isExempt(player)) continue
-                findMatchingQuests(QuestType.TIME_PLAYED, "").forEach { quest ->
-                    if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id, 60)
-                }
+                syncAllTimePlayedQuests(player)
             }
         }, 1200L, 1200L)
 
@@ -284,8 +287,43 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
     fun canStart(uuid: UUID, questId: String): Boolean {
         val quest = quests[questId] ?: return false
-        val prereq = quest.prerequisite ?: return true
+        val prereq = effectivePrerequisite(quest) ?: return true
         return isCompleted(uuid, prereq)
+    }
+
+    private fun effectivePrerequisite(quest: Quest): String? =
+        quest.prerequisite ?: implicitPrerequisites[quest.id]
+
+    // ── TIME_PLAYED sync ───────────────────────────────────────
+
+    private fun livePlaytimeSeconds(player: Player): Int {
+        val ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE).toLong()
+        return (ticks / 20L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
+
+    fun syncAllTimePlayedQuests(player: Player) {
+        if (isExempt(player)) return
+        val seconds = livePlaytimeSeconds(player)
+        // Sort by amount so that when quest N completes in-loop, quest N+1 unlocks
+        // via canStart() and its progress gets synced in the same pass.
+        findMatchingQuests(QuestType.TIME_PLAYED, "")
+            .sortedBy { it.amount }
+            .forEach { quest -> syncTimePlayedQuest(player, quest, seconds) }
+    }
+
+    private fun syncTimePlayedQuest(player: Player, quest: Quest, seconds: Int) {
+        val uuid = player.uniqueId
+        if (!canStart(uuid, quest.id)) return
+        val playerMap = progressCache.getOrPut(uuid) { loadProgress(uuid) }
+        val current = playerMap[quest.id] ?: PlayerQuestProgress(quest.id, 0, false, false)
+        if (current.completed) return
+
+        val newProgress = minOf(seconds, quest.amount)
+        val completed = newProgress >= quest.amount
+        if (newProgress == current.progress && completed == current.completed) return
+
+        playerMap[quest.id] = current.copy(progress = newProgress, completed = completed)
+        if (completed) onQuestComplete(player, quest)
     }
 
     fun claimReward(player: Player, questId: String): Boolean {
@@ -377,6 +415,8 @@ class QuestManager(private val plugin: Joshymc) : Listener {
     // ── GUIs ───────────────────────────────────────────────────
 
     fun openCategoryMenu(player: Player) {
+        syncAllTimePlayedQuests(player)
+
         val gui = CustomGui(
             plugin.commsManager.parseLegacy("&6&lQuests"),
             54
@@ -451,7 +491,16 @@ class QuestManager(private val plugin: Joshymc) : Listener {
     }
 
     fun openQuestList(player: Player, category: QuestCategory, page: Int) {
-        val categoryQuests = getQuestsByCategory(category).sortedBy { it.difficulty.ordinal }
+        if (category == QuestCategory.TIME_PLAYED) syncAllTimePlayedQuests(player)
+
+        val baseCategoryQuests = getQuestsByCategory(category)
+        val categoryQuests = if (category == QuestCategory.TIME_PLAYED) {
+            // Within the Time Played menu, order by amount so the chain reads
+            // 1h → 2h → 3h → ... instead of YAML insertion order.
+            baseCategoryQuests.sortedBy { it.amount }
+        } else {
+            baseCategoryQuests.sortedBy { it.difficulty.ordinal }
+        }
         val perPage = 28
         val totalPages = ((categoryQuests.size - 1) / perPage).coerceAtLeast(0)
         val safePage = page.coerceIn(0, totalPages)
@@ -836,10 +885,12 @@ class QuestManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun questIcon(quest: Quest, progress: PlayerQuestProgress, canStartQuest: Boolean): ItemStack {
-        val iconMaterial = if (progress.completed) {
-            Material.GREEN_STAINED_GLASS_PANE
-        } else {
-            Material.YELLOW_STAINED_GLASS_PANE
+        val iconMaterial = when {
+            progress.completed && progress.claimedReward -> Material.LIME_STAINED_GLASS_PANE
+            progress.completed -> Material.GREEN_STAINED_GLASS_PANE
+            !canStartQuest -> Material.RED_STAINED_GLASS_PANE
+            progress.progress > 0 -> Material.YELLOW_STAINED_GLASS_PANE
+            else -> Material.LIGHT_GRAY_STAINED_GLASS_PANE
         }
 
         val item = try {
@@ -866,8 +917,9 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
             // Status
             if (!canStartQuest) {
-                val prereqQuest = quest.prerequisite?.let { quests[it] }
-                val prereqName = prereqQuest?.name ?: quest.prerequisite ?: "Unknown"
+                val prereqId = effectivePrerequisite(quest)
+                val prereqQuest = prereqId?.let { quests[it] }
+                val prereqName = prereqQuest?.name ?: prereqId ?: "Unknown"
                 lore.add(Component.text("  \u26D4 Requires: $prereqName", NamedTextColor.RED)
                     .decoration(TextDecoration.ITALIC, false))
             } else {
@@ -944,9 +996,12 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
     private fun formatSecondsShort(total: Int): String {
         if (total < 60) return "${total}s"
-        val hours = total / 3600
+        val days = total / 86400
+        val hours = (total % 86400) / 3600
         val minutes = (total % 3600) / 60
         return when {
+            days > 0 && hours > 0 -> "${days}d ${hours}h"
+            days > 0 -> "${days}d"
             hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
             hours > 0 -> "${hours}h"
             else -> "${minutes}m"
@@ -1045,10 +1100,28 @@ class QuestManager(private val plugin: Joshymc) : Listener {
             }
         }
 
+        computeImplicitPrerequisites()
+
         // Log loaded counts per category
         for (cat in QuestCategory.entries) {
             val count = quests.values.count { it.category == cat }
             if (count > 0) plugin.logger.info("[Quests] ${cat.displayName}: $count quests")
+        }
+    }
+
+    /**
+     * TIME_PLAYED quests without an explicit prerequisite get chained by ascending
+     * amount — each quest requires the previous tier to be completed. This avoids
+     * showing the entire category as simultaneously-active yellow panes, and makes
+     * the "current" quest obvious at a glance.
+     */
+    private fun computeImplicitPrerequisites() {
+        implicitPrerequisites.clear()
+        val chain = quests.values
+            .filter { it.type == QuestType.TIME_PLAYED && it.prerequisite == null }
+            .sortedBy { it.amount }
+        for (i in 1 until chain.size) {
+            implicitPrerequisites[chain[i].id] = chain[i - 1].id
         }
     }
 
