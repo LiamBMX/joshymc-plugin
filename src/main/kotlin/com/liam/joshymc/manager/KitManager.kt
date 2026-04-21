@@ -65,23 +65,46 @@ class KitManager(private val plugin: Joshymc) {
 
     private fun loadKits() {
         kits.clear()
+
+        // First-run: extract the bundled kits.yml from the jar.
         if (!kitsFile.exists()) {
-            // Extract the bundled kits.yml from the jar if we're on a fresh install.
-            // Falls back to an empty file if the resource isn't present.
             try {
                 plugin.saveResource("kits.yml", false)
             } catch (_: IllegalArgumentException) {
                 kitsFile.parentFile.mkdirs()
                 kitsFile.createNewFile()
             }
-            // saveResource writes to <dataFolder>/kits.yml regardless of the path our
-            // configFile() helper resolved to; re-resolve in case the file now exists
-            // where we expected it on disk.
             kitsFile = plugin.configFile("kits.yml")
         }
+        parseKitsFile()
+
+        // Self-heal: if the on-disk file is missing a `kits:` section or contains
+        // zero kits (empty file, corrupted edit, legacy install from before we
+        // shipped defaults), overwrite it from the bundled resource and retry.
+        if (kits.isEmpty()) {
+            plugin.logger.warning(
+                "[KitManager] No kits parsed from ${kitsFile.path} (size=${kitsFile.length()}). " +
+                "Re-extracting bundled kits.yml from the jar."
+            )
+            try {
+                plugin.saveResource("kits.yml", true)
+                kitsFile = plugin.configFile("kits.yml")
+                parseKitsFile()
+            } catch (e: Exception) {
+                plugin.logger.warning("[KitManager] Failed to re-extract kits.yml: ${e.message}")
+            }
+        }
+    }
+
+    private fun parseKitsFile() {
+        kits.clear()
         kitsConfig = YamlConfiguration.loadConfiguration(kitsFile)
 
-        val kitsSection = kitsConfig.getConfigurationSection("kits") ?: return
+        val kitsSection = kitsConfig.getConfigurationSection("kits")
+        if (kitsSection == null) {
+            plugin.logger.warning("[KitManager] kits.yml has no 'kits:' root section (path=${kitsFile.path}).")
+            return
+        }
         for (name in kitsSection.getKeys(false)) {
             val section = kitsSection.getConfigurationSection(name) ?: continue
             val iconStr = section.getString("icon", "CHEST") ?: "CHEST"
@@ -94,7 +117,12 @@ class KitManager(private val plugin: Joshymc) {
             if (itemsSection != null) {
                 for (slotKey in itemsSection.getKeys(false)) {
                     val slot = slotKey.toIntOrNull() ?: continue
-                    val itemStack = itemsSection.getItemStack(slotKey) ?: continue
+                    val itemStack = try {
+                        itemsSection.getItemStack(slotKey)
+                    } catch (e: Exception) {
+                        plugin.logger.warning("[KitManager] Failed to deserialize $name slot $slotKey: ${e.message}")
+                        null
+                    } ?: continue
                     items[slot] = itemStack
                 }
             }
@@ -204,6 +232,16 @@ class KitManager(private val plugin: Joshymc) {
     }
 
     fun openKitGui(player: Player) {
+        if (kits.isEmpty()) {
+            // Likely saveResource never ran (file existed but empty, e.g. legacy install).
+            // Attempt one more load pass so `/kit` can self-recover without /joshymc reload.
+            plugin.logger.warning("[KitManager] openKitGui: no kits in memory; forcing reload.")
+            loadKits()
+        }
+        plugin.logger.info(
+            "[KitManager] openKitGui for ${player.name}: ${kits.size} kit(s) known, " +
+            "items/kit=${kits.values.joinToString(",") { "${it.name}=${it.items.size}" }}"
+        )
         val size = 45 // 5 rows
         val gui = CustomGui(KIT_GUI_TITLE, size)
 
