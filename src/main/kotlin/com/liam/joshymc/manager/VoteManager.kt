@@ -18,6 +18,7 @@ import java.util.UUID
 class VoteManager(private val plugin: Joshymc) : Listener {
 
     private var httpServer: HttpServer? = null
+    private var votifierServer: VotifierServer? = null
 
     private var enabled = false
     private var port = 8192
@@ -58,6 +59,7 @@ class VoteManager(private val plugin: Joshymc) : Listener {
 
         createTables()
         startHttpServer()
+        startVotifierServer()
 
         plugin.server.pluginManager.registerEvents(this, plugin)
         plugin.logger.info("[Vote] VoteManager started on port $port.")
@@ -66,6 +68,45 @@ class VoteManager(private val plugin: Joshymc) : Listener {
     fun stop() {
         httpServer?.stop(0)
         httpServer = null
+        votifierServer?.stop()
+        votifierServer = null
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  VOTIFIER TCP SERVER (v1 RSA + v2 token)
+    // ══════════════════════════════════════════════════════════
+
+    private fun startVotifierServer() {
+        val cfg = plugin.config
+        if (!cfg.getBoolean("voting.votifier.enabled", false)) {
+            plugin.logger.info("[Vote] Votifier TCP listener disabled.")
+            return
+        }
+        val votifierPort = cfg.getInt("voting.votifier.port", 8193)
+
+        val tokens = mutableMapOf<String, String>()
+        val section = cfg.getConfigurationSection("voting.votifier.tokens")
+        if (section != null) {
+            for (key in section.getKeys(false)) {
+                val value = section.getString(key) ?: continue
+                if (value.isNotBlank()) tokens[key] = value
+            }
+        }
+
+        val keyPair = VotifierServer.loadOrGenerateKeyPair(plugin)
+
+        try {
+            val server = VotifierServer(plugin, votifierPort, keyPair, tokens) { username, service ->
+                Bukkit.getScheduler().runTask(plugin, Runnable {
+                    processVote(username, service)
+                })
+            }
+            server.start()
+            votifierServer = server
+            plugin.logger.info("[Vote] Votifier listener bound to :$votifierPort (${tokens.size} v2 token(s))")
+        } catch (e: Exception) {
+            plugin.logger.warning("[Vote] Failed to start Votifier listener on :$votifierPort — ${e.message}")
+        }
     }
 
     // ══════════════════════════════════════════════════════════

@@ -189,10 +189,32 @@ welcome:
     - ""
 
 # Voting — reward players for voting
+#
+# Two ways a vote site can deliver votes to this server:
+#
+# 1. HTTP callback (simple, some sites support it)
+#    URL: http://<your-ip>:<port>/vote?username=<name>&key=<secret-key>&service=<site>
+#    Controlled by `port` + `secret-key` below.
+#
+# 2. Votifier protocol (standard, what most sites use) — see `votifier` below.
+#    This is 1:1 with NuVotifier — v1 (RSA) and v2 (token) both supported.
+#    Keys and tokens are stored under plugins/Joshymc/votifier/.
 voting:
   enabled: true
   port: 8192
   secret-key: "change-me-to-a-random-string"
+  # Votifier-compatible TCP listener. Most vote sites speak this protocol.
+  votifier:
+    enabled: false
+    # Traditional Votifier port is 8192, but the HTTP callback above already uses
+    # that — so Votifier defaults to 8193. Point your vote sites at THIS port.
+    port: 8193
+    # v2 tokens. Create one per vote site (or use "default" for all).
+    # Copy the token value into the vote site's Votifier/NuVotifier settings.
+    # The v1 RSA public key is auto-generated on first start at
+    # plugins/Joshymc/votifier/public.key — paste its contents into any v1 site.
+    tokens:
+      default: "change-me-to-a-long-random-string"
   vote-links:
     - name: "MinecraftServers.org"
       url: "https://minecraftservers.org/vote/joshymc"
