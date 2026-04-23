@@ -56,10 +56,17 @@ class GadgetManager(private val plugin: Joshymc) : Listener {
         val name: String,
         val description: String,
         val permission: String,
+        val category: String,
         val icon: Material,
         val color: String,
         val cooldownSeconds: Int
     )
+
+    fun canUse(player: Player, gadget: Gadget): Boolean {
+        if (player.hasPermission("joshymc.gadget.*")) return true
+        if (player.hasPermission("joshymc.gadget.category.${gadget.category.lowercase()}")) return true
+        return player.hasPermission(gadget.permission)
+    }
 
     private val gadgetKey = NamespacedKey(plugin, "gadget_id")
 
@@ -166,30 +173,30 @@ class GadgetManager(private val plugin: Joshymc) : Listener {
 
     private fun registerGadgets() {
         // Movement
-        register(Gadget("grappling_hook", "Grappling Hook", "Launch toward where you're looking", "joshymc.gadget.grappling_hook", Material.FISHING_ROD, "#AAAAAA", 10))
-        register(Gadget("launch_pad", "Launch Pad", "Place a temporary launch pad", "joshymc.gadget.launch_pad", Material.SLIME_BALL, "#55FF55", 15))
-        register(Gadget("rocket_boots", "Rocket Boots", "Fly with flames for 3 seconds", "joshymc.gadget.rocket_boots", Material.LEATHER_BOOTS, "#FF5500", 30))
-        register(Gadget("ender_warp", "Ender Warp", "Warp forward with ender particles", "joshymc.gadget.ender_warp", Material.ENDER_PEARL, "#AA00FF", 8))
+        register(Gadget("grappling_hook", "Grappling Hook", "Launch toward where you're looking", "joshymc.gadget.grappling_hook", "movement", Material.FISHING_ROD, "#AAAAAA", 10))
+        register(Gadget("launch_pad", "Launch Pad", "Place a temporary launch pad", "joshymc.gadget.launch_pad", "movement", Material.SLIME_BALL, "#55FF55", 15))
+        register(Gadget("rocket_boots", "Rocket Boots", "Fly with flames for 3 seconds", "joshymc.gadget.rocket_boots", "movement", Material.LEATHER_BOOTS, "#FF5500", 30))
+        register(Gadget("ender_warp", "Ender Warp", "Warp forward with ender particles", "joshymc.gadget.ender_warp", "movement", Material.ENDER_PEARL, "#AA00FF", 8))
 
         // Social/Troll
-        register(Gadget("boom_box", "Boom Box", "Play a random melody for everyone", "joshymc.gadget.boom_box", Material.JUKEBOX, "#FFAA00", 20))
-        register(Gadget("selfie_stick", "Selfie Stick", "Spawn a spinning clone of yourself", "joshymc.gadget.selfie_stick", Material.STICK, "#55AAFF", 15))
-        register(Gadget("disguise", "Disguise", "Go invisible with a decoy mob", "joshymc.gadget.disguise", Material.CARVED_PUMPKIN, "#FF8800", 45))
-        register(Gadget("snow_globe", "Snow Globe", "Surround yourself in a snow globe", "joshymc.gadget.snow_globe", Material.SNOW_BLOCK, "#FFFFFF", 20))
+        register(Gadget("boom_box", "Boom Box", "Play a random melody for everyone", "joshymc.gadget.boom_box", "social", Material.JUKEBOX, "#FFAA00", 20))
+        register(Gadget("selfie_stick", "Selfie Stick", "Spawn a spinning clone of yourself", "joshymc.gadget.selfie_stick", "social", Material.STICK, "#55AAFF", 15))
+        register(Gadget("disguise", "Disguise", "Go invisible with a decoy mob", "joshymc.gadget.disguise", "social", Material.CARVED_PUMPKIN, "#FF8800", 45))
+        register(Gadget("snow_globe", "Snow Globe", "Surround yourself in a snow globe", "joshymc.gadget.snow_globe", "social", Material.SNOW_BLOCK, "#FFFFFF", 20))
 
         // Spectacle
-        register(Gadget("firework_show", "Firework Show", "Launch a dazzling firework display", "joshymc.gadget.firework_show", Material.FIREWORK_ROCKET, "#FF55FF", 20))
-        register(Gadget("lightning_storm", "Lightning Storm", "Summon cosmetic lightning bolts", "joshymc.gadget.lightning_storm", Material.LIGHTNING_ROD, "#FFFF55", 25))
-        register(Gadget("meteor_strike", "Meteor Strike", "Call down a meteor at your target", "joshymc.gadget.meteor_strike", Material.FIRE_CHARGE, "#FF3300", 20))
-        register(Gadget("black_hole", "Black Hole", "Open a particle vortex", "joshymc.gadget.black_hole", Material.ENDER_EYE, "#5500AA", 30))
-        register(Gadget("disco_floor", "Disco Floor", "Turn the ground into a dance floor", "joshymc.gadget.disco_floor", Material.GLOWSTONE, "#FFD700", 15))
+        register(Gadget("firework_show", "Firework Show", "Launch a dazzling firework display", "joshymc.gadget.firework_show", "spectacle", Material.FIREWORK_ROCKET, "#FF55FF", 20))
+        register(Gadget("lightning_storm", "Lightning Storm", "Summon cosmetic lightning bolts", "joshymc.gadget.lightning_storm", "spectacle", Material.LIGHTNING_ROD, "#FFFF55", 25))
+        register(Gadget("meteor_strike", "Meteor Strike", "Call down a meteor at your target", "joshymc.gadget.meteor_strike", "spectacle", Material.FIRE_CHARGE, "#FF3300", 20))
+        register(Gadget("black_hole", "Black Hole", "Open a particle vortex", "joshymc.gadget.black_hole", "spectacle", Material.ENDER_EYE, "#5500AA", 30))
+        register(Gadget("disco_floor", "Disco Floor", "Turn the ground into a dance floor", "joshymc.gadget.disco_floor", "spectacle", Material.GLOWSTONE, "#FFD700", 15))
 
         // Pet/Companion
-        register(Gadget("bat_swarm", "Bat Swarm", "Spawn a swarm of bats", "joshymc.gadget.bat_swarm", Material.BAT_SPAWN_EGG, "#333333", 20))
-        register(Gadget("parrot_party", "Parrot Party", "Summon dancing parrots", "joshymc.gadget.parrot_party", Material.PARROT_SPAWN_EGG, "#00FF55", 20))
-        register(Gadget("phantom_wings", "Phantom Wings", "Glow with ethereal wings", "joshymc.gadget.phantom_wings", Material.PHANTOM_MEMBRANE, "#BBBBFF", 30))
-        register(Gadget("tornado", "Tornado", "Spawn a whirling tornado", "joshymc.gadget.tornado", Material.FEATHER, "#CCCCCC", 20))
-        register(Gadget("earthquake", "Earthquake", "Shake the ground around you", "joshymc.gadget.earthquake", Material.COBBLESTONE, "#886644", 25))
+        register(Gadget("bat_swarm", "Bat Swarm", "Spawn a swarm of bats", "joshymc.gadget.bat_swarm", "pet", Material.BAT_SPAWN_EGG, "#333333", 20))
+        register(Gadget("parrot_party", "Parrot Party", "Summon dancing parrots", "joshymc.gadget.parrot_party", "pet", Material.PARROT_SPAWN_EGG, "#00FF55", 20))
+        register(Gadget("phantom_wings", "Phantom Wings", "Glow with ethereal wings", "joshymc.gadget.phantom_wings", "pet", Material.PHANTOM_MEMBRANE, "#BBBBFF", 30))
+        register(Gadget("tornado", "Tornado", "Spawn a whirling tornado", "joshymc.gadget.tornado", "pet", Material.FEATHER, "#CCCCCC", 20))
+        register(Gadget("earthquake", "Earthquake", "Shake the ground around you", "joshymc.gadget.earthquake", "pet", Material.COBBLESTONE, "#886644", 25))
     }
 
     private fun register(gadget: Gadget) {
@@ -306,7 +313,7 @@ class GadgetManager(private val plugin: Joshymc) : Listener {
         for ((idx, gadget) in gadgetList.withIndex()) {
             if (idx >= allSlots.size) break
             val slot = allSlots[idx]
-            val hasPermission = player.hasPermission(gadget.permission)
+            val hasPermission = canUse(player, gadget)
 
             if (!hasPermission) {
                 gui.setItem(slot, LOCKED_PANE.clone()) { p, _ ->
@@ -421,7 +428,7 @@ class GadgetManager(private val plugin: Joshymc) : Listener {
 
         val gadget = gadgets[gadgetId] ?: return
 
-        if (!player.hasPermission(gadget.permission)) {
+        if (!canUse(player, gadget)) {
             plugin.commsManager.send(player, Component.text("You don't have permission to use this gadget.", NamedTextColor.RED))
             return
         }

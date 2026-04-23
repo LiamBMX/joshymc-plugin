@@ -50,6 +50,15 @@ class ChatColorCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
             "rainbow", "gradient_fire", "gradient_ice", "gradient_nature", "gradient_sunset"
         )
 
+        fun canUse(player: Player, colorName: String): Boolean {
+            if (player.hasPermission("joshymc.chatcolor.*")) return true
+            val category = if (specialColors.contains(colorName)) "special" else "basic"
+            if (player.hasPermission("joshymc.chatcolor.category.$category")) return true
+            // Preserve legacy blanket perm for gradient/rainbow
+            if (specialColors.contains(colorName) && player.hasPermission("joshymc.chatcolor.special")) return true
+            return player.hasPermission("joshymc.chatcolor.$colorName")
+        }
+
         private val gradientColorLists = mapOf(
             "GRADIENT_FIRE" to listOf("&4", "&c", "&6", "&e"),
             "GRADIENT_ICE" to listOf("&f", "&b", "&3", "&9"),
@@ -153,7 +162,7 @@ class ChatColorCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
             return true
         }
 
-        if (specialColors.contains(colorName) && !sender.hasPermission("joshymc.chatcolor.special")) {
+        if (!canUse(sender, colorName)) {
             plugin.commsManager.send(
                 sender,
                 Component.text("You don't have permission to use that color.", NamedTextColor.RED)
@@ -188,7 +197,6 @@ class ChatColorCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
         )
 
         val currentColor = getPlayerColor(plugin, player.uniqueId)
-        val hasSpecial = player.hasPermission("joshymc.chatcolor.special")
 
         val colorSlots = listOf(
             // Row 1 (slots 0-8): basic colors
@@ -202,8 +210,7 @@ class ChatColorCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
         for ((index, colorName) in colorSlots.withIndex()) {
             if (colorName == null) continue
 
-            val isSpecial = specialColors.contains(colorName)
-            val isLocked = isSpecial && !hasSpecial
+            val isLocked = !canUse(player, colorName)
             val isSelected = colorName == currentColor
 
             val item = if (isLocked) {

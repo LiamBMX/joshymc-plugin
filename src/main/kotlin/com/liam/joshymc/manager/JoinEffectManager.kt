@@ -54,6 +54,16 @@ class JoinEffectManager(private val plugin: Joshymc) : Listener {
     /** uuid -> message_id */
     private val equippedMessages = ConcurrentHashMap<UUID, String>()
 
+    fun canUseEffect(player: Player, effect: JoinEffect): Boolean {
+        if (player.hasPermission("joshymc.joineffect.*")) return true
+        return player.hasPermission("joshymc.joineffect.${effect.id}")
+    }
+
+    fun canUseMessage(player: Player, msg: JoinMessage): Boolean {
+        if (player.hasPermission("joshymc.joinmsg.*")) return true
+        return player.hasPermission("joshymc.joinmsg.${msg.id}")
+    }
+
     private val GUI_TITLE = Component.text("    ")
         .append(Component.text("J", TextColor.color(0xFF6600)))
         .append(Component.text("o", TextColor.color(0xFF7711)))
@@ -112,7 +122,7 @@ class JoinEffectManager(private val plugin: Joshymc) : Listener {
         val effectId = equippedEffects[uuid]
         if (effectId != null) {
             val effect = effects.find { it.id == effectId }
-            if (effect != null && player.hasPermission("joshymc.joineffect.${effect.id}")) {
+            if (effect != null && canUseEffect(player, effect)) {
                 effect.runner(player)
             }
         }
@@ -121,7 +131,7 @@ class JoinEffectManager(private val plugin: Joshymc) : Listener {
         val messageId = equippedMessages[uuid]
         if (messageId != null) {
             val msg = messages.find { it.id == messageId }
-            if (msg != null && player.hasPermission("joshymc.joinmsg.${msg.id}")) {
+            if (msg != null && canUseMessage(player, msg)) {
                 val formatted = msg.format.replace("{player}", player.name)
                 event.joinMessage(Component.text(formatted, NamedTextColor.YELLOW))
             }
@@ -153,11 +163,11 @@ class JoinEffectManager(private val plugin: Joshymc) : Listener {
         for ((i, effect) in effects.withIndex()) {
             if (i >= effectSlots.size) break
             val slot = effectSlots[i]
-            val hasPermission = player.hasPermission("joshymc.joineffect.${effect.id}")
+            val hasPermission = canUseEffect(player, effect)
             val equipped = effect.id == playerEffectId
 
             gui.setItem(slot, buildEffectItem(effect, hasPermission, equipped)) { p, event ->
-                if (!p.hasPermission("joshymc.joineffect.${effect.id}")) {
+                if (!canUseEffect(p, effect)) {
                     p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
                     return@setItem
                 }
@@ -217,11 +227,11 @@ class JoinEffectManager(private val plugin: Joshymc) : Listener {
         for ((i, msg) in messages.withIndex()) {
             if (i >= messageSlots.size) break
             val slot = messageSlots[i]
-            val hasPermission = player.hasPermission("joshymc.joinmsg.${msg.id}")
+            val hasPermission = canUseMessage(player, msg)
             val equipped = msg.id == playerMessageId
 
             gui.setItem(slot, buildMessageItem(msg, hasPermission, equipped)) { p, event ->
-                if (!p.hasPermission("joshymc.joinmsg.${msg.id}")) {
+                if (!canUseMessage(p, msg)) {
                     p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
                     return@setItem
                 }

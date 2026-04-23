@@ -34,6 +34,11 @@ class EmoteManager(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         private const val COOLDOWN_MS = 5000L
     }
 
+    fun canUse(player: Player, emote: Emote): Boolean {
+        if (player.hasPermission("joshymc.emote.*")) return true
+        return player.hasPermission("joshymc.emote.${emote.id}")
+    }
+
     fun start() {
         registerEmotes()
 
@@ -54,8 +59,8 @@ class EmoteManager(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         if (args.isEmpty() || args[0].equals("list", ignoreCase = true)) {
-            val available = emotes.filter { sender.hasPermission("joshymc.emote.${it.id}") }
-            val locked = emotes.filter { !sender.hasPermission("joshymc.emote.${it.id}") }
+            val available = emotes.filter { canUse(sender, it) }
+            val locked = emotes.filter { !canUse(sender, it) }
             sender.sendMessage(Component.text("--- Emotes ---", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true))
             if (available.isNotEmpty()) {
                 sender.sendMessage(Component.text("Available:", NamedTextColor.GREEN))
@@ -89,7 +94,7 @@ class EmoteManager(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return true
         }
 
-        if (!sender.hasPermission("joshymc.emote.${emote.id}")) {
+        if (!canUse(sender, emote)) {
             sender.sendMessage(Component.text("You don't have permission to use this emote.", NamedTextColor.RED))
             return true
         }
@@ -119,8 +124,9 @@ class EmoteManager(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size != 1) return emptyList()
         val prefix = args[0].lowercase()
+        val player = sender as? Player ?: return emptyList()
         val ids = emotes
-            .filter { sender.hasPermission("joshymc.emote.${it.id}") }
+            .filter { canUse(player, it) }
             .map { it.id } + "list"
         return ids.filter { it.startsWith(prefix) }
     }

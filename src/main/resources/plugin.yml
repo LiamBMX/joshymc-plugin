@@ -801,3 +801,275 @@ permissions:
   joshymc.anticheat.alerts:
     description: Receive anticheat violation alerts
     default: op
+
+  # ─── Cosmetics: per-item and per-category permissions ───────────────
+  # Base perms (joshymc.trail, joshymc.killeffect, etc.) above control the
+  # command / GUI access. The perms below control which specific cosmetics
+  # a player may equip. Grant category/wildcard perms to unlock groups.
+
+  # Trails
+  joshymc.trail.*: { description: All trails, default: op }
+  joshymc.trail.category.fire: { description: All Fire trails, default: op }
+  joshymc.trail.category.ice: { description: All Ice trails, default: op }
+  joshymc.trail.category.nature: { description: All Nature trails, default: op }
+  joshymc.trail.category.dark: { description: All Dark trails, default: op }
+  joshymc.trail.category.light: { description: All Light trails, default: op }
+  joshymc.trail.category.love: { description: All Love trails, default: op }
+  joshymc.trail.category.music: { description: All Music trails, default: op }
+  joshymc.trail.category.water: { description: All Water trails, default: op }
+  joshymc.trail.category.electric: { description: All Electric trails, default: op }
+  joshymc.trail.category.mythic: { description: All Mythic trails, default: op }
+  joshymc.trail.flame: { default: op }
+  joshymc.trail.fire_trail: { default: op }
+  joshymc.trail.blaze: { default: op }
+  joshymc.trail.inferno: { default: op }
+  joshymc.trail.ember_glow: { default: op }
+  joshymc.trail.magma_walk: { default: op }
+  joshymc.trail.snowflake: { default: op }
+  joshymc.trail.frost: { default: op }
+  joshymc.trail.blizzard_trail: { default: op }
+  joshymc.trail.ice_crystals: { default: op }
+  joshymc.trail.frozen_path: { default: op }
+  joshymc.trail.cherry_blossoms: { default: op }
+  joshymc.trail.leaves: { default: op }
+  joshymc.trail.flower_petals: { default: op }
+  joshymc.trail.spore_blossom: { default: op }
+  joshymc.trail.moss_trail: { default: op }
+  joshymc.trail.vine_trail: { default: op }
+  joshymc.trail.soul_fire: { default: op }
+  joshymc.trail.wither: { default: op }
+  joshymc.trail.end_rod: { default: op }
+  joshymc.trail.void: { default: op }
+  joshymc.trail.shadow: { default: op }
+  joshymc.trail.sculk_pulse: { default: op }
+  joshymc.trail.enchant_glint: { default: op }
+  joshymc.trail.star_sparkle: { default: op }
+  joshymc.trail.beacon_beam: { default: op }
+  joshymc.trail.prism: { default: op }
+  joshymc.trail.holy_light: { default: op }
+  joshymc.trail.hearts: { default: op }
+  joshymc.trail.cupids_trail: { default: op }
+  joshymc.trail.valentine: { default: op }
+  joshymc.trail.rose_petals: { default: op }
+  joshymc.trail.note_trail: { default: op }
+  joshymc.trail.jukebox: { default: op }
+  joshymc.trail.melody: { default: op }
+  joshymc.trail.bass_drop: { default: op }
+  joshymc.trail.bubble: { default: op }
+  joshymc.trail.drip: { default: op }
+  joshymc.trail.rain: { default: op }
+  joshymc.trail.ocean_spray: { default: op }
+  joshymc.trail.waterfall: { default: op }
+  joshymc.trail.lightning: { default: op }
+  joshymc.trail.spark: { default: op }
+  joshymc.trail.tesla: { default: op }
+  joshymc.trail.static: { default: op }
+  joshymc.trail.dragon_breath: { default: op }
+  joshymc.trail.phoenix: { default: op }
+  joshymc.trail.ender: { default: op }
+  joshymc.trail.nether_portal: { default: op }
+  joshymc.trail.totem_sparkle: { default: op }
+
+  # Kill Effects
+  joshymc.killeffect.*: { description: All kill effects, default: op }
+  joshymc.killeffect.category.explosive: { description: All Explosive kill effects, default: op }
+  joshymc.killeffect.category.elemental: { description: All Elemental kill effects, default: op }
+  joshymc.killeffect.category.soul: { description: All Soul kill effects, default: op }
+  joshymc.killeffect.category.nature: { description: All Nature kill effects, default: op }
+  joshymc.killeffect.category.dark: { description: All Dark kill effects, default: op }
+  joshymc.killeffect.category.epic: { description: All Epic kill effects, default: op }
+  joshymc.killeffect.blood_burst: { default: op }
+  joshymc.killeffect.firework_pop: { default: op }
+  joshymc.killeffect.tnt_blast: { default: op }
+  joshymc.killeffect.creeper_explosion: { default: op }
+  joshymc.killeffect.wither_skull: { default: op }
+  joshymc.killeffect.lightning_strike: { default: op }
+  joshymc.killeffect.flame_pillar: { default: op }
+  joshymc.killeffect.ice_shatter: { default: op }
+  joshymc.killeffect.thunder_clap: { default: op }
+  joshymc.killeffect.lava_burst: { default: op }
+  joshymc.killeffect.soul_release: { default: op }
+  joshymc.killeffect.ghost_ascend: { default: op }
+  joshymc.killeffect.ender_teleport: { default: op }
+  joshymc.killeffect.totem_pop: { default: op }
+  joshymc.killeffect.void_collapse: { default: op }
+  joshymc.killeffect.flower_burst: { default: op }
+  joshymc.killeffect.leaf_storm: { default: op }
+  joshymc.killeffect.spore_cloud: { default: op }
+  joshymc.killeffect.cherry_rain: { default: op }
+  joshymc.killeffect.bee_swarm: { default: op }
+  joshymc.killeffect.smoke_screen: { default: op }
+  joshymc.killeffect.wither_cloud: { default: op }
+  joshymc.killeffect.sculk_shriek: { default: op }
+  joshymc.killeffect.shadow_burst: { default: op }
+  joshymc.killeffect.obsidian_shatter: { default: op }
+  joshymc.killeffect.dragon_breath_burst: { default: op }
+  joshymc.killeffect.beacon_blast: { default: op }
+  joshymc.killeffect.enchant_swirl: { default: op }
+  joshymc.killeffect.prism_shatter: { default: op }
+  joshymc.killeffect.nether_portal_burst: { default: op }
+
+  # Join Effects and Join Messages
+  joshymc.joineffect.*: { description: All join effects, default: op }
+  joshymc.joineffect.firework_launch: { default: op }
+  joshymc.joineffect.lightning_entry: { default: op }
+  joshymc.joineffect.ender_teleport: { default: op }
+  joshymc.joineffect.wither_spawn: { default: op }
+  joshymc.joineffect.dragon_landing: { default: op }
+  joshymc.joineffect.nether_portal: { default: op }
+  joshymc.joineffect.flame_burst: { default: op }
+  joshymc.joineffect.snow_storm: { default: op }
+  joshymc.joineffect.cherry_blossom: { default: op }
+  joshymc.joineffect.totem_burst: { default: op }
+  joshymc.joineffect.beacon_beam: { default: op }
+  joshymc.joineffect.soul_ascend: { default: op }
+  joshymc.joineffect.sculk_wave: { default: op }
+  joshymc.joineffect.enchant_spiral: { default: op }
+  joshymc.joineffect.thunder_crash: { default: op }
+  joshymc.joineffect.phoenix_rise: { default: op }
+  joshymc.joineffect.ice_freeze: { default: op }
+  joshymc.joineffect.lava_eruption: { default: op }
+  joshymc.joineffect.star_fall: { default: op }
+  joshymc.joineffect.rainbow_burst: { default: op }
+  joshymc.joinmsg.*: { description: All custom join messages, default: op }
+  joshymc.joinmsg.lightning: { default: op }
+  joshymc.joinmsg.star: { default: op }
+  joshymc.joinmsg.fire: { default: op }
+  joshymc.joinmsg.crown: { default: op }
+  joshymc.joinmsg.sword: { default: op }
+  joshymc.joinmsg.ice: { default: op }
+  joshymc.joinmsg.skull: { default: op }
+  joshymc.joinmsg.blossom: { default: op }
+  joshymc.joinmsg.moon: { default: op }
+  joshymc.joinmsg.diamond: { default: op }
+  joshymc.joinmsg.music: { default: op }
+  joshymc.joinmsg.dragon: { default: op }
+  joshymc.joinmsg.warp: { default: op }
+  joshymc.joinmsg.ocean: { default: op }
+  joshymc.joinmsg.crystal: { default: op }
+
+  # Emotes
+  joshymc.emote.*: { description: All emotes, default: op }
+  joshymc.emote.wave: { default: op }
+  joshymc.emote.gg: { default: op }
+  joshymc.emote.heart: { default: op }
+  joshymc.emote.thumbsup: { default: op }
+  joshymc.emote.clap: { default: op }
+  joshymc.emote.shrug: { default: op }
+  joshymc.emote.flex: { default: op }
+  joshymc.emote.rage: { default: op }
+  joshymc.emote.cry: { default: op }
+  joshymc.emote.laugh: { default: op }
+  joshymc.emote.dance: { default: op }
+  joshymc.emote.firework: { default: op }
+  joshymc.emote.lightning: { default: op }
+  joshymc.emote.tornado: { default: op }
+  joshymc.emote.explosion: { default: op }
+  joshymc.emote.confetti: { default: op }
+  joshymc.emote.snow: { default: op }
+  joshymc.emote.fire_ring: { default: op }
+  joshymc.emote.bubble: { default: op }
+  joshymc.emote.sparkle: { default: op }
+  joshymc.emote.dragon: { default: op }
+  joshymc.emote.rainbow: { default: op }
+  joshymc.emote.skull: { default: op }
+  joshymc.emote.crown: { default: op }
+  joshymc.emote.wings: { default: op }
+
+  # Glow
+  joshymc.glow.*: { description: All glow colors, default: op }
+  joshymc.glow.red: { default: op }
+  joshymc.glow.blue: { default: op }
+  joshymc.glow.green: { default: op }
+  joshymc.glow.gold: { default: op }
+  joshymc.glow.aqua: { default: op }
+  joshymc.glow.purple: { default: op }
+  joshymc.glow.white: { default: op }
+  joshymc.glow.black: { default: op }
+  joshymc.glow.yellow: { default: op }
+  joshymc.glow.pink: { default: op }
+  joshymc.glow.dark_red: { default: op }
+  joshymc.glow.dark_blue: { default: op }
+  joshymc.glow.dark_green: { default: op }
+  joshymc.glow.dark_aqua: { default: op }
+  joshymc.glow.dark_purple: { default: op }
+
+  # Gadgets
+  joshymc.gadget.*: { description: All gadgets, default: op }
+  joshymc.gadget.nocooldown: { description: Bypass gadget cooldowns, default: op }
+  joshymc.gadget.category.movement: { description: All movement gadgets, default: op }
+  joshymc.gadget.category.social: { description: All social/troll gadgets, default: op }
+  joshymc.gadget.category.spectacle: { description: All spectacle gadgets, default: op }
+  joshymc.gadget.category.pet: { description: All pet/companion gadgets, default: op }
+  joshymc.gadget.grappling_hook: { default: op }
+  joshymc.gadget.launch_pad: { default: op }
+  joshymc.gadget.rocket_boots: { default: op }
+  joshymc.gadget.ender_warp: { default: op }
+  joshymc.gadget.boom_box: { default: op }
+  joshymc.gadget.selfie_stick: { default: op }
+  joshymc.gadget.disguise: { default: op }
+  joshymc.gadget.snow_globe: { default: op }
+  joshymc.gadget.firework_show: { default: op }
+  joshymc.gadget.lightning_storm: { default: op }
+  joshymc.gadget.meteor_strike: { default: op }
+  joshymc.gadget.black_hole: { default: op }
+  joshymc.gadget.disco_floor: { default: op }
+  joshymc.gadget.bat_swarm: { default: op }
+  joshymc.gadget.parrot_party: { default: op }
+  joshymc.gadget.phantom_wings: { default: op }
+  joshymc.gadget.tornado: { default: op }
+  joshymc.gadget.earthquake: { default: op }
+
+  # Chat Colors
+  joshymc.chatcolor.*: { description: All chat colors, default: op }
+  joshymc.chatcolor.category.basic: { description: All basic chat colors, default: op }
+  joshymc.chatcolor.category.special: { description: All special chat colors (gradients + rainbow), default: op }
+  joshymc.chatcolor.white: { default: op }
+  joshymc.chatcolor.gray: { default: op }
+  joshymc.chatcolor.dark_gray: { default: op }
+  joshymc.chatcolor.black: { default: op }
+  joshymc.chatcolor.red: { default: op }
+  joshymc.chatcolor.dark_red: { default: op }
+  joshymc.chatcolor.gold: { default: op }
+  joshymc.chatcolor.yellow: { default: op }
+  joshymc.chatcolor.green: { default: op }
+  joshymc.chatcolor.dark_green: { default: op }
+  joshymc.chatcolor.aqua: { default: op }
+  joshymc.chatcolor.dark_aqua: { default: op }
+  joshymc.chatcolor.blue: { default: op }
+  joshymc.chatcolor.dark_blue: { default: op }
+  joshymc.chatcolor.light_purple: { default: op }
+  joshymc.chatcolor.dark_purple: { default: op }
+  joshymc.chatcolor.bold: { default: op }
+  joshymc.chatcolor.rainbow: { default: op }
+  joshymc.chatcolor.gradient_fire: { default: op }
+  joshymc.chatcolor.gradient_ice: { default: op }
+  joshymc.chatcolor.gradient_nature: { default: op }
+  joshymc.chatcolor.gradient_sunset: { default: op }
+
+  # Chat Tags (category perms; per-tag perms are declared in tags.yml or
+  # derived at runtime as joshymc.tag.<tag_id> when unspecified)
+  joshymc.tag.*: { description: All chat tags, default: op }
+  joshymc.tag.category.prestige: { description: All Prestige tags, default: op }
+  joshymc.tag.category.og: { description: All OG tags, default: op }
+  joshymc.tag.category.skill: { description: All Skill tags, default: op }
+  joshymc.tag.category.vibe: { description: All Vibe tags, default: op }
+  joshymc.tag.category.nature: { description: All Nature tags, default: op }
+  joshymc.tag.category.cosmic: { description: All Cosmic tags, default: op }
+  joshymc.tag.category.gem: { description: All Gem tags, default: op }
+  joshymc.tag.category.animal: { description: All Animal tags, default: op }
+  joshymc.tag.category.food: { description: All Food tags, default: op }
+  joshymc.tag.category.meme: { description: All Meme tags, default: op }
+  joshymc.tag.category.color: { description: All Color tags, default: op }
+  joshymc.tag.category.role: { description: All Role tags, default: op }
+  joshymc.tag.category.season: { description: All Season tags, default: op }
+  joshymc.tag.category.rare: { description: All Rare tags, default: op }
+  joshymc.tag.category.holiday: { description: All Holiday tags, default: op }
+  joshymc.tag.category.legendary: { description: All Legendary tags, default: op }
+  joshymc.tag.category.royalty: { description: All Royalty tags, default: op }
+  joshymc.tag.prestige: { description: Legacy category perm for prestige tags, default: op }
+  joshymc.tag.og: { description: Legacy category perm for OG tags, default: op }
+  joshymc.tag.rare: { description: Legacy category perm for rare tags, default: op }
+  joshymc.tag.holiday: { description: Legacy category perm for holiday tags, default: op }
+  joshymc.tag.legendary: { description: Legacy category perm for legendary tags, default: op }
+  joshymc.tag.royalty: { description: Legacy category perm for royalty tags, default: op }

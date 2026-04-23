@@ -139,7 +139,9 @@ class TrailManager(private val plugin: Joshymc) : Listener {
     }
 
     fun canUse(player: Player, trail: Trail): Boolean {
-        return player.hasPermission("joshymc.trail.*") || player.hasPermission(trail.permission)
+        if (player.hasPermission("joshymc.trail.*")) return true
+        if (player.hasPermission("joshymc.trail.category.${trail.category.lowercase()}")) return true
+        return player.hasPermission(trail.permission)
     }
 
     fun getTrailById(id: String): Trail? = trails.find { it.id == id }

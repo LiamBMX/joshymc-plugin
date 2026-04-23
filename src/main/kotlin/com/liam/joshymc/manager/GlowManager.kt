@@ -38,6 +38,11 @@ class GlowManager(private val plugin: Joshymc) : Listener {
 
     private val TEAM_PREFIX = "joshyglow_"
 
+    fun canUse(player: Player, color: GlowColor): Boolean {
+        if (player.hasPermission("joshymc.glow.*")) return true
+        return player.hasPermission("joshymc.glow.${color.id}")
+    }
+
     private val GUI_TITLE = Component.text("       ")
         .append(Component.text("G", TextColor.color(0xFF5555)))
         .append(Component.text("l", TextColor.color(0xFF8855)))
@@ -86,7 +91,7 @@ class GlowManager(private val plugin: Joshymc) : Listener {
             for (player in Bukkit.getOnlinePlayers()) {
                 val colorId = equippedColors[player.uniqueId] ?: continue
                 val color = colors.find { it.id == colorId } ?: continue
-                if (!player.hasPermission("joshymc.glow.${color.id}")) continue
+                if (!canUse(player, color)) continue
                 player.addPotionEffect(
                     PotionEffect(PotionEffectType.GLOWING, 400, 0, false, false, false)
                 )
@@ -148,11 +153,11 @@ class GlowManager(private val plugin: Joshymc) : Listener {
         for ((i, color) in colors.withIndex()) {
             if (i >= colorSlots.size) break
             val slot = colorSlots[i]
-            val hasPermission = player.hasPermission("joshymc.glow.${color.id}")
+            val hasPermission = canUse(player, color)
             val equipped = color.id == currentColorId
 
             gui.setItem(slot, buildColorItem(color, hasPermission, equipped)) { p, _ ->
-                if (!p.hasPermission("joshymc.glow.${color.id}")) {
+                if (!canUse(p, color)) {
                     p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
                     return@setItem
                 }
@@ -272,7 +277,7 @@ class GlowManager(private val plugin: Joshymc) : Listener {
         if (colorId != null) {
             equippedColors[uuid] = colorId
             val color = colors.find { it.id == colorId }
-            if (color != null && player.hasPermission("joshymc.glow.${color.id}")) {
+            if (color != null && canUse(player, color)) {
                 applyGlow(player, color)
             }
         }

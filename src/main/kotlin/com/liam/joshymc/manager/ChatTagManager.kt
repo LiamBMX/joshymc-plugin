@@ -102,8 +102,11 @@ class ChatTagManager(private val plugin: Joshymc) {
     }
 
     fun canUse(player: Player, tag: ChatTag): Boolean {
-        if (tag.permission == null) return true
-        return player.hasPermission(tag.permission)
+        if (player.hasPermission("joshymc.tag.*")) return true
+        if (player.hasPermission("joshymc.tag.category.${tag.category.lowercase()}")) return true
+        // Fall back to the explicit config-declared permission, or a derived per-tag node if null
+        val perm = tag.permission ?: "joshymc.tag.${tag.id}"
+        return player.hasPermission(perm)
     }
 
     // ── GUI ──────────────────────────────────────────

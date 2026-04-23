@@ -23,9 +23,16 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
         val id: String,
         val name: String,
         val permission: String,
+        val category: String,
         val icon: Material,
         val color: String
     )
+
+    fun canUse(player: Player, effect: KillEffect): Boolean {
+        if (player.hasPermission("joshymc.killeffect.*")) return true
+        if (player.hasPermission("joshymc.killeffect.category.${effect.category.lowercase()}")) return true
+        return player.hasPermission(effect.permission)
+    }
 
     private val effects = mutableListOf<KillEffect>()
     private val equipped = ConcurrentHashMap<UUID, String>()
@@ -81,46 +88,46 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
 
     private fun registerEffects() {
         // Explosive (5)
-        effects += KillEffect("blood_burst", "Blood Burst", "joshymc.killeffect.blood_burst", Material.REDSTONE, "#FF0000")
-        effects += KillEffect("firework_pop", "Firework Pop", "joshymc.killeffect.firework_pop", Material.FIREWORK_ROCKET, "#FF55FF")
-        effects += KillEffect("tnt_blast", "TNT Blast", "joshymc.killeffect.tnt_blast", Material.TNT, "#FF3300")
-        effects += KillEffect("creeper_explosion", "Creeper Explosion", "joshymc.killeffect.creeper_explosion", Material.CREEPER_HEAD, "#00FF00")
-        effects += KillEffect("wither_skull", "Wither Skull", "joshymc.killeffect.wither_skull", Material.WITHER_SKELETON_SKULL, "#333333")
+        effects += KillEffect("blood_burst", "Blood Burst", "joshymc.killeffect.blood_burst", "explosive", Material.REDSTONE, "#FF0000")
+        effects += KillEffect("firework_pop", "Firework Pop", "joshymc.killeffect.firework_pop", "explosive", Material.FIREWORK_ROCKET, "#FF55FF")
+        effects += KillEffect("tnt_blast", "TNT Blast", "joshymc.killeffect.tnt_blast", "explosive", Material.TNT, "#FF3300")
+        effects += KillEffect("creeper_explosion", "Creeper Explosion", "joshymc.killeffect.creeper_explosion", "explosive", Material.CREEPER_HEAD, "#00FF00")
+        effects += KillEffect("wither_skull", "Wither Skull", "joshymc.killeffect.wither_skull", "explosive", Material.WITHER_SKELETON_SKULL, "#333333")
 
         // Elemental (5)
-        effects += KillEffect("lightning_strike", "Lightning Strike", "joshymc.killeffect.lightning_strike", Material.LIGHTNING_ROD, "#FFFF55")
-        effects += KillEffect("flame_pillar", "Flame Pillar", "joshymc.killeffect.flame_pillar", Material.BLAZE_POWDER, "#FF6600")
-        effects += KillEffect("ice_shatter", "Ice Shatter", "joshymc.killeffect.ice_shatter", Material.ICE, "#AAFFFF")
-        effects += KillEffect("thunder_clap", "Thunder Clap", "joshymc.killeffect.thunder_clap", Material.BELL, "#FFDD55")
-        effects += KillEffect("lava_burst", "Lava Burst", "joshymc.killeffect.lava_burst", Material.LAVA_BUCKET, "#FF4400")
+        effects += KillEffect("lightning_strike", "Lightning Strike", "joshymc.killeffect.lightning_strike", "elemental", Material.LIGHTNING_ROD, "#FFFF55")
+        effects += KillEffect("flame_pillar", "Flame Pillar", "joshymc.killeffect.flame_pillar", "elemental", Material.BLAZE_POWDER, "#FF6600")
+        effects += KillEffect("ice_shatter", "Ice Shatter", "joshymc.killeffect.ice_shatter", "elemental", Material.ICE, "#AAFFFF")
+        effects += KillEffect("thunder_clap", "Thunder Clap", "joshymc.killeffect.thunder_clap", "elemental", Material.BELL, "#FFDD55")
+        effects += KillEffect("lava_burst", "Lava Burst", "joshymc.killeffect.lava_burst", "elemental", Material.LAVA_BUCKET, "#FF4400")
 
         // Soul (5)
-        effects += KillEffect("soul_release", "Soul Release", "joshymc.killeffect.soul_release", Material.SOUL_LANTERN, "#55FFFF")
-        effects += KillEffect("ghost_ascend", "Ghost Ascend", "joshymc.killeffect.ghost_ascend", Material.GHAST_TEAR, "#FFFFFF")
-        effects += KillEffect("ender_teleport", "Ender Teleport", "joshymc.killeffect.ender_teleport", Material.ENDER_PEARL, "#AA00FF")
-        effects += KillEffect("totem_pop", "Totem Pop", "joshymc.killeffect.totem_pop", Material.TOTEM_OF_UNDYING, "#FFD700")
-        effects += KillEffect("void_collapse", "Void Collapse", "joshymc.killeffect.void_collapse", Material.OBSIDIAN, "#110022")
+        effects += KillEffect("soul_release", "Soul Release", "joshymc.killeffect.soul_release", "soul", Material.SOUL_LANTERN, "#55FFFF")
+        effects += KillEffect("ghost_ascend", "Ghost Ascend", "joshymc.killeffect.ghost_ascend", "soul", Material.GHAST_TEAR, "#FFFFFF")
+        effects += KillEffect("ender_teleport", "Ender Teleport", "joshymc.killeffect.ender_teleport", "soul", Material.ENDER_PEARL, "#AA00FF")
+        effects += KillEffect("totem_pop", "Totem Pop", "joshymc.killeffect.totem_pop", "soul", Material.TOTEM_OF_UNDYING, "#FFD700")
+        effects += KillEffect("void_collapse", "Void Collapse", "joshymc.killeffect.void_collapse", "soul", Material.OBSIDIAN, "#110022")
 
         // Nature (5)
-        effects += KillEffect("flower_burst", "Flower Burst", "joshymc.killeffect.flower_burst", Material.POPPY, "#FF5577")
-        effects += KillEffect("leaf_storm", "Leaf Storm", "joshymc.killeffect.leaf_storm", Material.OAK_LEAVES, "#33AA33")
-        effects += KillEffect("spore_cloud", "Spore Cloud", "joshymc.killeffect.spore_cloud", Material.BROWN_MUSHROOM, "#886644")
-        effects += KillEffect("cherry_rain", "Cherry Rain", "joshymc.killeffect.cherry_rain", Material.CHERRY_LEAVES, "#FFB7C5")
-        effects += KillEffect("bee_swarm", "Bee Swarm", "joshymc.killeffect.bee_swarm", Material.HONEYCOMB, "#FFCC00")
+        effects += KillEffect("flower_burst", "Flower Burst", "joshymc.killeffect.flower_burst", "nature", Material.POPPY, "#FF5577")
+        effects += KillEffect("leaf_storm", "Leaf Storm", "joshymc.killeffect.leaf_storm", "nature", Material.OAK_LEAVES, "#33AA33")
+        effects += KillEffect("spore_cloud", "Spore Cloud", "joshymc.killeffect.spore_cloud", "nature", Material.BROWN_MUSHROOM, "#886644")
+        effects += KillEffect("cherry_rain", "Cherry Rain", "joshymc.killeffect.cherry_rain", "nature", Material.CHERRY_LEAVES, "#FFB7C5")
+        effects += KillEffect("bee_swarm", "Bee Swarm", "joshymc.killeffect.bee_swarm", "nature", Material.HONEYCOMB, "#FFCC00")
 
         // Dark (5)
-        effects += KillEffect("smoke_screen", "Smoke Screen", "joshymc.killeffect.smoke_screen", Material.CAMPFIRE, "#555555")
-        effects += KillEffect("wither_cloud", "Wither Cloud", "joshymc.killeffect.wither_cloud", Material.WITHER_ROSE, "#222222")
-        effects += KillEffect("sculk_shriek", "Sculk Shriek", "joshymc.killeffect.sculk_shriek", Material.SCULK_SHRIEKER, "#003344")
-        effects += KillEffect("shadow_burst", "Shadow Burst", "joshymc.killeffect.shadow_burst", Material.BLACK_WOOL, "#111111")
-        effects += KillEffect("obsidian_shatter", "Obsidian Shatter", "joshymc.killeffect.obsidian_shatter", Material.CRYING_OBSIDIAN, "#6600AA")
+        effects += KillEffect("smoke_screen", "Smoke Screen", "joshymc.killeffect.smoke_screen", "dark", Material.CAMPFIRE, "#555555")
+        effects += KillEffect("wither_cloud", "Wither Cloud", "joshymc.killeffect.wither_cloud", "dark", Material.WITHER_ROSE, "#222222")
+        effects += KillEffect("sculk_shriek", "Sculk Shriek", "joshymc.killeffect.sculk_shriek", "dark", Material.SCULK_SHRIEKER, "#003344")
+        effects += KillEffect("shadow_burst", "Shadow Burst", "joshymc.killeffect.shadow_burst", "dark", Material.BLACK_WOOL, "#111111")
+        effects += KillEffect("obsidian_shatter", "Obsidian Shatter", "joshymc.killeffect.obsidian_shatter", "dark", Material.CRYING_OBSIDIAN, "#6600AA")
 
         // Epic (5)
-        effects += KillEffect("dragon_breath_burst", "Dragon Breath Burst", "joshymc.killeffect.dragon_breath_burst", Material.DRAGON_BREATH, "#FF00FF")
-        effects += KillEffect("beacon_blast", "Beacon Blast", "joshymc.killeffect.beacon_blast", Material.BEACON, "#55FFFF")
-        effects += KillEffect("enchant_swirl", "Enchant Swirl", "joshymc.killeffect.enchant_swirl", Material.ENCHANTING_TABLE, "#AA77FF")
-        effects += KillEffect("prism_shatter", "Prism Shatter", "joshymc.killeffect.prism_shatter", Material.PRISMARINE_SHARD, "#77DDDD")
-        effects += KillEffect("nether_portal_burst", "Nether Portal Burst", "joshymc.killeffect.nether_portal_burst", Material.OBSIDIAN, "#7700CC")
+        effects += KillEffect("dragon_breath_burst", "Dragon Breath Burst", "joshymc.killeffect.dragon_breath_burst", "epic", Material.DRAGON_BREATH, "#FF00FF")
+        effects += KillEffect("beacon_blast", "Beacon Blast", "joshymc.killeffect.beacon_blast", "epic", Material.BEACON, "#55FFFF")
+        effects += KillEffect("enchant_swirl", "Enchant Swirl", "joshymc.killeffect.enchant_swirl", "epic", Material.ENCHANTING_TABLE, "#AA77FF")
+        effects += KillEffect("prism_shatter", "Prism Shatter", "joshymc.killeffect.prism_shatter", "epic", Material.PRISMARINE_SHARD, "#77DDDD")
+        effects += KillEffect("nether_portal_burst", "Nether Portal Burst", "joshymc.killeffect.nether_portal_burst", "epic", Material.OBSIDIAN, "#7700CC")
     }
 
     // ── Database ──────────────────────────────────────────
@@ -162,7 +169,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
         val effectId = getEquippedEffect(killer.uniqueId) ?: return
         val effect = effects.find { it.id == effectId } ?: return
 
-        if (!killer.hasPermission(effect.permission)) return
+        if (!canUse(killer, effect)) return
 
         playEffect(effectId, event.entity.location)
     }
@@ -218,7 +225,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
         for ((index, effect) in effects.withIndex()) {
             if (index >= slots.size) break
             val slot = slots[index]
-            val hasPermission = player.hasPermission(effect.permission)
+            val hasPermission = canUse(player, effect)
             val isEquipped = currentEffect == effect.id
 
             if (!hasPermission) {
