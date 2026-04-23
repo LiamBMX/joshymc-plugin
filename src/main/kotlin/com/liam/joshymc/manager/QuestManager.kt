@@ -358,8 +358,13 @@ class QuestManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun syncTimePlayedQuest(player: Player, quest: Quest, seconds: Int) {
+        // Do NOT gate on canStart(): TIME_PLAYED quests chain via implicit
+        // prerequisites (tier N requires tier N-1 complete), but the underlying
+        // progress value should always reflect live playtime. Gating here leaves
+        // later tiers stuck on whatever stale value was in the DB from a prior
+        // quest-type definition (e.g. old WALK_DISTANCE numbers surviving type
+        // changes), which is what caused "2h quest shows 16m" style bugs.
         val uuid = player.uniqueId
-        if (!canStart(uuid, quest.id)) return
         val playerMap = progressCache.getOrPut(uuid) { loadProgress(uuid) }
         val current = playerMap[quest.id] ?: PlayerQuestProgress(quest.id, 0, false, false)
         if (current.completed) return
@@ -369,7 +374,10 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         if (newProgress == current.progress && completed == current.completed) return
 
         playerMap[quest.id] = current.copy(progress = newProgress, completed = completed)
-        if (completed) onQuestComplete(player, quest)
+        // Only fire the completion toast if this tier is actually reachable —
+        // otherwise finishing tier 5 while tier 1 is still locked would spam
+        // completion effects for quests the player never unlocked.
+        if (completed && canStart(uuid, quest.id)) onQuestComplete(player, quest)
     }
 
     fun claimReward(player: Player, questId: String): Boolean {
