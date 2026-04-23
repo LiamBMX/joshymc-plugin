@@ -90,13 +90,14 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        val name = args[1].lowercase()
-        if (!name.matches(Regex("^[a-z0-9_]{2,16}$"))) {
-            plugin.commsManager.send(player, Component.text("Team name must be 2-16 characters (a-z, 0-9, _).", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+        val rawName = args[1]
+        if (!rawName.matches(Regex("^[a-zA-Z0-9_]{2,16}$"))) {
+            plugin.commsManager.send(player, Component.text("Team name must be 2-16 characters (a-z, A-Z, 0-9, _).", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
 
-        val displayName = if (args.size > 2) args.drop(2).joinToString(" ") else name
+        val name = rawName.lowercase()
+        val displayName = if (args.size > 2) args.drop(2).joinToString(" ") else rawName
 
         if (plugin.teamManager.createTeam(name, displayName, player)) {
             plugin.commsManager.send(

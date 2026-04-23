@@ -71,6 +71,11 @@ class TradeManager(private val plugin: Joshymc) : Listener {
             return
         }
 
+        if (target.hasMetadata("NPC")) {
+            plugin.commsManager.send(sender, Component.text("You cannot trade with NPCs.", NamedTextColor.RED))
+            return
+        }
+
         if (activeTrades.containsKey(sender.uniqueId)) {
             plugin.commsManager.send(sender, Component.text("You are already in a trade.", NamedTextColor.RED))
             return

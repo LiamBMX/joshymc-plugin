@@ -449,8 +449,8 @@ class SkillManager(private val plugin: Joshymc) : Listener {
         }
         gui.border(filler)
 
-        // 3x3 grid centered: slots 20,21,22 / 29,30,31 / 38,39,40
-        val slots = intArrayOf(20, 21, 22, 29, 30, 31, 38, 39, 40)
+        // 3x3 grid centered on column 4: slots 21,22,23 / 30,31,32 / 39,40,41
+        val slots = intArrayOf(21, 22, 23, 30, 31, 32, 39, 40, 41)
 
         Skill.entries.forEachIndexed { index, skill ->
             val level = getLevel(uuid, skill)
