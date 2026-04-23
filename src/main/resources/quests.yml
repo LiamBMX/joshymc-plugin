@@ -2601,12 +2601,12 @@ quests:
     prerequisite: null
   exploring_001:
     name: "Quest 001: Exploring Challenge"
-    description: "Discover 1 unique biome"
+    description: "Travel 250 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 1
+    amount: 250
     rewards:
       money: 5000
       xp: 50
@@ -2614,12 +2614,12 @@ quests:
     prerequisite: null
   exploring_002:
     name: "Quest 002: Exploring Challenge"
-    description: "Discover 2 unique biomes"
+    description: "Travel 300 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 2
+    amount: 300
     rewards:
       money: 5416
       xp: 54
@@ -2627,12 +2627,12 @@ quests:
     prerequisite: null
   exploring_003:
     name: "Quest 003: Exploring Challenge"
-    description: "Discover 3 unique biomes"
+    description: "Travel 350 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 3
+    amount: 350
     rewards:
       money: 5833
       xp: 58
@@ -2640,12 +2640,12 @@ quests:
     prerequisite: null
   exploring_004:
     name: "Quest 004: Exploring Challenge"
-    description: "Discover 4 unique biomes"
+    description: "Travel 450 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 4
+    amount: 450
     rewards:
       money: 6250
       xp: 62
@@ -2653,12 +2653,12 @@ quests:
     prerequisite: null
   exploring_005:
     name: "Quest 005: Exploring Challenge"
-    description: "Discover 5 unique biomes"
+    description: "Travel 550 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 5
+    amount: 550
     rewards:
       money: 6666
       xp: 66
@@ -2666,12 +2666,12 @@ quests:
     prerequisite: null
   exploring_006:
     name: "Quest 006: Exploring Challenge"
-    description: "Discover 6 unique biomes"
+    description: "Travel 650 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 6
+    amount: 650
     rewards:
       money: 7083
       xp: 70
@@ -2679,12 +2679,12 @@ quests:
     prerequisite: null
   exploring_007:
     name: "Quest 007: Exploring Challenge"
-    description: "Discover 7 unique biomes"
+    description: "Travel 750 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 7
+    amount: 750
     rewards:
       money: 7500
       xp: 75
@@ -2692,12 +2692,12 @@ quests:
     prerequisite: null
   exploring_008:
     name: "Quest 008: Exploring Challenge"
-    description: "Discover 8 unique biomes"
+    description: "Travel 850 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 8
+    amount: 850
     rewards:
       money: 7916
       xp: 79
@@ -2705,12 +2705,12 @@ quests:
     prerequisite: null
   exploring_009:
     name: "Quest 009: Exploring Challenge"
-    description: "Discover 9 unique biomes"
+    description: "Travel 1,000 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 9
+    amount: 1000
     rewards:
       money: 8333
       xp: 83
@@ -2718,12 +2718,12 @@ quests:
     prerequisite: null
   exploring_010:
     name: "Quest 010: Exploring Challenge"
-    description: "Discover 10 unique biomes"
+    description: "Travel 1,150 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 10
+    amount: 1150
     rewards:
       money: 8750
       xp: 87
@@ -2731,12 +2731,12 @@ quests:
     prerequisite: null
   exploring_011:
     name: "Quest 011: Exploring Challenge"
-    description: "Discover 11 unique biomes"
+    description: "Travel 1,250 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 11
+    amount: 1250
     rewards:
       money: 9166
       xp: 91
@@ -2744,12 +2744,12 @@ quests:
     prerequisite: null
   exploring_012:
     name: "Quest 012: Exploring Challenge"
-    description: "Discover 12 unique biomes"
+    description: "Travel 1,400 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 12
+    amount: 1400
     rewards:
       money: 9583
       xp: 95
@@ -2757,12 +2757,12 @@ quests:
     prerequisite: null
   exploring_013:
     name: "Quest 013: Exploring Challenge"
-    description: "Discover 13 unique biomes"
+    description: "Travel 1,600 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 13
+    amount: 1600
     rewards:
       money: 10000
       xp: 100
@@ -2770,12 +2770,12 @@ quests:
     prerequisite: null
   exploring_014:
     name: "Quest 014: Exploring Challenge"
-    description: "Discover 14 unique biomes"
+    description: "Travel 1,750 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 14
+    amount: 1750
     rewards:
       money: 10416
       xp: 104
@@ -2783,12 +2783,12 @@ quests:
     prerequisite: null
   exploring_015:
     name: "Quest 015: Exploring Challenge"
-    description: "Discover 15 unique biomes"
+    description: "Travel 1,950 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 15
+    amount: 1950
     rewards:
       money: 10833
       xp: 108
@@ -2796,12 +2796,12 @@ quests:
     prerequisite: null
   exploring_016:
     name: "Quest 016: Exploring Challenge"
-    description: "Discover 16 unique biomes"
+    description: "Travel 2,150 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 16
+    amount: 2150
     rewards:
       money: 11250
       xp: 112
@@ -2809,12 +2809,12 @@ quests:
     prerequisite: null
   exploring_017:
     name: "Quest 017: Exploring Challenge"
-    description: "Discover 17 unique biomes"
+    description: "Travel 2,350 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 17
+    amount: 2350
     rewards:
       money: 11666
       xp: 116
@@ -2822,12 +2822,12 @@ quests:
     prerequisite: null
   exploring_018:
     name: "Quest 018: Exploring Challenge"
-    description: "Discover 18 unique biomes"
+    description: "Travel 2,550 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 18
+    amount: 2550
     rewards:
       money: 12083
       xp: 120
@@ -2835,12 +2835,12 @@ quests:
     prerequisite: null
   exploring_019:
     name: "Quest 019: Exploring Challenge"
-    description: "Discover 19 unique biomes"
+    description: "Travel 2,750 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 19
+    amount: 2750
     rewards:
       money: 12500
       xp: 125
@@ -2848,12 +2848,12 @@ quests:
     prerequisite: null
   exploring_020:
     name: "Quest 020: Exploring Challenge"
-    description: "Discover 20 unique biomes"
+    description: "Travel 3,000 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 20
+    amount: 3000
     rewards:
       money: 12916
       xp: 129
@@ -2861,12 +2861,12 @@ quests:
     prerequisite: null
   exploring_021:
     name: "Quest 021: Exploring Challenge"
-    description: "Discover 21 unique biomes"
+    description: "Travel 3,200 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 21
+    amount: 3200
     rewards:
       money: 13333
       xp: 133
@@ -2874,12 +2874,12 @@ quests:
     prerequisite: null
   exploring_022:
     name: "Quest 022: Exploring Challenge"
-    description: "Discover 22 unique biomes"
+    description: "Travel 3,450 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 22
+    amount: 3450
     rewards:
       money: 13750
       xp: 137
@@ -2887,12 +2887,12 @@ quests:
     prerequisite: null
   exploring_023:
     name: "Quest 023: Exploring Challenge"
-    description: "Discover 23 unique biomes"
+    description: "Travel 3,700 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 23
+    amount: 3700
     rewards:
       money: 14166
       xp: 141
@@ -2900,12 +2900,12 @@ quests:
     prerequisite: null
   exploring_024:
     name: "Quest 024: Exploring Challenge"
-    description: "Discover 24 unique biomes"
+    description: "Travel 3,950 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 24
+    amount: 3950
     rewards:
       money: 14583
       xp: 145
@@ -2913,12 +2913,12 @@ quests:
     prerequisite: null
   exploring_025:
     name: "Quest 025: Exploring Challenge"
-    description: "Discover 25 unique biomes"
+    description: "Travel 4,250 blocks"
     category: EXPLORATION
     difficulty: EASY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 25
+    amount: 4250
     rewards:
       money: 15000
       xp: 150
@@ -2926,12 +2926,12 @@ quests:
     prerequisite: null
   exploring_026:
     name: "Quest 026: Exploring Challenge"
-    description: "Discover 26 unique biomes"
+    description: "Travel 4,500 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 26
+    amount: 4500
     rewards:
       money: 20000
       xp: 200
@@ -2939,12 +2939,12 @@ quests:
     prerequisite: null
   exploring_027:
     name: "Quest 027: Exploring Challenge"
-    description: "Discover 27 unique biomes"
+    description: "Travel 4,800 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 27
+    amount: 4800
     rewards:
       money: 22500
       xp: 212
@@ -2952,12 +2952,12 @@ quests:
     prerequisite: null
   exploring_028:
     name: "Quest 028: Exploring Challenge"
-    description: "Discover 28 unique biomes"
+    description: "Travel 5,100 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 28
+    amount: 5100
     rewards:
       money: 25000
       xp: 225
@@ -2965,12 +2965,12 @@ quests:
     prerequisite: null
   exploring_029:
     name: "Quest 029: Exploring Challenge"
-    description: "Discover 29 unique biomes"
+    description: "Travel 5,400 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 29
+    amount: 5400
     rewards:
       money: 27500
       xp: 237
@@ -2978,12 +2978,12 @@ quests:
     prerequisite: null
   exploring_030:
     name: "Quest 030: Exploring Challenge"
-    description: "Discover 30 unique biomes"
+    description: "Travel 5,750 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 30
+    amount: 5750
     rewards:
       money: 30000
       xp: 250
@@ -2991,12 +2991,12 @@ quests:
     prerequisite: null
   exploring_031:
     name: "Quest 031: Exploring Challenge"
-    description: "Discover 31 unique biomes"
+    description: "Travel 6,050 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 31
+    amount: 6050
     rewards:
       money: 32500
       xp: 262
@@ -3004,12 +3004,12 @@ quests:
     prerequisite: null
   exploring_032:
     name: "Quest 032: Exploring Challenge"
-    description: "Discover 32 unique biomes"
+    description: "Travel 6,400 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 32
+    amount: 6400
     rewards:
       money: 35000
       xp: 275
@@ -3017,12 +3017,12 @@ quests:
     prerequisite: null
   exploring_033:
     name: "Quest 033: Exploring Challenge"
-    description: "Discover 33 unique biomes"
+    description: "Travel 6,750 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 33
+    amount: 6750
     rewards:
       money: 37500
       xp: 287
@@ -3030,12 +3030,12 @@ quests:
     prerequisite: null
   exploring_034:
     name: "Quest 034: Exploring Challenge"
-    description: "Discover 34 unique biomes"
+    description: "Travel 7,100 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 34
+    amount: 7100
     rewards:
       money: 40000
       xp: 300
@@ -3043,12 +3043,12 @@ quests:
     prerequisite: null
   exploring_035:
     name: "Quest 035: Exploring Challenge"
-    description: "Discover 35 unique biomes"
+    description: "Travel 7,450 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 35
+    amount: 7450
     rewards:
       money: 42500
       xp: 312
@@ -3056,12 +3056,12 @@ quests:
     prerequisite: null
   exploring_036:
     name: "Quest 036: Exploring Challenge"
-    description: "Discover 36 unique biomes"
+    description: "Travel 7,800 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 36
+    amount: 7800
     rewards:
       money: 45000
       xp: 325
@@ -3069,12 +3069,12 @@ quests:
     prerequisite: null
   exploring_037:
     name: "Quest 037: Exploring Challenge"
-    description: "Discover 37 unique biomes"
+    description: "Travel 8,200 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 37
+    amount: 8200
     rewards:
       money: 47500
       xp: 337
@@ -3082,12 +3082,12 @@ quests:
     prerequisite: null
   exploring_038:
     name: "Quest 038: Exploring Challenge"
-    description: "Discover 38 unique biomes"
+    description: "Travel 8,550 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 38
+    amount: 8550
     rewards:
       money: 50000
       xp: 350
@@ -3095,12 +3095,12 @@ quests:
     prerequisite: null
   exploring_039:
     name: "Quest 039: Exploring Challenge"
-    description: "Discover 39 unique biomes"
+    description: "Travel 8,950 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 39
+    amount: 8950
     rewards:
       money: 52500
       xp: 362
@@ -3108,12 +3108,12 @@ quests:
     prerequisite: null
   exploring_040:
     name: "Quest 040: Exploring Challenge"
-    description: "Discover 40 unique biomes"
+    description: "Travel 9,400 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 40
+    amount: 9400
     rewards:
       money: 55000
       xp: 375
@@ -3121,12 +3121,12 @@ quests:
     prerequisite: null
   exploring_041:
     name: "Quest 041: Exploring Challenge"
-    description: "Discover 41 unique biomes"
+    description: "Travel 9,800 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 41
+    amount: 9800
     rewards:
       money: 57500
       xp: 387
@@ -3134,12 +3134,12 @@ quests:
     prerequisite: null
   exploring_042:
     name: "Quest 042: Exploring Challenge"
-    description: "Discover 42 unique biomes"
+    description: "Travel 10,200 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 42
+    amount: 10200
     rewards:
       money: 60000
       xp: 400
@@ -3147,12 +3147,12 @@ quests:
     prerequisite: null
   exploring_043:
     name: "Quest 043: Exploring Challenge"
-    description: "Discover 43 unique biomes"
+    description: "Travel 10,650 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 43
+    amount: 10650
     rewards:
       money: 62500
       xp: 412
@@ -3160,12 +3160,12 @@ quests:
     prerequisite: null
   exploring_044:
     name: "Quest 044: Exploring Challenge"
-    description: "Discover 44 unique biomes"
+    description: "Travel 11,100 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 44
+    amount: 11100
     rewards:
       money: 65000
       xp: 425
@@ -3173,12 +3173,12 @@ quests:
     prerequisite: null
   exploring_045:
     name: "Quest 045: Exploring Challenge"
-    description: "Discover 45 unique biomes"
+    description: "Travel 11,550 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 45
+    amount: 11550
     rewards:
       money: 67500
       xp: 437
@@ -3186,12 +3186,12 @@ quests:
     prerequisite: null
   exploring_046:
     name: "Quest 046: Exploring Challenge"
-    description: "Discover 46 unique biomes"
+    description: "Travel 12,000 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 46
+    amount: 12000
     rewards:
       money: 70000
       xp: 450
@@ -3199,12 +3199,12 @@ quests:
     prerequisite: null
   exploring_047:
     name: "Quest 047: Exploring Challenge"
-    description: "Discover 47 unique biomes"
+    description: "Travel 12,450 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 47
+    amount: 12450
     rewards:
       money: 72500
       xp: 462
@@ -3212,12 +3212,12 @@ quests:
     prerequisite: null
   exploring_048:
     name: "Quest 048: Exploring Challenge"
-    description: "Discover 48 unique biomes"
+    description: "Travel 12,950 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 48
+    amount: 12950
     rewards:
       money: 75000
       xp: 475
@@ -3225,12 +3225,12 @@ quests:
     prerequisite: null
   exploring_049:
     name: "Quest 049: Exploring Challenge"
-    description: "Discover 49 unique biomes"
+    description: "Travel 13,450 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 49
+    amount: 13450
     rewards:
       money: 77500
       xp: 487
@@ -3238,12 +3238,12 @@ quests:
     prerequisite: null
   exploring_050:
     name: "Quest 050: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 13,950 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 13950
     rewards:
       money: 80000
       xp: 500
@@ -3251,12 +3251,12 @@ quests:
     prerequisite: null
   exploring_051:
     name: "Quest 051: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 14,450 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 14450
     rewards:
       money: 100000
       xp: 500
@@ -3264,12 +3264,12 @@ quests:
     prerequisite: null
   exploring_052:
     name: "Quest 052: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 14,950 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 14950
     rewards:
       money: 116666
       xp: 562
@@ -3277,12 +3277,12 @@ quests:
     prerequisite: null
   exploring_053:
     name: "Quest 053: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 15,450 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 15450
     rewards:
       money: 133333
       xp: 625
@@ -3290,12 +3290,12 @@ quests:
     prerequisite: null
   exploring_054:
     name: "Quest 054: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 16,000 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 16000
     rewards:
       money: 150000
       xp: 687
@@ -3303,12 +3303,12 @@ quests:
     prerequisite: null
   exploring_055:
     name: "Quest 055: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 16,550 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 16550
     rewards:
       money: 166666
       xp: 750
@@ -3316,12 +3316,12 @@ quests:
     prerequisite: null
   exploring_056:
     name: "Quest 056: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 17,100 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 17100
     rewards:
       money: 183333
       xp: 812
@@ -3329,12 +3329,12 @@ quests:
     prerequisite: null
   exploring_057:
     name: "Quest 057: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 17,650 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 17650
     rewards:
       money: 200000
       xp: 875
@@ -3342,12 +3342,12 @@ quests:
     prerequisite: null
   exploring_058:
     name: "Quest 058: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 18,200 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 18200
     rewards:
       money: 216666
       xp: 937
@@ -3355,12 +3355,12 @@ quests:
     prerequisite: null
   exploring_059:
     name: "Quest 059: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 18,800 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 18800
     rewards:
       money: 233333
       xp: 1000
@@ -3368,12 +3368,12 @@ quests:
     prerequisite: null
   exploring_060:
     name: "Quest 060: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 19,400 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 19400
     rewards:
       money: 250000
       xp: 1062
@@ -3381,12 +3381,12 @@ quests:
     prerequisite: null
   exploring_061:
     name: "Quest 061: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 19,950 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 19950
     rewards:
       money: 266666
       xp: 1125
@@ -3394,12 +3394,12 @@ quests:
     prerequisite: null
   exploring_062:
     name: "Quest 062: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 20,550 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 20550
     rewards:
       money: 283333
       xp: 1187
@@ -3407,12 +3407,12 @@ quests:
     prerequisite: null
   exploring_063:
     name: "Quest 063: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 21,200 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 21200
     rewards:
       money: 300000
       xp: 1250
@@ -3420,12 +3420,12 @@ quests:
     prerequisite: null
   exploring_064:
     name: "Quest 064: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 21,800 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 21800
     rewards:
       money: 316666
       xp: 1312
@@ -3433,12 +3433,12 @@ quests:
     prerequisite: null
   exploring_065:
     name: "Quest 065: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 22,450 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 22450
     rewards:
       money: 333333
       xp: 1375
@@ -3446,12 +3446,12 @@ quests:
     prerequisite: null
   exploring_066:
     name: "Quest 066: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 23,100 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 23100
     rewards:
       money: 350000
       xp: 1437
@@ -3459,12 +3459,12 @@ quests:
     prerequisite: null
   exploring_067:
     name: "Quest 067: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 23,750 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 23750
     rewards:
       money: 366666
       xp: 1500
@@ -3472,12 +3472,12 @@ quests:
     prerequisite: null
   exploring_068:
     name: "Quest 068: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 24,400 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 24400
     rewards:
       money: 383333
       xp: 1562
@@ -3485,12 +3485,12 @@ quests:
     prerequisite: null
   exploring_069:
     name: "Quest 069: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 25,050 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 25050
     rewards:
       money: 400000
       xp: 1625
@@ -3498,12 +3498,12 @@ quests:
     prerequisite: null
   exploring_070:
     name: "Quest 070: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 25,750 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 25750
     rewards:
       money: 416666
       xp: 1687
@@ -3511,12 +3511,12 @@ quests:
     prerequisite: null
   exploring_071:
     name: "Quest 071: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 26,400 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 26400
     rewards:
       money: 433333
       xp: 1750
@@ -3524,12 +3524,12 @@ quests:
     prerequisite: null
   exploring_072:
     name: "Quest 072: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 27,100 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 27100
     rewards:
       money: 450000
       xp: 1812
@@ -3537,12 +3537,12 @@ quests:
     prerequisite: null
   exploring_073:
     name: "Quest 073: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 27,800 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 27800
     rewards:
       money: 466666
       xp: 1875
@@ -3550,12 +3550,12 @@ quests:
     prerequisite: null
   exploring_074:
     name: "Quest 074: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 28,500 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 28500
     rewards:
       money: 483333
       xp: 1937
@@ -3563,12 +3563,12 @@ quests:
     prerequisite: null
   exploring_075:
     name: "Quest 075: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 29,250 blocks"
     category: EXPLORATION
     difficulty: HARD
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 29250
     rewards:
       money: 500000
       xp: 2000
@@ -3576,12 +3576,12 @@ quests:
     prerequisite: null
   exploring_076:
     name: "Quest 076: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 29,950 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 29950
     rewards:
       money: 500000
       xp: 2000
@@ -3589,12 +3589,12 @@ quests:
     prerequisite: null
   exploring_077:
     name: "Quest 077: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 30,700 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 30700
     rewards:
       money: 687500
       xp: 2333
@@ -3602,12 +3602,12 @@ quests:
     prerequisite: null
   exploring_078:
     name: "Quest 078: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 31,450 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 31450
     rewards:
       money: 875000
       xp: 2666
@@ -3615,12 +3615,12 @@ quests:
     prerequisite: null
   exploring_079:
     name: "Quest 079: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 32,200 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 32200
     rewards:
       money: 1062500
       xp: 3000
@@ -3628,12 +3628,12 @@ quests:
     prerequisite: null
   exploring_080:
     name: "Quest 080: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 33,000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 33000
     rewards:
       money: 1250000
       xp: 3333
@@ -3641,12 +3641,12 @@ quests:
     prerequisite: null
   exploring_081:
     name: "Quest 081: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 33,750 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 33750
     rewards:
       money: 1437500
       xp: 3666
@@ -3654,12 +3654,12 @@ quests:
     prerequisite: null
   exploring_082:
     name: "Quest 082: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 34,550 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 34550
     rewards:
       money: 1625000
       xp: 4000
@@ -3667,12 +3667,12 @@ quests:
     prerequisite: null
   exploring_083:
     name: "Quest 083: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 35,350 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 35350
     rewards:
       money: 1812500
       xp: 4333
@@ -3680,12 +3680,12 @@ quests:
     prerequisite: null
   exploring_084:
     name: "Quest 084: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 36,150 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 36150
     rewards:
       money: 2000000
       xp: 4666
@@ -3693,12 +3693,12 @@ quests:
     prerequisite: null
   exploring_085:
     name: "Quest 085: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 36,950 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 36950
     rewards:
       money: 2187500
       xp: 5000
@@ -3706,12 +3706,12 @@ quests:
     prerequisite: null
   exploring_086:
     name: "Quest 086: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 37,750 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 37750
     rewards:
       money: 2375000
       xp: 5333
@@ -3719,12 +3719,12 @@ quests:
     prerequisite: null
   exploring_087:
     name: "Quest 087: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 38,600 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 38600
     rewards:
       money: 2562500
       xp: 5666
@@ -3732,12 +3732,12 @@ quests:
     prerequisite: null
   exploring_088:
     name: "Quest 088: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 39,400 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 39400
     rewards:
       money: 2750000
       xp: 6000
@@ -3745,12 +3745,12 @@ quests:
     prerequisite: null
   exploring_089:
     name: "Quest 089: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 40,250 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 40250
     rewards:
       money: 2937500
       xp: 6333
@@ -3758,12 +3758,12 @@ quests:
     prerequisite: null
   exploring_090:
     name: "Quest 090: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 41,150 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 41150
     rewards:
       money: 3125000
       xp: 6666
@@ -3771,12 +3771,12 @@ quests:
     prerequisite: null
   exploring_091:
     name: "Quest 091: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 42,000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 42000
     rewards:
       money: 3312500
       xp: 7000
@@ -3784,12 +3784,12 @@ quests:
     prerequisite: null
   exploring_092:
     name: "Quest 092: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 42,850 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 42850
     rewards:
       money: 3500000
       xp: 7333
@@ -3797,12 +3797,12 @@ quests:
     prerequisite: null
   exploring_093:
     name: "Quest 093: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 43,750 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 43750
     rewards:
       money: 3687500
       xp: 7666
@@ -3810,12 +3810,12 @@ quests:
     prerequisite: null
   exploring_094:
     name: "Quest 094: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 44,650 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 44650
     rewards:
       money: 3875000
       xp: 8000
@@ -3823,12 +3823,12 @@ quests:
     prerequisite: null
   exploring_095:
     name: "Quest 095: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 45,550 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 45550
     rewards:
       money: 4062500
       xp: 8333
@@ -3836,12 +3836,12 @@ quests:
     prerequisite: null
   exploring_096:
     name: "Quest 096: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 46,450 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 46450
     rewards:
       money: 4250000
       xp: 8666
@@ -3849,12 +3849,12 @@ quests:
     prerequisite: null
   exploring_097:
     name: "Quest 097: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 47,350 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 47350
     rewards:
       money: 4437500
       xp: 9000
@@ -3862,12 +3862,12 @@ quests:
     prerequisite: null
   exploring_098:
     name: "Quest 098: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 48,300 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 48300
     rewards:
       money: 4625000
       xp: 9333
@@ -3875,12 +3875,12 @@ quests:
     prerequisite: null
   exploring_099:
     name: "Quest 099: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 49,250 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 49250
     rewards:
       money: 4812500
       xp: 9666
@@ -3888,12 +3888,12 @@ quests:
     prerequisite: null
   exploring_100:
     name: "Quest 100: Exploring Challenge"
-    description: "Discover 50 unique biomes"
+    description: "Travel 50,200 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
-    type: VISIT_BIOME
+    type: WALK_DISTANCE
     target: ""
-    amount: 50
+    amount: 50200
     rewards:
       money: 5000000
       xp: 10000

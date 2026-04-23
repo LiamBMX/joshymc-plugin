@@ -613,10 +613,97 @@ class Joshymc : JavaPlugin() {
                         world.worldBorder.size = overworldSize
                         logger.info("[WorldSetup] Overworld '${world.name}' border set to ${overworldSize.toInt()}x${overworldSize.toInt()}.")
                         world.setGameRule(GameRule.DO_TRADER_SPAWNING, false)
+                        disableStructureGeneration(world)
                     }
                 }
                 else -> {}
             }
+        }
+    }
+
+    /**
+     * Disable structure generation for an already-loaded world.
+     *
+     * Structure generation is baked into `level.dat` when the world is first
+     * created, so flipping `generate-structures=false` in server.properties
+     * only affects NEWLY created worlds — it does nothing for the existing
+     * main overworld. We have to patch the in-memory world gen options.
+     *
+     * Tries three strategies in order:
+     *   1. Bukkit's `World.setCanGenerateStructures(boolean)` if this Paper
+     *      build exposes it.
+     *   2. NMS reflection into the backing `WorldOptions` record — builds a
+     *      replacement record with generateStructures=false and swaps it.
+     *   3. Gives up and logs a clear manual-fix instruction.
+     *
+     * Wrapped in try/catch so a failed reflection path never breaks startup.
+     */
+    private fun disableStructureGeneration(world: World) {
+        // Already off? Nothing to do.
+        if (!world.canGenerateStructures()) {
+            logger.info("[WorldSetup] Structures already disabled on '${world.name}'.")
+            return
+        }
+
+        // Strategy 1: Bukkit API (newer Paper builds may expose a setter).
+        try {
+            val setter = world.javaClass.getMethod("setCanGenerateStructures", Boolean::class.javaPrimitiveType)
+            setter.invoke(world, false)
+            logger.info("[WorldSetup] Disabled structures on '${world.name}' via Bukkit API.")
+            return
+        } catch (_: NoSuchMethodException) {
+            // Fall through to reflection.
+        } catch (e: Exception) {
+            logger.warning("[WorldSetup] Bukkit setCanGenerateStructures failed: ${e.message}")
+        }
+
+        // Strategy 2: NMS reflection. Paper 1.21.x:
+        //   CraftWorld.getHandle() -> ServerLevel
+        //   ServerLevel.getServer().getWorldData() -> PrimaryLevelData (global)
+        //   PrimaryLevelData.worldGenOptions() -> WorldOptions (record)
+        //   Swap in a new WorldOptions record with generateStructures=false.
+        try {
+            val handle = world.javaClass.getMethod("getHandle").invoke(world)
+            val server = handle.javaClass.getMethod("getServer").invoke(handle)
+            val worldData = server.javaClass.getMethod("getWorldData").invoke(server)
+            // worldGenOptions() is the accessor on PrimaryLevelData since 1.19+.
+            val optsMethod = worldData.javaClass.methods.firstOrNull {
+                it.name == "worldGenOptions" && it.parameterCount == 0
+            } ?: worldData.javaClass.methods.firstOrNull {
+                it.name == "getWorldGenOptions" && it.parameterCount == 0
+            } ?: throw NoSuchMethodException("worldGenOptions() not found on ${worldData.javaClass.name}")
+
+            val opts = optsMethod.invoke(worldData)
+            val optsCls = opts.javaClass
+            val seed = optsCls.getMethod("seed").invoke(opts) as Long
+            val generateBonusChest = optsCls.getMethod("generateBonusChest").invoke(opts) as Boolean
+            val dimensions = optsCls.getMethod("dimensions").invoke(opts)
+
+            // WorldOptions(long seed, boolean generateStructures, boolean generateBonusChest, Registry<LevelStem> dimensions)
+            val ctor = optsCls.constructors.firstOrNull { it.parameterCount == 4 }
+                ?: throw NoSuchMethodException("WorldOptions 4-arg ctor not found")
+            val newOpts = ctor.newInstance(seed, false, generateBonusChest, dimensions)
+
+            // Replace on the world data. Prefer setWorldGenOptions if present,
+            // otherwise write the backing field directly.
+            val setter = worldData.javaClass.methods.firstOrNull {
+                it.name == "setWorldGenOptions" && it.parameterCount == 1
+            }
+            if (setter != null) {
+                setter.invoke(worldData, newOpts)
+            } else {
+                val field = worldData.javaClass.declaredFields.firstOrNull {
+                    it.type == optsCls
+                } ?: throw NoSuchFieldException("WorldOptions field not found on ${worldData.javaClass.name}")
+                field.isAccessible = true
+                field.set(worldData, newOpts)
+            }
+
+            logger.info("[WorldSetup] Disabled structures on '${world.name}' via NMS reflection. New chunks will not generate structures.")
+        } catch (e: Exception) {
+            logger.warning("[WorldSetup] Could not programmatically disable structures on '${world.name}': ${e.message}")
+            logger.warning("[WorldSetup] To disable manually: stop the server, open '${world.name}/level.dat'")
+            logger.warning("[WorldSetup] in an NBT editor, and set Data.WorldGenSettings.generate_features to 0b.")
         }
     }
 
