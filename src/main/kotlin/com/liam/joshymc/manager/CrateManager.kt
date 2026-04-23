@@ -415,6 +415,15 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return meta.persistentDataContainer.get(crateKeyKey, PersistentDataType.STRING)
     }
 
+    private fun consumeOneKey(player: Player) {
+        val itemInHand = player.inventory.itemInMainHand
+        if (itemInHand.amount > 1) {
+            itemInHand.amount -= 1
+        } else {
+            player.inventory.setItemInMainHand(null)
+        }
+    }
+
     fun openCrate(player: Player, crateType: String, block: Block) {
         val crate = crates[crateType] ?: return
 
@@ -511,7 +520,33 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             }
 
             val rewardRef = reward
+            val crateId = crate.id
             gui.setItem(slot, item) { p, _ ->
+                // Re-validate and consume key at click time (anti-dupe + anti-refund abuse)
+                val keyInHand = p.inventory.itemInMainHand
+                if (!isKey(keyInHand, crateId)) {
+                    p.closeInventory()
+                    plugin.commsManager.send(
+                        p,
+                        Component.text("You no longer have a ", NamedTextColor.RED)
+                            .append(Component.text(crate.keyName, TextColor.color(0xFFAA00)))
+                            .append(Component.text(".", NamedTextColor.RED))
+                    )
+                    return@setItem
+                }
+                // Re-check inventory space — the player may have filled it while the GUI was open.
+                // Main-hand slot frees up only when the key stack is size 1.
+                val hasFreeSlot = p.inventory.firstEmpty() != -1 || keyInHand.amount == 1
+                if (!hasFreeSlot) {
+                    p.closeInventory()
+                    plugin.commsManager.send(
+                        p,
+                        Component.text("Your inventory is full — clear some space and try again.", NamedTextColor.RED)
+                    )
+                    p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                    return@setItem
+                }
+                consumeOneKey(p)
                 p.closeInventory()
                 val rewardItem = buildRewardItem(rewardRef)
                 val leftover = p.inventory.addItem(rewardItem)
@@ -957,12 +992,36 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         val keyCount = itemInHand.amount
 
-        // Consume all keys
+        // SELECT crates normally require the player to pick — mass open falls back to weighted random.
+        if (crate.mode == CrateMode.SELECT) {
+            plugin.commsManager.send(
+                player,
+                Component.text("Mass-opening a ", NamedTextColor.GRAY)
+                    .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
+                    .append(Component.text(" crate picks rewards randomly (no manual selection).", NamedTextColor.GRAY))
+            )
+        }
+
+        // Require at least one free slot before we even start, so the first reward has somewhere to land.
+        if (player.inventory.firstEmpty() == -1) {
+            plugin.commsManager.send(
+                player,
+                Component.text("Your inventory is full — clear some space before mass-opening.", NamedTextColor.RED)
+            )
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+            return
+        }
+
+        // Consume keys incrementally so we can refund any we can't use.
         player.inventory.setItemInMainHand(null)
 
-        // Give rewards directly (skip animation for mass open)
         val rewardSummary = mutableMapOf<String, Int>()
+        var keysUsed = 0
         for (i in 0 until keyCount) {
+            // Stop if the inventory has no room for another reward.
+            // (Partial stacks can still top up existing stacks, but firstEmpty == -1 is our hard stop.)
+            if (player.inventory.firstEmpty() == -1) break
+
             val reward = selectWeightedReward(crate)
             val rewardItem = buildRewardItem(reward)
             val leftover = player.inventory.addItem(rewardItem)
@@ -970,14 +1029,21 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 player.world.dropItemNaturally(player.location, item)
             }
             rewardSummary[reward.displayName] = (rewardSummary[reward.displayName] ?: 0) + reward.amount
+            keysUsed++
+        }
+
+        val keysRefunded = keyCount - keysUsed
+        if (keysRefunded > 0) {
+            // Main hand is empty after setItemInMainHand(null), so giveKey is guaranteed a slot.
+            giveKey(player, crateType, keysRefunded)
         }
 
         // Send summary message
         plugin.commsManager.send(
             player,
-            Component.text("Opened $keyCount ", NamedTextColor.GREEN)
+            Component.text("Opened $keysUsed ", NamedTextColor.GREEN)
                 .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
-                .append(Component.text(" crates!", NamedTextColor.GREEN))
+                .append(Component.text(" crate${if (keysUsed == 1) "" else "s"}!", NamedTextColor.GREEN))
         )
 
         for ((rewardName, totalAmount) in rewardSummary) {
@@ -986,6 +1052,15 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 Component.text("  - ", NamedTextColor.DARK_GRAY)
                     .append(Component.text(rewardName, TextColor.color(0xFFAA00)))
                     .append(Component.text(" x$totalAmount", NamedTextColor.GRAY))
+            )
+        }
+
+        if (keysRefunded > 0) {
+            plugin.commsManager.send(
+                player,
+                Component.text("Your inventory filled up — ", NamedTextColor.YELLOW)
+                    .append(Component.text("$keysRefunded ", NamedTextColor.WHITE))
+                    .append(Component.text("key${if (keysRefunded == 1) "" else "s"} returned.", NamedTextColor.YELLOW))
             )
         }
 
@@ -1070,11 +1145,25 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        // Consume one key
-        if (itemInHand.amount > 1) {
-            itemInHand.amount -= 1
-        } else {
-            player.inventory.setItemInMainHand(null)
+        // Block opening if the inventory has no room for the reward — otherwise it would
+        // drop on the ground and risk being lost (void/lava/despawn).
+        // Main-hand slot will free up when we consume the key, but that only helps if
+        // the player holds exactly one key; otherwise a fresh free slot is required.
+        val hasFreeSlot = player.inventory.firstEmpty() != -1 ||
+            (itemInHand.amount == 1 && isKey(itemInHand, crateType))
+        if (!hasFreeSlot) {
+            plugin.commsManager.send(
+                player,
+                Component.text("Your inventory is full — clear some space before opening.", NamedTextColor.RED)
+            )
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+            return
+        }
+
+        // SELECT mode defers key consumption until the player actually picks a reward,
+        // so closing the GUI without choosing does not cost a key.
+        if (crates[crateType]?.mode != CrateMode.SELECT) {
+            consumeOneKey(player)
         }
 
         openCrate(player, crateType, block)
