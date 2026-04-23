@@ -15,10 +15,13 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.block.Action
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerPortalEvent
+import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitTask
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 import kotlin.math.min
 
@@ -40,6 +43,12 @@ class PortalManager(private val plugin: Joshymc) : Listener {
     private val portalSelections = mutableMapOf<UUID, Pair<Location?, Location?>>()
     private val lastPortalUse = mutableMapOf<UUID, MutableMap<Int, Long>>()
     private val playersInPortal = mutableMapOf<UUID, MutableSet<Int>>()
+
+    // Players currently mid-trigger of a custom portal. Vanilla PlayerPortalEvent
+    // is cancelled for anyone in here so async RTP / animation delays can't be
+    // overtaken by the vanilla nether-portal timer firing and yoinking them out.
+    private val pendingPortalTeleport = ConcurrentHashMap<UUID, Long>()
+    private val pendingTimeoutMs = 15_000L
 
     private var portals = mutableListOf<Portal>()
     private var detectionTask: BukkitTask? = null
@@ -224,8 +233,11 @@ class PortalManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun isInsidePortal(player: Player, portal: Portal): Boolean {
-        val loc = player.location
-        if (loc.world.name != portal.world) return false
+        return isInsidePortal(player.location, portal)
+    }
+
+    private fun isInsidePortal(loc: Location, portal: Portal): Boolean {
+        if (loc.world?.name != portal.world) return false
 
         val px = loc.blockX
         val py = loc.blockY
@@ -247,6 +259,11 @@ class PortalManager(private val plugin: Joshymc) : Listener {
             if (now - lastUse < portal.cooldownSeconds * 1000L) return
             cooldowns[portal.id] = now
         }
+
+        // Block vanilla portal teleports (e.g. the 4s nether portal timer) while
+        // the custom action runs — otherwise a slow async RTP can lose the race
+        // and the player gets yanked to the nether instead of their destination.
+        pendingPortalTeleport[uuid] = now
 
         // Show message
         if (!portal.message.isNullOrBlank()) {
@@ -277,16 +294,44 @@ class PortalManager(private val plugin: Joshymc) : Listener {
         }, 20L)
     }
 
-    // Cancel vanilla portal teleportation when player is inside a custom portal
+    // Cancel vanilla portal teleportation when player is inside a custom portal,
+    // when the event's origin block is inside one, or while a custom portal
+    // trigger is still mid-flight for this player.
     @EventHandler(priority = EventPriority.LOWEST)
     fun onPortalTeleport(event: PlayerPortalEvent) {
         val player = event.player
+        if (isPending(player.uniqueId)) {
+            event.isCancelled = true
+            return
+        }
+        val from = event.from
         for (portal in portals) {
-            if (isInsidePortal(player, portal)) {
+            if (isInsidePortal(player, portal) || isInsidePortal(from, portal)) {
                 event.isCancelled = true
                 return
             }
         }
+    }
+
+    // Any successful teleport clears the pending flag so unrelated nether
+    // portals the player uses afterwards aren't incorrectly blocked.
+    @EventHandler
+    fun onPlayerTeleport(event: PlayerTeleportEvent) {
+        pendingPortalTeleport.remove(event.player.uniqueId)
+    }
+
+    @EventHandler
+    fun onPlayerQuit(event: PlayerQuitEvent) {
+        pendingPortalTeleport.remove(event.player.uniqueId)
+    }
+
+    private fun isPending(uuid: UUID): Boolean {
+        val ts = pendingPortalTeleport[uuid] ?: return false
+        if (System.currentTimeMillis() - ts > pendingTimeoutMs) {
+            pendingPortalTeleport.remove(uuid)
+            return false
+        }
+        return true
     }
 
     private fun executeAction(player: Player, portal: Portal) {
