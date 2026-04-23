@@ -1070,12 +1070,13 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         val available = listOf(19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34)
         if (count >= available.size) return available.take(count)
 
-        return if (count <= 7) {
-            // Single row, center in row 2
+        return if (count % 2 == 1 && count <= 7) {
+            // Odd count fits perfectly in a single centered row
             val row = listOf(19, 20, 21, 22, 23, 24, 25)
             val offset = (7 - count) / 2
             row.subList(offset, offset + count)
         } else {
+            // Even count or 8+: split into two centered rows
             val topCount = (count + 1) / 2
             val bottomCount = count - topCount
             val topRow = listOf(19, 20, 21, 22, 23, 24, 25)
