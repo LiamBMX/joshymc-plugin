@@ -26,7 +26,19 @@ class AFKManager(private val plugin: Joshymc) {
     private val preAfkLocations = ConcurrentHashMap<UUID, Location>()
     private val teleporting = ConcurrentHashMap.newKeySet<UUID>()
 
-    data class RewardItem(val material: Material, val amount: Int, val chance: Int)
+    /**
+     * AFK reward item. Resolution order at give time:
+     *   1. [crateKeyType] — pulled from the crate registry as a key item
+     *   2. [customItemId] — built from the custom-item registry
+     *   3. [material] fallback
+     */
+    data class RewardItem(
+        val material: Material,
+        val amount: Int,
+        val chance: Int,
+        val customItemId: String? = null,
+        val crateKeyType: String? = null
+    )
 
     private var worldName = "afk"
     private var rewardEnabled = true
@@ -48,6 +60,20 @@ class AFKManager(private val plugin: Joshymc) {
     fun start() {
         worldName = plugin.config.getString("afk.world", "afk") ?: "afk"
         rewardEnabled = plugin.config.getBoolean("afk.reward.enabled", true)
+
+        // Persistent pre-AFK location store — survives server restarts so a
+        // player who quits while AFK isn't stranded in the void on rejoin.
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS afk_pre_locations (
+                uuid TEXT PRIMARY KEY,
+                world TEXT NOT NULL,
+                x REAL NOT NULL,
+                y REAL NOT NULL,
+                z REAL NOT NULL,
+                yaw REAL NOT NULL,
+                pitch REAL NOT NULL
+            )
+        """.trimIndent())
 
         rewardMoney = plugin.config.getDouble("afk.reward.money", 0.0)
         rewardXp = plugin.config.getInt("afk.reward.xp", 0)
@@ -82,6 +108,12 @@ class AFKManager(private val plugin: Joshymc) {
     /**
      * Load reward items from `afk.reward.items` list. Falls back to the legacy
      * single-item fields (`afk.reward.item` + `amount`) so older configs keep working.
+     *
+     * Each entry's `material` (or legacy `item`) value is resolved in this order:
+     *   1. As a Bukkit Material name (e.g. `DIRT`, `IRON_INGOT`).
+     *   2. As a JoshyMC custom-item id (e.g. `afk_key`, `easter_egg`).
+     *
+     * The `key:amount` shorthand from the legacy pebblehost format is also accepted.
      */
     private fun loadRewardItems(): List<RewardItem> {
         val list = plugin.config.getMapList("afk.reward.items")
@@ -89,18 +121,75 @@ class AFKManager(private val plugin: Joshymc) {
             val parsed = mutableListOf<RewardItem>()
             for (entry in list) {
                 val matName = (entry["material"] as? String) ?: continue
-                val mat = Material.matchMaterial(matName) ?: continue
                 val amt = (entry["amount"] as? Number)?.toInt()?.coerceAtLeast(1) ?: 1
                 val chance = (entry["chance"] as? Number)?.toInt()?.coerceIn(0, 100) ?: 100
-                parsed.add(RewardItem(mat, amt, chance))
+                val resolved = resolveRewardItem(matName, amt, chance)
+                if (resolved != null) {
+                    parsed.add(resolved)
+                } else {
+                    plugin.logger.warning("[AFK] Unknown reward material/item id '$matName' — skipping.")
+                }
             }
             if (parsed.isNotEmpty()) return parsed
         }
 
         val legacyName = plugin.config.getString("afk.reward.item", "DIRT") ?: "DIRT"
-        val legacyMat = Material.matchMaterial(legacyName) ?: Material.DIRT
         val legacyAmt = plugin.config.getInt("afk.reward.amount", 1).coerceAtLeast(1)
-        return listOf(RewardItem(legacyMat, legacyAmt, 100))
+        val resolved = resolveRewardItem(legacyName, legacyAmt, 100)
+        if (resolved != null) return listOf(resolved)
+
+        plugin.logger.warning("[AFK] Legacy reward item '$legacyName' not found — defaulting to DIRT.")
+        return listOf(RewardItem(Material.DIRT, legacyAmt, 100))
+    }
+
+    /**
+     * Resolve a config string into a [RewardItem]. Accepts:
+     *   - Bukkit material name           ("DIRT", "iron_ingot")
+     *   - Custom item id                  ("afk_key", "easter_egg")
+     *   - Crate key                       ("crate:afk", "key:vote")
+     *   - "<id>:<amount>" shorthand       ("afk_key:1")
+     *
+     * The "crate:" / "key:" prefix is checked first so a crate type named "afk"
+     * isn't confused with a custom item also called "afk_key". If the lookup
+     * fails for any of these, returns null and the caller logs a warning.
+     */
+    private fun resolveRewardItem(rawName: String, defaultAmount: Int, chance: Int): RewardItem? {
+        val name = rawName.trim()
+        if (name.isEmpty()) return null
+
+        // Explicit crate-key prefix: "crate:<type>" or "key:<type>".
+        val lower = name.lowercase()
+        if (lower.startsWith("crate:") || lower.startsWith("key:")) {
+            val crateType = name.substringAfter(':').trim().lowercase()
+            if (crateType.isEmpty()) return null
+            // Use Material.PAPER as a placeholder; the real material comes from
+            // CrateManager.createKeyStack at give time.
+            return RewardItem(Material.PAPER, defaultAmount, chance, crateKeyType = crateType)
+        }
+
+        // Allow "name:amount" shorthand (pebblehost legacy format).
+        val (key, amount) = if (name.contains(':')) {
+            val parts = name.split(':', limit = 2)
+            val parsedAmt = parts.getOrNull(1)?.trim()?.toIntOrNull()?.coerceAtLeast(1) ?: defaultAmount
+            parts[0].trim() to parsedAmt
+        } else {
+            name to defaultAmount
+        }
+
+        // 1. Try vanilla Material
+        val mat = Material.matchMaterial(key)
+        if (mat != null) {
+            return RewardItem(mat, amount, chance)
+        }
+
+        // 2. Try custom item id (case-insensitive — registry stores lowercase keys)
+        val customId = key.lowercase()
+        val custom = plugin.itemManager.getItem(customId)
+        if (custom != null) {
+            return RewardItem(custom.material, amount, chance, customItemId = customId)
+        }
+
+        return null
     }
 
     fun stop() {
@@ -132,7 +221,9 @@ class AFKManager(private val plugin: Joshymc) {
     fun setAfk(player: Player, afk: Boolean) {
         if (afk) {
             afkPlayers.add(player.uniqueId)
-            preAfkLocations[player.uniqueId] = player.location.clone()
+            val loc = player.location.clone()
+            preAfkLocations[player.uniqueId] = loc
+            persistPreAfkLocation(player.uniqueId, loc)
             afkStartTime[player.uniqueId] = System.currentTimeMillis()
             nextRewardTime[player.uniqueId] = System.currentTimeMillis() + (rewardIntervalSeconds * 1000)
 
@@ -179,6 +270,7 @@ class AFKManager(private val plugin: Joshymc) {
 
             // Teleport back
             val previousLocation = preAfkLocations.remove(player.uniqueId)
+            clearPersistedPreAfkLocation(player.uniqueId)
             if (previousLocation != null) {
                 teleporting.add(player.uniqueId)
                 player.teleport(previousLocation)
@@ -210,6 +302,69 @@ class AFKManager(private val plugin: Joshymc) {
             nextRewardTime.remove(player.uniqueId)
             afkStartTime.remove(player.uniqueId)
             teleporting.remove(player.uniqueId)
+            // The persisted location row is intentionally kept until the player
+            // rejoins, so handleJoin can rescue them if they spawn in the AFK world.
+        }
+    }
+
+    /**
+     * Rescue a player who logs in while still inside the AFK world (e.g. server
+     * crashed before [handleQuit] could teleport them out). Sends them back to
+     * their stored pre-AFK location, or the spawn world spawn as a fallback.
+     */
+    fun handleJoin(player: Player) {
+        val inAfkWorld = player.world.name == worldName
+        val saved = loadPersistedPreAfkLocation(player.uniqueId)
+
+        if (inAfkWorld) {
+            val target = saved ?: fallbackSpawnLocation()
+            if (target != null) {
+                // Defer one tick so the join is fully processed before teleport
+                plugin.server.scheduler.runTaskLater(plugin, Runnable {
+                    if (player.isOnline) {
+                        teleporting.add(player.uniqueId)
+                        player.teleport(target)
+                        plugin.server.scheduler.runTaskLater(plugin, Runnable {
+                            teleporting.remove(player.uniqueId)
+                        }, 3L)
+                    }
+                }, 2L)
+            }
+        }
+
+        clearPersistedPreAfkLocation(player.uniqueId)
+    }
+
+    private fun fallbackSpawnLocation(): Location? {
+        val warpSpawn = plugin.warpManager.getSpawn()
+        if (warpSpawn != null) return warpSpawn
+        val spawnWorld = Bukkit.getWorld("spawn") ?: Bukkit.getWorlds().firstOrNull { it.name != worldName }
+        return spawnWorld?.spawnLocation
+    }
+
+    private fun persistPreAfkLocation(uuid: UUID, loc: Location) {
+        val world = loc.world ?: return
+        plugin.databaseManager.execute(
+            "INSERT OR REPLACE INTO afk_pre_locations (uuid, world, x, y, z, yaw, pitch) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            uuid.toString(), world.name, loc.x, loc.y, loc.z, loc.yaw.toDouble(), loc.pitch.toDouble()
+        )
+    }
+
+    private fun clearPersistedPreAfkLocation(uuid: UUID) {
+        plugin.databaseManager.execute(
+            "DELETE FROM afk_pre_locations WHERE uuid = ?",
+            uuid.toString()
+        )
+    }
+
+    private fun loadPersistedPreAfkLocation(uuid: UUID): Location? {
+        return plugin.databaseManager.queryFirst(
+            "SELECT world, x, y, z, yaw, pitch FROM afk_pre_locations WHERE uuid = ?",
+            uuid.toString()
+        ) { rs ->
+            val w = Bukkit.getWorld(rs.getString("world")) ?: return@queryFirst null
+            Location(w, rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
+                rs.getFloat("yaw"), rs.getFloat("pitch"))
         }
     }
 
@@ -232,12 +387,27 @@ class AFKManager(private val plugin: Joshymc) {
 
             for (reward in rewardItems) {
                 if (reward.chance < 100 && random.nextInt(100) >= reward.chance) continue
-                val stack = ItemStack(reward.material, reward.amount)
+                val stack = when {
+                    reward.crateKeyType != null ->
+                        plugin.crateManager.createKeyStack(reward.crateKeyType, reward.amount)
+                            ?: run {
+                                plugin.logger.warning("[AFK] Crate type '${reward.crateKeyType}' not registered — skipping reward.")
+                                continue
+                            }
+                    reward.customItemId != null ->
+                        plugin.itemManager.getItem(reward.customItemId)?.createItemStack(reward.amount)
+                            ?: ItemStack(reward.material, reward.amount)
+                    else ->
+                        ItemStack(reward.material, reward.amount)
+                }
                 val leftover = player.inventory.addItem(stack)
                 if (leftover.isNotEmpty()) {
                     leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
                 }
-                granted.add("+${reward.amount} ${reward.material.name.lowercase().replace('_', ' ')}")
+                val label = reward.crateKeyType?.let { "$it key" }
+                    ?: reward.customItemId
+                    ?: reward.material.name.lowercase().replace('_', ' ')
+                granted.add("+${reward.amount} $label")
             }
 
             // Reset countdown

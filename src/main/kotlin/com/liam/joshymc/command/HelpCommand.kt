@@ -460,6 +460,17 @@ class HelpCommand(private val plugin: Joshymc) : CommandExecutor {
         return true
     }
 
+    private fun isStaff(player: Player): Boolean =
+        player.isOp ||
+                player.hasPermission("joshymc.admin") ||
+                player.hasPermission("joshymc.admin.moderate") ||
+                player.hasPermission("joshymc.admin.helper")
+
+    private fun visibleEntries(player: Player, category: Category): List<HelpEntry> {
+        val staff = isStaff(player)
+        return category.entries.filter { !it.staffOnly || staff }
+    }
+
     private val legacy = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand()
 
     private fun openMainMenu(player: Player) {
@@ -482,12 +493,14 @@ class HelpCommand(private val plugin: Joshymc) : CommandExecutor {
             gui.setItem(45 + i, cyanPane)
         }
 
-        // Place command categories (rows 1-2)
+        // Place command categories (rows 1-2). Hide categories with no visible entries.
         val allSlots = row1Slots + row2Slots
-        for ((index, category) in categories.withIndex()) {
+        val visibleCategories = categories.filter { visibleEntries(player, it).isNotEmpty() }
+        for ((index, category) in visibleCategories.withIndex()) {
             if (index >= allSlots.size) break
             val slot = allSlots[index]
-            val item = createCategoryItem(category)
+            val entries = visibleEntries(player, category)
+            val item = createCategoryItem(category, entries)
             gui.setItem(slot, item) { p, _ ->
                 openCategoryMenu(p, category)
             }
@@ -631,9 +644,10 @@ class HelpCommand(private val plugin: Joshymc) : CommandExecutor {
             gui.setItem(45 + i, cyanPane)
         }
 
-        // Place command entries starting at slot 10
+        // Place command entries starting at slot 10 — only entries the player can see
         val contentSlots = (9 until 45).filter { it % 9 != 0 && it % 9 != 8 }
-        for ((index, entry) in category.entries.withIndex()) {
+        val entries = visibleEntries(player, category)
+        for ((index, entry) in entries.withIndex()) {
             if (index >= contentSlots.size) break
             val slot = contentSlots[index]
             val item = createCommandItem(entry)
@@ -665,7 +679,7 @@ class HelpCommand(private val plugin: Joshymc) : CommandExecutor {
         }
     }
 
-    private fun createCategoryItem(category: Category): ItemStack {
+    private fun createCategoryItem(category: Category, entries: List<HelpEntry> = category.entries): ItemStack {
         return ItemStack(category.icon).apply {
             editMeta { meta ->
                 meta.displayName(
@@ -680,7 +694,7 @@ class HelpCommand(private val plugin: Joshymc) : CommandExecutor {
                     Component.text("Commands:", NamedTextColor.GRAY)
                         .decoration(TextDecoration.ITALIC, false)
                 )
-                for (entry in category.entries) {
+                for (entry in entries) {
                     lore.add(
                         Component.text(" ${entry.command}", NamedTextColor.YELLOW)
                             .decoration(TextDecoration.ITALIC, false)

@@ -149,7 +149,7 @@ commands:
     aliases: [stocks]
   quests:
     description: Browse and track quests
-    usage: /quests [list|progress|info]
+    usage: /quests [list|progress|info|reset <player> [quest_id|all]]
     aliases: [quest, q]
   cosmetics:
     description: Open the cosmetics hub
@@ -449,10 +449,10 @@ permissions:
     default: true
   joshymc.autosmelt:
     description: Allows using auto smelt
-    default: true
+    default: op
   joshymc.treefeller:
     description: Allows using tree feller
-    default: true
+    default: op
   joshymc.spawn:
     description: Allows teleporting to spawn
     default: true
@@ -576,6 +576,9 @@ permissions:
   joshymc.quests:
     description: Use the quest system
     default: true
+  joshymc.quests.admin:
+    description: Reset player quest progress (also available from console)
+    default: op
   joshymc.cosmetics:
     description: Open cosmetics hub
     default: true

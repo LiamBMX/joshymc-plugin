@@ -281,8 +281,14 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
             val wasIn = playersInArena[player.uniqueId]
 
             if (arena != null && wasIn == null) {
-                // Entering arena
+                // Entering arena \u2014 force PvP on so the player can fight without
+                // having to flip /pvp first. The setting persists, but most
+                // players want it on inside the arena anyway.
                 playersInArena[player.uniqueId] = arena.id
+                if (!plugin.settingsManager.getSetting(player, CombatManager.PVP_SETTING_KEY)) {
+                    plugin.settingsManager.setSetting(player, CombatManager.PVP_SETTING_KEY, true)
+                    comms.send(player, Component.text("PvP auto-enabled \u2014 you entered an arena.", NamedTextColor.YELLOW))
+                }
                 player.showTitle(Title.title(
                     Component.text("\u2694 PvP Zone", NamedTextColor.RED).decoration(TextDecoration.BOLD, true),
                     Component.text(arena.name, NamedTextColor.GRAY),

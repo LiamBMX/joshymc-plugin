@@ -771,7 +771,7 @@ class Joshymc : JavaPlugin() {
             description = "Sneak + chop to fell entire trees",
             material = org.bukkit.Material.DIAMOND_AXE,
             disabledMaterial = org.bukkit.Material.STONE_AXE,
-            default = true,
+            default = false,
             permission = "joshymc.treefeller"
         ))
     }

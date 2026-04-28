@@ -128,14 +128,8 @@ class ChatColorCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
             return true
         }
 
-        if (args.isEmpty()) {
-            openGui(sender)
-            return true
-        }
-
-        val colorName = args[0].lowercase()
-
-        if (colorName == "reset") {
+        // Reset is always allowed (lets a player who lost the perm clear their color).
+        if (args.isNotEmpty() && args[0].lowercase() == "reset") {
             removePlayerColor(plugin, sender.uniqueId)
             plugin.commsManager.send(
                 sender,
@@ -143,6 +137,21 @@ class ChatColorCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
             )
             return true
         }
+
+        if (!sender.hasPermission("joshymc.chatcolor")) {
+            plugin.commsManager.send(
+                sender,
+                Component.text("You don't have permission to use chat colors.", NamedTextColor.RED)
+            )
+            return true
+        }
+
+        if (args.isEmpty()) {
+            openGui(sender)
+            return true
+        }
+
+        val colorName = args[0].lowercase()
 
         val entry = CHAT_COLORS[colorName]?.let { colorName to it }
         if (entry == null) {

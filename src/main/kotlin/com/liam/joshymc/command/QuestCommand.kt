@@ -14,6 +14,14 @@ import org.bukkit.entity.Player
 class QuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        // The reset subcommand is intentionally console-only (or admin) so it
+        // can't be used by players. We handle it here BEFORE the players-only
+        // check so the console can run it.
+        if (args.isNotEmpty() && args[0].equals("reset", ignoreCase = true)) {
+            handleReset(sender, args)
+            return true
+        }
+
         if (sender !is Player) {
             sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
             return true
@@ -39,6 +47,49 @@ class QuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         return true
+    }
+
+    private fun handleReset(sender: CommandSender, args: Array<out String>) {
+        // Console always allowed; players require admin permission.
+        if (sender is Player && !sender.hasPermission("joshymc.quests.admin")) {
+            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+
+        if (args.size < 2) {
+            sender.sendMessage(Component.text("Usage: /quests reset <player> [quest_id|all]", NamedTextColor.RED))
+            return
+        }
+
+        val name = args[1]
+        val target = plugin.server.getOfflinePlayer(name)
+        if (!target.hasPlayedBefore() && target.player == null) {
+            sender.sendMessage(Component.text("Unknown player '$name'.", NamedTextColor.RED))
+            return
+        }
+
+        val uuid = target.uniqueId
+        val scope = args.getOrNull(2)?.lowercase() ?: "all"
+
+        if (scope == "all") {
+            val removed = plugin.questManager.resetAllProgress(uuid)
+            sender.sendMessage(Component.text("Reset all quest progress for ${target.name ?: name} ($removed entries removed).", NamedTextColor.GREEN))
+            target.player?.let { online ->
+                plugin.commsManager.send(online, Component.text("Your quest progress has been reset.", NamedTextColor.YELLOW))
+            }
+        } else {
+            val quest = plugin.questManager.getAllQuests().find { it.id.equals(scope, ignoreCase = true) }
+            if (quest == null) {
+                sender.sendMessage(Component.text("Unknown quest id '$scope'.", NamedTextColor.RED))
+                return
+            }
+            val removed = plugin.questManager.resetQuestProgress(uuid, quest.id)
+            if (removed) {
+                sender.sendMessage(Component.text("Reset quest '${quest.id}' for ${target.name ?: name}.", NamedTextColor.GREEN))
+            } else {
+                sender.sendMessage(Component.text("${target.name ?: name} had no progress on '${quest.id}'.", NamedTextColor.YELLOW))
+            }
+        }
     }
 
     private fun handleList(player: Player, args: Array<out String>) {
@@ -156,11 +207,14 @@ class QuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (sender !is Player || !sender.hasPermission("joshymc.quests")) return emptyList()
+        val isAdmin = sender !is Player || sender.hasPermission("joshymc.quests.admin")
+        val canBrowse = sender is Player && sender.hasPermission("joshymc.quests")
+        if (!isAdmin && !canBrowse) return emptyList()
 
         if (args.size == 1) {
-            return listOf("list", "progress", "info")
-                .filter { it.startsWith(args[0], ignoreCase = true) }
+            val subs = mutableListOf("list", "progress", "info")
+            if (isAdmin) subs.add("reset")
+            return subs.filter { it.startsWith(args[0], ignoreCase = true) }
         }
 
         if (args.size == 2) {
@@ -179,6 +233,18 @@ class QuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                     .filter { it.startsWith(prefix) }
                     .take(30)
             }
+
+            if (sub == "reset" && isAdmin) {
+                return plugin.server.onlinePlayers
+                    .map { it.name }
+                    .filter { it.startsWith(args[1], ignoreCase = true) }
+            }
+        }
+
+        if (args.size == 3 && args[0].equals("reset", ignoreCase = true) && isAdmin) {
+            val prefix = args[2].lowercase()
+            val ids = plugin.questManager.getAllQuests().map { it.id }
+            return (listOf("all") + ids).filter { it.startsWith(prefix) }.take(30)
         }
 
         return emptyList()

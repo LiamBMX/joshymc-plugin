@@ -915,6 +915,37 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         visitedBiomes.remove(uuid)
     }
 
+    /**
+     * Wipe all quest progress for a player (and the cached/persistent biome list).
+     * Called by /quests reset <player>. Returns the number of progress rows removed.
+     */
+    fun resetAllProgress(uuid: UUID): Int {
+        val removed = plugin.databaseManager.executeUpdate(
+            "DELETE FROM quest_progress WHERE uuid = ?",
+            uuid.toString()
+        )
+        plugin.databaseManager.execute(
+            "DELETE FROM quest_biomes WHERE uuid = ?",
+            uuid.toString()
+        )
+        progressCache.remove(uuid)
+        visitedBiomes.remove(uuid)
+        distanceAccumulator.remove(uuid)
+        return removed
+    }
+
+    /**
+     * Wipe progress for a single quest. Returns true if a row was removed.
+     */
+    fun resetQuestProgress(uuid: UUID, questId: String): Boolean {
+        val removed = plugin.databaseManager.executeUpdate(
+            "DELETE FROM quest_progress WHERE uuid = ? AND quest_id = ?",
+            uuid.toString(), questId
+        )
+        progressCache[uuid]?.remove(questId)
+        return removed > 0
+    }
+
     // ── Internals ──────────────────────────────────────────────
 
     private fun findMatchingQuests(type: QuestType, target: String): List<Quest> {

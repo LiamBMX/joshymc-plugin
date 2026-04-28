@@ -371,10 +371,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }?.crateType
     }
 
-    fun giveKey(player: Player, crateType: String, amount: Int = 1): Boolean {
-        val crate = crates[crateType] ?: return false
+    /**
+     * Build an [ItemStack] for the given crate type's key without giving it.
+     * Returns null if the crate type isn't registered.
+     */
+    fun createKeyStack(crateType: String, amount: Int = 1): ItemStack? {
+        val crate = crates[crateType] ?: return null
 
-        val key = ItemStack(crate.keyMaterial, amount)
+        val key = ItemStack(crate.keyMaterial, amount.coerceAtLeast(1))
         key.editMeta { meta ->
             meta.displayName(
                 Component.text(crate.keyName, TextColor.color(0xFFAA00))
@@ -395,7 +399,11 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             meta.persistentDataContainer.set(crateKeyKey, PersistentDataType.STRING, crateType)
             meta.setEnchantmentGlintOverride(true)
         }
+        return key
+    }
 
+    fun giveKey(player: Player, crateType: String, amount: Int = 1): Boolean {
+        val key = createKeyStack(crateType, amount) ?: return false
         val leftover = player.inventory.addItem(key)
         for ((_, item) in leftover) {
             player.world.dropItemNaturally(player.location, item)

@@ -103,6 +103,11 @@ afk:
     amount: 1
     # Full items list — each entry supports material, amount, chance (0-100).
     # Entries with chance < 100 roll independently each interval.
+    #
+    # `material` accepts three formats:
+    #   1. Bukkit material  — DIRT, IRON_INGOT, DIAMOND, etc.
+    #   2. Custom item id   — easter_egg, void_drill, money_pouch_small, etc.
+    #   3. Crate key        — crate:vote, key:afk  (must match a crate type)
     items:
       - material: DIRT
         amount: 1
@@ -110,6 +115,12 @@ afk:
       # - material: IRON_INGOT
       #   amount: 1
       #   chance: 25
+      # - material: easter_egg
+      #   amount: 1
+      #   chance: 10
+      # - material: "key:afk"
+      #   amount: 1
+      #   chance: 100
 
 # Player Vaults
 vaults:
