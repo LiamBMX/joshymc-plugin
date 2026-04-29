@@ -106,40 +106,112 @@ class AFKManager(private val plugin: Joshymc) {
     }
 
     /**
-     * Load reward items from `afk.reward.items` list. Falls back to the legacy
+     * Load reward items from `afk.reward.items`. Falls back to the legacy
      * single-item fields (`afk.reward.item` + `amount`) so older configs keep working.
      *
-     * Each entry's `material` (or legacy `item`) value is resolved in this order:
-     *   1. As a Bukkit Material name (e.g. `DIRT`, `IRON_INGOT`).
-     *   2. As a JoshyMC custom-item id (e.g. `afk_key`, `easter_egg`).
+     * The `items` list is intentionally generous about format, since users
+     * frequently hand-edit YAML and miss the schema. Accepted entry shapes:
      *
-     * The `key:amount` shorthand from the legacy pebblehost format is also accepted.
+     *   - Map form (recommended):
+     *       items:
+     *         - material: afk_key       # vanilla material, custom item id, or "key:<crate>"
+     *           amount: 1
+     *           chance: 100
+     *
+     *   - String form:
+     *       items:
+     *         - afk_key                  # implicit amount=1, chance=100
+     *         - "afk_key:1"              # name:amount
+     *         - "afk_key:1:50"           # name:amount:chance
+     *         - "key:afk:1:100"          # crate-key shorthand also works inside the string
+     *
+     * Resolution order for the name part:
+     *   1. Crate key prefix    ("crate:<type>", "key:<type>")
+     *   2. Bukkit Material     ("DIRT", "iron_ingot")
+     *   3. Custom item id      ("afk_key", "easter_egg")
      */
     private fun loadRewardItems(): List<RewardItem> {
-        val list = plugin.config.getMapList("afk.reward.items")
-        if (list.isNotEmpty()) {
-            val parsed = mutableListOf<RewardItem>()
-            for (entry in list) {
-                val matName = (entry["material"] as? String) ?: continue
-                val amt = (entry["amount"] as? Number)?.toInt()?.coerceAtLeast(1) ?: 1
-                val chance = (entry["chance"] as? Number)?.toInt()?.coerceIn(0, 100) ?: 100
-                val resolved = resolveRewardItem(matName, amt, chance)
-                if (resolved != null) {
-                    parsed.add(resolved)
+        val parsed = mutableListOf<RewardItem>()
+        // ConfigurationSection.getList preserves the raw entries (maps OR strings).
+        val raw = plugin.config.getList("afk.reward.items")
+        if (raw != null) {
+            for (entry in raw) {
+                val item = parseRewardEntry(entry)
+                if (item != null) {
+                    parsed.add(item)
                 } else {
-                    plugin.logger.warning("[AFK] Unknown reward material/item id '$matName' — skipping.")
+                    plugin.logger.warning("[AFK] Could not parse reward entry: $entry")
                 }
             }
-            if (parsed.isNotEmpty()) return parsed
         }
 
-        val legacyName = plugin.config.getString("afk.reward.item", "DIRT") ?: "DIRT"
-        val legacyAmt = plugin.config.getInt("afk.reward.amount", 1).coerceAtLeast(1)
-        val resolved = resolveRewardItem(legacyName, legacyAmt, 100)
-        if (resolved != null) return listOf(resolved)
+        if (parsed.isEmpty()) {
+            // Legacy single-item fallback (also supports custom item ids and crate keys).
+            val legacyName = plugin.config.getString("afk.reward.item", "DIRT") ?: "DIRT"
+            val legacyAmt = plugin.config.getInt("afk.reward.amount", 1).coerceAtLeast(1)
+            val resolved = resolveRewardItem(legacyName, legacyAmt, 100)
+            if (resolved != null) {
+                parsed.add(resolved)
+            } else {
+                plugin.logger.warning("[AFK] Legacy reward item '$legacyName' not found — defaulting to DIRT.")
+                parsed.add(RewardItem(Material.DIRT, legacyAmt, 100))
+            }
+        }
 
-        plugin.logger.warning("[AFK] Legacy reward item '$legacyName' not found — defaulting to DIRT.")
-        return listOf(RewardItem(Material.DIRT, legacyAmt, 100))
+        // Surface what we actually loaded so misconfigurations are obvious.
+        for (r in parsed) {
+            val label = r.crateKeyType?.let { "crate-key '$it'" }
+                ?: r.customItemId?.let { "custom item '$it'" }
+                ?: "material ${r.material.name}"
+            plugin.logger.info("[AFK] Reward → $label x${r.amount} @ ${r.chance}%")
+        }
+        return parsed
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun parseRewardEntry(entry: Any?): RewardItem? {
+        when (entry) {
+            null -> return null
+            is Map<*, *> -> {
+                val matName = entry["material"] as? String ?: return null
+                val amt = (entry["amount"] as? Number)?.toInt()?.coerceAtLeast(1) ?: 1
+                val chance = (entry["chance"] as? Number)?.toInt()?.coerceIn(0, 100) ?: 100
+                return resolveRewardItem(matName, amt, chance)
+            }
+            is String -> {
+                // Format: "<name>[:amount[:chance]]" — but "<name>" itself may
+                // contain a single colon for the crate-key prefix ("key:afk").
+                val trimmed = entry.trim()
+                if (trimmed.isEmpty()) return null
+
+                val (namePart, tail) = splitNameAndTail(trimmed)
+                val parts = if (tail.isEmpty()) emptyList() else tail.split(':')
+                val amt = parts.getOrNull(0)?.trim()?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                val chance = parts.getOrNull(1)?.trim()?.toIntOrNull()?.coerceIn(0, 100) ?: 100
+                return resolveRewardItem(namePart, amt, chance)
+            }
+            else -> return null
+        }
+    }
+
+    /**
+     * Splits a string like `"afk_key:1:50"` or `"key:afk:1:100"` into the
+     * name portion (which may itself contain one colon for `key:` / `crate:`
+     * prefixes) and the trailing numeric suffix.
+     */
+    private fun splitNameAndTail(s: String): Pair<String, String> {
+        val lower = s.lowercase()
+        if (lower.startsWith("crate:") || lower.startsWith("key:")) {
+            // Two segments belong to the name: prefix + crate type
+            val parts = s.split(':', limit = 4)
+            return when (parts.size) {
+                1, 2 -> s to ""                                   // "key:afk"
+                3 -> "${parts[0]}:${parts[1]}" to parts[2]        // "key:afk:1"
+                else -> "${parts[0]}:${parts[1]}" to "${parts[2]}:${parts[3]}"  // "key:afk:1:100"
+            }
+        }
+        val idx = s.indexOf(':')
+        return if (idx < 0) s to "" else s.substring(0, idx) to s.substring(idx + 1)
     }
 
     /**

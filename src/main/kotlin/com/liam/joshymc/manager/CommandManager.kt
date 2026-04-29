@@ -495,7 +495,14 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("portal")?.let { val c = PortalCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Voting ──────────────────────────────────────
-        plugin.getCommand("vote")?.let { val c = VoteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        if (plugin.isFeatureEnabled("voting")) {
+            plugin.getCommand("vote")?.let { val c = VoteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        } else {
+            // Release /vote so other voting plugins (NuVotifier, VotingPlugin, etc.)
+            // can claim it. Without this the JoshyMC plugin.yml would still own
+            // the unprefixed alias and intercept their commands.
+            unregisterCommand("vote")
+        }
 
         // ── Spawn Decorations ───────────────────────────
         plugin.getCommand("spawndecor")?.let {
@@ -514,5 +521,38 @@ class CommandManager(private val plugin: Joshymc) {
         }
 
         plugin.logger.info("Commands registered.")
+    }
+
+    /**
+     * Remove a command (and its aliases) from Bukkit's command map so another
+     * plugin's identically-named command can take the unprefixed slot. Used when
+     * a feature is disabled to avoid hijacking commands like `/vote`.
+     */
+    private fun unregisterCommand(name: String) {
+        val pluginCommand = plugin.getCommand(name) ?: return
+        try {
+            val server = org.bukkit.Bukkit.getServer()
+            val commandMap = server.javaClass.getMethod("getCommandMap").invoke(server)
+                    as org.bukkit.command.CommandMap
+            pluginCommand.unregister(commandMap)
+            // Also strip the known knownCommands map entries (some Bukkit versions
+            // keep aliases there even after unregister). Reflection is intentionally
+            // best-effort — failure just means a leftover ghost entry, not a crash.
+            try {
+                val knownField = commandMap.javaClass.getDeclaredField("knownCommands")
+                knownField.isAccessible = true
+                @Suppress("UNCHECKED_CAST")
+                val known = knownField.get(commandMap) as MutableMap<String, org.bukkit.command.Command>
+                known.remove(name)
+                known.remove("joshymc:$name")
+                pluginCommand.aliases.forEach {
+                    known.remove(it)
+                    known.remove("joshymc:$it")
+                }
+            } catch (_: Exception) { /* knownCommands not exposed on this server build */ }
+            plugin.logger.info("[CommandManager] Released /$name — other plugins may now claim it.")
+        } catch (e: Exception) {
+            plugin.logger.warning("[CommandManager] Could not release /$name: ${e.message}")
+        }
     }
 }

@@ -15,6 +15,7 @@ class ItemManager(private val plugin: Joshymc) {
         register(VoidBore())
         register(VoidBore5x5())
         register(VoidBoreChunk())
+        register(AfkKey())
         register(EasterEgg())
         register(ExplosiveEgg())
         register(FreezeEgg())
