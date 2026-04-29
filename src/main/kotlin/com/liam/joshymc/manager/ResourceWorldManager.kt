@@ -12,11 +12,16 @@ import org.bukkit.boss.BarColor
 import org.bukkit.boss.BarStyle
 import org.bukkit.boss.BossBar
 import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.block.BlockIgniteEvent
+import org.bukkit.event.entity.EntityPortalEvent
 import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerPortalEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.event.player.PlayerChangedWorldEvent
+import org.bukkit.event.world.PortalCreateEvent
 import org.bukkit.entity.Player
 import java.io.File
 import kotlin.random.Random
@@ -243,6 +248,66 @@ class ResourceWorldManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onWorldChange(event: PlayerChangedWorldEvent) {
         updateBossBarVisibility(event.player)
+    }
+
+    // ── Portal blocking ───────────────────────────────────────
+    // The resource world is a temporary, regenerating world — letting players
+    // light a nether portal there leaks them into the real nether (and back to
+    // the main overworld), bypassing /resource and the reset cycle. Block all
+    // portal creation and traversal originating in the resource world.
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPortalCreate(event: PortalCreateEvent) {
+        if (event.world.name != worldName) return
+        event.isCancelled = true
+        (event.entity as? Player)?.let { p ->
+            commsManager.send(p, Component.text("Portals don't work in the resource world.", NamedTextColor.RED))
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onBlockIgnite(event: BlockIgniteEvent) {
+        if (event.block.world.name != worldName) return
+        // Block flint-and-steel portal lighting (and lava-source ignites). Allows
+        // natural fire spread to be governed by world flags, but stops players
+        // from creating a working portal frame here.
+        if (event.cause == BlockIgniteEvent.IgniteCause.FLINT_AND_STEEL ||
+            event.cause == BlockIgniteEvent.IgniteCause.FIREBALL
+        ) {
+            // Only cancel if the ignited block is part of a potential portal frame
+            // (obsidian nearby) — otherwise people can still light campfires etc.
+            val nearObsidian = (-1..1).any { dx ->
+                (-1..1).any { dy ->
+                    (-1..1).any { dz ->
+                        event.block.world.getBlockAt(
+                            event.block.x + dx, event.block.y + dy, event.block.z + dz
+                        ).type == Material.OBSIDIAN
+                    }
+                }
+            }
+            if (nearObsidian) {
+                event.isCancelled = true
+                event.player?.let { p ->
+                    commsManager.send(p, Component.text("Portals don't work in the resource world.", NamedTextColor.RED))
+                }
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPlayerPortal(event: PlayerPortalEvent) {
+        val from = event.from.world?.name
+        if (from == worldName) {
+            event.isCancelled = true
+            commsManager.send(event.player, Component.text("Portals are disabled in the resource world.", NamedTextColor.RED))
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onEntityPortal(event: EntityPortalEvent) {
+        if (event.from.world?.name == worldName) {
+            event.isCancelled = true
+        }
     }
 
     // ── Teleport ──────────────────────────────────────────────

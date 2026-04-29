@@ -495,12 +495,14 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("portal")?.let { val c = PortalCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Voting ──────────────────────────────────────
-        if (plugin.isFeatureEnabled("voting")) {
+        // Two ways to disable voting: `features.voting: false` (turn off the
+        // whole feature) or `voting.enabled: false` (legacy section toggle).
+        // Either should release /vote so other voting plugins claim the alias.
+        val votingActive = plugin.isFeatureEnabled("voting") &&
+                plugin.config.getBoolean("voting.enabled", true)
+        if (votingActive) {
             plugin.getCommand("vote")?.let { val c = VoteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         } else {
-            // Release /vote so other voting plugins (NuVotifier, VotingPlugin, etc.)
-            // can claim it. Without this the JoshyMC plugin.yml would still own
-            // the unprefixed alias and intercept their commands.
             unregisterCommand("vote")
         }
 

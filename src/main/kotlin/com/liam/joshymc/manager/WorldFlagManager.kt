@@ -240,8 +240,13 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     fun onPlayerInteract(event: PlayerInteractEvent) {
         // Only block interactions with blocks, not general item use
-        if (event.clickedBlock == null) return
+        val block = event.clickedBlock ?: return
         if (!event.action.isRightClick && !event.action.isLeftClick) return
+
+        // Server-managed interactables (crates) always work, even in worlds
+        // where INTERACT is denied — otherwise spawn-region crates would be
+        // unreachable for everyone without bypass.
+        if (plugin.crateManager.getCrateTypeAt(block) != null) return
 
         if (!isAllowed(event.player, WorldFlag.INTERACT)) {
             event.isCancelled = true

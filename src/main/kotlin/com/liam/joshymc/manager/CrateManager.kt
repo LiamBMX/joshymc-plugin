@@ -1096,7 +1096,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     // --- Event handlers ---
 
-    @EventHandler
+    // HIGHEST so we win against world/claim/etc. plugins that may have already
+    // cancelled the click. ignoreCancelled stays false so we still fire and can
+    // explicitly suppress vanilla container interaction below.
+    @EventHandler(priority = org.bukkit.event.EventPriority.HIGHEST)
     fun onInteract(event: PlayerInteractEvent) {
         val block = event.clickedBlock ?: return
         val player = event.player
@@ -1108,6 +1111,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // Left-click crate = preview rewards GUI
         if (event.action == Action.LEFT_CLICK_BLOCK) {
             event.isCancelled = true
+            event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY)
             openPreview(player, crateType)
             return
         }
@@ -1115,6 +1119,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         if (event.action != Action.RIGHT_CLICK_BLOCK) return
 
         event.isCancelled = true
+        // Force-deny vanilla container interaction so the underlying chest /
+        // ender chest GUI cannot open even if another plugin tried to allow it.
+        event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY)
 
         if (activeAnimations.contains(player.uniqueId)) {
             plugin.commsManager.send(player, Component.text("You already have a crate animation running.", NamedTextColor.RED))

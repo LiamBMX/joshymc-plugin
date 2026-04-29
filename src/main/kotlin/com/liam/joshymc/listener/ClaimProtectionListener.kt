@@ -66,6 +66,10 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         val block = event.clickedBlock ?: return
         val player = event.player
 
+        // Server-managed interactables (crates) bypass claim protection so
+        // anyone with a key can use them even at spawn.
+        if (plugin.crateManager.getCrateTypeAt(block) != null) return
+
         if (!plugin.claimManager.canAccess(player, block.location)) {
             event.isCancelled = true
             denyWithMessage(player)
