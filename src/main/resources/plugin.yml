@@ -98,7 +98,7 @@ commands:
     aliases: [npcs]
   crate:
     description: Manage and open crates
-    usage: /crate <use|preview|setlocation|removelocation|givekey|list|diagnose|locations|force>
+    usage: /crate <preview|setlocation|removelocation|givekey|list|diagnose|locations|force>
     aliases: [crates]
   crateeditor:
     description: In-game crate editor
