@@ -27,9 +27,46 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "preview" -> handlePreview(sender, args)
             "diagnose", "inspect" -> handleDiagnose(sender)
             "locations" -> handleLocations(sender)
+            "force", "open" -> handleForceOpen(sender, args)
             else -> sendUsage(sender)
         }
         return true
+    }
+
+    /**
+     * Open a crate animation for a player without needing them to right-click
+     * a registered crate block. Useful for testing whether the issue is the
+     * click handler, the registration, or the crate itself.
+     */
+    private fun handleForceOpen(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.crate.admin")) {
+            if (sender is Player) plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+        if (args.size < 2) {
+            val msg = Component.text("Usage: /crate force <type> [player]", NamedTextColor.RED)
+            if (sender is Player) plugin.commsManager.send(sender, msg) else sender.sendMessage(msg)
+            return
+        }
+
+        val crateType = args[1].lowercase()
+        if (plugin.crateManager.getCrate(crateType) == null) {
+            val msg = Component.text("Unknown crate type: $crateType", NamedTextColor.RED)
+            if (sender is Player) plugin.commsManager.send(sender, msg) else sender.sendMessage(msg)
+            return
+        }
+
+        val target = if (args.size >= 3) plugin.server.getPlayer(args[2]) else (sender as? Player)
+        if (target == null) {
+            val msg = Component.text("Specify a target player.", NamedTextColor.RED)
+            if (sender is Player) plugin.commsManager.send(sender, msg) else sender.sendMessage(msg)
+            return
+        }
+
+        // Use the target's standing block as the visual anchor for particles.
+        plugin.crateManager.openCrate(target, crateType, target.location.block)
+        val msg = Component.text("Opening $crateType crate for ${target.name}.", NamedTextColor.GREEN)
+        if (sender is Player) plugin.commsManager.send(sender, msg) else sender.sendMessage(msg)
     }
 
     /**
@@ -161,8 +198,42 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                     .append(Component.text(crateType, TextColor.color(0x55FFFF)))
                     .append(Component.text(" at ${block.x}, ${block.y}, ${block.z}.", NamedTextColor.GREEN))
             )
+
+            // If this is half of a double chest, register the other half too so
+            // right-clicking either side opens the crate.
+            val pairedHalf = findDoubleChestPartner(block)
+            if (pairedHalf != null && plugin.crateManager.getCrateTypeAt(pairedHalf) == null) {
+                if (plugin.crateManager.setCrateLocation(pairedHalf, crateType)) {
+                    plugin.commsManager.send(
+                        player,
+                        Component.text(
+                            "  + paired half registered at ${pairedHalf.x}, ${pairedHalf.y}, ${pairedHalf.z}.",
+                            NamedTextColor.GREEN
+                        )
+                    )
+                }
+            }
         } else {
             plugin.commsManager.send(player, Component.text("Failed to set crate location.", NamedTextColor.RED))
+        }
+    }
+
+    /**
+     * If [block] is half of a double chest, return its partner block; otherwise null.
+     * Works on both regular and trapped chests.
+     */
+    private fun findDoubleChestPartner(block: org.bukkit.block.Block): org.bukkit.block.Block? {
+        val state = block.state as? org.bukkit.block.Chest ?: return null
+        val inv = state.inventory as? org.bukkit.inventory.DoubleChestInventory ?: return null
+        val left = inv.leftSide.location
+        val right = inv.rightSide.location
+        val target = block.location
+        return when {
+            left != null && (left.blockX != target.blockX || left.blockY != target.blockY || left.blockZ != target.blockZ)
+                -> left.block
+            right != null && (right.blockX != target.blockX || right.blockY != target.blockY || right.blockZ != target.blockZ)
+                -> right.block
+            else -> null
         }
     }
 
@@ -310,7 +381,8 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "/crate list",
             "/crate preview <type>",
             "/crate diagnose  (look at a block to inspect)",
-            "/crate locations  (list all registered crates)"
+            "/crate locations  (list all registered crates)",
+            "/crate force <type> [player]  (open a crate without clicking)"
         )
         for (usage in usages) {
             sender.sendMessage(
@@ -330,12 +402,12 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             1 -> {
                 val subs = mutableListOf("list", "preview")
                 if (sender.hasPermission("joshymc.crate.admin")) {
-                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations"))
+                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force"))
                 }
                 subs.filter { it.startsWith(args[0], ignoreCase = true) }
             }
             2 -> when (args[0].lowercase()) {
-                "setlocation", "givekey", "preview" ->
+                "setlocation", "givekey", "preview", "force", "open" ->
                     plugin.crateManager.getCrateTypes().filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
             }

@@ -374,9 +374,32 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     }
 
     fun getCrateTypeAt(block: Block): String? {
-        return crateLocations.firstOrNull {
+        // Exact match first — this is the common case.
+        val exact = crateLocations.firstOrNull {
             it.world == block.world.name && it.x == block.x && it.y == block.y && it.z == block.z
         }?.crateType
+        if (exact != null) return exact
+
+        // Fuzzy fallback: the 6 face-neighbours. Catches double chests where
+        // only one half was registered, and 1-block off-by-one mistakes from
+        // registering the wrong target block. Diagonals are intentionally
+        // excluded so two adjacent crates can't bleed into each other.
+        val world = block.world.name
+        val offsets = listOf(
+            Triple(1, 0, 0), Triple(-1, 0, 0),
+            Triple(0, 1, 0), Triple(0, -1, 0),
+            Triple(0, 0, 1), Triple(0, 0, -1),
+        )
+        for ((dx, dy, dz) in offsets) {
+            val match = crateLocations.firstOrNull {
+                it.world == world &&
+                    it.x == block.x + dx &&
+                    it.y == block.y + dy &&
+                    it.z == block.z + dz
+            }
+            if (match != null) return match.crateType
+        }
+        return null
     }
 
     /** Snapshot of every registered crate location, for `/crate locations`. */
@@ -1134,6 +1157,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val player = event.player
 
         val crateType = getCrateTypeAt(block)
+
+        if (plugin.config.getBoolean("crates.debug-interactions", false)) {
+            plugin.logger.info("[Crates DEBUG] ${player.name} ${event.action} ${block.type.name} @ ${block.world.name} ${block.x},${block.y},${block.z} hand=${event.hand} crateType=$crateType cancelled=${event.isCancelled} useBlock=${event.useInteractedBlock()}")
+        }
         if (crateType == null) {
             // If the player is holding a crate key and right-clicked something
             // that LOOKS like a crate but isn't registered, give them a clear

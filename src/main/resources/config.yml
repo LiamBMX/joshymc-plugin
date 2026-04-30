@@ -64,6 +64,15 @@ recipe-blocker:
 combat:
   tag-duration-seconds: 15
 
+# Crates — debug toggles
+# debug-interactions: when true, every right-click on a registered crate (or
+# fuzzy-matched neighbour) is logged to the server console with the player,
+# coords, hand, key state, and event-cancellation status. Useful for tracking
+# down "right-clicking my spawn crate doesn't open the GUI" — leave off in
+# production.
+crates:
+  debug-interactions: false
+
 # Lag Cleaner — entity-threshold-based, only clears when needed
 # Checks entity counts every check-interval-seconds
 # Triggers a 30s countdown (with warnings at 30s, 10s, 3s) when thresholds are exceeded
