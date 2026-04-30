@@ -443,6 +443,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
                     .append(Component.text(" crate to open.", NamedTextColor.GRAY))
                     .decoration(TextDecoration.ITALIC, false),
+                Component.text("  Or right-click in the air to open here.", NamedTextColor.DARK_GRAY)
+                    .decoration(TextDecoration.ITALIC, false),
                 Component.empty()
             )
             meta.lore(lore)
@@ -473,6 +475,17 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     fun getKeyType(item: ItemStack): String? {
         val meta = item.itemMeta ?: return null
         return meta.persistentDataContainer.get(crateKeyKey, PersistentDataType.STRING)
+    }
+
+    /**
+     * Consume one key from the player's main hand, but only if the crate is in
+     * RANDOM mode. SELECT-mode crates consume the key when the player picks a
+     * reward, so calling this for them would double-charge.
+     */
+    fun consumeOneKeyIfAuto(player: Player, crateType: String) {
+        if (crates[crateType]?.mode != CrateMode.SELECT) {
+            consumeOneKey(player)
+        }
     }
 
     private fun consumeOneKey(player: Player) {
@@ -1147,6 +1160,67 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     }
 
     // --- Event handlers ---
+
+    /**
+     * Belt-and-suspenders #1: catches the right-click at LOWEST priority,
+     * BEFORE any other plugin (claim protection, anti-grief, region plugins,
+     * etc.) can cancel it. If the clicked block is a registered crate we
+     * immediately mark useInteractedBlock as DENY so vanilla can never open
+     * the chest GUI, even if our HIGHEST handler somehow misses.
+     *
+     * The actual crate-open logic still lives in [onInteract] at HIGHEST so
+     * other listeners get a chance to react first — this is purely defensive.
+     */
+    @EventHandler(priority = org.bukkit.event.EventPriority.LOWEST, ignoreCancelled = false)
+    fun onInteractEarly(event: PlayerInteractEvent) {
+        val block = event.clickedBlock ?: return
+        if (event.hand != org.bukkit.inventory.EquipmentSlot.HAND) return
+        if (event.action != Action.RIGHT_CLICK_BLOCK && event.action != Action.LEFT_CLICK_BLOCK) return
+        if (getCrateTypeAt(block) == null) return
+        // Suppress vanilla container handling regardless of what other plugins do.
+        event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY)
+    }
+
+    /**
+     * Belt-and-suspenders #2: right-click in air while holding a crate key
+     * opens the matching crate at the player's location, no block-click
+     * required. This is a fallback for servers where click-on-block is
+     * intercepted by a third-party plugin we can't see.
+     */
+    @EventHandler(priority = org.bukkit.event.EventPriority.HIGH, ignoreCancelled = false)
+    fun onAirClickWithKey(event: PlayerInteractEvent) {
+        if (event.action != Action.RIGHT_CLICK_AIR) return
+        if (event.hand != org.bukkit.inventory.EquipmentSlot.HAND) return
+        val key = event.player.inventory.itemInMainHand
+        val keyType = getKeyType(key) ?: return
+        if (!crates.containsKey(keyType)) return
+
+        event.isCancelled = true
+        val player = event.player
+
+        if (plugin.config.getBoolean("crates.debug-interactions", false)) {
+            plugin.logger.info("[Crates DEBUG] ${player.name} air-clicked $keyType key — opening crate")
+        }
+
+        if (activeAnimations.contains(player.uniqueId)) {
+            plugin.commsManager.send(player, Component.text("You already have a crate animation running.", NamedTextColor.RED))
+            return
+        }
+
+        // Need a free slot if the key is the player's only item; otherwise the
+        // reward will drop on the ground after consumeOneKey clears the hand.
+        val hasFreeSlot = player.inventory.firstEmpty() != -1 || key.amount == 1
+        if (!hasFreeSlot) {
+            plugin.commsManager.send(player, Component.text("Your inventory is full — clear some space before opening.", NamedTextColor.RED))
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+            return
+        }
+
+        if (crates[keyType]?.mode != CrateMode.SELECT) {
+            consumeOneKey(player)
+        }
+        openCrate(player, keyType, player.location.block)
+    }
 
     // HIGHEST so we win against world/claim/etc. plugins that may have already
     // cancelled the click. ignoreCancelled stays false so we still fire and can

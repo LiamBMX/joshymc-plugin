@@ -27,10 +27,60 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "preview" -> handlePreview(sender, args)
             "diagnose", "inspect" -> handleDiagnose(sender)
             "locations" -> handleLocations(sender)
-            "force", "open" -> handleForceOpen(sender, args)
+            "force" -> handleForceOpen(sender, args)
+            "use", "open" -> handleUseKey(sender, args)
             else -> sendUsage(sender)
         }
         return true
+    }
+
+    /**
+     * Player-facing fallback for when right-clicking the crate block doesn't
+     * work (some other plugin intercepts it, etc.). The player must hold the
+     * matching key in their main hand — we consume it and open the crate.
+     */
+    private fun handleUseKey(sender: CommandSender, args: Array<out String>) {
+        val player = sender as? Player ?: run {
+            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            return
+        }
+        if (!player.hasPermission("joshymc.crate.use")) {
+            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+
+        val held = player.inventory.itemInMainHand
+        val heldType = plugin.crateManager.getKeyType(held)
+
+        // If the player typed a crate type, validate the key matches.
+        val crateType = if (args.size >= 2) args[1].lowercase() else heldType
+        if (crateType == null) {
+            plugin.commsManager.send(player, Component.text("Hold a crate key, or specify a type: /crate use <type>", NamedTextColor.RED))
+            return
+        }
+        if (plugin.crateManager.getCrate(crateType) == null) {
+            plugin.commsManager.send(player, Component.text("Unknown crate type: $crateType", NamedTextColor.RED))
+            return
+        }
+        if (heldType != crateType) {
+            plugin.commsManager.send(
+                player,
+                Component.text("You need to hold a ", NamedTextColor.RED)
+                    .append(Component.text("$crateType key", TextColor.color(0xFFAA00)))
+                    .append(Component.text(" to use it.", NamedTextColor.RED))
+            )
+            return
+        }
+
+        // Sanity checks before consuming the key
+        if (player.inventory.firstEmpty() == -1 && held.amount > 1) {
+            plugin.commsManager.send(player, Component.text("Your inventory is full — clear some space first.", NamedTextColor.RED))
+            return
+        }
+
+        // Consume the key (unless SELECT-mode — animation only consumes on pick)
+        plugin.crateManager.consumeOneKeyIfAuto(player, crateType)
+        plugin.crateManager.openCrate(player, crateType, player.location.block)
     }
 
     /**
@@ -375,11 +425,12 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             sender.sendMessage(Component.text("Crate Commands:", NamedTextColor.GREEN))
         }
         val usages = listOf(
+            "/crate use [type]  (open the crate matching the key in your hand)",
+            "/crate preview <type>",
             "/crate setlocation <type>",
             "/crate removelocation",
             "/crate givekey <type> [player] [amount]",
             "/crate list",
-            "/crate preview <type>",
             "/crate diagnose  (look at a block to inspect)",
             "/crate locations  (list all registered crates)",
             "/crate force <type> [player]  (open a crate without clicking)"
@@ -400,14 +451,14 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     ): List<String> {
         return when (args.size) {
             1 -> {
-                val subs = mutableListOf("list", "preview")
+                val subs = mutableListOf("list", "preview", "use", "open")
                 if (sender.hasPermission("joshymc.crate.admin")) {
                     subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force"))
                 }
                 subs.filter { it.startsWith(args[0], ignoreCase = true) }
             }
             2 -> when (args[0].lowercase()) {
-                "setlocation", "givekey", "preview", "force", "open" ->
+                "setlocation", "givekey", "preview", "force", "use", "open" ->
                     plugin.crateManager.getCrateTypes().filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
             }
