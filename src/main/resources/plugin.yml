@@ -282,9 +282,10 @@ commands:
     description: Manage custom portals
     usage: /portal <wand|create|delete|action|cooldown|message|list|info|tp>
     aliases: [portals]
-  vote:
-    description: Vote for the server
-    usage: /vote [top|streak]
+  jvote:
+    description: Open JoshyMC's vote rewards GUI (separate from /vote)
+    usage: /jvote [top|streak]
+    aliases: [joshyvote]
   spawndecor:
     description: Manage spawn decorations
     usage: /spawndecor <hologram|particle|beacon> <add|remove|list>

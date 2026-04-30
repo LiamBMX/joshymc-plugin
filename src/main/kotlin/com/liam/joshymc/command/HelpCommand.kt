@@ -416,7 +416,7 @@ class HelpCommand(private val plugin: Joshymc) : CommandExecutor {
                 "&6  /sell &7- Sell items from your hand",
                 "&6  /shop &7- Buy and sell from the server shop",
                 "&6  /ah &7- List items on the auction house",
-                "&6  Voting &7- Earn \$25,000 per vote",
+                "&6  /jvote &7- Voting GUI (earn \$25,000 per vote)",
                 "&6  Skills &7- Mining perk finds money",
                 "&6  Bounties &7- Collect bounties on players",
                 "",
