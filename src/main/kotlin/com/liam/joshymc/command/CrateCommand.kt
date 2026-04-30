@@ -25,9 +25,103 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "givekey" -> handleGiveKey(sender, args)
             "list" -> handleList(sender)
             "preview" -> handlePreview(sender, args)
+            "diagnose", "inspect" -> handleDiagnose(sender)
+            "locations" -> handleLocations(sender)
             else -> sendUsage(sender)
         }
         return true
+    }
+
+    /**
+     * Inspect the block the player is looking at — shows whether it's a
+     * registered crate, what type, and any nearby (within 1 block) registered
+     * crates so admins can spot off-by-one registrations.
+     */
+    private fun handleDiagnose(sender: CommandSender) {
+        if (!sender.hasPermission("joshymc.crate.admin")) {
+            if (sender is Player) plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+        val player = sender as? Player ?: run {
+            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            return
+        }
+
+        val block = player.getTargetBlockExact(8)
+        if (block == null || block.type.isAir) {
+            plugin.commsManager.send(player, Component.text("Look at a block first (within 8 blocks).", NamedTextColor.RED))
+            return
+        }
+
+        plugin.commsManager.send(player, Component.text("─── Crate Diagnose ───", NamedTextColor.GOLD))
+        plugin.commsManager.send(player, Component.text("World: ${block.world.name}", NamedTextColor.GRAY))
+        plugin.commsManager.send(player, Component.text("Block: ${block.type.name} @ ${block.x}, ${block.y}, ${block.z}", NamedTextColor.GRAY))
+
+        val type = plugin.crateManager.getCrateTypeAt(block)
+        if (type != null) {
+            plugin.commsManager.send(
+                player,
+                Component.text("✔ Registered as crate: ", NamedTextColor.GREEN)
+                    .append(Component.text(type, TextColor.color(0x55FFFF)))
+            )
+        } else {
+            plugin.commsManager.send(
+                player,
+                Component.text("✘ Not registered. Use ", NamedTextColor.RED)
+                    .append(Component.text("/crate setlocation <type>", NamedTextColor.YELLOW))
+                    .append(Component.text(" while looking at this block.", NamedTextColor.RED))
+            )
+
+            // Look for nearby registrations the user may have meant
+            val nearby = (-1..1).flatMap { dy ->
+                listOf(
+                    block.world.getBlockAt(block.x, block.y + dy, block.z)
+                ).mapNotNull { b ->
+                    if (b == block) null else plugin.crateManager.getCrateTypeAt(b)?.let { t -> b to t }
+                }
+            }
+            if (nearby.isNotEmpty()) {
+                plugin.commsManager.send(player, Component.text("Nearby registered crates:", NamedTextColor.YELLOW))
+                for ((b, t) in nearby) {
+                    plugin.commsManager.send(player, Component.text("  • ${b.x}, ${b.y}, ${b.z}: $t", NamedTextColor.GRAY))
+                }
+            }
+        }
+
+        val held = player.inventory.itemInMainHand
+        if (plugin.crateManager.isKey(held)) {
+            val keyType = plugin.crateManager.getKeyType(held)
+            plugin.commsManager.send(
+                player,
+                Component.text("Key in hand: ", NamedTextColor.GRAY)
+                    .append(Component.text(keyType ?: "unknown", TextColor.color(0xFFAA00)))
+            )
+        } else {
+            plugin.commsManager.send(player, Component.text("Hold a crate key to verify it's recognized.", NamedTextColor.DARK_GRAY))
+        }
+    }
+
+    /**
+     * List every registered crate location so the user can verify their /crate
+     * setlocation commands actually persisted.
+     */
+    private fun handleLocations(sender: CommandSender) {
+        if (!sender.hasPermission("joshymc.crate.admin")) {
+            if (sender is Player) plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+        val locations = plugin.crateManager.getAllLocations()
+        if (locations.isEmpty()) {
+            val msg = Component.text("No crate locations registered.", NamedTextColor.GRAY)
+            if (sender is Player) plugin.commsManager.send(sender, msg) else sender.sendMessage(msg)
+            return
+        }
+        val header = Component.text("Registered crate locations (${locations.size}):", NamedTextColor.GOLD)
+        if (sender is Player) plugin.commsManager.send(sender, header) else sender.sendMessage(header)
+        for (loc in locations) {
+            val line = Component.text("  • ${loc.crateType} @ ${loc.world} ${loc.x}, ${loc.y}, ${loc.z}", NamedTextColor.GRAY)
+            if (sender is Player) plugin.commsManager.send(sender, line) else sender.sendMessage(line)
+        }
     }
 
     private fun handleSetLocation(sender: CommandSender, args: Array<out String>) {
@@ -214,7 +308,9 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "/crate removelocation",
             "/crate givekey <type> [player] [amount]",
             "/crate list",
-            "/crate preview <type>"
+            "/crate preview <type>",
+            "/crate diagnose  (look at a block to inspect)",
+            "/crate locations  (list all registered crates)"
         )
         for (usage in usages) {
             sender.sendMessage(
@@ -234,7 +330,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             1 -> {
                 val subs = mutableListOf("list", "preview")
                 if (sender.hasPermission("joshymc.crate.admin")) {
-                    subs.addAll(listOf("setlocation", "removelocation", "givekey"))
+                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations"))
                 }
                 subs.filter { it.startsWith(args[0], ignoreCase = true) }
             }

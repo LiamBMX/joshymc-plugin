@@ -212,6 +212,14 @@ welcome:
 #    Keys and tokens are stored under plugins/Joshymc/votifier/.
 voting:
   enabled: true
+  # Release the `/vote` command so another voting plugin (NuVotifier, VotingPlugin,
+  # etc.) can claim the unprefixed alias. JoshyMC auto-detects common voting
+  # plugins and releases `/vote` automatically — set this to `true` to force
+  # release even when no other voting plugin is detected, or set
+  # `voting.keep-command: true` below to override auto-detection and keep
+  # JoshyMC's `/vote` regardless.
+  release-command: false
+  keep-command: false
   port: 8192
   secret-key: "change-me-to-a-random-string"
   # Votifier-compatible TCP listener. Most vote sites speak this protocol.

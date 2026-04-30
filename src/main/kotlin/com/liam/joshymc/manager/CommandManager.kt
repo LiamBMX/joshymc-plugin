@@ -495,15 +495,34 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("portal")?.let { val c = PortalCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Voting ──────────────────────────────────────
-        // Two ways to disable voting: `features.voting: false` (turn off the
-        // whole feature) or `voting.enabled: false` (legacy section toggle).
-        // Either should release /vote so other voting plugins claim the alias.
-        val votingActive = plugin.isFeatureEnabled("voting") &&
-                plugin.config.getBoolean("voting.enabled", true)
-        if (votingActive) {
-            plugin.getCommand("vote")?.let { val c = VoteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        } else {
+        // Three reasons we release /vote so another voting plugin can claim it:
+        //   1. The whole feature is disabled (`features.voting: false`).
+        //   2. The voting section is disabled (`voting.enabled: false`).
+        //   3. The user explicitly opted into passthrough (`voting.release-command: true`).
+        //   4. We auto-detected a competing voting plugin and the user hasn't
+        //      explicitly asked us to keep /vote (`voting.keep-command: true`).
+        val featureOn = plugin.isFeatureEnabled("voting")
+        val sectionOn = plugin.config.getBoolean("voting.enabled", true)
+        val explicitRelease = plugin.config.getBoolean("voting.release-command", false)
+        val keepCommand = plugin.config.getBoolean("voting.keep-command", false)
+
+        val competingPlugin = detectCompetingVotePlugin()
+        if (competingPlugin != null) {
+            plugin.logger.info("[CommandManager] Detected another voting plugin: $competingPlugin")
+        }
+
+        val shouldRelease = !featureOn
+                || !sectionOn
+                || explicitRelease
+                || (competingPlugin != null && !keepCommand)
+
+        if (shouldRelease) {
             unregisterCommand("vote")
+            if (competingPlugin != null) {
+                plugin.logger.info("[CommandManager] /vote released so $competingPlugin can handle it. Set 'voting.keep-command: true' in config.yml to override.")
+            }
+        } else {
+            plugin.getCommand("vote")?.let { val c = VoteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         }
 
         // ── Spawn Decorations ───────────────────────────
@@ -523,6 +542,20 @@ class CommandManager(private val plugin: Joshymc) {
         }
 
         plugin.logger.info("Commands registered.")
+    }
+
+    /**
+     * Return the name of any common voting plugin currently loaded, or null
+     * if none is present. Lets us auto-defer the `/vote` alias when the user
+     * brought their own voting plugin to JoshyMC.
+     */
+    private fun detectCompetingVotePlugin(): String? {
+        val candidates = listOf(
+            "NuVotifier", "Votifier", "VotingPlugin",
+            "AdvancedVotifier", "SuperbVote", "VoteRoulette"
+        )
+        val pm = org.bukkit.Bukkit.getPluginManager()
+        return candidates.firstOrNull { pm.getPlugin(it) != null }
     }
 
     /**

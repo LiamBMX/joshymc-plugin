@@ -113,6 +113,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         startParticleTask()
 
         plugin.logger.info("[Crates] Started with ${crates.size} crate type(s) and ${crateLocations.size} location(s).")
+        if (crateLocations.isNotEmpty()) {
+            // Print every location so admins can verify what's actually registered.
+            for (loc in crateLocations) {
+                plugin.logger.info("[Crates]   • ${loc.crateType} @ ${loc.world} ${loc.x}, ${loc.y}, ${loc.z}")
+            }
+        } else {
+            plugin.logger.info("[Crates] No crate locations registered yet — run /crate setlocation <type> while looking at a block.")
+        }
     }
 
     fun stop() {
@@ -371,6 +379,26 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }?.crateType
     }
 
+    /** Snapshot of every registered crate location, for `/crate locations`. */
+    fun getAllLocations(): List<CrateLocation> = crateLocations.toList()
+
+    /**
+     * True for blocks that admins typically register as crates — chests,
+     * ender chests, barrels, shulkers, and similar. Used to show a friendly
+     * "not registered" message when a player right-clicks one with a key.
+     */
+    private fun isContainerLike(type: Material): Boolean {
+        val name = type.name
+        return type == Material.CHEST
+                || type == Material.TRAPPED_CHEST
+                || type == Material.ENDER_CHEST
+                || type == Material.BARREL
+                || name.endsWith("_SHULKER_BOX")
+                || type == Material.SHULKER_BOX
+                || type == Material.BEACON
+                || type == Material.RESPAWN_ANCHOR
+    }
+
     /**
      * Build an [ItemStack] for the given crate type's key without giving it.
      * Returns null if the crate type isn't registered.
@@ -418,7 +446,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return crateType == null || storedType == crateType
     }
 
-    private fun getKeyType(item: ItemStack): String? {
+    /** Returns the crate type tagged on the key item, or null if it's not a key. */
+    fun getKeyType(item: ItemStack): String? {
         val meta = item.itemMeta ?: return null
         return meta.persistentDataContainer.get(crateKeyKey, PersistentDataType.STRING)
     }
@@ -1103,7 +1132,38 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     fun onInteract(event: PlayerInteractEvent) {
         val block = event.clickedBlock ?: return
         val player = event.player
-        val crateType = getCrateTypeAt(block) ?: return
+
+        val crateType = getCrateTypeAt(block)
+        if (crateType == null) {
+            // If the player is holding a crate key and right-clicked something
+            // that LOOKS like a crate but isn't registered, give them a clear
+            // diagnostic instead of letting vanilla open the chest silently.
+            if (event.action == Action.RIGHT_CLICK_BLOCK
+                && event.hand == org.bukkit.inventory.EquipmentSlot.HAND
+                && isKey(player.inventory.itemInMainHand)
+                && isContainerLike(block.type)
+            ) {
+                val keyType = getKeyType(player.inventory.itemInMainHand)
+                plugin.commsManager.send(
+                    player,
+                    Component.text("This isn't a registered crate.", NamedTextColor.RED)
+                )
+                if (player.hasPermission("joshymc.crate.admin")) {
+                    plugin.commsManager.send(
+                        player,
+                        Component.text("Admin tip: use ", NamedTextColor.GRAY)
+                            .append(Component.text("/crate setlocation ${keyType ?: "<type>"}", NamedTextColor.YELLOW))
+                            .append(Component.text(" while looking at the block.", NamedTextColor.GRAY))
+                    )
+                    plugin.commsManager.send(
+                        player,
+                        Component.text("Block: ${block.type.name} @ ${block.x}, ${block.y}, ${block.z} in ${block.world.name}", NamedTextColor.DARK_GRAY)
+                    )
+                }
+                player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+            }
+            return
+        }
 
         // Anti-dupe: only process main hand to prevent double-fire
         if (event.hand != org.bukkit.inventory.EquipmentSlot.HAND) return
