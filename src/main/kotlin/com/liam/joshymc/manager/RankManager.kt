@@ -99,8 +99,11 @@ class RankManager(private val plugin: Joshymc) : Listener {
      * Place [player] into the scoreboard team matching their current rank.
      * No-op if the team can't be found (shouldn't happen unless config was
      * mid-edit).
+     *
+     * Public so other managers (e.g. AFKManager) can restore the rank team
+     * after temporarily moving the player to a custom team.
      */
-    private fun applyTeamFor(player: Player) {
+    fun applyTeamFor(player: Player) {
         val rank = getPlayerRank(player) ?: return
         val board = Bukkit.getScoreboardManager().mainScoreboard
         val team = board.teams

@@ -17,6 +17,7 @@ import org.bukkit.generator.ChunkGenerator
 import org.bukkit.inventory.ItemStack
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
+import org.bukkit.scoreboard.Team
 import java.time.Duration
 import java.util.Random
 import java.util.UUID
@@ -93,16 +94,25 @@ class AFKManager(private val plugin: Joshymc) {
         ensureAfkWorld()
 
         if (rewardEnabled) {
-            // Reward task
+            // Reward task ticks every second and only rewards a player when
+            // their personal nextRewardTime has expired. Previously this ran
+            // on a fixed global cadence (rewardIntervalTicks), so a player
+            // who went AFK 10 seconds before the next tick would receive a
+            // full reward that fast — producing the "got a key in 10 sec
+            // even though interval=600s" glitch.
             rewardTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
                 giveRewards()
-            }, rewardIntervalTicks, rewardIntervalTicks)
+            }, 20L, 20L)
 
             // Countdown title task — runs every second
             countdownTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
                 updateCountdownTitles()
             }, 20L, 20L)
         }
+
+        // Set up the no-collide team so multiple AFK players can stand on the
+        // same bedrock without pushing each other off (which then cancels AFK).
+        ensureNoCollideTeam()
 
         plugin.logger.info("[AFK] Manager started (world=$worldName, reward=${if (rewardEnabled) "${rewardItems.size} item type(s) / money=$rewardMoney / xp=$rewardXp every ${rewardIntervalSeconds}s" else "disabled"}).")
     }
@@ -335,6 +345,11 @@ class AFKManager(private val plugin: Joshymc) {
                 )
             )
 
+            // Disable collisions so other AFK players can't bump this player
+            // off the spawn block (which would otherwise trigger the move
+            // handler and cancel AFK).
+            joinNoCollideTeam(player)
+
             plugin.commsManager.send(player,
                 Component.text("You are now AFK.", NamedTextColor.GRAY),
                 CommunicationsManager.Category.AFK
@@ -358,6 +373,9 @@ class AFKManager(private val plugin: Joshymc) {
 
             // Lift the AFK-zone blindness
             player.removePotionEffect(PotionEffectType.BLINDNESS)
+
+            // Restore collisions + rank team
+            leaveNoCollideTeam(player)
 
             // Teleport back
             val previousLocation = preAfkLocations.remove(player.uniqueId)
@@ -396,6 +414,7 @@ class AFKManager(private val plugin: Joshymc) {
             // Blindness gets persisted with the player save; clear it so they
             // don't rejoin still blinded.
             player.removePotionEffect(PotionEffectType.BLINDNESS)
+            leaveNoCollideTeam(player)
             // The persisted location row is intentionally kept until the player
             // rejoins, so handleJoin can rescue them if they spawn in the AFK world.
         }
@@ -425,8 +444,10 @@ class AFKManager(private val plugin: Joshymc) {
                 }, 2L)
             }
             // Player is being rescued out of the AFK world — strip the
-            // AFK-zone blindness so they're not stranded blind at spawn.
+            // AFK-zone blindness so they're not stranded blind at spawn,
+            // and put them back in their rank team.
             player.removePotionEffect(PotionEffectType.BLINDNESS)
+            leaveNoCollideTeam(player)
         }
 
         clearPersistedPreAfkLocation(player.uniqueId)
@@ -469,6 +490,10 @@ class AFKManager(private val plugin: Joshymc) {
         val now = System.currentTimeMillis()
         for (uuid in afkPlayers) {
             val player = Bukkit.getPlayer(uuid) ?: continue
+
+            // Only reward players whose personal countdown has expired.
+            val nextTime = nextRewardTime[uuid] ?: continue
+            if (now < nextTime) continue
 
             val granted = mutableListOf<String>()
 
@@ -530,11 +555,57 @@ class AFKManager(private val plugin: Joshymc) {
                 Component.text("AFK", TextColor.color(0x55FFFF))
                     .decoration(TextDecoration.BOLD, true),
                 Component.text("Next reward in ", NamedTextColor.GRAY)
-                    .append(Component.text("${remaining}s", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
+                    .append(Component.text(formatCountdown(remaining), NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
                 Title.Times.times(Duration.ZERO, Duration.ofMillis(1100), Duration.ZERO)
             )
             player.showTitle(title)
         }
+    }
+
+    /**
+     * Pretty-print a countdown for the AFK title. Examples:
+     *   600s → "10m"
+     *   599s → "9m 59s"
+     *   59s  → "59s"
+     */
+    private fun formatCountdown(totalSeconds: Long): String {
+        if (totalSeconds < 60) return "${totalSeconds}s"
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return if (seconds == 0L) "${minutes}m" else "${minutes}m ${seconds}s"
+    }
+
+    /**
+     * Create the AFK no-collision scoreboard team if it doesn't exist.
+     * Players added to this team can't push each other (or be pushed),
+     * so two AFK players on the same bedrock block don't get bumped off
+     * (which would otherwise cancel AFK via the move handler).
+     */
+    private fun ensureNoCollideTeam() {
+        val board = Bukkit.getScoreboardManager().mainScoreboard
+        val team = board.getTeam(NO_COLLIDE_TEAM) ?: board.registerNewTeam(NO_COLLIDE_TEAM)
+        team.setOption(Team.Option.COLLISION_RULE, Team.OptionStatus.NEVER)
+    }
+
+    private fun joinNoCollideTeam(player: Player) {
+        val board = Bukkit.getScoreboardManager().mainScoreboard
+        val team = board.getTeam(NO_COLLIDE_TEAM) ?: return
+        // addEntry auto-removes the player from any other team on this
+        // scoreboard (e.g. their rank team), which is what we want — we'll
+        // restore the rank team via RankManager.applyTeamFor on un-AFK.
+        team.addEntry(player.name)
+    }
+
+    private fun leaveNoCollideTeam(player: Player) {
+        val board = Bukkit.getScoreboardManager().mainScoreboard
+        val team = board.getTeam(NO_COLLIDE_TEAM) ?: return
+        team.removeEntry(player.name)
+        // Restore the player's rank team so their nameplate prefix returns.
+        plugin.rankManager.applyTeamFor(player)
+    }
+
+    companion object {
+        private const val NO_COLLIDE_TEAM = "jmc_afk_nocollide"
     }
 
     private fun formatDuration(totalSeconds: Long): String {

@@ -2,10 +2,15 @@ package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
 import io.papermc.paper.event.player.AsyncChatEvent
+import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.entity.EntityDamageEvent
+import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.player.PlayerCommandPreprocessEvent
+import org.bukkit.event.player.PlayerDropItemEvent
+import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
@@ -62,5 +67,33 @@ class AFKListener(private val plugin: Joshymc) : Listener {
         if (plugin.afkManager.isAfk(player)) {
             plugin.afkManager.setAfk(player, false)
         }
+    }
+
+    // ── AFK player invulnerability + interaction freeze ────────────────────
+    // While AFK, the player should be a passive presence: no damage taken,
+    // no items dropped, no inventory swaps, no block clicks. Each handler
+    // returns silently if the player isn't AFK so non-AFK players are
+    // unaffected.
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onAfkDamage(event: EntityDamageEvent) {
+        val player = event.entity as? Player ?: return
+        if (plugin.afkManager.isAfk(player)) event.isCancelled = true
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onAfkDropItem(event: PlayerDropItemEvent) {
+        if (plugin.afkManager.isAfk(event.player)) event.isCancelled = true
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onAfkInventoryClick(event: InventoryClickEvent) {
+        val player = event.whoClicked as? Player ?: return
+        if (plugin.afkManager.isAfk(player)) event.isCancelled = true
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onAfkInteract(event: PlayerInteractEvent) {
+        if (plugin.afkManager.isAfk(event.player)) event.isCancelled = true
     }
 }
