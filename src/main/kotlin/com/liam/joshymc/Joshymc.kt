@@ -392,69 +392,83 @@ class Joshymc : JavaPlugin() {
      * Commands are not re-registered (they persist via plugin.yml).
      */
     fun reload() {
+        // Wrap every manager call in `safe(name) { … }` so one broken stop() or
+        // start() doesn't abort the whole reload and leave the plugin half-up.
+        // The exception is logged with the manager name so the offender is
+        // identifiable in the console output.
+
         // 1. Cancel all scheduled tasks (Discord flush, status updater, etc.)
-        server.scheduler.cancelTasks(this)
+        safe("scheduler.cancelTasks") { server.scheduler.cancelTasks(this) }
 
         // 2. Unregister all event listeners owned by this plugin
-        HandlerList.unregisterAll(this)
+        safe("HandlerList.unregisterAll") { HandlerList.unregisterAll(this) }
 
         // 3. Shutdown services
-        storageManager.saveOpenVaults()
-        hologramManager.stop()
-        npcManager.stop()
-        crateManager.stop()
-        auctionManager.stop()
-        hopperPlusManager.stop()
-        spawnerManager.stop()
-        afkManager.stop()
-        antiCheatManager.stop()
-        combatManager.stop()
-        lagCleanerManager.stop()
-        resourcePackManager.shutdown()
-        discordManager.shutdown()
+        safe("storageManager.saveOpenVaults") { storageManager.saveOpenVaults() }
+        safe("hologramManager.stop") { hologramManager.stop() }
+        safe("npcManager.stop") { npcManager.stop() }
+        safe("crateManager.stop") { crateManager.stop() }
+        safe("auctionManager.stop") { auctionManager.stop() }
+        safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
+        safe("spawnerManager.stop") { spawnerManager.stop() }
+        safe("afkManager.stop") { afkManager.stop() }
+        safe("antiCheatManager.stop") { antiCheatManager.stop() }
+        safe("combatManager.stop") { combatManager.stop() }
+        safe("lagCleanerManager.stop") { lagCleanerManager.stop() }
+        safe("resourcePackManager.shutdown") { resourcePackManager.shutdown() }
+        safe("discordManager.shutdown") { discordManager.shutdown() }
 
         // 4. Clear registries
-        itemManager.clear()
-        recipeManager.clear()
+        safe("itemManager.clear") { itemManager.clear() }
+        safe("recipeManager.clear") { recipeManager.clear() }
 
         // 5. Reload config from disk
-        reloadConfig()
+        safe("reloadConfig") { reloadConfig() }
 
         // 6. Re-register everything
-        itemManager.registerAll()
-        recipeManager.registerAll()
-        listenerManager.registerAll()
-        linkManager.load()
+        safe("itemManager.registerAll") { itemManager.registerAll() }
+        safe("recipeManager.registerAll") { recipeManager.registerAll() }
+        safe("listenerManager.registerAll") { listenerManager.registerAll() }
+        safe("linkManager.load") { linkManager.load() }
         // WarpManager uses DB directly, no reload needed
-        kitManager.start()
-        storageManager.start()
-        hologramManager.start()
-        if (isFeatureEnabled("npcs")) npcManager.start()
-        crateManager.start()
-        auctionManager.start()
-        signShopManager.start()
-        hopperPlusManager.start()
-        spawnerManager.start()
-        teamManager.start()
-        resourcePackManager.start()
+        safe("kitManager.start") { kitManager.start() }
+        safe("storageManager.start") { storageManager.start() }
+        safe("hologramManager.start") { hologramManager.start() }
+        if (isFeatureEnabled("npcs")) safe("npcManager.start") { npcManager.start() }
+        safe("crateManager.start") { crateManager.start() }
+        safe("auctionManager.start") { auctionManager.start() }
+        safe("signShopManager.start") { signShopManager.start() }
+        safe("hopperPlusManager.start") { hopperPlusManager.start() }
+        safe("spawnerManager.start") { spawnerManager.start() }
+        safe("teamManager.start") { teamManager.start() }
+        safe("resourcePackManager.start") { resourcePackManager.start() }
 
         // 7. Commands just get new instances (executors are swapped, not re-registered)
-        commandManager.registerAll()
+        safe("commandManager.registerAll") { commandManager.registerAll() }
 
         // 8. Restart Discord
-        discordManager.start()
+        safe("discordManager.start") { discordManager.start() }
 
         // 9. Restart lag cleaner, combat manager, chat manager, and AFK manager with new config
-        rankManager.start()
-        commsManager.start()
-        lagCleanerManager.start()
-        combatManager.start()
-        afkManager.start()
-        antiCheatManager.start()
-        registerEnchants()
-        customEnchantManager.start()
+        safe("rankManager.start") { rankManager.start() }
+        safe("commsManager.start") { commsManager.start() }
+        safe("lagCleanerManager.start") { lagCleanerManager.start() }
+        safe("combatManager.start") { combatManager.start() }
+        safe("afkManager.start") { afkManager.start() }
+        safe("antiCheatManager.start") { antiCheatManager.start() }
+        safe("registerEnchants") { registerEnchants() }
+        safe("customEnchantManager.start") { customEnchantManager.start() }
 
         logger.info("JoshyMC has been fully reloaded!")
+    }
+
+    private inline fun safe(label: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Throwable) {
+            logger.severe("[Reload] $label failed: ${e.javaClass.simpleName}: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
     /**

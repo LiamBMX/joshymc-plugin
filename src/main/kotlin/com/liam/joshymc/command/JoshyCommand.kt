@@ -128,8 +128,22 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         sender.sendMessage(Component.text("Reloading JoshyMC...", NamedTextColor.YELLOW))
-        plugin.reload()
-        sender.sendMessage(Component.text("JoshyMC fully reloaded.", NamedTextColor.GREEN))
+        // Wrap the reload so a failure inside any manager's stop()/start()
+        // doesn't kill the whole server — log a stack trace, restore listeners,
+        // and tell the sender exactly what blew up so it can be reported.
+        try {
+            plugin.reload()
+            sender.sendMessage(Component.text("JoshyMC fully reloaded.", NamedTextColor.GREEN))
+        } catch (e: Throwable) {
+            plugin.logger.severe("[Reload] Failed: ${e.javaClass.simpleName}: ${e.message}")
+            e.printStackTrace()
+            sender.sendMessage(Component.text(
+                "Reload failed: ${e.javaClass.simpleName} — ${e.message}. " +
+                "See server console for the full stack trace. " +
+                "If features are broken, run /joshymc reload hard or restart the server.",
+                NamedTextColor.RED
+            ))
+        }
     }
 
     private fun handleHardReload(sender: CommandSender) {
