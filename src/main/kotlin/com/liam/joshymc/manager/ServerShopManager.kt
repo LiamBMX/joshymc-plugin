@@ -287,7 +287,7 @@ class ServerShopManager(private val plugin: Joshymc) {
                 // Action hints
                 if (shopItem.buyPrice > 0) {
                     lore.add(
-                        Component.text("Left-click to buy 1", NamedTextColor.GREEN)
+                        Component.text("Left-click to choose buy amount", NamedTextColor.GREEN)
                             .decoration(TextDecoration.ITALIC, false)
                     )
                 }
@@ -296,14 +296,6 @@ class ServerShopManager(private val plugin: Joshymc) {
                         Component.text("Right-click to sell 1", NamedTextColor.YELLOW)
                             .decoration(TextDecoration.ITALIC, false)
                     )
-                }
-                if (shopItem.buyPrice > 0) {
-                    lore.add(
-                        Component.text("Shift+left to buy 64", NamedTextColor.GREEN)
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                }
-                if (shopItem.sellPrice > 0) {
                     lore.add(
                         Component.text("Shift+right to sell all", NamedTextColor.YELLOW)
                             .decoration(TextDecoration.ITALIC, false)
@@ -326,12 +318,133 @@ class ServerShopManager(private val plugin: Joshymc) {
         val noBuy = { plugin.commsManager.send(player, Component.text("This item is not for sale.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY); player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f) }
 
         when (clickType) {
-            ClickType.LEFT -> if (liveBuy > 0) buyItem(player, shopItem.material, liveBuy, 1) else noBuy()
-            ClickType.SHIFT_LEFT -> if (liveBuy > 0) buyItem(player, shopItem.material, liveBuy, 64) else noBuy()
+            ClickType.LEFT, ClickType.SHIFT_LEFT ->
+                if (liveBuy > 0) openBuyQuantityGui(player, shopItem, liveBuy) else noBuy()
             ClickType.RIGHT -> if (liveSell > 0) sellItem(player, shopItem.material, liveSell, 1) else noSell()
             ClickType.SHIFT_RIGHT -> if (liveSell > 0) sellItem(player, shopItem.material, liveSell, -1) else noSell()
             else -> {}
         }
+    }
+
+    // ── Buy Quantity GUI ────────────────────────────────────────────────
+    //
+    // Replaces the old "shift-left = buy 64" hotkey with a 27-slot inventory
+    // that lets players pick exactly how many they want (1..64). Layout:
+    //   row 0:        gray border
+    //   row 1: . R16 R8 R-1 ITEM G+1 G+8 G+16 .
+    //   row 2:        confirm at slot 22
+    // Confirm charges live price * amount and gives that many items.
+
+    private fun openBuyQuantityGui(player: Player, shopItem: ShopItem, livePrice: Double) {
+        var amount = 1
+
+        val gui = CustomGui(
+            Component.text("Buy ${formatMaterialName(shopItem.material)}", NamedTextColor.DARK_GREEN)
+                .decoration(TextDecoration.BOLD, true)
+                .decoration(TextDecoration.ITALIC, false),
+            27
+        )
+
+        // Fill background
+        for (i in 0 until 27) gui.inventory.setItem(i, BORDER.clone())
+
+        fun renderDynamic() {
+            val total = livePrice * amount
+            val itemDisplay = ItemStack(shopItem.material, amount.coerceIn(1, 64))
+            itemDisplay.editMeta { meta ->
+                meta.displayName(
+                    Component.text(formatMaterialName(shopItem.material), NamedTextColor.WHITE)
+                        .decoration(TextDecoration.ITALIC, false)
+                        .decoration(TextDecoration.BOLD, true)
+                )
+                meta.lore(listOf(
+                    Component.empty(),
+                    Component.text("Buying: ", NamedTextColor.GRAY)
+                        .append(Component.text("$amount", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true))
+                        .decoration(TextDecoration.ITALIC, false),
+                    Component.text("Unit price: ", NamedTextColor.GRAY)
+                        .append(Component.text(plugin.economyManager.format(livePrice), NamedTextColor.GOLD))
+                        .decoration(TextDecoration.ITALIC, false),
+                    Component.text("Total: ", NamedTextColor.GRAY)
+                        .append(Component.text(plugin.economyManager.format(total), NamedTextColor.GOLD))
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false),
+                    Component.empty(),
+                ))
+            }
+            gui.inventory.setItem(13, itemDisplay)
+
+            val confirm = ItemStack(Material.LIME_CONCRETE)
+            confirm.editMeta { meta ->
+                meta.displayName(
+                    Component.text("Confirm Purchase", NamedTextColor.GREEN)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                meta.lore(listOf(
+                    Component.text("Buy ", NamedTextColor.GRAY)
+                        .append(Component.text("$amount", NamedTextColor.WHITE))
+                        .append(Component.text(" for ", NamedTextColor.GRAY))
+                        .append(Component.text(plugin.economyManager.format(livePrice * amount), NamedTextColor.GOLD))
+                        .decoration(TextDecoration.ITALIC, false),
+                ))
+            }
+            gui.inventory.setItem(22, confirm)
+        }
+
+        // Decrement panes (left of the item display)
+        for ((slot, delta) in listOf(10 to -16, 11 to -8, 12 to -1)) {
+            gui.setItem(slot, decBtn(delta)) { p, _ ->
+                amount = (amount + delta).coerceIn(1, 64)
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.4f, 0.8f)
+                renderDynamic()
+            }
+        }
+        // Increment panes (right of the item display)
+        for ((slot, delta) in listOf(14 to 1, 15 to 8, 16 to 16)) {
+            gui.setItem(slot, incBtn(delta)) { p, _ ->
+                amount = (amount + delta).coerceIn(1, 64)
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.4f, 1.4f)
+                renderDynamic()
+            }
+        }
+        // Confirm button — handler is bound here; renderDynamic() overwrites
+        // the visual on each click but the bound handler persists.
+        gui.setItem(22, ItemStack(Material.LIME_CONCRETE)) { p, _ ->
+            p.closeInventory()
+            // Re-fetch the live price on confirm so a market price tick
+            // mid-GUI doesn't let the player lock in a stale rate.
+            val currentPrice = shopItem.buyPrice * plugin.marketManager.getMultiplier(shopItem.material)
+            buyItem(p, shopItem.material, currentPrice, amount.coerceIn(1, 64))
+        }
+
+        renderDynamic()
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    private fun decBtn(delta: Int): ItemStack {
+        val item = ItemStack(Material.RED_STAINED_GLASS_PANE)
+        item.editMeta { meta ->
+            meta.displayName(
+                Component.text("$delta", NamedTextColor.RED)
+                    .decoration(TextDecoration.BOLD, true)
+                    .decoration(TextDecoration.ITALIC, false)
+            )
+        }
+        return item
+    }
+
+    private fun incBtn(delta: Int): ItemStack {
+        val item = ItemStack(Material.LIME_STAINED_GLASS_PANE)
+        item.editMeta { meta ->
+            meta.displayName(
+                Component.text("+$delta", NamedTextColor.GREEN)
+                    .decoration(TextDecoration.BOLD, true)
+                    .decoration(TextDecoration.ITALIC, false)
+            )
+        }
+        return item
     }
 
     // ── Buy Logic ───────────────────────────────────────────────────────

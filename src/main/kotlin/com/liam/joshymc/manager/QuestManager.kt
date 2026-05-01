@@ -759,6 +759,20 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         else -> name
     }
 
+    /**
+     * Strip the DEEPSLATE_ prefix from ore variants so a quest targeting
+     * IRON_ORE / REDSTONE_ORE / etc. matches breaks on either the regular or
+     * deepslate version. Returns both names so findMatchingQuests sees a hit
+     * for either form.
+     */
+    private fun oreVariants(name: String): Set<String> {
+        val set = mutableSetOf(name)
+        if (name.startsWith("DEEPSLATE_") && name.endsWith("_ORE")) {
+            set.add(name.removePrefix("DEEPSLATE_"))
+        }
+        return set
+    }
+
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onBlockPlace(event: BlockPlaceEvent) {
         val player = event.player
@@ -767,6 +781,40 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         val materialName = event.block.type.name
         findMatchingQuests(QuestType.PLACE_BLOCK, materialName).forEach { quest ->
             if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id)
+        }
+    }
+
+    /**
+     * External hook for veinminer / treefeller / etc. to record block breaks
+     * that didn't go through a vanilla BlockBreakEvent. Mirrors what
+     * onBlockBreak does for a single block (BREAK_BLOCK + MINE_ORE +
+     * fully-grown HARVEST_CROP), so vein-mined ores count toward "Mine N
+     * iron ore" / "Break N stone" quests just like manually-broken ones.
+     */
+    fun recordBlockBreak(player: Player, block: org.bukkit.block.Block) {
+        if (isExempt(player)) return
+        val materialName = block.type.name
+
+        findMatchingQuests(QuestType.BREAK_BLOCK, materialName).forEach { quest ->
+            if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id)
+        }
+        findMatchingQuests(QuestType.MINE_ORE, materialName).forEach { quest ->
+            if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id)
+        }
+        val blockData = block.blockData
+        val normalized = normalizeHarvestName(materialName)
+        val alwaysHarvestable = setOf(
+            "MELON", "PUMPKIN", "SUGAR_CANE", "CACTUS", "BAMBOO",
+            "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES",
+            "WEEPING_VINES", "GLOW_LICHEN", "VINE", "NETHER_WART",
+            "SWEET_BERRY_BUSH",
+        )
+        val eligible = (blockData is org.bukkit.block.data.Ageable && blockData.age == blockData.maximumAge)
+                || normalized in alwaysHarvestable
+        if (eligible) {
+            findMatchingQuests(QuestType.HARVEST_CROP, normalized).forEach { quest ->
+                if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id)
+            }
         }
     }
 
@@ -930,10 +978,13 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
         val player = event.player
 
-        // Only count walking — not flying, gliding, in vehicle, creative, spectator
+        // Only count walking — not flying, gliding, in vehicle, creative, spectator.
+        // We deliberately do NOT bail on `player.allowFlight`: ops have fly
+        // permission permanently, but they can still legitimately walk and
+        // shouldn't be locked out of WALK_DISTANCE quests just because they
+        // *could* fly. We only exclude when they're actually airborne.
         if (isExempt(player)) return
         if (player.isFlying || player.isGliding || player.isInsideVehicle) return
-        if (player.allowFlight) return // fly mode enabled even if not currently flying
 
         // Only count horizontal movement (not falling/jumping)
         val dx = to.x - from.x
@@ -998,14 +1049,23 @@ class QuestManager(private val plugin: Joshymc) : Listener {
     // ── Internals ──────────────────────────────────────────────
 
     private fun findMatchingQuests(type: QuestType, target: String): List<Quest> {
+        // Accept ore variants so deepslate ores count toward base-ore quests
+        // and vice versa.
+        val candidates = oreVariants(target)
         return quests.values.filter { quest ->
-            quest.type == type && (quest.target.isEmpty() || quest.target.equals(target, ignoreCase = true))
+            quest.type == type && (
+                quest.target.isEmpty() ||
+                candidates.any { it.equals(quest.target, ignoreCase = true) }
+            )
         }
     }
 
     private fun onQuestComplete(player: Player, quest: Quest) {
-        player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
-        player.playSound(player.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f)
+        // Quieter than vanilla so it's not earsplitting when several quests
+        // chain in a row (e.g. veinminer popping a bunch of "mine N ore" quests
+        // back-to-back).
+        player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.35f, 1.0f)
+        player.playSound(player.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.35f, 1.0f)
 
         plugin.commsManager.send(player, plugin.commsManager.parseLegacy(
             "&6&l\u2605 Quest Complete! &e${quest.name} &7\u2014 use /quests to claim reward"

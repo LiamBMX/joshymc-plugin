@@ -23,8 +23,10 @@ import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityExplodeEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.entity.FoodLevelChangeEvent
+import org.bukkit.event.player.PlayerBucketEmptyEvent
 import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.Material
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -235,6 +237,20 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    /**
+     * Block bucket empties (water, lava, powder snow) where BLOCK_PLACE is
+     * disabled. PlayerBucketEmptyEvent is a separate event from
+     * BlockPlaceEvent, so without this handler players could place water in
+     * spawn even with BLOCK_PLACE off.
+     */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onBucketEmpty(event: PlayerBucketEmptyEvent) {
+        if (!isAllowed(event.player, WorldFlag.BLOCK_PLACE)) {
+            event.isCancelled = true
+            denyMessage(event.player, WorldFlag.BLOCK_PLACE)
+        }
+    }
+
     // — Interact —
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -242,6 +258,18 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         // Only block interactions with blocks, not general item use
         val block = event.clickedBlock ?: return
         if (!event.action.isRightClick && !event.action.isLeftClick) return
+
+        // Dragon eggs teleport on left-click and drop on punch — both bypass
+        // BlockBreakEvent. In worlds where BLOCK_BREAK is denied (e.g. spawn),
+        // any interact with a dragon egg should be cancelled outright so
+        // players can't snag it from spawn decor.
+        if (block.type == Material.DRAGON_EGG &&
+            !isAllowed(event.player, WorldFlag.BLOCK_BREAK)
+        ) {
+            event.isCancelled = true
+            denyMessage(event.player, WorldFlag.BLOCK_BREAK)
+            return
+        }
 
         // Server-managed interactables (crates) always work, even in worlds
         // where INTERACT is denied — otherwise spawn-region crates would be

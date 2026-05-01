@@ -15,10 +15,10 @@ import java.util.concurrent.ConcurrentHashMap
 
 class MarketManager(private val plugin: Joshymc) {
 
-    enum class Trend(val symbol: String, val color: NamedTextColor) {
-        UP("▲", NamedTextColor.GREEN),
-        DOWN("▼", NamedTextColor.RED),
-        STABLE("■", NamedTextColor.GRAY)
+    enum class Trend(val symbol: String, val color: NamedTextColor, val legacyCode: String) {
+        UP("▲", NamedTextColor.GREEN, "&a"),
+        DOWN("▼", NamedTextColor.RED, "&c"),
+        STABLE("■", NamedTextColor.GRAY, "&7")
     }
 
     private val multiplierCache = ConcurrentHashMap<Material, Double>()

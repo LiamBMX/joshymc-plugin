@@ -178,6 +178,16 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
+        // Block combat-tagged players (or staff trying to enable fly on a
+        // tagged target) from using fly to escape PvP.
+        if (plugin.combatManager.isTagged(target)) {
+            plugin.commsManager.send(
+                if (sender is Player) sender else target,
+                Component.text("Can't toggle flight while in combat.", NamedTextColor.RED)
+            )
+            return true
+        }
+
         target.allowFlight = !target.allowFlight
         target.isFlying = target.allowFlight
 
@@ -208,6 +218,16 @@ class HealCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         val target = resolveTarget(sender, args) ?: return true
+
+        // Block /heal on combat-tagged players to remove the heal-mid-fight
+        // exploit. Staff still need to wait until the combat tag clears.
+        if (plugin.combatManager.isTagged(target)) {
+            plugin.commsManager.send(
+                if (sender is Player) sender else target,
+                Component.text("Can't heal a player while they're in combat.", NamedTextColor.RED)
+            )
+            return true
+        }
 
         val maxHealth = target.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH)?.value ?: 20.0
         target.health = maxHealth
@@ -576,6 +596,87 @@ class AnvilCommand(private val plugin: Joshymc) : CommandExecutor {
         }
         sender.openAnvil(null, true)
         return true
+    }
+}
+
+// ══════════════════════════════════════════════════════════
+//  /smithing — open a smithing table anywhere
+// ══════════════════════════════════════════════════════════
+
+class SmithingCommand(private val plugin: Joshymc) : CommandExecutor {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (!sender.hasPermission("joshymc.smithing")) {
+            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            return true
+        }
+        // Bukkit doesn't expose openSmithingTable directly; use the inventory
+        // type. The portable=true flag matches /craft and /anvil behaviour.
+        @Suppress("DEPRECATION")
+        val view = sender.openInventory(
+            org.bukkit.Bukkit.createInventory(sender, org.bukkit.event.inventory.InventoryType.SMITHING)
+        )
+        return true
+    }
+}
+
+// ══════════════════════════════════════════════════════════
+//  /repair — repair the held item, or all worn equipment with `all`
+// ══════════════════════════════════════════════════════════
+
+class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (!sender.hasPermission("joshymc.repair")) {
+            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            return true
+        }
+        // Combat-tagged players can't use /repair to fix gear mid-fight.
+        if (plugin.combatManager.isTagged(sender)) {
+            plugin.commsManager.send(sender, Component.text("Can't repair while in combat.", NamedTextColor.RED))
+            return true
+        }
+
+        val mode = args.getOrNull(0)?.lowercase() ?: "hand"
+        var repaired = 0
+        when (mode) {
+            "hand" -> if (repairItem(sender.inventory.itemInMainHand)) repaired++
+            "all" -> {
+                if (repairItem(sender.inventory.itemInMainHand)) repaired++
+                if (repairItem(sender.inventory.itemInOffHand)) repaired++
+                for (armor in sender.inventory.armorContents) {
+                    if (armor != null && repairItem(armor)) repaired++
+                }
+            }
+            else -> {
+                plugin.commsManager.send(sender, Component.text("Usage: /repair [hand|all]", NamedTextColor.RED))
+                return true
+            }
+        }
+
+        if (repaired == 0) {
+            plugin.commsManager.send(sender, Component.text("Nothing to repair.", NamedTextColor.GRAY))
+        } else {
+            plugin.commsManager.send(sender, Component.text("Repaired $repaired item${if (repaired != 1) "s" else ""}.", NamedTextColor.GREEN))
+            sender.playSound(sender.location, org.bukkit.Sound.BLOCK_ANVIL_USE, 0.6f, 1.4f)
+        }
+        return true
+    }
+
+    /** Reset durability on a Damageable item. Returns true if it changed. */
+    private fun repairItem(item: org.bukkit.inventory.ItemStack?): Boolean {
+        if (item == null || item.type.isAir) return false
+        val meta = item.itemMeta ?: return false
+        if (meta !is org.bukkit.inventory.meta.Damageable) return false
+        if (meta.damage <= 0) return false
+        meta.damage = 0
+        item.itemMeta = meta
+        return true
+    }
+
+    override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
+        if (args.size == 1) return listOf("hand", "all").filter { it.startsWith(args[0], ignoreCase = true) }
+        return emptyList()
     }
 }
 

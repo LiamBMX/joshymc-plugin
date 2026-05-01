@@ -67,7 +67,7 @@ class AuctionManager(private val plugin: Joshymc) {
     private var listingDurationHours: Int = 48
     private var maxListings: Int = 10
     private var minPrice: Double = 1.0
-    private var maxPrice: Double = 1_000_000.0
+    private var maxPrice: Double = 1_000_000_000.0
     private var taxPercent: Double = 5.0
 
     // State tracking
@@ -82,7 +82,7 @@ class AuctionManager(private val plugin: Joshymc) {
         listingDurationHours = cfg.getInt("auction.listing-duration-hours", 48)
         maxListings = cfg.getInt("auction.max-listings-per-player", 10)
         minPrice = cfg.getDouble("auction.min-price", 1.0)
-        maxPrice = cfg.getDouble("auction.max-price", 1_000_000.0)
+        maxPrice = cfg.getDouble("auction.max-price", 1_000_000_000.0)
         taxPercent = cfg.getDouble("auction.tax-percent", 5.0)
 
         plugin.databaseManager.createTable("""

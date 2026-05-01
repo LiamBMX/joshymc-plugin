@@ -150,7 +150,7 @@ auction:
   listing-duration-hours: 48
   max-listings-per-player: 10
   min-price: 1
-  max-price: 1000000
+  max-price: 1000000000
   tax-percent: 5
 
 # Spawn World — auto-loads a schematic into a flat world

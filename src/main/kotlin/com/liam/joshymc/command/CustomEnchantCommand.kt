@@ -18,6 +18,19 @@ import org.bukkit.entity.Player
 class CustomEnchantCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        val sub = args.getOrNull(0)?.lowercase() ?: "help"
+
+        // /ce givescroll is console-friendly so admins can hand scrolls out
+        // from scripts / other plugins. Permission still applies.
+        if (sub == "givescroll") {
+            if (!sender.hasPermission("joshymc.customenchant")) {
+                sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+                return true
+            }
+            handleGiveScroll(sender, args)
+            return true
+        }
+
         if (sender !is Player) {
             sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
             return true
@@ -27,8 +40,6 @@ class CustomEnchantCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
             plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
             return true
         }
-
-        val sub = args.getOrNull(0)?.lowercase() ?: "help"
 
         when (sub) {
             "add", "apply" -> handleApply(sender, args)
@@ -40,6 +51,67 @@ class CustomEnchantCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
         }
 
         return true
+    }
+
+    /**
+     * /ce givescroll <enchant> [level] [chance] [player] [amount]
+     *
+     * - level defaults to 1, clamped to 1..maxLevel
+     * - chance defaults to 100, clamped to 1..100
+     * - player defaults to the sender if a player; required from console
+     * - amount defaults to 1
+     */
+    private fun handleGiveScroll(sender: CommandSender, args: Array<out String>) {
+        val enchantId = args.getOrNull(1)?.lowercase()
+        if (enchantId == null) {
+            sender.sendMessage(Component.text(
+                "Usage: /ce givescroll <enchant> [level] [chance] [player] [amount]",
+                NamedTextColor.RED
+            ))
+            return
+        }
+
+        val enchant = plugin.customEnchantManager.getEnchant(enchantId)
+        if (enchant == null) {
+            sender.sendMessage(Component.text("Unknown enchant: $enchantId", NamedTextColor.RED))
+            return
+        }
+
+        val level = args.getOrNull(2)?.toIntOrNull() ?: 1
+        val chance = args.getOrNull(3)?.toIntOrNull() ?: 100
+        val playerName = args.getOrNull(4)
+        val amount = args.getOrNull(5)?.toIntOrNull() ?: 1
+
+        val target: Player = if (playerName != null) {
+            plugin.server.getPlayer(playerName) ?: run {
+                sender.sendMessage(Component.text("Player not found: $playerName", NamedTextColor.RED))
+                return
+            }
+        } else if (sender is Player) {
+            sender
+        } else {
+            sender.sendMessage(Component.text("Specify a target player when running from console.", NamedTextColor.RED))
+            return
+        }
+
+        val scroll = plugin.customEnchantManager.createScroll(enchantId, level, chance, amount)
+        if (scroll == null) {
+            sender.sendMessage(Component.text("Failed to create scroll.", NamedTextColor.RED))
+            return
+        }
+
+        val leftover = target.inventory.addItem(scroll)
+        for ((_, item) in leftover) {
+            target.world.dropItemNaturally(target.location, item)
+        }
+
+        val levelText = if (enchant.maxLevel == 1) "" else " ${CustomEnchantManager.toRoman(level.coerceIn(1, enchant.maxLevel))}"
+        val msg = Component.text("Gave ", NamedTextColor.GREEN)
+            .append(Component.text("${amount.coerceAtLeast(1)}x ", NamedTextColor.WHITE))
+            .append(Component.text("${enchant.displayName}$levelText", NamedTextColor.GOLD))
+            .append(Component.text(" scroll (${chance.coerceIn(1, 100)}% chance) to ${target.name}.", NamedTextColor.GREEN))
+
+        if (sender is Player) plugin.commsManager.send(sender, msg) else sender.sendMessage(msg)
     }
 
     private fun handleApply(player: Player, args: Array<out String>) {
@@ -326,26 +398,45 @@ class CustomEnchantCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
             .append(Component.newline())
             .append(Component.text("/ce test", NamedTextColor.YELLOW))
             .append(Component.text(" — Run all enchant tests + give test items", NamedTextColor.GRAY))
+            .append(Component.newline())
+            .append(Component.text("/ce givescroll <enchant> [level] [chance] [player] [amount]", NamedTextColor.YELLOW))
+            .append(Component.text(" — Give an enchant scroll", NamedTextColor.GRAY))
 
         plugin.commsManager.send(player, msg.build())
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
-            1 -> listOf("add", "remove", "list", "info", "test").filter { it.startsWith(args[0].lowercase()) }
+            1 -> listOf("add", "remove", "list", "info", "test", "givescroll").filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
-                "add", "apply", "info" -> plugin.customEnchantManager.getEnchantIds()
+                "add", "apply", "info", "givescroll" -> plugin.customEnchantManager.getEnchantIds()
                     .filter { it.startsWith(args[1].lowercase()) }
                 "remove" -> (plugin.customEnchantManager.getEnchantIds() + "all")
                     .filter { it.startsWith(args[1].lowercase()) }
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
-                "add", "apply" -> {
+                "add", "apply", "givescroll" -> {
                     val enchant = plugin.customEnchantManager.getEnchant(args[1].lowercase())
                     if (enchant != null) (1..enchant.maxLevel).map { it.toString() }
                     else emptyList()
                 }
+                else -> emptyList()
+            }
+            4 -> when (args[0].lowercase()) {
+                "givescroll" -> listOf("100", "75", "50", "25", "10")
+                    .filter { it.startsWith(args[3]) }
+                else -> emptyList()
+            }
+            5 -> when (args[0].lowercase()) {
+                "givescroll" -> plugin.server.onlinePlayers
+                    .map { it.name }
+                    .filter { it.startsWith(args[4], ignoreCase = true) }
+                else -> emptyList()
+            }
+            6 -> when (args[0].lowercase()) {
+                "givescroll" -> listOf("1", "5", "16", "32", "64")
+                    .filter { it.startsWith(args[5]) }
                 else -> emptyList()
             }
             else -> emptyList()

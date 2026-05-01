@@ -17,11 +17,31 @@ import org.bukkit.event.Listener
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.event.entity.PlayerDeathEvent
+import org.bukkit.event.entity.ProjectileLaunchEvent
+import org.bukkit.event.player.PlayerCommandPreprocessEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerToggleFlightEvent
 
 class CombatListener(private val plugin: Joshymc) : Listener {
+
+    companion object {
+        // Commands that let a player escape or fully heal — banned while
+        // combat-tagged. Includes JoshyMC's own commands and the obvious
+        // vanilla equivalents (joshymc:fly, minecraft:tp, etc.).
+        private val BLOCKED_COMBAT_COMMANDS = setOf(
+            "fly", "heal", "feed", "god", "repair", "fix",
+            "tp", "tphere", "tpa", "tpahere", "tpaccept", "tpyes",
+            "spawn", "home", "homes", "warp", "warps", "pwarp",
+            "rtp", "wild", "back", "vanish", "v",
+            "kit", "kits", "ec", "echest", "enderchest",
+        )
+        // Same list with `joshymc:` and `minecraft:` namespacing in case
+        // players try to bypass via the namespaced alias.
+        private val BLOCKED_COMBAT_PREFIXED = BLOCKED_COMBAT_COMMANDS.flatMap {
+            listOf("joshymc:$it", "minecraft:$it", "essentials:$it", "bukkit:$it")
+        }.toSet()
+    }
 
     /**
      * Core PvP handler — resolves the attacking player from direct hits,
@@ -81,6 +101,42 @@ class CombatListener(private val plugin: Joshymc) : Listener {
             event.isCancelled = true
             plugin.commsManager.send(player,
                 Component.text("You cannot use elytra while in combat!", NamedTextColor.RED),
+                CommunicationsManager.Category.COMBAT
+            )
+        }
+    }
+
+    /**
+     * Block ender pearl + chorus fruit launches while combat tagged.
+     * Pearls let players escape combat instantly otherwise.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onPearlLaunch(event: ProjectileLaunchEvent) {
+        val shooter = event.entity.shooter as? Player ?: return
+        if (!plugin.combatManager.isTagged(shooter)) return
+        val type = event.entity.type.name
+        if (type == "ENDER_PEARL" || type == "CHORUS_FRUIT") {
+            event.isCancelled = true
+            plugin.commsManager.sendActionBar(shooter,
+                Component.text("You can't pearl while in combat!", NamedTextColor.RED)
+            )
+        }
+    }
+
+    /**
+     * Block escape commands while combat tagged: /fly, /heal, /repair, /tp,
+     * /tpa, /spawn, /home, /warp, /rtp, /back. Ops still get the command —
+     * we want to lock everyone equally during a fight to keep PvP fair.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onCombatCommand(event: PlayerCommandPreprocessEvent) {
+        val player = event.player
+        if (!plugin.combatManager.isTagged(player)) return
+        val cmd = event.message.removePrefix("/").substringBefore(' ').lowercase()
+        if (cmd in BLOCKED_COMBAT_COMMANDS || cmd in BLOCKED_COMBAT_PREFIXED) {
+            event.isCancelled = true
+            plugin.commsManager.send(player,
+                Component.text("You can't use /$cmd while in combat!", NamedTextColor.RED),
                 CommunicationsManager.Category.COMBAT
             )
         }

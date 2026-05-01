@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.ProfanityFilter
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -12,6 +13,20 @@ import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 
 class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
+
+    /**
+     * Build the actual displayed nickname Component. Non-op players get a
+     * `~` prefix in front of their nick to make it obvious it's a fake name;
+     * ops are exempt so admin-set nicknames look clean.
+     */
+    private fun renderNick(target: Player, raw: String): Component {
+        val core = plugin.commsManager.parseLegacy(raw)
+        return if (target.isOp || target.hasPermission("joshymc.nick.noprefix")) {
+            core
+        } else {
+            Component.text("~", NamedTextColor.GRAY).append(core)
+        }
+    }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) { sender.sendMessage("Players only."); return true }
@@ -27,15 +42,21 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     plugin.commsManager.send(sender, Component.text("Usage: /nick set <nickname>", NamedTextColor.RED))
                     return true
                 }
-                if (nick.replace("&[0-9a-fk-or]".toRegex(), "").length > 24) {
+                val plain = nick.replace("&[0-9a-fk-or]".toRegex(), "")
+                if (plain.length > 24) {
                     plugin.commsManager.send(sender, Component.text("Nickname too long (max 24 characters).", NamedTextColor.RED))
+                    return true
+                }
+                if (ProfanityFilter.contains(plain) && !sender.hasPermission("joshymc.nick.bypassfilter")) {
+                    val hit = ProfanityFilter.firstHit(plain) ?: "banned word"
+                    plugin.commsManager.send(sender, Component.text("Nickname rejected — contains '$hit'.", NamedTextColor.RED))
                     return true
                 }
                 plugin.databaseManager.execute(
                     "INSERT OR REPLACE INTO nicknames (uuid, nickname) VALUES (?, ?)",
                     sender.uniqueId.toString(), nick
                 )
-                val display = plugin.commsManager.parseLegacy(nick)
+                val display = renderNick(sender, nick)
                 sender.displayName(display)
                 sender.playerListName(display)
                 plugin.commsManager.send(sender, Component.text("Nickname set to ", NamedTextColor.GREEN).append(display))
@@ -63,11 +84,17 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
                     return true
                 }
+                val plain = nick.replace("&[0-9a-fk-or]".toRegex(), "")
+                if (ProfanityFilter.contains(plain) && !sender.hasPermission("joshymc.nick.bypassfilter")) {
+                    val hit = ProfanityFilter.firstHit(plain) ?: "banned word"
+                    plugin.commsManager.send(sender, Component.text("Nickname rejected — contains '$hit'.", NamedTextColor.RED))
+                    return true
+                }
                 plugin.databaseManager.execute(
                     "INSERT OR REPLACE INTO nicknames (uuid, nickname) VALUES (?, ?)",
                     target.uniqueId.toString(), nick
                 )
-                val display = plugin.commsManager.parseLegacy(nick)
+                val display = renderNick(target, nick)
                 target.displayName(display)
                 target.playerListName(display)
                 plugin.commsManager.send(sender, Component.text("Set ${target.name}'s nickname to ", NamedTextColor.GREEN).append(display))
@@ -112,7 +139,12 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 player.uniqueId.toString()
             ) { it.getString("nickname") } ?: return
 
-            val display = plugin.commsManager.parseLegacy(nick)
+            val core = plugin.commsManager.parseLegacy(nick)
+            val display = if (player.isOp || player.hasPermission("joshymc.nick.noprefix")) {
+                core
+            } else {
+                Component.text("~", NamedTextColor.GRAY).append(core)
+            }
             player.displayName(display)
             player.playerListName(display)
         }

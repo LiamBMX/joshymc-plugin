@@ -268,6 +268,14 @@ commands:
   anvil:
     description: Open anvil
     usage: /anvil
+  smithing:
+    description: Open a smithing table anywhere
+    usage: /smithing
+    aliases: [smith]
+  repair:
+    description: Repair the item in your hand (or all gear with 'all')
+    usage: /repair [hand|all]
+    aliases: [fix]
   gencave:
     description: Generate a natural cave
     usage: /gencave <radius>
@@ -675,6 +683,12 @@ permissions:
     default: op
   joshymc.anvil:
     description: Open portable anvil
+    default: op
+  joshymc.smithing:
+    description: Open portable smithing table
+    default: op
+  joshymc.repair:
+    description: Use /repair on held / worn items
     default: op
   joshymc.gencave:
     description: Generate caves

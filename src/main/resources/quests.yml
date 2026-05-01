@@ -681,7 +681,7 @@ quests:
     category: MINING
     difficulty: HARD
     type: BREAK_BLOCK
-    target: "STONE"
+    target: "REDSTONE_ORE"
     amount: 80
     rewards:
       money: 133333
@@ -720,7 +720,7 @@ quests:
     category: MINING
     difficulty: HARD
     type: BREAK_BLOCK
-    target: "STONE"
+    target: "REDSTONE_ORE"
     amount: 96
     rewards:
       money: 183333
@@ -759,7 +759,7 @@ quests:
     category: MINING
     difficulty: HARD
     type: BREAK_BLOCK
-    target: "STONE"
+    target: "REDSTONE_ORE"
     amount: 96
     rewards:
       money: 233333
@@ -798,7 +798,7 @@ quests:
     category: MINING
     difficulty: HARD
     type: BREAK_BLOCK
-    target: "STONE"
+    target: "REDSTONE_ORE"
     amount: 112
     rewards:
       money: 283333
@@ -837,7 +837,7 @@ quests:
     category: MINING
     difficulty: HARD
     type: BREAK_BLOCK
-    target: "STONE"
+    target: "REDSTONE_ORE"
     amount: 144
     rewards:
       money: 333333
@@ -876,7 +876,7 @@ quests:
     category: MINING
     difficulty: HARD
     type: BREAK_BLOCK
-    target: "STONE"
+    target: "REDSTONE_ORE"
     amount: 160
     rewards:
       money: 383333
@@ -915,7 +915,7 @@ quests:
     category: MINING
     difficulty: HARD
     type: BREAK_BLOCK
-    target: "STONE"
+    target: "REDSTONE_ORE"
     amount: 192
     rewards:
       money: 433333
@@ -954,7 +954,7 @@ quests:
     category: MINING
     difficulty: HARD
     type: BREAK_BLOCK
-    target: "STONE"
+    target: "REDSTONE_ORE"
     amount: 208
     rewards:
       money: 483333

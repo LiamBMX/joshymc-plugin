@@ -79,7 +79,7 @@ class MarketCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         val multiplier = plugin.marketManager.getMultiplier(material)
         val percentChange = ((multiplier - 1.0) * 100).toInt()
         val sign = if (percentChange >= 0) "+" else ""
-        val trendText = "${trend.color}${trend.symbol} $sign$percentChange%"
+        val trendText = "${trend.legacyCode}${trend.symbol} $sign$percentChange%"
 
         val message = "&f${formatMaterial(material)} &7— " +
             "&fBuy: &e${plugin.economyManager.format(buyPrice)} &7($trendText&7) &8| " +
@@ -118,7 +118,7 @@ class MarketCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             val multiplierFormatted = String.format("%.2f", multiplier)
 
             val line = "  &7${index + 1}. &f${formatMaterial(material)} " +
-                "${trend.color}${trend.symbol} &7${multiplierFormatted}x &8($sign$percentChange%)"
+                "${trend.legacyCode}${trend.symbol} &7${multiplierFormatted}x &8($sign$percentChange%)"
 
             player.sendMessage(plugin.commsManager.parseLegacy(line))
         }

@@ -355,28 +355,12 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         val key = block.toKey()
         val spawnerBlock = blocks[key]
 
-        // VANILLA spawner: allow silk touch pickup so they work in the wild
+        // VANILLA spawner: do NOT allow pickup (even with silk touch). Players
+        // were silk-touching dungeon-loot spawners (blaze, zombie, spider) for
+        // free farms — only JoshyMC-owned custom spawners are pickable.
+        // Players still get standard XP/dropless behaviour from breaking it.
         if (spawnerBlock == null) {
-            val tool = event.player.inventory.itemInMainHand
-            if (tool.containsEnchantment(Enchantment.SILK_TOUCH)) {
-                val state = block.state as? CreatureSpawner ?: return
-                val mobType = state.spawnedType ?: return
-                event.isDropItems = false
-                // Drop a vanilla spawner item with the mob type baked into BlockStateMeta
-                val item = ItemStack(Material.SPAWNER, 1)
-                val meta = item.itemMeta as? org.bukkit.inventory.meta.BlockStateMeta
-                if (meta != null) {
-                    val bs = meta.blockState
-                    if (bs is CreatureSpawner) {
-                        bs.spawnedType = mobType
-                        meta.blockState = bs
-                    }
-                    meta.displayName(Component.text("${formatMobName(mobType)} Spawner", NamedTextColor.GOLD)
-                        .decoration(TextDecoration.ITALIC, false))
-                    item.itemMeta = meta
-                }
-                block.world.dropItemNaturally(block.location.add(0.5, 0.5, 0.5), item)
-            }
+            event.isDropItems = false
             return
         }
 

@@ -127,9 +127,12 @@ class CustomRecipes(private val plugin: Joshymc) {
             setIngredient('M', mat)
         }
 
-        // Chestplate: 1 top-left + 1 top-right + 3 middle + 2 bottom-sides
+        // Chestplate: vanilla shape (M M / MMM / MMM) — 8 mats.
+        // Was previously "M M / MMM / M M" (7 mats, no bottom row), which
+        // didn't match the vanilla chestplate pattern at all and that's
+        // why fragments couldn't craft chestplates.
         addRecipe("${prefix}_chestplate", result("${prefix}_chestplate")) {
-            shape("M M", "MMM", "M M")
+            shape("M M", "MMM", "MMM")
             setIngredient('M', mat)
         }
 
