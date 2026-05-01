@@ -400,7 +400,7 @@ commands:
     aliases: [ranks]
   hopper:
     description: View and manage upgraded hoppers
-    usage: /hopper <info|reset>
+    usage: /hopper <info|reset|filter [hand|<material>|clear]>
   spawner:
     description: Open the spawner shop, or admin spawner commands
     usage: /spawner [shop|give|list]

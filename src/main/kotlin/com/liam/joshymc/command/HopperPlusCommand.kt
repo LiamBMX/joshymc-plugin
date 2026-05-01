@@ -20,17 +20,67 @@ class HopperPlusCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         }
 
         if (args.isEmpty()) {
-            plugin.commsManager.send(sender, Component.text("Usage: /hopper <info|reset>", NamedTextColor.GRAY), CommunicationsManager.Category.DEFAULT)
+            plugin.commsManager.send(sender, Component.text("Usage: /hopper <info|reset|filter>", NamedTextColor.GRAY), CommunicationsManager.Category.DEFAULT)
             return true
         }
 
         when (args[0].lowercase()) {
             "info" -> handleInfo(sender)
             "reset" -> handleReset(sender)
-            else -> plugin.commsManager.send(sender, Component.text("Usage: /hopper <info|reset>", NamedTextColor.GRAY), CommunicationsManager.Category.DEFAULT)
+            "filter" -> handleFilter(sender, args)
+            else -> plugin.commsManager.send(sender, Component.text("Usage: /hopper <info|reset|filter>", NamedTextColor.GRAY), CommunicationsManager.Category.DEFAULT)
         }
 
         return true
+    }
+
+    private fun handleFilter(player: Player, args: Array<out String>) {
+        if (!player.hasPermission("joshymc.hopper.upgrade")) {
+            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        val block = player.getTargetBlockExact(5)
+        if (block == null || block.type != Material.HOPPER) {
+            plugin.commsManager.send(player, Component.text("Look at a hopper to set its filter.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        val loc = block.location
+
+        // No arg / "clear" / "none" → clear filter
+        val arg = args.getOrNull(1)?.lowercase()
+        if (arg == null || arg == "clear" || arg == "none") {
+            plugin.hopperPlusManager.setFilter(loc.world.name, loc.blockX, loc.blockY, loc.blockZ, null)
+            plugin.commsManager.send(player, Component.text("Hopper filter cleared.", NamedTextColor.GREEN), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        // "hand" → use the material in the player's main hand
+        val material: Material? = if (arg == "hand") {
+            val held = player.inventory.itemInMainHand
+            if (held.type == Material.AIR) {
+                plugin.commsManager.send(player, Component.text("Hold an item to use as the filter, or pass a material name.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                return
+            }
+            held.type
+        } else {
+            Material.matchMaterial(arg.uppercase())
+        }
+
+        if (material == null) {
+            plugin.commsManager.send(player, Component.text("Unknown material: $arg", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        plugin.hopperPlusManager.setFilter(loc.world.name, loc.blockX, loc.blockY, loc.blockZ, material)
+        plugin.commsManager.send(
+            player,
+            Component.text("Hopper filter set to ", NamedTextColor.GREEN)
+                .append(Component.text(material.name.lowercase().replace('_', ' '), NamedTextColor.YELLOW))
+                .append(Component.text(".", NamedTextColor.GREEN)),
+            CommunicationsManager.Category.DEFAULT
+        )
     }
 
     private fun handleInfo(player: Player) {
@@ -106,7 +156,13 @@ class HopperPlusCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) {
             val prefix = args[0].lowercase()
-            return listOf("info", "reset").filter { it.startsWith(prefix) }
+            return listOf("info", "reset", "filter").filter { it.startsWith(prefix) }
+        }
+        if (args.size == 2 && args[0].equals("filter", ignoreCase = true)) {
+            val prefix = args[1].lowercase()
+            return (listOf("hand", "clear", "none") + Material.entries.map { it.name.lowercase() })
+                .filter { it.startsWith(prefix) }
+                .take(30)
         }
         return emptyList()
     }

@@ -107,6 +107,19 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
         delete(world, x, y, z)
     }
 
+    /**
+     * Set or clear a hopper's filter. Pass null to clear. Used by
+     * `/hopper filter <material>` since shift+right-click with an item in
+     * hand now leaves vanilla block-placement intact.
+     */
+    fun setFilter(world: String, x: Int, y: Int, z: Int, material: Material?) {
+        val k = key(world, x, y, z)
+        val data = cache[k] ?: HopperData(world, x, y, z, 1, null)
+        data.filterItem = material?.name
+        cache[k] = data
+        save(data)
+    }
+
     // ── Key helper ──────────────────────────────────────────
 
     private fun key(world: String, x: Int, y: Int, z: Int) = "$world:$x:$y:$z"
@@ -218,6 +231,15 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
         val k = key(loc)
         val item = event.item
 
+        // Only intercept gestures that are unambiguously hopper management:
+        //   - DIAMOND in hand   → upgrade
+        //   - empty hand        → info / clear filter
+        // Anything else (including blocks) falls through to vanilla so the
+        // player can stack-place a block on top of the hopper.
+        val isUpgrade = item != null && item.type == Material.DIAMOND
+        val isInfo = item == null || item.type == Material.AIR
+        if (!isUpgrade && !isInfo) return
+
         event.isCancelled = true
 
         if (item != null && item.type == Material.DIAMOND) {
@@ -256,29 +278,6 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
             )
             player.playSound(player.location, Sound.BLOCK_ANVIL_USE, 0.7f, 1.2f)
             loc.world.spawnParticle(Particle.HAPPY_VILLAGER, loc.x + 0.5, loc.y + 1.0, loc.z + 0.5, 10, 0.3, 0.3, 0.3, 0.0)
-            return
-        }
-
-        if (item != null && item.type != Material.AIR) {
-            // Set filter
-            if (!player.hasPermission("joshymc.hopper.upgrade")) {
-                plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
-                return
-            }
-
-            val data = cache[k] ?: HopperData(loc.world.name, loc.blockX, loc.blockY, loc.blockZ, 1, null)
-            data.filterItem = item.type.name
-            cache[k] = data
-            save(data)
-
-            plugin.commsManager.send(
-                player,
-                Component.text("Hopper filter set to ", NamedTextColor.GREEN)
-                    .append(Component.text(item.type.name.lowercase().replace('_', ' '), NamedTextColor.YELLOW))
-                    .append(Component.text(".", NamedTextColor.GREEN)),
-                CommunicationsManager.Category.DEFAULT
-            )
-            player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_CHIME, 0.7f, 1.5f)
             return
         }
 
