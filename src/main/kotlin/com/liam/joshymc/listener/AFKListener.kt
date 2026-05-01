@@ -24,11 +24,17 @@ class AFKListener(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onMove(event: PlayerMoveEvent) {
-        // Only trigger on actual block-level movement, not head rotation
-        if (event.from.blockX == event.to.blockX &&
-            event.from.blockY == event.to.blockY &&
-            event.from.blockZ == event.to.blockZ
-        ) return
+        // Distance-squared threshold instead of block-level check. Standing
+        // on a block in the AFK void world produces tiny floating-point Y
+        // drift on every physics tick, which would cross block boundaries
+        // (y=64.999 ↔ 65.001) and falsely cancel AFK whenever the player
+        // happened to turn their camera on the same tick.
+        // 0.04 = a 0.2-block radius — well above gravity wobble, well below
+        // any intentional walk/jump distance.
+        val dx = event.to.x - event.from.x
+        val dy = event.to.y - event.from.y
+        val dz = event.to.z - event.from.z
+        if (dx * dx + dy * dy + dz * dz < 0.04) return
 
         val player = event.player
         if (!plugin.afkManager.isAfk(player)) return
