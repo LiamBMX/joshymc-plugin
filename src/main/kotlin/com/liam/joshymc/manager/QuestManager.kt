@@ -962,11 +962,34 @@ class QuestManager(private val plugin: Joshymc) : Listener {
             "&6&l\u2605 Quest Complete! &e${quest.name} &7\u2014 use /quests to claim reward"
         ))
 
+        // Big on-screen title \u2014 gold "QUEST COMPLETE!" with the quest name as
+        // subtitle. Stays up for 4 seconds so it's actually noticeable.
         player.showTitle(Title.title(
-            plugin.commsManager.parseLegacy("&6\u2605"),
-            plugin.commsManager.parseLegacy("&eQuest Complete: ${quest.name}"),
-            Title.Times.times(Duration.ofMillis(200), Duration.ofSeconds(3), Duration.ofMillis(500))
+            plugin.commsManager.parseLegacy("&6&l\u2605 QUEST COMPLETE! \u2605"),
+            plugin.commsManager.parseLegacy("&e${quest.name}"),
+            Title.Times.times(
+                Duration.ofMillis(300),  // fade in
+                Duration.ofSeconds(4),   // stay
+                Duration.ofMillis(800)   // fade out
+            )
         ))
+
+        // Action bar with the reward summary so the player knows what they
+        // earned without opening /quests. Action bar text sits above the
+        // hotbar and is much harder to miss than the title.
+        val rewardSummary = buildList {
+            if (quest.rewards.money > 0) add("&6+${plugin.economyManager.format(quest.rewards.money)}")
+            if (quest.rewards.xp > 0) add("&a+${quest.rewards.xp} XP")
+            if (quest.rewards.items.isNotEmpty()) {
+                val total = quest.rewards.items.sumOf { it.second }
+                add("&b+$total item${if (total != 1) "s" else ""}")
+            }
+        }
+        if (rewardSummary.isNotEmpty()) {
+            player.sendActionBar(plugin.commsManager.parseLegacy(
+                "&6\u2605 &eClaim with /rewards: " + rewardSummary.joinToString("  &7| ") + " &6\u2605"
+            ))
+        }
     }
 
     private fun questIcon(quest: Quest, progress: PlayerQuestProgress, canStartQuest: Boolean): ItemStack {

@@ -8,7 +8,7 @@ quests:
     target: "STONE"
     amount: 144
     rewards:
-      money: 5000
+      money: 500
       xp: 50
       items: []
     prerequisite: null
@@ -21,7 +21,7 @@ quests:
     target: "COAL_ORE"
     amount: 16
     rewards:
-      money: 5416
+      money: 541.6
       xp: 54
       items: []
     prerequisite: null
@@ -34,7 +34,7 @@ quests:
     target: ""
     amount: 160
     rewards:
-      money: 5833
+      money: 583.3
       xp: 58
       items: []
     prerequisite: null
@@ -47,7 +47,7 @@ quests:
     target: "STONE"
     amount: 160
     rewards:
-      money: 6250
+      money: 625
       xp: 62
       items: []
     prerequisite: null
@@ -60,7 +60,7 @@ quests:
     target: "COAL_ORE"
     amount: 16
     rewards:
-      money: 6666
+      money: 666.6
       xp: 66
       items: []
     prerequisite: null
@@ -73,7 +73,7 @@ quests:
     target: ""
     amount: 176
     rewards:
-      money: 7083
+      money: 708.3
       xp: 70
       items: []
     prerequisite: null
@@ -86,7 +86,7 @@ quests:
     target: "STONE"
     amount: 176
     rewards:
-      money: 7500
+      money: 750
       xp: 75
       items: []
     prerequisite: null
@@ -99,7 +99,7 @@ quests:
     target: "COAL_ORE"
     amount: 16
     rewards:
-      money: 7916
+      money: 791.6
       xp: 79
       items: []
     prerequisite: null
@@ -112,7 +112,7 @@ quests:
     target: ""
     amount: 192
     rewards:
-      money: 8333
+      money: 833.3
       xp: 83
       items: []
     prerequisite: null
@@ -125,7 +125,7 @@ quests:
     target: "STONE"
     amount: 192
     rewards:
-      money: 8750
+      money: 875
       xp: 87
       items: []
     prerequisite: null
@@ -138,7 +138,7 @@ quests:
     target: "COAL_ORE"
     amount: 16
     rewards:
-      money: 9166
+      money: 916.6
       xp: 91
       items: []
     prerequisite: null
@@ -151,7 +151,7 @@ quests:
     target: ""
     amount: 208
     rewards:
-      money: 9583
+      money: 958.3
       xp: 95
       items: []
     prerequisite: null
@@ -164,7 +164,7 @@ quests:
     target: "STONE"
     amount: 224
     rewards:
-      money: 10000
+      money: 1000
       xp: 100
       items: []
     prerequisite: null
@@ -177,7 +177,7 @@ quests:
     target: "COAL_ORE"
     amount: 16
     rewards:
-      money: 10416
+      money: 1041.6
       xp: 104
       items: []
     prerequisite: null
@@ -190,7 +190,7 @@ quests:
     target: ""
     amount: 240
     rewards:
-      money: 10833
+      money: 1083.3
       xp: 108
       items: []
     prerequisite: null
@@ -203,7 +203,7 @@ quests:
     target: "STONE"
     amount: 240
     rewards:
-      money: 11250
+      money: 1125
       xp: 112
       items: []
     prerequisite: null
@@ -216,7 +216,7 @@ quests:
     target: "COAL_ORE"
     amount: 16
     rewards:
-      money: 11666
+      money: 1166.6
       xp: 116
       items: []
     prerequisite: null
@@ -229,7 +229,7 @@ quests:
     target: ""
     amount: 256
     rewards:
-      money: 12083
+      money: 1208.3
       xp: 120
       items: []
     prerequisite: null
@@ -242,7 +242,7 @@ quests:
     target: "STONE"
     amount: 272
     rewards:
-      money: 12500
+      money: 1250
       xp: 125
       items: []
     prerequisite: null
@@ -255,7 +255,7 @@ quests:
     target: "COAL_ORE"
     amount: 16
     rewards:
-      money: 12916
+      money: 1291.6
       xp: 129
       items: []
     prerequisite: null
@@ -268,7 +268,7 @@ quests:
     target: ""
     amount: 288
     rewards:
-      money: 13333
+      money: 1333.3
       xp: 133
       items: []
     prerequisite: null
@@ -281,7 +281,7 @@ quests:
     target: "STONE"
     amount: 288
     rewards:
-      money: 13750
+      money: 1375
       xp: 137
       items: []
     prerequisite: null
@@ -294,7 +294,7 @@ quests:
     target: "COAL_ORE"
     amount: 32
     rewards:
-      money: 14166
+      money: 1416.6
       xp: 141
       items: []
     prerequisite: null
@@ -307,7 +307,7 @@ quests:
     target: ""
     amount: 320
     rewards:
-      money: 14583
+      money: 1458.3
       xp: 145
       items: []
     prerequisite: null
@@ -320,7 +320,7 @@ quests:
     target: "STONE"
     amount: 320
     rewards:
-      money: 15000
+      money: 1500
       xp: 150
       items: []
     prerequisite: null
@@ -333,7 +333,7 @@ quests:
     target: "COPPER_ORE"
     amount: 32
     rewards:
-      money: 20000
+      money: 2000
       xp: 200
       items: []
     prerequisite: null
@@ -346,7 +346,7 @@ quests:
     target: "GRAVEL"
     amount: 240
     rewards:
-      money: 22500
+      money: 2250
       xp: 212
       items: []
     prerequisite: null
@@ -359,7 +359,7 @@ quests:
     target: "IRON_ORE"
     amount: 32
     rewards:
-      money: 25000
+      money: 2500
       xp: 225
       items: []
     prerequisite: null
@@ -372,7 +372,7 @@ quests:
     target: "COPPER_ORE"
     amount: 32
     rewards:
-      money: 27500
+      money: 2750
       xp: 237
       items: []
     prerequisite: null
@@ -385,7 +385,7 @@ quests:
     target: "GRAVEL"
     amount: 272
     rewards:
-      money: 30000
+      money: 3000
       xp: 250
       items: []
     prerequisite: null
@@ -398,7 +398,7 @@ quests:
     target: "IRON_ORE"
     amount: 32
     rewards:
-      money: 32500
+      money: 3250
       xp: 262
       items: []
     prerequisite: null
@@ -411,7 +411,7 @@ quests:
     target: "COPPER_ORE"
     amount: 32
     rewards:
-      money: 35000
+      money: 3500
       xp: 275
       items: []
     prerequisite: null
@@ -424,7 +424,7 @@ quests:
     target: "GRAVEL"
     amount: 320
     rewards:
-      money: 37500
+      money: 3750
       xp: 287
       items: []
     prerequisite: null
@@ -437,7 +437,7 @@ quests:
     target: "IRON_ORE"
     amount: 32
     rewards:
-      money: 40000
+      money: 4000
       xp: 300
       items: []
     prerequisite: null
@@ -450,7 +450,7 @@ quests:
     target: "COPPER_ORE"
     amount: 32
     rewards:
-      money: 42500
+      money: 4250
       xp: 312
       items: []
     prerequisite: null
@@ -463,7 +463,7 @@ quests:
     target: "GRAVEL"
     amount: 368
     rewards:
-      money: 45000
+      money: 4500
       xp: 325
       items: []
     prerequisite: null
@@ -476,7 +476,7 @@ quests:
     target: "IRON_ORE"
     amount: 48
     rewards:
-      money: 47500
+      money: 4750
       xp: 337
       items: []
     prerequisite: null
@@ -489,7 +489,7 @@ quests:
     target: "COPPER_ORE"
     amount: 48
     rewards:
-      money: 50000
+      money: 5000
       xp: 350
       items: []
     prerequisite: null
@@ -502,7 +502,7 @@ quests:
     target: "GRAVEL"
     amount: 432
     rewards:
-      money: 52500
+      money: 5250
       xp: 362
       items: []
     prerequisite: null
@@ -515,7 +515,7 @@ quests:
     target: "IRON_ORE"
     amount: 48
     rewards:
-      money: 55000
+      money: 5500
       xp: 375
       items: []
     prerequisite: null
@@ -528,7 +528,7 @@ quests:
     target: "COPPER_ORE"
     amount: 48
     rewards:
-      money: 57500
+      money: 5750
       xp: 387
       items: []
     prerequisite: null
@@ -541,7 +541,7 @@ quests:
     target: "GRAVEL"
     amount: 496
     rewards:
-      money: 60000
+      money: 6000
       xp: 400
       items: []
     prerequisite: null
@@ -554,7 +554,7 @@ quests:
     target: "IRON_ORE"
     amount: 48
     rewards:
-      money: 62500
+      money: 6250
       xp: 412
       items: []
     prerequisite: null
@@ -567,7 +567,7 @@ quests:
     target: "COPPER_ORE"
     amount: 48
     rewards:
-      money: 65000
+      money: 6500
       xp: 425
       items: []
     prerequisite: null
@@ -580,7 +580,7 @@ quests:
     target: "GRAVEL"
     amount: 576
     rewards:
-      money: 67500
+      money: 6750
       xp: 437
       items: []
     prerequisite: null
@@ -593,7 +593,7 @@ quests:
     target: "IRON_ORE"
     amount: 64
     rewards:
-      money: 70000
+      money: 7000
       xp: 450
       items: []
     prerequisite: null
@@ -606,7 +606,7 @@ quests:
     target: "COPPER_ORE"
     amount: 64
     rewards:
-      money: 72500
+      money: 7250
       xp: 462
       items: []
     prerequisite: null
@@ -619,7 +619,7 @@ quests:
     target: "GRAVEL"
     amount: 672
     rewards:
-      money: 75000
+      money: 7500
       xp: 475
       items: []
     prerequisite: null
@@ -632,7 +632,7 @@ quests:
     target: "IRON_ORE"
     amount: 64
     rewards:
-      money: 77500
+      money: 7750
       xp: 487
       items: []
     prerequisite: null
@@ -645,7 +645,7 @@ quests:
     target: "COPPER_ORE"
     amount: 64
     rewards:
-      money: 80000
+      money: 8000
       xp: 500
       items: []
     prerequisite: null
@@ -1308,7 +1308,7 @@ quests:
     target: "PIG"
     amount: 16
     rewards:
-      money: 5000
+      money: 500
       xp: 50
       items: []
     prerequisite: null
@@ -1321,7 +1321,7 @@ quests:
     target: "COW"
     amount: 16
     rewards:
-      money: 5416
+      money: 541.6
       xp: 54
       items: []
     prerequisite: null
@@ -1334,7 +1334,7 @@ quests:
     target: "SHEEP"
     amount: 16
     rewards:
-      money: 5833
+      money: 583.3
       xp: 58
       items: []
     prerequisite: null
@@ -1347,7 +1347,7 @@ quests:
     target: "CHICKEN"
     amount: 16
     rewards:
-      money: 6250
+      money: 625
       xp: 62
       items: []
     prerequisite: null
@@ -1360,7 +1360,7 @@ quests:
     target: "RABBIT"
     amount: 16
     rewards:
-      money: 6666
+      money: 666.6
       xp: 66
       items: []
     prerequisite: null
@@ -1373,7 +1373,7 @@ quests:
     target: "PIG"
     amount: 16
     rewards:
-      money: 7083
+      money: 708.3
       xp: 70
       items: []
     prerequisite: null
@@ -1386,7 +1386,7 @@ quests:
     target: "COW"
     amount: 16
     rewards:
-      money: 7500
+      money: 750
       xp: 75
       items: []
     prerequisite: null
@@ -1399,7 +1399,7 @@ quests:
     target: "SHEEP"
     amount: 16
     rewards:
-      money: 7916
+      money: 791.6
       xp: 79
       items: []
     prerequisite: null
@@ -1412,7 +1412,7 @@ quests:
     target: ""
     amount: 5
     rewards:
-      money: 8333
+      money: 833.3
       xp: 83
       items: []
     prerequisite: null
@@ -1425,7 +1425,7 @@ quests:
     target: "RABBIT"
     amount: 16
     rewards:
-      money: 8750
+      money: 875
       xp: 87
       items: []
     prerequisite: null
@@ -1438,7 +1438,7 @@ quests:
     target: "PIG"
     amount: 16
     rewards:
-      money: 9166
+      money: 916.6
       xp: 91
       items: []
     prerequisite: null
@@ -1451,7 +1451,7 @@ quests:
     target: "COW"
     amount: 16
     rewards:
-      money: 9583
+      money: 958.3
       xp: 95
       items: []
     prerequisite: null
@@ -1464,7 +1464,7 @@ quests:
     target: "SHEEP"
     amount: 16
     rewards:
-      money: 10000
+      money: 1000
       xp: 100
       items: []
     prerequisite: null
@@ -1477,7 +1477,7 @@ quests:
     target: "CHICKEN"
     amount: 16
     rewards:
-      money: 10416
+      money: 1041.6
       xp: 104
       items: []
     prerequisite: null
@@ -1490,7 +1490,7 @@ quests:
     target: "RABBIT"
     amount: 16
     rewards:
-      money: 10833
+      money: 1083.3
       xp: 108
       items: []
     prerequisite: null
@@ -1503,7 +1503,7 @@ quests:
     target: "PIG"
     amount: 16
     rewards:
-      money: 11250
+      money: 1125
       xp: 112
       items: []
     prerequisite: null
@@ -1516,7 +1516,7 @@ quests:
     target: "COW"
     amount: 16
     rewards:
-      money: 11666
+      money: 1166.6
       xp: 116
       items: []
     prerequisite: null
@@ -1529,7 +1529,7 @@ quests:
     target: "SHEEP"
     amount: 16
     rewards:
-      money: 12083
+      money: 1208.3
       xp: 120
       items: []
     prerequisite: null
@@ -1542,7 +1542,7 @@ quests:
     target: "CHICKEN"
     amount: 16
     rewards:
-      money: 12500
+      money: 1250
       xp: 125
       items: []
     prerequisite: null
@@ -1555,7 +1555,7 @@ quests:
     target: "RABBIT"
     amount: 16
     rewards:
-      money: 12916
+      money: 1291.6
       xp: 129
       items: []
     prerequisite: null
@@ -1568,7 +1568,7 @@ quests:
     target: "PIG"
     amount: 16
     rewards:
-      money: 13333
+      money: 1333.3
       xp: 133
       items: []
     prerequisite: null
@@ -1581,7 +1581,7 @@ quests:
     target: "COW"
     amount: 32
     rewards:
-      money: 13750
+      money: 1375
       xp: 137
       items: []
     prerequisite: null
@@ -1594,7 +1594,7 @@ quests:
     target: "SHEEP"
     amount: 32
     rewards:
-      money: 14166
+      money: 1416.6
       xp: 141
       items: []
     prerequisite: null
@@ -1607,7 +1607,7 @@ quests:
     target: ""
     amount: 10
     rewards:
-      money: 14583
+      money: 1458.3
       xp: 145
       items: []
     prerequisite: null
@@ -1620,7 +1620,7 @@ quests:
     target: "RABBIT"
     amount: 32
     rewards:
-      money: 15000
+      money: 1500
       xp: 150
       items: []
     prerequisite: null
@@ -1633,7 +1633,7 @@ quests:
     target: "ZOMBIE"
     amount: 32
     rewards:
-      money: 20000
+      money: 2000
       xp: 200
       items: []
     prerequisite: null
@@ -1646,7 +1646,7 @@ quests:
     target: "SKELETON"
     amount: 32
     rewards:
-      money: 22500
+      money: 2250
       xp: 212
       items: []
     prerequisite: null
@@ -1659,7 +1659,7 @@ quests:
     target: "CREEPER"
     amount: 32
     rewards:
-      money: 25000
+      money: 2500
       xp: 225
       items: []
     prerequisite: null
@@ -1672,7 +1672,7 @@ quests:
     target: "SPIDER"
     amount: 32
     rewards:
-      money: 27500
+      money: 2750
       xp: 237
       items: []
     prerequisite: null
@@ -1685,7 +1685,7 @@ quests:
     target: "DROWNED"
     amount: 32
     rewards:
-      money: 30000
+      money: 3000
       xp: 250
       items: []
     prerequisite: null
@@ -1698,7 +1698,7 @@ quests:
     target: "ZOMBIE"
     amount: 32
     rewards:
-      money: 32500
+      money: 3250
       xp: 262
       items: []
     prerequisite: null
@@ -1711,7 +1711,7 @@ quests:
     target: "SKELETON"
     amount: 32
     rewards:
-      money: 35000
+      money: 3500
       xp: 275
       items: []
     prerequisite: null
@@ -1724,7 +1724,7 @@ quests:
     target: "CREEPER"
     amount: 32
     rewards:
-      money: 37500
+      money: 3750
       xp: 287
       items: []
     prerequisite: null
@@ -1737,7 +1737,7 @@ quests:
     target: "SPIDER"
     amount: 32
     rewards:
-      money: 40000
+      money: 4000
       xp: 300
       items: []
     prerequisite: null
@@ -1750,7 +1750,7 @@ quests:
     target: "DROWNED"
     amount: 32
     rewards:
-      money: 42500
+      money: 4250
       xp: 312
       items: []
     prerequisite: null
@@ -1763,7 +1763,7 @@ quests:
     target: "ZOMBIE"
     amount: 32
     rewards:
-      money: 45000
+      money: 4500
       xp: 325
       items: []
     prerequisite: null
@@ -1776,7 +1776,7 @@ quests:
     target: "SKELETON"
     amount: 48
     rewards:
-      money: 47500
+      money: 4750
       xp: 337
       items: []
     prerequisite: null
@@ -1789,7 +1789,7 @@ quests:
     target: "CREEPER"
     amount: 48
     rewards:
-      money: 50000
+      money: 5000
       xp: 350
       items: []
     prerequisite: null
@@ -1802,7 +1802,7 @@ quests:
     target: ""
     amount: 25
     rewards:
-      money: 52500
+      money: 5250
       xp: 362
       items: []
     prerequisite: null
@@ -1815,7 +1815,7 @@ quests:
     target: "DROWNED"
     amount: 48
     rewards:
-      money: 55000
+      money: 5500
       xp: 375
       items: []
     prerequisite: null
@@ -1828,7 +1828,7 @@ quests:
     target: "ZOMBIE"
     amount: 48
     rewards:
-      money: 57500
+      money: 5750
       xp: 387
       items: []
     prerequisite: null
@@ -1841,7 +1841,7 @@ quests:
     target: "SKELETON"
     amount: 48
     rewards:
-      money: 60000
+      money: 6000
       xp: 400
       items: []
     prerequisite: null
@@ -1854,7 +1854,7 @@ quests:
     target: "CREEPER"
     amount: 48
     rewards:
-      money: 62500
+      money: 6250
       xp: 412
       items: []
     prerequisite: null
@@ -1867,7 +1867,7 @@ quests:
     target: "SPIDER"
     amount: 48
     rewards:
-      money: 65000
+      money: 6500
       xp: 425
       items: []
     prerequisite: null
@@ -1880,7 +1880,7 @@ quests:
     target: "DROWNED"
     amount: 48
     rewards:
-      money: 67500
+      money: 6750
       xp: 437
       items: []
     prerequisite: null
@@ -1893,7 +1893,7 @@ quests:
     target: "ZOMBIE"
     amount: 64
     rewards:
-      money: 70000
+      money: 7000
       xp: 450
       items: []
     prerequisite: null
@@ -1906,7 +1906,7 @@ quests:
     target: "SKELETON"
     amount: 64
     rewards:
-      money: 72500
+      money: 7250
       xp: 462
       items: []
     prerequisite: null
@@ -1919,7 +1919,7 @@ quests:
     target: "CREEPER"
     amount: 64
     rewards:
-      money: 75000
+      money: 7500
       xp: 475
       items: []
     prerequisite: null
@@ -1932,7 +1932,7 @@ quests:
     target: "SPIDER"
     amount: 64
     rewards:
-      money: 77500
+      money: 7750
       xp: 487
       items: []
     prerequisite: null
@@ -1945,7 +1945,7 @@ quests:
     target: "DROWNED"
     amount: 64
     rewards:
-      money: 80000
+      money: 8000
       xp: 500
       items: []
     prerequisite: null
@@ -2608,7 +2608,7 @@ quests:
     target: ""
     amount: 250
     rewards:
-      money: 5000
+      money: 500
       xp: 50
       items: []
     prerequisite: null
@@ -2621,7 +2621,7 @@ quests:
     target: ""
     amount: 300
     rewards:
-      money: 5416
+      money: 541.6
       xp: 54
       items: []
     prerequisite: null
@@ -2634,7 +2634,7 @@ quests:
     target: ""
     amount: 350
     rewards:
-      money: 5833
+      money: 583.3
       xp: 58
       items: []
     prerequisite: null
@@ -2647,7 +2647,7 @@ quests:
     target: ""
     amount: 450
     rewards:
-      money: 6250
+      money: 625
       xp: 62
       items: []
     prerequisite: null
@@ -2660,7 +2660,7 @@ quests:
     target: ""
     amount: 550
     rewards:
-      money: 6666
+      money: 666.6
       xp: 66
       items: []
     prerequisite: null
@@ -2673,7 +2673,7 @@ quests:
     target: ""
     amount: 650
     rewards:
-      money: 7083
+      money: 708.3
       xp: 70
       items: []
     prerequisite: null
@@ -2686,7 +2686,7 @@ quests:
     target: ""
     amount: 750
     rewards:
-      money: 7500
+      money: 750
       xp: 75
       items: []
     prerequisite: null
@@ -2699,7 +2699,7 @@ quests:
     target: ""
     amount: 850
     rewards:
-      money: 7916
+      money: 791.6
       xp: 79
       items: []
     prerequisite: null
@@ -2712,7 +2712,7 @@ quests:
     target: ""
     amount: 1000
     rewards:
-      money: 8333
+      money: 833.3
       xp: 83
       items: []
     prerequisite: null
@@ -2725,7 +2725,7 @@ quests:
     target: ""
     amount: 1150
     rewards:
-      money: 8750
+      money: 875
       xp: 87
       items: []
     prerequisite: null
@@ -2738,7 +2738,7 @@ quests:
     target: ""
     amount: 1250
     rewards:
-      money: 9166
+      money: 916.6
       xp: 91
       items: []
     prerequisite: null
@@ -2751,7 +2751,7 @@ quests:
     target: ""
     amount: 1400
     rewards:
-      money: 9583
+      money: 958.3
       xp: 95
       items: []
     prerequisite: null
@@ -2764,7 +2764,7 @@ quests:
     target: ""
     amount: 1600
     rewards:
-      money: 10000
+      money: 1000
       xp: 100
       items: []
     prerequisite: null
@@ -2777,7 +2777,7 @@ quests:
     target: ""
     amount: 1750
     rewards:
-      money: 10416
+      money: 1041.6
       xp: 104
       items: []
     prerequisite: null
@@ -2790,7 +2790,7 @@ quests:
     target: ""
     amount: 1950
     rewards:
-      money: 10833
+      money: 1083.3
       xp: 108
       items: []
     prerequisite: null
@@ -2803,7 +2803,7 @@ quests:
     target: ""
     amount: 2150
     rewards:
-      money: 11250
+      money: 1125
       xp: 112
       items: []
     prerequisite: null
@@ -2816,7 +2816,7 @@ quests:
     target: ""
     amount: 2350
     rewards:
-      money: 11666
+      money: 1166.6
       xp: 116
       items: []
     prerequisite: null
@@ -2829,7 +2829,7 @@ quests:
     target: ""
     amount: 2550
     rewards:
-      money: 12083
+      money: 1208.3
       xp: 120
       items: []
     prerequisite: null
@@ -2842,7 +2842,7 @@ quests:
     target: ""
     amount: 2750
     rewards:
-      money: 12500
+      money: 1250
       xp: 125
       items: []
     prerequisite: null
@@ -2855,7 +2855,7 @@ quests:
     target: ""
     amount: 3000
     rewards:
-      money: 12916
+      money: 1291.6
       xp: 129
       items: []
     prerequisite: null
@@ -2868,7 +2868,7 @@ quests:
     target: ""
     amount: 3200
     rewards:
-      money: 13333
+      money: 1333.3
       xp: 133
       items: []
     prerequisite: null
@@ -2881,7 +2881,7 @@ quests:
     target: ""
     amount: 3450
     rewards:
-      money: 13750
+      money: 1375
       xp: 137
       items: []
     prerequisite: null
@@ -2894,7 +2894,7 @@ quests:
     target: ""
     amount: 3700
     rewards:
-      money: 14166
+      money: 1416.6
       xp: 141
       items: []
     prerequisite: null
@@ -2907,7 +2907,7 @@ quests:
     target: ""
     amount: 3950
     rewards:
-      money: 14583
+      money: 1458.3
       xp: 145
       items: []
     prerequisite: null
@@ -2920,7 +2920,7 @@ quests:
     target: ""
     amount: 4250
     rewards:
-      money: 15000
+      money: 1500
       xp: 150
       items: []
     prerequisite: null
@@ -2933,7 +2933,7 @@ quests:
     target: ""
     amount: 4500
     rewards:
-      money: 20000
+      money: 2000
       xp: 200
       items: []
     prerequisite: null
@@ -2946,7 +2946,7 @@ quests:
     target: ""
     amount: 4800
     rewards:
-      money: 22500
+      money: 2250
       xp: 212
       items: []
     prerequisite: null
@@ -2959,7 +2959,7 @@ quests:
     target: ""
     amount: 5100
     rewards:
-      money: 25000
+      money: 2500
       xp: 225
       items: []
     prerequisite: null
@@ -2972,7 +2972,7 @@ quests:
     target: ""
     amount: 5400
     rewards:
-      money: 27500
+      money: 2750
       xp: 237
       items: []
     prerequisite: null
@@ -2985,7 +2985,7 @@ quests:
     target: ""
     amount: 5750
     rewards:
-      money: 30000
+      money: 3000
       xp: 250
       items: []
     prerequisite: null
@@ -2998,7 +2998,7 @@ quests:
     target: ""
     amount: 6050
     rewards:
-      money: 32500
+      money: 3250
       xp: 262
       items: []
     prerequisite: null
@@ -3011,7 +3011,7 @@ quests:
     target: ""
     amount: 6400
     rewards:
-      money: 35000
+      money: 3500
       xp: 275
       items: []
     prerequisite: null
@@ -3024,7 +3024,7 @@ quests:
     target: ""
     amount: 6750
     rewards:
-      money: 37500
+      money: 3750
       xp: 287
       items: []
     prerequisite: null
@@ -3037,7 +3037,7 @@ quests:
     target: ""
     amount: 7100
     rewards:
-      money: 40000
+      money: 4000
       xp: 300
       items: []
     prerequisite: null
@@ -3050,7 +3050,7 @@ quests:
     target: ""
     amount: 7450
     rewards:
-      money: 42500
+      money: 4250
       xp: 312
       items: []
     prerequisite: null
@@ -3063,7 +3063,7 @@ quests:
     target: ""
     amount: 7800
     rewards:
-      money: 45000
+      money: 4500
       xp: 325
       items: []
     prerequisite: null
@@ -3076,7 +3076,7 @@ quests:
     target: ""
     amount: 8200
     rewards:
-      money: 47500
+      money: 4750
       xp: 337
       items: []
     prerequisite: null
@@ -3089,7 +3089,7 @@ quests:
     target: ""
     amount: 8550
     rewards:
-      money: 50000
+      money: 5000
       xp: 350
       items: []
     prerequisite: null
@@ -3102,7 +3102,7 @@ quests:
     target: ""
     amount: 8950
     rewards:
-      money: 52500
+      money: 5250
       xp: 362
       items: []
     prerequisite: null
@@ -3115,7 +3115,7 @@ quests:
     target: ""
     amount: 9400
     rewards:
-      money: 55000
+      money: 5500
       xp: 375
       items: []
     prerequisite: null
@@ -3128,7 +3128,7 @@ quests:
     target: ""
     amount: 9800
     rewards:
-      money: 57500
+      money: 5750
       xp: 387
       items: []
     prerequisite: null
@@ -3141,7 +3141,7 @@ quests:
     target: ""
     amount: 10200
     rewards:
-      money: 60000
+      money: 6000
       xp: 400
       items: []
     prerequisite: null
@@ -3154,7 +3154,7 @@ quests:
     target: ""
     amount: 10650
     rewards:
-      money: 62500
+      money: 6250
       xp: 412
       items: []
     prerequisite: null
@@ -3167,7 +3167,7 @@ quests:
     target: ""
     amount: 11100
     rewards:
-      money: 65000
+      money: 6500
       xp: 425
       items: []
     prerequisite: null
@@ -3180,7 +3180,7 @@ quests:
     target: ""
     amount: 11550
     rewards:
-      money: 67500
+      money: 6750
       xp: 437
       items: []
     prerequisite: null
@@ -3193,7 +3193,7 @@ quests:
     target: ""
     amount: 12000
     rewards:
-      money: 70000
+      money: 7000
       xp: 450
       items: []
     prerequisite: null
@@ -3206,7 +3206,7 @@ quests:
     target: ""
     amount: 12450
     rewards:
-      money: 72500
+      money: 7250
       xp: 462
       items: []
     prerequisite: null
@@ -3219,7 +3219,7 @@ quests:
     target: ""
     amount: 12950
     rewards:
-      money: 75000
+      money: 7500
       xp: 475
       items: []
     prerequisite: null
@@ -3232,7 +3232,7 @@ quests:
     target: ""
     amount: 13450
     rewards:
-      money: 77500
+      money: 7750
       xp: 487
       items: []
     prerequisite: null
@@ -3245,7 +3245,7 @@ quests:
     target: ""
     amount: 13950
     rewards:
-      money: 80000
+      money: 8000
       xp: 500
       items: []
     prerequisite: null
@@ -3908,7 +3908,7 @@ quests:
     target: "WHEAT"
     amount: 64
     rewards:
-      money: 5000
+      money: 500
       xp: 50
       items: []
     prerequisite: null
@@ -3921,7 +3921,7 @@ quests:
     target: "CARROTS"
     amount: 32
     rewards:
-      money: 5416
+      money: 541.6
       xp: 54
       items: []
     prerequisite: null
@@ -3934,7 +3934,7 @@ quests:
     target: ""
     amount: 160
     rewards:
-      money: 5833
+      money: 583.3
       xp: 58
       items: []
     prerequisite: null
@@ -3947,7 +3947,7 @@ quests:
     target: "WHEAT"
     amount: 80
     rewards:
-      money: 6250
+      money: 625
       xp: 62
       items: []
     prerequisite: null
@@ -3960,7 +3960,7 @@ quests:
     target: "CARROTS"
     amount: 32
     rewards:
-      money: 6666
+      money: 666.6
       xp: 66
       items: []
     prerequisite: null
@@ -3973,7 +3973,7 @@ quests:
     target: ""
     amount: 176
     rewards:
-      money: 7083
+      money: 708.3
       xp: 70
       items: []
     prerequisite: null
@@ -3986,7 +3986,7 @@ quests:
     target: "WHEAT"
     amount: 96
     rewards:
-      money: 7500
+      money: 750
       xp: 75
       items: []
     prerequisite: null
@@ -3999,7 +3999,7 @@ quests:
     target: "CARROTS"
     amount: 32
     rewards:
-      money: 7916
+      money: 791.6
       xp: 79
       items: []
     prerequisite: null
@@ -4012,7 +4012,7 @@ quests:
     target: ""
     amount: 192
     rewards:
-      money: 8333
+      money: 833.3
       xp: 83
       items: []
     prerequisite: null
@@ -4025,7 +4025,7 @@ quests:
     target: "WHEAT"
     amount: 96
     rewards:
-      money: 8750
+      money: 875
       xp: 87
       items: []
     prerequisite: null
@@ -4038,7 +4038,7 @@ quests:
     target: "CARROTS"
     amount: 32
     rewards:
-      money: 9166
+      money: 916.6
       xp: 91
       items: []
     prerequisite: null
@@ -4051,7 +4051,7 @@ quests:
     target: ""
     amount: 208
     rewards:
-      money: 9583
+      money: 958.3
       xp: 95
       items: []
     prerequisite: null
@@ -4064,7 +4064,7 @@ quests:
     target: "WHEAT"
     amount: 112
     rewards:
-      money: 10000
+      money: 1000
       xp: 100
       items: []
     prerequisite: null
@@ -4077,7 +4077,7 @@ quests:
     target: "CARROTS"
     amount: 32
     rewards:
-      money: 10416
+      money: 1041.6
       xp: 104
       items: []
     prerequisite: null
@@ -4090,7 +4090,7 @@ quests:
     target: ""
     amount: 240
     rewards:
-      money: 10833
+      money: 1083.3
       xp: 108
       items: []
     prerequisite: null
@@ -4103,7 +4103,7 @@ quests:
     target: "WHEAT"
     amount: 128
     rewards:
-      money: 11250
+      money: 1125
       xp: 112
       items: []
     prerequisite: null
@@ -4116,7 +4116,7 @@ quests:
     target: "CARROTS"
     amount: 32
     rewards:
-      money: 11666
+      money: 1166.6
       xp: 116
       items: []
     prerequisite: null
@@ -4129,7 +4129,7 @@ quests:
     target: ""
     amount: 256
     rewards:
-      money: 12083
+      money: 1208.3
       xp: 120
       items: []
     prerequisite: null
@@ -4142,7 +4142,7 @@ quests:
     target: "WHEAT"
     amount: 128
     rewards:
-      money: 12500
+      money: 1250
       xp: 125
       items: []
     prerequisite: null
@@ -4155,7 +4155,7 @@ quests:
     target: "CARROTS"
     amount: 32
     rewards:
-      money: 12916
+      money: 1291.6
       xp: 129
       items: []
     prerequisite: null
@@ -4168,7 +4168,7 @@ quests:
     target: ""
     amount: 288
     rewards:
-      money: 13333
+      money: 1333.3
       xp: 133
       items: []
     prerequisite: null
@@ -4181,7 +4181,7 @@ quests:
     target: "WHEAT"
     amount: 144
     rewards:
-      money: 13750
+      money: 1375
       xp: 137
       items: []
     prerequisite: null
@@ -4194,7 +4194,7 @@ quests:
     target: "CARROTS"
     amount: 32
     rewards:
-      money: 14166
+      money: 1416.6
       xp: 141
       items: []
     prerequisite: null
@@ -4207,7 +4207,7 @@ quests:
     target: ""
     amount: 320
     rewards:
-      money: 14583
+      money: 1458.3
       xp: 145
       items: []
     prerequisite: null
@@ -4220,7 +4220,7 @@ quests:
     target: "WHEAT"
     amount: 160
     rewards:
-      money: 15000
+      money: 1500
       xp: 150
       items: []
     prerequisite: null
@@ -4233,7 +4233,7 @@ quests:
     target: "MELON"
     amount: 32
     rewards:
-      money: 20000
+      money: 2000
       xp: 200
       items: []
     prerequisite: null
@@ -4246,7 +4246,7 @@ quests:
     target: "PUMPKIN"
     amount: 176
     rewards:
-      money: 22500
+      money: 2250
       xp: 212
       items: []
     prerequisite: null
@@ -4259,7 +4259,7 @@ quests:
     target: ""
     amount: 48
     rewards:
-      money: 25000
+      money: 2500
       xp: 225
       items: []
     prerequisite: null
@@ -4272,7 +4272,7 @@ quests:
     target: "MELON"
     amount: 48
     rewards:
-      money: 27500
+      money: 2750
       xp: 237
       items: []
     prerequisite: null
@@ -4285,7 +4285,7 @@ quests:
     target: "PUMPKIN"
     amount: 208
     rewards:
-      money: 30000
+      money: 3000
       xp: 250
       items: []
     prerequisite: null
@@ -4298,7 +4298,7 @@ quests:
     target: ""
     amount: 48
     rewards:
-      money: 32500
+      money: 3250
       xp: 262
       items: []
     prerequisite: null
@@ -4311,7 +4311,7 @@ quests:
     target: "MELON"
     amount: 48
     rewards:
-      money: 35000
+      money: 3500
       xp: 275
       items: []
     prerequisite: null
@@ -4324,7 +4324,7 @@ quests:
     target: "PUMPKIN"
     amount: 240
     rewards:
-      money: 37500
+      money: 3750
       xp: 287
       items: []
     prerequisite: null
@@ -4337,7 +4337,7 @@ quests:
     target: ""
     amount: 48
     rewards:
-      money: 40000
+      money: 4000
       xp: 300
       items: []
     prerequisite: null
@@ -4350,7 +4350,7 @@ quests:
     target: "MELON"
     amount: 64
     rewards:
-      money: 42500
+      money: 4250
       xp: 312
       items: []
     prerequisite: null
@@ -4363,7 +4363,7 @@ quests:
     target: "PUMPKIN"
     amount: 272
     rewards:
-      money: 45000
+      money: 4500
       xp: 325
       items: []
     prerequisite: null
@@ -4376,7 +4376,7 @@ quests:
     target: ""
     amount: 64
     rewards:
-      money: 47500
+      money: 4750
       xp: 337
       items: []
     prerequisite: null
@@ -4389,7 +4389,7 @@ quests:
     target: "MELON"
     amount: 64
     rewards:
-      money: 50000
+      money: 5000
       xp: 350
       items: []
     prerequisite: null
@@ -4402,7 +4402,7 @@ quests:
     target: "PUMPKIN"
     amount: 320
     rewards:
-      money: 52500
+      money: 5250
       xp: 362
       items: []
     prerequisite: null
@@ -4415,7 +4415,7 @@ quests:
     target: ""
     amount: 64
     rewards:
-      money: 55000
+      money: 5500
       xp: 375
       items: []
     prerequisite: null
@@ -4428,7 +4428,7 @@ quests:
     target: "MELON"
     amount: 64
     rewards:
-      money: 57500
+      money: 5750
       xp: 387
       items: []
     prerequisite: null
@@ -4441,7 +4441,7 @@ quests:
     target: "PUMPKIN"
     amount: 368
     rewards:
-      money: 60000
+      money: 6000
       xp: 400
       items: []
     prerequisite: null
@@ -4454,7 +4454,7 @@ quests:
     target: ""
     amount: 80
     rewards:
-      money: 62500
+      money: 6250
       xp: 412
       items: []
     prerequisite: null
@@ -4467,7 +4467,7 @@ quests:
     target: "MELON"
     amount: 80
     rewards:
-      money: 65000
+      money: 6500
       xp: 425
       items: []
     prerequisite: null
@@ -4480,7 +4480,7 @@ quests:
     target: "PUMPKIN"
     amount: 432
     rewards:
-      money: 67500
+      money: 6750
       xp: 437
       items: []
     prerequisite: null
@@ -4493,7 +4493,7 @@ quests:
     target: ""
     amount: 80
     rewards:
-      money: 70000
+      money: 7000
       xp: 450
       items: []
     prerequisite: null
@@ -4506,7 +4506,7 @@ quests:
     target: "MELON"
     amount: 96
     rewards:
-      money: 72500
+      money: 7250
       xp: 462
       items: []
     prerequisite: null
@@ -4519,7 +4519,7 @@ quests:
     target: "PUMPKIN"
     amount: 496
     rewards:
-      money: 75000
+      money: 7500
       xp: 475
       items: []
     prerequisite: null
@@ -4532,7 +4532,7 @@ quests:
     target: ""
     amount: 96
     rewards:
-      money: 77500
+      money: 7750
       xp: 487
       items: []
     prerequisite: null
@@ -4545,7 +4545,7 @@ quests:
     target: "MELON"
     amount: 96
     rewards:
-      money: 80000
+      money: 8000
       xp: 500
       items: []
     prerequisite: null
@@ -5208,7 +5208,7 @@ quests:
     target: ""
     amount: 32
     rewards:
-      money: 5000
+      money: 500
       xp: 50
       items: []
     prerequisite: null
@@ -5221,7 +5221,7 @@ quests:
     target: ""
     amount: 12
     rewards:
-      money: 5416
+      money: 541.6
       xp: 54
       items: []
     prerequisite: null
@@ -5234,7 +5234,7 @@ quests:
     target: ""
     amount: 16
     rewards:
-      money: 5833
+      money: 583.3
       xp: 58
       items: []
     prerequisite: null
@@ -5247,7 +5247,7 @@ quests:
     target: ""
     amount: 9
     rewards:
-      money: 6250
+      money: 625
       xp: 62
       items: []
     prerequisite: null
@@ -5260,7 +5260,7 @@ quests:
     target: ""
     amount: 16
     rewards:
-      money: 6666
+      money: 666.6
       xp: 66
       items: []
     prerequisite: null
@@ -5273,7 +5273,7 @@ quests:
     target: ""
     amount: 6
     rewards:
-      money: 7083
+      money: 708.3
       xp: 70
       items: []
     prerequisite: null
@@ -5286,7 +5286,7 @@ quests:
     target: ""
     amount: 16
     rewards:
-      money: 7500
+      money: 750
       xp: 75
       items: []
     prerequisite: null
@@ -5299,7 +5299,7 @@ quests:
     target: ""
     amount: 20
     rewards:
-      money: 7916
+      money: 791.6
       xp: 79
       items: []
     prerequisite: null
@@ -5312,7 +5312,7 @@ quests:
     target: ""
     amount: 16
     rewards:
-      money: 8333
+      money: 833.3
       xp: 83
       items: []
     prerequisite: null
@@ -5325,7 +5325,7 @@ quests:
     target: ""
     amount: 5
     rewards:
-      money: 8750
+      money: 875
       xp: 87
       items: []
     prerequisite: null
@@ -5338,7 +5338,7 @@ quests:
     target: ""
     amount: 16
     rewards:
-      money: 9166
+      money: 916.6
       xp: 91
       items: []
     prerequisite: null
@@ -5351,7 +5351,7 @@ quests:
     target: ""
     amount: 5
     rewards:
-      money: 9583
+      money: 958.3
       xp: 95
       items: []
     prerequisite: null
@@ -5364,7 +5364,7 @@ quests:
     target: ""
     amount: 16
     rewards:
-      money: 10000
+      money: 1000
       xp: 100
       items: []
     prerequisite: null
@@ -5377,7 +5377,7 @@ quests:
     target: ""
     amount: 19
     rewards:
-      money: 10416
+      money: 1041.6
       xp: 104
       items: []
     prerequisite: null
@@ -5390,7 +5390,7 @@ quests:
     target: ""
     amount: 16
     rewards:
-      money: 10833
+      money: 1083.3
       xp: 108
       items: []
     prerequisite: null
@@ -5403,7 +5403,7 @@ quests:
     target: ""
     amount: 11
     rewards:
-      money: 11250
+      money: 1125
       xp: 112
       items: []
     prerequisite: null
@@ -5416,7 +5416,7 @@ quests:
     target: ""
     amount: 16
     rewards:
-      money: 11666
+      money: 1166.6
       xp: 116
       items: []
     prerequisite: null
@@ -5429,7 +5429,7 @@ quests:
     target: ""
     amount: 20
     rewards:
-      money: 12083
+      money: 1208.3
       xp: 120
       items: []
     prerequisite: null
@@ -5442,7 +5442,7 @@ quests:
     target: ""
     amount: 16
     rewards:
-      money: 12500
+      money: 1250
       xp: 125
       items: []
     prerequisite: null
@@ -5455,7 +5455,7 @@ quests:
     target: ""
     amount: 6
     rewards:
-      money: 12916
+      money: 1291.6
       xp: 129
       items: []
     prerequisite: null
@@ -5468,7 +5468,7 @@ quests:
     target: ""
     amount: 48
     rewards:
-      money: 13333
+      money: 1333.3
       xp: 133
       items: []
     prerequisite: null
@@ -5481,7 +5481,7 @@ quests:
     target: ""
     amount: 17
     rewards:
-      money: 13750
+      money: 1375
       xp: 137
       items: []
     prerequisite: null
@@ -5494,7 +5494,7 @@ quests:
     target: ""
     amount: 32
     rewards:
-      money: 14166
+      money: 1416.6
       xp: 141
       items: []
     prerequisite: null
@@ -5507,7 +5507,7 @@ quests:
     target: ""
     amount: 13
     rewards:
-      money: 14583
+      money: 1458.3
       xp: 145
       items: []
     prerequisite: null
@@ -5520,7 +5520,7 @@ quests:
     target: ""
     amount: 32
     rewards:
-      money: 15000
+      money: 1500
       xp: 150
       items: []
     prerequisite: null
@@ -5533,7 +5533,7 @@ quests:
     target: ""
     amount: 75
     rewards:
-      money: 20000
+      money: 2000
       xp: 200
       items: []
     prerequisite: null
@@ -5546,7 +5546,7 @@ quests:
     target: ""
     amount: 32
     rewards:
-      money: 22500
+      money: 2250
       xp: 212
       items: []
     prerequisite: null
@@ -5559,7 +5559,7 @@ quests:
     target: ""
     amount: 78
     rewards:
-      money: 25000
+      money: 2500
       xp: 225
       items: []
     prerequisite: null
@@ -5572,7 +5572,7 @@ quests:
     target: ""
     amount: 32
     rewards:
-      money: 27500
+      money: 2750
       xp: 237
       items: []
     prerequisite: null
@@ -5585,7 +5585,7 @@ quests:
     target: ""
     amount: 113
     rewards:
-      money: 30000
+      money: 3000
       xp: 250
       items: []
     prerequisite: null
@@ -5598,7 +5598,7 @@ quests:
     target: ""
     amount: 32
     rewards:
-      money: 32500
+      money: 3250
       xp: 262
       items: []
     prerequisite: null
@@ -5611,7 +5611,7 @@ quests:
     target: ""
     amount: 101
     rewards:
-      money: 35000
+      money: 3500
       xp: 275
       items: []
     prerequisite: null
@@ -5624,7 +5624,7 @@ quests:
     target: ""
     amount: 32
     rewards:
-      money: 37500
+      money: 3750
       xp: 287
       items: []
     prerequisite: null
@@ -5637,7 +5637,7 @@ quests:
     target: ""
     amount: 87
     rewards:
-      money: 40000
+      money: 4000
       xp: 300
       items: []
     prerequisite: null
@@ -5650,7 +5650,7 @@ quests:
     target: ""
     amount: 32
     rewards:
-      money: 42500
+      money: 4250
       xp: 312
       items: []
     prerequisite: null
@@ -5663,7 +5663,7 @@ quests:
     target: ""
     amount: 126
     rewards:
-      money: 45000
+      money: 4500
       xp: 325
       items: []
     prerequisite: null
@@ -5676,7 +5676,7 @@ quests:
     target: ""
     amount: 48
     rewards:
-      money: 47500
+      money: 4750
       xp: 337
       items: []
     prerequisite: null
@@ -5689,7 +5689,7 @@ quests:
     target: ""
     amount: 67
     rewards:
-      money: 50000
+      money: 5000
       xp: 350
       items: []
     prerequisite: null
@@ -5702,7 +5702,7 @@ quests:
     target: ""
     amount: 48
     rewards:
-      money: 52500
+      money: 5250
       xp: 362
       items: []
     prerequisite: null
@@ -5715,7 +5715,7 @@ quests:
     target: ""
     amount: 135
     rewards:
-      money: 55000
+      money: 5500
       xp: 375
       items: []
     prerequisite: null
@@ -5728,7 +5728,7 @@ quests:
     target: ""
     amount: 48
     rewards:
-      money: 57500
+      money: 5750
       xp: 387
       items: []
     prerequisite: null
@@ -5741,7 +5741,7 @@ quests:
     target: ""
     amount: 72
     rewards:
-      money: 60000
+      money: 6000
       xp: 400
       items: []
     prerequisite: null
@@ -5754,7 +5754,7 @@ quests:
     target: ""
     amount: 48
     rewards:
-      money: 62500
+      money: 6250
       xp: 412
       items: []
     prerequisite: null
@@ -5767,7 +5767,7 @@ quests:
     target: ""
     amount: 82
     rewards:
-      money: 65000
+      money: 6500
       xp: 425
       items: []
     prerequisite: null
@@ -5780,7 +5780,7 @@ quests:
     target: ""
     amount: 48
     rewards:
-      money: 67500
+      money: 6750
       xp: 437
       items: []
     prerequisite: null
@@ -5793,7 +5793,7 @@ quests:
     target: ""
     amount: 85
     rewards:
-      money: 70000
+      money: 7000
       xp: 450
       items: []
     prerequisite: null
@@ -5806,7 +5806,7 @@ quests:
     target: ""
     amount: 64
     rewards:
-      money: 72500
+      money: 7250
       xp: 462
       items: []
     prerequisite: null
@@ -5819,7 +5819,7 @@ quests:
     target: ""
     amount: 109
     rewards:
-      money: 75000
+      money: 7500
       xp: 475
       items: []
     prerequisite: null
@@ -5832,7 +5832,7 @@ quests:
     target: ""
     amount: 64
     rewards:
-      money: 77500
+      money: 7750
       xp: 487
       items: []
     prerequisite: null
@@ -5845,7 +5845,7 @@ quests:
     target: ""
     amount: 157
     rewards:
-      money: 80000
+      money: 8000
       xp: 500
       items: []
     prerequisite: null
@@ -6508,7 +6508,7 @@ quests:
     target: ""
     amount: 3600
     rewards:
-      money: 5000
+      money: 500
       xp: 50
       items: []
     prerequisite: null
@@ -6521,7 +6521,7 @@ quests:
     target: ""
     amount: 7200
     rewards:
-      money: 5416
+      money: 541.6
       xp: 54
       items: []
     prerequisite: null
@@ -6534,7 +6534,7 @@ quests:
     target: ""
     amount: 10800
     rewards:
-      money: 5833
+      money: 583.3
       xp: 58
       items: []
     prerequisite: null
@@ -6547,7 +6547,7 @@ quests:
     target: ""
     amount: 21600
     rewards:
-      money: 6250
+      money: 625
       xp: 62
       items: []
     prerequisite: null
@@ -6560,7 +6560,7 @@ quests:
     target: ""
     amount: 43200
     rewards:
-      money: 6666
+      money: 666.6
       xp: 66
       items: []
     prerequisite: null
@@ -6573,7 +6573,7 @@ quests:
     target: ""
     amount: 57600
     rewards:
-      money: 7083
+      money: 708.3
       xp: 70
       items: []
     prerequisite: null
@@ -6586,7 +6586,7 @@ quests:
     target: ""
     amount: 86400
     rewards:
-      money: 7500
+      money: 750
       xp: 75
       items: []
     prerequisite: null
@@ -6599,7 +6599,7 @@ quests:
     target: ""
     amount: 129600
     rewards:
-      money: 7916
+      money: 791.6
       xp: 79
       items: []
     prerequisite: null
@@ -6612,7 +6612,7 @@ quests:
     target: ""
     amount: 172800
     rewards:
-      money: 8333
+      money: 833.3
       xp: 83
       items: []
     prerequisite: null
@@ -6625,7 +6625,7 @@ quests:
     target: ""
     amount: 216000
     rewards:
-      money: 8750
+      money: 875
       xp: 87
       items: []
     prerequisite: null
@@ -6638,7 +6638,7 @@ quests:
     target: ""
     amount: 259200
     rewards:
-      money: 9166
+      money: 916.6
       xp: 91
       items: []
     prerequisite: null
@@ -6651,7 +6651,7 @@ quests:
     target: ""
     amount: 302400
     rewards:
-      money: 9583
+      money: 958.3
       xp: 95
       items: []
     prerequisite: null
@@ -6664,7 +6664,7 @@ quests:
     target: ""
     amount: 345600
     rewards:
-      money: 10000
+      money: 1000
       xp: 100
       items: []
     prerequisite: null
@@ -6677,7 +6677,7 @@ quests:
     target: ""
     amount: 388800
     rewards:
-      money: 10416
+      money: 1041.6
       xp: 104
       items: []
     prerequisite: null
@@ -6690,7 +6690,7 @@ quests:
     target: ""
     amount: 432000
     rewards:
-      money: 10833
+      money: 1083.3
       xp: 108
       items: []
     prerequisite: null
@@ -6703,7 +6703,7 @@ quests:
     target: ""
     amount: 518400
     rewards:
-      money: 11250
+      money: 1125
       xp: 112
       items: []
     prerequisite: null
@@ -6716,7 +6716,7 @@ quests:
     target: ""
     amount: 604800
     rewards:
-      money: 11666
+      money: 1166.6
       xp: 116
       items: []
     prerequisite: null
@@ -6729,7 +6729,7 @@ quests:
     target: ""
     amount: 691200
     rewards:
-      money: 12083
+      money: 1208.3
       xp: 120
       items: []
     prerequisite: null
@@ -6742,7 +6742,7 @@ quests:
     target: ""
     amount: 777600
     rewards:
-      money: 12500
+      money: 1250
       xp: 125
       items: []
     prerequisite: null
@@ -6755,7 +6755,7 @@ quests:
     target: ""
     amount: 864000
     rewards:
-      money: 12916
+      money: 1291.6
       xp: 129
       items: []
     prerequisite: null
@@ -6768,7 +6768,7 @@ quests:
     target: ""
     amount: 950400
     rewards:
-      money: 13333
+      money: 1333.3
       xp: 133
       items: []
     prerequisite: null
@@ -6781,7 +6781,7 @@ quests:
     target: ""
     amount: 1036800
     rewards:
-      money: 13750
+      money: 1375
       xp: 137
       items: []
     prerequisite: null
@@ -6794,7 +6794,7 @@ quests:
     target: ""
     amount: 1123200
     rewards:
-      money: 14166
+      money: 1416.6
       xp: 141
       items: []
     prerequisite: null
@@ -6807,7 +6807,7 @@ quests:
     target: ""
     amount: 1209600
     rewards:
-      money: 14583
+      money: 1458.3
       xp: 145
       items: []
     prerequisite: null
@@ -6820,7 +6820,7 @@ quests:
     target: ""
     amount: 1296000
     rewards:
-      money: 15000
+      money: 1500
       xp: 150
       items: []
     prerequisite: null
@@ -6833,7 +6833,7 @@ quests:
     target: ""
     amount: 1382400
     rewards:
-      money: 20000
+      money: 2000
       xp: 200
       items: []
     prerequisite: null
@@ -6846,7 +6846,7 @@ quests:
     target: ""
     amount: 1468800
     rewards:
-      money: 22500
+      money: 2250
       xp: 212
       items: []
     prerequisite: null
@@ -6859,7 +6859,7 @@ quests:
     target: ""
     amount: 1555200
     rewards:
-      money: 25000
+      money: 2500
       xp: 225
       items: []
     prerequisite: null
@@ -6872,7 +6872,7 @@ quests:
     target: ""
     amount: 1641600
     rewards:
-      money: 27500
+      money: 2750
       xp: 237
       items: []
     prerequisite: null
@@ -6885,7 +6885,7 @@ quests:
     target: ""
     amount: 1728000
     rewards:
-      money: 30000
+      money: 3000
       xp: 250
       items: []
     prerequisite: null
@@ -6898,7 +6898,7 @@ quests:
     target: ""
     amount: 1814400
     rewards:
-      money: 32500
+      money: 3250
       xp: 262
       items: []
     prerequisite: null
@@ -6911,7 +6911,7 @@ quests:
     target: ""
     amount: 1900800
     rewards:
-      money: 35000
+      money: 3500
       xp: 275
       items: []
     prerequisite: null
@@ -6924,7 +6924,7 @@ quests:
     target: ""
     amount: 1987200
     rewards:
-      money: 37500
+      money: 3750
       xp: 287
       items: []
     prerequisite: null
@@ -6937,7 +6937,7 @@ quests:
     target: ""
     amount: 2073600
     rewards:
-      money: 40000
+      money: 4000
       xp: 300
       items: []
     prerequisite: null
@@ -6950,7 +6950,7 @@ quests:
     target: ""
     amount: 2160000
     rewards:
-      money: 42500
+      money: 4250
       xp: 312
       items: []
     prerequisite: null
@@ -6963,7 +6963,7 @@ quests:
     target: ""
     amount: 2332800
     rewards:
-      money: 45000
+      money: 4500
       xp: 325
       items: []
     prerequisite: null
@@ -6976,7 +6976,7 @@ quests:
     target: ""
     amount: 2505600
     rewards:
-      money: 47500
+      money: 4750
       xp: 337
       items: []
     prerequisite: null
@@ -6989,7 +6989,7 @@ quests:
     target: ""
     amount: 2678400
     rewards:
-      money: 50000
+      money: 5000
       xp: 350
       items: []
     prerequisite: null
@@ -7002,7 +7002,7 @@ quests:
     target: ""
     amount: 2851200
     rewards:
-      money: 52500
+      money: 5250
       xp: 362
       items: []
     prerequisite: null
@@ -7015,7 +7015,7 @@ quests:
     target: ""
     amount: 3024000
     rewards:
-      money: 55000
+      money: 5500
       xp: 375
       items: []
     prerequisite: null
@@ -7028,7 +7028,7 @@ quests:
     target: ""
     amount: 3196800
     rewards:
-      money: 57500
+      money: 5750
       xp: 387
       items: []
     prerequisite: null
@@ -7041,7 +7041,7 @@ quests:
     target: ""
     amount: 3369600
     rewards:
-      money: 60000
+      money: 6000
       xp: 400
       items: []
     prerequisite: null
@@ -7054,7 +7054,7 @@ quests:
     target: ""
     amount: 3542400
     rewards:
-      money: 62500
+      money: 6250
       xp: 412
       items: []
     prerequisite: null
@@ -7067,7 +7067,7 @@ quests:
     target: ""
     amount: 3715200
     rewards:
-      money: 65000
+      money: 6500
       xp: 425
       items: []
     prerequisite: null
@@ -7080,7 +7080,7 @@ quests:
     target: ""
     amount: 3888000
     rewards:
-      money: 67500
+      money: 6750
       xp: 437
       items: []
     prerequisite: null
@@ -7093,7 +7093,7 @@ quests:
     target: ""
     amount: 4060800
     rewards:
-      money: 70000
+      money: 7000
       xp: 450
       items: []
     prerequisite: null
@@ -7106,7 +7106,7 @@ quests:
     target: ""
     amount: 4233600
     rewards:
-      money: 72500
+      money: 7250
       xp: 462
       items: []
     prerequisite: null
@@ -7119,7 +7119,7 @@ quests:
     target: ""
     amount: 4406400
     rewards:
-      money: 75000
+      money: 7500
       xp: 475
       items: []
     prerequisite: null
@@ -7132,7 +7132,7 @@ quests:
     target: ""
     amount: 4579200
     rewards:
-      money: 77500
+      money: 7750
       xp: 487
       items: []
     prerequisite: null
@@ -7145,7 +7145,7 @@ quests:
     target: ""
     amount: 4752000
     rewards:
-      money: 80000
+      money: 8000
       xp: 500
       items: []
     prerequisite: null
