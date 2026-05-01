@@ -15,6 +15,8 @@ import org.bukkit.WorldType
 import org.bukkit.entity.Player
 import org.bukkit.generator.ChunkGenerator
 import org.bukkit.inventory.ItemStack
+import org.bukkit.potion.PotionEffect
+import org.bukkit.potion.PotionEffectType
 import java.time.Duration
 import java.util.Random
 import java.util.UUID
@@ -319,6 +321,20 @@ class AFKManager(private val plugin: Joshymc) {
                 plugin.logger.warning("[AFK] World '$worldName' not found — skipping teleportation.")
             }
 
+            // Apply permanent Blindness so the AFK area is just darkness with
+            // the reward countdown title overlaid. ambient=true + hidden
+            // particles/icon keeps the screen clean.
+            player.addPotionEffect(
+                PotionEffect(
+                    PotionEffectType.BLINDNESS,
+                    PotionEffect.INFINITE_DURATION,
+                    0,
+                    /* ambient = */ true,
+                    /* particles = */ false,
+                    /* icon = */ false,
+                )
+            )
+
             plugin.commsManager.send(player,
                 Component.text("You are now AFK.", NamedTextColor.GRAY),
                 CommunicationsManager.Category.AFK
@@ -339,6 +355,9 @@ class AFKManager(private val plugin: Joshymc) {
 
             // Clear title
             player.clearTitle()
+
+            // Lift the AFK-zone blindness
+            player.removePotionEffect(PotionEffectType.BLINDNESS)
 
             // Teleport back
             val previousLocation = preAfkLocations.remove(player.uniqueId)
@@ -374,6 +393,9 @@ class AFKManager(private val plugin: Joshymc) {
             nextRewardTime.remove(player.uniqueId)
             afkStartTime.remove(player.uniqueId)
             teleporting.remove(player.uniqueId)
+            // Blindness gets persisted with the player save; clear it so they
+            // don't rejoin still blinded.
+            player.removePotionEffect(PotionEffectType.BLINDNESS)
             // The persisted location row is intentionally kept until the player
             // rejoins, so handleJoin can rescue them if they spawn in the AFK world.
         }
@@ -402,6 +424,9 @@ class AFKManager(private val plugin: Joshymc) {
                     }
                 }, 2L)
             }
+            // Player is being rescued out of the AFK world — strip the
+            // AFK-zone blindness so they're not stranded blind at spawn.
+            player.removePotionEffect(PotionEffectType.BLINDNESS)
         }
 
         clearPersistedPreAfkLocation(player.uniqueId)
