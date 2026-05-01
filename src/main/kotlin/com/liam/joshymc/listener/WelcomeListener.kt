@@ -6,6 +6,7 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.event.player.PlayerRespawnEvent
 
 class WelcomeListener(private val plugin: Joshymc) : Listener {
 
@@ -74,12 +75,38 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
                 val welcomeText = firstJoinMessage.replace("{player}", name)
                 plugin.server.broadcast(plugin.commsManager.parseLegacy(welcomeText))
             }
+
+            // Teleport first-time joiners to the configured spawn so they
+            // don't drop into a random vanilla world spawn point.
+            val spawn = plugin.warpManager.getSpawn()
+                ?: org.bukkit.Bukkit.getWorld("spawn")?.spawnLocation
+                ?: org.bukkit.Bukkit.getWorlds()[0].spawnLocation
+            // Defer one tick so the join is fully processed before we teleport.
+            plugin.server.scheduler.runTask(plugin, Runnable {
+                if (player.isOnline) player.teleport(spawn)
+            })
         }
 
         // Send MOTD lines to the player (first join or returning)
         for (line in motdLines) {
             plugin.commsManager.sendRaw(player, plugin.commsManager.parseLegacy(line))
         }
+    }
+
+    /**
+     * Route respawns to the configured /spawn warp unless the player has a
+     * valid bed or respawn anchor. Otherwise vanilla picks the world's
+     * spawnLocation (which is randomized inside the spawn region) and players
+     * end up scattered.
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    fun onRespawn(event: PlayerRespawnEvent) {
+        if (event.isBedSpawn || event.isAnchorSpawn) return
+
+        val spawn = plugin.warpManager.getSpawn()
+            ?: org.bukkit.Bukkit.getWorld("spawn")?.spawnLocation
+            ?: return
+        event.respawnLocation = spawn
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)

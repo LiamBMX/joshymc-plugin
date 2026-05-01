@@ -74,7 +74,8 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
 
     fun openMainMenu(player: Player) {
         val crates = plugin.crateManager.getAllCrates()
-        val size = 27
+        // 6-row inventory: top + bottom border, 4 inner rows of 7 = 28 crate slots.
+        val size = 54
 
         val gui = CustomGui(
             Component.text("Crate Editor", TextColor.color(0x55FFFF))
@@ -88,10 +89,19 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
         filler.editMeta { it.displayName(Component.empty()) }
         gui.border(filler)
 
-        // Place each crate type as its icon
-        var slot = 10
+        // Crate slots: rows 1..4 (10..16, 19..25, 28..34, 37..43) = 28 slots.
+        val crateSlots = listOf(
+            10, 11, 12, 13, 14, 15, 16,
+            19, 20, 21, 22, 23, 24, 25,
+            28, 29, 30, 31, 32, 33, 34,
+            37, 38, 39, 40, 41, 42, 43,
+        )
+
+        var slotIdx = 0
         for ((id, crate) in crates) {
-            if (slot > 16) break // max 7 crates in one row
+            if (slotIdx >= crateSlots.size) break
+            val slot = crateSlots[slotIdx]
+            slotIdx++
 
             val icon = ItemStack(crate.keyMaterial)
             icon.editMeta { meta ->
@@ -120,10 +130,9 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
                 openEditMenu(p, crateId)
             }
-            slot++
         }
 
-        // Create New Crate button
+        // Create New Crate button (centered in the bottom border row)
         val createBtn = ItemStack(Material.LIME_WOOL)
         createBtn.editMeta { meta ->
             meta.displayName(
@@ -138,7 +147,7 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
                 Component.empty()
             ))
         }
-        gui.setItem(22, createBtn) { p, _ ->
+        gui.setItem(49, createBtn) { p, _ ->
             p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
             pendingActions[p.uniqueId] = PendingCrateAction.CreateCrate()
             p.closeInventory()

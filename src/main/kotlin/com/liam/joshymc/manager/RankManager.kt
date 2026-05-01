@@ -1,11 +1,19 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
+import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.scoreboard.Scoreboard
 import java.util.UUID
 
-class RankManager(private val plugin: Joshymc) {
+class RankManager(private val plugin: Joshymc) : Listener {
 
     /**
      * A rank with an ID, display tag (with color codes), weight for ordering,
@@ -19,6 +27,8 @@ class RankManager(private val plugin: Joshymc) {
 
     private val ranks = mutableMapOf<String, Rank>()
     private val playerRanks = mutableMapOf<UUID, String>() // UUID -> rank ID
+
+    private val legacy = LegacyComponentSerializer.legacyAmpersand()
 
     fun start() {
         // Create DB table for player ranks
@@ -35,7 +45,87 @@ class RankManager(private val plugin: Joshymc) {
         // Load player ranks from DB
         loadPlayerRanks()
 
+        // Register scoreboard teams so the rank prefix shows above the
+        // nameplate (and orders the tab list by weight).
+        rebuildScoreboardTeams()
+
+        // Wire up join/quit so newly-arriving players get put in the right
+        // team automatically.
+        Bukkit.getPluginManager().registerEvents(this, plugin)
+
+        // Players already online when this manager (re)starts after /reload.
+        for (online in Bukkit.getOnlinePlayers()) {
+            applyTeamFor(online)
+        }
+
         plugin.logger.info("[Ranks] Started with ${ranks.size} rank(s), ${playerRanks.size} assigned player(s).")
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onJoin(event: PlayerJoinEvent) {
+        applyTeamFor(event.player)
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onQuit(event: PlayerQuitEvent) {
+        // Bukkit will remove the entry on its own when the player logs off,
+        // but explicit removal keeps the main scoreboard tidy across reloads.
+        val board = Bukkit.getScoreboardManager().mainScoreboard
+        board.getEntryTeam(event.player.name)?.removeEntry(event.player.name)
+    }
+
+    /**
+     * Wipe and recreate every JoshyMC rank team on the main scoreboard.
+     * Called at startup and whenever ranks are reloaded so prefixes stay
+     * in sync with config edits.
+     */
+    private fun rebuildScoreboardTeams() {
+        val board = Bukkit.getScoreboardManager().mainScoreboard
+        // Drop any leftover joshymc_rank_* teams from a prior boot
+        board.teams
+            .filter { it.name.startsWith(TEAM_PREFIX) }
+            .forEach { it.unregister() }
+
+        val sorted = ranks.values.sortedByDescending { it.weight }
+        for ((idx, rank) in sorted.withIndex()) {
+            val teamName = teamNameFor(rank, idx)
+            val team = board.registerNewTeam(teamName)
+            // Adventure component prefix; Bukkit converts to legacy on the wire.
+            team.prefix(legacy.deserialize("${rank.displayTag}&r "))
+        }
+    }
+
+    /**
+     * Place [player] into the scoreboard team matching their current rank.
+     * No-op if the team can't be found (shouldn't happen unless config was
+     * mid-edit).
+     */
+    private fun applyTeamFor(player: Player) {
+        val rank = getPlayerRank(player) ?: return
+        val board = Bukkit.getScoreboardManager().mainScoreboard
+        val team = board.teams
+            .firstOrNull { it.name.startsWith(TEAM_PREFIX) && it.name.endsWith("_${rank.id}") }
+            ?: return
+
+        // Remove from any other rank team first (e.g. when rank changes).
+        board.teams
+            .filter { it.name.startsWith(TEAM_PREFIX) && it.hasEntry(player.name) }
+            .forEach { it.removeEntry(player.name) }
+
+        team.addEntry(player.name)
+    }
+
+    private fun teamNameFor(rank: Rank, sortIndex: Int): String {
+        // Bukkit team names are limited to 16 chars and used for tab-list
+        // ordering. Pad with the sort index so higher-weight ranks come first
+        // alphabetically. Truncate the rank id if needed to keep under 16.
+        val padded = sortIndex.coerceIn(0, 99).toString().padStart(2, '0')
+        val safeId = rank.id.take(11)
+        return "$TEAM_PREFIX${padded}_$safeId"
+    }
+
+    companion object {
+        private const val TEAM_PREFIX = "jmc_"
     }
 
     private fun loadRanks() {
@@ -129,6 +219,10 @@ class RankManager(private val plugin: Joshymc) {
                 uuid.toString(), rankId
             )
         }
+
+        // Update the scoreboard team so the nameplate prefix reflects the
+        // new rank immediately (no relog needed).
+        Bukkit.getPlayer(uuid)?.let { applyTeamFor(it) }
 
         syncWithLuckPerms(uuid, rankId)
     }

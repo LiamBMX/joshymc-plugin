@@ -259,7 +259,13 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     fun onFoodLevelChange(event: FoodLevelChangeEvent) {
         val player = event.entity as? Player ?: return
-        if (!getFlag(player.world.name, WorldFlag.HUNGER)) {
+        if (getFlag(player.world.name, WorldFlag.HUNGER)) return
+
+        // HUNGER flag means "allow hunger drain". When it's off we should
+        // only cancel DECREASES — eating (which raises foodLevel) and
+        // saturation buffs from food still need to go through, otherwise
+        // food in spawn does nothing.
+        if (event.foodLevel < player.foodLevel) {
             event.isCancelled = true
         }
     }
