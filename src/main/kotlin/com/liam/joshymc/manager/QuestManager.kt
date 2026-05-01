@@ -22,6 +22,7 @@ import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.enchantment.EnchantItemEvent
 import org.bukkit.event.entity.EntityBreedEvent
 import org.bukkit.event.entity.EntityDeathEvent
+import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.entity.EntityTameEvent
 import org.bukkit.event.inventory.CraftItemEvent
 import org.bukkit.event.player.PlayerFishEvent
@@ -58,7 +59,8 @@ enum class QuestType {
     EARN_MONEY,
     TAME_ANIMAL,
     TIME_PLAYED,
-    VISIT_BIOME
+    VISIT_BIOME,
+    ITEM_PICKUP
 }
 
 enum class QuestDifficulty(val color: String, val displayName: String) {
@@ -717,18 +719,44 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         findMatchingQuests(QuestType.MINE_ORE, materialName).forEach { quest ->
             if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id)
         }
-        // Only count fully grown crops for harvest quests
+
+        // Harvest crop tracking. Includes:
+        //   - Fully grown Ageable crops (wheat, carrots, potatoes, beetroot, nether wart, etc.)
+        //   - Always-harvestable plants (melon, pumpkin, sugar cane, cactus, bamboo, chorus, kelp)
+        //
+        // Plant variants whose top/stem use different Material names (KELP vs
+        // KELP_PLANT, BAMBOO vs BAMBOO_SAPLING, TWISTING_VINES vs
+        // TWISTING_VINES_PLANT, etc.) are normalized to the harvested-item
+        // name so target matching works regardless of which segment was broken.
         val block = event.block
         val blockData = block.blockData
-        if (blockData is org.bukkit.block.data.Ageable && blockData.age == blockData.maximumAge) {
-            findMatchingQuests(QuestType.HARVEST_CROP, materialName).forEach { quest ->
-                if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id)
-            }
-        } else if (materialName in setOf("MELON", "PUMPKIN", "SUGAR_CANE", "CACTUS", "BAMBOO", "CHORUS_FLOWER", "CHORUS_PLANT")) {
-            findMatchingQuests(QuestType.HARVEST_CROP, materialName).forEach { quest ->
+        val normalized = normalizeHarvestName(materialName)
+        val alwaysHarvestable = setOf(
+            "MELON", "PUMPKIN", "SUGAR_CANE", "CACTUS", "BAMBOO",
+            "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES",
+            "WEEPING_VINES", "GLOW_LICHEN", "VINE", "NETHER_WART",
+            "SWEET_BERRY_BUSH",
+        )
+        val eligible = (blockData is org.bukkit.block.data.Ageable && blockData.age == blockData.maximumAge)
+                || normalized in alwaysHarvestable
+        if (eligible) {
+            findMatchingQuests(QuestType.HARVEST_CROP, normalized).forEach { quest ->
                 if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id)
             }
         }
+    }
+
+    /**
+     * Map plant block variants to the canonical harvested-item name so quest
+     * targets like `KELP` match when the player breaks a `KELP_PLANT` segment.
+     */
+    private fun normalizeHarvestName(name: String): String = when (name) {
+        "KELP_PLANT" -> "KELP"
+        "BAMBOO_SAPLING" -> "BAMBOO"
+        "TWISTING_VINES_PLANT" -> "TWISTING_VINES"
+        "WEEPING_VINES_PLANT" -> "WEEPING_VINES"
+        "TALL_SEAGRASS" -> "SEAGRASS"
+        else -> name
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -811,6 +839,27 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
         findMatchingQuests(QuestType.EAT_FOOD, "").forEach { quest ->
             if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id)
+        }
+    }
+
+    /**
+     * Track item-pickup quests (e.g. "Collect 48 Apples"). Each pickup
+     * counts the stack's amount, so picking up a stack of 16 apples
+     * advances the quest by 16. Without this, "collect" quests had to
+     * be implemented as BREAK_BLOCK with empty target — which falsely
+     * matched ANY block break (mining dirt completed apples quests).
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onPickup(event: EntityPickupItemEvent) {
+        val player = event.entity as? Player ?: return
+        if (isExempt(player)) return
+
+        val item = event.item.itemStack
+        val materialName = item.type.name
+        val amount = item.amount.coerceAtLeast(1)
+
+        findMatchingQuests(QuestType.ITEM_PICKUP, materialName).forEach { quest ->
+            if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id, amount)
         }
     }
 

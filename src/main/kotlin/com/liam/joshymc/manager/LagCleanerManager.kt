@@ -28,9 +28,9 @@ class LagCleanerManager(private val plugin: Joshymc) {
         val enabled = plugin.config.getBoolean("lag-cleaner.enabled", true)
         if (!enabled) return
 
-        entityThreshold = plugin.config.getInt("lag-cleaner.entity-threshold", 500)
-        itemThreshold = plugin.config.getInt("lag-cleaner.item-threshold", 200)
-        checkIntervalSeconds = plugin.config.getInt("lag-cleaner.check-interval-seconds", 30)
+        entityThreshold = plugin.config.getInt("lag-cleaner.entity-threshold", 1500)
+        itemThreshold = plugin.config.getInt("lag-cleaner.item-threshold", 800)
+        checkIntervalSeconds = plugin.config.getInt("lag-cleaner.check-interval-seconds", 60)
 
         val checkTicks = checkIntervalSeconds * 20L
 

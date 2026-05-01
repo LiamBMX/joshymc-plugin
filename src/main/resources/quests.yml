@@ -3931,7 +3931,7 @@ quests:
     category: FARMING
     difficulty: EASY
     type: PLACE_BLOCK
-    target: ""
+    target: "WHEAT"
     amount: 160
     rewards:
       money: 583.3
@@ -3970,7 +3970,7 @@ quests:
     category: FARMING
     difficulty: EASY
     type: PLACE_BLOCK
-    target: ""
+    target: "WHEAT"
     amount: 176
     rewards:
       money: 708.3
@@ -4009,7 +4009,7 @@ quests:
     category: FARMING
     difficulty: EASY
     type: PLACE_BLOCK
-    target: ""
+    target: "WHEAT"
     amount: 192
     rewards:
       money: 833.3
@@ -4048,7 +4048,7 @@ quests:
     category: FARMING
     difficulty: EASY
     type: PLACE_BLOCK
-    target: ""
+    target: "WHEAT"
     amount: 208
     rewards:
       money: 958.3
@@ -4087,7 +4087,7 @@ quests:
     category: FARMING
     difficulty: EASY
     type: PLACE_BLOCK
-    target: ""
+    target: "WHEAT"
     amount: 240
     rewards:
       money: 1083.3
@@ -4126,7 +4126,7 @@ quests:
     category: FARMING
     difficulty: EASY
     type: PLACE_BLOCK
-    target: ""
+    target: "WHEAT"
     amount: 256
     rewards:
       money: 1208.3
@@ -4165,7 +4165,7 @@ quests:
     category: FARMING
     difficulty: EASY
     type: PLACE_BLOCK
-    target: ""
+    target: "WHEAT"
     amount: 288
     rewards:
       money: 1333.3
@@ -4204,7 +4204,7 @@ quests:
     category: FARMING
     difficulty: EASY
     type: PLACE_BLOCK
-    target: ""
+    target: "WHEAT"
     amount: 320
     rewards:
       money: 1458.3
@@ -4255,8 +4255,8 @@ quests:
     description: "Collect 48 Apples"
     category: FARMING
     difficulty: MEDIUM
-    type: BREAK_BLOCK
-    target: ""
+    type: ITEM_PICKUP
+    target: "APPLE"
     amount: 48
     rewards:
       money: 2500
@@ -4294,8 +4294,8 @@ quests:
     description: "Collect 48 Apples"
     category: FARMING
     difficulty: MEDIUM
-    type: BREAK_BLOCK
-    target: ""
+    type: ITEM_PICKUP
+    target: "APPLE"
     amount: 48
     rewards:
       money: 3250
@@ -4333,8 +4333,8 @@ quests:
     description: "Collect 48 Apples"
     category: FARMING
     difficulty: MEDIUM
-    type: BREAK_BLOCK
-    target: ""
+    type: ITEM_PICKUP
+    target: "APPLE"
     amount: 48
     rewards:
       money: 4000
@@ -4372,8 +4372,8 @@ quests:
     description: "Collect 64 Apples"
     category: FARMING
     difficulty: MEDIUM
-    type: BREAK_BLOCK
-    target: ""
+    type: ITEM_PICKUP
+    target: "APPLE"
     amount: 64
     rewards:
       money: 4750
@@ -4411,8 +4411,8 @@ quests:
     description: "Collect 64 Apples"
     category: FARMING
     difficulty: MEDIUM
-    type: BREAK_BLOCK
-    target: ""
+    type: ITEM_PICKUP
+    target: "APPLE"
     amount: 64
     rewards:
       money: 5500
@@ -4450,8 +4450,8 @@ quests:
     description: "Collect 80 Apples"
     category: FARMING
     difficulty: MEDIUM
-    type: BREAK_BLOCK
-    target: ""
+    type: ITEM_PICKUP
+    target: "APPLE"
     amount: 80
     rewards:
       money: 6250
@@ -4489,8 +4489,8 @@ quests:
     description: "Collect 80 Apples"
     category: FARMING
     difficulty: MEDIUM
-    type: BREAK_BLOCK
-    target: ""
+    type: ITEM_PICKUP
+    target: "APPLE"
     amount: 80
     rewards:
       money: 7000
@@ -4528,8 +4528,8 @@ quests:
     description: "Collect 96 Apples"
     category: FARMING
     difficulty: MEDIUM
-    type: BREAK_BLOCK
-    target: ""
+    type: ITEM_PICKUP
+    target: "APPLE"
     amount: 96
     rewards:
       money: 7750
@@ -4555,7 +4555,7 @@ quests:
     category: FARMING
     difficulty: HARD
     type: CRAFT_ITEM
-    target: ""
+    target: "POTION"
     amount: 112
     rewards:
       money: 100000
@@ -4594,7 +4594,7 @@ quests:
     category: FARMING
     difficulty: HARD
     type: CRAFT_ITEM
-    target: ""
+    target: "POTION"
     amount: 128
     rewards:
       money: 150000
@@ -4633,7 +4633,7 @@ quests:
     category: FARMING
     difficulty: HARD
     type: CRAFT_ITEM
-    target: ""
+    target: "POTION"
     amount: 144
     rewards:
       money: 200000
@@ -4672,7 +4672,7 @@ quests:
     category: FARMING
     difficulty: HARD
     type: CRAFT_ITEM
-    target: ""
+    target: "POTION"
     amount: 160
     rewards:
       money: 250000
@@ -4711,7 +4711,7 @@ quests:
     category: FARMING
     difficulty: HARD
     type: CRAFT_ITEM
-    target: ""
+    target: "POTION"
     amount: 192
     rewards:
       money: 300000
@@ -4750,7 +4750,7 @@ quests:
     category: FARMING
     difficulty: HARD
     type: CRAFT_ITEM
-    target: ""
+    target: "POTION"
     amount: 224
     rewards:
       money: 350000
@@ -4789,7 +4789,7 @@ quests:
     category: FARMING
     difficulty: HARD
     type: CRAFT_ITEM
-    target: ""
+    target: "POTION"
     amount: 256
     rewards:
       money: 400000
@@ -4828,7 +4828,7 @@ quests:
     category: FARMING
     difficulty: HARD
     type: CRAFT_ITEM
-    target: ""
+    target: "POTION"
     amount: 288
     rewards:
       money: 450000
@@ -4867,7 +4867,7 @@ quests:
     category: FARMING
     difficulty: HARD
     type: CRAFT_ITEM
-    target: ""
+    target: "POTION"
     amount: 336
     rewards:
       money: 500000

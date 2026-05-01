@@ -77,11 +77,15 @@ crates:
 # Checks entity counts every check-interval-seconds
 # Triggers a 30s countdown (with warnings at 30s, 10s, 3s) when thresholds are exceeded
 # Protected entities: villagers, NPCs, ender dragon, wither, armor stands, named/leashed mobs
+#
+# Defaults are intentionally generous — most servers only run into lag at much
+# higher counts. Lower these if your server has < 1GB heap or you see TPS drops
+# from mob crowding. Raise them if cleanups are firing too often.
 lag-cleaner:
   enabled: true
-  entity-threshold: 500
-  item-threshold: 200
-  check-interval-seconds: 30
+  entity-threshold: 1500
+  item-threshold: 800
+  check-interval-seconds: 60
 
 # Mining — Veinminer, Auto Smelt, Tree Feller
 mining:
