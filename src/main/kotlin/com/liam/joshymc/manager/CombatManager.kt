@@ -56,6 +56,7 @@ class CombatManager(private val plugin: Joshymc) {
                 if (now >= expiry) {
                     // Expired
                     combatTags.remove(uuid)
+                    restoreFlightIfEligible(player)
                     plugin.commsManager.sendActionBar(player,
                         Component.text("You are no longer in combat.", NamedTextColor.GREEN)
                     )
@@ -80,6 +81,7 @@ class CombatManager(private val plugin: Joshymc) {
             tickTaskId = -1
         }
         combatTags.clear()
+        hadFlightOnTag.clear()
         // Remove all combat NPCs
         for ((_, npc) in activeNPCs) {
             plugin.server.scheduler.cancelTask(npc.despawnTaskId)
@@ -94,8 +96,14 @@ class CombatManager(private val plugin: Joshymc) {
         combatTags[player.uniqueId] = System.currentTimeMillis() + combatDurationMs
 
         if (!wasTagged && player.gameMode == GameMode.SURVIVAL) {
-            // First tag — disable flight and elytra (survival only)
-            if (player.isFlying) {
+            // First tag — disable flight + elytra. We MUST also clear
+            // allowFlight, not just isFlying, otherwise the player can simply
+            // press space-space to re-enter flight mid-fight.
+            // Track that we removed it so we can restore it when the tag
+            // clears (only if the player still has permission for /fly).
+            if (player.allowFlight) {
+                hadFlightOnTag.add(player.uniqueId)
+                player.allowFlight = false
                 player.isFlying = false
                 plugin.commsManager.send(player,
                     Component.text("Flight disabled — you are in combat!", NamedTextColor.RED),
@@ -112,6 +120,11 @@ class CombatManager(private val plugin: Joshymc) {
         }
     }
 
+    /** UUIDs of players who had allowFlight on at the time we tagged them.
+     *  When the tag clears we restore allowFlight, but only if they still
+     *  have the joshymc.fly perm. */
+    private val hadFlightOnTag = java.util.concurrent.ConcurrentHashMap.newKeySet<UUID>()
+
     fun isTagged(player: Player): Boolean {
         val expiry = combatTags[player.uniqueId] ?: return false
         if (System.currentTimeMillis() >= expiry) {
@@ -123,6 +136,25 @@ class CombatManager(private val plugin: Joshymc) {
 
     fun untag(player: Player) {
         combatTags.remove(player.uniqueId)
+        restoreFlightIfEligible(player)
+    }
+
+    /**
+     * Re-enable allowFlight on a player whose flight we disabled when we
+     * tagged them — but only if they still hold the joshymc.fly permission
+     * (or are creative/spectator). Avoids handing flight back to someone who
+     * lost the perm or had it removed mid-fight.
+     */
+    private fun restoreFlightIfEligible(player: Player) {
+        if (!hadFlightOnTag.remove(player.uniqueId)) return
+        val mode = player.gameMode
+        if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR) {
+            player.allowFlight = true
+            return
+        }
+        if (player.hasPermission("joshymc.fly")) {
+            player.allowFlight = true
+        }
     }
 
     fun canPvP(player: Player): Boolean {
