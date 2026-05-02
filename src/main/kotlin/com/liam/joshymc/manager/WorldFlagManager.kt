@@ -271,10 +271,14 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
      * snowballs, eggs, splash potions, tridents) in worlds where BLOCK_BREAK
      * is denied. Otherwise spawn-region griefing via bows / fishing rods is
      * possible even with PVP off.
+     *
+     * Arenas are exempt — they have BLOCK_BREAK off too (so players can't
+     * mine the floor), but bows / rods are core PvP weapons inside them.
      */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onProjectileLaunch(event: ProjectileLaunchEvent) {
         val shooter = event.entity.shooter as? Player ?: return
+        if (plugin.arenaManager.isInArena(shooter)) return
         if (!isAllowed(shooter, WorldFlag.BLOCK_BREAK)) {
             event.isCancelled = true
             denyMessage(shooter, WorldFlag.BLOCK_BREAK)
