@@ -237,28 +237,26 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
             plugin.commsManager.parseLegacy("$prefix$name")
         )
 
-        // Sort tab list by rank weight using scoreboard teams on EVERY player's scoreboard
-        val rank = plugin.rankManager.getPlayerRank(player)
-        val weight = rank?.weight ?: 0
-        val sortKey = String.format("%03d", 999 - weight) // owner(100) → "899", default(0) → "999"
-        val teamName = "ztab_${sortKey}"
-
-        // Apply sort team on ALL online players' scoreboards so everyone sees the correct order
+        // Tab list sort is handled by the jmc_* rank teams (named jmc_00_owner,
+        // jmc_01_admin, …, jmc_06_default) — Bukkit sorts the player list by
+        // team name, and these are already weight-prefixed in descending
+        // order. We previously had a separate ztab_* team layer that ran
+        // every 5 seconds and moved each player into a sort team, but a
+        // player can only be in ONE scoreboard team per scoreboard, so the
+        // ztab_* assignment was overwriting the jmc_* rank team — that's
+        // why rank prefixes disappeared after the first tab refresh tick.
+        //
+        // Make sure stale ztab_* teams from old plugin versions are gone so
+        // they don't keep stealing entries.
         for (online in Bukkit.getOnlinePlayers()) {
             val board = online.scoreboard
-            // Remove this player from any old tab sort teams on this board
-            for (t in board.teams.toList()) {
-                if (t.name.startsWith("ztab_") && t.hasEntry(player.name)) {
-                    t.removeEntry(player.name)
-                }
-            }
-            // Add to correct sort team
-            var team = board.getTeam(teamName)
-            if (team == null) {
-                team = board.registerNewTeam(teamName)
-            }
-            team.addEntry(player.name)
+            board.teams
+                .filter { it.name.startsWith("ztab_") }
+                .forEach { it.unregister() }
         }
+        // Re-anchor the player in their rank team in case anything else
+        // moved them (e.g. a /reload mid-session).
+        plugin.rankManager.applyTeamFor(player)
     }
 
     // ── Utility ─────────────────────────────────────────────────────
