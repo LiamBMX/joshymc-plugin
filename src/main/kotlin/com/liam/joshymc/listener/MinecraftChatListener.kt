@@ -43,7 +43,11 @@ class MinecraftChatListener(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onChat(event: AsyncChatEvent) {
-        plugin.discordManager.sendChat(event.player.name, plainSerializer.serialize(event.message()))
+        val plain = plainSerializer.serialize(event.message())
+        // Chat-game answer check before discord forwarding so winning messages
+        // don't echo to Discord with the answer leaking out.
+        plugin.chatGamesManager.handleChat(event.player, plain)
+        plugin.discordManager.sendChat(event.player.name, plain)
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

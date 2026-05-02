@@ -427,6 +427,10 @@ commands:
   jmc-violation:
     description: External anti-cheat bridge — records violations into JoshyMC admin panel
     usage: /jmc-violation log <player> <check> [vl] [source]
+  chatgame:
+    description: Start a chat game on demand
+    usage: /chatgame [math|unscramble|type|reverse|status]
+    aliases: [chatgames, cg]
 
 permissions:
   joshymc.give:
@@ -825,3 +829,6 @@ permissions:
   joshymc.violation.bridge:
     description: Allow forwarding external AC violations into the admin panel (intended for console only)
     default: false
+  joshymc.chatgame:
+    description: Start chat games on demand and view active game state
+    default: op

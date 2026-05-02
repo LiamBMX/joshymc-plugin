@@ -32,6 +32,7 @@ features:
   portals: true
   arenas: true
   npcs: false
+  chat-games: true
 
 # Chat formatting
 chat:
@@ -73,6 +74,23 @@ integrations:
   # configure Grim's punishments.yml manually.
   grim:
     auto-install: true
+
+# Chat games — periodic chat-typing puzzles for online players
+# Game types: math, unscramble, type-this-token, reverse-this-word
+# An admin can manually trigger games with /chatgame [type].
+chat-games:
+  enabled: true
+  # How often (in minutes) the auto-scheduler triggers a game when no game
+  # is currently running and at least min-players are online.
+  interval-minutes: 15
+  # Minimum online players required for the auto-scheduler to fire a game.
+  # Manual /chatgame ignores this.
+  min-players: 2
+  # Auto-expire a game if no one solves it within this many seconds.
+  solve-window-seconds: 60
+  reward:
+    money: 1000
+    xp: 25
 
 # Crates — debug toggles
 # debug-interactions: when true, every right-click on a registered crate (or

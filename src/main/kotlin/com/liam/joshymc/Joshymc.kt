@@ -178,6 +178,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var marketManager: MarketManager
         private set
+    lateinit var chatGamesManager: com.liam.joshymc.manager.ChatGamesManager
+        private set
     lateinit var vanishCommand: VanishCommand
     lateinit var rtpCommand: com.liam.joshymc.command.RtpCommand
     lateinit var questManager: QuestManager
@@ -324,6 +326,9 @@ class Joshymc : JavaPlugin() {
 
         marketManager = MarketManager(this)
         if (isFeatureEnabled("market")) marketManager.start()
+
+        chatGamesManager = com.liam.joshymc.manager.ChatGamesManager(this)
+        if (isFeatureEnabled("chat-games")) chatGamesManager.start()
 
         if (isFeatureEnabled("quests")) questManager.start()
         if (isFeatureEnabled("talismans")) talismanManager.start()
