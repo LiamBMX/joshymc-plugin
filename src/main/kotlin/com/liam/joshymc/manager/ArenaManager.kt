@@ -281,6 +281,20 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
             val wasIn = playersInArena[player.uniqueId]
 
             if (arena != null && wasIn == null) {
+                // Refuse to admit combat-tagged players into the arena cache.
+                // If they got knockback-pushed across the boundary while
+                // tagged, they're being farmed \u2014 don't let the cache mark
+                // them as "in arena" so the onDamage check still treats them
+                // as outside.
+                if (plugin.combatManager.isTagged(player)) {
+                    continue
+                }
+                // AFK players also shouldn't be admitted (they can't leave
+                // by themselves and would be sitting ducks).
+                if (plugin.afkManager.isAfk(player)) {
+                    continue
+                }
+
                 // Entering arena \u2014 force PvP on so the player can fight without
                 // having to flip /pvp first. The setting persists, but most
                 // players want it on inside the arena anyway.
@@ -411,28 +425,35 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        val attackerArena = playersInArena[attacker.uniqueId]
-        val victimArena = playersInArena[victim.uniqueId]
+        val attackerCached = playersInArena[attacker.uniqueId]
+        val victimCached = playersInArena[victim.uniqueId]
+        val attackerLiveId = liveArenaFor(attacker)?.id
+        val victimLiveId = liveArenaFor(victim)?.id
 
-        // Live polygon re-check using the current locations of both players.
-        // The cached playersInArena map is updated every 10 ticks; in the
-        // meantime someone can step out of the arena boundary, take a hit
-        // we'd think is in-arena, and bypass the "one in, one out" guard.
-        val attackerLive = liveArenaFor(attacker)
-        val victimLive = liveArenaFor(victim)
-        val attackerEffective = attackerArena ?: attackerLive?.id
-        val victimEffective = victimArena ?: victimLive?.id
-
-        // Both in the same arena — force PvP on
-        if (attackerEffective != null && victimEffective != null && attackerEffective == victimEffective) {
+        // Strict same-arena check: BOTH players must be admitted to the
+        // same arena (cache) AND currently inside that arena's polygon
+        // (live). This rejects:
+        //   - Attacker stepped out (cache says in, live says no) — won't
+        //     uncancel, falls to the cross-border path below.
+        //   - Victim got pushed in via knockback (cache=null because we
+        //     refuse to admit tagged players in tickPvpZones) — won't
+        //     uncancel.
+        val sameArena = attackerCached != null
+                && attackerCached == victimCached
+                && attackerLiveId == attackerCached
+                && victimLiveId == attackerCached
+        if (sameArena) {
             event.isCancelled = false
             return
         }
 
-        // One inside, one outside — block (can't hit into or out of arena)
-        if ((attackerEffective != null) != (victimEffective != null)) {
+        // Anyone touching an arena (cached OR live) but not paired up by
+        // the strict check above — cancel the hit. Covers shoot-from-
+        // outside, hit-into-outside, and the pushed-in-victim case.
+        val attackerInAny = attackerCached != null || attackerLiveId != null
+        val victimInAny = victimCached != null || victimLiveId != null
+        if (attackerInAny || victimInAny) {
             event.isCancelled = true
-            // Remove combat tags that were applied before this handler
             plugin.combatManager.untag(attacker)
             plugin.combatManager.untag(victim)
             return
@@ -449,6 +470,48 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
     /** Live polygon check on the player's current location, so a step
      *  across the boundary in the last 0.5s window doesn't get missed. */
     private fun liveArenaFor(player: Player): Arena? = findArenaAt(player)
+
+    /**
+     * Real server-side arena boundary while combat-tagged. The fake-barrier
+     * block-change packet was just a visual hint; players could keep
+     * walking and the client would reconcile to the actual air block on
+     * the next position update. Now we cancel any PlayerMoveEvent whose
+     * destination crosses out of the polygon while the player is tagged,
+     * pinning them back at the last in-arena position.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onCombatBoundary(event: org.bukkit.event.player.PlayerMoveEvent) {
+        val player = event.player
+        if (!plugin.combatManager.isTagged(player)) return
+
+        val from = event.from
+        val to = event.to ?: return
+        if (from.blockX == to.blockX && from.blockZ == to.blockZ) return
+
+        // Only enforce when the player IS in an arena. Find via cached map
+        // first; fall back to live polygon check on `from` to handle players
+        // who got tagged just outside the cache refresh window.
+        val arenaId = playersInArena[player.uniqueId]
+        val arena = (if (arenaId != null) arenas.find { it.id == arenaId } else null)
+            ?: findArenaAt(player)
+            ?: return
+
+        val fromInside = isInsidePolygon(from.x, from.z, arena.points)
+        val toInside = isInsidePolygon(to.x, to.z, arena.points)
+        if (fromInside && !toInside) {
+            // Pin them at the last in-polygon position. Use setTo so head
+            // rotation is preserved (to.yaw / to.pitch) and only the position
+            // is reverted — feels less janky than cancelling the whole event.
+            val pinned = from.clone()
+            pinned.yaw = to.yaw
+            pinned.pitch = to.pitch
+            event.setTo(pinned)
+            plugin.commsManager.sendActionBar(
+                player,
+                Component.text("You can't leave the arena while in combat!", NamedTextColor.RED)
+            )
+        }
+    }
 
     // ── Combat barrier: fake barrier blocks along arena border ──────────
 
