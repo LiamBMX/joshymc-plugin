@@ -3,12 +3,15 @@ package com.liam.joshymc.listener
 import com.liam.joshymc.Joshymc
 import org.bukkit.Bukkit
 import org.bukkit.entity.LivingEntity
+import org.bukkit.entity.Mob
 import org.bukkit.entity.Player
+import org.bukkit.entity.Projectile
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
+import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityTargetEvent
 import org.bukkit.event.player.PlayerJoinEvent
 
@@ -44,6 +47,14 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
                     if (!player.canSee(entity)) player.showEntity(plugin, entity)
                 } else {
                     if (player.canSee(entity)) player.hideEntity(plugin, entity)
+                    // ALSO drop any existing target this mob had on the
+                    // player. Without this, a mob already locked onto the
+                    // player at the moment they toggle off will keep
+                    // chasing — EntityTargetEvent only fires on new
+                    // acquisitions, not on mid-track refreshes.
+                    if (entity is Mob && entity.target == player) {
+                        entity.target = null
+                    }
                 }
             }
         }
@@ -90,23 +101,62 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
     }
 
     /**
-     * Mutual damage immunity: if either side has the setting off, the hit
-     * doesn't land. Covers mob → player AND player → mob.
+     * Mutual damage immunity. Covers:
+     *   - direct mob hit (creeper explosion, zombie melee, …) → player
+     *   - projectile fired by mob (skeleton arrow, ghast fireball, …) → player
+     *   - player → mob (so a hidden mob can't be hit either)
      */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onDamage(event: EntityDamageByEntityEvent) {
         val damager = event.damager
         val victim = event.entity
 
-        // Mob hits Player: skip if player has setting off.
-        if (damager is LivingEntity && damager !is Player && victim is Player) {
-            if (!visible(victim)) event.isCancelled = true
-            return
+        if (victim is Player && !visible(victim)) {
+            // Resolve the actual mob source — direct mob, or the mob shooter
+            // behind a projectile / TNT. If there's a non-player living
+            // source, this is a mob hit and we cancel.
+            val mobSource: LivingEntity? = when {
+                damager is Player -> null
+                damager is LivingEntity -> damager
+                damager is Projectile -> {
+                    val shooter = damager.shooter
+                    if (shooter is LivingEntity && shooter !is Player) shooter else null
+                }
+                else -> null
+            }
+            if (mobSource != null) {
+                event.isCancelled = true
+                return
+            }
         }
+
         // Player hits Mob: skip if attacker has setting off.
         if (damager is Player && victim is LivingEntity && victim !is Player) {
             if (!visible(damager)) event.isCancelled = true
-            return
+        }
+    }
+
+    /**
+     * Catch explosion / non-attributed damage paths to a mob-hidden player.
+     * Creeper blasts and TNT chains land via EntityDamageEvent with cause
+     * ENTITY_EXPLOSION / BLOCK_EXPLOSION; not all of those fire through
+     * EntityDamageByEntityEvent. If the player has mobs off, suppress the
+     * explosion damage entirely — so a creeper that somehow primed near
+     * them can never hit them.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onExplosionDamage(event: EntityDamageEvent) {
+        if (event is EntityDamageByEntityEvent) return // handled by onDamage
+        val player = event.entity as? Player ?: return
+        if (visible(player)) return
+        when (event.cause) {
+            EntityDamageEvent.DamageCause.ENTITY_EXPLOSION,
+            EntityDamageEvent.DamageCause.BLOCK_EXPLOSION,
+            EntityDamageEvent.DamageCause.MAGIC,
+            EntityDamageEvent.DamageCause.WITHER -> {
+                event.isCancelled = true
+            }
+            else -> Unit
         }
     }
 }
