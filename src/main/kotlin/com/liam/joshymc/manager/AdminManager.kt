@@ -560,6 +560,15 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             }
         }
 
+        // Reports — anyone with the view perm
+        if (admin.hasPermission("joshymc.reports.view")) {
+            gui.setItem(16, buildItem(Material.WRITABLE_BOOK, "Reports", NamedTextColor.GOLD,
+                "View and resolve player reports")) { p, _ ->
+                openReportsList(p, 0, null)
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            }
+        }
+
         // Anticheat — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
             gui.setItem(13, buildItem(Material.IRON_SWORD, "Anticheat", NamedTextColor.AQUA,
@@ -855,6 +864,25 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             }
         }
 
+        // Reports against this player — anyone with view perm
+        if (admin.hasPermission("joshymc.reports.view")) {
+            val reportCount = plugin.databaseManager.queryFirst(
+                "SELECT COUNT(*) AS n FROM reports WHERE target_uuid = ?",
+                target.uniqueId.toString()
+            ) { rs -> rs.getInt("n") } ?: 0
+            val openCount = plugin.databaseManager.queryFirst(
+                "SELECT COUNT(*) AS n FROM reports WHERE target_uuid = ? AND resolved = 0",
+                target.uniqueId.toString()
+            ) { rs -> rs.getInt("n") } ?: 0
+            val title = if (openCount > 0) "Reports ($openCount open)" else "Reports ($reportCount total)"
+            val color = if (openCount > 0) NamedTextColor.RED else NamedTextColor.GOLD
+            gui.setItem(16, buildItem(Material.WRITABLE_BOOK, title, color,
+                "Reports filed against ${targetName}")) { p, _ ->
+                openReportsList(p, 0, target.uniqueId)
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            }
+        }
+
         // Freeze (slot 25) — moderate+
         if (admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
             val frozen = isFrozen(target.uniqueId)
@@ -1051,6 +1079,177 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         }
 
         plugin.guiManager.open(admin, gui)
+    }
+
+    /**
+     * Reports GUI. Pass [filterTargetUuid] = null for the global view (all
+     * reports across all players, used from the main admin panel) or pass a
+     * specific player UUID to scope to reports against that player (used
+     * from the per-player admin panel).
+     *
+     * Layout: open reports first sorted newest-first, then resolved reports
+     * after. Each entry is a paper item with reporter / target / reason /
+     * age in the lore. Left-click toggles resolved state. The remove
+     * button on the right of every line deletes the report (admin-only).
+     */
+    fun openReportsList(admin: Player, page: Int, filterTargetUuid: UUID?) {
+        val title = if (filterTargetUuid == null) {
+            Component.text("Reports", NamedTextColor.GOLD)
+        } else {
+            val targetName = Bukkit.getOfflinePlayer(filterTargetUuid).name ?: "Unknown"
+            Component.text("Reports against $targetName", NamedTextColor.GOLD)
+        }.decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
+
+        val gui = CustomGui(title, 54)
+        gui.fill(FILLER)
+
+        val reports: List<ReportRow> = if (filterTargetUuid == null) {
+            plugin.databaseManager.query(
+                "SELECT id, reporter_name, target_name, target_uuid, reason, created_at, resolved FROM reports ORDER BY resolved ASC, created_at DESC LIMIT 500"
+            ) { rs -> rs.toReportRow() }
+        } else {
+            plugin.databaseManager.query(
+                "SELECT id, reporter_name, target_name, target_uuid, reason, created_at, resolved FROM reports WHERE target_uuid = ? ORDER BY resolved ASC, created_at DESC LIMIT 500",
+                filterTargetUuid.toString()
+            ) { rs -> rs.toReportRow() }
+        }
+
+        val itemsPerPage = 45
+        val totalPages = ((reports.size - 1) / itemsPerPage).coerceAtLeast(0)
+        val currentPage = page.coerceIn(0, totalPages)
+        val pageReports = reports.drop(currentPage * itemsPerPage).take(itemsPerPage)
+
+        if (reports.isEmpty()) {
+            gui.setItem(22, buildItem(
+                Material.PAPER,
+                if (filterTargetUuid == null) "No reports yet" else "No reports against this player",
+                NamedTextColor.GRAY,
+                "All clear."
+            ))
+        }
+
+        for ((index, report) in pageReports.withIndex()) {
+            gui.setItem(index, buildReportItem(report)) { p, event ->
+                if (event.isShiftClick && p.hasPermission(PERM_ADMIN)) {
+                    // Shift-click = delete
+                    plugin.databaseManager.execute("DELETE FROM reports WHERE id = ?", report.id)
+                    p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.4f, 0.7f)
+                    openReportsList(p, currentPage, filterTargetUuid)
+                } else {
+                    // Click = toggle resolved
+                    val newResolved = if (report.resolved) 0 else 1
+                    plugin.databaseManager.execute(
+                        "UPDATE reports SET resolved = ? WHERE id = ?",
+                        newResolved, report.id
+                    )
+                    p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.2f)
+                    openReportsList(p, currentPage, filterTargetUuid)
+                }
+            }
+        }
+
+        if (currentPage > 0) {
+            gui.setItem(48, buildItem(Material.ARROW, "Previous Page", NamedTextColor.GRAY, "Page $currentPage")) { p, _ ->
+                openReportsList(p, currentPage - 1, filterTargetUuid)
+            }
+        }
+        if (currentPage < totalPages) {
+            gui.setItem(50, buildItem(Material.ARROW, "Next Page", NamedTextColor.GRAY, "Page ${currentPage + 2}")) { p, _ ->
+                openReportsList(p, currentPage + 1, filterTargetUuid)
+            }
+        }
+
+        gui.setItem(49, buildItem(Material.BARRIER, "Back", NamedTextColor.GRAY,
+            if (filterTargetUuid == null) "Return to admin panel" else "Return to player panel")
+        ) { p, _ ->
+            if (filterTargetUuid == null) {
+                openMainPanel(p)
+            } else {
+                openPlayerPanel(p, Bukkit.getOfflinePlayer(filterTargetUuid))
+            }
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+        }
+
+        plugin.guiManager.open(admin, gui)
+    }
+
+    private data class ReportRow(
+        val id: Int,
+        val reporterName: String,
+        val targetName: String,
+        val targetUuid: UUID,
+        val reason: String,
+        val createdAt: Long,
+        val resolved: Boolean,
+    )
+
+    private fun java.sql.ResultSet.toReportRow(): ReportRow = ReportRow(
+        id = getInt("id"),
+        reporterName = getString("reporter_name"),
+        targetName = getString("target_name"),
+        targetUuid = UUID.fromString(getString("target_uuid")),
+        reason = getString("reason"),
+        createdAt = getLong("created_at"),
+        resolved = getInt("resolved") == 1,
+    )
+
+    private fun buildReportItem(report: ReportRow): ItemStack {
+        val mat = if (report.resolved) Material.LIME_DYE else Material.PAPER
+        val item = ItemStack(mat)
+        item.editMeta { meta ->
+            val statusColor = if (report.resolved) NamedTextColor.GREEN else NamedTextColor.RED
+            val statusText = if (report.resolved) "RESOLVED" else "OPEN"
+
+            meta.displayName(
+                Component.text("#${report.id} ", NamedTextColor.DARK_GRAY)
+                    .append(Component.text(report.targetName, NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true))
+                    .decoration(TextDecoration.ITALIC, false)
+            )
+
+            val ago = formatTimeAgo(System.currentTimeMillis() - report.createdAt)
+            val lore = mutableListOf<Component>()
+            lore.add(Component.empty())
+            lore.add(Component.text("Status: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+                .append(Component.text(statusText, statusColor).decoration(TextDecoration.BOLD, true)))
+            lore.add(Component.text("Reporter: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+                .append(Component.text(report.reporterName, NamedTextColor.WHITE)))
+            lore.add(Component.text("Target: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+                .append(Component.text(report.targetName, NamedTextColor.WHITE)))
+            lore.add(Component.text("When: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+                .append(Component.text(ago, NamedTextColor.WHITE)))
+            lore.add(Component.empty())
+
+            // Reason can be long — wrap into multiple lore lines.
+            lore.add(Component.text("Reason:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+            for (chunk in wrapText(report.reason, 40)) {
+                lore.add(Component.text("  $chunk", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+            }
+            lore.add(Component.empty())
+            val toggleHint = if (report.resolved) "Click to mark unresolved" else "Click to mark resolved"
+            lore.add(Component.text(toggleHint, NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+            lore.add(Component.text("Shift-click to delete", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+
+            meta.lore(lore)
+        }
+        return item
+    }
+
+    /** Soft-wrap a string at word boundaries to fit roughly [maxChars] per line. */
+    private fun wrapText(text: String, maxChars: Int): List<String> {
+        if (text.length <= maxChars) return listOf(text)
+        val words = text.split(' ')
+        val out = mutableListOf<String>()
+        val cur = StringBuilder()
+        for (w in words) {
+            if (cur.isNotEmpty() && cur.length + 1 + w.length > maxChars) {
+                out.add(cur.toString())
+                cur.clear()
+            }
+            if (cur.isNotEmpty()) cur.append(' ')
+            cur.append(w)
+        }
+        if (cur.isNotEmpty()) out.add(cur.toString())
+        return out
     }
 
     fun openLogViewer(admin: Player, page: Int) {

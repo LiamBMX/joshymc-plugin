@@ -471,6 +471,66 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
      *  across the boundary in the last 0.5s window doesn't get missed. */
     private fun liveArenaFor(player: Player): Arena? = findArenaAt(player)
 
+    /** Wall-clock ms of the last player-source hit each victim took.
+     *  Drives the "can't be knocked across the arena boundary" guard —
+     *  see [onPushAcrossBoundary]. */
+    private val lastPlayerHitMs = java.util.concurrent.ConcurrentHashMap<UUID, Long>()
+
+    /** Time window after a player-source hit during which knockback could
+     *  still be acting on the victim. Tighter than the combat tag (which
+     *  is several seconds) so legitimate movement isn't restricted. */
+    private val knockbackWindowMs = 1200L
+
+    /**
+     * Stamp the victim's UUID whenever they take damage from another player
+     * (direct hits, projectiles, TNT). Stamped at MONITOR so we only record
+     * hits that actually went through.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onTrackKnockback(event: EntityDamageByEntityEvent) {
+        val victim = event.entity as? Player ?: return
+        if (getDamager(event) == null) return
+        lastPlayerHitMs[victim.uniqueId] = System.currentTimeMillis()
+    }
+
+    /**
+     * Block players from being PUSHED across an arena boundary. If the
+     * victim's `from` was outside the polygon and `to` is inside AND they
+     * took a player-source hit in the last [knockbackWindowMs], the move is
+     * almost certainly knockback dragging them in — pin them outside the
+     * polygon so they can't be farmed. Voluntary movement when no recent
+     * knockback is in flight is unaffected.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onPushAcrossBoundary(event: org.bukkit.event.player.PlayerMoveEvent) {
+        val player = event.player
+        val from = event.from
+        val to = event.to ?: return
+        if (from.blockX == to.blockX && from.blockZ == to.blockZ) return
+
+        val lastHit = lastPlayerHitMs[player.uniqueId] ?: return
+        if (System.currentTimeMillis() - lastHit > knockbackWindowMs) return
+
+        // Find an arena at the destination position. Skip if the destination
+        // isn't entering an arena, or if the player was already inside the
+        // same one (internal knockback shouldn't be blocked).
+        val toArena = arenas.firstOrNull { arena ->
+            arena.enabled
+                    && arena.world == to.world.name
+                    && to.blockY >= arena.minY
+                    && isInsidePolygon(to.x, to.z, arena.points)
+        } ?: return
+        val fromInside = isInsidePolygon(from.x, from.z, toArena.points)
+                && from.blockY >= toArena.minY
+        if (fromInside) return
+
+        // Pin them just before the boundary, preserving their look direction.
+        val pinned = from.clone()
+        pinned.yaw = to.yaw
+        pinned.pitch = to.pitch
+        event.setTo(pinned)
+    }
+
     /**
      * Real server-side arena boundary while combat-tagged. The fake-barrier
      * block-change packet was just a visual hint; players could keep
@@ -629,6 +689,7 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
             if (arena != null) hideBarrier(event.player, arena)
         }
         barrierPlayers.remove(uuid)
+        lastPlayerHitMs.remove(uuid)
     }
 
     private fun getDamager(event: EntityDamageByEntityEvent): Player? {
