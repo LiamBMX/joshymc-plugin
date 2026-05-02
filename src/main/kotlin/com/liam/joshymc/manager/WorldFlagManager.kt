@@ -22,7 +22,9 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityExplodeEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
+import org.bukkit.event.block.SignChangeEvent
 import org.bukkit.event.entity.FoodLevelChangeEvent
+import org.bukkit.event.entity.ProjectileLaunchEvent
 import org.bukkit.event.player.PlayerBucketEmptyEvent
 import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerInteractEvent
@@ -251,6 +253,34 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    /**
+     * Cancel any sign edits (right-click on un-waxed sign opens the editor)
+     * in worlds where BLOCK_BREAK is denied. Backstop for the interact
+     * handler in case some other plugin opens the sign editor directly.
+     */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onSignChange(event: SignChangeEvent) {
+        if (!isAllowed(event.player, WorldFlag.BLOCK_BREAK)) {
+            event.isCancelled = true
+            denyMessage(event.player, WorldFlag.BLOCK_BREAK)
+        }
+    }
+
+    /**
+     * Block projectile launches (arrows, crossbow bolts, fishing-rod bobbers,
+     * snowballs, eggs, splash potions, tridents) in worlds where BLOCK_BREAK
+     * is denied. Otherwise spawn-region griefing via bows / fishing rods is
+     * possible even with PVP off.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onProjectileLaunch(event: ProjectileLaunchEvent) {
+        val shooter = event.entity.shooter as? Player ?: return
+        if (!isAllowed(shooter, WorldFlag.BLOCK_BREAK)) {
+            event.isCancelled = true
+            denyMessage(shooter, WorldFlag.BLOCK_BREAK)
+        }
+    }
+
     // — Interact —
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -271,18 +301,22 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        // Doors / trapdoors / fence gates in build-protected worlds (e.g.
-        // spawn) — players were popping these open even with INTERACT=true
-        // because INTERACT is meant for buttons / signs / general clicks.
-        // Block them when BLOCK_BREAK is denied so spawn enclosures stay
-        // sealed.
+        // Doors / trapdoors / fence gates / signs in build-protected worlds
+        // (e.g. spawn) — players were popping these open / editing them even
+        // with INTERACT=true because INTERACT is meant for buttons / clicks.
+        // Block them when BLOCK_BREAK is denied so spawn stays clean.
         val type = block.type
         val typeName = type.name
         val isDoorLike =
             typeName.endsWith("_DOOR") ||
             typeName.endsWith("_TRAPDOOR") ||
             typeName.endsWith("_FENCE_GATE")
-        if (isDoorLike && !isAllowed(event.player, WorldFlag.BLOCK_BREAK)) {
+        val isSign =
+            typeName.endsWith("_SIGN") ||
+            typeName.endsWith("_HANGING_SIGN") ||
+            typeName.endsWith("_WALL_SIGN") ||
+            typeName.endsWith("_WALL_HANGING_SIGN")
+        if ((isDoorLike || isSign) && !isAllowed(event.player, WorldFlag.BLOCK_BREAK)) {
             event.isCancelled = true
             denyMessage(event.player, WorldFlag.BLOCK_BREAK)
             return
