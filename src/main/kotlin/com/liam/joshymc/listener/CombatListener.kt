@@ -35,6 +35,9 @@ class CombatListener(private val plugin: Joshymc) : Listener {
             "spawn", "home", "homes", "warp", "warps", "pwarp",
             "rtp", "wild", "back", "vanish", "v",
             "kit", "kits", "ec", "echest", "enderchest",
+            // /pvp already self-blocks; /settings blocked here as a
+            // fallback because the GUI also has a per-toggle check.
+            "settings", "pvp",
         )
         // Same list with `joshymc:` and `minecraft:` namespacing in case
         // players try to bypass via the namespaced alias.

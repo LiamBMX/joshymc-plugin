@@ -132,6 +132,18 @@ class SettingsManager(private val plugin: Joshymc) {
                     return@setItem
                 }
 
+                // Block PvP toggle while combat-tagged — otherwise a player
+                // who's been hit can disable PvP from /settings and dodge
+                // every subsequent hit.
+                if (def.key == "pvp" && plugin.combatManager.isTagged(p)) {
+                    p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                    plugin.commsManager.send(
+                        p,
+                        Component.text("Can't toggle PvP while in combat!", NamedTextColor.RED)
+                    )
+                    return@setItem
+                }
+
                 val newValue = toggle(p, def.key)
                 event.inventory.setItem(slot, buildSettingItem(def, newValue))
 
