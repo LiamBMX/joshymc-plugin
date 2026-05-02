@@ -47,31 +47,50 @@ class CombatListener(private val plugin: Joshymc) : Listener {
     }
 
     /**
-     * Core PvP handler — resolves the attacking player from direct hits,
-     * projectiles, and TNT, then checks PvP toggle and applies combat tags.
+     * PvP toggle gate — runs BEFORE damage logic. If either player has the
+     * /settings PvP toggle off and they're not in an arena, cancel the hit.
+     * ArenaManager's HIGHEST-priority handler will un-cancel for arena
+     * fights, which is the right outcome.
+     *
+     * Tagging is intentionally NOT done here — it happens at MONITOR after
+     * ArenaManager has had a chance to override, so we tag iff damage
+     * actually went through. (Old behavior: if PvP toggle was off for
+     * either side, we returned without tagging, but ArenaManager then
+     * un-cancelled the damage — resulting in damage with no combat tags
+     * and one-sided fly drops.)
      */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onDamage(event: EntityDamageByEntityEvent) {
         val victim = event.entity as? Player ?: return
         val attacker = resolvePlayerSource(event) ?: return
-
         if (attacker == victim) return
 
         val combat = plugin.combatManager
-
-        // PvP toggle check — both must have PvP enabled
         if (!combat.canPvP(attacker) || !combat.canPvP(victim)) {
             event.isCancelled = true
-
             if (!combat.canPvP(attacker)) {
                 plugin.commsManager.sendActionBar(attacker, Component.text("Your PvP is disabled. /pvp on", NamedTextColor.RED))
             } else {
                 plugin.commsManager.sendActionBar(attacker, Component.text("That player has PvP disabled.", NamedTextColor.RED))
             }
-            return
         }
+    }
 
-        // Both have PvP on — apply combat tags
+    /**
+     * Tag both players when a hit actually lands. Runs at MONITOR so we see
+     * the final cancellation state — anything that uncancelled the event
+     * (e.g. ArenaManager) has already done so by this point. ignoreCancelled
+     * means we silently skip cancelled hits.
+     *
+     * This is the canonical place that mutually applies combat tags + drops
+     * both players out of flight.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onDamageTag(event: EntityDamageByEntityEvent) {
+        val victim = event.entity as? Player ?: return
+        val attacker = resolvePlayerSource(event) ?: return
+        if (attacker == victim) return
+        val combat = plugin.combatManager
         combat.tag(attacker)
         combat.tag(victim)
     }
