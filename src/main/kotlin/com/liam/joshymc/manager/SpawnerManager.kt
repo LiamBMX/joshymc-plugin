@@ -139,6 +139,11 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         val file = plugin.configFile("spawners.yml")
         if (!file.exists()) {
             plugin.saveResource("spawners.yml", false)
+        } else {
+            // Merge in any new spawner types added to the bundled defaults
+            // since the user last regenerated their file. Existing entries
+            // are never overwritten — admin tweaks (prices, drops) survive.
+            mergeMissingFromDefaults(file)
         }
         val cfg = YamlConfiguration.loadConfiguration(file)
         val section = cfg.getConfigurationSection("spawners") ?: return
@@ -218,6 +223,38 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
 
     fun getTypes(): Collection<SpawnerType> = types.values
     fun getType(id: String): SpawnerType? = types[id]
+
+    /**
+     * Merge any spawner-type entries that exist in the bundled
+     * `spawners.yml` resource but are missing from the user's saved file.
+     * Existing entries (with admin tweaks) are left untouched. Only adds
+     * new top-level keys under `spawners:`.
+     */
+    private fun mergeMissingFromDefaults(userFile: java.io.File) {
+        val defaultStream = plugin.getResource("spawners.yml") ?: return
+        val defaults = YamlConfiguration.loadConfiguration(defaultStream.bufferedReader())
+        val userCfg = YamlConfiguration.loadConfiguration(userFile)
+
+        val defaultsSection = defaults.getConfigurationSection("spawners") ?: return
+        val userSection = userCfg.getConfigurationSection("spawners")
+            ?: userCfg.createSection("spawners")
+
+        var added = 0
+        for (id in defaultsSection.getKeys(false)) {
+            if (userSection.contains(id)) continue
+            // Copy the entire sub-section over.
+            userSection.set(id, defaultsSection.get(id))
+            added++
+        }
+        if (added > 0) {
+            try {
+                userCfg.save(userFile)
+                plugin.logger.info("[Spawners] Merged $added new spawner type(s) from bundled defaults.")
+            } catch (e: Exception) {
+                plugin.logger.warning("[Spawners] Failed to save merged spawners.yml: ${e.message}")
+            }
+        }
+    }
 
     /** Create a custom spawner ItemStack with PDC-tagged spawner id. */
     fun createSpawnerItem(typeId: String, amount: Int = 1): ItemStack? {

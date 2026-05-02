@@ -2601,1302 +2601,1302 @@ quests:
     prerequisite: null
   exploring_001:
     name: "Quest 001: Exploring Challenge"
-    description: "Travel 250 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 250
-    rewards:
-      money: 500
-      xp: 50
-      items: []
-    prerequisite: null
-  exploring_002:
-    name: "Quest 002: Exploring Challenge"
-    description: "Travel 300 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 300
-    rewards:
-      money: 541.6
-      xp: 54
-      items: []
-    prerequisite: null
-  exploring_003:
-    name: "Quest 003: Exploring Challenge"
-    description: "Travel 350 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 350
-    rewards:
-      money: 583.3
-      xp: 58
-      items: []
-    prerequisite: null
-  exploring_004:
-    name: "Quest 004: Exploring Challenge"
-    description: "Travel 450 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 450
-    rewards:
-      money: 625
-      xp: 62
-      items: []
-    prerequisite: null
-  exploring_005:
-    name: "Quest 005: Exploring Challenge"
-    description: "Travel 550 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 550
-    rewards:
-      money: 666.6
-      xp: 66
-      items: []
-    prerequisite: null
-  exploring_006:
-    name: "Quest 006: Exploring Challenge"
-    description: "Travel 650 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 650
-    rewards:
-      money: 708.3
-      xp: 70
-      items: []
-    prerequisite: null
-  exploring_007:
-    name: "Quest 007: Exploring Challenge"
-    description: "Travel 750 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 750
-    rewards:
-      money: 750
-      xp: 75
-      items: []
-    prerequisite: null
-  exploring_008:
-    name: "Quest 008: Exploring Challenge"
-    description: "Travel 850 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 850
-    rewards:
-      money: 791.6
-      xp: 79
-      items: []
-    prerequisite: null
-  exploring_009:
-    name: "Quest 009: Exploring Challenge"
-    description: "Travel 1,000 blocks"
+    description: "Travel 1000 blocks"
     category: EXPLORATION
     difficulty: EASY
     type: WALK_DISTANCE
     target: ""
     amount: 1000
     rewards:
-      money: 833.3
-      xp: 83
+      money: 250
+      xp: 10
       items: []
     prerequisite: null
-  exploring_010:
-    name: "Quest 010: Exploring Challenge"
-    description: "Travel 1,150 blocks"
+  exploring_002:
+    name: "Quest 002: Exploring Challenge"
+    description: "Travel 2000 blocks"
     category: EXPLORATION
     difficulty: EASY
     type: WALK_DISTANCE
     target: ""
-    amount: 1150
+    amount: 2000
     rewards:
-      money: 875
-      xp: 87
+      money: 500
+      xp: 20
       items: []
     prerequisite: null
-  exploring_011:
-    name: "Quest 011: Exploring Challenge"
-    description: "Travel 1,250 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 1250
-    rewards:
-      money: 916.6
-      xp: 91
-      items: []
-    prerequisite: null
-  exploring_012:
-    name: "Quest 012: Exploring Challenge"
-    description: "Travel 1,400 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 1400
-    rewards:
-      money: 958.3
-      xp: 95
-      items: []
-    prerequisite: null
-  exploring_013:
-    name: "Quest 013: Exploring Challenge"
-    description: "Travel 1,600 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 1600
-    rewards:
-      money: 1000
-      xp: 100
-      items: []
-    prerequisite: null
-  exploring_014:
-    name: "Quest 014: Exploring Challenge"
-    description: "Travel 1,750 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 1750
-    rewards:
-      money: 1041.6
-      xp: 104
-      items: []
-    prerequisite: null
-  exploring_015:
-    name: "Quest 015: Exploring Challenge"
-    description: "Travel 1,950 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 1950
-    rewards:
-      money: 1083.3
-      xp: 108
-      items: []
-    prerequisite: null
-  exploring_016:
-    name: "Quest 016: Exploring Challenge"
-    description: "Travel 2,150 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 2150
-    rewards:
-      money: 1125
-      xp: 112
-      items: []
-    prerequisite: null
-  exploring_017:
-    name: "Quest 017: Exploring Challenge"
-    description: "Travel 2,350 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 2350
-    rewards:
-      money: 1166.6
-      xp: 116
-      items: []
-    prerequisite: null
-  exploring_018:
-    name: "Quest 018: Exploring Challenge"
-    description: "Travel 2,550 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 2550
-    rewards:
-      money: 1208.3
-      xp: 120
-      items: []
-    prerequisite: null
-  exploring_019:
-    name: "Quest 019: Exploring Challenge"
-    description: "Travel 2,750 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 2750
-    rewards:
-      money: 1250
-      xp: 125
-      items: []
-    prerequisite: null
-  exploring_020:
-    name: "Quest 020: Exploring Challenge"
-    description: "Travel 3,000 blocks"
+  exploring_003:
+    name: "Quest 003: Exploring Challenge"
+    description: "Travel 3000 blocks"
     category: EXPLORATION
     difficulty: EASY
     type: WALK_DISTANCE
     target: ""
     amount: 3000
     rewards:
-      money: 1291.6
-      xp: 129
+      money: 750
+      xp: 30
       items: []
     prerequisite: null
-  exploring_021:
-    name: "Quest 021: Exploring Challenge"
-    description: "Travel 3,200 blocks"
+  exploring_004:
+    name: "Quest 004: Exploring Challenge"
+    description: "Travel 4000 blocks"
     category: EXPLORATION
     difficulty: EASY
     type: WALK_DISTANCE
     target: ""
-    amount: 3200
+    amount: 4000
     rewards:
-      money: 1333.3
-      xp: 133
+      money: 1000
+      xp: 40
       items: []
     prerequisite: null
-  exploring_022:
-    name: "Quest 022: Exploring Challenge"
-    description: "Travel 3,450 blocks"
+  exploring_005:
+    name: "Quest 005: Exploring Challenge"
+    description: "Travel 5000 blocks"
     category: EXPLORATION
     difficulty: EASY
     type: WALK_DISTANCE
     target: ""
-    amount: 3450
+    amount: 5000
     rewards:
-      money: 1375
-      xp: 137
+      money: 1250
+      xp: 50
       items: []
     prerequisite: null
-  exploring_023:
-    name: "Quest 023: Exploring Challenge"
-    description: "Travel 3,700 blocks"
+  exploring_006:
+    name: "Quest 006: Exploring Challenge"
+    description: "Travel 6000 blocks"
     category: EXPLORATION
     difficulty: EASY
     type: WALK_DISTANCE
     target: ""
-    amount: 3700
-    rewards:
-      money: 1416.6
-      xp: 141
-      items: []
-    prerequisite: null
-  exploring_024:
-    name: "Quest 024: Exploring Challenge"
-    description: "Travel 3,950 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 3950
-    rewards:
-      money: 1458.3
-      xp: 145
-      items: []
-    prerequisite: null
-  exploring_025:
-    name: "Quest 025: Exploring Challenge"
-    description: "Travel 4,250 blocks"
-    category: EXPLORATION
-    difficulty: EASY
-    type: WALK_DISTANCE
-    target: ""
-    amount: 4250
+    amount: 6000
     rewards:
       money: 1500
-      xp: 150
+      xp: 60
       items: []
     prerequisite: null
-  exploring_026:
-    name: "Quest 026: Exploring Challenge"
-    description: "Travel 4,500 blocks"
+  exploring_007:
+    name: "Quest 007: Exploring Challenge"
+    description: "Travel 7000 blocks"
     category: EXPLORATION
-    difficulty: MEDIUM
+    difficulty: EASY
     type: WALK_DISTANCE
     target: ""
-    amount: 4500
+    amount: 7000
+    rewards:
+      money: 1750
+      xp: 70
+      items: []
+    prerequisite: null
+  exploring_008:
+    name: "Quest 008: Exploring Challenge"
+    description: "Travel 8000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 8000
     rewards:
       money: 2000
-      xp: 200
+      xp: 80
       items: []
     prerequisite: null
-  exploring_027:
-    name: "Quest 027: Exploring Challenge"
-    description: "Travel 4,800 blocks"
+  exploring_009:
+    name: "Quest 009: Exploring Challenge"
+    description: "Travel 9000 blocks"
     category: EXPLORATION
-    difficulty: MEDIUM
+    difficulty: EASY
     type: WALK_DISTANCE
     target: ""
-    amount: 4800
+    amount: 9000
     rewards:
       money: 2250
-      xp: 212
+      xp: 90
       items: []
     prerequisite: null
-  exploring_028:
-    name: "Quest 028: Exploring Challenge"
-    description: "Travel 5,100 blocks"
+  exploring_010:
+    name: "Quest 010: Exploring Challenge"
+    description: "Travel 10000 blocks"
     category: EXPLORATION
-    difficulty: MEDIUM
+    difficulty: EASY
     type: WALK_DISTANCE
     target: ""
-    amount: 5100
+    amount: 10000
     rewards:
       money: 2500
-      xp: 225
+      xp: 100
       items: []
     prerequisite: null
-  exploring_029:
-    name: "Quest 029: Exploring Challenge"
-    description: "Travel 5,400 blocks"
+  exploring_011:
+    name: "Quest 011: Exploring Challenge"
+    description: "Travel 11000 blocks"
     category: EXPLORATION
-    difficulty: MEDIUM
+    difficulty: EASY
     type: WALK_DISTANCE
     target: ""
-    amount: 5400
+    amount: 11000
     rewards:
       money: 2750
-      xp: 237
+      xp: 110
       items: []
     prerequisite: null
-  exploring_030:
-    name: "Quest 030: Exploring Challenge"
-    description: "Travel 5,750 blocks"
+  exploring_012:
+    name: "Quest 012: Exploring Challenge"
+    description: "Travel 12000 blocks"
     category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 5750
-    rewards:
-      money: 3000
-      xp: 250
-      items: []
-    prerequisite: null
-  exploring_031:
-    name: "Quest 031: Exploring Challenge"
-    description: "Travel 6,050 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 6050
-    rewards:
-      money: 3250
-      xp: 262
-      items: []
-    prerequisite: null
-  exploring_032:
-    name: "Quest 032: Exploring Challenge"
-    description: "Travel 6,400 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 6400
-    rewards:
-      money: 3500
-      xp: 275
-      items: []
-    prerequisite: null
-  exploring_033:
-    name: "Quest 033: Exploring Challenge"
-    description: "Travel 6,750 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 6750
-    rewards:
-      money: 3750
-      xp: 287
-      items: []
-    prerequisite: null
-  exploring_034:
-    name: "Quest 034: Exploring Challenge"
-    description: "Travel 7,100 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 7100
-    rewards:
-      money: 4000
-      xp: 300
-      items: []
-    prerequisite: null
-  exploring_035:
-    name: "Quest 035: Exploring Challenge"
-    description: "Travel 7,450 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 7450
-    rewards:
-      money: 4250
-      xp: 312
-      items: []
-    prerequisite: null
-  exploring_036:
-    name: "Quest 036: Exploring Challenge"
-    description: "Travel 7,800 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 7800
-    rewards:
-      money: 4500
-      xp: 325
-      items: []
-    prerequisite: null
-  exploring_037:
-    name: "Quest 037: Exploring Challenge"
-    description: "Travel 8,200 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 8200
-    rewards:
-      money: 4750
-      xp: 337
-      items: []
-    prerequisite: null
-  exploring_038:
-    name: "Quest 038: Exploring Challenge"
-    description: "Travel 8,550 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 8550
-    rewards:
-      money: 5000
-      xp: 350
-      items: []
-    prerequisite: null
-  exploring_039:
-    name: "Quest 039: Exploring Challenge"
-    description: "Travel 8,950 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 8950
-    rewards:
-      money: 5250
-      xp: 362
-      items: []
-    prerequisite: null
-  exploring_040:
-    name: "Quest 040: Exploring Challenge"
-    description: "Travel 9,400 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 9400
-    rewards:
-      money: 5500
-      xp: 375
-      items: []
-    prerequisite: null
-  exploring_041:
-    name: "Quest 041: Exploring Challenge"
-    description: "Travel 9,800 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 9800
-    rewards:
-      money: 5750
-      xp: 387
-      items: []
-    prerequisite: null
-  exploring_042:
-    name: "Quest 042: Exploring Challenge"
-    description: "Travel 10,200 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 10200
-    rewards:
-      money: 6000
-      xp: 400
-      items: []
-    prerequisite: null
-  exploring_043:
-    name: "Quest 043: Exploring Challenge"
-    description: "Travel 10,650 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 10650
-    rewards:
-      money: 6250
-      xp: 412
-      items: []
-    prerequisite: null
-  exploring_044:
-    name: "Quest 044: Exploring Challenge"
-    description: "Travel 11,100 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 11100
-    rewards:
-      money: 6500
-      xp: 425
-      items: []
-    prerequisite: null
-  exploring_045:
-    name: "Quest 045: Exploring Challenge"
-    description: "Travel 11,550 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
-    type: WALK_DISTANCE
-    target: ""
-    amount: 11550
-    rewards:
-      money: 6750
-      xp: 437
-      items: []
-    prerequisite: null
-  exploring_046:
-    name: "Quest 046: Exploring Challenge"
-    description: "Travel 12,000 blocks"
-    category: EXPLORATION
-    difficulty: MEDIUM
+    difficulty: EASY
     type: WALK_DISTANCE
     target: ""
     amount: 12000
     rewards:
+      money: 3000
+      xp: 120
+      items: []
+    prerequisite: null
+  exploring_013:
+    name: "Quest 013: Exploring Challenge"
+    description: "Travel 13000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 13000
+    rewards:
+      money: 3250
+      xp: 130
+      items: []
+    prerequisite: null
+  exploring_014:
+    name: "Quest 014: Exploring Challenge"
+    description: "Travel 14000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 14000
+    rewards:
+      money: 3500
+      xp: 140
+      items: []
+    prerequisite: null
+  exploring_015:
+    name: "Quest 015: Exploring Challenge"
+    description: "Travel 15000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 15000
+    rewards:
+      money: 3750
+      xp: 150
+      items: []
+    prerequisite: null
+  exploring_016:
+    name: "Quest 016: Exploring Challenge"
+    description: "Travel 16000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 16000
+    rewards:
+      money: 4000
+      xp: 160
+      items: []
+    prerequisite: null
+  exploring_017:
+    name: "Quest 017: Exploring Challenge"
+    description: "Travel 17000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 17000
+    rewards:
+      money: 4250
+      xp: 170
+      items: []
+    prerequisite: null
+  exploring_018:
+    name: "Quest 018: Exploring Challenge"
+    description: "Travel 18000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 18000
+    rewards:
+      money: 4500
+      xp: 180
+      items: []
+    prerequisite: null
+  exploring_019:
+    name: "Quest 019: Exploring Challenge"
+    description: "Travel 19000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 19000
+    rewards:
+      money: 4750
+      xp: 190
+      items: []
+    prerequisite: null
+  exploring_020:
+    name: "Quest 020: Exploring Challenge"
+    description: "Travel 20000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 20000
+    rewards:
+      money: 5000
+      xp: 200
+      items: []
+    prerequisite: null
+  exploring_021:
+    name: "Quest 021: Exploring Challenge"
+    description: "Travel 21000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 21000
+    rewards:
+      money: 5250
+      xp: 210
+      items: []
+    prerequisite: null
+  exploring_022:
+    name: "Quest 022: Exploring Challenge"
+    description: "Travel 22000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 22000
+    rewards:
+      money: 5500
+      xp: 220
+      items: []
+    prerequisite: null
+  exploring_023:
+    name: "Quest 023: Exploring Challenge"
+    description: "Travel 23000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 23000
+    rewards:
+      money: 5750
+      xp: 230
+      items: []
+    prerequisite: null
+  exploring_024:
+    name: "Quest 024: Exploring Challenge"
+    description: "Travel 24000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 24000
+    rewards:
+      money: 6000
+      xp: 240
+      items: []
+    prerequisite: null
+  exploring_025:
+    name: "Quest 025: Exploring Challenge"
+    description: "Travel 25000 blocks"
+    category: EXPLORATION
+    difficulty: EASY
+    type: WALK_DISTANCE
+    target: ""
+    amount: 25000
+    rewards:
+      money: 6250
+      xp: 250
+      items: []
+    prerequisite: null
+  exploring_026:
+    name: "Quest 026: Exploring Challenge"
+    description: "Travel 26000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 26000
+    rewards:
+      money: 6500
+      xp: 260
+      items: []
+    prerequisite: null
+  exploring_027:
+    name: "Quest 027: Exploring Challenge"
+    description: "Travel 27000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 27000
+    rewards:
+      money: 6750
+      xp: 270
+      items: []
+    prerequisite: null
+  exploring_028:
+    name: "Quest 028: Exploring Challenge"
+    description: "Travel 28000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 28000
+    rewards:
       money: 7000
+      xp: 280
+      items: []
+    prerequisite: null
+  exploring_029:
+    name: "Quest 029: Exploring Challenge"
+    description: "Travel 29000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 29000
+    rewards:
+      money: 7250
+      xp: 290
+      items: []
+    prerequisite: null
+  exploring_030:
+    name: "Quest 030: Exploring Challenge"
+    description: "Travel 30000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 30000
+    rewards:
+      money: 7500
+      xp: 300
+      items: []
+    prerequisite: null
+  exploring_031:
+    name: "Quest 031: Exploring Challenge"
+    description: "Travel 31000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 31000
+    rewards:
+      money: 7750
+      xp: 310
+      items: []
+    prerequisite: null
+  exploring_032:
+    name: "Quest 032: Exploring Challenge"
+    description: "Travel 32000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 32000
+    rewards:
+      money: 8000
+      xp: 320
+      items: []
+    prerequisite: null
+  exploring_033:
+    name: "Quest 033: Exploring Challenge"
+    description: "Travel 33000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 33000
+    rewards:
+      money: 8250
+      xp: 330
+      items: []
+    prerequisite: null
+  exploring_034:
+    name: "Quest 034: Exploring Challenge"
+    description: "Travel 34000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 34000
+    rewards:
+      money: 8500
+      xp: 340
+      items: []
+    prerequisite: null
+  exploring_035:
+    name: "Quest 035: Exploring Challenge"
+    description: "Travel 35000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 35000
+    rewards:
+      money: 8750
+      xp: 350
+      items: []
+    prerequisite: null
+  exploring_036:
+    name: "Quest 036: Exploring Challenge"
+    description: "Travel 36000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 36000
+    rewards:
+      money: 9000
+      xp: 360
+      items: []
+    prerequisite: null
+  exploring_037:
+    name: "Quest 037: Exploring Challenge"
+    description: "Travel 37000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 37000
+    rewards:
+      money: 9250
+      xp: 370
+      items: []
+    prerequisite: null
+  exploring_038:
+    name: "Quest 038: Exploring Challenge"
+    description: "Travel 38000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 38000
+    rewards:
+      money: 9500
+      xp: 380
+      items: []
+    prerequisite: null
+  exploring_039:
+    name: "Quest 039: Exploring Challenge"
+    description: "Travel 39000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 39000
+    rewards:
+      money: 9750
+      xp: 390
+      items: []
+    prerequisite: null
+  exploring_040:
+    name: "Quest 040: Exploring Challenge"
+    description: "Travel 40000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 40000
+    rewards:
+      money: 10000
+      xp: 400
+      items: []
+    prerequisite: null
+  exploring_041:
+    name: "Quest 041: Exploring Challenge"
+    description: "Travel 41000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 41000
+    rewards:
+      money: 10250
+      xp: 410
+      items: []
+    prerequisite: null
+  exploring_042:
+    name: "Quest 042: Exploring Challenge"
+    description: "Travel 42000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 42000
+    rewards:
+      money: 10500
+      xp: 420
+      items: []
+    prerequisite: null
+  exploring_043:
+    name: "Quest 043: Exploring Challenge"
+    description: "Travel 43000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 43000
+    rewards:
+      money: 10750
+      xp: 430
+      items: []
+    prerequisite: null
+  exploring_044:
+    name: "Quest 044: Exploring Challenge"
+    description: "Travel 44000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 44000
+    rewards:
+      money: 11000
+      xp: 440
+      items: []
+    prerequisite: null
+  exploring_045:
+    name: "Quest 045: Exploring Challenge"
+    description: "Travel 45000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 45000
+    rewards:
+      money: 11250
       xp: 450
+      items: []
+    prerequisite: null
+  exploring_046:
+    name: "Quest 046: Exploring Challenge"
+    description: "Travel 46000 blocks"
+    category: EXPLORATION
+    difficulty: MEDIUM
+    type: WALK_DISTANCE
+    target: ""
+    amount: 46000
+    rewards:
+      money: 11500
+      xp: 460
       items: []
     prerequisite: null
   exploring_047:
     name: "Quest 047: Exploring Challenge"
-    description: "Travel 12,450 blocks"
+    description: "Travel 47000 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
     type: WALK_DISTANCE
     target: ""
-    amount: 12450
+    amount: 47000
     rewards:
-      money: 7250
-      xp: 462
+      money: 11750
+      xp: 470
       items: []
     prerequisite: null
   exploring_048:
     name: "Quest 048: Exploring Challenge"
-    description: "Travel 12,950 blocks"
+    description: "Travel 48000 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
     type: WALK_DISTANCE
     target: ""
-    amount: 12950
+    amount: 48000
     rewards:
-      money: 7500
-      xp: 475
+      money: 12000
+      xp: 480
       items: []
     prerequisite: null
   exploring_049:
     name: "Quest 049: Exploring Challenge"
-    description: "Travel 13,450 blocks"
+    description: "Travel 49000 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
     type: WALK_DISTANCE
     target: ""
-    amount: 13450
+    amount: 49000
     rewards:
-      money: 7750
-      xp: 487
+      money: 12250
+      xp: 490
       items: []
     prerequisite: null
   exploring_050:
     name: "Quest 050: Exploring Challenge"
-    description: "Travel 13,950 blocks"
+    description: "Travel 50000 blocks"
     category: EXPLORATION
     difficulty: MEDIUM
     type: WALK_DISTANCE
     target: ""
-    amount: 13950
+    amount: 50000
     rewards:
-      money: 8000
+      money: 12500
       xp: 500
       items: []
     prerequisite: null
   exploring_051:
     name: "Quest 051: Exploring Challenge"
-    description: "Travel 14,450 blocks"
+    description: "Travel 51000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 14450
+    amount: 51000
     rewards:
-      money: 100000
-      xp: 500
+      money: 12750
+      xp: 510
       items: []
     prerequisite: null
   exploring_052:
     name: "Quest 052: Exploring Challenge"
-    description: "Travel 14,950 blocks"
+    description: "Travel 52000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 14950
+    amount: 52000
     rewards:
-      money: 116666
-      xp: 562
+      money: 13000
+      xp: 520
       items: []
     prerequisite: null
   exploring_053:
     name: "Quest 053: Exploring Challenge"
-    description: "Travel 15,450 blocks"
+    description: "Travel 53000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 15450
+    amount: 53000
     rewards:
-      money: 133333
-      xp: 625
+      money: 13250
+      xp: 530
       items: []
     prerequisite: null
   exploring_054:
     name: "Quest 054: Exploring Challenge"
-    description: "Travel 16,000 blocks"
+    description: "Travel 54000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 16000
+    amount: 54000
     rewards:
-      money: 150000
-      xp: 687
+      money: 13500
+      xp: 540
       items: []
     prerequisite: null
   exploring_055:
     name: "Quest 055: Exploring Challenge"
-    description: "Travel 16,550 blocks"
+    description: "Travel 55000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 16550
+    amount: 55000
     rewards:
-      money: 166666
-      xp: 750
+      money: 13750
+      xp: 550
       items: []
     prerequisite: null
   exploring_056:
     name: "Quest 056: Exploring Challenge"
-    description: "Travel 17,100 blocks"
+    description: "Travel 56000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 17100
+    amount: 56000
     rewards:
-      money: 183333
-      xp: 812
+      money: 14000
+      xp: 560
       items: []
     prerequisite: null
   exploring_057:
     name: "Quest 057: Exploring Challenge"
-    description: "Travel 17,650 blocks"
+    description: "Travel 57000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 17650
+    amount: 57000
     rewards:
-      money: 200000
-      xp: 875
+      money: 14250
+      xp: 570
       items: []
     prerequisite: null
   exploring_058:
     name: "Quest 058: Exploring Challenge"
-    description: "Travel 18,200 blocks"
+    description: "Travel 58000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 18200
+    amount: 58000
     rewards:
-      money: 216666
-      xp: 937
+      money: 14500
+      xp: 580
       items: []
     prerequisite: null
   exploring_059:
     name: "Quest 059: Exploring Challenge"
-    description: "Travel 18,800 blocks"
+    description: "Travel 59000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 18800
+    amount: 59000
     rewards:
-      money: 233333
-      xp: 1000
+      money: 14750
+      xp: 590
       items: []
     prerequisite: null
   exploring_060:
     name: "Quest 060: Exploring Challenge"
-    description: "Travel 19,400 blocks"
+    description: "Travel 60000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 19400
+    amount: 60000
     rewards:
-      money: 250000
-      xp: 1062
+      money: 15000
+      xp: 600
       items: []
     prerequisite: null
   exploring_061:
     name: "Quest 061: Exploring Challenge"
-    description: "Travel 19,950 blocks"
+    description: "Travel 61000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 19950
+    amount: 61000
     rewards:
-      money: 266666
-      xp: 1125
+      money: 15250
+      xp: 610
       items: []
     prerequisite: null
   exploring_062:
     name: "Quest 062: Exploring Challenge"
-    description: "Travel 20,550 blocks"
+    description: "Travel 62000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 20550
+    amount: 62000
     rewards:
-      money: 283333
-      xp: 1187
+      money: 15500
+      xp: 620
       items: []
     prerequisite: null
   exploring_063:
     name: "Quest 063: Exploring Challenge"
-    description: "Travel 21,200 blocks"
+    description: "Travel 63000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 21200
+    amount: 63000
     rewards:
-      money: 300000
-      xp: 1250
+      money: 15750
+      xp: 630
       items: []
     prerequisite: null
   exploring_064:
     name: "Quest 064: Exploring Challenge"
-    description: "Travel 21,800 blocks"
+    description: "Travel 64000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 21800
+    amount: 64000
     rewards:
-      money: 316666
-      xp: 1312
+      money: 16000
+      xp: 640
       items: []
     prerequisite: null
   exploring_065:
     name: "Quest 065: Exploring Challenge"
-    description: "Travel 22,450 blocks"
+    description: "Travel 65000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 22450
+    amount: 65000
     rewards:
-      money: 333333
-      xp: 1375
+      money: 16250
+      xp: 650
       items: []
     prerequisite: null
   exploring_066:
     name: "Quest 066: Exploring Challenge"
-    description: "Travel 23,100 blocks"
+    description: "Travel 66000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 23100
+    amount: 66000
     rewards:
-      money: 350000
-      xp: 1437
+      money: 16500
+      xp: 660
       items: []
     prerequisite: null
   exploring_067:
     name: "Quest 067: Exploring Challenge"
-    description: "Travel 23,750 blocks"
+    description: "Travel 67000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 23750
+    amount: 67000
     rewards:
-      money: 366666
-      xp: 1500
+      money: 16750
+      xp: 670
       items: []
     prerequisite: null
   exploring_068:
     name: "Quest 068: Exploring Challenge"
-    description: "Travel 24,400 blocks"
+    description: "Travel 68000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 24400
+    amount: 68000
     rewards:
-      money: 383333
-      xp: 1562
+      money: 17000
+      xp: 680
       items: []
     prerequisite: null
   exploring_069:
     name: "Quest 069: Exploring Challenge"
-    description: "Travel 25,050 blocks"
+    description: "Travel 69000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 25050
+    amount: 69000
     rewards:
-      money: 400000
-      xp: 1625
+      money: 17250
+      xp: 690
       items: []
     prerequisite: null
   exploring_070:
     name: "Quest 070: Exploring Challenge"
-    description: "Travel 25,750 blocks"
+    description: "Travel 70000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 25750
+    amount: 70000
     rewards:
-      money: 416666
-      xp: 1687
+      money: 17500
+      xp: 700
       items: []
     prerequisite: null
   exploring_071:
     name: "Quest 071: Exploring Challenge"
-    description: "Travel 26,400 blocks"
+    description: "Travel 71000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 26400
+    amount: 71000
     rewards:
-      money: 433333
-      xp: 1750
+      money: 17750
+      xp: 710
       items: []
     prerequisite: null
   exploring_072:
     name: "Quest 072: Exploring Challenge"
-    description: "Travel 27,100 blocks"
+    description: "Travel 72000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 27100
+    amount: 72000
     rewards:
-      money: 450000
-      xp: 1812
+      money: 18000
+      xp: 720
       items: []
     prerequisite: null
   exploring_073:
     name: "Quest 073: Exploring Challenge"
-    description: "Travel 27,800 blocks"
+    description: "Travel 73000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 27800
+    amount: 73000
     rewards:
-      money: 466666
-      xp: 1875
+      money: 18250
+      xp: 730
       items: []
     prerequisite: null
   exploring_074:
     name: "Quest 074: Exploring Challenge"
-    description: "Travel 28,500 blocks"
+    description: "Travel 74000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 28500
+    amount: 74000
     rewards:
-      money: 483333
-      xp: 1937
+      money: 18500
+      xp: 740
       items: []
     prerequisite: null
   exploring_075:
     name: "Quest 075: Exploring Challenge"
-    description: "Travel 29,250 blocks"
+    description: "Travel 75000 blocks"
     category: EXPLORATION
     difficulty: HARD
     type: WALK_DISTANCE
     target: ""
-    amount: 29250
+    amount: 75000
     rewards:
-      money: 500000
-      xp: 2000
+      money: 18750
+      xp: 750
       items: []
     prerequisite: null
   exploring_076:
     name: "Quest 076: Exploring Challenge"
-    description: "Travel 29,950 blocks"
+    description: "Travel 76000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 29950
+    amount: 76000
     rewards:
-      money: 500000
-      xp: 2000
+      money: 19000
+      xp: 760
       items: []
     prerequisite: null
   exploring_077:
     name: "Quest 077: Exploring Challenge"
-    description: "Travel 30,700 blocks"
+    description: "Travel 77000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 30700
+    amount: 77000
     rewards:
-      money: 687500
-      xp: 2333
+      money: 19250
+      xp: 770
       items: []
     prerequisite: null
   exploring_078:
     name: "Quest 078: Exploring Challenge"
-    description: "Travel 31,450 blocks"
+    description: "Travel 78000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 31450
+    amount: 78000
     rewards:
-      money: 875000
-      xp: 2666
+      money: 19500
+      xp: 780
       items: []
     prerequisite: null
   exploring_079:
     name: "Quest 079: Exploring Challenge"
-    description: "Travel 32,200 blocks"
+    description: "Travel 79000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 32200
+    amount: 79000
     rewards:
-      money: 1062500
-      xp: 3000
+      money: 19750
+      xp: 790
       items: []
     prerequisite: null
   exploring_080:
     name: "Quest 080: Exploring Challenge"
-    description: "Travel 33,000 blocks"
+    description: "Travel 80000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 33000
+    amount: 80000
     rewards:
-      money: 1250000
-      xp: 3333
+      money: 20000
+      xp: 800
       items: []
     prerequisite: null
   exploring_081:
     name: "Quest 081: Exploring Challenge"
-    description: "Travel 33,750 blocks"
+    description: "Travel 81000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 33750
+    amount: 81000
     rewards:
-      money: 1437500
-      xp: 3666
+      money: 20250
+      xp: 810
       items: []
     prerequisite: null
   exploring_082:
     name: "Quest 082: Exploring Challenge"
-    description: "Travel 34,550 blocks"
+    description: "Travel 82000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 34550
+    amount: 82000
     rewards:
-      money: 1625000
-      xp: 4000
+      money: 20500
+      xp: 820
       items: []
     prerequisite: null
   exploring_083:
     name: "Quest 083: Exploring Challenge"
-    description: "Travel 35,350 blocks"
+    description: "Travel 83000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 35350
+    amount: 83000
     rewards:
-      money: 1812500
-      xp: 4333
+      money: 20750
+      xp: 830
       items: []
     prerequisite: null
   exploring_084:
     name: "Quest 084: Exploring Challenge"
-    description: "Travel 36,150 blocks"
+    description: "Travel 84000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 36150
+    amount: 84000
     rewards:
-      money: 2000000
-      xp: 4666
+      money: 21000
+      xp: 840
       items: []
     prerequisite: null
   exploring_085:
     name: "Quest 085: Exploring Challenge"
-    description: "Travel 36,950 blocks"
+    description: "Travel 85000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 36950
+    amount: 85000
     rewards:
-      money: 2187500
-      xp: 5000
+      money: 21250
+      xp: 850
       items: []
     prerequisite: null
   exploring_086:
     name: "Quest 086: Exploring Challenge"
-    description: "Travel 37,750 blocks"
+    description: "Travel 86000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 37750
+    amount: 86000
     rewards:
-      money: 2375000
-      xp: 5333
+      money: 21500
+      xp: 860
       items: []
     prerequisite: null
   exploring_087:
     name: "Quest 087: Exploring Challenge"
-    description: "Travel 38,600 blocks"
+    description: "Travel 87000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 38600
+    amount: 87000
     rewards:
-      money: 2562500
-      xp: 5666
+      money: 21750
+      xp: 870
       items: []
     prerequisite: null
   exploring_088:
     name: "Quest 088: Exploring Challenge"
-    description: "Travel 39,400 blocks"
+    description: "Travel 88000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 39400
+    amount: 88000
     rewards:
-      money: 2750000
-      xp: 6000
+      money: 22000
+      xp: 880
       items: []
     prerequisite: null
   exploring_089:
     name: "Quest 089: Exploring Challenge"
-    description: "Travel 40,250 blocks"
+    description: "Travel 89000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 40250
+    amount: 89000
     rewards:
-      money: 2937500
-      xp: 6333
+      money: 22250
+      xp: 890
       items: []
     prerequisite: null
   exploring_090:
     name: "Quest 090: Exploring Challenge"
-    description: "Travel 41,150 blocks"
+    description: "Travel 90000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 41150
+    amount: 90000
     rewards:
-      money: 3125000
-      xp: 6666
+      money: 22500
+      xp: 900
       items: []
     prerequisite: null
   exploring_091:
     name: "Quest 091: Exploring Challenge"
-    description: "Travel 42,000 blocks"
+    description: "Travel 91000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 42000
+    amount: 91000
     rewards:
-      money: 3312500
-      xp: 7000
+      money: 22750
+      xp: 910
       items: []
     prerequisite: null
   exploring_092:
     name: "Quest 092: Exploring Challenge"
-    description: "Travel 42,850 blocks"
+    description: "Travel 92000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 42850
+    amount: 92000
     rewards:
-      money: 3500000
-      xp: 7333
+      money: 23000
+      xp: 920
       items: []
     prerequisite: null
   exploring_093:
     name: "Quest 093: Exploring Challenge"
-    description: "Travel 43,750 blocks"
+    description: "Travel 93000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 43750
+    amount: 93000
     rewards:
-      money: 3687500
-      xp: 7666
+      money: 23250
+      xp: 930
       items: []
     prerequisite: null
   exploring_094:
     name: "Quest 094: Exploring Challenge"
-    description: "Travel 44,650 blocks"
+    description: "Travel 94000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 44650
+    amount: 94000
     rewards:
-      money: 3875000
-      xp: 8000
+      money: 23500
+      xp: 940
       items: []
     prerequisite: null
   exploring_095:
     name: "Quest 095: Exploring Challenge"
-    description: "Travel 45,550 blocks"
+    description: "Travel 95000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 45550
+    amount: 95000
     rewards:
-      money: 4062500
-      xp: 8333
+      money: 23750
+      xp: 950
       items: []
     prerequisite: null
   exploring_096:
     name: "Quest 096: Exploring Challenge"
-    description: "Travel 46,450 blocks"
+    description: "Travel 96000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 46450
+    amount: 96000
     rewards:
-      money: 4250000
-      xp: 8666
+      money: 24000
+      xp: 960
       items: []
     prerequisite: null
   exploring_097:
     name: "Quest 097: Exploring Challenge"
-    description: "Travel 47,350 blocks"
+    description: "Travel 97000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 47350
+    amount: 97000
     rewards:
-      money: 4437500
-      xp: 9000
+      money: 24250
+      xp: 970
       items: []
     prerequisite: null
   exploring_098:
     name: "Quest 098: Exploring Challenge"
-    description: "Travel 48,300 blocks"
+    description: "Travel 98000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 48300
+    amount: 98000
     rewards:
-      money: 4625000
-      xp: 9333
+      money: 24500
+      xp: 980
       items: []
     prerequisite: null
   exploring_099:
     name: "Quest 099: Exploring Challenge"
-    description: "Travel 49,250 blocks"
+    description: "Travel 99000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 49250
+    amount: 99000
     rewards:
-      money: 4812500
-      xp: 9666
+      money: 24750
+      xp: 990
       items: []
     prerequisite: null
   exploring_100:
     name: "Quest 100: Exploring Challenge"
-    description: "Travel 50,200 blocks"
+    description: "Travel 100000 blocks"
     category: EXPLORATION
     difficulty: LEGENDARY
     type: WALK_DISTANCE
     target: ""
-    amount: 50200
+    amount: 100000
     rewards:
-      money: 5000000
-      xp: 10000
+      money: 25000
+      xp: 1000
       items: []
     prerequisite: null
   farming_001:

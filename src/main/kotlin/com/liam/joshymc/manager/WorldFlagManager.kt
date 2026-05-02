@@ -271,6 +271,23 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
             return
         }
 
+        // Doors / trapdoors / fence gates in build-protected worlds (e.g.
+        // spawn) — players were popping these open even with INTERACT=true
+        // because INTERACT is meant for buttons / signs / general clicks.
+        // Block them when BLOCK_BREAK is denied so spawn enclosures stay
+        // sealed.
+        val type = block.type
+        val typeName = type.name
+        val isDoorLike =
+            typeName.endsWith("_DOOR") ||
+            typeName.endsWith("_TRAPDOOR") ||
+            typeName.endsWith("_FENCE_GATE")
+        if (isDoorLike && !isAllowed(event.player, WorldFlag.BLOCK_BREAK)) {
+            event.isCancelled = true
+            denyMessage(event.player, WorldFlag.BLOCK_BREAK)
+            return
+        }
+
         // Server-managed interactables (crates) always work, even in worlds
         // where INTERACT is denied — otherwise spawn-region crates would be
         // unreachable for everyone without bypass.
