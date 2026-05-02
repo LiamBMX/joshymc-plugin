@@ -424,6 +424,9 @@ commands:
     description: Apply custom enchants to items
     usage: /customenchant <add|remove|list|info>
     aliases: [ce, cenchant]
+  jmc-violation:
+    description: External anti-cheat bridge — records violations into JoshyMC admin panel
+    usage: /jmc-violation log <player> <check> [vl] [source]
 
 permissions:
   joshymc.give:
@@ -819,3 +822,6 @@ permissions:
   joshymc.anticheat.alerts:
     description: Receive anticheat violation alerts
     default: op
+  joshymc.violation.bridge:
+    description: Allow forwarding external AC violations into the admin panel (intended for console only)
+    default: false

@@ -193,6 +193,47 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
         return playerData[uuid]?.violations?.toMap() ?: emptyMap()
     }
 
+    /**
+     * Public hook for external anti-cheat plugins (Grim, Vulcan, Matrix,
+     * Spartan, etc.) to record a flag into JoshyMC's admin panel. Best-fit
+     * mapping from arbitrary check names to JoshyMC's [CheckType] is done
+     * via [resolveCheckType]. The flag flows through the same staff-alert /
+     * kick threshold logic as native checks so the admin panel shows a
+     * unified violation history regardless of source.
+     */
+    fun recordExternalViolation(player: Player, externalCheckName: String, vl: Double, source: String) {
+        val mapped = resolveCheckType(externalCheckName)
+        flag(player, mapped, vl, "[$source: $externalCheckName]")
+    }
+
+    /**
+     * Map a free-form external check name (e.g. "AntiKB", "BadPacketsA",
+     * "Reach2", "KillAuraA") to the closest matching JoshyMC [CheckType].
+     * Falls back to [CheckType.BAD_PACKETS] for anything we can't classify.
+     */
+    private fun resolveCheckType(name: String): CheckType {
+        val n = name.lowercase().filter { it.isLetterOrDigit() }
+        return when {
+            "killaura" in n || "aura" in n -> CheckType.KILL_AURA
+            "reach" in n -> CheckType.REACH
+            "fly" in n || "flight" in n || "boatfly" in n || "highjump" in n -> CheckType.FLIGHT
+            "speed" in n || "sprint" in n -> CheckType.SPEED
+            "scaffold" in n || "tower" in n || "bridge" in n -> CheckType.SCAFFOLD
+            "nofall" in n -> CheckType.NO_FALL
+            "phase" in n || "noclip" in n -> CheckType.PHASE
+            "timer" in n -> CheckType.TIMER
+            "velocity" in n || "antikb" in n || "knockback" in n -> CheckType.VELOCITY
+            "click" in n || "cps" in n || "autoclicker" in n -> CheckType.AUTO_CLICK
+            "jesus" in n || "water" in n -> CheckType.JESUS
+            "fastbreak" in n || "instabreak" in n -> CheckType.FAST_BREAK
+            "fastplace" in n -> CheckType.FAST_PLACE
+            "nuker" in n -> CheckType.NUKER
+            "inventory" in n || "invclick" in n -> CheckType.INVENTORY
+            "illegal" in n -> CheckType.ILLEGAL_ITEMS
+            else -> CheckType.BAD_PACKETS
+        }
+    }
+
     // ══════════════════════════════════════════════════════════
     //  VIOLATION SYSTEM
     // ══════════════════════════════════════════════════════════
