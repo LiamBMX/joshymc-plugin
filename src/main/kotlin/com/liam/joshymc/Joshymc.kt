@@ -801,6 +801,18 @@ class Joshymc : JavaPlugin() {
             default = false,
             permission = "joshymc.treefeller"
         ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "mob_visibility",
+            displayName = "Show Mobs",
+            description = "Hide mobs from your view (mobs ignore you too)",
+            material = org.bukkit.Material.ZOMBIE_HEAD,
+            disabledMaterial = org.bukkit.Material.SKELETON_SKULL,
+            default = true,
+            permission = "joshymc.mobvisibility",
+            onToggle = { player, enabled ->
+                com.liam.joshymc.listener.MobVisibilityListener.applyTo(this, player, enabled)
+            }
+        ))
     }
 
     /**

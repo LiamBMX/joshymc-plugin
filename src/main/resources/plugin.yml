@@ -469,6 +469,9 @@ permissions:
   joshymc.treefeller:
     description: Allows using tree feller
     default: op
+  joshymc.mobvisibility:
+    description: Allows toggling per-player mob visibility in /settings
+    default: true
   joshymc.spawn:
     description: Allows teleporting to spawn
     default: true

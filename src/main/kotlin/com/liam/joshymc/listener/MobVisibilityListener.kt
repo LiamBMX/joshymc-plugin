@@ -1,0 +1,112 @@
+package com.liam.joshymc.listener
+
+import com.liam.joshymc.Joshymc
+import org.bukkit.Bukkit
+import org.bukkit.entity.LivingEntity
+import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
+import org.bukkit.event.Listener
+import org.bukkit.event.entity.CreatureSpawnEvent
+import org.bukkit.event.entity.EntityDamageByEntityEvent
+import org.bukkit.event.entity.EntityTargetEvent
+import org.bukkit.event.player.PlayerJoinEvent
+
+/**
+ * Per-player mob visibility toggle. The mob is still ONE server-side entity
+ * — players sharing the world all see the same mob if their setting is on.
+ * Players with the setting off use Paper's [Player.hideEntity] so the mob
+ * is never sent to their client, AND we cancel mob targeting + damage in
+ * both directions so the mob and the player are functionally invisible to
+ * each other.
+ *
+ * Two players with the setting ON both see the same mob and can both hit
+ * it / be targeted by it as normal.
+ */
+class MobVisibilityListener(private val plugin: Joshymc) : Listener {
+
+    companion object {
+        private const val SETTING_KEY = "mob_visibility"
+
+        /**
+         * Apply the current setting state to [player]. Iterates every loaded
+         * living entity in their world; hides or reveals based on [enabled].
+         * Called by:
+         *   - the SettingDef.onToggle when the player flips the setting
+         *   - the join handler when they connect
+         */
+        fun applyTo(plugin: Joshymc, player: Player, enabled: Boolean) {
+            val world = player.world
+            for (entity in world.livingEntities) {
+                if (entity is Player) continue
+                if (enabled) {
+                    // Toggling on: re-show every mob the player had hidden.
+                    if (!player.canSee(entity)) player.showEntity(plugin, entity)
+                } else {
+                    if (player.canSee(entity)) player.hideEntity(plugin, entity)
+                }
+            }
+        }
+    }
+
+    /** Convenience accessor — true when the player wants mobs visible. */
+    private fun visible(player: Player): Boolean =
+        plugin.settingsManager.getSetting(player, SETTING_KEY)
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onJoin(event: PlayerJoinEvent) {
+        val player = event.player
+        // Defer one tick — settings cache is loaded lazily on first read,
+        // and the player's scoreboard / chunk visibility setup needs to
+        // settle before we start sending entity-hide packets.
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            if (player.isOnline) applyTo(plugin, player, visible(player))
+        }, 5L)
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onSpawn(event: CreatureSpawnEvent) {
+        val entity = event.entity
+        // Hide newly-spawned mobs from anyone who has the setting off.
+        for (online in entity.world.players) {
+            if (!visible(online) && online.canSee(entity)) {
+                online.hideEntity(plugin, entity)
+            }
+        }
+    }
+
+    /**
+     * Cancel mob targeting onto a player who's hiding mobs. Without this,
+     * the mob would still chase / attack-anim them server-side even though
+     * the player can't see it — and the next damage tick would land.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onTarget(event: EntityTargetEvent) {
+        val target = event.target as? Player ?: return
+        if (!visible(target)) {
+            event.target = null
+            event.isCancelled = true
+        }
+    }
+
+    /**
+     * Mutual damage immunity: if either side has the setting off, the hit
+     * doesn't land. Covers mob → player AND player → mob.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onDamage(event: EntityDamageByEntityEvent) {
+        val damager = event.damager
+        val victim = event.entity
+
+        // Mob hits Player: skip if player has setting off.
+        if (damager is LivingEntity && damager !is Player && victim is Player) {
+            if (!visible(victim)) event.isCancelled = true
+            return
+        }
+        // Player hits Mob: skip if attacker has setting off.
+        if (damager is Player && victim is LivingEntity && victim !is Player) {
+            if (!visible(damager)) event.isCancelled = true
+            return
+        }
+    }
+}

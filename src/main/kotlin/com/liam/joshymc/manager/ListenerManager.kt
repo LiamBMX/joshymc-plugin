@@ -14,6 +14,7 @@ import com.liam.joshymc.listener.RecipeBlockerListener
 import com.liam.joshymc.listener.AFKListener
 import com.liam.joshymc.listener.AutoSmeltListener
 import com.liam.joshymc.listener.ChatFormatListener
+import com.liam.joshymc.listener.MobVisibilityListener
 import com.liam.joshymc.listener.TreeFellerListener
 import com.liam.joshymc.listener.VeinminerListener
 import com.liam.joshymc.listener.UnknownCommandListener
@@ -62,6 +63,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(VeinminerListener(plugin), plugin)
         pm.registerEvents(AutoSmeltListener(plugin), plugin)
         pm.registerEvents(TreeFellerListener(plugin), plugin)
+        pm.registerEvents(MobVisibilityListener(plugin), plugin)
 
         // Phase 5 — Chat & AFK
         pm.registerEvents(ChatFormatListener(plugin), plugin)
