@@ -113,6 +113,13 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         // Hide the red score numbers
         objective.numberFormat(io.papermc.paper.scoreboard.numbers.NumberFormat.blank())
         player.scoreboard = board
+
+        // Defer one tick so RankManager's join handler can re-register rank
+        // teams on this brand-new board. Without this the player joins with
+        // a fresh scoreboard and never sees rank prefixes above heads.
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            if (player.isOnline) plugin.rankManager.applyTeamFor(player)
+        }, 1L)
     }
 
     private fun updateSidebar(player: Player) {

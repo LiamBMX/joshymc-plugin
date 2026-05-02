@@ -45,17 +45,20 @@ class RankManager(private val plugin: Joshymc) : Listener {
         // Load player ranks from DB
         loadPlayerRanks()
 
-        // Register scoreboard teams so the rank prefix shows above the
-        // nameplate (and orders the tab list by weight).
-        rebuildScoreboardTeams()
-
         // Wire up join/quit so newly-arriving players get put in the right
         // team automatically.
         Bukkit.getPluginManager().registerEvents(this, plugin)
 
-        // Players already online when this manager (re)starts after /reload.
-        for (online in Bukkit.getOnlinePlayers()) {
-            applyTeamFor(online)
+        // For every online player, register rank teams on their scoreboard
+        // and add every online player's name to the appropriate team. This
+        // is needed because ScoreboardManager swaps each player to a fresh
+        // per-player scoreboard for the sidebar — teams registered only on
+        // the main scoreboard never reach anyone.
+        for (viewer in Bukkit.getOnlinePlayers()) {
+            ensureRankTeamsOn(viewer.scoreboard)
+            for (subject in Bukkit.getOnlinePlayers()) {
+                addToRankTeam(viewer.scoreboard, subject)
+            }
         }
 
         plugin.logger.info("[Ranks] Started with ${ranks.size} rank(s), ${playerRanks.size} assigned player(s).")
@@ -63,59 +66,87 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onJoin(event: PlayerJoinEvent) {
-        applyTeamFor(event.player)
+        // Defer one tick so ScoreboardManager.onPlayerJoin has finished
+        // setting up the new player's scoreboard. Otherwise we'd register
+        // teams on the default scoreboard and then ScoreboardManager would
+        // replace it with a fresh empty one.
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            if (!event.player.isOnline) return@Runnable
+            applyTeamFor(event.player)
+        }, 2L)
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onQuit(event: PlayerQuitEvent) {
-        // Bukkit will remove the entry on its own when the player logs off,
-        // but explicit removal keeps the main scoreboard tidy across reloads.
-        val board = Bukkit.getScoreboardManager().mainScoreboard
-        board.getEntryTeam(event.player.name)?.removeEntry(event.player.name)
-    }
-
-    /**
-     * Wipe and recreate every JoshyMC rank team on the main scoreboard.
-     * Called at startup and whenever ranks are reloaded so prefixes stay
-     * in sync with config edits.
-     */
-    private fun rebuildScoreboardTeams() {
-        val board = Bukkit.getScoreboardManager().mainScoreboard
-        // Drop any leftover joshymc_rank_* teams from a prior boot
-        board.teams
-            .filter { it.name.startsWith(TEAM_PREFIX) }
-            .forEach { it.unregister() }
-
-        val sorted = ranks.values.sortedByDescending { it.weight }
-        for ((idx, rank) in sorted.withIndex()) {
-            val teamName = teamNameFor(rank, idx)
-            val team = board.registerNewTeam(teamName)
-            // Adventure component prefix; Bukkit converts to legacy on the wire.
-            team.prefix(legacy.deserialize("${rank.displayTag}&r "))
+        // Remove the leaving player's entry from every viewer's scoreboard
+        // so the team doesn't keep an orphan.
+        for (viewer in Bukkit.getOnlinePlayers()) {
+            if (viewer == event.player) continue
+            val board = viewer.scoreboard
+            board.teams
+                .filter { it.name.startsWith(TEAM_PREFIX) && it.hasEntry(event.player.name) }
+                .forEach { it.removeEntry(event.player.name) }
         }
     }
 
     /**
-     * Place [player] into the scoreboard team matching their current rank.
-     * No-op if the team can't be found (shouldn't happen unless config was
-     * mid-edit).
+     * Place [player] in the right rank team on every online viewer's
+     * scoreboard, AND make sure every other online player is in their
+     * correct rank team on [player]'s own scoreboard. This propagates the
+     * rank prefix above the head from every viewing angle.
      *
      * Public so other managers (e.g. AFKManager) can restore the rank team
      * after temporarily moving the player to a custom team.
      */
     fun applyTeamFor(player: Player) {
-        val rank = getPlayerRank(player) ?: return
-        val board = Bukkit.getScoreboardManager().mainScoreboard
-        val team = board.teams
-            .firstOrNull { it.name.startsWith(TEAM_PREFIX) && it.name.endsWith("_${rank.id}") }
-            ?: return
+        // 1. Add this player to the right team on every viewer's board so
+        //    everyone sees their nameplate prefix.
+        for (viewer in Bukkit.getOnlinePlayers()) {
+            ensureRankTeamsOn(viewer.scoreboard)
+            addToRankTeam(viewer.scoreboard, player)
+        }
+        // 2. On the player's OWN board, fill in every other online player so
+        //    they see everyone else's rank too.
+        ensureRankTeamsOn(player.scoreboard)
+        for (other in Bukkit.getOnlinePlayers()) {
+            if (other == player) continue
+            addToRankTeam(player.scoreboard, other)
+        }
+    }
 
-        // Remove from any other rank team first (e.g. when rank changes).
+    /**
+     * Register a JoshyMC rank team for every rank on [board] if not present.
+     * Existing teams keep their entries — we only update the prefix to keep
+     * config edits live.
+     */
+    private fun ensureRankTeamsOn(board: org.bukkit.scoreboard.Scoreboard) {
+        val sorted = ranks.values.sortedByDescending { it.weight }
+        for ((idx, rank) in sorted.withIndex()) {
+            val name = teamNameFor(rank, idx)
+            val existing = board.getTeam(name)
+            val team = existing ?: board.registerNewTeam(name)
+            // Always refresh the prefix so reloading config picks up tag changes.
+            team.prefix(legacy.deserialize("${rank.displayTag}&r "))
+        }
+    }
+
+    /** Add [subject] to the team matching their current rank on [board]. */
+    private fun addToRankTeam(board: org.bukkit.scoreboard.Scoreboard, subject: Player) {
+        val rank = getPlayerRank(subject) ?: return
+        val sorted = ranks.values.sortedByDescending { it.weight }
+        val idx = sorted.indexOfFirst { it.id == rank.id }
+        if (idx < 0) return
+        val targetName = teamNameFor(rank, idx)
+        val target = board.getTeam(targetName) ?: return
+
+        // Remove from any other rank team on this board.
         board.teams
-            .filter { it.name.startsWith(TEAM_PREFIX) && it.hasEntry(player.name) }
-            .forEach { it.removeEntry(player.name) }
+            .filter { it.name.startsWith(TEAM_PREFIX) && it.name != targetName && it.hasEntry(subject.name) }
+            .forEach { it.removeEntry(subject.name) }
 
-        team.addEntry(player.name)
+        if (!target.hasEntry(subject.name)) {
+            target.addEntry(subject.name)
+        }
     }
 
     private fun teamNameFor(rank: Rank, sortIndex: Int): String {
