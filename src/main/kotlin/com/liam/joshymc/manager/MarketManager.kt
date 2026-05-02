@@ -30,6 +30,13 @@ class MarketManager(private val plugin: Joshymc) {
     private val SENSITIVITY = 0.001
     private val MIN_MULTIPLIER = 0.3
     private val MAX_MULTIPLIER = 3.0
+    /** Need at least this much net volume in the window before the multiplier
+     *  moves at all. Stops a small server from showing "+200%" off two
+     *  transactions. */
+    private val MIN_VOLUME_FOR_MOVE = 50L
+    /** Per-recalc fraction of the gap to 1.0 that decays away when an item
+     *  has no recent activity. 0.1 = 10% reversion every 5 minutes. */
+    private val IDLE_DECAY_RATE = 0.10
 
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
         editMeta { it.displayName(Component.empty()) }
@@ -94,12 +101,12 @@ class MarketManager(private val plugin: Joshymc) {
         val windowStart = now - WINDOW_MS
 
         // Get all materials with transactions in the window
-        val materials = plugin.databaseManager.query(
+        val activeNames = plugin.databaseManager.query(
             "SELECT DISTINCT material FROM market_transactions WHERE timestamp > ?",
             windowStart
-        ) { rs -> rs.getString("material") }
+        ) { rs -> rs.getString("material") }.toSet()
 
-        for (materialName in materials) {
+        for (materialName in activeNames) {
             val material = Material.matchMaterial(materialName) ?: continue
 
             val totalBought = plugin.databaseManager.queryFirst(
@@ -112,9 +119,33 @@ class MarketManager(private val plugin: Joshymc) {
                 materialName, windowStart
             ) { rs -> rs.getLong("total") } ?: 0L
 
+            val totalVolume = totalBought + totalSold
+            // Below the volume threshold, hold the multiplier at 1.0 — stops
+            // single-digit transactions from yanking the price 200%.
+            if (totalVolume < MIN_VOLUME_FOR_MOVE) {
+                multiplierCache[material] = 1.0
+                continue
+            }
+
             val netDemand = totalBought - totalSold
             val rawMultiplier = 1.0 + (netDemand * SENSITIVITY)
             multiplierCache[material] = rawMultiplier.coerceIn(MIN_MULTIPLIER, MAX_MULTIPLIER)
+        }
+
+        // Decay multipliers for items that no longer have any activity in
+        // the window — without this a one-off pump leaves the multiplier
+        // stuck at 3.00x forever. Pull each idle multiplier 10% closer to
+        // 1.0 every recalc tick; once it's effectively neutral, drop it.
+        val activeKeys = activeNames.mapNotNull { Material.matchMaterial(it) }.toSet()
+        val idle = multiplierCache.keys - activeKeys
+        for (mat in idle) {
+            val current = multiplierCache[mat] ?: continue
+            val decayed = current + (1.0 - current) * IDLE_DECAY_RATE
+            if (kotlin.math.abs(decayed - 1.0) < 0.01) {
+                multiplierCache.remove(mat)
+            } else {
+                multiplierCache[mat] = decayed
+            }
         }
     }
 
@@ -146,38 +177,19 @@ class MarketManager(private val plugin: Joshymc) {
 
     // ── Trend Calculation ───────────────────────────────────────────────
 
+    /**
+     * Trend arrow now mirrors the multiplier directly so the arrow and the
+     * percentage in the same line always agree. Previously the arrow was a
+     * 6h-vs-prev-6h rate-of-change indicator while the percent was the 24h
+     * cumulative; the two metrics disagreed often (e.g. an item pumped to
+     * 3.00x earlier and now sitting still showed "+200% ▼"), which is what
+     * users were complaining about.
+     */
     fun getTrend(material: Material): Trend {
-        val now = System.currentTimeMillis()
-        val sixHoursMs = 6 * 3600 * 1000L
-
-        // Recent 6h net demand
-        val recentBought = plugin.databaseManager.queryFirst(
-            "SELECT COALESCE(SUM(amount), 0) AS total FROM market_transactions WHERE material = ? AND type = 'BUY' AND timestamp > ?",
-            material.name, now - sixHoursMs
-        ) { rs -> rs.getLong("total") } ?: 0L
-
-        val recentSold = plugin.databaseManager.queryFirst(
-            "SELECT COALESCE(SUM(amount), 0) AS total FROM market_transactions WHERE material = ? AND type = 'SELL' AND timestamp > ?",
-            material.name, now - sixHoursMs
-        ) { rs -> rs.getLong("total") } ?: 0L
-
-        // Previous 6h net demand (6h-12h ago)
-        val prevBought = plugin.databaseManager.queryFirst(
-            "SELECT COALESCE(SUM(amount), 0) AS total FROM market_transactions WHERE material = ? AND type = 'BUY' AND timestamp BETWEEN ? AND ?",
-            material.name, now - (2 * sixHoursMs), now - sixHoursMs
-        ) { rs -> rs.getLong("total") } ?: 0L
-
-        val prevSold = plugin.databaseManager.queryFirst(
-            "SELECT COALESCE(SUM(amount), 0) AS total FROM market_transactions WHERE material = ? AND type = 'SELL' AND timestamp BETWEEN ? AND ?",
-            material.name, now - (2 * sixHoursMs), now - sixHoursMs
-        ) { rs -> rs.getLong("total") } ?: 0L
-
-        val recentNet = recentBought - recentSold
-        val prevNet = prevBought - prevSold
-
+        val mult = getMultiplier(material)
         return when {
-            recentNet > prevNet + 5 -> Trend.UP
-            recentNet < prevNet - 5 -> Trend.DOWN
+            mult > 1.05 -> Trend.UP
+            mult < 0.95 -> Trend.DOWN
             else -> Trend.STABLE
         }
     }

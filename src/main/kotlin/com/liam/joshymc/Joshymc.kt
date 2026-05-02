@@ -356,6 +356,14 @@ class Joshymc : JavaPlugin() {
         // Apply world borders and game rules on a 1-tick delay (after all worlds are loaded)
         server.scheduler.runTaskLater(this, Runnable { applyWorldSettings() }, 1L)
 
+        // After every plugin has finished loading, try to auto-install the
+        // Grim AntiCheat → JoshyMC admin-panel bridge so flags surface in
+        // /admin without admins having to hand-edit punishments.yml. Safe
+        // no-op if Grim isn't installed.
+        server.scheduler.runTaskLater(this, Runnable {
+            com.liam.joshymc.manager.GrimIntegration(this).start()
+        }, 40L)
+
         logger.info("JoshyMC has been enabled!")
     }
 

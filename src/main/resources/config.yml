@@ -64,6 +64,16 @@ recipe-blocker:
 combat:
   tag-duration-seconds: 15
 
+# External plugin integrations
+integrations:
+  # Grim AntiCheat — when JoshyMC sees Grim is installed, it auto-injects a
+  # bridge command into Grim's punishments.yml so Grim's flags also show up
+  # in JoshyMC's /admin → Top Violators list. Idempotent + non-destructive
+  # (only adds an entry, never removes anything). Set false if you want to
+  # configure Grim's punishments.yml manually.
+  grim:
+    auto-install: true
+
 # Crates — debug toggles
 # debug-interactions: when true, every right-click on a registered crate (or
 # fuzzy-matched neighbour) is logged to the server console with the player,
