@@ -1177,6 +1177,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         if (getCrateTypeAt(block) == null) return
         // Suppress vanilla container handling regardless of what other plugins do.
         event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY)
+        // ALSO deny the held-item action so vanilla doesn't try to place the
+        // item being held. This was the candle bug: keyMaterial=CANDLE meant
+        // every right-click also tried to place a candle on/near the crate,
+        // so the crate never opened. Same fix protects buckets, item frames,
+        // banners, and any other placeable held item.
+        event.setUseItemInHand(org.bukkit.event.Event.Result.DENY)
     }
 
     /**
@@ -1327,6 +1333,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         if (event.action == Action.LEFT_CLICK_BLOCK) {
             event.isCancelled = true
             event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY)
+            event.setUseItemInHand(org.bukkit.event.Event.Result.DENY)
             openPreview(player, crateType)
             return
         }
@@ -1337,6 +1344,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // Force-deny vanilla container interaction so the underlying chest /
         // ender chest GUI cannot open even if another plugin tried to allow it.
         event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY)
+        // Also deny the held-item action — needed when keyMaterial is a
+        // placeable item like CANDLE / BANNER / ITEM_FRAME, otherwise vanilla
+        // tries to place the held item instead of opening the crate.
+        event.setUseItemInHand(org.bukkit.event.Event.Result.DENY)
 
         if (activeAnimations.contains(player.uniqueId)) {
             plugin.commsManager.send(player, Component.text("You already have a crate animation running.", NamedTextColor.RED))
