@@ -38,6 +38,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
             for (player in Bukkit.getOnlinePlayers()) {
                 updateSidebar(player)
             }
+            updateBelowNameHealth()
         }, 0L, 40L)
 
         // Tab list header/footer + tab names every 5 seconds (100 ticks)
@@ -112,6 +113,19 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         objective.displaySlot = DisplaySlot.SIDEBAR
         // Hide the red score numbers
         objective.numberFormat(io.papermc.paper.scoreboard.numbers.NumberFormat.blank())
+
+        // Below-name health display: shows "<HP>/20 ❤" under every player's
+        // nameplate from this player's POV. Uses a DUMMY criteria + periodic
+        // task (see updateBelowNameHealth) so the suffix can be "/20 ❤".
+        // Vanilla HEALTH criteria + HEARTS render type would only show an
+        // icon row, no number.
+        val belowName = board.registerNewObjective(
+            "joshymc_health",
+            org.bukkit.scoreboard.Criteria.DUMMY,
+            plugin.commsManager.parseLegacy("&7/20 &c❤")
+        )
+        belowName.displaySlot = DisplaySlot.BELOW_NAME
+
         player.scoreboard = board
 
         // Defer one tick so RankManager's join handler can re-register rank
@@ -120,6 +134,23 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             if (player.isOnline) plugin.rankManager.applyTeamFor(player)
         }, 1L)
+    }
+
+    /**
+     * Push every online player's HP into every viewer's BELOW_NAME objective.
+     * Called from the periodic task — values that don't change don't trigger
+     * client packets, so the cost is mostly the iteration. HP is rounded to
+     * the nearest int so 19.5 → 20 (matches what hearts display anyway).
+     */
+    private fun updateBelowNameHealth() {
+        for (viewer in Bukkit.getOnlinePlayers()) {
+            val board = viewer.scoreboard
+            val obj = board.getObjective("joshymc_health") ?: continue
+            for (subject in Bukkit.getOnlinePlayers()) {
+                val hp = subject.health.coerceAtLeast(0.0).toInt()
+                obj.getScore(subject.name).score = hp
+            }
+        }
     }
 
     private fun updateSidebar(player: Player) {

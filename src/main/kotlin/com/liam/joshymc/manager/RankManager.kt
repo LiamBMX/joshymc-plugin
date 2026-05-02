@@ -125,8 +125,10 @@ class RankManager(private val plugin: Joshymc) : Listener {
             val name = teamNameFor(rank, idx)
             val existing = board.getTeam(name)
             val team = existing ?: board.registerNewTeam(name)
-            // Always refresh the prefix so reloading config picks up tag changes.
-            team.prefix(legacy.deserialize("${rank.displayTag}&r "))
+            // Always refresh the prefix so reloading config picks up tag
+            // changes. Wrap in dark-gray brackets so the rank is visually
+            // separated from the player name.
+            team.prefix(legacy.deserialize("&8[${rank.displayTag}&8] &r"))
         }
     }
 

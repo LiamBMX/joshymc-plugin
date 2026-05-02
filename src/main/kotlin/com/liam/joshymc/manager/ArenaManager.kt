@@ -402,17 +402,35 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
         val attacker = getDamager(event) ?: return
         val victim = event.entity as? Player ?: return
 
+        // AFK players are invulnerable, full stop. Even if both happen to be
+        // inside the polygon (because someone shoved an AFK player across
+        // the border with knockback), don't let the arena override the AFK
+        // damage immunity.
+        if (plugin.afkManager.isAfk(victim) || plugin.afkManager.isAfk(attacker)) {
+            event.isCancelled = true
+            return
+        }
+
         val attackerArena = playersInArena[attacker.uniqueId]
         val victimArena = playersInArena[victim.uniqueId]
 
+        // Live polygon re-check using the current locations of both players.
+        // The cached playersInArena map is updated every 10 ticks; in the
+        // meantime someone can step out of the arena boundary, take a hit
+        // we'd think is in-arena, and bypass the "one in, one out" guard.
+        val attackerLive = liveArenaFor(attacker)
+        val victimLive = liveArenaFor(victim)
+        val attackerEffective = attackerArena ?: attackerLive?.id
+        val victimEffective = victimArena ?: victimLive?.id
+
         // Both in the same arena — force PvP on
-        if (attackerArena != null && victimArena != null && attackerArena == victimArena) {
+        if (attackerEffective != null && victimEffective != null && attackerEffective == victimEffective) {
             event.isCancelled = false
             return
         }
 
         // One inside, one outside — block (can't hit into or out of arena)
-        if ((attackerArena != null) != (victimArena != null)) {
+        if ((attackerEffective != null) != (victimEffective != null)) {
             event.isCancelled = true
             // Remove combat tags that were applied before this handler
             plugin.combatManager.untag(attacker)
@@ -427,6 +445,10 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
             plugin.combatManager.untag(victim)
         }
     }
+
+    /** Live polygon check on the player's current location, so a step
+     *  across the boundary in the last 0.5s window doesn't get missed. */
+    private fun liveArenaFor(player: Player): Arena? = findArenaAt(player)
 
     // ── Combat barrier: fake barrier blocks along arena border ──────────
 

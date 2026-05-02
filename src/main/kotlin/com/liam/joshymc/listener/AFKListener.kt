@@ -75,7 +75,13 @@ class AFKListener(private val plugin: Joshymc) : Listener {
     // returns silently if the player isn't AFK so non-AFK players are
     // unaffected.
 
-    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    /**
+     * AFK damage immunity runs at HIGHEST + ignoreCancelled=false so it has
+     * the final say after ArenaManager / WorldFlag etc. have finished
+     * deciding. Without this, an attacker could shove an AFK player into
+     * an arena polygon and the arena handler would un-cancel the hit.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     fun onAfkDamage(event: EntityDamageEvent) {
         val player = event.entity as? Player ?: return
         if (plugin.afkManager.isAfk(player)) event.isCancelled = true
