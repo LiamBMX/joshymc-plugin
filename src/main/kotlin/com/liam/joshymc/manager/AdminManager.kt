@@ -560,15 +560,6 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        // Reports — anyone with the view perm
-        if (admin.hasPermission("joshymc.reports.view")) {
-            gui.setItem(16, buildItem(Material.WRITABLE_BOOK, "Reports", NamedTextColor.GOLD,
-                "View and resolve player reports")) { p, _ ->
-                openReportsList(p, 0, null)
-                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
-            }
-        }
-
         // Anticheat — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
             gui.setItem(13, buildItem(Material.IRON_SWORD, "Anticheat", NamedTextColor.AQUA,
@@ -578,8 +569,18 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        // Row 3 center (slot 22): Server Info
-        gui.setItem(22, buildServerInfoItem()) { p, _ ->
+        // Row 3 center (slot 22): Reports — gets its own row so it doesn't
+        // crowd the 5-button row above (which is symmetric around slot 13).
+        if (admin.hasPermission("joshymc.reports.view")) {
+            gui.setItem(22, buildItem(Material.WRITABLE_BOOK, "Reports", NamedTextColor.GOLD,
+                "View and resolve player reports")) { p, _ ->
+                openReportsList(p, 0, null)
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            }
+        }
+
+        // Row 4 center (slot 31): Server Info
+        gui.setItem(31, buildServerInfoItem()) { p, _ ->
             // Refresh server info
             openMainPanel(p)
         }
