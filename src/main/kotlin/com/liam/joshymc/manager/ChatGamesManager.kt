@@ -39,7 +39,7 @@ class ChatGamesManager(private val plugin: Joshymc) {
     private val current = AtomicReference<ActiveGame?>(null)
 
     private var enabled = true
-    private var intervalMinutes = 15
+    private var intervalSeconds = 900L
     private var minPlayers = 2
     private var solveWindowSeconds = 60L
     private var rewardMoney = 1000.0
@@ -57,7 +57,15 @@ class ChatGamesManager(private val plugin: Joshymc) {
             return
         }
 
-        intervalMinutes = cfg.getInt("chat-games.interval-minutes", 15).coerceAtLeast(1)
+        // New `interval-seconds` field, with legacy `interval-minutes` kept
+        // working for older configs. Floor at 30s so the auto-scheduler can't
+        // be misconfigured into spam.
+        intervalSeconds = if (cfg.contains("chat-games.interval-seconds")) {
+            cfg.getLong("chat-games.interval-seconds", 900L)
+        } else {
+            cfg.getLong("chat-games.interval-minutes", 15L) * 60L
+        }.coerceAtLeast(30L)
+
         minPlayers = cfg.getInt("chat-games.min-players", 2).coerceAtLeast(1)
         solveWindowSeconds = cfg.getLong("chat-games.solve-window-seconds", 60L).coerceAtLeast(10L)
         rewardMoney = cfg.getDouble("chat-games.reward.money", 1000.0)
@@ -65,14 +73,14 @@ class ChatGamesManager(private val plugin: Joshymc) {
 
         // Auto-start a game every interval, if no game is currently running and
         // there are enough players online to make it interesting.
-        val period = intervalMinutes * 60 * 20L
+        val periodTicks = intervalSeconds * 20L
         autoStartTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
             if (current.get() != null) return@Runnable
             if (Bukkit.getOnlinePlayers().size < minPlayers) return@Runnable
             startRandomGame()
-        }, period, period)
+        }, periodTicks, periodTicks)
 
-        plugin.logger.info("[ChatGames] Started — interval=${intervalMinutes}m, reward=\$${rewardMoney.toInt()} + ${rewardXp}XP.")
+        plugin.logger.info("[ChatGames] Started — interval=${intervalSeconds}s, reward=\$${rewardMoney.toInt()} + ${rewardXp}XP.")
     }
 
     fun stop() {
@@ -150,19 +158,35 @@ class ChatGamesManager(private val plugin: Joshymc) {
     // ── Announcement ────────────────────────────────────────────────────
 
     private fun announceStart(game: ActiveGame) {
-        Bukkit.broadcast(
-            Component.text("🎲 ", TextColor.color(0xFFD700)).decoration(TextDecoration.BOLD, true)
-                .append(Component.text("Chat Game ", TextColor.color(0xFFD700)).decoration(TextDecoration.BOLD, true))
-                .append(Component.text("(${game.type.displayName}): ", NamedTextColor.GRAY))
-                .append(Component.text(game.prompt, NamedTextColor.AQUA).decoration(TextDecoration.BOLD, true))
-        )
-        Bukkit.broadcast(
-            Component.text("First to answer in chat wins ", NamedTextColor.GRAY)
-                .append(Component.text("\$${rewardMoney.toInt()}", NamedTextColor.GOLD))
-                .append(Component.text(" + ", NamedTextColor.GRAY))
-                .append(Component.text("${rewardXp} XP", NamedTextColor.GREEN))
-                .append(Component.text("!", NamedTextColor.GRAY))
-        )
+        // Empty separator line above the announcement so it visually breaks
+        // away from preceding chat. Same below.
+        val rule = Component.text("━━━━━━━━━━━━━━━ ", TextColor.color(0xFFD700))
+            .append(Component.text("✦ CHAT GAME ✦", TextColor.color(0xFFD700)).decoration(TextDecoration.BOLD, true))
+            .append(Component.text(" ━━━━━━━━━━━━━━━", TextColor.color(0xFFD700)))
+        val ruleBottom = Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", TextColor.color(0xFFD700))
+
+        val typeLine = Component.text("  ", NamedTextColor.GRAY)
+            .append(Component.text("[${game.type.displayName}]  ", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.BOLD, true))
+            .append(Component.text(game.prompt, NamedTextColor.AQUA).decoration(TextDecoration.BOLD, true))
+
+        val rewardLine = Component.text("  First in chat wins ", NamedTextColor.GRAY)
+            .append(Component.text("\$${rewardMoney.toInt()}", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true))
+            .append(Component.text(" + ", NamedTextColor.GRAY))
+            .append(Component.text("${rewardXp} XP", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true))
+            .append(Component.text("  ·  Time: ", NamedTextColor.DARK_GRAY))
+            .append(Component.text("${solveWindowSeconds}s", NamedTextColor.GRAY))
+
+        Bukkit.broadcast(Component.empty())
+        Bukkit.broadcast(rule)
+        Bukkit.broadcast(typeLine)
+        Bukkit.broadcast(rewardLine)
+        Bukkit.broadcast(ruleBottom)
+        Bukkit.broadcast(Component.empty())
+
+        // Bell "ting" so players notice even if they're not looking at chat.
+        for (online in Bukkit.getOnlinePlayers()) {
+            online.playSound(online.location, Sound.BLOCK_NOTE_BLOCK_BELL, 0.7f, 1.5f)
+        }
     }
 
     // ── Game generation ─────────────────────────────────────────────────

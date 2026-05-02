@@ -80,9 +80,10 @@ integrations:
 # An admin can manually trigger games with /chatgame [type].
 chat-games:
   enabled: true
-  # How often (in minutes) the auto-scheduler triggers a game when no game
-  # is currently running and at least min-players are online.
-  interval-minutes: 15
+  # How often the auto-scheduler triggers a game when no game is running
+  # and at least min-players are online. Floors at 30s. The legacy
+  # `interval-minutes` field still works for older configs.
+  interval-seconds: 900
   # Minimum online players required for the auto-scheduler to fire a game.
   # Manual /chatgame ignores this.
   min-players: 2
