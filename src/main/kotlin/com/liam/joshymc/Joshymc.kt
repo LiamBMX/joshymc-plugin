@@ -51,6 +51,7 @@ import com.liam.joshymc.manager.SignShopManager
 import com.liam.joshymc.manager.SpawnerManager
 import com.liam.joshymc.manager.StorageManager
 import com.liam.joshymc.manager.TeamManager
+import com.liam.joshymc.manager.TimezoneManager
 import com.liam.joshymc.manager.TradeManager
 import com.liam.joshymc.manager.WarpManager
 import com.liam.joshymc.command.VanishCommand
@@ -218,6 +219,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var spawnWorldManager: SpawnWorldManager
         private set
+    lateinit var timezoneManager: TimezoneManager
+        private set
 
     override fun onEnable() {
         instance = this
@@ -273,6 +276,8 @@ class Joshymc : JavaPlugin() {
         claimManager = ClaimManager(this)
         punishmentManager = PunishmentManager(this)
         resourceWorldManager = ResourceWorldManager(this)
+        timezoneManager = TimezoneManager(this)
+        timezoneManager.start()
         scoreboardManager = ScoreboardManager(this)
         announcementManager = AnnouncementManager(this)
         playtimeManager = PlaytimeManager(this)

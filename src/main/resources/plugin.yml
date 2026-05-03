@@ -192,6 +192,10 @@ commands:
     description: Equip talismans and relics
     usage: /talisman [equip|unequip|info|list]
     aliases: [talismans, relic, relics]
+  timezone:
+    description: Set the timezone used for the in-game clock
+    usage: /timezone [zone|reset|list]
+    aliases: [tz]
   tag:
     description: Browse and equip chat tags
     usage: /tag [remove|tagname]

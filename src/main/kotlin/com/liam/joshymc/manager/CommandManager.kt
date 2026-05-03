@@ -58,6 +58,7 @@ import com.liam.joshymc.command.QuestCommand
 import com.liam.joshymc.command.RewardsCommand
 import com.liam.joshymc.command.TagCommand
 import com.liam.joshymc.command.TalismanCommand
+import com.liam.joshymc.command.TimezoneCommand
 import com.liam.joshymc.command.TrashCommand
 import com.liam.joshymc.command.TpCommand
 import com.liam.joshymc.command.TpHereCommand
@@ -342,6 +343,9 @@ class CommandManager(private val plugin: Joshymc) {
 
         // ── Talismans ─────────────────────────────────
         plugin.getCommand("talisman")?.let { val c = TalismanCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        // ── Timezone ──────────────────────────────────
+        plugin.getCommand("timezone")?.let { val c = TimezoneCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Chat Tags ────────────────────────────────
         plugin.getCommand("tag")?.let { val c = TagCommand(plugin); it.setExecutor(c); it.tabCompleter = c }

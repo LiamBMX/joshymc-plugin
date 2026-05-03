@@ -179,7 +179,11 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val playtime = formatPlaytime(plugin.playtimeManager.getPlaytime(player.uniqueId))
         val ping = player.ping
 
-        val now = java.time.LocalDateTime.now()
+        // Per-player timezone — defaults to EST when the player hasn't picked one,
+        // overridden via /timezone <zone>. The Minecraft client doesn't tell us
+        // its zone, so we either trust the player's choice or fall back to EST.
+        val zone = plugin.timezoneManager.zoneFor(player)
+        val now = java.time.ZonedDateTime.now(zone)
         val dateFmt = java.time.format.DateTimeFormatter.ofPattern("MM/dd/yyyy hh:mma")
         val dateStr = now.format(dateFmt)
 
