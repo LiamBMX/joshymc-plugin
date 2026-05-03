@@ -21,11 +21,22 @@ import java.util.UUID
 class LeaderboardManager(private val plugin: Joshymc) {
 
     enum class Type(val displayName: String, val icon: String) {
+        // Per-player leaderboards
         MONEY("Richest Players", "&6\$"),
         KILLS("Top Killers", "&c⚔"),
         DEATHS("Most Deaths", "&8☠"),
         PLAYTIME("Most Played", "&b⏱"),
         QUESTS("Top Questers", "&e☆"),
+        // Per-team leaderboards (sum of member stats unless noted)
+        TEAM_MONEY("Richest Teams (members)", "&6\$"),
+        TEAM_BANK("Team Banks", "&6🏦"),
+        TEAM_KILLS("Top Team Killers", "&c⚔"),
+        TEAM_DEATHS("Most Team Deaths", "&8☠"),
+        TEAM_PLAYTIME("Most Team Playtime", "&b⏱"),
+        TEAM_QUESTS("Top Team Questers", "&e☆"),
+        ;
+
+        val isTeam: Boolean get() = name.startsWith("TEAM_")
     }
 
     data class LeaderboardEntry(
@@ -135,7 +146,9 @@ class LeaderboardManager(private val plugin: Joshymc) {
      */
     private fun computeTop(type: Type, n: Int): List<Pair<String, String>> {
         return when (type) {
-            Type.MONEY -> plugin.economyManager.getTopBalances(n).map { (name, bal) ->
+            Type.MONEY -> plugin.economyManager.getTopBalances(n).map { (uuidStr, bal) ->
+                // getTopBalances returns the UUID string; resolve to name.
+                val name = try { nameOf(UUID.fromString(uuidStr)) } catch (e: Exception) { uuidStr.take(8) }
                 name to plugin.economyManager.format(bal)
             }
             Type.KILLS -> queryUuidIntTop(
@@ -154,6 +167,68 @@ class LeaderboardManager(private val plugin: Joshymc) {
                 "SELECT uuid, COUNT(*) AS n FROM quest_progress WHERE completed = 1 GROUP BY uuid ORDER BY n DESC LIMIT ?",
                 n
             ).map { (uuid, count) -> nameOf(uuid) to count.toString() }
+
+            // ── Team leaderboards ──────────────────────────────────────
+            // Pull team aggregates straight from joins — keeps the per-team
+            // numbers always-fresh and avoids us needing to maintain a
+            // mirrored team_stats table.
+            Type.TEAM_MONEY -> queryTeamDoubleTop(
+                """
+                SELECT tm.team_name AS team, COALESCE(SUM(e.balance), 0) AS n
+                FROM team_members tm
+                LEFT JOIN economy e ON e.uuid = tm.uuid
+                GROUP BY tm.team_name
+                ORDER BY n DESC
+                LIMIT ?
+                """.trimIndent(), n
+            ).map { (team, total) -> team to plugin.economyManager.format(total) }
+            Type.TEAM_BANK -> queryTeamDoubleTop(
+                "SELECT team_name AS team, balance AS n FROM team_balances WHERE balance > 0 ORDER BY balance DESC LIMIT ?",
+                n
+            ).map { (team, bal) -> team to plugin.economyManager.format(bal) }
+            Type.TEAM_KILLS -> queryTeamLongTop(
+                """
+                SELECT tm.team_name AS team, COALESCE(SUM(ps.kills), 0) AS n
+                FROM team_members tm
+                LEFT JOIN player_stats ps ON ps.uuid = tm.uuid
+                GROUP BY tm.team_name
+                HAVING n > 0
+                ORDER BY n DESC
+                LIMIT ?
+                """.trimIndent(), n
+            ).map { (team, count) -> team to count.toString() }
+            Type.TEAM_DEATHS -> queryTeamLongTop(
+                """
+                SELECT tm.team_name AS team, COALESCE(SUM(ps.deaths), 0) AS n
+                FROM team_members tm
+                LEFT JOIN player_stats ps ON ps.uuid = tm.uuid
+                GROUP BY tm.team_name
+                HAVING n > 0
+                ORDER BY n DESC
+                LIMIT ?
+                """.trimIndent(), n
+            ).map { (team, count) -> team to count.toString() }
+            Type.TEAM_PLAYTIME -> queryTeamLongTop(
+                """
+                SELECT tm.team_name AS team, COALESCE(SUM(p.total_seconds), 0) AS n
+                FROM team_members tm
+                LEFT JOIN playtime p ON p.uuid = tm.uuid
+                GROUP BY tm.team_name
+                HAVING n > 0
+                ORDER BY n DESC
+                LIMIT ?
+                """.trimIndent(), n
+            ).map { (team, sec) -> team to plugin.playtimeManager.formatPlaytime(sec) }
+            Type.TEAM_QUESTS -> queryTeamLongTop(
+                """
+                SELECT tm.team_name AS team, COUNT(*) AS n
+                FROM team_members tm
+                JOIN quest_progress qp ON qp.uuid = tm.uuid AND qp.completed = 1
+                GROUP BY tm.team_name
+                ORDER BY n DESC
+                LIMIT ?
+                """.trimIndent(), n
+            ).map { (team, count) -> team to count.toString() }
         }
     }
 
@@ -174,6 +249,22 @@ class LeaderboardManager(private val plugin: Joshymc) {
             } catch (e: Exception) {
                 null
             }
+        }.filterNotNull()
+    }
+
+    /** Top teams by an integer/long aggregate. SQL must select `team` and `n`. */
+    private fun queryTeamLongTop(sql: String, limit: Int): List<Pair<String, Long>> {
+        return plugin.databaseManager.query(sql, limit) { rs ->
+            val name = rs.getString("team") ?: return@query null
+            name to rs.getLong("n")
+        }.filterNotNull()
+    }
+
+    /** Top teams by a double aggregate. SQL must select `team` and `n`. */
+    private fun queryTeamDoubleTop(sql: String, limit: Int): List<Pair<String, Double>> {
+        return plugin.databaseManager.query(sql, limit) { rs ->
+            val name = rs.getString("team") ?: return@query null
+            name to rs.getDouble("n")
         }.filterNotNull()
     }
 
