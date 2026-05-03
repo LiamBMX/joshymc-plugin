@@ -190,6 +190,16 @@ spawn-world:
   paste-y: 64
   paste-z: 0
 
+# Worlds where player-vs-player COLLISIONS are disabled by default.
+# Players standing on the same block / running through each other won't push.
+# Exceptions: collisions are auto-RE-ENABLED whenever a player is
+#   - inside a PvP arena polygon, or
+#   - currently combat-tagged
+# So spawn / lobby can be friction-free without breaking PvP.
+worlds:
+  no-collision:
+    - spawn
+
 # World Borders — per-dimension, in blocks (full diameter)
 # Applied on plugin start. The resource world also re-applies on regen.
 world-borders:

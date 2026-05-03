@@ -117,31 +117,43 @@ class RankManager(private val plugin: Joshymc) : Listener {
     /**
      * Register a JoshyMC rank team for every rank on [board] if not present.
      * Existing teams keep their entries — we only update the prefix to keep
-     * config edits live.
+     * config edits live. Two variants per rank: `<name>_y` (collisions
+     * enabled) and `<name>_n` (collisions disabled). Same prefix on both,
+     * differs only by COLLISION_RULE — the right variant is chosen per
+     * player based on [shouldCollide].
      */
     private fun ensureRankTeamsOn(board: org.bukkit.scoreboard.Scoreboard) {
         val sorted = ranks.values.sortedByDescending { it.weight }
         for ((idx, rank) in sorted.withIndex()) {
-            val name = teamNameFor(rank, idx)
-            val existing = board.getTeam(name)
-            val team = existing ?: board.registerNewTeam(name)
-            // Always refresh the prefix so reloading config picks up tag
-            // changes. Wrap in dark-gray brackets so the rank is visually
-            // separated from the player name.
-            team.prefix(legacy.deserialize("&8[${rank.displayTag}&8] &r"))
+            for (collide in listOf(true, false)) {
+                val name = teamNameFor(rank, idx, collide)
+                val existing = board.getTeam(name)
+                val team = existing ?: board.registerNewTeam(name)
+                team.prefix(legacy.deserialize("&8[${rank.displayTag}&8] &r"))
+                team.setOption(
+                    org.bukkit.scoreboard.Team.Option.COLLISION_RULE,
+                    if (collide) org.bukkit.scoreboard.Team.OptionStatus.ALWAYS
+                    else org.bukkit.scoreboard.Team.OptionStatus.NEVER
+                )
+            }
         }
     }
 
-    /** Add [subject] to the team matching their current rank on [board]. */
+    /**
+     * Add [subject] to the right rank-team variant on [board]. The variant
+     * is chosen by [shouldCollide]: combat-tagged or in-arena or in a world
+     * not on the no-collision list → collide variant; otherwise → no-collide.
+     */
     private fun addToRankTeam(board: org.bukkit.scoreboard.Scoreboard, subject: Player) {
         val rank = getPlayerRank(subject) ?: return
         val sorted = ranks.values.sortedByDescending { it.weight }
         val idx = sorted.indexOfFirst { it.id == rank.id }
         if (idx < 0) return
-        val targetName = teamNameFor(rank, idx)
+        val collide = shouldCollide(subject)
+        val targetName = teamNameFor(rank, idx, collide)
         val target = board.getTeam(targetName) ?: return
 
-        // Remove from any other rank team on this board.
+        // Remove from any other rank team variant on this board.
         board.teams
             .filter { it.name.startsWith(TEAM_PREFIX) && it.name != targetName && it.hasEntry(subject.name) }
             .forEach { it.removeEntry(subject.name) }
@@ -151,13 +163,33 @@ class RankManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    private fun teamNameFor(rank: Rank, sortIndex: Int): String {
+    /**
+     * Whether the player should currently collide with other players.
+     * Order of checks (return as soon as one wins):
+     *   - combat-tagged → ALWAYS collide (PvP needs collision)
+     *   - inside an arena polygon → ALWAYS collide
+     *   - current world is in worlds.no-collision config → NEVER collide
+     *   - otherwise → collide
+     */
+    fun shouldCollide(player: Player): Boolean {
+        if (plugin.combatManager.isTagged(player)) return true
+        if (plugin.arenaManager.isInArena(player)) return true
+        val noCollideWorlds = plugin.config.getStringList("worlds.no-collision")
+        if (player.world.name in noCollideWorlds) return false
+        return true
+    }
+
+    private fun teamNameFor(rank: Rank, sortIndex: Int, collide: Boolean): String {
         // Bukkit team names are limited to 16 chars and used for tab-list
         // ordering. Pad with the sort index so higher-weight ranks come first
-        // alphabetically. Truncate the rank id if needed to keep under 16.
+        // alphabetically. Truncate the rank id if needed to keep under 16,
+        // then append _y / _n for the collision variant.
         val padded = sortIndex.coerceIn(0, 99).toString().padStart(2, '0')
-        val safeId = rank.id.take(11)
-        return "$TEAM_PREFIX${padded}_$safeId"
+        // Reserve 2 chars for the variant suffix (_y / _n) so the total
+        // stays under the 16-char team name limit.
+        val safeId = rank.id.take(9)
+        val suffix = if (collide) "y" else "n"
+        return "$TEAM_PREFIX${padded}_${safeId}_$suffix"
     }
 
     companion object {

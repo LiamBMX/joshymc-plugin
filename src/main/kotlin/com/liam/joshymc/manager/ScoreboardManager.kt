@@ -37,6 +37,11 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         sidebarTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
             for (player in Bukkit.getOnlinePlayers()) {
                 updateSidebar(player)
+                // Re-apply rank team selection so the collision variant
+                // (collide vs no-collide) tracks the player's current state
+                // — world change, arena entry/exit, combat tag — without
+                // needing a dedicated event hook for each.
+                plugin.rankManager.applyTeamFor(player)
             }
             updateBelowNameHealth()
         }, 0L, 40L)
