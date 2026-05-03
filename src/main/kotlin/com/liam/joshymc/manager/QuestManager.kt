@@ -335,12 +335,45 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
     fun canStart(uuid: UUID, questId: String): Boolean {
         val quest = quests[questId] ?: return false
+
+        // Tier gating: in MINING / FARMING / COMBAT, require all quests of
+        // the lower difficulty tier in the same category be complete before
+        // a quest unlocks. EASY → MEDIUM → HARD → LEGENDARY.
+        // Other categories (exploration, fishing, social, etc.) are not
+        // tier-gated.
+        if (quest.category in TIER_GATED_CATEGORIES) {
+            val lower = lowerDifficulty(quest.difficulty)
+            if (lower != null) {
+                val lowerTierQuests = quests.values.filter {
+                    it.category == quest.category && it.difficulty == lower
+                }
+                for (q in lowerTierQuests) {
+                    if (!isCompleted(uuid, q.id)) return false
+                }
+            }
+        }
+
         val prereq = effectivePrerequisite(quest) ?: return true
         return isCompleted(uuid, prereq)
     }
 
     private fun effectivePrerequisite(quest: Quest): String? =
         quest.prerequisite ?: implicitPrerequisites[quest.id]
+
+    /** Categories where each difficulty tier must be cleared before the
+     *  next unlocks. Other categories progress freely. */
+    private val TIER_GATED_CATEGORIES = setOf(
+        QuestCategory.MINING,
+        QuestCategory.FARMING,
+        QuestCategory.COMBAT,
+    )
+
+    private fun lowerDifficulty(d: QuestDifficulty): QuestDifficulty? = when (d) {
+        QuestDifficulty.EASY -> null
+        QuestDifficulty.MEDIUM -> QuestDifficulty.EASY
+        QuestDifficulty.HARD -> QuestDifficulty.MEDIUM
+        QuestDifficulty.LEGENDARY -> QuestDifficulty.HARD
+    }
 
     // ── TIME_PLAYED sync ───────────────────────────────────────
 

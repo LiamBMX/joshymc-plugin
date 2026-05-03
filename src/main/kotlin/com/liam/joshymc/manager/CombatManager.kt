@@ -174,8 +174,14 @@ class CombatManager(private val plugin: Joshymc) {
         val armorContents = player.inventory.armorContents.map { it?.clone() }.toTypedArray()
         val offhand = player.inventory.itemInOffHand.clone()
 
-        // Clear player inventory so items aren't duplicated
+        // Clear EVERYTHING — main, armor, offhand. PlayerInventory.clear()
+        // only wipes the main slots; armor + offhand survived and were
+        // re-dropped on the immediate death below, AND the combat NPC
+        // also had them stored, so killing the NPC duped them. This was
+        // the long-standing combat-log dupe.
         player.inventory.clear()
+        player.inventory.setArmorContents(arrayOfNulls(4))
+        player.inventory.setItemInOffHand(null)
 
         val npc = world.spawn(loc, Villager::class.java) { villager ->
             villager.customName(

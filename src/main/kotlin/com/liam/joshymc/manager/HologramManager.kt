@@ -223,7 +223,7 @@ class HologramManager(private val plugin: Joshymc) {
         }
     }
 
-    private fun updateLines(id: String, lines: List<String>) {
+    fun updateLines(id: String, lines: List<String>) {
         plugin.databaseManager.execute(
             "UPDATE holograms SET lines = ? WHERE id = ?",
             lines.joinToString("\n"), id

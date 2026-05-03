@@ -39,9 +39,78 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "info" -> handleInfo(sender)
             "list" -> handleList(sender)
             "blocks" -> handleBlocks(sender, args)
+            "addblocks" -> handleAddBlocks(sender, args)
+            "setblocks" -> handleSetBlocks(sender, args)
             else -> showHelp(sender)
         }
         return true
+    }
+
+    /**
+     * `/claim addblocks <player> <amount>` — admin command to grant claim
+     * blocks. Negative amounts work (subtract). Used by ops to reward
+     * players or refund mistakenly-spent blocks.
+     */
+    private fun handleAddBlocks(sender: Player, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.claim.admin")) {
+            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+        val targetName = args.getOrNull(1)
+        val amount = args.getOrNull(2)?.toIntOrNull()
+        if (targetName == null || amount == null) {
+            plugin.commsManager.send(sender, Component.text("Usage: /claim addblocks <player> <amount>", NamedTextColor.RED))
+            return
+        }
+        val target = Bukkit.getOfflinePlayer(targetName)
+        if (!target.hasPlayedBefore() && target.player == null) {
+            plugin.commsManager.send(sender, Component.text("Unknown player: $targetName", NamedTextColor.RED))
+            return
+        }
+        plugin.claimManager.addBlocks(target.uniqueId, amount)
+        val newTotal = plugin.claimManager.getTotalBlocks(target.uniqueId)
+        plugin.commsManager.send(
+            sender,
+            Component.text("Gave ", NamedTextColor.GREEN)
+                .append(Component.text("$amount", NamedTextColor.GOLD))
+                .append(Component.text(" claim block${if (amount == 1) "" else "s"} to ${target.name ?: targetName}. ", NamedTextColor.GREEN))
+                .append(Component.text("(new total: $newTotal)", NamedTextColor.GRAY))
+        )
+        target.player?.let { onlineTarget ->
+            plugin.commsManager.send(
+                onlineTarget,
+                Component.text("You received ", NamedTextColor.GREEN)
+                    .append(Component.text("$amount", NamedTextColor.GOLD))
+                    .append(Component.text(" claim block${if (amount == 1) "" else "s"}. ", NamedTextColor.GREEN))
+                    .append(Component.text("(total: $newTotal)", NamedTextColor.GRAY))
+            )
+        }
+    }
+
+    /** `/claim setblocks <player> <amount>` — admin command to overwrite. */
+    private fun handleSetBlocks(sender: Player, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.claim.admin")) {
+            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+        val targetName = args.getOrNull(1)
+        val amount = args.getOrNull(2)?.toIntOrNull()
+        if (targetName == null || amount == null || amount < 0) {
+            plugin.commsManager.send(sender, Component.text("Usage: /claim setblocks <player> <amount>", NamedTextColor.RED))
+            return
+        }
+        val target = Bukkit.getOfflinePlayer(targetName)
+        if (!target.hasPlayedBefore() && target.player == null) {
+            plugin.commsManager.send(sender, Component.text("Unknown player: $targetName", NamedTextColor.RED))
+            return
+        }
+        plugin.claimManager.setBlocks(target.uniqueId, amount)
+        plugin.commsManager.send(
+            sender,
+            Component.text("Set ${target.name ?: targetName}'s claim block total to ", NamedTextColor.GREEN)
+                .append(Component.text("$amount", NamedTextColor.GOLD))
+                .append(Component.text(".", NamedTextColor.GREEN))
+        )
     }
 
     private fun handleTrust(player: Player, args: Array<out String>) {

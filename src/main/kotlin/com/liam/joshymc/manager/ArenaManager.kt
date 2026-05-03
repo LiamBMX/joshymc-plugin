@@ -331,6 +331,9 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
 
         // Tick combat barriers
         tickCombatBarriers()
+        // Backstop pin for combat-tagged players who somehow ended up
+        // outside their arena polygon.
+        tickCombatPin()
     }
 
     // ── Border particles (every 30 ticks) ────────────────
@@ -546,7 +549,12 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
 
         val from = event.from
         val to = event.to ?: return
-        if (from.blockX == to.blockX && from.blockZ == to.blockZ) return
+        // No early-out on block-level equality — polygon edges often run
+        // through the middle of a block, and players were stepping across
+        // the line without ever triggering a block-coord change. Tiny
+        // pure-rotation moves (from.x == to.x && from.z == to.z) are still
+        // skipped below as a cheap no-op.
+        if (from.x == to.x && from.z == to.z) return
 
         // Only enforce when the player IS in an arena. Find via cached map
         // first; fall back to live polygon check on `from` to handle players
@@ -569,6 +577,36 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
             plugin.commsManager.sendActionBar(
                 player,
                 Component.text("You can't leave the arena while in combat!", NamedTextColor.RED)
+            )
+        }
+    }
+
+    /**
+     * Backstop: every 5 ticks, sweep all combat-tagged players. If any of
+     * them ended up OUTSIDE their arena polygon (high-velocity launch,
+     * server-side teleport from another plugin, anything that bypassed the
+     * move-event guard), teleport them back to the arena's center.
+     *
+     * Without this, a one-shot velocity spike can launch a tagged player
+     * across the boundary in a single tick where the move event's `to`
+     * is already outside.
+     */
+    private fun tickCombatPin() {
+        for (player in Bukkit.getOnlinePlayers()) {
+            if (!plugin.combatManager.isTagged(player)) continue
+            val arenaId = playersInArena[player.uniqueId] ?: continue
+            val arena = arenas.find { it.id == arenaId } ?: continue
+            if (player.world.name != arena.world) continue
+            if (isInsidePolygon(player.location.x, player.location.z, arena.points)) continue
+
+            val cx = arena.points.sumOf { it.first }.toDouble() / arena.points.size + 0.5
+            val cz = arena.points.sumOf { it.second }.toDouble() / arena.points.size + 0.5
+            val world = Bukkit.getWorld(arena.world) ?: continue
+            val centerY = world.getHighestBlockYAt(cx.toInt(), cz.toInt()).toDouble() + 1.0
+            player.teleport(org.bukkit.Location(world, cx, centerY, cz, player.location.yaw, player.location.pitch))
+            plugin.commsManager.sendActionBar(
+                player,
+                Component.text("Sent back inside — you can't leave while in combat.", NamedTextColor.RED)
             )
         }
     }

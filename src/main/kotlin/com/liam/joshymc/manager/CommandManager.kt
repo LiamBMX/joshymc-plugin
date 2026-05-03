@@ -6,6 +6,7 @@ import com.liam.joshymc.command.AnnounceCommand
 import com.liam.joshymc.command.AdminCommand
 import com.liam.joshymc.command.AnvilCommand
 import com.liam.joshymc.command.ChatGameCommand
+import com.liam.joshymc.command.LeaderboardCommand
 import com.liam.joshymc.command.RepairCommand
 import com.liam.joshymc.command.SmithingCommand
 import com.liam.joshymc.command.ViolationBridgeCommand
@@ -394,6 +395,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("repair")?.let { val c = RepairCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("jmc-violation")?.setExecutor(ViolationBridgeCommand(plugin))
         plugin.getCommand("chatgame")?.let { val c = ChatGameCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("leaderboard")?.let { val c = LeaderboardCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("gencave")?.let { val c = GenCaveCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("admin")?.let { val c = AdminCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("enchant")?.let { val c = EnchantCommand(plugin); it.setExecutor(c); it.tabCompleter = c }

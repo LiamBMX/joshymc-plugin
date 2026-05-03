@@ -136,6 +136,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var hologramManager: HologramManager
         private set
+    lateinit var leaderboardManager: com.liam.joshymc.manager.LeaderboardManager
+        private set
     lateinit var npcManager: NPCManager
         private set
     lateinit var crateManager: CrateManager
@@ -255,6 +257,7 @@ class Joshymc : JavaPlugin() {
         storageManager = StorageManager(this)
         tradeManager = TradeManager(this)
         hologramManager = HologramManager(this)
+        leaderboardManager = com.liam.joshymc.manager.LeaderboardManager(this)
         npcManager = NPCManager(this)
         crateManager = CrateManager(this)
         auctionManager = AuctionManager(this)
@@ -302,6 +305,7 @@ class Joshymc : JavaPlugin() {
         kitManager.start()
         storageManager.start()
         hologramManager.start()
+        leaderboardManager.start()
         if (isFeatureEnabled("npcs")) npcManager.start()
         crateManager.start()
         auctionManager.start()

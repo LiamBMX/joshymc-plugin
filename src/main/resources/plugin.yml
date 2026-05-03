@@ -431,6 +431,10 @@ commands:
     description: Start a chat game on demand
     usage: /chatgame [math|unscramble|type|reverse|status]
     aliases: [chatgames, cg]
+  leaderboard:
+    description: Manage leaderboard holograms
+    usage: /leaderboard <create|delete|list|refresh>
+    aliases: [lb, leaderboards]
 
 permissions:
   joshymc.give:
@@ -834,4 +838,7 @@ permissions:
     default: false
   joshymc.chatgame:
     description: Start chat games on demand and view active game state
+    default: op
+  joshymc.leaderboard:
+    description: Create / delete / refresh leaderboard holograms
     default: op
