@@ -7,10 +7,15 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.block.BlockFace
 import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockExplodeEvent
+import org.bukkit.event.block.BlockFromToEvent
+import org.bukkit.event.block.BlockPistonExtendEvent
+import org.bukkit.event.block.BlockPistonRetractEvent
 import org.bukkit.event.block.BlockPlaceEvent
+import org.bukkit.event.block.BlockRedstoneEvent
 import org.bukkit.event.entity.EntityChangeBlockEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityExplodeEvent
@@ -185,6 +190,75 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         if (!plugin.claimManager.canAccess(player, event.rightClicked.location)) {
             event.isCancelled = true
             denyWithMessage(player)
+        }
+    }
+
+    // 14. Liquid flow / dragon egg teleport — block flow that crosses INTO a
+    // claim from outside, or from one claim into a different claim. Movement
+    // entirely within a single claim (or entirely outside any claim) is fine.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onLiquidFlow(event: BlockFromToEvent) {
+        val from = plugin.claimManager.getClaimAt(event.block.location)
+        val to = plugin.claimManager.getClaimAt(event.toBlock.location)
+        if (to == null) return                 // flowing into unclaimed land — fine
+        if (from?.id == to.id) return          // entirely within one claim — fine
+        // Crossing into a claim (from unclaimed or from a different claim) — block.
+        event.isCancelled = true
+    }
+
+    // 15. Piston extend — refuse to push blocks INTO a claim from outside, or
+    // to push a claim's blocks out from under their owner.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPistonExtend(event: BlockPistonExtendEvent) {
+        val pistonClaim = plugin.claimManager.getClaimAt(event.block.location)
+        for (block in event.blocks) {
+            val srcClaim = plugin.claimManager.getClaimAt(block.location)
+            val dest = block.getRelative(event.direction)
+            val destClaim = plugin.claimManager.getClaimAt(dest.location)
+            // Cancel if the source or destination crosses any claim boundary
+            // we don't already own (i.e. piston is outside the affected claim).
+            if (srcClaim != null && srcClaim.id != pistonClaim?.id) { event.isCancelled = true; return }
+            if (destClaim != null && destClaim.id != pistonClaim?.id) { event.isCancelled = true; return }
+        }
+    }
+
+    // 16a. Redstone activation — refuse to let an outside source power a
+    //      block inside a claim. Lets internal redstone work normally; blocks
+    //      "redstone tunnels" or wires laid up to the boundary by an attacker.
+    //
+    //      BlockRedstoneEvent isn't Cancellable; you suppress the change by
+    //      setting newCurrent back to oldCurrent so vanilla treats it as a
+    //      no-op tick.
+    @EventHandler(priority = EventPriority.HIGH)
+    fun onRedstone(event: BlockRedstoneEvent) {
+        if (event.newCurrent <= event.oldCurrent) return  // only inspect rising edges
+        val targetClaim = plugin.claimManager.getClaimAt(event.block.location) ?: return
+
+        // If at least one powered neighbor is in the SAME claim, the signal
+        // has an in-claim source and we let it through. If every powered
+        // neighbor is outside this claim, the signal is sneaking in across
+        // the boundary — neutralize it.
+        val faces = arrayOf(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST,
+            BlockFace.WEST, BlockFace.UP, BlockFace.DOWN)
+        val hasInClaimSource = faces.any { face ->
+            val n = event.block.getRelative(face)
+            if (n.blockPower <= 0) return@any false
+            val nClaim = plugin.claimManager.getClaimAt(n.location)
+            nClaim != null && nClaim.id == targetClaim.id
+        }
+        if (!hasInClaimSource) event.newCurrent = event.oldCurrent
+    }
+
+    // 16. Piston retract (sticky) — same boundary rule as extend.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPistonRetract(event: BlockPistonRetractEvent) {
+        val pistonClaim = plugin.claimManager.getClaimAt(event.block.location)
+        for (block in event.blocks) {
+            val srcClaim = plugin.claimManager.getClaimAt(block.location)
+            val dest = block.getRelative(event.direction)
+            val destClaim = plugin.claimManager.getClaimAt(dest.location)
+            if (srcClaim != null && srcClaim.id != pistonClaim?.id) { event.isCancelled = true; return }
+            if (destClaim != null && destClaim.id != pistonClaim?.id) { event.isCancelled = true; return }
         }
     }
 

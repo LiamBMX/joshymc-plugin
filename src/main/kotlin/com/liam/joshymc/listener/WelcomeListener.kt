@@ -18,7 +18,7 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         "",
         "&b&lWelcome to JoshyMC!",
         "&7Type &6/shop &7to buy items",
-        "&7Type &6/claim &7to protect your builds",
+        "&7Type &6/claim wand &7to protect your builds",
         "&7Type &6/kit &7to get starter items",
         ""
     )

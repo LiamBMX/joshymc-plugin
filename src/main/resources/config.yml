@@ -234,7 +234,7 @@ announcements:
       volume: 1.0
       pitch: 1.5
     - "&fUSE &6/TPA &fTO TELEPORT TO FRIENDS!"
-    - "&fPROTECT YOUR BUILDS WITH &6/CLAIM&f!"
+    - "&fPROTECT YOUR BUILDS WITH &6/CLAIM WAND&f!"
     - "&fSELL ITEMS QUICKLY WITH &6/SELL&f!"
 
 # Welcome / MOTD — join/leave messages
@@ -247,7 +247,7 @@ welcome:
     - ""
     - "&b&lWelcome to JoshyMC!"
     - "&7Type &6/shop &7to buy items"
-    - "&7Type &6/claim &7to protect your builds"
+    - "&7Type &6/claim wand &7to protect your builds"
     - "&7Type &6/kit &7to get starter items"
     - ""
 

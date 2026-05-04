@@ -73,7 +73,10 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         var stackCount: Int,
         var enabled: Boolean,
         val storage: MutableList<ItemStack>,
-        var lastTickMs: Long
+        var lastTickMs: Long,
+        /** Materials the owner has filtered out — generated drops of these
+         *  materials are discarded instead of being added to storage. */
+        val filteredOut: MutableSet<Material> = mutableSetOf()
     )
 
     // ── State ───────────────────────────────────────────────
@@ -90,6 +93,11 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
 
     /** Players currently viewing a spawner main GUI: UUID -> the spawner block they're viewing */
     private val openMainGuis = ConcurrentHashMap<UUID, BlockKey>()
+
+    /** Players currently viewing a spawner storage page: UUID -> (block, page).
+     *  Used so hopper pulls / drop generation refresh the visible slots instead
+     *  of leaving stale items in the open GUI for a few seconds. */
+    private val openStorageGuis = ConcurrentHashMap<UUID, Pair<BlockKey, Int>>()
 
     /** Base storage rows per stack count. Each stack adds this many rows (max 6 per page). */
     private val rowsPerStack = 1
@@ -109,6 +117,14 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
                 PRIMARY KEY (world, x, y, z)
             )
         """.trimIndent())
+
+        // Add filter column if it doesn't exist — pre-1.0.48 spawners get an
+        // empty filter (collect everything), matching prior behaviour.
+        try {
+            plugin.databaseManager.execute(
+                "ALTER TABLE custom_spawners ADD COLUMN filter_csv TEXT NOT NULL DEFAULT ''"
+            )
+        } catch (_: Exception) { /* already exists */ }
 
         loadTypes()
         loadBlocks()
@@ -130,6 +146,7 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         hopperTask?.cancel(); hopperTask = null
         countdownTask?.cancel(); countdownTask = null
         openMainGuis.clear()
+        openStorageGuis.clear()
         // Save all storage to DB
         for (block in blocks.values) saveBlock(block)
     }
@@ -179,9 +196,13 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
     private fun loadBlocks() {
         blocks.clear()
         val rows = plugin.databaseManager.query(
-            "SELECT world, x, y, z, spawner_id, owner_uuid, stack_count, enabled, storage_b64 FROM custom_spawners"
+            "SELECT world, x, y, z, spawner_id, owner_uuid, stack_count, enabled, storage_b64, filter_csv FROM custom_spawners"
         ) { rs ->
             val key = BlockKey(rs.getString("world"), rs.getInt("x"), rs.getInt("y"), rs.getInt("z"))
+            val filterCsv = try { rs.getString("filter_csv") } catch (_: Exception) { "" } ?: ""
+            val filter = filterCsv.split(',')
+                .mapNotNull { name -> name.takeIf { it.isNotBlank() }?.let { runCatching { Material.valueOf(it) }.getOrNull() } }
+                .toMutableSet()
             SpawnerBlock(
                 key = key,
                 spawnerId = rs.getString("spawner_id"),
@@ -189,25 +210,28 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
                 stackCount = rs.getInt("stack_count"),
                 enabled = rs.getInt("enabled") == 1,
                 storage = deserializeStorage(rs.getString("storage_b64")),
-                lastTickMs = System.currentTimeMillis()
+                lastTickMs = System.currentTimeMillis(),
+                filteredOut = filter
             )
         }
         for (block in rows) blocks[block.key] = block
     }
 
     private fun saveBlock(block: SpawnerBlock) {
+        val filterCsv = block.filteredOut.joinToString(",") { it.name }
         plugin.databaseManager.execute(
-            """INSERT INTO custom_spawners (world, x, y, z, spawner_id, owner_uuid, stack_count, enabled, storage_b64)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO custom_spawners (world, x, y, z, spawner_id, owner_uuid, stack_count, enabled, storage_b64, filter_csv)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(world, x, y, z) DO UPDATE SET
                  spawner_id = excluded.spawner_id,
                  owner_uuid = excluded.owner_uuid,
                  stack_count = excluded.stack_count,
                  enabled = excluded.enabled,
-                 storage_b64 = excluded.storage_b64""",
+                 storage_b64 = excluded.storage_b64,
+                 filter_csv = excluded.filter_csv""",
             block.key.world, block.key.x, block.key.y, block.key.z,
             block.spawnerId, block.ownerUuid.toString(), block.stackCount,
-            if (block.enabled) 1 else 0, serializeStorage(block.storage)
+            if (block.enabled) 1 else 0, serializeStorage(block.storage), filterCsv
         )
     }
 
@@ -516,6 +540,9 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         for (i in 0 until rolls) {
             for (drop in type.drops) {
                 if (Math.random() > drop.chance) continue
+                // Owner-configured filter — drops the player has toggled OFF
+                // are discarded at generation time so they don't waste storage.
+                if (block.filteredOut.contains(drop.material)) continue
                 val item = ItemStack(drop.material, drop.amount)
                 addToStorage(block, item)
             }
@@ -710,20 +737,41 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         return item
     }
 
-    /** Update slot 13 of every open spawner GUI with the latest countdown. */
+    /** Update slot 13 of every open spawner GUI with the latest countdown,
+     *  and refresh storage slots so hopper pulls / fresh drops show up live
+     *  instead of leaving stale items on screen for a few seconds. */
     private fun tickOpenGuis() {
-        if (openMainGuis.isEmpty()) return
+        // Main GUI: refresh the countdown slot
         for ((uuid, key) in openMainGuis.toMap()) {
             val player = Bukkit.getPlayer(uuid) ?: run { openMainGuis.remove(uuid); continue }
             val block = blocks[key] ?: continue
             val type = types[block.spawnerId] ?: continue
-            // Replace slot 13 in the player's open inventory
             val openInv = player.openInventory.topInventory
             if (openInv.size != 27) {
                 openMainGuis.remove(uuid)
                 continue
             }
             openInv.setItem(13, buildCenterItem(block, type))
+        }
+
+        // Storage GUI: re-paint the visible page so hopper extraction and
+        // new drops show up without the player having to close + reopen.
+        for ((uuid, ref) in openStorageGuis.toMap()) {
+            val (key, page) = ref
+            val player = Bukkit.getPlayer(uuid) ?: run { openStorageGuis.remove(uuid); continue }
+            val block = blocks[key] ?: continue
+            val openInv = player.openInventory.topInventory
+            if (openInv.size != 54) {
+                openStorageGuis.remove(uuid)
+                continue
+            }
+            val perPage = 45
+            val startIdx = page * perPage
+            for (i in 0 until perPage) {
+                val storageIdx = startIdx + i
+                val current = if (storageIdx < block.storage.size) block.storage[storageIdx].takeIf { it.amount > 0 } else null
+                openInv.setItem(i, current?.clone())
+            }
         }
     }
 
@@ -833,17 +881,31 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
     private fun openStorageGui(player: Player, block: SpawnerBlock, isOwner: Boolean, page: Int) {
         val type = types[block.spawnerId] ?: return
         val maxSlots = maxStorageSlots(block.stackCount)
-        // 27 content slots per page (3 rows), 9 button slots at the bottom
-        val perPage = 27
+        // 45 content slots per page (5 rows = double-chest sized minus the
+        // button row), 9 button slots at the bottom. Bigger per-page view so
+        // owners aren't paging through 27-slot pages.
+        val perPage = 45
         val totalPages = ((maxSlots - 1) / perPage).coerceAtLeast(0) + 1
         val safePage = page.coerceIn(0, totalPages - 1)
 
-        val title = Component.text("Storage: ", NamedTextColor.GOLD)
-            .append(legacy.deserialize(type.displayName))
-            .append(Component.text(" (Page ${safePage + 1}/$totalPages)", NamedTextColor.GRAY))
+        // Shorter title — the previous "Storage: <Display> (Page X/Y)" overflowed
+        // the chest GUI title area. Strip the spawner displayName's leading
+        // colour codes so we can prefix it cleanly with "Storage —".
+        val displayPlain = legacy.deserialize(type.displayName)
+        val title = Component.text("Storage — ", NamedTextColor.GOLD)
+            .append(displayPlain)
+            .let {
+                if (totalPages > 1) it.append(Component.text(" ${safePage + 1}/$totalPages", NamedTextColor.GRAY))
+                else it
+            }
             .decoration(TextDecoration.ITALIC, false)
 
-        val gui = CustomGui(title, 36) // 27 content + 9 buttons
+        val gui = CustomGui(title, 54) // 45 content + 9 buttons
+
+        // Track this viewer so the per-second tick can refresh stale slots
+        // after a hopper pulls or drop generation runs.
+        openStorageGuis[player.uniqueId] = block.key to safePage
+        gui.onClose = { openStorageGuis.remove(it.uniqueId) }
 
         // Show items on this page
         val startIdx = safePage * perPage
@@ -875,21 +937,45 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        // Bottom row buttons (slots 27-35)
+        // Bottom row buttons (slots 45-53)
         val filler = ItemStack(Material.BLACK_STAINED_GLASS_PANE)
         filler.editMeta { it.displayName(Component.empty()) }
-        for (i in 27 until 36) gui.inventory.setItem(i, filler.clone())
+        for (i in 45 until 54) gui.inventory.setItem(i, filler.clone())
 
-        // Previous page (slot 27)
+        // Previous page (slot 45)
         if (safePage > 0) {
             val prev = ItemStack(Material.ARROW)
             prev.editMeta { meta ->
                 meta.displayName(Component.text("Previous Page", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
             }
-            gui.setItem(27, prev) { p, _ -> openStorageGui(p, block, isOwner, safePage - 1) }
+            gui.setItem(45, prev) { p, _ -> openStorageGui(p, block, isOwner, safePage - 1) }
         }
 
-        // Withdraw All (slot 30) | Back (slot 31) | Sell All (slot 32)
+        // Filter (slot 47) | Withdraw All (slot 48) | Back (slot 49) | Sell All (slot 50)
+        // Filter button — opens the per-spawner drop filter sub-GUI
+        val filterBtn = ItemStack(Material.HOPPER_MINECART)
+        filterBtn.editMeta { meta ->
+            meta.displayName(Component.text("Filter Drops", NamedTextColor.AQUA)
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true))
+            val onCount = type.drops.count { !block.filteredOut.contains(it.material) }
+            meta.lore(listOf(
+                Component.empty(),
+                Component.text("  Choose which drops to keep", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("  Filtered drops are discarded", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("  $onCount/${type.drops.size} drops enabled", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+            ))
+        }
+        gui.setItem(47, filterBtn) { p, _ ->
+            if (!isOwner && !p.hasPermission("joshymc.spawners.admin")) {
+                plugin.commsManager.send(p, Component.text("Only the owner can edit the filter.", NamedTextColor.RED))
+                return@setItem
+            }
+            openFilterGui(p, block, isOwner)
+        }
+
         // Withdraw All
         val withdrawAll = ItemStack(Material.HOPPER)
         withdrawAll.editMeta { meta ->
@@ -902,7 +988,7 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
                 Component.empty()
             ))
         }
-        gui.setItem(30, withdrawAll) { p, _ ->
+        gui.setItem(48, withdrawAll) { p, _ ->
             if (!isOwner && !p.hasPermission("joshymc.spawners.admin")) {
                 plugin.commsManager.send(p, Component.text("Only the owner can withdraw items.", NamedTextColor.RED))
                 return@setItem
@@ -947,7 +1033,7 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
                 Component.empty()
             ))
         }
-        gui.setItem(32, sellAll) { p, _ ->
+        gui.setItem(50, sellAll) { p, _ ->
             if (!isOwner && !p.hasPermission("joshymc.spawners.admin")) {
                 plugin.commsManager.send(p, Component.text("Only the owner can sell items.", NamedTextColor.RED))
                 return@setItem
@@ -973,23 +1059,122 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
             openStorageGui(p, block, isOwner, safePage)
         }
 
-        // Next page (slot 35)
+        // Next page (slot 53)
         if (safePage < totalPages - 1) {
             val next = ItemStack(Material.ARROW)
             next.editMeta { meta ->
                 meta.displayName(Component.text("Next Page", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
             }
-            gui.setItem(35, next) { p, _ -> openStorageGui(p, block, isOwner, safePage + 1) }
+            gui.setItem(53, next) { p, _ -> openStorageGui(p, block, isOwner, safePage + 1) }
         }
 
-        // Back (slot 31 — between Withdraw All and Sell All)
+        // Back (slot 49 — between Withdraw All and Sell All)
         val back = ItemStack(Material.OAK_DOOR)
         back.editMeta { meta ->
             meta.displayName(Component.text("Back", NamedTextColor.WHITE)
                 .decoration(TextDecoration.ITALIC, false)
                 .decoration(TextDecoration.BOLD, true))
         }
-        gui.setItem(31, back) { p, _ -> openMainGui(p, block, isOwner) }
+        gui.setItem(49, back) { p, _ -> openMainGui(p, block, isOwner) }
+
+        plugin.guiManager.open(player, gui)
+    }
+
+    // ── Filter Sub-GUI ──────────────────────────────────────
+
+    /**
+     * Per-spawner drop filter. Each drop type from the spawner's drop table
+     * is shown as a clickable slot — click to toggle whether the spawner
+     * keeps that drop. Filtered drops are discarded at generation time so
+     * they don't waste storage slots.
+     */
+    private fun openFilterGui(player: Player, block: SpawnerBlock, isOwner: Boolean) {
+        val type = types[block.spawnerId] ?: return
+        val title = Component.text("Filter — ", NamedTextColor.AQUA)
+            .append(legacy.deserialize(type.displayName))
+            .decoration(TextDecoration.ITALIC, false)
+
+        val gui = CustomGui(title, 36)
+        val filler = ItemStack(Material.GRAY_STAINED_GLASS_PANE)
+        filler.editMeta { it.displayName(Component.empty()) }
+        for (i in 0 until 36) gui.inventory.setItem(i, filler.clone())
+
+        // Show each drop with its current on/off state
+        for ((index, drop) in type.drops.withIndex()) {
+            if (index >= 27) break
+            val enabled = !block.filteredOut.contains(drop.material)
+            val item = ItemStack(drop.material)
+            item.editMeta { meta ->
+                val name = drop.material.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+                meta.displayName(
+                    Component.text(name, if (enabled) NamedTextColor.GREEN else NamedTextColor.RED)
+                        .decoration(TextDecoration.ITALIC, false)
+                        .decoration(TextDecoration.BOLD, true)
+                )
+                meta.lore(listOf(
+                    Component.empty(),
+                    Component.text(
+                        if (enabled) "  Currently: COLLECTING" else "  Currently: FILTERED OUT",
+                        if (enabled) NamedTextColor.GREEN else NamedTextColor.RED
+                    ).decoration(TextDecoration.ITALIC, false),
+                    Component.text("  Click to toggle", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.empty()
+                ))
+                if (enabled) meta.addEnchant(Enchantment.UNBREAKING, 1, true)
+                meta.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ENCHANTS, org.bukkit.inventory.ItemFlag.HIDE_ATTRIBUTES)
+            }
+            gui.setItem(index, item) { p, _ ->
+                if (!isOwner && !p.hasPermission("joshymc.spawners.admin")) {
+                    plugin.commsManager.send(p, Component.text("Only the owner can edit the filter.", NamedTextColor.RED))
+                    return@setItem
+                }
+                if (block.filteredOut.contains(drop.material)) {
+                    block.filteredOut.remove(drop.material)
+                } else {
+                    block.filteredOut.add(drop.material)
+                }
+                saveBlock(block)
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 1.0f, 1.5f)
+                openFilterGui(p, block, isOwner)
+            }
+        }
+
+        // Bottom row: Enable All | Back | Disable All
+        val enableAll = ItemStack(Material.LIME_DYE)
+        enableAll.editMeta { meta ->
+            meta.displayName(Component.text("Enable All", NamedTextColor.GREEN)
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true))
+        }
+        gui.setItem(30, enableAll) { p, _ ->
+            if (!isOwner && !p.hasPermission("joshymc.spawners.admin")) return@setItem
+            block.filteredOut.clear()
+            saveBlock(block)
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 1.0f, 1.5f)
+            openFilterGui(p, block, isOwner)
+        }
+
+        val back = ItemStack(Material.OAK_DOOR)
+        back.editMeta { meta ->
+            meta.displayName(Component.text("Back", NamedTextColor.WHITE)
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true))
+        }
+        gui.setItem(31, back) { p, _ -> openStorageGui(p, block, isOwner, 0) }
+
+        val disableAll = ItemStack(Material.RED_DYE)
+        disableAll.editMeta { meta ->
+            meta.displayName(Component.text("Disable All", NamedTextColor.RED)
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true))
+        }
+        gui.setItem(32, disableAll) { p, _ ->
+            if (!isOwner && !p.hasPermission("joshymc.spawners.admin")) return@setItem
+            for (drop in type.drops) block.filteredOut.add(drop.material)
+            saveBlock(block)
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 1.0f, 1.5f)
+            openFilterGui(p, block, isOwner)
+        }
 
         plugin.guiManager.open(player, gui)
     }

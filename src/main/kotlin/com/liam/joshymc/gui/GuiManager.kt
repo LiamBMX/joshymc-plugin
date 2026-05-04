@@ -38,21 +38,47 @@ class GuiManager : Listener {
         val player = event.whoClicked as? Player ?: return
         val gui = openGuis[player.uniqueId] ?: return
 
-        // Only handle if this is actually our GUI's inventory
-        if (event.inventory != gui.inventory) return
+        // Only handle if our GUI is open as the top inventory
+        if (event.view.topInventory != gui.inventory) return
 
-        // ALWAYS cancel in custom GUIs to prevent item theft
-        event.isCancelled = true
+        val clickedTop = event.clickedInventory == gui.inventory
 
-        val slot = event.rawSlot
-        if (slot < 0 || slot >= gui.inventory.size) return
+        if (clickedTop) {
+            // Click landed on the GUI itself — always cancel and route to handler.
+            event.isCancelled = true
 
-        // Anti-dupe: enforce click cooldown to prevent rapid-fire exploits
-        val now = System.currentTimeMillis()
-        val last = lastClick.put(player.uniqueId, now) ?: 0L
-        if (now - last < CLICK_COOLDOWN_MS) return
+            val slot = event.rawSlot
+            if (slot < 0 || slot >= gui.inventory.size) return
 
-        gui.clickHandlers[slot]?.invoke(player, event)
+            // Anti-dupe: enforce click cooldown to prevent rapid-fire exploits
+            val now = System.currentTimeMillis()
+            val last = lastClick.put(player.uniqueId, now) ?: 0L
+            if (now - last < CLICK_COOLDOWN_MS) return
+
+            gui.clickHandlers[slot]?.invoke(player, event)
+            return
+        }
+
+        // Click landed on the player's own inventory while the GUI was open.
+        // Allow normal in-inventory shuffling, but block any action that would
+        // shove an item INTO the GUI (shift-click, double-click collect, hotbar
+        // number-key swap that targets a GUI slot, drop-to-empty-cursor moves).
+        if (event.isShiftClick) {
+            event.isCancelled = true
+            return
+        }
+        when (event.click) {
+            org.bukkit.event.inventory.ClickType.DOUBLE_CLICK,
+            org.bukkit.event.inventory.ClickType.NUMBER_KEY,
+            org.bukkit.event.inventory.ClickType.SWAP_OFFHAND -> {
+                // DOUBLE_CLICK can collect-to-cursor pulling items from the GUI;
+                // NUMBER_KEY/SWAP_OFFHAND can swap the hotbar / off-hand item with
+                // a GUI slot. Block all three to be safe.
+                event.isCancelled = true
+                return
+            }
+            else -> { /* ordinary click on own inventory — leave it alone */ }
+        }
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
