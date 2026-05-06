@@ -17,6 +17,18 @@ import org.bukkit.entity.Player
 class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        val sub = args.getOrNull(0)?.lowercase()
+        if (sub == "addblocks" || sub == "setblocks") {
+            if (sender is Player) {
+                if (!sender.hasPermission("joshymc.claim.admin")) {
+                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    return true
+                }
+            }
+            if (sub == "addblocks") handleAddBlocks(sender, args) else handleSetBlocks(sender, args)
+            return true
+        }
+
         if (sender !is Player) { sender.sendMessage("Players only."); return true }
         if (!sender.hasPermission("joshymc.claim")) {
             plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
@@ -27,7 +39,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             handleUnclaim(sender); return true
         }
 
-        when (args.getOrNull(0)?.lowercase()) {
+        when (sub) {
             "wand" -> handleWand(sender)
             "trust" -> handleTrust(sender, args)
             "untrust" -> handleUntrust(sender, args)
@@ -39,37 +51,36 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "info" -> handleInfo(sender)
             "list" -> handleList(sender)
             "blocks" -> handleBlocks(sender, args)
-            "addblocks" -> handleAddBlocks(sender, args)
-            "setblocks" -> handleSetBlocks(sender, args)
             else -> showHelp(sender)
         }
         return true
     }
 
+    private fun reply(sender: CommandSender, message: Component) {
+        if (sender is Player) plugin.commsManager.send(sender, message) else sender.sendMessage(message)
+    }
+
     /**
      * `/claim addblocks <player> <amount>` — admin command to grant claim
      * blocks. Negative amounts work (subtract). Used by ops to reward
-     * players or refund mistakenly-spent blocks.
+     * players or refund mistakenly-spent blocks. Console-runnable so vote
+     * listeners can hand out claim blocks.
      */
-    private fun handleAddBlocks(sender: Player, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.claim.admin")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
-            return
-        }
+    private fun handleAddBlocks(sender: CommandSender, args: Array<out String>) {
         val targetName = args.getOrNull(1)
         val amount = args.getOrNull(2)?.toIntOrNull()
         if (targetName == null || amount == null) {
-            plugin.commsManager.send(sender, Component.text("Usage: /claim addblocks <player> <amount>", NamedTextColor.RED))
+            reply(sender, Component.text("Usage: /claim addblocks <player> <amount>", NamedTextColor.RED))
             return
         }
         val target = Bukkit.getOfflinePlayer(targetName)
         if (!target.hasPlayedBefore() && target.player == null) {
-            plugin.commsManager.send(sender, Component.text("Unknown player: $targetName", NamedTextColor.RED))
+            reply(sender, Component.text("Unknown player: $targetName", NamedTextColor.RED))
             return
         }
         plugin.claimManager.addBlocks(target.uniqueId, amount)
         val newTotal = plugin.claimManager.getTotalBlocks(target.uniqueId)
-        plugin.commsManager.send(
+        reply(
             sender,
             Component.text("Gave ", NamedTextColor.GREEN)
                 .append(Component.text("$amount", NamedTextColor.GOLD))
@@ -88,24 +99,20 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     }
 
     /** `/claim setblocks <player> <amount>` — admin command to overwrite. */
-    private fun handleSetBlocks(sender: Player, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.claim.admin")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
-            return
-        }
+    private fun handleSetBlocks(sender: CommandSender, args: Array<out String>) {
         val targetName = args.getOrNull(1)
         val amount = args.getOrNull(2)?.toIntOrNull()
         if (targetName == null || amount == null || amount < 0) {
-            plugin.commsManager.send(sender, Component.text("Usage: /claim setblocks <player> <amount>", NamedTextColor.RED))
+            reply(sender, Component.text("Usage: /claim setblocks <player> <amount>", NamedTextColor.RED))
             return
         }
         val target = Bukkit.getOfflinePlayer(targetName)
         if (!target.hasPlayedBefore() && target.player == null) {
-            plugin.commsManager.send(sender, Component.text("Unknown player: $targetName", NamedTextColor.RED))
+            reply(sender, Component.text("Unknown player: $targetName", NamedTextColor.RED))
             return
         }
         plugin.claimManager.setBlocks(target.uniqueId, amount)
-        plugin.commsManager.send(
+        reply(
             sender,
             Component.text("Set ${target.name ?: targetName}'s claim block total to ", NamedTextColor.GREEN)
                 .append(Component.text("$amount", NamedTextColor.GOLD))
