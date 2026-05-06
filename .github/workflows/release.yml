@@ -30,7 +30,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build
-        run: ./gradlew build --no-daemon
+        run: ./gradlew build --no-daemon --stacktrace
+
+      - name: Inspect build outputs
+        if: always()
+        run: |
+          echo "--- jar/ ---"
+          ls -la jar/ 2>/dev/null || echo "(no jar/ dir)"
+          echo "--- build/libs/ ---"
+          ls -la build/libs/ 2>/dev/null || echo "(no build/libs dir)"
 
       - name: Resolve version
         id: ver
@@ -51,14 +59,20 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.tag != ''
         run: |
           mkdir -p release
-          cp build/libs/joshymc-1.0-SNAPSHOT-all.jar "release/joshymc-${{ steps.ver.outputs.version }}.jar"
+          # build.gradle.kts redirects shadowJar output to top-level jar/ dir
+          SRC=$(ls jar/joshymc-*-all.jar 2>/dev/null | head -n1)
+          if [ -z "$SRC" ]; then
+            echo "::error::No shaded JAR found under jar/"
+            exit 1
+          fi
+          cp "$SRC" "release/joshymc-${{ steps.ver.outputs.version }}.jar"
           ls -la release/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: joshymc-jar
-          path: build/libs/joshymc-1.0-SNAPSHOT-all.jar
+          path: jar/joshymc-*-all.jar
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.tag != ''
