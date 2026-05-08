@@ -13,7 +13,9 @@ import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityTargetEvent
+import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerTeleportEvent
 
 /**
  * Per-player mob visibility toggle. The mob is still ONE server-side entity
@@ -70,6 +72,36 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
         // Defer one tick — settings cache is loaded lazily on first read,
         // and the player's scoreboard / chunk visibility setup needs to
         // settle before we start sending entity-hide packets.
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            if (player.isOnline) applyTo(plugin, player, visible(player))
+        }, 5L)
+    }
+
+    /**
+     * Re-apply hide state when crossing worlds. Without this, teleporting
+     * from spawn → overworld leaves new-world mobs visible (their hide
+     * packets never went out), even though damage/targeting is still
+     * correctly suppressed by the handlers below — which is exactly the
+     * "visual bug" Joshy reported.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onWorldChange(event: PlayerChangedWorldEvent) {
+        val player = event.player
+        // Defer a couple ticks so the new world's chunks/entities are
+        // tracked client-side before we fire hide packets.
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            if (player.isOnline) applyTo(plugin, player, visible(player))
+        }, 5L)
+    }
+
+    /**
+     * Same-world long-distance teleports (e.g. /tpa, /warp inside the
+     * overworld) can move the player into chunks that weren't tracked
+     * yet. Re-apply on every teleport — applyTo is idempotent.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onTeleport(event: PlayerTeleportEvent) {
+        val player = event.player
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             if (player.isOnline) applyTo(plugin, player, visible(player))
         }, 5L)

@@ -301,13 +301,20 @@ class RankManager(private val plugin: Joshymc) : Listener {
         val name = Bukkit.getOfflinePlayer(uuid).name ?: return
         // Use LP's console command surface — avoids a hard compile-time dep and
         // sidesteps the full LP UserManager/NodeBuilder reflection dance.
-        val cmd = if (rankId == null) {
-            "lp user $name parent set default"
-        } else {
-            "lp user $name parent set $rankId"
-        }
+        //
+        // Per Joshy's request, players keep the `default` LuckPerms group even
+        // after being given a rank, so default-group permissions still apply.
+        // We `parent set` the new rank to clear any stale parent, then
+        // `parent add default` so the player inherits both.
         try {
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd)
+            if (rankId == null) {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent set default")
+            } else {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent set $rankId")
+                if (rankId != "default") {
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent add default")
+                }
+            }
         } catch (e: Exception) {
             plugin.logger.warning("[Ranks] LuckPerms sync failed for $name ($rankId): ${e.message}")
         }

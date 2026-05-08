@@ -132,8 +132,8 @@ class LagCleanerManager(private val plugin: Joshymc) {
                         entity.remove()
                         itemCount++
                     }
-                    // Clear hostile mobs (except bosses)
-                    entity is Monster && !isProtected(entity) -> {
+                    // Clear hostile + passive mobs (except protected ones)
+                    (entity is Monster || entity is Animals) && !isProtected(entity) -> {
                         entity.remove()
                         mobCount++
                     }
@@ -212,12 +212,12 @@ class LagCleanerManager(private val plugin: Joshymc) {
     }
 
     /**
-     * Entities that should never be cleared.
+     * Per Joshy's request: keep nametagged, tamed, and villagers.
+     * Plus an unavoidable safety set: bosses, plugin NPCs/entities, leashed,
+     * and ArmorStands (not really mobs).
      */
     private fun isProtected(entity: org.bukkit.entity.Entity): Boolean {
-        // Named mobs are always protected
         if (entity.customName() != null) return true
-        // Entities with plugin tags are protected
         if (entity.scoreboardTags.any { it.startsWith("joshymc") }) return true
 
         return when (entity) {
@@ -226,13 +226,8 @@ class LagCleanerManager(private val plugin: Joshymc) {
             is EnderDragon -> true
             is Wither -> true
             is ArmorStand -> true
-            is org.bukkit.entity.IronGolem -> true
-            is org.bukkit.entity.Allay -> true
-            is org.bukkit.entity.Bee -> true
             is org.bukkit.entity.Tameable -> (entity as org.bukkit.entity.Tameable).isTamed
-            else -> {
-                (entity is org.bukkit.entity.LivingEntity && entity.isLeashed)
-            }
+            else -> entity is org.bukkit.entity.LivingEntity && entity.isLeashed
         }
     }
 

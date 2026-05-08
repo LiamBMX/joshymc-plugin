@@ -211,6 +211,14 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 // ══════════════════════════════════════════════════════════
 
 class HealCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
+
+    companion object {
+        // Per-player cooldown for self-heal. Staff who use /heal <other> are
+        // not rate-limited, and `joshymc.heal.bypass` skips the cooldown.
+        val cooldowns = ConcurrentHashMap<UUID, Long>()
+        const val COOLDOWN_MS = 3 * 60 * 1000L
+    }
+
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.heal")) {
             sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
@@ -227,6 +235,21 @@ class HealCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 Component.text("Can't heal a player while they're in combat.", NamedTextColor.RED)
             )
             return true
+        }
+
+        // Cooldown — only when player heals themselves.
+        if (sender is Player && sender == target && !sender.hasPermission("joshymc.heal.bypass")) {
+            val now = System.currentTimeMillis()
+            val last = cooldowns[sender.uniqueId] ?: 0L
+            val remaining = (last + COOLDOWN_MS) - now
+            if (remaining > 0) {
+                plugin.commsManager.send(
+                    sender,
+                    Component.text("/heal is on cooldown — ${formatRemaining(remaining)} left.", NamedTextColor.RED)
+                )
+                return true
+            }
+            cooldowns[sender.uniqueId] = now
         }
 
         val maxHealth = target.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH)?.value ?: 20.0
@@ -265,6 +288,12 @@ class HealCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 // ══════════════════════════════════════════════════════════
 
 class FeedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
+
+    companion object {
+        val cooldowns = ConcurrentHashMap<UUID, Long>()
+        const val COOLDOWN_MS = 3 * 60 * 1000L
+    }
+
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.feed")) {
             sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
@@ -272,6 +301,21 @@ class FeedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         val target = resolveTarget(sender, args) ?: return true
+
+        if (sender is Player && sender == target && !sender.hasPermission("joshymc.feed.bypass")) {
+            val now = System.currentTimeMillis()
+            val last = cooldowns[sender.uniqueId] ?: 0L
+            val remaining = (last + COOLDOWN_MS) - now
+            if (remaining > 0) {
+                plugin.commsManager.send(
+                    sender,
+                    Component.text("/feed is on cooldown — ${formatRemaining(remaining)} left.", NamedTextColor.RED)
+                )
+                return true
+            }
+            cooldowns[sender.uniqueId] = now
+        }
+
         target.foodLevel = 20
         target.saturation = 20f
 
@@ -962,6 +1006,16 @@ class TrashCommand(private val plugin: Joshymc) : CommandExecutor, Listener {
         // Items are already gone (virtual inventory)
         player.playSound(player.location, Sound.BLOCK_LAVA_EXTINGUISH, 0.5f, 1.2f)
         plugin.commsManager.send(player, Component.text("Trash emptied.", NamedTextColor.GRAY))
+    }
+}
+
+private fun formatRemaining(ms: Long): String {
+    val totalSeconds = (ms + 999) / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return when {
+        minutes > 0 -> "${minutes}m ${seconds}s"
+        else -> "${seconds}s"
     }
 }
 

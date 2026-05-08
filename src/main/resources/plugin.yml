@@ -666,8 +666,14 @@ permissions:
   joshymc.heal:
     description: Heal players
     default: op
+  joshymc.heal.bypass:
+    description: Bypass /heal cooldown
+    default: op
   joshymc.feed:
     description: Feed players
+    default: op
+  joshymc.feed.bypass:
+    description: Bypass /feed cooldown
     default: op
   joshymc.god:
     description: Toggle god mode
