@@ -466,18 +466,18 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
         if (shop.buyPrice != null) {
             val buyButton = ItemStack(Material.LIME_STAINED_GLASS_PANE)
             buyButton.editMeta { meta ->
-                meta.displayName(Component.text("Buy 1x $itemName", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, true))
+                meta.displayName(Component.text("Buy $itemName", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, true))
                 meta.lore(listOf(
                     Component.empty(),
-                    Component.text("  Price: ${plugin.economyManager.format(shop.buyPrice)}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.text("  Price: ${plugin.economyManager.format(shop.buyPrice)} each", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.text("  Stock: $stock", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
                     Component.empty(),
-                    Component.text("  Click to buy", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)
+                    Component.text("  Click to choose quantity", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)
                 ))
             }
 
             gui.setItem(11, buyButton) { buyer, _ ->
-                handleBuy(buyer, shop)
-                buyer.closeInventory()
+                openBuyQuantityGui(buyer, shop)
             }
         }
 
@@ -500,6 +500,123 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             }
         }
 
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    private fun openBuyQuantityGui(player: Player, shop: ShopData) {
+        val price = shop.buyPrice ?: return
+        val template = getShopItemTemplate(shop)
+        val itemName = getShopDisplayName(shop)
+        val stock = countChestStock(shop)
+
+        if (stock < 1) {
+            plugin.commsManager.send(player, Component.text("This shop is out of stock.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
+            player.closeInventory()
+            return
+        }
+
+        val maxAmount = stock.coerceAtMost(64)
+        var amount = 1
+
+        val gui = CustomGui(
+            Component.text("Buy $itemName", NamedTextColor.DARK_GREEN)
+                .decoration(TextDecoration.BOLD, true)
+                .decoration(TextDecoration.ITALIC, false),
+            27
+        )
+
+        for (i in 0 until 27) gui.inventory.setItem(i, BORDER.clone())
+
+        fun renderDynamic() {
+            val total = price * amount
+            val itemDisplay = template.clone().also { it.amount = amount.coerceIn(1, template.maxStackSize) }
+            itemDisplay.editMeta { meta ->
+                meta.displayName(
+                    Component.text(itemName, NamedTextColor.WHITE)
+                        .decoration(TextDecoration.ITALIC, false)
+                        .decoration(TextDecoration.BOLD, true)
+                )
+                meta.lore(listOf(
+                    Component.empty(),
+                    Component.text("Buying: ", NamedTextColor.GRAY)
+                        .append(Component.text("$amount", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true))
+                        .decoration(TextDecoration.ITALIC, false),
+                    Component.text("Unit price: ", NamedTextColor.GRAY)
+                        .append(Component.text(plugin.economyManager.format(price), NamedTextColor.GOLD))
+                        .decoration(TextDecoration.ITALIC, false),
+                    Component.text("Total: ", NamedTextColor.GRAY)
+                        .append(Component.text(plugin.economyManager.format(total), NamedTextColor.GOLD))
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false),
+                    Component.empty(),
+                ))
+            }
+            gui.inventory.setItem(13, itemDisplay)
+
+            val confirm = ItemStack(Material.LIME_CONCRETE)
+            confirm.editMeta { meta ->
+                meta.displayName(
+                    Component.text("Confirm Purchase", NamedTextColor.GREEN)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                meta.lore(listOf(
+                    Component.text("Buy ", NamedTextColor.GRAY)
+                        .append(Component.text("$amount", NamedTextColor.WHITE))
+                        .append(Component.text(" for ", NamedTextColor.GRAY))
+                        .append(Component.text(plugin.economyManager.format(price * amount), NamedTextColor.GOLD))
+                        .decoration(TextDecoration.ITALIC, false),
+                ))
+            }
+            gui.inventory.setItem(22, confirm)
+        }
+
+        fun decBtn(delta: Int): ItemStack {
+            val item = ItemStack(Material.RED_STAINED_GLASS_PANE)
+            item.editMeta { meta ->
+                meta.displayName(
+                    Component.text("$delta", NamedTextColor.RED)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+            }
+            return item
+        }
+
+        fun incBtn(delta: Int): ItemStack {
+            val item = ItemStack(Material.LIME_STAINED_GLASS_PANE)
+            item.editMeta { meta ->
+                meta.displayName(
+                    Component.text("+$delta", NamedTextColor.GREEN)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+            }
+            return item
+        }
+
+        for ((slot, delta) in listOf(10 to -16, 11 to -8, 12 to -1)) {
+            gui.setItem(slot, decBtn(delta)) { p, _ ->
+                amount = (amount + delta).coerceIn(1, maxAmount)
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.4f, 0.8f)
+                renderDynamic()
+            }
+        }
+        for ((slot, delta) in listOf(14 to 1, 15 to 8, 16 to 16)) {
+            gui.setItem(slot, incBtn(delta)) { p, _ ->
+                amount = (amount + delta).coerceIn(1, maxAmount)
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.4f, 1.4f)
+                renderDynamic()
+            }
+        }
+        gui.setItem(22, ItemStack(Material.LIME_CONCRETE)) { p, _ ->
+            p.closeInventory()
+            handleBuyMany(p, shop, amount.coerceIn(1, maxAmount))
+        }
+
+        renderDynamic()
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
@@ -574,6 +691,77 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             plugin.commsManager.send(
                 owner,
                 Component.text("${buyer.name} bought 1x $itemName from your shop for ${plugin.economyManager.format(price)}.", NamedTextColor.GREEN),
+                CommunicationsManager.Category.ECONOMY
+            )
+        }
+    }
+
+    private fun handleBuyMany(buyer: Player, shop: ShopData, amount: Int) {
+        val price = shop.buyPrice ?: return
+        val totalCost = price * amount
+        val template = getShopItemTemplate(shop)
+        val itemName = getShopDisplayName(shop)
+
+        if (!plugin.economyManager.has(buyer.uniqueId, totalCost)) {
+            plugin.commsManager.send(buyer, Component.text("You need ${plugin.economyManager.format(totalCost)} to buy ${amount}x $itemName.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            buyer.playSound(buyer.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
+            return
+        }
+
+        val chestInv = getChestInventory(shop)
+        if (chestInv == null) {
+            plugin.commsManager.send(buyer, Component.text("Shop chest not found.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return
+        }
+
+        val stock = countItemsByTemplate(chestInv, template)
+        if (stock < amount) {
+            plugin.commsManager.send(
+                buyer,
+                if (stock == 0) Component.text("This shop is out of stock.", NamedTextColor.RED)
+                else Component.text("Not enough stock — only $stock available.", NamedTextColor.RED),
+                CommunicationsManager.Category.ECONOMY
+            )
+            buyer.playSound(buyer.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
+            return
+        }
+
+        // Anti-dupe: remove items from chest first, verify removal
+        val beforeCount = countItemsByTemplate(chestInv, template)
+        removeItemByTemplate(chestInv, template, amount)
+        val afterCount = countItemsByTemplate(chestInv, template)
+        val removed = beforeCount - afterCount
+
+        if (removed < amount) {
+            // Partial or failed removal — roll back what we took and abort
+            if (removed > 0) chestInv.addItem(template.clone().also { it.amount = removed })
+            plugin.commsManager.send(buyer, Component.text("Not enough stock — purchase cancelled.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            buyer.playSound(buyer.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
+            return
+        }
+
+        plugin.databaseManager.transaction {
+            plugin.economyManager.withdraw(buyer.uniqueId, totalCost)
+            plugin.economyManager.deposit(shop.ownerUuid, totalCost)
+        }
+
+        val overflow = buyer.inventory.addItem(template.clone().also { it.amount = amount })
+        for (leftover in overflow.values) {
+            buyer.world.dropItemNaturally(buyer.location, leftover)
+        }
+
+        buyer.playSound(buyer.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f)
+        plugin.commsManager.send(
+            buyer,
+            Component.text("Bought ${amount}x $itemName for ${plugin.economyManager.format(totalCost)}.", NamedTextColor.GREEN),
+            CommunicationsManager.Category.ECONOMY
+        )
+
+        val owner = Bukkit.getPlayer(shop.ownerUuid)
+        if (owner != null) {
+            plugin.commsManager.send(
+                owner,
+                Component.text("${buyer.name} bought ${amount}x $itemName from your shop for ${plugin.economyManager.format(totalCost)}.", NamedTextColor.GREEN),
                 CommunicationsManager.Category.ECONOMY
             )
         }
