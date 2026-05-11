@@ -1,9 +1,4 @@
-name: Discord release notification
-
-# Fires on every GitHub release. Posts a rich-embed message to the Discord
-# webhook configured in the DISCORD_WEBHOOK secret, with the release notes,
-# the JAR download link, and a clickable link to the release page. Acts as
-# the project changelog: every feature/fix that ships shows up here.
+name: Discord changelog
 
 on:
   release:
@@ -11,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to (re)notify Discord about (e.g. v1.0.52)'
+        description: Tag to notify Discord about
         required: true
         type: string
 
@@ -38,9 +33,6 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           gh release view "$TAG" --repo "$REPO" \
             --json name,body,url,publishedAt,author,assets > release.json
-          jq -r '.name // ""'        release.json | head -c 200 ; echo
-          jq -r '.url // ""'         release.json
-          jq -r '.publishedAt // ""' release.json
 
       - name: Build and send Discord embed
         env:
@@ -55,18 +47,12 @@ jobs:
           RELEASE_BODY=$(jq -r '.body // ""' release.json)
           RELEASE_PUBLISHED=$(jq -r '.publishedAt // ""' release.json)
           RELEASE_AUTHOR=$(jq -r '.author.login // "github-actions"' release.json)
-          RELEASE_AUTHOR_AVATAR=$(jq -r '.author.avatarUrl // ""' release.json)
 
-          # Display title: prefer the release name (often "v1.0.X — short title"),
-          # fall back to the tag if name is empty.
           TITLE_DISPLAY="${RELEASE_NAME:-$RELEASE_TAG}"
 
-          # Locate the JAR asset and grab the public download URL (friendly link,
-          # not API). gh's `assets[].url` is already the browser-download form.
           JAR_NAME=$(jq -r '[.assets[] | select(.name | endswith(".jar"))][0].name // ""' release.json)
           JAR_URL=$(jq -r '[.assets[] | select(.name | endswith(".jar"))][0].url // ""' release.json)
 
-          # Discord embed description limit is 4096 chars; we leave a small margin.
           DESCRIPTION=$(printf '%s' "$RELEASE_BODY" | head -c 3800)
           if [ "${#RELEASE_BODY}" -gt 3800 ]; then
             DESCRIPTION="${DESCRIPTION}
@@ -74,8 +60,6 @@ jobs:
 …[truncated — see full release on GitHub](${RELEASE_URL})"
           fi
 
-          # Build the payload via jq so escaping is bulletproof.
-          # Color 0x2ECC71 (emerald green, decimal 3066993).
           if [ -n "$JAR_NAME" ] && [ -n "$JAR_URL" ]; then
             DOWNLOAD_FIELD="[\`$JAR_NAME\`]($JAR_URL)"
           else
@@ -88,7 +72,6 @@ jobs:
             --arg url         "$RELEASE_URL" \
             --arg download    "$DOWNLOAD_FIELD" \
             --arg released_by "$RELEASE_AUTHOR" \
-            --arg avatar      "$RELEASE_AUTHOR_AVATAR" \
             --arg ts          "$RELEASE_PUBLISHED" \
             --arg tag         "$RELEASE_TAG" \
             --arg repo        "$REPO" \
@@ -100,25 +83,16 @@ jobs:
                 url: $url,
                 color: 3066993,
                 fields: [
-                  { name: "Download",   value: $download,                                                inline: true },
-                  { name: "Tag",        value: ("[" + $tag + "](https://github.com/" + $repo + "/releases/tag/" + $tag + ")"), inline: true },
-                  { name: "Released by", value: $released_by,                                            inline: true }
+                  { name: "Download",    value: $download,                                                                              inline: true },
+                  { name: "Tag",         value: ("[" + $tag + "](https://github.com/" + $repo + "/releases/tag/" + $tag + ")"),         inline: true },
+                  { name: "Released by", value: $released_by,                                                                           inline: true }
                 ],
-                author: {
-                  name: "JoshyMC Plugin",
-                  url: ("https://github.com/" + $repo),
-                  icon_url: $avatar
-                },
-                footer: { text: "github.com/\($repo)" },
+                author: { name: "JoshyMC Plugin", url: ("https://github.com/" + $repo) },
+                footer: { text: ("github.com/" + $repo) },
                 timestamp: $ts
               }]
             }' > payload.json
 
-          # Discord allows up to 6000 chars total across all embed text fields.
-          # We're well under, but log size for sanity.
-          echo "Payload bytes: $(wc -c < payload.json)"
-
-          # Post. Discord returns 204 on success. Fail the step on any 4xx/5xx.
           HTTP_CODE=$(curl -sS -o response.txt -w "%{http_code}" \
             -X POST -H "Content-Type: application/json" \
             --data @payload.json \
