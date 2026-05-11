@@ -1,12 +1,15 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.manager.ClaimManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.Material
+import org.bukkit.Sound
+import org.bukkit.block.BlockFace
 import org.bukkit.command.Command
 import org.bukkit.inventory.ItemStack
 import org.bukkit.command.CommandExecutor
@@ -51,6 +54,8 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "info" -> handleInfo(sender)
             "list" -> handleList(sender)
             "blocks" -> handleBlocks(sender, args)
+            "expand" -> handleExpand(sender, args)
+            "shrink" -> handleShrink(sender, args)
             else -> showHelp(sender)
         }
         return true
@@ -285,6 +290,83 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         plugin.commsManager.send(player, Component.text("Gave $amount claim blocks to $targetName.", NamedTextColor.GREEN))
     }
 
+    /** Parses `[direction] <amount>` from args starting at startIdx.
+     *  Direction defaults to player's facing if omitted. */
+    private fun parseDirectionAmount(player: Player, args: Array<out String>, startIdx: Int): Pair<ClaimManager.ClaimDirection?, Int?> {
+        val a = args.drop(startIdx)
+        return when {
+            a.isEmpty() -> null to null
+            a.size == 1 -> {
+                val amount = a[0].toIntOrNull() ?: return null to null
+                val face = player.facing
+                val dir = when (face) {
+                    BlockFace.NORTH -> ClaimManager.ClaimDirection.NORTH
+                    BlockFace.SOUTH -> ClaimManager.ClaimDirection.SOUTH
+                    BlockFace.EAST  -> ClaimManager.ClaimDirection.EAST
+                    BlockFace.WEST  -> ClaimManager.ClaimDirection.WEST
+                    else -> null
+                }
+                dir to amount
+            }
+            else -> {
+                val dir = ClaimManager.ClaimDirection.from(a[0]) ?: return null to null
+                val amount = a[1].toIntOrNull() ?: return null to null
+                dir to amount
+            }
+        }
+    }
+
+    private fun handleExpand(player: Player, args: Array<out String>) {
+        val claim = plugin.claimManager.getClaimAt(player.location)
+        if (claim == null) { plugin.commsManager.send(player, Component.text("You're not standing in a claim.", NamedTextColor.RED)); return }
+        if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) {
+            plugin.commsManager.send(player, Component.text("You don't own this claim.", NamedTextColor.RED)); return
+        }
+        val (direction, amount) = parseDirectionAmount(player, args, 1)
+        if (direction == null || amount == null) {
+            plugin.commsManager.send(player, Component.text("Usage: /claim expand [north|south|east|west] <amount>", NamedTextColor.RED)); return
+        }
+        when (val result = plugin.claimManager.expandClaim(player, claim, direction, amount)) {
+            is ClaimManager.ClaimResizeResult.Success -> {
+                player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.2f)
+                plugin.commsManager.send(player,
+                    Component.text("Claim expanded ${direction.name.lowercase()} by $amount block${if (amount == 1) "" else "s"}. ", NamedTextColor.GREEN)
+                        .append(Component.text("(${result.blocksDelta} used, ${plugin.claimManager.getAvailableBlocks(player.uniqueId)} remaining)", NamedTextColor.GRAY))
+                )
+            }
+            is ClaimManager.ClaimResizeResult.Failure -> {
+                player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
+                plugin.commsManager.send(player, Component.text(result.reason, NamedTextColor.RED))
+            }
+        }
+    }
+
+    private fun handleShrink(player: Player, args: Array<out String>) {
+        val claim = plugin.claimManager.getClaimAt(player.location)
+        if (claim == null) { plugin.commsManager.send(player, Component.text("You're not standing in a claim.", NamedTextColor.RED)); return }
+        if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) {
+            plugin.commsManager.send(player, Component.text("You don't own this claim.", NamedTextColor.RED)); return
+        }
+        val (direction, amount) = parseDirectionAmount(player, args, 1)
+        if (direction == null || amount == null) {
+            plugin.commsManager.send(player, Component.text("Usage: /claim shrink [north|south|east|west] <amount>", NamedTextColor.RED)); return
+        }
+        when (val result = plugin.claimManager.shrinkClaim(player, claim, direction, amount)) {
+            is ClaimManager.ClaimResizeResult.Success -> {
+                val refund = -result.blocksDelta
+                player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.0f)
+                plugin.commsManager.send(player,
+                    Component.text("Claim shrunk from the ${direction.name.lowercase()} by $amount block${if (amount == 1) "" else "s"}. ", NamedTextColor.GREEN)
+                        .append(Component.text("($refund block${if (refund == 1) "" else "s"} freed, ${plugin.claimManager.getAvailableBlocks(player.uniqueId)} available)", NamedTextColor.GRAY))
+                )
+            }
+            is ClaimManager.ClaimResizeResult.Failure -> {
+                player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
+                plugin.commsManager.send(player, Component.text(result.reason, NamedTextColor.RED))
+            }
+        }
+    }
+
     private fun showHelp(player: Player) {
         val gold = TextColor.color(0xFFD700)
         val msg = Component.text()
@@ -301,6 +383,8 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             .append(Component.text("  /claim info", NamedTextColor.YELLOW)).append(Component.text(" — claim info\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim list", NamedTextColor.YELLOW)).append(Component.text(" — your claims\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim blocks", NamedTextColor.YELLOW)).append(Component.text(" — claim block balance\n", NamedTextColor.GRAY))
+            .append(Component.text("  /claim expand [dir] <amount>", NamedTextColor.YELLOW)).append(Component.text(" — expand claim\n", NamedTextColor.GRAY))
+            .append(Component.text("  /claim shrink [dir] <amount>", NamedTextColor.YELLOW)).append(Component.text(" — shrink claim edge\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim team", NamedTextColor.YELLOW)).append(Component.text(" — share with team\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim personal", NamedTextColor.YELLOW)).append(Component.text(" — un-share\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim map", NamedTextColor.YELLOW)).append(Component.text(" — nearby claims\n", NamedTextColor.GRAY))
@@ -312,15 +396,21 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (alias.equals("unclaim", true)) return emptyList()
+        val directions = listOf("north", "south", "east", "west")
         return when (args.size) {
-            1 -> listOf("wand", "trust", "untrust", "trusted", "show", "team", "personal", "map", "info", "list", "blocks", "help").filter { it.startsWith(args[0].lowercase()) }
+            1 -> listOf("wand", "trust", "untrust", "trusted", "show", "team", "personal", "map", "info", "list", "blocks", "expand", "shrink", "help").filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
                 "blocks" -> listOf("give").filter { it.startsWith(args[1].lowercase()) }
                 "trust", "untrust" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], true) }
+                "expand", "shrink" -> directions.filter { it.startsWith(args[1].lowercase()) }
                 else -> emptyList()
             }
-            3 -> if (args[0].equals("blocks", true) && args[1].equals("give", true))
-                Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[2], true) } else emptyList()
+            3 -> when {
+                args[0].equals("blocks", true) && args[1].equals("give", true) ->
+                    Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[2], true) }
+                args[0].lowercase() in listOf("expand", "shrink") && args[1].lowercase() in directions -> emptyList()
+                else -> emptyList()
+            }
             else -> emptyList()
         }
     }

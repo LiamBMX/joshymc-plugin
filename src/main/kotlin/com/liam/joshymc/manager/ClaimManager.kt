@@ -502,6 +502,83 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         data class Failure(val reason: String) : ClaimCreateResult()
     }
 
+    sealed class ClaimResizeResult {
+        data class Success(val claim: Claim, val blocksDelta: Int) : ClaimResizeResult()
+        data class Failure(val reason: String) : ClaimResizeResult()
+    }
+
+    enum class ClaimDirection {
+        NORTH, SOUTH, EAST, WEST;
+        companion object {
+            fun from(s: String): ClaimDirection? = entries.find { it.name.equals(s, ignoreCase = true) }
+                ?: when (s.uppercase()) { "N" -> NORTH; "S" -> SOUTH; "E" -> EAST; "W" -> WEST; else -> null }
+        }
+    }
+
+    fun expandClaim(player: Player, claim: Claim, direction: ClaimDirection, amount: Int): ClaimResizeResult {
+        if (!canManageClaim(player, claim)) return ClaimResizeResult.Failure("You don't own this claim.")
+        if (amount <= 0) return ClaimResizeResult.Failure("Amount must be positive.")
+
+        val newMinX = if (direction == ClaimDirection.WEST) claim.minX - amount else claim.minX
+        val newMaxX = if (direction == ClaimDirection.EAST) claim.maxX + amount else claim.maxX
+        val newMinZ = if (direction == ClaimDirection.NORTH) claim.minZ - amount else claim.minZ
+        val newMaxZ = if (direction == ClaimDirection.SOUTH) claim.maxZ + amount else claim.maxZ
+        val newArea = (newMaxX - newMinX + 1) * (newMaxZ - newMinZ + 1)
+        val blockCost = newArea - claim.area
+
+        if (newArea > 10000) return ClaimResizeResult.Failure("Claim too large (max 10,000 blocks per claim).")
+
+        val available = getAvailableBlocks(player.uniqueId)
+        if (blockCost > available) return ClaimResizeResult.Failure("Not enough claim blocks. Need $blockCost more, have $available.")
+
+        for (existing in claims) {
+            if (existing.id == claim.id || existing.world != claim.world) continue
+            if (overlaps(newMinX, newMinZ, newMaxX, newMaxZ, existing.minX, existing.minZ, existing.maxX, existing.maxZ))
+                return ClaimResizeResult.Failure("Expansion overlaps with ${Bukkit.getOfflinePlayer(existing.ownerUuid).name ?: "someone"}'s claim.")
+        }
+
+        plugin.databaseManager.execute(
+            "UPDATE claims_v2 SET x1 = ?, z1 = ?, x2 = ?, z2 = ? WHERE id = ?",
+            newMinX, newMinZ, newMaxX, newMaxZ, claim.id
+        )
+        val newClaim = claim.copy(x1 = newMinX, z1 = newMinZ, x2 = newMaxX, z2 = newMaxZ)
+        val idx = claims.indexOf(claim); if (idx >= 0) claims[idx] = newClaim
+        return ClaimResizeResult.Success(newClaim, blockCost)
+    }
+
+    fun shrinkClaim(player: Player, claim: Claim, direction: ClaimDirection, amount: Int): ClaimResizeResult {
+        if (!canManageClaim(player, claim)) return ClaimResizeResult.Failure("You don't own this claim.")
+        if (amount <= 0) return ClaimResizeResult.Failure("Amount must be positive.")
+
+        val newMinX = if (direction == ClaimDirection.WEST) claim.minX + amount else claim.minX
+        val newMaxX = if (direction == ClaimDirection.EAST) claim.maxX - amount else claim.maxX
+        val newMinZ = if (direction == ClaimDirection.NORTH) claim.minZ + amount else claim.minZ
+        val newMaxZ = if (direction == ClaimDirection.SOUTH) claim.maxZ - amount else claim.maxZ
+
+        if (newMinX > newMaxX || newMinZ > newMaxZ)
+            return ClaimResizeResult.Failure("Can't shrink by that much — claim would collapse.")
+        val newArea = (newMaxX - newMinX + 1) * (newMaxZ - newMinZ + 1)
+        if (newArea < 4) return ClaimResizeResult.Failure("Claim must remain at least 2×2 (4 blocks).")
+
+        val subsToRemove = getSubclaimsInClaim(claim).filter { sc ->
+            min(sc.x1, sc.x2) < newMinX || max(sc.x1, sc.x2) > newMaxX
+                    || min(sc.z1, sc.z2) < newMinZ || max(sc.z1, sc.z2) > newMaxZ
+        }
+        for (sc in subsToRemove) {
+            plugin.databaseManager.execute("DELETE FROM subclaim_access WHERE subclaim_id = ?", sc.id)
+            plugin.databaseManager.execute("DELETE FROM subclaims WHERE id = ?", sc.id)
+        }
+        subclaims.removeAll(subsToRemove.toSet())
+
+        plugin.databaseManager.execute(
+            "UPDATE claims_v2 SET x1 = ?, z1 = ?, x2 = ?, z2 = ? WHERE id = ?",
+            newMinX, newMinZ, newMaxX, newMaxZ, claim.id
+        )
+        val newClaim = claim.copy(x1 = newMinX, z1 = newMinZ, x2 = newMaxX, z2 = newMaxZ)
+        val idx = claims.indexOf(claim); if (idx >= 0) claims[idx] = newClaim
+        return ClaimResizeResult.Success(newClaim, -(claim.area - newArea))
+    }
+
     private fun overlaps(ax1: Int, az1: Int, ax2: Int, az2: Int, bx1: Int, bz1: Int, bx2: Int, bz2: Int): Boolean {
         return ax1 <= bx2 && ax2 >= bx1 && az1 <= bz2 && az2 >= bz1
     }
