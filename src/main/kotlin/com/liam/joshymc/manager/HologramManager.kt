@@ -229,7 +229,24 @@ class HologramManager(private val plugin: Joshymc) {
             lines.joinToString("\n"), id
         )
 
-        // Re-spawn with updated lines
+        val existing = entities[id]
+        if (existing != null && existing.size == lines.size) {
+            // Fast path: same line count — update text in-place, no entity churn.
+            // This is the common case for leaderboard refreshes.
+            var allAlive = true
+            for ((i, uuid) in existing.withIndex()) {
+                val display = Bukkit.getEntity(uuid) as? TextDisplay
+                if (display != null) {
+                    display.text(legacySerializer.deserialize(lines[i]))
+                } else {
+                    allAlive = false
+                    break
+                }
+            }
+            if (allAlive) return
+        }
+
+        // Full respawn: line count changed or an entity went missing
         val location = getLocation(id) ?: return
         despawnEntities(id)
         spawnEntities(id, location, lines)
@@ -250,6 +267,18 @@ class HologramManager(private val plugin: Joshymc) {
     }
 
     private fun loadAll() {
+        // Remove any hologram entities that survived from a prior run (persistent=true
+        // before this fix, or a crash before despawn). Without this, loadAll spawns
+        // duplicates on top of the still-loaded entities.
+        for (world in Bukkit.getWorlds()) {
+            for (entity in world.entities.toList()) {
+                if (entity is TextDisplay && entity.scoreboardTags.any { it.startsWith("joshymc_holo_") }) {
+                    entity.remove()
+                }
+            }
+        }
+        entities.clear()
+
         data class HoloRow(val id: String, val location: Location, val lines: List<String>, val style: HoloStyle)
 
         val holograms = plugin.databaseManager.query<HoloRow?>(
@@ -297,8 +326,9 @@ class HologramManager(private val plugin: Joshymc) {
                 entity.isShadowed = true
                 entity.addScoreboardTag("joshymc_holo_$id")
 
-                // Persist across chunk unloads and server restarts.
-                entity.isPersistent = true
+                // Don't persist — the DB is the source of truth; loadAll() re-spawns on restart.
+                // Persistent entities would double-spawn on top of the freshly-spawned ones.
+                entity.isPersistent = false
 
                 // Apply scale via Display transformation
                 if (style.scale != 1f) {

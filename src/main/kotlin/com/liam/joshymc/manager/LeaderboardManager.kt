@@ -48,7 +48,8 @@ class LeaderboardManager(private val plugin: Joshymc) {
     )
 
     private val entries = mutableMapOf<String, LeaderboardEntry>()
-    private var refreshTaskId = -1
+    private var refreshTask: org.bukkit.scheduler.BukkitTask? = null
+    @Volatile private var refreshInProgress = false
 
     fun start() {
         plugin.databaseManager.createTable("""
@@ -62,20 +63,24 @@ class LeaderboardManager(private val plugin: Joshymc) {
         """.trimIndent())
 
         loadEntries()
-        // Refresh every 60 seconds (1200 ticks). Holograms tolerate stale
-        // data fine for that long; cheaper than recomputing every tick.
-        refreshTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
-            refreshAll()
+        // Heavy SQL runs async; only the entity updates bounce back to the main thread.
+        refreshTask = plugin.server.scheduler.runTaskTimerAsynchronously(plugin, Runnable {
+            if (refreshInProgress) return@Runnable
+            refreshInProgress = true
+            val snapshot = entries.values.toList()
+            val results = snapshot.map { entry -> entry to computeTop(entry.type, entry.topN) }
+            plugin.server.scheduler.runTask(plugin, Runnable {
+                for ((entry, rows) in results) applyRows(entry, rows)
+                refreshInProgress = false
+            })
         }, 100L, 1200L)
 
         plugin.logger.info("[Leaderboards] Loaded ${entries.size} leaderboard hologram(s).")
     }
 
     fun stop() {
-        if (refreshTaskId != -1) {
-            plugin.server.scheduler.cancelTask(refreshTaskId)
-            refreshTaskId = -1
-        }
+        refreshTask?.cancel()
+        refreshTask = null
     }
 
     private fun loadEntries() {
@@ -108,7 +113,7 @@ class LeaderboardManager(private val plugin: Joshymc) {
         )
         val entry = LeaderboardEntry(id, type, hologramId, topN, finalTitle)
         entries[id] = entry
-        refresh(entry)
+        refreshAsync(entry)
         return true
     }
 
@@ -122,11 +127,28 @@ class LeaderboardManager(private val plugin: Joshymc) {
     fun list(): Collection<LeaderboardEntry> = entries.values.toList()
 
     fun refreshAll() {
-        for (entry in entries.values) refresh(entry)
+        if (refreshInProgress) return
+        refreshInProgress = true
+        val snapshot = entries.values.toList()
+        plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
+            val results = snapshot.map { entry -> entry to computeTop(entry.type, entry.topN) }
+            plugin.server.scheduler.runTask(plugin, Runnable {
+                for ((entry, rows) in results) applyRows(entry, rows)
+                refreshInProgress = false
+            })
+        })
     }
 
-    private fun refresh(entry: LeaderboardEntry) {
-        val rows = computeTop(entry.type, entry.topN)
+    private fun refreshAsync(entry: LeaderboardEntry) {
+        plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
+            val rows = computeTop(entry.type, entry.topN)
+            plugin.server.scheduler.runTask(plugin, Runnable {
+                applyRows(entry, rows)
+            })
+        })
+    }
+
+    private fun applyRows(entry: LeaderboardEntry, rows: List<Pair<String, String>>) {
         val lines = mutableListOf(entry.title)
         for ((idx, row) in rows.withIndex()) {
             lines.add("&7${idx + 1}. &f${row.first} &8» ${entry.type.icon} &f${row.second}")
