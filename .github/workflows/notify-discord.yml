@@ -37,9 +37,9 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           gh release view "$TAG" --repo "$REPO" \
-            --json name,body,htmlUrl,publishedAt,author,assets > release.json
+            --json name,body,url,publishedAt,author,assets > release.json
           jq -r '.name // ""'        release.json | head -c 200 ; echo
-          jq -r '.htmlUrl // ""'     release.json
+          jq -r '.url // ""'         release.json
           jq -r '.publishedAt // ""' release.json
 
       - name: Build and send Discord embed
@@ -51,7 +51,7 @@ jobs:
           set -euo pipefail
 
           RELEASE_NAME=$(jq -r '.name // ""' release.json)
-          RELEASE_URL=$(jq -r '.htmlUrl // ""' release.json)
+          RELEASE_URL=$(jq -r '.url // ""' release.json)
           RELEASE_BODY=$(jq -r '.body // ""' release.json)
           RELEASE_PUBLISHED=$(jq -r '.publishedAt // ""' release.json)
           RELEASE_AUTHOR=$(jq -r '.author.login // "github-actions"' release.json)
