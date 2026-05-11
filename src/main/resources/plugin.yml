@@ -126,6 +126,14 @@ commands:
     description: View richest players
     usage: /baltop
     aliases: [balancetop]
+  killtop:
+    description: View top killers
+    usage: /killtop
+    aliases: [killerboard]
+  questtop:
+    description: View top questers
+    usage: /questtop
+    aliases: [questboard]
   chestshop:
     description: Chest shop (sign-based) help and management
     usage: /chestshop [help|example|info|remove]
@@ -584,6 +592,12 @@ permissions:
     default: true
   joshymc.baltop:
     description: View balance leaderboard
+    default: true
+  joshymc.killtop:
+    description: View kill leaderboard
+    default: true
+  joshymc.questtop:
+    description: View quest leaderboard
     default: true
   joshymc.shop:
     description: Access the server shop
