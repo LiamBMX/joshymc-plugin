@@ -346,8 +346,14 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         // Remove trusted players
         plugin.databaseManager.execute("DELETE FROM claim_trusted WHERE claim_id = ?", claim.id)
 
-        // Restore terrain from snapshot
-        restoreTerrainSnapshot(claim)
+        // Restore terrain only when an admin force-deletes someone else's claim.
+        // When the owner voluntarily unclims, skip restore so legitimately mined
+        // blocks are not rolled back (prevents the mine-unclaim-repeat dupe).
+        if (player.uniqueId != claim.ownerUuid && player.hasPermission("joshymc.claim.admin")) {
+            restoreTerrainSnapshot(claim)
+        } else {
+            getSnapshotFile(claim).let { if (it.exists()) it.delete() }
+        }
 
         plugin.databaseManager.execute("DELETE FROM claims_v2 WHERE id = ?", claim.id)
         claims.remove(claim)
