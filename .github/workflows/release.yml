@@ -91,7 +91,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run notify-discord.yml \
+          gh workflow run discord-changelog.yml \
             --repo "${{ github.repository }}" \
             --ref main \
             -f tag="${{ steps.ver.outputs.tag }}"
