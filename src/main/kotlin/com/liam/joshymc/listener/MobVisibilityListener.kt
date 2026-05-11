@@ -2,6 +2,7 @@ package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
 import org.bukkit.Bukkit
+import org.bukkit.entity.ArmorStand
 import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Mob
 import org.bukkit.entity.Player
@@ -34,6 +35,18 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
         private const val SETTING_KEY = "mob_visibility"
 
         /**
+         * Returns true for entities that the mob-hide setting should manage.
+         * ArmorStands are LivingEntities but not mobs — always keep them visible.
+         * Xray shulkers (tagged "joshymc_xray") are helper entities for the
+         * xray enchant and must remain visible to the enchant owner.
+         */
+        private fun shouldHide(entity: LivingEntity): Boolean {
+            if (entity is ArmorStand) return false
+            if (entity.scoreboardTags.contains("joshymc_xray")) return false
+            return true
+        }
+
+        /**
          * Apply the current setting state to [player]. Iterates every loaded
          * living entity in their world; hides or reveals based on [enabled].
          * Called by:
@@ -44,6 +57,7 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
             val world = player.world
             for (entity in world.livingEntities) {
                 if (entity is Player) continue
+                if (!shouldHide(entity)) continue
                 if (enabled) {
                     // Toggling on: re-show every mob the player had hidden.
                     if (!player.canSee(entity)) player.showEntity(plugin, entity)
@@ -110,6 +124,7 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     fun onSpawn(event: CreatureSpawnEvent) {
         val entity = event.entity
+        if (!shouldHide(entity)) return
         // Hide newly-spawned mobs from anyone who has the setting off.
         for (online in entity.world.players) {
             if (!visible(online) && online.canSee(entity)) {
@@ -163,7 +178,8 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
         }
 
         // Player hits Mob: skip if attacker has setting off.
-        if (damager is Player && victim is LivingEntity && victim !is Player) {
+        // Exclude armor stands and other non-mob entities from the cancel.
+        if (damager is Player && victim is LivingEntity && victim !is Player && shouldHide(victim)) {
             if (!visible(damager)) event.isCancelled = true
         }
     }
