@@ -1,79 +1,58 @@
 name: Discord changelog
-
 on:
   release:
     types: [published, released]
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag to notify Discord about
+        description: Release tag
         required: true
-        type: string
-
-permissions:
-  contents: read
-
 jobs:
   notify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - name: Resolve release metadata
-        id: meta
+      - name: Send Discord embed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          DISPATCH_TAG: ${{ github.event.inputs.tag }}
-        run: |
-          set -euo pipefail
-          if [ -n "${DISPATCH_TAG:-}" ]; then
-            TAG="$DISPATCH_TAG"
-          else
-            TAG="${{ github.event.release.tag_name }}"
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          gh release view "$TAG" --repo "$REPO" \
-            --json name,body,url,publishedAt,author,assets > release.json
-
-      - name: Build and send Discord embed
-        env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+          RELEASE_TAG_FROM_EVENT: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
+          TAG="${DISPATCH_TAG:-$RELEASE_TAG_FROM_EVENT}"
+          echo "Notifying for $TAG"
+
+          gh release view "$TAG" --repo "$REPO" \
+            --json name,body,url,publishedAt,author,assets > release.json
 
           RELEASE_NAME=$(jq -r '.name // ""' release.json)
           RELEASE_URL=$(jq -r '.url // ""' release.json)
           RELEASE_BODY=$(jq -r '.body // ""' release.json)
           RELEASE_PUBLISHED=$(jq -r '.publishedAt // ""' release.json)
           RELEASE_AUTHOR=$(jq -r '.author.login // "github-actions"' release.json)
-
-          TITLE_DISPLAY="${RELEASE_NAME:-$RELEASE_TAG}"
-
           JAR_NAME=$(jq -r '[.assets[] | select(.name | endswith(".jar"))][0].name // ""' release.json)
           JAR_URL=$(jq -r '[.assets[] | select(.name | endswith(".jar"))][0].url // ""' release.json)
 
+          TITLE_DISPLAY="${RELEASE_NAME:-$TAG}"
           DESCRIPTION=$(printf '%s' "$RELEASE_BODY" | head -c 3800)
-          if [ "${#RELEASE_BODY}" -gt 3800 ]; then
-            DESCRIPTION="${DESCRIPTION}
-
-…[truncated — see full release on GitHub](${RELEASE_URL})"
-          fi
 
           if [ -n "$JAR_NAME" ] && [ -n "$JAR_URL" ]; then
-            DOWNLOAD_FIELD="[\`$JAR_NAME\`]($JAR_URL)"
+            DOWNLOAD_FIELD="[\`${JAR_NAME}\`](${JAR_URL})"
           else
             DOWNLOAD_FIELD="(no JAR attached)"
           fi
 
           jq -n \
-            --arg title       "📦  $TITLE_DISPLAY" \
+            --arg title       "Release $TITLE_DISPLAY" \
             --arg description "$DESCRIPTION" \
             --arg url         "$RELEASE_URL" \
             --arg download    "$DOWNLOAD_FIELD" \
             --arg released_by "$RELEASE_AUTHOR" \
             --arg ts          "$RELEASE_PUBLISHED" \
-            --arg tag         "$RELEASE_TAG" \
+            --arg tag         "$TAG" \
             --arg repo        "$REPO" \
             '{
               username: "JoshyMC Releases",
@@ -83,9 +62,9 @@ jobs:
                 url: $url,
                 color: 3066993,
                 fields: [
-                  { name: "Download",    value: $download,                                                                              inline: true },
-                  { name: "Tag",         value: ("[" + $tag + "](https://github.com/" + $repo + "/releases/tag/" + $tag + ")"),         inline: true },
-                  { name: "Released by", value: $released_by,                                                                           inline: true }
+                  { name: "Download",    value: $download,    inline: true },
+                  { name: "Tag",         value: $tag,         inline: true },
+                  { name: "Released by", value: $released_by, inline: true }
                 ],
                 author: { name: "JoshyMC Plugin", url: ("https://github.com/" + $repo) },
                 footer: { text: ("github.com/" + $repo) },
