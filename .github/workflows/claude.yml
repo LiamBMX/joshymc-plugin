@@ -1,0 +1,85 @@
+name: Claude
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    # New issues always run. Comments/reviews only run if they mention @claude.
+    if: |
+      github.event_name == 'issues' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: '--allowed-tools "Bash(./gradlew:*),Bash(git:*),Bash(gh:*),Bash(cp:*),Bash(ls:*),Bash(cat:*),Bash(mkdir:*),Edit,Write,Read,Glob,Grep"'
+          prompt: |
+            You are working on the JoshyMC Paper plugin repo. The project's
+            CLAUDE.md describes the codebase, conventions, and the established
+            release workflow — read it before acting.
+
+            Trigger context:
+              event:        ${{ github.event_name }}
+              issue/PR #:   ${{ github.event.issue.number || github.event.pull_request.number }}
+              title:        ${{ github.event.issue.title || github.event.pull_request.title }}
+
+            What to do:
+
+            1. If this was triggered by a newly opened issue:
+               - Read the issue, investigate the repo.
+               - If it's not actionable (a question, vague, a duplicate),
+                 comment on the issue explaining and stop.
+               - Otherwise, create a branch `claude/issue-<number>`, implement
+                 the fix, run `./gradlew build` to verify it compiles, and open
+                 a PR that says "Closes #<number>". Do NOT cut a release —
+                 humans review and merge first.
+
+               Stay conservative: a bug fix doesn't need surrounding cleanup,
+               and small changes are easier to review. Match existing style
+               (Adventure API, commsManager.send, Kotlin only, no legacy
+               ChatColor — CLAUDE.md has the full list).
+
+            2. If this was triggered by an `@claude` mention in a comment:
+               - Do whatever was asked in the comment.
+               - If the ask is "cut a release" / "ship it" / "release this":
+                 The repo has a `release.yml` workflow that triggers on any
+                 `v*` tag push and handles building, JAR upload, and release
+                 creation. So you just need to push the tag:
+                   * Find latest: `git tag --sort=-v:refname | head -1`
+                   * Increment patch (e.g. v1.0.51 -> v1.0.52)
+                   * `git tag v1.0.<N> && git push origin v1.0.<N>`
+                 Only release from `main` (or right after merging a PR to
+                 main). Never release from an unmerged feature branch.
+
+            Hard rules:
+              - Never force-push, never bypass hooks, never commit secrets.
+              - Don't touch `.github/workflows/claude.yml` (this file) without
+                an explicit human ask — that's the loop you're running in.
