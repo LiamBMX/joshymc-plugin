@@ -7,6 +7,9 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.Material
+import org.bukkit.Tag
+import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockBreakEvent
@@ -229,10 +232,20 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
     //      BlockRedstoneEvent isn't Cancellable; you suppress the change by
     //      setting newCurrent back to oldCurrent so vanilla treats it as a
     //      no-op tick.
+    //
+    //      Intrinsic sources (comparators, daylight sensors, pressure plates,
+    //      buttons, levers, observers, etc.) derive their power from player
+    //      interaction, environment, or entity detection — not from neighboring
+    //      redstone wire. If such a block is inside the claim it is an internal
+    //      mechanism and its power change is always allowed. The cross-boundary
+    //      guard still fires on the downstream wires those blocks power.
     @EventHandler(priority = EventPriority.HIGH)
     fun onRedstone(event: BlockRedstoneEvent) {
         if (event.newCurrent <= event.oldCurrent) return  // only inspect rising edges
         val targetClaim = plugin.claimManager.getClaimAt(event.block.location) ?: return
+
+        // Allow intrinsic sources that live inside the claim.
+        if (isIntrinsicRedstoneSource(event.block)) return
 
         // If at least one powered neighbor is in the SAME claim, the signal
         // has an in-claim source and we let it through. If every powered
@@ -247,6 +260,28 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
             nClaim != null && nClaim.id == targetClaim.id
         }
         if (!hasInClaimSource) event.newCurrent = event.oldCurrent
+    }
+
+    // Blocks whose rising-edge power change is driven by their own internal state
+    // (player interaction, light level, entity detection, block-state observation)
+    // rather than by adjacent redstone signal. These should always function normally
+    // when placed inside a claim; the boundary guard is enforced on the wires they
+    // power, not on the sources themselves.
+    private fun isIntrinsicRedstoneSource(block: Block): Boolean {
+        val t = block.type
+        return Tag.BUTTONS.isTagged(t)
+            || Tag.PRESSURE_PLATES.isTagged(t)
+            || t == Material.LEVER
+            || t == Material.COMPARATOR
+            || t == Material.DAYLIGHT_DETECTOR
+            || t == Material.OBSERVER
+            || t == Material.TRIPWIRE_HOOK
+            || t == Material.TARGET
+            || t == Material.SCULK_SENSOR
+            || t == Material.CALIBRATED_SCULK_SENSOR
+            || t == Material.LIGHTNING_ROD
+            || t == Material.REDSTONE_TORCH
+            || t == Material.REDSTONE_WALL_TORCH
     }
 
     // 16. Piston retract (sticky) — same boundary rule as extend.
