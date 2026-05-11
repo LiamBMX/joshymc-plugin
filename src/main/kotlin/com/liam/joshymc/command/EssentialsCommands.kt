@@ -686,11 +686,13 @@ class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         when (mode) {
             "hand" -> if (repairItem(sender.inventory.itemInMainHand)) repaired++
             "all" -> {
-                if (repairItem(sender.inventory.itemInMainHand)) repaired++
-                if (repairItem(sender.inventory.itemInOffHand)) repaired++
+                for (item in sender.inventory.contents) {
+                    if (repairItem(item)) repaired++
+                }
                 for (armor in sender.inventory.armorContents) {
                     if (armor != null && repairItem(armor)) repaired++
                 }
+                if (repairItem(sender.inventory.itemInOffHand)) repaired++
             }
             else -> {
                 plugin.commsManager.send(sender, Component.text("Usage: /repair [hand|all]", NamedTextColor.RED))
