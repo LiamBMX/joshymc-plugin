@@ -26,18 +26,21 @@ class RankManager(private val plugin: Joshymc) : Listener {
     )
 
     private val ranks = mutableMapOf<String, Rank>()
-    private val playerRanks = mutableMapOf<UUID, String>() // UUID -> rank ID
+    private val playerRanks = mutableMapOf<UUID, MutableSet<String>>() // UUID -> set of rank IDs
 
     private val legacy = LegacyComponentSerializer.legacyAmpersand()
 
     fun start() {
-        // Create DB table for player ranks
+        // Create DB table for player ranks (composite PK allows multiple ranks per player)
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS player_ranks (
-                uuid TEXT PRIMARY KEY,
-                rank_id TEXT NOT NULL
+                uuid TEXT NOT NULL,
+                rank_id TEXT NOT NULL,
+                PRIMARY KEY (uuid, rank_id)
             )
         """.trimIndent())
+
+        migrateToMultiRankSchema()
 
         // Load ranks from config
         loadRanks()
@@ -196,6 +199,31 @@ class RankManager(private val plugin: Joshymc) : Listener {
         private const val TEAM_PREFIX = "jmc_"
     }
 
+    private fun migrateToMultiRankSchema() {
+        val tableSql = plugin.databaseManager.queryFirst(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='player_ranks'"
+        ) { rs -> rs.getString("sql") } ?: return
+
+        // Old schema used "uuid TEXT PRIMARY KEY" (single rank per player).
+        // New schema uses a composite PRIMARY KEY (uuid, rank_id).
+        if (!tableSql.contains("PRIMARY KEY (uuid", ignoreCase = true)) {
+            plugin.logger.info("[Ranks] Migrating player_ranks to multi-rank schema...")
+            plugin.databaseManager.execute("""
+                CREATE TABLE IF NOT EXISTS player_ranks_new (
+                    uuid TEXT NOT NULL,
+                    rank_id TEXT NOT NULL,
+                    PRIMARY KEY (uuid, rank_id)
+                )
+            """.trimIndent())
+            plugin.databaseManager.execute(
+                "INSERT OR IGNORE INTO player_ranks_new (uuid, rank_id) SELECT uuid, rank_id FROM player_ranks"
+            )
+            plugin.databaseManager.execute("DROP TABLE player_ranks")
+            plugin.databaseManager.execute("ALTER TABLE player_ranks_new RENAME TO player_ranks")
+            plugin.logger.info("[Ranks] Multi-rank migration complete.")
+        }
+    }
+
     private fun loadRanks() {
         ranks.clear()
         var section = plugin.config.getConfigurationSection("ranks.list")
@@ -239,7 +267,7 @@ class RankManager(private val plugin: Joshymc) : Listener {
         }
         for ((uuid, rankId) in rows) {
             if (ranks.containsKey(rankId)) {
-                playerRanks[uuid] = rankId
+                playerRanks.getOrPut(uuid) { mutableSetOf() }.add(rankId)
             }
         }
     }
@@ -253,20 +281,27 @@ class RankManager(private val plugin: Joshymc) : Listener {
     fun getRankIds(): Set<String> = ranks.keys
 
     /**
-     * Get the player's rank. Falls back to "default" rank if none assigned.
+     * Get the player's displayed rank (highest weight among all assigned ranks).
+     * Falls back to "default" rank if none assigned.
      */
     fun getPlayerRank(player: Player): Rank? {
-        val rankId = playerRanks[player.uniqueId]
-        if (rankId != null) return ranks[rankId]
-        // Fall back to default rank
+        val rankIds = playerRanks[player.uniqueId]
+        if (!rankIds.isNullOrEmpty()) {
+            return rankIds.mapNotNull { ranks[it] }.maxByOrNull { it.weight }
+        }
         return ranks["default"]
     }
 
     fun getPlayerRankById(uuid: UUID): Rank? {
-        val rankId = playerRanks[uuid]
-        if (rankId != null) return ranks[rankId]
+        val rankIds = playerRanks[uuid]
+        if (!rankIds.isNullOrEmpty()) {
+            return rankIds.mapNotNull { ranks[it] }.maxByOrNull { it.weight }
+        }
         return ranks["default"]
     }
+
+    /** All rank IDs explicitly assigned to this player, empty if none. */
+    fun getPlayerRankIds(uuid: UUID): Set<String> = playerRanks[uuid] ?: emptySet()
 
     /**
      * Set a player's rank. Pass null to remove their rank.
@@ -281,11 +316,21 @@ class RankManager(private val plugin: Joshymc) : Listener {
             playerRanks.remove(uuid)
             plugin.databaseManager.execute("DELETE FROM player_ranks WHERE uuid = ?", uuid.toString())
         } else {
-            playerRanks[uuid] = rankId
+            val set = playerRanks.getOrPut(uuid) { mutableSetOf() }
+            set.add(rankId)
             plugin.databaseManager.execute(
-                "INSERT OR REPLACE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
+                "INSERT OR IGNORE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
                 uuid.toString(), rankId
             )
+            // Preserve the default rank alongside any non-default rank so players
+            // retain their base permissions/display when a special rank is assigned.
+            if (rankId != "default" && ranks.containsKey("default")) {
+                set.add("default")
+                plugin.databaseManager.execute(
+                    "INSERT OR IGNORE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
+                    uuid.toString(), "default"
+                )
+            }
         }
 
         // Update the scoreboard team so the nameplate prefix reflects the

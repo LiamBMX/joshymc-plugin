@@ -129,18 +129,27 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        val rank = plugin.rankManager.getPlayerRank(target)
-        if (rank == null) {
-            sender.sendMessage(
-                Component.text(playerName, NamedTextColor.WHITE)
-                    .append(Component.text(" has no rank.", NamedTextColor.GRAY))
-            )
-        } else {
-            val tagDisplay = plugin.commsManager.parseLegacy(rank.displayTag)
+        val assignedIds = plugin.rankManager.getPlayerRankIds(target.uniqueId)
+        val displayRank = plugin.rankManager.getPlayerRank(target)
+
+        if (assignedIds.isEmpty()) {
+            val tagDisplay = displayRank?.let { plugin.commsManager.parseLegacy(it.displayTag) }
+                ?: Component.text("none", NamedTextColor.GRAY)
             sender.sendMessage(
                 Component.text(playerName, NamedTextColor.WHITE)
                     .append(Component.text("'s rank: ", NamedTextColor.GRAY))
                     .append(tagDisplay)
+                    .append(Component.text(" (default)", NamedTextColor.DARK_GRAY))
+            )
+        } else {
+            val tagDisplay = displayRank?.let { plugin.commsManager.parseLegacy(it.displayTag) }
+                ?: Component.text("none", NamedTextColor.GRAY)
+            val allTags = assignedIds.sorted().joinToString(", ")
+            sender.sendMessage(
+                Component.text(playerName, NamedTextColor.WHITE)
+                    .append(Component.text("'s rank: ", NamedTextColor.GRAY))
+                    .append(tagDisplay)
+                    .append(Component.text(" [$allTags]", NamedTextColor.DARK_GRAY))
             )
         }
     }
