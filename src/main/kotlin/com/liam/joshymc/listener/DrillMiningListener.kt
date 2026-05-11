@@ -33,7 +33,7 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
         val face = getTargetBlockFace(player)
 
         val blocksToBreak = getGridBlocks(origin, face, radius).filter {
-            it != origin && BlockUtil.isMineable(it.type)
+            it != origin && BlockUtil.isMineable(it.type) && plugin.claimManager.canAccess(player, it.location)
         }
 
         if (blocksToBreak.isEmpty()) return
