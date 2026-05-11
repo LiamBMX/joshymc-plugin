@@ -762,6 +762,7 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         // Harvest crop tracking. Includes:
         //   - Fully grown Ageable crops (wheat, carrots, potatoes, beetroot, nether wart, etc.)
         //   - Always-harvestable plants (melon, pumpkin, sugar cane, cactus, bamboo, chorus, kelp)
+        //   - Flower blocks (dandelion, poppy, tulips, etc.) — not Ageable, tracked as always-harvestable
         //
         // Plant variants whose top/stem use different Material names (KELP vs
         // KELP_PLANT, BAMBOO vs BAMBOO_SAPLING, TWISTING_VINES vs
@@ -775,6 +776,14 @@ class QuestManager(private val plugin: Joshymc) : Listener {
             "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES",
             "WEEPING_VINES", "GLOW_LICHEN", "VINE", "NETHER_WART",
             "SWEET_BERRY_BUSH",
+            // Flowers — single-block
+            "DANDELION", "POPPY", "BLUE_ORCHID", "ALLIUM", "AZURE_BLUET",
+            "RED_TULIP", "ORANGE_TULIP", "WHITE_TULIP", "PINK_TULIP",
+            "OXEYE_DAISY", "CORNFLOWER", "LILY_OF_THE_VALLEY", "WITHER_ROSE",
+            "TORCHFLOWER", "CLOSED_EYEBLOSSOM", "OPEN_EYEBLOSSOM",
+            "SPORE_BLOSSOM", "PINK_PETALS",
+            // Flowers — tall (both halves share the same Material name)
+            "SUNFLOWER", "LILAC", "ROSE_BUSH", "PEONY",
         )
         val eligible = (blockData is org.bukkit.block.data.Ageable && blockData.age == blockData.maximumAge)
                 || normalized in alwaysHarvestable
@@ -847,6 +856,14 @@ class QuestManager(private val plugin: Joshymc) : Listener {
             "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES",
             "WEEPING_VINES", "GLOW_LICHEN", "VINE", "NETHER_WART",
             "SWEET_BERRY_BUSH",
+            // Flowers — single-block
+            "DANDELION", "POPPY", "BLUE_ORCHID", "ALLIUM", "AZURE_BLUET",
+            "RED_TULIP", "ORANGE_TULIP", "WHITE_TULIP", "PINK_TULIP",
+            "OXEYE_DAISY", "CORNFLOWER", "LILY_OF_THE_VALLEY", "WITHER_ROSE",
+            "TORCHFLOWER", "CLOSED_EYEBLOSSOM", "OPEN_EYEBLOSSOM",
+            "SPORE_BLOSSOM", "PINK_PETALS",
+            // Flowers — tall (both halves share the same Material name)
+            "SUNFLOWER", "LILAC", "ROSE_BUSH", "PEONY",
         )
         val eligible = (blockData is org.bukkit.block.data.Ageable && blockData.age == blockData.maximumAge)
                 || normalized in alwaysHarvestable
