@@ -1,0 +1,79 @@
+name: Auto-merge Claude PRs
+
+# Fires when CI completes on a PR. Merges the PR if all gates pass:
+#  - CI was successful
+#  - Head branch starts with `claude/`
+#  - No `do-not-auto-merge` label
+#  - No files under sensitive paths (build infra, workflows)
+#
+# Safe-by-design: a human PR from any non-`claude/*` branch never auto-merges,
+# and a Claude PR touching the build pipeline itself is blocked too.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  merge:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Identify PR and merge if eligible
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+
+          # Find the PR for this branch
+          PR_NUMBER=$(gh pr list \
+            --repo "$REPO" \
+            --head "$HEAD_BRANCH" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open PR for branch $HEAD_BRANCH"
+            exit 0
+          fi
+
+          echo "Considering PR #$PR_NUMBER (branch: $HEAD_BRANCH)"
+
+          # Gate 1: branch must start with claude/
+          case "$HEAD_BRANCH" in
+            claude/*) ;;
+            *)
+              echo "Branch does not start with claude/; skipping"
+              exit 0
+              ;;
+          esac
+
+          # Gate 2: no do-not-auto-merge label
+          if gh pr view "$PR_NUMBER" --repo "$REPO" --json labels \
+              --jq '.labels[].name' | grep -qx 'do-not-auto-merge'; then
+            echo "Label do-not-auto-merge present; skipping"
+            exit 0
+          fi
+
+          # Gate 3: no sensitive paths
+          FILES=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json files \
+            --jq '.files[].path')
+          SENSITIVE='^(\.github/workflows/|gradle/wrapper/|build\.gradle\.kts$|settings\.gradle\.kts$|gradlew(\.bat)?$)'
+          if echo "$FILES" | grep -qE "$SENSITIVE"; then
+            echo "Sensitive paths touched, blocking auto-merge:"
+            echo "$FILES" | grep -E "$SENSITIVE" || true
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
+              "Auto-merge skipped: PR touches sensitive paths (build infra / workflows). Human review required."
+            exit 0
+          fi
+
+          echo "All gates passed; merging PR #$PR_NUMBER"
+          gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch

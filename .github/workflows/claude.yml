@@ -9,15 +9,20 @@ on:
     types: [created]
   pull_request_review:
     types: [submitted]
+  pull_request:
+    types: [opened, synchronize]
 
 jobs:
   claude:
-    # New issues always run. Comments/reviews only run if they mention @claude.
+    # New issues always run.
+    # Comments/reviews only run if they mention @claude.
+    # PR open/sync runs only for claude/* branches (Claude's own PRs).
     if: |
       github.event_name == 'issues' ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'claude/'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -70,7 +75,24 @@ jobs:
                (Adventure API, commsManager.send, Kotlin only, no legacy
                ChatColor — CLAUDE.md has the full list).
 
-            2. If this was triggered by an `@claude` mention in a comment:
+            2. If this was triggered by a pull_request (head branch
+               `claude/*`, your own PR):
+               - This is review mode. Read the PR diff, the linked issue,
+                 and the relevant code. Check for: obvious bugs, behavior
+                 that doesn't match the issue, places you should have used
+                 commsManager.send / Adventure API but used legacy ChatColor,
+                 Bukkit gotchas listed in CLAUDE.md (hand-filtering events,
+                 mutual-exclusivity of teams, etc.).
+               - Post ONE consolidated review comment summarizing findings.
+                 If the PR is good, post a short "looks good" review.
+                 If there's a real problem, request changes and describe
+                 the fix; do NOT push commits during review (the auto-merge
+                 happens once CI is green — wait for the human to read your
+                 review if they want).
+               - You do NOT need to gate the merge yourself. CI is the hard
+                 gate; auto-merge fires when CI is green.
+
+            3. If this was triggered by an `@claude` mention in a comment:
                - Do whatever was asked in the comment.
                - If the ask is "cut a release" / "ship it" / "release this":
                  The repo has a `release.yml` workflow that triggers on any
@@ -84,5 +106,8 @@ jobs:
 
             Hard rules:
               - Never force-push, never bypass hooks, never commit secrets.
-              - Don't touch `.github/workflows/claude.yml` (this file) without
-                an explicit human ask — that's the loop you're running in.
+              - Don't touch anything under `.github/workflows/` without an
+                explicit human ask — that's the loop you're running in,
+                and PRs that change workflows are blocked from auto-merge.
+              - Don't touch `build.gradle.kts`, `settings.gradle.kts`, or
+                `gradle/wrapper/**` without explicit ask — same reason.
