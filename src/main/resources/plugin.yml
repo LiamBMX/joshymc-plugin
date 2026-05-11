@@ -399,7 +399,7 @@ commands:
     usage: /tpacancel
   claim:
     description: Claim land
-    usage: /claim [team|personal|map|info|list]
+    usage: /claim [expand|shrink|team|personal|map|info|list]
   unclaim:
     description: Unclaim land
     usage: /unclaim
