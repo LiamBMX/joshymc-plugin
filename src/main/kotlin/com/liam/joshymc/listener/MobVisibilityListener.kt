@@ -78,33 +78,38 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
     }
 
     /**
-     * Re-apply hide state when crossing worlds. Without this, teleporting
-     * from spawn → overworld leaves new-world mobs visible (their hide
-     * packets never went out), even though damage/targeting is still
-     * correctly suppressed by the handlers below — which is exactly the
-     * "visual bug" Joshy reported.
+     * Re-apply hide state when crossing worlds. Cross-world teleports reset
+     * Paper's per-player entity tracking, so every mob in the new world
+     * becomes visible again until we re-hide them. We fire at tick 1 to
+     * intercept entity spawn packets before the entity tracker sends them,
+     * then again at tick 40 to catch mobs in chunks that loaded after the
+     * initial pass.
      */
     @EventHandler(priority = EventPriority.MONITOR)
     fun onWorldChange(event: PlayerChangedWorldEvent) {
         val player = event.player
-        // Defer a couple ticks so the new world's chunks/entities are
-        // tracked client-side before we fire hide packets.
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             if (player.isOnline) applyTo(plugin, player, visible(player))
-        }, 5L)
+        }, 1L)
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            if (player.isOnline) applyTo(plugin, player, visible(player))
+        }, 40L)
     }
 
     /**
      * Same-world long-distance teleports (e.g. /tpa, /warp inside the
-     * overworld) can move the player into chunks that weren't tracked
-     * yet. Re-apply on every teleport — applyTo is idempotent.
+     * overworld) can move the player into chunks that weren't tracked yet.
+     * Re-apply on every teleport — applyTo is idempotent.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onTeleport(event: PlayerTeleportEvent) {
         val player = event.player
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             if (player.isOnline) applyTo(plugin, player, visible(player))
-        }, 5L)
+        }, 1L)
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            if (player.isOnline) applyTo(plugin, player, visible(player))
+        }, 40L)
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
