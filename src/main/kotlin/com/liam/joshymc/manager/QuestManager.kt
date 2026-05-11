@@ -366,6 +366,7 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         QuestCategory.MINING,
         QuestCategory.FARMING,
         QuestCategory.COMBAT,
+        QuestCategory.FISHING,
     )
 
     private fun lowerDifficulty(d: QuestDifficulty): QuestDifficulty? = when (d) {
