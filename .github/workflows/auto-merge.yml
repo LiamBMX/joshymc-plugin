@@ -6,6 +6,15 @@ name: Auto-merge Claude PRs
 #  - No `do-not-auto-merge` label
 #  - No files under sensitive paths (build infra, workflows)
 #
+# After merge, also handles:
+#  - Closing the linked issue (parsed from `claude/issue-N` branch name).
+#    We can't rely on GitHub's "Closes #N" auto-magic because Claude doesn't
+#    always include the keyword in PR bodies.
+#  - Dispatching the Release workflow with a bumped patch version. We can't
+#    use a separate `pull_request: closed` workflow because GITHUB_TOKEN-
+#    driven merges don't trigger downstream workflows (anti-recursion),
+#    but `workflow_dispatch` IS exempt from that rule.
+#
 # Safe-by-design: a human PR from any non-`claude/*` branch never auto-merges,
 # and a Claude PR touching the build pipeline itself is blocked too.
 
@@ -17,14 +26,20 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  actions: read
+  issues: write
+  actions: write
 
 jobs:
   merge:
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Identify PR and merge if eligible
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Identify PR, merge, close issue, dispatch release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -32,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Find the PR for this branch
+          # Find the open PR for this branch
           PR_NUMBER=$(gh pr list \
             --repo "$REPO" \
             --head "$HEAD_BRANCH" \
@@ -77,3 +92,39 @@ jobs:
 
           echo "All gates passed; merging PR #$PR_NUMBER"
           gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch
+
+          # ---- post-merge tasks ----
+
+          # Close linked issue: parse N from `claude/issue-N`
+          ISSUE_N=$(echo "$HEAD_BRANCH" | sed -nE 's|^claude/issue-([0-9]+)$|\1|p')
+          if [ -n "$ISSUE_N" ]; then
+            if gh issue view "$ISSUE_N" --repo "$REPO" --json state --jq '.state' | grep -qx 'OPEN'; then
+              echo "Closing linked issue #$ISSUE_N"
+              gh issue close "$ISSUE_N" --repo "$REPO" \
+                --reason completed \
+                --comment "Closed automatically by merge of #$PR_NUMBER."
+            else
+              echo "Issue #$ISSUE_N already closed; skipping"
+            fi
+          else
+            echo "Branch name doesn't match claude/issue-N; no issue to close"
+          fi
+
+          # Compute next version (v1.0.X -> v1.0.X+1) and dispatch Release
+          git fetch --tags origin
+          LATEST=$(git tag --sort=-v:refname | grep -E '^v1\.0\.[0-9]+$' | head -1 || true)
+          if [ -z "$LATEST" ]; then
+            NEXT="v1.0.1"
+          else
+            BASE=${LATEST#v1.0.}
+            NEXT="v1.0.$((BASE + 1))"
+          fi
+          echo "Latest tag: ${LATEST:-none}  Next: $NEXT"
+
+          gh workflow run release.yml \
+            --repo "$REPO" \
+            --ref main \
+            -f tag="$NEXT"
+
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
+            "Auto-release dispatched: \`$NEXT\`. JAR will appear in [Releases](https://github.com/$REPO/releases) once the Release workflow finishes."
