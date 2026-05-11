@@ -8,6 +8,12 @@ name: Discord release notification
 on:
   release:
     types: [published, released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to (re)notify Discord about (e.g. v1.0.52)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -16,31 +22,49 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve release metadata
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DISPATCH_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DISPATCH_TAG:-}" ]; then
+            TAG="$DISPATCH_TAG"
+          else
+            TAG="${{ github.event.release.tag_name }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          gh release view "$TAG" --repo "$REPO" \
+            --json name,body,htmlUrl,publishedAt,author,assets > release.json
+          jq -r '.name // ""'        release.json | head -c 200 ; echo
+          jq -r '.htmlUrl // ""'     release.json
+          jq -r '.publishedAt // ""' release.json
+
       - name: Build and send Discord embed
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          RELEASE_NAME: ${{ github.event.release.name }}
-          RELEASE_URL: ${{ github.event.release.html_url }}
-          RELEASE_BODY: ${{ github.event.release.body }}
-          RELEASE_PUBLISHED: ${{ github.event.release.published_at }}
-          RELEASE_AUTHOR: ${{ github.event.release.author.login }}
-          RELEASE_AUTHOR_AVATAR: ${{ github.event.release.author.avatar_url }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
         run: |
           set -euo pipefail
+
+          RELEASE_NAME=$(jq -r '.name // ""' release.json)
+          RELEASE_URL=$(jq -r '.htmlUrl // ""' release.json)
+          RELEASE_BODY=$(jq -r '.body // ""' release.json)
+          RELEASE_PUBLISHED=$(jq -r '.publishedAt // ""' release.json)
+          RELEASE_AUTHOR=$(jq -r '.author.login // "github-actions"' release.json)
+          RELEASE_AUTHOR_AVATAR=$(jq -r '.author.avatarUrl // ""' release.json)
 
           # Display title: prefer the release name (often "v1.0.X — short title"),
           # fall back to the tag if name is empty.
           TITLE_DISPLAY="${RELEASE_NAME:-$RELEASE_TAG}"
 
-          # Locate the JAR asset and grab the public download URL (browser_download_url,
-          # not the API url — Discord users need the friendly link).
-          JAR_NAME=$(gh release view "$RELEASE_TAG" --repo "$REPO" \
-            --json assets --jq '[.assets[] | select(.name | endswith(".jar"))][0].name // ""')
-          JAR_URL=$(gh release view "$RELEASE_TAG" --repo "$REPO" \
-            --json assets --jq '[.assets[] | select(.name | endswith(".jar"))][0].url // ""')
+          # Locate the JAR asset and grab the public download URL (friendly link,
+          # not API). gh's `assets[].url` is already the browser-download form.
+          JAR_NAME=$(jq -r '[.assets[] | select(.name | endswith(".jar"))][0].name // ""' release.json)
+          JAR_URL=$(jq -r '[.assets[] | select(.name | endswith(".jar"))][0].url // ""' release.json)
 
           # Discord embed description limit is 4096 chars; we leave a small margin.
           DESCRIPTION=$(printf '%s' "$RELEASE_BODY" | head -c 3800)
