@@ -9,6 +9,7 @@ import net.kyori.adventure.text.format.TextDecoration
 import net.kyori.adventure.title.Title
 import org.bukkit.Bukkit
 import org.bukkit.Material
+import org.bukkit.NamespacedKey
 import org.bukkit.Sound
 import org.bukkit.Statistic
 import org.bukkit.configuration.file.YamlConfiguration
@@ -32,6 +33,7 @@ import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.FurnaceRecipe
 import org.bukkit.inventory.ItemStack
+import org.bukkit.persistence.PersistentDataType
 import java.io.File
 import java.time.Duration
 import java.util.UUID
@@ -114,6 +116,9 @@ data class PlayerQuestProgress(
 // ── Manager ────────────────────────────────────────────────────
 
 class QuestManager(private val plugin: Joshymc) : Listener {
+
+    // Items dropped as overflow from /shop purchases are tagged so onPickup ignores them.
+    val shopDropKey = NamespacedKey(plugin, "shop_drop")
 
     private val quests = mutableMapOf<String, Quest>()
     private val progressCache = ConcurrentHashMap<UUID, MutableMap<String, PlayerQuestProgress>>()
@@ -934,6 +939,7 @@ class QuestManager(private val plugin: Joshymc) : Listener {
     fun onPickup(event: EntityPickupItemEvent) {
         val player = event.entity as? Player ?: return
         if (isExempt(player)) return
+        if (event.item.persistentDataContainer.has(shopDropKey, PersistentDataType.BYTE)) return
 
         val item = event.item.itemStack
         val materialName = item.type.name

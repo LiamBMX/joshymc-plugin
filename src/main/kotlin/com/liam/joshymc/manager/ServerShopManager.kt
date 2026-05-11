@@ -7,6 +7,7 @@ import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
 import org.bukkit.Sound
+import org.bukkit.persistence.PersistentDataType
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.event.inventory.ClickType
@@ -470,9 +471,10 @@ class ServerShopManager(private val plugin: Joshymc) {
         val items = ItemStack(material, amount)
         val overflow = player.inventory.addItem(items)
 
-        // Drop any items that didn't fit
+        // Drop any items that didn't fit; tag them so quest progress is not counted
         for (remaining in overflow.values) {
-            player.world.dropItemNaturally(player.location, remaining)
+            val dropped = player.world.dropItemNaturally(player.location, remaining)
+            dropped.persistentDataContainer.set(plugin.questManager.shopDropKey, PersistentDataType.BYTE, 1)
         }
 
         val name = formatMaterialName(material)
