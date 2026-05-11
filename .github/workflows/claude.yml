@@ -40,6 +40,9 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Allow the Claude GitHub App itself to trigger this workflow, so
+          # issues Claude opens during triage cascade-fix without manual nudge.
+          allowed_bots: 'claude'
           claude_args: '--allowed-tools "Bash(./gradlew:*),Bash(git:*),Bash(gh:*),Bash(cp:*),Bash(ls:*),Bash(cat:*),Bash(mkdir:*),Edit,Write,Read,Glob,Grep"'
           prompt: |
             You are working on the JoshyMC Paper plugin repo. The project's

@@ -1,0 +1,55 @@
+name: Claude retry
+
+# Re-runs failed Claude workflow runs from the last 24h, up to 5 attempts
+# each. The main cause of failures is hitting the Claude subscription rate
+# limit (5-hour rolling window), so a periodic re-run gets things flowing
+# again once the window clears.
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # every 30 minutes
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-run failed Claude runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Pull failed Claude runs from the last 24h
+          gh run list \
+            --repo "$REPO" \
+            --workflow=claude.yml \
+            --status=failure \
+            --limit 50 \
+            --json databaseId,attempt,createdAt \
+            > runs.json
+
+          CUTOFF=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+
+          echo "Cutoff: $CUTOFF"
+          echo "Candidate runs:"
+          cat runs.json
+
+          # Re-run failed runs that have been attempted fewer than 5 times.
+          # Cap of 5 prevents infinite loops on genuinely broken failures
+          # (e.g. compile errors, no API access).
+          jq -r --arg cutoff "$CUTOFF" '
+            .[]
+            | select(.attempt < 5)
+            | select(.createdAt > $cutoff)
+            | .databaseId
+          ' runs.json | while read -r id; do
+            [ -z "$id" ] && continue
+            echo "Re-running run $id"
+            gh run rerun "$id" --repo "$REPO" --failed || echo "  (rerun failed, skipping)"
+          done
