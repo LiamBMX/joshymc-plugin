@@ -6,14 +6,14 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
-import org.bukkit.entity.Animals
+import org.bukkit.entity.ArmorStand
 import org.bukkit.entity.EnderDragon
 import org.bukkit.entity.Item
-import org.bukkit.entity.Monster
+import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.NPC
+import org.bukkit.entity.Player
 import org.bukkit.entity.Villager
 import org.bukkit.entity.Wither
-import org.bukkit.entity.ArmorStand
 
 class LagCleanerManager(private val plugin: Joshymc) {
 
@@ -57,9 +57,9 @@ class LagCleanerManager(private val plugin: Joshymc) {
 
         for (world in plugin.server.worlds) {
             for (entity in world.entities) {
-                when (entity) {
-                    is Item -> totalItems++
-                    is Monster, is Animals -> totalEntities++
+                when {
+                    entity is Item -> totalItems++
+                    entity is LivingEntity && entity !is Player && !isProtected(entity) -> totalEntities++
                 }
             }
         }
@@ -132,8 +132,8 @@ class LagCleanerManager(private val plugin: Joshymc) {
                         entity.remove()
                         itemCount++
                     }
-                    // Clear hostile + passive mobs (except protected ones)
-                    (entity is Monster || entity is Animals) && !isProtected(entity) -> {
+                    // Clear all living non-player mobs (except protected ones)
+                    entity is LivingEntity && entity !is Player && !isProtected(entity) -> {
                         entity.remove()
                         mobCount++
                     }
