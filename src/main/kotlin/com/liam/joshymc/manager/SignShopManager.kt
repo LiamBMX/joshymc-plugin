@@ -23,6 +23,8 @@ import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.SignChangeEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.meta.EnchantmentStorageMeta
+import java.util.Base64
 import java.util.UUID
 
 class SignShopManager(private val plugin: Joshymc) : Listener {
@@ -40,7 +42,8 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
         val chestWorld: String,
         val chestX: Int,
         val chestY: Int,
-        val chestZ: Int
+        val chestZ: Int,
+        val itemData: String? = null
     ) {
         val signLocation: Location
             get() = Location(Bukkit.getWorld(world), x.toDouble(), y.toDouble(), z.toDouble())
@@ -86,6 +89,11 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
+        // Migration: add item_data column for serialized ItemStack (enchants, PDC custom items)
+        try {
+            plugin.databaseManager.execute("ALTER TABLE sign_shops ADD COLUMN item_data TEXT")
+        } catch (_: Exception) {}
+
         val shopCount = plugin.databaseManager.queryFirst(
             "SELECT COUNT(*) as cnt FROM sign_shops"
         ) { rs -> rs.getInt("cnt") } ?: 0
@@ -97,17 +105,17 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
 
     private fun saveShop(shop: ShopData) {
         plugin.databaseManager.execute(
-            """INSERT INTO sign_shops (world, x, y, z, owner_uuid, owner_name, item, buy_price, sell_price, chest_world, chest_x, chest_y, chest_z)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO sign_shops (world, x, y, z, owner_uuid, owner_name, item, buy_price, sell_price, chest_world, chest_x, chest_y, chest_z, item_data)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(world, x, y, z) DO UPDATE SET
                owner_uuid = ?, owner_name = ?, item = ?, buy_price = ?, sell_price = ?,
-               chest_world = ?, chest_x = ?, chest_y = ?, chest_z = ?""",
+               chest_world = ?, chest_x = ?, chest_y = ?, chest_z = ?, item_data = ?""",
             shop.world, shop.x, shop.y, shop.z,
             shop.ownerUuid.toString(), shop.ownerName, shop.item, shop.buyPrice, shop.sellPrice,
-            shop.chestWorld, shop.chestX, shop.chestY, shop.chestZ,
+            shop.chestWorld, shop.chestX, shop.chestY, shop.chestZ, shop.itemData,
             // ON CONFLICT values
             shop.ownerUuid.toString(), shop.ownerName, shop.item, shop.buyPrice, shop.sellPrice,
-            shop.chestWorld, shop.chestX, shop.chestY, shop.chestZ
+            shop.chestWorld, shop.chestX, shop.chestY, shop.chestZ, shop.itemData
         )
     }
 
@@ -129,7 +137,8 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
                 chestWorld = rs.getString("chest_world"),
                 chestX = rs.getInt("chest_x"),
                 chestY = rs.getInt("chest_y"),
-                chestZ = rs.getInt("chest_z")
+                chestZ = rs.getInt("chest_z"),
+                itemData = rs.getString("item_data")
             )
         }
     }
@@ -164,7 +173,8 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
                 chestWorld = rs.getString("chest_world"),
                 chestX = rs.getInt("chest_x"),
                 chestY = rs.getInt("chest_y"),
-                chestZ = rs.getInt("chest_z")
+                chestZ = rs.getInt("chest_z"),
+                itemData = rs.getString("item_data")
             )
         }
     }
@@ -187,8 +197,70 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
                 chestWorld = rs.getString("chest_world"),
                 chestX = rs.getInt("chest_x"),
                 chestY = rs.getInt("chest_y"),
-                chestZ = rs.getInt("chest_z")
+                chestZ = rs.getInt("chest_z"),
+                itemData = rs.getString("item_data")
             )
+        }
+    }
+
+    // ---- Item Serialization Helpers ----
+
+    private fun serializeItem(item: ItemStack): String =
+        Base64.getEncoder().encodeToString(item.serializeAsBytes())
+
+    private fun deserializeItem(data: String): ItemStack? = try {
+        ItemStack.deserializeBytes(Base64.getDecoder().decode(data))
+    } catch (_: Exception) { null }
+
+    /** Returns the exact ItemStack template for this shop (with enchants/PDC if stored). */
+    private fun getShopItemTemplate(shop: ShopData): ItemStack {
+        val data = shop.itemData
+        if (data != null) {
+            val item = deserializeItem(data)
+            if (item != null) return item
+        }
+        return try {
+            ItemStack(Material.valueOf(shop.item))
+        } catch (_: Exception) {
+            ItemStack(Material.BARRIER)
+        }
+    }
+
+    /**
+     * Builds a human-readable display name from an ItemStack.
+     * Prefers a custom display name; falls back to enchant name for enchanted books,
+     * then to the formatted material name.
+     */
+    private fun buildItemDisplayName(item: ItemStack): String {
+        val meta = item.itemMeta
+        // Custom display name set on the item
+        if (meta != null && meta.hasDisplayName()) {
+            return plainText(meta.displayName()!!)
+        }
+        // Enchanted book: derive name from stored enchantments
+        if (item.type == Material.ENCHANTED_BOOK && meta is EnchantmentStorageMeta) {
+            val enchants = meta.storedEnchants
+            if (enchants.isNotEmpty()) {
+                val (enchant, level) = enchants.entries.first()
+                val enchantName = enchant.key.key
+                    .split("_").joinToString(" ") { it.replaceFirstChar { c -> c.uppercaseChar() } }
+                return "$enchantName $level Book"
+            }
+        }
+        return formatMaterialName(item.type)
+    }
+
+    /** Returns the display name for a shop, using stored item data when available. */
+    private fun getShopDisplayName(shop: ShopData): String {
+        val data = shop.itemData
+        if (data != null) {
+            val item = deserializeItem(data)
+            if (item != null) return buildItemDisplayName(item)
+        }
+        return try {
+            formatMaterialName(Material.valueOf(shop.item))
+        } catch (_: Exception) {
+            shop.item
         }
     }
 
@@ -228,6 +300,7 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
         val line1Text = event.line(1)?.let { plainText(it) }?.trim() ?: ""
         val itemMaterial: Material
         val itemDisplayName: String
+        var capturedItemData: String? = null
 
         if (line1Text.equals("[hand]", ignoreCase = true)) {
             val handItem = player.inventory.itemInMainHand
@@ -236,7 +309,10 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
                 return
             }
             itemMaterial = handItem.type
-            itemDisplayName = formatMaterialName(itemMaterial)
+            // Always capture full item data when using [hand] so enchants and PDC tags are preserved
+            val snapshot = handItem.clone().also { it.amount = 1 }
+            capturedItemData = serializeItem(snapshot)
+            itemDisplayName = buildItemDisplayName(snapshot)
         } else {
             val mat = matchMaterial(line1Text)
             if (mat == null) {
@@ -275,7 +351,8 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             chestWorld = chestBlock.world.name,
             chestX = chestBlock.x,
             chestY = chestBlock.y,
-            chestZ = chestBlock.z
+            chestZ = chestBlock.z,
+            itemData = capturedItemData
         )
 
         saveShop(shop)
@@ -316,7 +393,7 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun showOwnerInfo(player: Player, shop: ShopData) {
-        val itemName = formatMaterialName(Material.valueOf(shop.item))
+        val itemName = getShopDisplayName(shop)
         val stock = countChestStock(shop)
 
         val msg = Component.text()
@@ -344,8 +421,8 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun openShopGui(player: Player, shop: ShopData) {
-        val itemMaterial = try { Material.valueOf(shop.item) } catch (_: Exception) { Material.BARRIER }
-        val itemName = formatMaterialName(itemMaterial)
+        val itemName = getShopDisplayName(shop)
+        val template = getShopItemTemplate(shop)
         val stock = countChestStock(shop)
 
         val title = Component.text("         ")
@@ -362,8 +439,8 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
         for (i in 0..8) { gui.inventory.setItem(i, BORDER.clone()) }
         for (i in 18..26) { gui.inventory.setItem(i, BORDER.clone()) }
 
-        // Display item in center
-        val displayItem = ItemStack(itemMaterial)
+        // Display item in center — use the actual template item so custom model/texture shows
+        val displayItem = template.clone().also { it.amount = 1 }
         displayItem.editMeta { meta ->
             meta.displayName(Component.text(itemName, NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, true))
             val lore = mutableListOf<Component>()
@@ -426,11 +503,8 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
 
     private fun handleBuy(buyer: Player, shop: ShopData) {
         val price = shop.buyPrice ?: return
-        val itemMaterial = try { Material.valueOf(shop.item) } catch (_: Exception) {
-            plugin.commsManager.send(buyer, Component.text("This shop has an invalid item.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
-            return
-        }
-        val itemName = formatMaterialName(itemMaterial)
+        val template = getShopItemTemplate(shop)
+        val itemName = getShopDisplayName(shop)
 
         // Check buyer has enough money
         if (!plugin.economyManager.has(buyer.uniqueId, price)) {
@@ -446,7 +520,7 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        val stock = countItemsInInventory(chestInv, itemMaterial)
+        val stock = countItemsByTemplate(chestInv, template)
         if (stock < 1) {
             plugin.commsManager.send(buyer, Component.text("This shop is out of stock.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             buyer.playSound(buyer.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
@@ -455,9 +529,8 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
 
         // Check buyer has inventory space
         if (buyer.inventory.firstEmpty() == -1) {
-            // Try to stack
             val canStack = buyer.inventory.contents.any {
-                it != null && it.type == itemMaterial && it.amount < it.maxStackSize
+                it != null && it.isSimilar(template) && it.amount < it.maxStackSize
             }
             if (!canStack) {
                 plugin.commsManager.send(buyer, Component.text("Your inventory is full.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
@@ -467,12 +540,11 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
         }
 
         // Anti-dupe: remove the item from the chest FIRST, verify it was actually removed
-        val beforeCount = countItemsInInventory(chestInv, itemMaterial)
-        removeItemFromInventory(chestInv, itemMaterial, 1)
-        val afterCount = countItemsInInventory(chestInv, itemMaterial)
+        val beforeCount = countItemsByTemplate(chestInv, template)
+        removeItemByTemplate(chestInv, template, 1)
+        val afterCount = countItemsByTemplate(chestInv, template)
 
         if (afterCount >= beforeCount) {
-            // Item removal failed (chest was modified between check and removal)
             plugin.commsManager.send(buyer, Component.text("This shop is out of stock.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             buyer.playSound(buyer.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
             return
@@ -484,7 +556,8 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             plugin.economyManager.deposit(shop.ownerUuid, price)
         }
 
-        buyer.inventory.addItem(ItemStack(itemMaterial, 1))
+        // Give buyer the exact item (preserving enchants, PDC tags, etc.)
+        buyer.inventory.addItem(template.clone().also { it.amount = 1 })
 
         buyer.playSound(buyer.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f)
         plugin.commsManager.send(
@@ -506,14 +579,11 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
 
     private fun handleSell(seller: Player, shop: ShopData) {
         val price = shop.sellPrice ?: return
-        val itemMaterial = try { Material.valueOf(shop.item) } catch (_: Exception) {
-            plugin.commsManager.send(seller, Component.text("This shop has an invalid item.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
-            return
-        }
-        val itemName = formatMaterialName(itemMaterial)
+        val template = getShopItemTemplate(shop)
+        val itemName = getShopDisplayName(shop)
 
-        // Check seller has the item
-        val sellerHas = countItemsInInventory(seller.inventory, itemMaterial)
+        // Check seller has the item (exact match: same enchants/PDC)
+        val sellerHas = countItemsByTemplate(seller.inventory, template)
         if (sellerHas < 1) {
             plugin.commsManager.send(seller, Component.text("You don't have any $itemName to sell.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             seller.playSound(seller.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
@@ -535,7 +605,7 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
         }
 
         val hasSpace = chestInv.firstEmpty() != -1 || chestInv.contents.any {
-            it != null && it.type == itemMaterial && it.amount < it.maxStackSize
+            it != null && it.isSimilar(template) && it.amount < it.maxStackSize
         }
         if (!hasSpace) {
             plugin.commsManager.send(seller, Component.text("The shop chest is full.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
@@ -544,12 +614,11 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
         }
 
         // Anti-dupe: remove the item from seller FIRST, verify it was actually removed
-        val beforeCount = countItemsInInventory(seller.inventory, itemMaterial)
-        removeItemFromInventory(seller.inventory, itemMaterial, 1)
-        val afterCount = countItemsInInventory(seller.inventory, itemMaterial)
+        val beforeCount = countItemsByTemplate(seller.inventory, template)
+        removeItemByTemplate(seller.inventory, template, 1)
+        val afterCount = countItemsByTemplate(seller.inventory, template)
 
         if (afterCount >= beforeCount) {
-            // Item removal failed
             plugin.commsManager.send(seller, Component.text("You don't have any $itemName to sell.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             seller.playSound(seller.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
             return
@@ -561,7 +630,7 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             plugin.economyManager.deposit(seller.uniqueId, price)
         }
 
-        chestInv.addItem(ItemStack(itemMaterial, 1))
+        chestInv.addItem(template.clone().also { it.amount = 1 })
 
         seller.playSound(seller.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f)
         plugin.commsManager.send(
@@ -621,8 +690,7 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
         // If sign already has [Shop] text, no restoration needed
         if (line0.contains("Shop", ignoreCase = true)) return
 
-        val itemMaterial = try { Material.valueOf(shop.item) } catch (_: Exception) { return }
-        val itemName = formatMaterialName(itemMaterial)
+        val itemName = getShopDisplayName(shop)
 
         side.line(0, Component.text("[Shop]", TextColor.color(0x0000AA)).decoration(TextDecoration.BOLD, true))
         side.line(1, Component.text(itemName, NamedTextColor.WHITE))
@@ -665,19 +733,20 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
 
     fun countChestStock(shop: ShopData): Int {
         val inv = getChestInventory(shop) ?: return 0
-        val mat = try { Material.valueOf(shop.item) } catch (_: Exception) { return 0 }
-        return countItemsInInventory(inv, mat)
+        return countItemsByTemplate(inv, getShopItemTemplate(shop))
     }
 
-    private fun countItemsInInventory(inventory: org.bukkit.inventory.Inventory, material: Material): Int {
-        return inventory.contents.filterNotNull().filter { it.type == material }.sumOf { it.amount }
+    /** Counts items in an inventory that are similar to the given template. */
+    private fun countItemsByTemplate(inventory: org.bukkit.inventory.Inventory, template: ItemStack): Int {
+        return inventory.contents.filterNotNull().filter { it.isSimilar(template) }.sumOf { it.amount }
     }
 
-    private fun removeItemFromInventory(inventory: org.bukkit.inventory.Inventory, material: Material, amount: Int) {
+    /** Removes up to [amount] items from [inventory] that are similar to [template]. */
+    private fun removeItemByTemplate(inventory: org.bukkit.inventory.Inventory, template: ItemStack, amount: Int) {
         var remaining = amount
         for (i in 0 until inventory.size) {
             val item = inventory.getItem(i) ?: continue
-            if (item.type != material) continue
+            if (!item.isSimilar(template)) continue
             if (item.amount <= remaining) {
                 remaining -= item.amount
                 inventory.setItem(i, null)
