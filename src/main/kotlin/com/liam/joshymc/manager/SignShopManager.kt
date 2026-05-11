@@ -319,6 +319,11 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
                 plugin.commsManager.send(player, Component.text("Unknown item: $line1Text", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
                 return
             }
+            // Enchanted books must use [hand] so the specific enchant is captured.
+            if (mat == Material.ENCHANTED_BOOK) {
+                plugin.commsManager.send(player, Component.text("Hold the enchanted book and use [hand] to set a specific enchant.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+                return
+            }
             itemMaterial = mat
             itemDisplayName = formatMaterialName(itemMaterial)
         }
@@ -539,12 +544,9 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        // Anti-dupe: remove the item from the chest FIRST, verify it was actually removed
-        val beforeCount = countItemsByTemplate(chestInv, template)
-        removeItemByTemplate(chestInv, template, 1)
-        val afterCount = countItemsByTemplate(chestInv, template)
-
-        if (afterCount >= beforeCount) {
+        // Anti-dupe: remove the actual item from the chest FIRST, returning what was taken.
+        val removedItem = removeOneItemByTemplate(chestInv, template)
+        if (removedItem == null) {
             plugin.commsManager.send(buyer, Component.text("This shop is out of stock.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             buyer.playSound(buyer.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
             return
@@ -556,8 +558,8 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             plugin.economyManager.deposit(shop.ownerUuid, price)
         }
 
-        // Give buyer the exact item (preserving enchants, PDC tags, etc.)
-        buyer.inventory.addItem(template.clone().also { it.amount = 1 })
+        // Give buyer the exact item that was in the chest (preserves actual enchants, PDC, etc.)
+        buyer.inventory.addItem(removedItem)
 
         buyer.playSound(buyer.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f)
         plugin.commsManager.send(
@@ -613,12 +615,9 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        // Anti-dupe: remove the item from seller FIRST, verify it was actually removed
-        val beforeCount = countItemsByTemplate(seller.inventory, template)
-        removeItemByTemplate(seller.inventory, template, 1)
-        val afterCount = countItemsByTemplate(seller.inventory, template)
-
-        if (afterCount >= beforeCount) {
+        // Anti-dupe: remove the actual item from the seller FIRST, returning what was taken.
+        val removedItem = removeOneItemByTemplate(seller.inventory, template)
+        if (removedItem == null) {
             plugin.commsManager.send(seller, Component.text("You don't have any $itemName to sell.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             seller.playSound(seller.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
             return
@@ -630,7 +629,8 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             plugin.economyManager.deposit(seller.uniqueId, price)
         }
 
-        chestInv.addItem(template.clone().also { it.amount = 1 })
+        // Add the actual sold item to the chest (not a template clone)
+        chestInv.addItem(removedItem)
 
         seller.playSound(seller.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f)
         plugin.commsManager.send(
@@ -756,6 +756,25 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             }
             if (remaining <= 0) break
         }
+    }
+
+    /**
+     * Removes exactly one item similar to [template] from [inventory] and returns it.
+     * Returns null if no matching item was found.
+     */
+    private fun removeOneItemByTemplate(inventory: org.bukkit.inventory.Inventory, template: ItemStack): ItemStack? {
+        for (i in 0 until inventory.size) {
+            val item = inventory.getItem(i) ?: continue
+            if (!item.isSimilar(template)) continue
+            val removed = item.clone().also { it.amount = 1 }
+            if (item.amount <= 1) {
+                inventory.setItem(i, null)
+            } else {
+                item.amount -= 1
+            }
+            return removed
+        }
+        return null
     }
 
     private fun parsePrices(text: String): Pair<Double?, Double?> {
