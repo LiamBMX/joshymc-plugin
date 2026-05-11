@@ -82,3 +82,16 @@ jobs:
           name: ${{ steps.ver.outputs.tag }}
           generate_release_notes: true
           files: release/joshymc-${{ steps.ver.outputs.version }}.jar
+
+      - name: Dispatch Discord notification
+        # softprops/action-gh-release creates the release via GITHUB_TOKEN, so the
+        # `release: published` event is suppressed (anti-recursion). Dispatch the
+        # notify workflow directly — workflow_dispatch is exempt from that rule.
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run notify-discord.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f tag="${{ steps.ver.outputs.tag }}"
