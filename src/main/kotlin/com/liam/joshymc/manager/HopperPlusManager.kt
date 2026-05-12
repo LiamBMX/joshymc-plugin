@@ -189,6 +189,10 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun transferItems(hopper: Hopper, data: HopperData) {
+        // Respect redstone: a powered hopper has isEnabled=false and must not transfer
+        val hopperBlockData = hopper.block.blockData as? org.bukkit.block.data.type.Hopper ?: return
+        if (!hopperBlockData.isEnabled) return
+
         val hopperInv = hopper.inventory
         val destination = getDestinationInventory(hopper) ?: return
 
