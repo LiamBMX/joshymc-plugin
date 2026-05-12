@@ -132,8 +132,8 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         // Drop generation tick — runs every second, processes spawners whose interval has elapsed
         tickTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickSpawners() }, 20L, 20L)
 
-        // Hopper extraction — every 2 seconds
-        hopperTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickHoppers() }, 40L, 40L)
+        // Hopper extraction — 4x per second
+        hopperTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickHoppers() }, 5L, 5L)
 
         // Live countdown updater for any open spawner GUIs — every second
         countdownTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickOpenGuis() }, 20L, 20L)
