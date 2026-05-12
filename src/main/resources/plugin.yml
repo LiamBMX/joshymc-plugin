@@ -50,7 +50,7 @@ commands:
     usage: /editwarp <name>
   pwarp:
     description: Player warps GUI and management
-    usage: /pwarp [set|delete|<name>]
+    usage: /pwarp [set|seticon|delete|<name>]
     aliases: [playerwarp, pwarps, pw]
   home:
     description: Teleport to your home
