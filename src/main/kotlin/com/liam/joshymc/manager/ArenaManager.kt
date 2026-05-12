@@ -25,6 +25,7 @@ import org.bukkit.event.block.Action
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerMoveEvent
+import org.bukkit.GameMode
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.inventory.ItemStack
@@ -48,6 +49,7 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
     private val arenas = mutableListOf<Arena>()
     private val arenaSelections = mutableMapOf<UUID, MutableList<Pair<Int, Int>>>()
     val playersInArena = mutableMapOf<UUID, Int>()
+    private val hadFlightInArena = java.util.concurrent.ConcurrentHashMap.newKeySet<UUID>()
 
     private val wandKey = NamespacedKey(plugin, "arena_wand")
 
@@ -303,6 +305,14 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                     plugin.settingsManager.setSetting(player, CombatManager.PVP_SETTING_KEY, true)
                     comms.send(player, Component.text("PvP auto-enabled \u2014 you entered an arena.", NamedTextColor.YELLOW))
                 }
+                // Disable flight on arena entry \u2014 flying gives an unfair
+                // advantage in PvP regardless of combat-tag state.
+                if (player.gameMode == GameMode.SURVIVAL && player.allowFlight) {
+                    hadFlightInArena.add(player.uniqueId)
+                    player.allowFlight = false
+                    player.isFlying = false
+                    comms.send(player, Component.text("Flight disabled \u2014 no flying in the arena.", NamedTextColor.RED))
+                }
                 player.showTitle(Title.title(
                     Component.text("\u2694 PvP Zone", NamedTextColor.RED).decoration(TextDecoration.BOLD, true),
                     Component.text(arena.name, NamedTextColor.GRAY),
@@ -314,6 +324,7 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 val oldArena = arenas.find { it.id == wasIn }
                 if (oldArena != null) hideBarrier(player, oldArena)
                 playersInArena.remove(player.uniqueId)
+                restoreArenaFlight(player)
                 player.showTitle(Title.title(
                     Component.text("Safe Zone", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true),
                     Component.empty(),
@@ -334,6 +345,19 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
         // Backstop pin for combat-tagged players who somehow ended up
         // outside their arena polygon.
         tickCombatPin()
+    }
+
+    private fun restoreArenaFlight(player: Player) {
+        if (!hadFlightInArena.remove(player.uniqueId)) return
+        if (plugin.combatManager.isTagged(player)) return
+        val mode = player.gameMode
+        if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR) {
+            player.allowFlight = true
+            return
+        }
+        if (player.hasPermission("joshymc.fly")) {
+            player.allowFlight = true
+        }
     }
 
     // ── Border particles (every 30 ticks) ────────────────
@@ -728,6 +752,7 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
         }
         barrierPlayers.remove(uuid)
         lastPlayerHitMs.remove(uuid)
+        hadFlightInArena.remove(uuid)
     }
 
     private fun getDamager(event: EntityDamageByEntityEvent): Player? {
