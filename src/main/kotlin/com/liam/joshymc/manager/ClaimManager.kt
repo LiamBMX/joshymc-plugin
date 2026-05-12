@@ -694,7 +694,10 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
     fun isClaimWand(player: Player): Boolean {
         val item = player.inventory.itemInMainHand
-        return item.type == Material.GOLDEN_SHOVEL
+        if (item.type != Material.GOLDEN_SHOVEL) return false
+        // Subclaim wands are golden shovels that carry the claim_wand PDC tag — exclude them.
+        val meta = item.itemMeta ?: return true
+        return !meta.persistentDataContainer.has(claimWandKey, PersistentDataType.INTEGER)
     }
 
     @EventHandler
