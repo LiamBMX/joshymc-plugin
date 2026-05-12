@@ -311,10 +311,10 @@ class AFKManager(private val plugin: Joshymc) {
             afkStartTime[player.uniqueId] = System.currentTimeMillis()
             nextRewardTime[player.uniqueId] = System.currentTimeMillis() + (rewardIntervalSeconds * 1000)
 
-            // Update display name with [AFK] tag
+            // Update display name with [AFK] tag, preserving any active nickname
             player.displayName(
                 Component.text("[AFK] ", NamedTextColor.GRAY)
-                    .append(Component.text(player.name))
+                    .append(player.displayName())
             )
 
             // Teleport to AFK world
@@ -365,8 +365,10 @@ class AFKManager(private val plugin: Joshymc) {
                 formatDuration(totalSeconds)
             } else "unknown"
 
-            // Restore display name
+            // Restore display name — reset to IGN first, then re-apply nick if present
             player.displayName(Component.text(player.name))
+            player.playerListName(Component.text(player.name))
+            com.liam.joshymc.command.NickCommand.loadNickname(plugin, player)
 
             // Clear title
             player.clearTitle()
