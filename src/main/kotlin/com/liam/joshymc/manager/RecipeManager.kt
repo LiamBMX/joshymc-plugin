@@ -1,24 +1,22 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import org.bukkit.Material
+import org.bukkit.NamespacedKey
 
-/**
- * Central registry for custom crafting recipes.
- * Add recipes in `registerAll()` as items are added.
- */
 class RecipeManager(private val plugin: Joshymc) {
 
-    private val registeredKeys = mutableListOf<org.bukkit.NamespacedKey>()
+    private var customRecipes = com.liam.joshymc.recipe.CustomRecipes(plugin)
 
     fun registerAll() {
-        val customRecipes = com.liam.joshymc.recipe.CustomRecipes(plugin)
+        customRecipes = com.liam.joshymc.recipe.CustomRecipes(plugin)
         customRecipes.registerAll()
     }
 
     fun clear() {
-        for (key in registeredKeys) {
-            plugin.server.removeRecipe(key)
-        }
-        registeredKeys.clear()
+        customRecipes.clear()
     }
+
+    fun getCustomIngredients(key: NamespacedKey): Map<Material, String>? =
+        customRecipes.getCustomIngredients(key)
 }
