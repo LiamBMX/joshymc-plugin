@@ -1,0 +1,67 @@
+name: Progress labels
+
+# Adds visible status labels to issues and PRs so you can tell at a glance
+# what stage of the pipeline each item is in:
+#   🔨 in-progress  — Claude is investigating an issue (no PR yet)
+#   📝 in-review    — Claude has opened a PR; CI / auto-merge pending
+#
+# Labels are added when an issue opens and when a claude/* PR opens. They
+# disappear on their own when the issue auto-closes via the merge handler.
+
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  apply:
+    if: |
+      github.event_name == 'issues' ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'claude/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh label create "🔨 in-progress" --repo "$REPO" --color F1C40F \
+            --description "Claude is investigating this issue" 2>/dev/null || true
+          gh label create "📝 in-review"   --repo "$REPO" --color 3498DB \
+            --description "Claude has opened a PR; CI + auto-merge pending" 2>/dev/null || true
+
+      - name: Apply label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT" = "issues" ]; then
+            echo "Labeling issue #$ISSUE_NUMBER as in-progress"
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --add-label "🔨 in-progress"
+          else
+            echo "Labeling PR #$PR_NUMBER as in-review"
+            gh pr edit "$PR_NUMBER" --repo "$REPO" \
+              --add-label "📝 in-review"
+
+            # Promote the linked issue from in-progress -> in-review
+            LINKED=$(echo "$PR_BRANCH" | sed -nE 's|^claude/issue-([0-9]+)$|\1|p')
+            if [ -n "$LINKED" ]; then
+              echo "Promoting linked issue #$LINKED to in-review"
+              gh issue edit "$LINKED" --repo "$REPO" \
+                --remove-label "🔨 in-progress" 2>/dev/null || true
+              gh issue edit "$LINKED" --repo "$REPO" \
+                --add-label "📝 in-review"
+            fi
+          fi
