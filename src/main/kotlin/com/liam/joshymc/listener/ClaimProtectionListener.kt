@@ -29,6 +29,7 @@ import org.bukkit.event.player.PlayerBucketEmptyEvent
 import org.bukkit.event.player.PlayerBucketFillEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.event.vehicle.VehicleDestroyEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -294,6 +295,19 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
             val destClaim = plugin.claimManager.getClaimAt(dest.location)
             if (srcClaim != null && srcClaim.id != pistonClaim?.id) { event.isCancelled = true; return }
             if (destClaim != null && destClaim.id != pistonClaim?.id) { event.isCancelled = true; return }
+        }
+    }
+
+    // 17. Vehicle destruction (boats, minecarts) — safety net that fires after the
+    //     entity-damage chain; ensures a vehicle in a claim cannot be destroyed by
+    //     an unauthorized player even if an earlier event slipped through.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onVehicleDestroy(event: VehicleDestroyEvent) {
+        val attacker = event.attacker ?: return
+        val player = getPlayerAttacker(attacker) ?: return
+        if (!plugin.claimManager.canAccess(player, event.vehicle.location)) {
+            event.isCancelled = true
+            denyWithMessage(player)
         }
     }
 
