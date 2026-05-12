@@ -7,6 +7,7 @@ import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Mob
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
+import org.bukkit.entity.Villager
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
@@ -42,6 +43,7 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
          */
         private fun shouldHide(entity: LivingEntity): Boolean {
             if (entity is ArmorStand) return false
+            if (entity is Villager) return false
             if (entity.scoreboardTags.contains("joshymc_xray")) return false
             return true
         }
