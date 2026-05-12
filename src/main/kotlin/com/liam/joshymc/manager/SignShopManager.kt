@@ -726,15 +726,13 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        // Anti-dupe: remove items from chest first, verify removal
-        val beforeCount = countItemsByTemplate(chestInv, template)
-        removeItemByTemplate(chestInv, template, amount)
-        val afterCount = countItemsByTemplate(chestInv, template)
-        val removed = beforeCount - afterCount
+        // Anti-dupe: remove the actual items from the chest first, returning what was taken.
+        val removedItems = removeItemsByTemplate(chestInv, template, amount)
+        val removed = removedItems.sumOf { it.amount }
 
         if (removed < amount) {
             // Partial or failed removal — roll back what we took and abort
-            if (removed > 0) chestInv.addItem(template.clone().also { it.amount = removed })
+            for (item in removedItems) chestInv.addItem(item)
             plugin.commsManager.send(buyer, Component.text("Not enough stock — purchase cancelled.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             buyer.playSound(buyer.location, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
             return
@@ -745,9 +743,12 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
             plugin.economyManager.deposit(shop.ownerUuid, totalCost)
         }
 
-        val overflow = buyer.inventory.addItem(template.clone().also { it.amount = amount })
-        for (leftover in overflow.values) {
-            buyer.world.dropItemNaturally(buyer.location, leftover)
+        // Give buyer the exact items that were in the chest (preserves enchants, PDC, etc.)
+        for (item in removedItems) {
+            val overflow = buyer.inventory.addItem(item)
+            for (leftover in overflow.values) {
+                buyer.world.dropItemNaturally(buyer.location, leftover)
+            }
         }
 
         buyer.playSound(buyer.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f)
@@ -927,6 +928,30 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
     /** Counts items in an inventory that are similar to the given template. */
     private fun countItemsByTemplate(inventory: org.bukkit.inventory.Inventory, template: ItemStack): Int {
         return inventory.contents.filterNotNull().filter { it.isSimilar(template) }.sumOf { it.amount }
+    }
+
+    /**
+     * Removes up to [amount] items from [inventory] similar to [template], returning the actual
+     * removed stacks with their full metadata intact (enchantments, PDC, etc.).
+     */
+    private fun removeItemsByTemplate(inventory: org.bukkit.inventory.Inventory, template: ItemStack, amount: Int): List<ItemStack> {
+        val removed = mutableListOf<ItemStack>()
+        var remaining = amount
+        for (i in 0 until inventory.size) {
+            val item = inventory.getItem(i) ?: continue
+            if (!item.isSimilar(template)) continue
+            if (item.amount <= remaining) {
+                removed.add(item.clone())
+                remaining -= item.amount
+                inventory.setItem(i, null)
+            } else {
+                removed.add(item.clone().also { it.amount = remaining })
+                item.amount -= remaining
+                remaining = 0
+            }
+            if (remaining <= 0) break
+        }
+        return removed
     }
 
     /** Removes up to [amount] items from [inventory] that are similar to [template]. */
