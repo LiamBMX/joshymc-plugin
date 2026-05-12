@@ -216,6 +216,9 @@ commands:
     description: Broadcast an announcement
     usage: /announce <message>
     aliases: [broadcast, bc]
+  restart:
+    description: Schedule a server restart with a countdown
+    usage: /restart [seconds|cancel]
   help:
     description: Open the help menu GUI
     usage: /help
@@ -664,6 +667,9 @@ permissions:
     default: op
   joshymc.announce:
     description: Send custom announcements
+    default: op
+  joshymc.restart:
+    description: Schedule and cancel server restarts
     default: op
   joshymc.back:
     description: Use /back

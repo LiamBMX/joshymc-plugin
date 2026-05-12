@@ -116,6 +116,7 @@ import com.liam.joshymc.command.PortalCommand
 import com.liam.joshymc.command.VoteCommand
 import com.liam.joshymc.command.WorldCommand
 import com.liam.joshymc.command.WorldFlagCommand
+import com.liam.joshymc.command.RestartCommand
 
 class CommandManager(private val plugin: Joshymc) {
 
@@ -410,6 +411,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("smite")?.let { val c = SmiteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("top")?.setExecutor(TopCommand(plugin))
         plugin.getCommand("sudo")?.let { val c = SudoCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("restart")?.let { val c = RestartCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         val msgCmd = MsgCommand(plugin)
         plugin.getCommand("msg")?.let { it.setExecutor(msgCmd); it.tabCompleter = msgCmd }
