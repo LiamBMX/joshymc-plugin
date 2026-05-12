@@ -6,6 +6,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.Bukkit
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
@@ -87,6 +88,18 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS team_homes (
+                team_name TEXT PRIMARY KEY,
+                world TEXT NOT NULL,
+                x REAL NOT NULL,
+                y REAL NOT NULL,
+                z REAL NOT NULL,
+                yaw REAL NOT NULL,
+                pitch REAL NOT NULL
+            )
+        """.trimIndent())
+
         plugin.logger.info("[Teams] TeamManager started.")
     }
 
@@ -114,6 +127,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         plugin.databaseManager.execute("DELETE FROM team_members WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_balances WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_echests WHERE team_name = ?", name)
+        plugin.databaseManager.execute("DELETE FROM team_homes WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM teams WHERE name = ?", name)
         return true
     }
@@ -279,6 +293,25 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         val team1 = getPlayerTeam(uuid1) ?: return false
         val team2 = getPlayerTeam(uuid2) ?: return false
         return team1 == team2
+    }
+
+    // ── Team home methods ──
+
+    fun setTeamHome(teamName: String, location: Location) {
+        plugin.databaseManager.execute(
+            "INSERT OR REPLACE INTO team_homes (team_name, world, x, y, z, yaw, pitch) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            teamName, location.world.name, location.x, location.y, location.z, location.yaw, location.pitch
+        )
+    }
+
+    fun getTeamHome(teamName: String): Location? {
+        return plugin.databaseManager.queryFirst(
+            "SELECT world, x, y, z, yaw, pitch FROM team_homes WHERE team_name = ?", teamName
+        ) { rs ->
+            val world = plugin.server.getWorld(rs.getString("world")) ?: return@queryFirst null
+            Location(world, rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
+                rs.getFloat("yaw"), rs.getFloat("pitch"))
+        }
     }
 
     // ── Team balance methods ──
