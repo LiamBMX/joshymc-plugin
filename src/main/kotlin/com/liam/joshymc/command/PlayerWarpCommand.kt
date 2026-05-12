@@ -52,6 +52,7 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
         when (args[0].lowercase()) {
             "set" -> handleSet(sender, args)
+            "seticon" -> handleSetIcon(sender, args)
             "delete", "del", "remove" -> handleDelete(sender, args)
             else -> {
                 // Treat as a warp name
@@ -112,6 +113,31 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         plugin.commsManager.send(sender, Component.text("Player warp '$name' created.", NamedTextColor.GREEN), CommunicationsManager.Category.WARP)
     }
 
+    private fun handleSetIcon(sender: Player, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.pwarp.set")) {
+            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            return
+        }
+
+        if (args.size < 2) {
+            plugin.commsManager.send(sender, Component.text("Usage: /pwarp seticon <name>", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            return
+        }
+
+        val held = sender.inventory.itemInMainHand
+        if (held.type == Material.AIR) {
+            plugin.commsManager.send(sender, Component.text("Hold the item you want to use as the icon.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            return
+        }
+
+        val name = args[1].lowercase()
+        if (plugin.warpManager.setPlayerWarpIcon(name, held.type.name, sender.uniqueId.toString())) {
+            plugin.commsManager.send(sender, Component.text("Icon for '$name' updated.", NamedTextColor.GREEN), CommunicationsManager.Category.WARP)
+        } else {
+            plugin.commsManager.send(sender, Component.text("Player warp '$name' not found or you don't own it.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+        }
+    }
+
     private fun handleDelete(sender: Player, args: Array<out String>) {
         if (args.size < 2) {
             plugin.commsManager.send(sender, Component.text("Usage: /pwarp delete <name>", NamedTextColor.RED), CommunicationsManager.Category.WARP)
@@ -155,7 +181,8 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             val loc = warp.location
             val ownerName = plugin.warpManager.getPlayerWarpOwnerName(warp.name) ?: "Unknown"
 
-            val item = ItemStack(Material.OAK_SIGN)
+            val iconMat = runCatching { Material.valueOf(warp.icon) }.getOrDefault(Material.OAK_SIGN)
+            val item = ItemStack(iconMat)
             item.editMeta { meta ->
                 meta.displayName(
                     Component.text(warp.name, TextColor.color(0xFFAA00))
@@ -217,7 +244,7 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) {
             val prefix = args[0].lowercase()
-            val subs = listOf("set", "delete")
+            val subs = listOf("set", "seticon", "delete")
             val warpNames = plugin.warpManager.getAllPlayerWarps().map { it.name }
             return (subs + warpNames).filter { it.startsWith(prefix) }
         }
@@ -231,6 +258,11 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                         plugin.warpManager.getPlayerWarpsByOwner(sender.uniqueId.toString())
                     } else emptyList()
                     warps.map { it.name }.filter { it.startsWith(prefix) }
+                }
+                "seticon" -> {
+                    if (sender !is Player) return emptyList()
+                    plugin.warpManager.getPlayerWarpsByOwner(sender.uniqueId.toString())
+                        .map { it.name }.filter { it.startsWith(prefix) }
                 }
                 else -> emptyList()
             }

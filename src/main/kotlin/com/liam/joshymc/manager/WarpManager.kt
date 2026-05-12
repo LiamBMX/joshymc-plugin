@@ -37,7 +37,8 @@ class WarpManager(private val plugin: Joshymc) {
                 owner_name TEXT NOT NULL,
                 world TEXT NOT NULL,
                 x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL,
-                yaw REAL NOT NULL, pitch REAL NOT NULL
+                yaw REAL NOT NULL, pitch REAL NOT NULL,
+                icon TEXT NOT NULL DEFAULT 'OAK_SIGN'
             )
         """.trimIndent())
 
@@ -55,9 +56,10 @@ class WarpManager(private val plugin: Joshymc) {
         // Migrate: add icon column if missing
         try {
             plugin.databaseManager.execute("ALTER TABLE warps ADD COLUMN icon TEXT NOT NULL DEFAULT 'ENDER_PEARL'")
-        } catch (_: Exception) {
-            // Column already exists
-        }
+        } catch (_: Exception) {}
+        try {
+            plugin.databaseManager.execute("ALTER TABLE player_warps ADD COLUMN icon TEXT NOT NULL DEFAULT 'OAK_SIGN'")
+        } catch (_: Exception) {}
 
         plugin.logger.info("[WarpManager] Tables initialized.")
     }
@@ -201,14 +203,15 @@ class WarpManager(private val plugin: Joshymc) {
 
     fun getAllPlayerWarps(): List<WarpInfo> {
         return plugin.databaseManager.query(
-            "SELECT name, owner, world, x, y, z, yaw, pitch FROM player_warps ORDER BY name"
+            "SELECT name, owner, world, x, y, z, yaw, pitch, icon FROM player_warps ORDER BY name"
         ) { rs ->
             val world = plugin.server.getWorld(rs.getString("world"))
             if (world != null) {
                 WarpInfo(
                     rs.getString("name"), rs.getString("owner"),
                     Location(world, rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
-                        rs.getFloat("yaw"), rs.getFloat("pitch"))
+                        rs.getFloat("yaw"), rs.getFloat("pitch")),
+                    rs.getString("icon") ?: "OAK_SIGN"
                 )
             } else null
         }.filterNotNull()
@@ -216,17 +219,27 @@ class WarpManager(private val plugin: Joshymc) {
 
     fun getPlayerWarpsByOwner(uuid: String): List<WarpInfo> {
         return plugin.databaseManager.query(
-            "SELECT name, owner, world, x, y, z, yaw, pitch FROM player_warps WHERE owner = ? ORDER BY name", uuid
+            "SELECT name, owner, world, x, y, z, yaw, pitch, icon FROM player_warps WHERE owner = ? ORDER BY name", uuid
         ) { rs ->
             val world = plugin.server.getWorld(rs.getString("world"))
             if (world != null) {
                 WarpInfo(
                     rs.getString("name"), rs.getString("owner"),
                     Location(world, rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"),
-                        rs.getFloat("yaw"), rs.getFloat("pitch"))
+                        rs.getFloat("yaw"), rs.getFloat("pitch")),
+                    rs.getString("icon") ?: "OAK_SIGN"
                 )
             } else null
         }.filterNotNull()
+    }
+
+    fun setPlayerWarpIcon(name: String, icon: String, ownerUuid: String): Boolean {
+        val owner = plugin.databaseManager.queryFirst(
+            "SELECT owner FROM player_warps WHERE name = ?", name
+        ) { rs -> rs.getString("owner") } ?: return false
+        if (owner != ownerUuid) return false
+        plugin.databaseManager.execute("UPDATE player_warps SET icon = ? WHERE name = ?", icon, name)
+        return true
     }
 
     fun getPlayerWarpCount(uuid: String): Int {
