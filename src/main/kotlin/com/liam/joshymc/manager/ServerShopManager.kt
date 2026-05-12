@@ -329,12 +329,13 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     // ── Buy Quantity GUI ────────────────────────────────────────────────
     //
-    // Replaces the old "shift-left = buy 64" hotkey with a 27-slot inventory
-    // that lets players pick exactly how many they want (1..64). Layout:
+    // 27-slot GUI letting players pick how many to buy (1..640, i.e. up to 10 stacks). Layout:
     //   row 0:        gray border
-    //   row 1: . R16 R8 R-1 ITEM G+1 G+8 G+16 .
+    //   row 1: R64 R16 R8 R-1 ITEM G+1 G+8 G+16 G+64
     //   row 2:        confirm at slot 22
     // Confirm charges live price * amount and gives that many items.
+
+    private val MAX_BUY = 640
 
     private fun openBuyQuantityGui(player: Player, shopItem: ShopItem, livePrice: Double) {
         var amount = 1
@@ -393,18 +394,18 @@ class ServerShopManager(private val plugin: Joshymc) {
             gui.inventory.setItem(22, confirm)
         }
 
-        // Decrement panes (left of the item display)
-        for ((slot, delta) in listOf(10 to -16, 11 to -8, 12 to -1)) {
+        // Decrement panes (left of the item display, slot 9 = -64 stack button)
+        for ((slot, delta) in listOf(9 to -64, 10 to -16, 11 to -8, 12 to -1)) {
             gui.setItem(slot, decBtn(delta)) { p, _ ->
-                amount = (amount + delta).coerceIn(1, 64)
+                amount = (amount + delta).coerceIn(1, MAX_BUY)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.4f, 0.8f)
                 renderDynamic()
             }
         }
-        // Increment panes (right of the item display)
-        for ((slot, delta) in listOf(14 to 1, 15 to 8, 16 to 16)) {
+        // Increment panes (right of the item display, slot 17 = +64 stack button)
+        for ((slot, delta) in listOf(14 to 1, 15 to 8, 16 to 16, 17 to 64)) {
             gui.setItem(slot, incBtn(delta)) { p, _ ->
-                amount = (amount + delta).coerceIn(1, 64)
+                amount = (amount + delta).coerceIn(1, MAX_BUY)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.4f, 1.4f)
                 renderDynamic()
             }
@@ -416,7 +417,7 @@ class ServerShopManager(private val plugin: Joshymc) {
             // Re-fetch the live price on confirm so a market price tick
             // mid-GUI doesn't let the player lock in a stale rate.
             val currentPrice = shopItem.buyPrice * plugin.marketManager.getMultiplier(shopItem.material)
-            buyItem(p, shopItem.material, currentPrice, amount.coerceIn(1, 64))
+            buyItem(p, shopItem.material, currentPrice, amount.coerceIn(1, MAX_BUY))
         }
 
         renderDynamic()
