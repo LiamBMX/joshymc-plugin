@@ -51,6 +51,9 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "withdraw" -> handleWithdraw(sender, args)
             "balance", "bal" -> handleBalance(sender)
             "echest" -> handleEchest(sender)
+            "sethome" -> handleSetHome(sender)
+            "home" -> handleHome(sender)
+            "delhome" -> handleDelHome(sender)
             else -> sendUsage(sender)
         }
         return true
@@ -74,7 +77,10 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "/team deposit <amount>" to "Deposit to team bank",
             "/team withdraw <amount>" to "Withdraw from team bank",
             "/team balance" to "View team balance",
-            "/team echest" to "Open team ender chest"
+            "/team echest" to "Open team ender chest",
+            "/team sethome" to "Set team home (owner only)",
+            "/team home" to "Teleport to team home",
+            "/team delhome" to "Delete team home (owner only)"
         )
         commands.forEach { (cmd, desc) ->
             player.sendMessage(
@@ -610,11 +616,63 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         plugin.teamManager.openTeamEchest(player, teamName)
     }
 
+    private fun handleSetHome(player: Player) {
+        val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
+        if (teamName == null) {
+            plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (plugin.teamManager.getPlayerRole(player.uniqueId) != "owner") {
+            plugin.commsManager.send(player, Component.text("Only the owner can set the team home.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        plugin.teamManager.setTeamHome(teamName, player.location)
+        plugin.commsManager.send(player, Component.text("Team home set!", NamedTextColor.GREEN), CommunicationsManager.Category.DEFAULT)
+    }
+
+    private fun handleHome(player: Player) {
+        val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
+        if (teamName == null) {
+            plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        val home = plugin.teamManager.getTeamHome(teamName)
+        if (home == null) {
+            plugin.commsManager.send(player, Component.text("Your team has no home set. The owner can use /team sethome.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        player.teleport(home)
+        plugin.commsManager.send(player, Component.text("Teleported to team home.", NamedTextColor.GREEN), CommunicationsManager.Category.DEFAULT)
+    }
+
+    private fun handleDelHome(player: Player) {
+        val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
+        if (teamName == null) {
+            plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (plugin.teamManager.getPlayerRole(player.uniqueId) != "owner") {
+            plugin.commsManager.send(player, Component.text("Only the owner can delete the team home.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (plugin.teamManager.deleteTeamHome(teamName)) {
+            plugin.commsManager.send(player, Component.text("Team home deleted.", NamedTextColor.GRAY), CommunicationsManager.Category.DEFAULT)
+        } else {
+            plugin.commsManager.send(player, Component.text("No team home is set.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+        }
+    }
+
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (sender !is Player) return emptyList()
 
         if (args.size == 1) {
-            return listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "chat", "deposit", "withdraw", "balance", "echest")
+            return listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home", "delhome")
                 .filter { it.startsWith(args[0], ignoreCase = true) }
         }
 

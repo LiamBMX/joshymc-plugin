@@ -87,6 +87,18 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS team_homes (
+                team_name TEXT PRIMARY KEY,
+                world TEXT NOT NULL,
+                x REAL NOT NULL,
+                y REAL NOT NULL,
+                z REAL NOT NULL,
+                yaw REAL NOT NULL,
+                pitch REAL NOT NULL
+            )
+        """.trimIndent())
+
         plugin.logger.info("[Teams] TeamManager started.")
     }
 
@@ -114,6 +126,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         plugin.databaseManager.execute("DELETE FROM team_members WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_balances WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_echests WHERE team_name = ?", name)
+        plugin.databaseManager.execute("DELETE FROM team_homes WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM teams WHERE name = ?", name)
         return true
     }
@@ -279,6 +292,40 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         val team1 = getPlayerTeam(uuid1) ?: return false
         val team2 = getPlayerTeam(uuid2) ?: return false
         return team1 == team2
+    }
+
+    // ── Team home methods ──
+
+    fun setTeamHome(teamName: String, location: org.bukkit.Location) {
+        val world = location.world?.name ?: return
+        plugin.databaseManager.execute(
+            "INSERT OR REPLACE INTO team_homes (team_name, world, x, y, z, yaw, pitch) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            teamName, world, location.x, location.y, location.z, location.yaw.toDouble(), location.pitch.toDouble()
+        )
+    }
+
+    fun getTeamHome(teamName: String): org.bukkit.Location? {
+        return plugin.databaseManager.queryFirst(
+            "SELECT * FROM team_homes WHERE team_name = ?", teamName
+        ) { rs ->
+            val world = Bukkit.getWorld(rs.getString("world")) ?: return@queryFirst null
+            org.bukkit.Location(
+                world,
+                rs.getDouble("x"),
+                rs.getDouble("y"),
+                rs.getDouble("z"),
+                rs.getDouble("yaw").toFloat(),
+                rs.getDouble("pitch").toFloat()
+            )
+        }
+    }
+
+    fun deleteTeamHome(teamName: String): Boolean {
+        val exists = plugin.databaseManager.queryFirst(
+            "SELECT team_name FROM team_homes WHERE team_name = ?", teamName
+        ) { true } ?: return false
+        plugin.databaseManager.execute("DELETE FROM team_homes WHERE team_name = ?", teamName)
+        return true
     }
 
     // ── Team balance methods ──
