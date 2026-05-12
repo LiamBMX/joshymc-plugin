@@ -37,9 +37,8 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
     /** Tick counters per hopper for speed scheduling */
     private val tickCounters = mutableMapOf<String, Int>()
 
-    /** Non-upgraded hoppers claimed by our tick task; value = consecutive-miss count */
-    private val regularHoppers = mutableMapOf<String, Int>()
-    private val regularTickCounters = mutableMapOf<String, Int>()
+    /** Non-upgraded hoppers owned by our tick task; value = last successful transfer time (ms) */
+    private val regularHoppers = mutableMapOf<String, Long>()
 
     fun start() {
         plugin.databaseManager.createTable("""
@@ -63,7 +62,6 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
         tickTask = null
         tickCounters.clear()
         regularHoppers.clear()
-        regularTickCounters.clear()
         cache.clear()
     }
 
@@ -175,41 +173,30 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
                 }
             }
 
-            // Process non-upgraded hoppers at 4 items/second (every 5 ticks)
+            // Process non-upgraded hoppers at ~4/s using wall-clock time (works correctly under lag)
+            val nowMs = System.currentTimeMillis()
             val regularToRemove = mutableListOf<String>()
-            for ((k, misses) in regularHoppers) {
-                val counter = (regularTickCounters[k] ?: 0) + 1
-                regularTickCounters[k] = counter
+            for ((k, lastMs) in regularHoppers) {
+                if (nowMs - lastMs < 250L) continue
 
-                if (counter % 5 != 0) continue
+                val parts = k.split(":", limit = 4)
+                if (parts.size < 4) { regularToRemove.add(k); continue }
+                val rWorld = plugin.server.getWorld(parts[0]) ?: run { regularToRemove.add(k); continue }
+                val rx = parts[1].toIntOrNull() ?: run { regularToRemove.add(k); continue }
+                val ry = parts[2].toIntOrNull() ?: run { regularToRemove.add(k); continue }
+                val rz = parts[3].toIntOrNull() ?: run { regularToRemove.add(k); continue }
 
-                val parts = k.split(":")
-                if (parts.size != 4) { regularToRemove.add(k); continue }
-                val world = plugin.server.getWorld(parts[0]) ?: run { regularToRemove.add(k); continue }
-                val x = parts[1].toIntOrNull() ?: run { regularToRemove.add(k); continue }
-                val y = parts[2].toIntOrNull() ?: run { regularToRemove.add(k); continue }
-                val z = parts[3].toIntOrNull() ?: run { regularToRemove.add(k); continue }
+                val rBlock = rWorld.getBlockAt(rx, ry, rz)
+                if (rBlock.type != Material.HOPPER) { regularToRemove.add(k); continue }
 
-                val block = world.getBlockAt(x, y, z)
-                if (block.type != Material.HOPPER) { regularToRemove.add(k); continue }
+                val rHopper = rBlock.state as? Hopper ?: run { regularToRemove.add(k); continue }
+                regularHoppers[k] = nowMs
 
-                val hopperState = block.state as? Hopper ?: run { regularToRemove.add(k); continue }
-                val transferred = transferRegular(hopperState)
-
-                if (transferred) {
-                    regularHoppers[k] = 0
-                } else {
-                    if (misses >= 3) {
-                        regularToRemove.add(k)
-                    } else {
-                        regularHoppers[k] = misses + 1
-                    }
-                }
+                // Push first; if nothing moved, try to pull from the container above
+                val pushed = transferRegular(rHopper)
+                if (!pushed) tryPull(rHopper)
             }
-            regularToRemove.forEach { k ->
-                regularHoppers.remove(k)
-                regularTickCounters.remove(k)
-            }
+            regularToRemove.forEach { regularHoppers.remove(it) }
         }, 1L, 1L)
     }
 
@@ -264,6 +251,24 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
             }
         }
         return false
+    }
+
+    private fun tryPull(hopper: Hopper) {
+        val above = hopper.block.getRelative(org.bukkit.block.BlockFace.UP)
+        val sourceInv = (above.state as? org.bukkit.block.Container)?.inventory ?: return
+        val hopperInv = hopper.inventory
+        for (slot in 0 until sourceInv.size) {
+            val item = sourceInv.getItem(slot) ?: continue
+            if (item.type == Material.AIR) continue
+            val toTransfer = item.clone().apply { amount = 1 }
+            val leftover = hopperInv.addItem(toTransfer)
+            val transferred = 1 - (leftover.values.sumOf { it.amount })
+            if (transferred > 0) {
+                item.amount -= transferred
+                if (item.amount <= 0) sourceInv.setItem(slot, null)
+                return
+            }
+        }
     }
 
     private fun getDestinationInventory(hopper: Hopper): Inventory? {
@@ -321,6 +326,7 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
             data.speed++
             cache[k] = data
             save(data)
+            regularHoppers.remove(k) // now managed by upgrade tick path
 
             // Consume one diamond
             item.amount--
@@ -385,24 +391,30 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
         val destHolder = event.destination.holder
         if (destHolder is Hopper) {
             val loc = destHolder.block.location
-            val data = cache[key(loc)] ?: return
+            val k = key(loc)
+            val data = cache[k]
 
-            // Block filtered items
-            if (data.filterItem != null) {
-                val filterMat = try { Material.valueOf(data.filterItem!!) } catch (_: Exception) { null }
-                if (filterMat != null && event.item.type != filterMat) {
-                    event.isCancelled = true
-                    return
-                }
-            }
-
-            // Cancel vanilla transfer for speed-upgraded hoppers (our tick task handles it)
-            if (data.speed > 1) {
+            if (data == null) {
+                // Non-upgraded hopper (pull direction): take over at 4 items/second
+                regularHoppers.putIfAbsent(k, 0L)
                 event.isCancelled = true
+            } else {
+                // Block filtered items
+                if (data.filterItem != null) {
+                    val filterMat = try { Material.valueOf(data.filterItem!!) } catch (_: Exception) { null }
+                    if (filterMat != null && event.item.type != filterMat) {
+                        event.isCancelled = true
+                        return
+                    }
+                }
+                // Cancel vanilla transfer for speed-upgraded hoppers (our tick task handles it)
+                if (data.speed > 1) {
+                    event.isCancelled = true
+                }
             }
         }
 
-        // Also apply filter/speed when upgraded hopper is the source
+        // Also apply filter/speed when upgraded or vanilla hopper is the source
         val srcHolder = event.source.holder
         if (srcHolder is Hopper) {
             val loc = srcHolder.block.location
@@ -410,9 +422,9 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
             val data = cache[k]
 
             if (data == null) {
-                // Non-upgraded hopper: take over at 4 items/second
+                // Non-upgraded hopper (push direction): take over at 4 items/second
+                regularHoppers.putIfAbsent(k, 0L)
                 event.isCancelled = true
-                regularHoppers[k] = 0
                 return
             }
 
@@ -438,6 +450,7 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
 
         val loc = event.block.location
         val k = key(loc)
+        regularHoppers.remove(k)
         val data = cache[k] ?: return
 
         delete(loc.world.name, loc.blockX, loc.blockY, loc.blockZ)
