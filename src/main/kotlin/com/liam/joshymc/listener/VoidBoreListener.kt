@@ -136,10 +136,12 @@ class VoidBoreListener(private val plugin: Joshymc) : Listener {
                 }
 
                 // Clear everything that isn't bedrock, keep going through mixed bedrock layers
+                val onlinePlayer = plugin.server.getPlayer(playerId)
                 for (dx in -radius..radius) {
                     for (dz in -radius..radius) {
                         val block = world.getBlockAt(cx + dx, currentY, cz + dz)
                         if (BlockUtil.isMineable(block.type)) {
+                            if (onlinePlayer != null && !plugin.claimManager.canAccess(onlinePlayer, block.location)) continue
                             if (radius == 0) {
                                 spawnBreakEffects(block, blocksDestroyed)
                             } else if (blocksDestroyed % 5 == 0) {
@@ -181,10 +183,12 @@ class VoidBoreListener(private val plugin: Joshymc) : Listener {
                 }
 
                 // Clear everything that isn't bedrock on this layer, all the way to minHeight
+                val onlinePlayer = plugin.server.getPlayer(playerId)
                 for (dx in 0..15) {
                     for (dz in 0..15) {
                         val block = world.getBlockAt(chunkX + dx, currentY, chunkZ + dz)
                         if (BlockUtil.isMineable(block.type)) {
+                            if (onlinePlayer != null && !plugin.claimManager.canAccess(onlinePlayer, block.location)) continue
                             block.setType(Material.AIR, false)
                             blocksDestroyed++
                         }
