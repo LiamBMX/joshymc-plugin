@@ -226,41 +226,37 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         }
     }
 
-    // 16a. Redstone activation — refuse to let an outside source power a
-    //      block inside a claim. Lets internal redstone work normally; blocks
-    //      "redstone tunnels" or wires laid up to the boundary by an attacker.
+    // 16a. Redstone activation — block signals that originate from OUTSIDE a claim
+    //      from powering blocks inside it (cross-boundary "redstone tunnels").
+    //      Redstone entirely within a claim always works normally.
     //
-    //      BlockRedstoneEvent isn't Cancellable; you suppress the change by
-    //      setting newCurrent back to oldCurrent so vanilla treats it as a
-    //      no-op tick.
+    //      BlockRedstoneEvent isn't Cancellable; suppress the change by setting
+    //      newCurrent back to oldCurrent so vanilla treats it as a no-op tick.
     //
-    //      Intrinsic sources (comparators, daylight sensors, pressure plates,
-    //      buttons, levers, observers, etc.) derive their power from player
-    //      interaction, environment, or entity detection — not from neighboring
-    //      redstone wire. If such a block is inside the claim it is an internal
-    //      mechanism and its power change is always allowed. The cross-boundary
-    //      guard still fires on the downstream wires those blocks power.
+    //      Logic: only neutralize a rising edge if at least one currently-powered
+    //      neighbor is clearly outside this claim. If no powered neighbors are
+    //      detectable (common during in-claim propagation because block-state
+    //      updates lag a tick), the signal is internal — leave it alone.
     @EventHandler(priority = EventPriority.HIGH)
     fun onRedstone(event: BlockRedstoneEvent) {
         if (event.newCurrent <= event.oldCurrent) return  // only inspect rising edges
         val targetClaim = plugin.claimManager.getClaimAt(event.block.location) ?: return
 
-        // Allow intrinsic sources that live inside the claim.
+        // Intrinsic sources inside the claim are always self-powered — allow them.
         if (isIntrinsicRedstoneSource(event.block)) return
 
-        // If at least one powered neighbor is in the SAME claim, the signal
-        // has an in-claim source and we let it through. If every powered
-        // neighbor is outside this claim, the signal is sneaking in across
-        // the boundary — neutralize it.
+        // Neutralize only when a neighbor with confirmed power is from outside this
+        // claim. If no powered neighbor is found (stale state during propagation),
+        // the signal is internal and we let it through.
         val faces = arrayOf(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST,
             BlockFace.WEST, BlockFace.UP, BlockFace.DOWN)
-        val hasInClaimSource = faces.any { face ->
+        val hasOutsideSource = faces.any { face ->
             val n = event.block.getRelative(face)
             if (n.blockPower <= 0) return@any false
             val nClaim = plugin.claimManager.getClaimAt(n.location)
-            nClaim != null && nClaim.id == targetClaim.id
+            nClaim == null || nClaim.id != targetClaim.id
         }
-        if (!hasInClaimSource) event.newCurrent = event.oldCurrent
+        if (hasOutsideSource) event.newCurrent = event.oldCurrent
     }
 
     // Blocks whose rising-edge power change is driven by their own internal state
