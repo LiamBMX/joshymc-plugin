@@ -15,7 +15,7 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
 
     private var isProcessing = false
 
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onBlockBreak(event: BlockBreakEvent) {
         val player = event.player
         val item = player.inventory.itemInMainHand
