@@ -18,7 +18,9 @@ import org.bukkit.event.block.BlockFromToEvent
 import org.bukkit.event.block.BlockPistonExtendEvent
 import org.bukkit.event.block.BlockPistonRetractEvent
 import org.bukkit.event.block.BlockPlaceEvent
+import org.bukkit.event.block.BlockBurnEvent
 import org.bukkit.event.block.BlockRedstoneEvent
+import org.bukkit.event.block.BlockSpreadEvent
 import org.bukkit.event.entity.EntityChangeBlockEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityExplodeEvent
@@ -304,6 +306,23 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         if (!plugin.claimManager.canAccess(player, event.vehicle.location)) {
             event.isCancelled = true
             denyWithMessage(player)
+        }
+    }
+
+    // 18. Fire spread — block fire spreading into (or within) a claimed area.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onFireSpread(event: BlockSpreadEvent) {
+        if (event.newState.type != Material.FIRE && event.newState.type != Material.SOUL_FIRE) return
+        if (plugin.claimManager.getClaimAt(event.block.location) != null) {
+            event.isCancelled = true
+        }
+    }
+
+    // 19. Block burn — prevent blocks inside a claim from being consumed by fire.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onBlockBurn(event: BlockBurnEvent) {
+        if (plugin.claimManager.getClaimAt(event.block.location) != null) {
+            event.isCancelled = true
         }
     }
 
