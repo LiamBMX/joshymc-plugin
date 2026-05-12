@@ -349,7 +349,12 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
 
     private fun restoreArenaFlight(player: Player) {
         if (!hadFlightInArena.remove(player.uniqueId)) return
-        if (plugin.combatManager.isTagged(player)) return
+        if (plugin.combatManager.isTagged(player)) {
+            // Still in combat — hand off to combat-tag expiry so flight is
+            // restored when the tag clears rather than being lost permanently.
+            plugin.combatManager.markNeedsFlightRestore(player)
+            return
+        }
         val mode = player.gameMode
         if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR) {
             player.allowFlight = true

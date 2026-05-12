@@ -145,6 +145,10 @@ class CombatManager(private val plugin: Joshymc) {
      * (or are creative/spectator). Avoids handing flight back to someone who
      * lost the perm or had it removed mid-fight.
      */
+    fun markNeedsFlightRestore(player: Player) {
+        hadFlightOnTag.add(player.uniqueId)
+    }
+
     private fun restoreFlightIfEligible(player: Player) {
         if (!hadFlightOnTag.remove(player.uniqueId)) return
         val mode = player.gameMode
