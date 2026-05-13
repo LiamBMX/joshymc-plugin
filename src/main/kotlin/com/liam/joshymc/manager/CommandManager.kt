@@ -79,6 +79,7 @@ import com.liam.joshymc.command.PlayerVaultCommand
 import com.liam.joshymc.command.AFKCommand
 import com.liam.joshymc.command.DelHomeCommand
 import com.liam.joshymc.command.DelWarpCommand
+import com.liam.joshymc.command.PlayerHomeCommand
 import com.liam.joshymc.command.EditWarpCommand
 import com.liam.joshymc.command.HomeCommand
 import com.liam.joshymc.command.JoshyCommand
@@ -187,6 +188,11 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("sethome")?.setExecutor(SetHomeCommand(plugin))
         plugin.getCommand("delhome")?.let {
             val cmd = DelHomeCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+        plugin.getCommand("phome")?.let {
+            val cmd = PlayerHomeCommand(plugin)
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }

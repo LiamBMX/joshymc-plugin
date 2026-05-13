@@ -63,6 +63,9 @@ commands:
     description: Delete a home
     usage: /delhome [name]
     aliases: [deletehome, removehome]
+  phome:
+    description: Teleport to another player's home (operators only)
+    usage: /phome <player> <home>
   rtp:
     description: Random teleport
     usage: /rtp
@@ -533,6 +536,9 @@ permissions:
   joshymc.delhome:
     description: Allows deleting homes
     default: true
+  joshymc.phome:
+    description: Allows teleporting to another player's home
+    default: op
   joshymc.rtp:
     description: Allows random teleport
     default: true
