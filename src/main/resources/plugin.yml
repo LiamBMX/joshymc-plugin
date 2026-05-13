@@ -89,7 +89,7 @@ commands:
     usage: /trade <player>
   pv:
     description: Open player vault
-    usage: /pv [number]
+    usage: /pv [number] [username]
     aliases: [playervault, vault]
   holo:
     description: Manage holograms
@@ -565,6 +565,9 @@ permissions:
     default: true
   joshymc.pv:
     description: Allows using player vaults
+    default: op
+  joshymc.admin.pv:
+    description: Allows operators to view any player's vault via /pv <number> <username>
     default: op
   joshymc.holo:
     description: Allows managing holograms

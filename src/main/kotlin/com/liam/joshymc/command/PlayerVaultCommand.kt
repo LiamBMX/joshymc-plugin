@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -20,6 +21,27 @@ class PlayerVaultCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
 
         if (!sender.hasPermission("joshymc.pv")) {
             plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            return true
+        }
+
+        // Admin: /pv <number> <username>
+        if (args.size >= 2 && sender.hasPermission("joshymc.admin.pv")) {
+            val number = args[0].toIntOrNull()
+            if (number == null || number < 1) {
+                plugin.commsManager.send(
+                    sender,
+                    Component.text("Usage: /pv <number> <username>", NamedTextColor.RED),
+                    CommunicationsManager.Category.DEFAULT
+                )
+                return true
+            }
+            val targetName = args[1]
+            val target = Bukkit.getOfflinePlayer(targetName)
+            if (!target.hasPlayedBefore()) {
+                plugin.commsManager.send(sender, Component.text("Player '$targetName' not found.", NamedTextColor.RED))
+                return true
+            }
+            plugin.storageManager.openVaultAsAdmin(sender, target.uniqueId, target.name ?: targetName, number)
             return true
         }
 
@@ -53,6 +75,10 @@ class PlayerVaultCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
             val max = plugin.storageManager.getMaxVaults(sender)
             val prefix = args[0]
             return (1..max).map { it.toString() }.filter { it.startsWith(prefix) }
+        }
+        if (args.size == 2 && sender.hasPermission("joshymc.admin.pv")) {
+            val prefix = args[1].lowercase()
+            return Bukkit.getOnlinePlayers().map { it.name }.filter { it.lowercase().startsWith(prefix) }
         }
         return emptyList()
     }
