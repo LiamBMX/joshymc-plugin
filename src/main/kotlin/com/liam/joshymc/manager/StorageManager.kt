@@ -39,6 +39,9 @@ class StorageManager(private val plugin: Joshymc) : Listener {
     /** Tracks which vault number each player currently has open (UUID -> vault number). */
     private val openVaults = mutableMapOf<UUID, Int>()
 
+    /** Tracks admins viewing another player's vault (adminUUID -> (targetUUID, vaultNumber)). */
+    private val adminViewingVaults = mutableMapOf<UUID, Pair<UUID, Int>>()
+
 
     private var maxVaults: Int = 10
 
@@ -68,6 +71,13 @@ class StorageManager(private val plugin: Joshymc) : Listener {
             saveVault(player, vaultNumber, inv)
         }
         openVaults.clear()
+
+        for ((adminUuid, view) in adminViewingVaults.toMap()) {
+            val admin = Bukkit.getPlayer(adminUuid) ?: continue
+            val inv = admin.openInventory.topInventory
+            saveVaultByUuid(view.first, view.second, inv)
+        }
+        adminViewingVaults.clear()
     }
 
     // ---- Permission-based vault count ----
@@ -129,19 +139,66 @@ class StorageManager(private val plugin: Joshymc) : Listener {
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
+    // ---- Open vault as admin ----
+
+    fun openVaultAsAdmin(admin: Player, targetUuid: UUID, targetName: String, number: Int) {
+        if (number < 1) {
+            plugin.commsManager.send(admin, Component.text("Vault number must be at least 1.", NamedTextColor.RED))
+            return
+        }
+        if (openVaults[targetUuid] == number) {
+            plugin.commsManager.send(admin, Component.text("$targetName currently has vault #$number open.", NamedTextColor.RED))
+            return
+        }
+        if (adminViewingVaults.values.any { it.first == targetUuid && it.second == number }) {
+            plugin.commsManager.send(admin, Component.text("Another admin is already viewing $targetName's vault #$number.", NamedTextColor.RED))
+            return
+        }
+
+        val title = Component.text("[$targetName] Vault #$number")
+            .decoration(TextDecoration.ITALIC, false)
+
+        val inv = Bukkit.createInventory(null, 54, title)
+
+        val items = plugin.databaseManager.query(
+            "SELECT slot, item FROM player_vaults WHERE uuid = ? AND vault_number = ?",
+            targetUuid.toString(), number
+        ) { rs ->
+            val slot = rs.getInt("slot")
+            val bytes = Base64.getDecoder().decode(rs.getString("item"))
+            slot to ItemStack.deserializeBytes(bytes)
+        }
+
+        for ((slot, itemStack) in items) {
+            if (slot in 0 until 54) inv.setItem(slot, itemStack)
+        }
+
+        plugin.databaseManager.execute(
+            "DELETE FROM player_vaults WHERE uuid = ? AND vault_number = ?",
+            targetUuid.toString(), number
+        )
+
+        adminViewingVaults[admin.uniqueId] = Pair(targetUuid, number)
+        admin.openInventory(inv)
+        admin.playSound(admin.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+        plugin.commsManager.send(admin, Component.text("Viewing $targetName's vault #$number.", NamedTextColor.GRAY))
+    }
+
     // ---- Save vault ----
 
     fun saveVault(player: Player, number: Int, inventory: Inventory) {
-        val uuid = player.uniqueId.toString()
+        saveVaultByUuid(player.uniqueId, number, inventory)
+    }
+
+    private fun saveVaultByUuid(targetUuid: UUID, number: Int, inventory: Inventory) {
+        val uuid = targetUuid.toString()
 
         plugin.databaseManager.transaction {
-            // Delete existing entries for this vault
             plugin.databaseManager.execute(
                 "DELETE FROM player_vaults WHERE uuid = ? AND vault_number = ?",
                 uuid, number
             )
 
-            // Insert current items (skip air/null)
             for (slot in 0 until inventory.size) {
                 val item = inventory.getItem(slot)
                 if (item != null && item.type != Material.AIR) {
@@ -251,10 +308,16 @@ class StorageManager(private val plugin: Joshymc) : Listener {
     fun onClose(event: InventoryCloseEvent) {
         val player = event.player as? Player ?: return
 
-        // Save vault if one is open
+        // Admin viewing someone else's vault
+        val adminView = adminViewingVaults.remove(player.uniqueId)
+        if (adminView != null) {
+            saveVaultByUuid(adminView.first, adminView.second, event.inventory)
+            return
+        }
+
+        // Save own vault if one is open
         val vaultNumber = openVaults.remove(player.uniqueId) ?: return
 
-        // Verify the title matches
         val title = event.view.title()
         val expectedTitle = Component.text("$VAULT_TITLE_PREFIX$vaultNumber")
             .decoration(TextDecoration.ITALIC, false)
@@ -266,9 +329,15 @@ class StorageManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
         val player = event.player
-        val vaultNumber = openVaults.remove(player.uniqueId) ?: return
 
-        // Force-save whatever is in the open inventory on disconnect
+        val adminView = adminViewingVaults.remove(player.uniqueId)
+        if (adminView != null) {
+            val inv = player.openInventory.topInventory
+            saveVaultByUuid(adminView.first, adminView.second, inv)
+            return
+        }
+
+        val vaultNumber = openVaults.remove(player.uniqueId) ?: return
         val inv = player.openInventory.topInventory
         saveVault(player, vaultNumber, inv)
     }
