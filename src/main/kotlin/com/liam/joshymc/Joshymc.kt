@@ -18,6 +18,7 @@ import com.liam.joshymc.enchant.EnchantTarget
 import com.liam.joshymc.manager.AFKManager
 import com.liam.joshymc.manager.AdminManager
 import com.liam.joshymc.manager.AnnouncementManager
+import com.liam.joshymc.manager.AutoRestartManager
 import com.liam.joshymc.manager.AntiCheatManager
 import com.liam.joshymc.manager.PlaytimeManager
 import com.liam.joshymc.manager.PunishmentManager
@@ -175,6 +176,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var announcementManager: AnnouncementManager
         private set
+    lateinit var autoRestartManager: AutoRestartManager
+        private set
     lateinit var playtimeManager: PlaytimeManager
         private set
     lateinit var chatTagManager: ChatTagManager
@@ -280,6 +283,7 @@ class Joshymc : JavaPlugin() {
         timezoneManager.start()
         scoreboardManager = ScoreboardManager(this)
         announcementManager = AnnouncementManager(this)
+        autoRestartManager = AutoRestartManager(this)
         playtimeManager = PlaytimeManager(this)
         questManager = QuestManager(this)
         talismanManager = TalismanManager(this)
@@ -328,6 +332,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("resource-world")) resourceWorldManager.start()
         scoreboardManager.start()
         announcementManager.start()
+        autoRestartManager.start()
         playtimeManager.start()
         registerEnchants()
         if (isFeatureEnabled("custom-enchants")) customEnchantManager.start()
@@ -398,6 +403,7 @@ class Joshymc : JavaPlugin() {
         claimManager.stop()
         scoreboardManager.stop()
         announcementManager.stop()
+        autoRestartManager.stop()
         playtimeManager.stop()
         resourceWorldManager.stop()
         combatManager.stop()
@@ -436,6 +442,7 @@ class Joshymc : JavaPlugin() {
         safe("afkManager.stop") { afkManager.stop() }
         safe("antiCheatManager.stop") { antiCheatManager.stop() }
         safe("combatManager.stop") { combatManager.stop() }
+        safe("autoRestartManager.stop") { autoRestartManager.stop() }
         safe("lagCleanerManager.stop") { lagCleanerManager.stop() }
         safe("resourcePackManager.shutdown") { resourcePackManager.shutdown() }
         safe("discordManager.shutdown") { discordManager.shutdown() }
@@ -476,6 +483,7 @@ class Joshymc : JavaPlugin() {
         safe("commsManager.start") { commsManager.start() }
         safe("lagCleanerManager.start") { lagCleanerManager.start() }
         safe("combatManager.start") { combatManager.start() }
+        safe("autoRestartManager.start") { autoRestartManager.start() }
         safe("afkManager.start") { afkManager.start() }
         safe("antiCheatManager.start") { antiCheatManager.start() }
         safe("registerEnchants") { registerEnchants() }

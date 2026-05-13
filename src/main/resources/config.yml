@@ -348,6 +348,14 @@ ranks:
       tag: "&8Player"
       weight: 0
 
+# Auto Restart — periodically restart the server to prevent memory-related disconnects
+auto-restart:
+  enabled: true
+  # How often to restart (hours). Default: 12
+  interval-hours: 12.0
+  # How many seconds before restart to begin the countdown broadcast. Default: 300 (5 min)
+  warning-seconds: 300
+
 # AntiCheat — server-side cheat detection
 anticheat:
   enabled: true
