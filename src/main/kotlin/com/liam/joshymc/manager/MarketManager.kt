@@ -172,7 +172,7 @@ class MarketManager(private val plugin: Joshymc) {
     }
 
     private fun getBaseSellPrice(material: Material): Double? {
-        return plugin.serverShopManager.getSellPrice(material)
+        return plugin.serverShopManager.getBaseSellPrice(material)
     }
 
     // ── Trend Calculation ───────────────────────────────────────────────
