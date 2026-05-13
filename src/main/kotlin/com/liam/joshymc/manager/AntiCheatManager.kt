@@ -257,7 +257,7 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
                 .let { if (detail.isNotEmpty()) it.append(Component.text(" $detail", NamedTextColor.DARK_GRAY)) else it }
 
             for (staff in Bukkit.getOnlinePlayers()) {
-                if (staff.hasPermission("joshymc.anticheat.alerts")) {
+                if (staff.hasPermission("joshymc.anticheat.alerts") && !plugin.adminManager.isAcAlertSuppressed(staff.uniqueId)) {
                     staff.sendMessage(msg)
                 }
             }
