@@ -105,6 +105,16 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS ac_alert_toggles (
+                player_uuid TEXT PRIMARY KEY
+            )
+        """.trimIndent())
+
+        plugin.databaseManager.query(
+            "SELECT player_uuid FROM ac_alert_toggles"
+        ) { rs -> UUID.fromString(rs.getString("player_uuid")) }.forEach { acAlertToggles.add(it) }
+
         // Expire pending actions after 30 seconds
         pendingExpiryTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, Runnable {
             val now = System.currentTimeMillis()
@@ -382,8 +392,8 @@ class AdminManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
         // Keep frozen status — don't remove from frozenPlayers on quit
+        // Keep acAlertToggles — preference is persisted in DB and should survive reconnects
         pendingActions.remove(event.player.uniqueId)
-        acAlertToggles.remove(event.player.uniqueId)
     }
 
     @EventHandler
@@ -1702,9 +1712,11 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             "Toggle anticheat alert notifications")) { p, _ ->
             if (acAlertToggles.contains(p.uniqueId)) {
                 acAlertToggles.remove(p.uniqueId)
+                plugin.databaseManager.execute("DELETE FROM ac_alert_toggles WHERE player_uuid = ?", p.uniqueId.toString())
                 plugin.commsManager.send(p, Component.text("AC alerts enabled", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
             } else {
                 acAlertToggles.add(p.uniqueId)
+                plugin.databaseManager.execute("INSERT OR REPLACE INTO ac_alert_toggles (player_uuid) VALUES (?)", p.uniqueId.toString())
                 plugin.commsManager.send(p, Component.text("AC alerts disabled", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
             }
             p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
