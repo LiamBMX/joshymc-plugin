@@ -71,6 +71,14 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         return true
     }
 
+    // Returns -1 for unlimited, otherwise the max player warps allowed for this player's rank.
+    private fun pwarpLimit(player: Player): Int {
+        val rankId = plugin.rankManager.getPlayerRank(player)?.id ?: "default"
+        val rankLimit = plugin.config.getInt("warps.limits-by-rank.$rankId", Int.MIN_VALUE)
+        return if (rankLimit != Int.MIN_VALUE) rankLimit
+               else plugin.config.getInt("warps.player-max-per-player", 3)
+    }
+
     private fun handleSet(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.pwarp.set")) {
             plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
@@ -100,12 +108,14 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         }
 
         if (!sender.hasPermission("joshymc.pwarp.set.unlimited")) {
-            val max = plugin.config.getInt("warps.player-max-per-player", 3)
-            val current = plugin.warpManager.getPlayerWarpCount(sender.uniqueId.toString())
-            val isOverwrite = existingWarp != null && existingWarp.ownerUuid == sender.uniqueId.toString()
-            if (current >= max && !isOverwrite) {
-                plugin.commsManager.send(sender, Component.text("You have reached the player warp limit ($max).", NamedTextColor.RED), CommunicationsManager.Category.WARP)
-                return
+            val max = pwarpLimit(sender)
+            if (max != -1) {
+                val current = plugin.warpManager.getPlayerWarpCount(sender.uniqueId.toString())
+                val isOverwrite = existingWarp != null && existingWarp.ownerUuid == sender.uniqueId.toString()
+                if (current >= max && !isOverwrite) {
+                    plugin.commsManager.send(sender, Component.text("You have reached the player warp limit ($max).", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+                    return
+                }
             }
         }
 
