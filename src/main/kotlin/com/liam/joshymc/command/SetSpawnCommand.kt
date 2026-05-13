@@ -17,6 +17,11 @@ class SetSpawnCommand(private val plugin: Joshymc) : CommandExecutor {
             return true
         }
 
+        if (!sender.hasPermission("joshymc.setspawn")) {
+            plugin.commsManager.send(sender, Component.text("You don't have permission to do that.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            return true
+        }
+
         plugin.warpManager.setSpawn(sender.location)
         plugin.commsManager.send(sender, Component.text("Spawn set.", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
         return true
