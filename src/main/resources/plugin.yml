@@ -499,7 +499,7 @@ permissions:
     default: true
   joshymc.setspawn:
     description: Allows setting the server spawn
-    default: op
+    default: false
   joshymc.warp:
     description: Allows using server warps
     default: true
