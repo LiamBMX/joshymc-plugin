@@ -57,7 +57,13 @@ class RestartCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 0 -> {
                     cancelCountdown()
                     broadcastAll(Component.text("Server is restarting now. See you soon!", NamedTextColor.RED))
-                    Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, { plugin.server.spigot().restart() }, 20L)
+                    val kickMessage = Component.text("Server is restarting. Back in a moment!", NamedTextColor.RED)
+                    Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
+                        for (player in Bukkit.getOnlinePlayers()) {
+                            player.kick(kickMessage)
+                        }
+                        plugin.server.spigot().restart()
+                    }, 5L)
                 }
             }
         }, 20L, 20L)
