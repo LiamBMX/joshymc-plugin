@@ -122,12 +122,30 @@ mining:
   treefeller-max-logs: 128
 
 # Warps — player warps limit (server warps are unlimited, admin only)
+# limits-by-rank: per-rank override. Use -1 for unlimited. Falls back to player-max-per-player if a rank has no entry.
 warps:
   player-max-per-player: 3
+  limits-by-rank:
+    owner: -1
+    admin: -1
+    mod: -1
+    helper: 5
+    vip: 5
+    member: 3
+    default: 3
 
 # Homes
+# limits-by-rank: per-rank override. Use -1 for unlimited. Falls back to max-per-player if a rank has no entry.
 homes:
   max-per-player: 3
+  limits-by-rank:
+    owner: -1
+    admin: -1
+    mod: -1
+    helper: 5
+    vip: 5
+    member: 3
+    default: 3
 
 # AFK — rewards per interval while AFK. Configure any combination of money,
 # items, and XP. Leave a reward at 0 / empty to skip it.
