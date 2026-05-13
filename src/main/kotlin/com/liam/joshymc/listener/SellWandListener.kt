@@ -88,6 +88,10 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
 
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
 
+        for ((material, amount) in breakdown) {
+            plugin.marketManager.recordTransaction(material, "SELL", amount)
+        }
+
         val formatted = plugin.economyManager.format(totalEarned)
         val multiplierText = if (multiplier != 1.0) " (${multiplier}x)" else ""
         plugin.commsManager.send(
