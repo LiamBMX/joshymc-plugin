@@ -34,6 +34,7 @@ class BubbleButtLeggings : CustomItem() {
         meta.isUnbreakable = true
         val equippable = meta.equippable
         equippable.slot = EquipmentSlot.LEGS
+        equippable.model = NamespacedKey(Joshymc.instance, "bubble_butt")
         meta.setEquippable(equippable)
     }
 }
