@@ -12,6 +12,7 @@ import org.bukkit.entity.Item
 import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.NPC
 import org.bukkit.entity.Player
+import org.bukkit.entity.Shulker
 import org.bukkit.entity.Villager
 import org.bukkit.entity.Wither
 
@@ -127,8 +128,8 @@ class LagCleanerManager(private val plugin: Joshymc) {
         for (world in plugin.server.worlds) {
             for (entity in world.entities) {
                 when {
-                    // Clear ground items
-                    entity is Item -> {
+                    // Clear ground items (shulker boxes are preserved)
+                    entity is Item && !isShulkerBox(entity) -> {
                         entity.remove()
                         itemCount++
                     }
@@ -195,7 +196,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
             var count = 0
             for (world in plugin.server.worlds) {
                 for (entity in world.entities) {
-                    if (entity is Item) {
+                    if (entity is Item && !isShulkerBox(entity)) {
                         entity.remove()
                         count++
                     }
@@ -211,8 +212,11 @@ class LagCleanerManager(private val plugin: Joshymc) {
         }, 10L * 20) // 10 seconds
     }
 
+    private fun isShulkerBox(item: Item): Boolean =
+        item.itemStack.type.name.endsWith("SHULKER_BOX")
+
     /**
-     * Per Joshy's request: keep nametagged, tamed, and villagers.
+     * Per Joshy's request: keep nametagged, tamed, villagers, and shulkers.
      * Plus an unavoidable safety set: bosses, plugin NPCs/entities, leashed,
      * and ArmorStands (not really mobs).
      */
@@ -222,6 +226,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
 
         return when (entity) {
             is Villager -> true
+            is Shulker -> true
             is NPC -> true
             is EnderDragon -> true
             is Wither -> true
