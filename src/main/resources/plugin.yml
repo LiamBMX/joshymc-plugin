@@ -154,6 +154,9 @@ commands:
     description: Change your chat message color
     usage: /chatcolor [color|reset]
     aliases: [cc, messagecolor]
+  ignore:
+    description: Ignore or unignore a player's messages
+    usage: /ignore <player> | /ignore list
   market:
     description: View the dynamic stock market
     usage: /market [price|trends|info]

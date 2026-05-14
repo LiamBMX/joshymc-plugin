@@ -37,6 +37,7 @@ import com.liam.joshymc.command.HatCommand
 import com.liam.joshymc.command.HealCommand
 import com.liam.joshymc.command.HelpCommand
 import com.liam.joshymc.command.InvseeCommand
+import com.liam.joshymc.command.IgnoreCommand
 import com.liam.joshymc.command.MsgCommand
 import com.liam.joshymc.command.ReplyCommand
 import com.liam.joshymc.command.SmiteCommand
@@ -329,6 +330,10 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Chat Colors ──────────────────────────────
         ChatColorCommand.createTable(plugin)
         plugin.getCommand("chatcolor")?.let { val c = ChatColorCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        // ── Ignore ───────────────────────────────────
+        IgnoreCommand.createTable(plugin)
+        plugin.getCommand("ignore")?.let { val c = IgnoreCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Market ──────────────────────────────────
         if (plugin.isFeatureEnabled("market")) {
