@@ -394,15 +394,32 @@ class CustomEnchantManager(private val plugin: Joshymc) : Listener {
             return false
         }
 
-        // Already at the level on the scroll → don't waste it
-        val level = getScrollLevel(scroll)
-        if (getLevel(target, enchantId) >= level) {
-            plugin.commsManager.send(
-                player,
-                Component.text("That item already has ${enchant.displayName} ${toRoman(level)} or higher.", NamedTextColor.RED)
-            )
-            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
-            return false
+        val scrollLevel = getScrollLevel(scroll)
+        val currentLevel = getLevel(target, enchantId)
+        val applyLevel: Int
+
+        when {
+            currentLevel == scrollLevel -> {
+                // Same level — stack up to next
+                if (scrollLevel >= enchant.maxLevel) {
+                    plugin.commsManager.send(
+                        player,
+                        Component.text("That item already has ${enchant.displayName} at max level.", NamedTextColor.RED)
+                    )
+                    player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                    return false
+                }
+                applyLevel = scrollLevel + 1
+            }
+            currentLevel > scrollLevel -> {
+                plugin.commsManager.send(
+                    player,
+                    Component.text("That item already has ${enchant.displayName} ${toRoman(currentLevel)}, which is higher.", NamedTextColor.RED)
+                )
+                player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                return false
+            }
+            else -> applyLevel = scrollLevel
         }
 
         val chance = getScrollChance(scroll)
@@ -412,12 +429,12 @@ class CustomEnchantManager(private val plugin: Joshymc) : Listener {
         scroll.amount--
 
         if (roll <= chance) {
-            val applied = applyEnchant(target, enchantId, level)
+            val applied = applyEnchant(target, enchantId, applyLevel)
             if (applied) {
                 plugin.commsManager.send(
                     player,
                     Component.text("Applied ", NamedTextColor.GREEN)
-                        .append(Component.text("${enchant.displayName} ${toRoman(level)}", NamedTextColor.GOLD))
+                        .append(Component.text("${enchant.displayName} ${toRoman(applyLevel)}", NamedTextColor.GOLD))
                         .append(Component.text("! (rolled $roll / $chance)", NamedTextColor.DARK_GRAY))
                 )
                 player.playSound(player.location, Sound.BLOCK_ENCHANTMENT_TABLE_USE, 0.8f, 1.2f)
