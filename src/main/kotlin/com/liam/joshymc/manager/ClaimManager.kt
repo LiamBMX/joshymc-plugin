@@ -288,10 +288,27 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
      * Create a claim between two corners. Returns the new claim or null on failure.
      */
     private val blockedWorlds = setOf("resource", "spawn", "afk")
+    // Claims within this radius of 0,0 in the_end are blocked (covers the main island + buffer before outer islands).
+    private val endIslandRadius = 1000
+
+    private fun isOnMainEndIsland(minX: Int, minZ: Int, maxX: Int, maxZ: Int): Boolean {
+        return maxX >= -endIslandRadius && minX <= endIslandRadius &&
+                maxZ >= -endIslandRadius && minZ <= endIslandRadius
+    }
 
     fun createClaim(player: Player, pos1: Location, pos2: Location): ClaimCreateResult {
         val worldName = pos1.world?.name ?: return ClaimCreateResult.Failure("Invalid world.")
         if (worldName in blockedWorlds) return ClaimCreateResult.Failure("You cannot claim land in this world.")
+
+        if (pos1.world?.environment == org.bukkit.World.Environment.THE_END) {
+            val minX = min(pos1.blockX, pos2.blockX)
+            val maxX = max(pos1.blockX, pos2.blockX)
+            val minZ = min(pos1.blockZ, pos2.blockZ)
+            val maxZ = max(pos1.blockZ, pos2.blockZ)
+            if (isOnMainEndIsland(minX, minZ, maxX, maxZ)) {
+                return ClaimCreateResult.Failure("You cannot claim land on the main End island.")
+            }
+        }
         if (pos1.world?.name != pos2.world?.name) return ClaimCreateResult.Failure("Corners must be in the same world.")
 
         val minX = min(pos1.blockX, pos2.blockX)
@@ -712,6 +729,16 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         if (player.world.name in blockedWorlds) {
             plugin.commsManager.send(player, Component.text("You cannot claim land in this world.", NamedTextColor.RED))
             return
+        }
+
+        val clickedBlock = event.clickedBlock
+        if (player.world.environment == org.bukkit.World.Environment.THE_END && clickedBlock != null) {
+            val bx = clickedBlock.x
+            val bz = clickedBlock.z
+            if (bx >= -endIslandRadius && bx <= endIslandRadius && bz >= -endIslandRadius && bz <= endIslandRadius) {
+                plugin.commsManager.send(player, Component.text("You cannot claim land on the main End island.", NamedTextColor.RED))
+                return
+            }
         }
 
         event.isCancelled = true
