@@ -106,6 +106,15 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         """.trimIndent())
 
         plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS player_invsee_cache (
+                uuid TEXT PRIMARY KEY,
+                inventory_data TEXT NOT NULL,
+                enderchest_data TEXT NOT NULL,
+                timestamp INTEGER NOT NULL
+            )
+        """.trimIndent())
+
+        plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS ac_alert_toggles (
                 player_uuid TEXT PRIMARY KEY
             )
@@ -362,6 +371,91 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    // ── Offline Inventory Cache ─────────────────────────
+
+    private fun serializeItems(items: Array<ItemStack?>): String {
+        val parts = mutableListOf<String>()
+        for (i in items.indices) {
+            val item = items[i]
+            if (item != null && item.type != Material.AIR) {
+                val encoded = Base64.getEncoder().encodeToString(item.serializeAsBytes())
+                parts.add("$i:$encoded")
+            }
+        }
+        return parts.joinToString(";")
+    }
+
+    fun savePlayerCache(player: Player) {
+        val invData = serializeItems(player.inventory.contents)
+        val ecData = serializeItems(player.enderChest.contents)
+        plugin.databaseManager.execute(
+            "INSERT OR REPLACE INTO player_invsee_cache (uuid, inventory_data, enderchest_data, timestamp) VALUES (?, ?, ?, ?)",
+            player.uniqueId.toString(), invData, ecData, System.currentTimeMillis()
+        )
+    }
+
+    fun openOfflineInvsee(admin: Player, uuid: java.util.UUID, name: String) {
+        data class CacheRow(val inv: String, val ts: Long)
+        val row = plugin.databaseManager.queryFirst(
+            "SELECT inventory_data, timestamp FROM player_invsee_cache WHERE uuid = ?",
+            uuid.toString()
+        ) { rs -> CacheRow(rs.getString("inventory_data"), rs.getLong("timestamp")) }
+
+        if (row == null) {
+            plugin.commsManager.send(admin, Component.text("No cached inventory for $name — data is saved when they disconnect.", NamedTextColor.RED))
+            return
+        }
+
+        val title = "InvSee: $name"
+        val gui = CustomGui(
+            Component.text(title, NamedTextColor.DARK_AQUA).decoration(TextDecoration.ITALIC, false),
+            36
+        )
+        if (row.inv.isNotBlank()) {
+            for (entry in row.inv.split(";")) {
+                val colonIdx = entry.indexOf(':')
+                if (colonIdx < 0) continue
+                val slot = entry.substring(0, colonIdx).toIntOrNull() ?: continue
+                try {
+                    val item = ItemStack.deserializeBytes(Base64.getDecoder().decode(entry.substring(colonIdx + 1)))
+                    if (slot in 0 until 36) gui.inventory.setItem(slot, item)
+                } catch (_: Exception) {}
+            }
+        }
+        plugin.guiManager.open(admin, gui)
+    }
+
+    fun openOfflineEnderchest(admin: Player, uuid: java.util.UUID, name: String) {
+        data class CacheRow(val ec: String, val ts: Long)
+        val row = plugin.databaseManager.queryFirst(
+            "SELECT enderchest_data, timestamp FROM player_invsee_cache WHERE uuid = ?",
+            uuid.toString()
+        ) { rs -> CacheRow(rs.getString("enderchest_data"), rs.getLong("timestamp")) }
+
+        if (row == null) {
+            plugin.commsManager.send(admin, Component.text("No cached ender chest for $name — data is saved when they disconnect.", NamedTextColor.RED))
+            return
+        }
+
+        val title = "EC: $name"
+        val gui = CustomGui(
+            Component.text(title, NamedTextColor.DARK_PURPLE).decoration(TextDecoration.ITALIC, false),
+            27
+        )
+        if (row.ec.isNotBlank()) {
+            for (entry in row.ec.split(";")) {
+                val colonIdx = entry.indexOf(':')
+                if (colonIdx < 0) continue
+                val slot = entry.substring(0, colonIdx).toIntOrNull() ?: continue
+                try {
+                    val item = ItemStack.deserializeBytes(Base64.getDecoder().decode(entry.substring(colonIdx + 1)))
+                    if (slot in 0 until 27) gui.inventory.setItem(slot, item)
+                } catch (_: Exception) {}
+            }
+        }
+        plugin.guiManager.open(admin, gui)
+    }
+
     // ── Freeze System ───────────────────────────────────
 
     fun toggleFreeze(target: Player): Boolean {
@@ -394,6 +488,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         // Keep frozen status — don't remove from frozenPlayers on quit
         // Keep acAlertToggles — preference is persisted in DB and should survive reconnects
         pendingActions.remove(event.player.uniqueId)
+        savePlayerCache(event.player)
     }
 
     @EventHandler

@@ -545,11 +545,17 @@ class InvseeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             plugin.commsManager.send(sender, Component.text("Usage: /invsee <player>", NamedTextColor.RED))
             return true
         }
-        val target = Bukkit.getPlayer(args[0]) ?: run {
+        val online = Bukkit.getPlayer(args[0])
+        if (online != null) {
+            sender.openInventory(online.inventory)
+            return true
+        }
+        val offline = Bukkit.getOfflinePlayer(args[0])
+        if (!offline.hasPlayedBefore()) {
             plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
             return true
         }
-        sender.openInventory(target.inventory)
+        plugin.adminManager.openOfflineInvsee(sender, offline.uniqueId, offline.name ?: args[0])
         return true
     }
 
@@ -570,14 +576,22 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
             return true
         }
-        val target = if (args.isNotEmpty() && sender.hasPermission("joshymc.enderchest.others")) {
-            Bukkit.getPlayer(args[0]) ?: run {
+        if (args.isNotEmpty() && sender.hasPermission("joshymc.enderchest.others")) {
+            val online = Bukkit.getPlayer(args[0])
+            if (online != null) {
+                sender.openInventory(online.enderChest)
+                return true
+            }
+            val offline = Bukkit.getOfflinePlayer(args[0])
+            if (!offline.hasPlayedBefore()) {
                 plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
                 return true
             }
-        } else sender
+            plugin.adminManager.openOfflineEnderchest(sender, offline.uniqueId, offline.name ?: args[0])
+            return true
+        }
 
-        sender.openInventory(target.enderChest)
+        sender.openInventory(sender.enderChest)
         return true
     }
 
