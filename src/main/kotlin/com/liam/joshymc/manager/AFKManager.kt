@@ -43,7 +43,8 @@ class AFKManager(private val plugin: Joshymc) {
         val crateKeyType: String? = null
     )
 
-    private var worldName = "afk"
+    var worldName = "afk"
+        private set
     private var rewardEnabled = true
     private var rewardMoney = 0.0
     private var rewardXp = 0
