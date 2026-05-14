@@ -71,7 +71,7 @@ class BubbleButtListener(private val plugin: Joshymc) : Listener {
                     if (dist < rMin || dist > rMax) continue
                     val loc = center.clone().add(dx.toDouble(), dy.toDouble(), dz.toDouble())
                     val block = loc.block
-                    if (block.type == Material.AIR) {
+                    if (block.type == Material.AIR && plugin.claimManager.canAccess(player, loc)) {
                         block.type = Material.LIGHT_BLUE_STAINED_GLASS
                         placed.add(loc)
                     }
