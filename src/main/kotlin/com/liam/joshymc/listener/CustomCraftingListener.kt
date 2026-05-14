@@ -55,7 +55,7 @@ class CustomCraftingListener(private val plugin: Joshymc) : Listener {
                 return
             }
             event.inventory.result = plugin.customEnchantManager.createScroll(
-                eligible.random().id, level = 1, chance = 100
+                eligible.random().id, level = 1, chance = (1..100).random()
             )
         }
     }
