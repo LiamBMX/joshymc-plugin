@@ -22,6 +22,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.SignChangeEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.EnchantmentStorageMeta
 import java.util.Base64
@@ -377,9 +378,19 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.HIGH)
     fun onInteract(event: PlayerInteractEvent) {
         if (event.action != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) return
+        if (event.hand == EquipmentSlot.OFF_HAND) return
         val block = event.clickedBlock ?: return
 
         if (block.type !in ALL_SIGN_TYPES) return
+
+        val player = event.player
+
+        // Block dye-on-sign coloring — crate keys are colored dyes and must not be consumed by signs
+        val heldItem = player.inventory.itemInMainHand
+        if (!heldItem.type.isAir && heldItem.type.name.endsWith("_DYE")) {
+            event.isCancelled = true
+            return
+        }
 
         val shop = getShopAtLocation(block.location) ?: return
 
@@ -387,8 +398,6 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
 
         // Restore sign text if it was wiped (chunk reload, corruption, etc.)
         restoreSignText(block, shop)
-
-        val player = event.player
 
         if (player.uniqueId == shop.ownerUuid) {
             showOwnerInfo(player, shop)
