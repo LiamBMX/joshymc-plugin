@@ -17,6 +17,7 @@ import org.bukkit.block.Sign
 import org.bukkit.block.sign.Side
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
+import org.bukkit.event.Event
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
@@ -385,11 +386,11 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
 
         val player = event.player
 
-        // Block dye-on-sign coloring — crate keys are colored dyes and must not be consumed by signs
+        // Block dye-on-sign coloring — crate keys are colored dyes and must not be consumed by signs.
+        // Deny item use only (not block interaction) so the player can still open the sign editor.
         val heldItem = player.inventory.itemInMainHand
         if (!heldItem.type.isAir && heldItem.type.name.endsWith("_DYE")) {
-            event.isCancelled = true
-            return
+            event.setUseItemInHand(Event.Result.DENY)
         }
 
         val shop = getShopAtLocation(block.location) ?: return
