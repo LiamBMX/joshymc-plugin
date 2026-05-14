@@ -98,6 +98,12 @@ jobs:
           # Close linked issue: parse N from `claude/issue-N`
           ISSUE_N=$(echo "$HEAD_BRANCH" | sed -nE 's|^claude/issue-([0-9]+)$|\1|p')
           if [ -n "$ISSUE_N" ]; then
+            # Strip in-progress / in-review labels so closed issues don't show stale state
+            gh issue edit "$ISSUE_N" --repo "$REPO" \
+              --remove-label "🔨 in-progress" 2>/dev/null || true
+            gh issue edit "$ISSUE_N" --repo "$REPO" \
+              --remove-label "📝 in-review"   2>/dev/null || true
+
             if gh issue view "$ISSUE_N" --repo "$REPO" --json state --jq '.state' | grep -qx 'OPEN'; then
               echo "Closing linked issue #$ISSUE_N"
               gh issue close "$ISSUE_N" --repo "$REPO" \
