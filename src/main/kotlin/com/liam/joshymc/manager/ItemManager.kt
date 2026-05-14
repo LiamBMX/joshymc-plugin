@@ -33,6 +33,7 @@ class ItemManager(private val plugin: Joshymc) {
         register(BunnyChestplate())
         register(BunnyLeggings())
         register(BunnyBoots())
+        register(BubbleButtLeggings())
 
         // Crafting materials
         register(VoidShard())

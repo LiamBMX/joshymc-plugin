@@ -24,6 +24,7 @@ import com.liam.joshymc.command.BackLocationListener
 import com.liam.joshymc.listener.WelcomeListener
 import com.liam.joshymc.listener.ClaimProtectionListener
 import com.liam.joshymc.listener.ConsumableListener
+import com.liam.joshymc.listener.BubbleButtListener
 import com.liam.joshymc.listener.CustomArmorListener
 import com.liam.joshymc.listener.CustomDropListener
 import com.liam.joshymc.listener.SellWandListener
@@ -137,6 +138,7 @@ class ListenerManager(private val plugin: Joshymc) {
         val armorListener = CustomArmorListener(plugin)
         armorListener.start()
         pm.registerEvents(armorListener, plugin)
+        pm.registerEvents(BubbleButtListener(plugin), plugin)
 
         // Cosmetics
         pm.registerEvents(plugin.trailManager, plugin)
