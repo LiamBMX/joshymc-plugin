@@ -113,7 +113,7 @@ commands:
     aliases: [bin, dispose]
   ah:
     description: Open the auction house
-    usage: /ah [sell <price>]
+    usage: /ah [sell <price>] [bid <starting price>]
     aliases: [auction, auctionhouse]
   eco:
     description: Manage player economy
