@@ -25,6 +25,7 @@ import org.bukkit.event.entity.EntityBreedEvent
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.entity.EntityTameEvent
+import org.bukkit.event.inventory.BrewEvent
 import org.bukkit.event.inventory.CraftItemEvent
 import org.bukkit.event.player.PlayerFishEvent
 import org.bukkit.event.player.PlayerItemConsumeEvent
@@ -933,6 +934,27 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
         findMatchingQuests(QuestType.CRAFT_ITEM, materialName).forEach { quest ->
             if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id, amount)
+        }
+    }
+
+    // BrewEvent has no direct player reference — attribute to the nearest player within 10 blocks,
+    // matching the same approach used by SkillManager for Alchemy XP.
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onBrew(event: BrewEvent) {
+        val brewLoc = event.block.location
+        val player = brewLoc.world?.getNearbyEntities(brewLoc, 10.0, 10.0, 10.0)
+            ?.filterIsInstance<Player>()
+            ?.minByOrNull { it.location.distanceSquared(brewLoc) }
+            ?: return
+        if (isExempt(player)) return
+
+        // Count all brewed potions (regular, splash, lingering) toward POTION-target quests
+        val potionMaterials = setOf(Material.POTION, Material.SPLASH_POTION, Material.LINGERING_POTION)
+        val brewedCount = event.results.count { it != null && it.type in potionMaterials }
+        if (brewedCount == 0) return
+
+        findMatchingQuests(QuestType.CRAFT_ITEM, Material.POTION.name).forEach { quest ->
+            if (canStart(player.uniqueId, quest.id)) incrementProgress(player, quest.id, brewedCount)
         }
     }
 
