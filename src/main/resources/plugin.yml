@@ -165,6 +165,9 @@ commands:
     description: Browse and track quests
     usage: /quests [list|progress|info|reset <player> [quest_id|all]]
     aliases: [quest, q]
+  daily:
+    description: View and claim daily quests
+    usage: /daily [claim]
   cosmetics:
     description: Open the cosmetics hub
     usage: /cosmetics
@@ -634,6 +637,9 @@ permissions:
     default: true
   joshymc.quests.admin:
     description: Reset player quest progress (also available from console)
+  joshymc.daily:
+    description: Use the daily quest system
+    default: true
     default: op
   joshymc.cosmetics:
     description: Open cosmetics hub

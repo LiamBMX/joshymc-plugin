@@ -55,6 +55,7 @@ import com.liam.joshymc.command.TrailCommand
 import com.liam.joshymc.command.FishCommand
 import com.liam.joshymc.command.SkillsCommand
 import com.liam.joshymc.command.MarketCommand
+import com.liam.joshymc.command.DailyCommand
 import com.liam.joshymc.command.QuestCommand
 import com.liam.joshymc.command.RewardsCommand
 import com.liam.joshymc.command.TagCommand
@@ -343,6 +344,7 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Quests ──────────────────────────────────
         plugin.getCommand("quests")?.let { val c = QuestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("rewards")?.setExecutor(RewardsCommand(plugin))
+        plugin.getCommand("daily")?.setExecutor(DailyCommand(plugin))
 
         // ── Cosmetics ─────────────────────────────────
         plugin.getCommand("trail")?.let { val c = TrailCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
