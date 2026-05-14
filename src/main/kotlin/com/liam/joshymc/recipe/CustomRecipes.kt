@@ -8,6 +8,8 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.RecipeChoice
 import org.bukkit.inventory.ShapedRecipe
 
+const val ENCHANT_DUST_SCROLL_RECIPE = "enchant_dust_scroll"
+
 class CustomRecipes(private val plugin: Joshymc) {
 
     private val registeredKeys = mutableListOf<NamespacedKey>()
@@ -23,6 +25,7 @@ class CustomRecipes(private val plugin: Joshymc) {
         registerArmorRecipes()
         registerConsumableRecipes()
         registerLegendaryRecipes()
+        registerEnchantDustRecipes()
 
         plugin.logger.info("Registered ${registeredKeys.size} custom recipe(s).")
     }
@@ -176,6 +179,18 @@ class CustomRecipes(private val plugin: Joshymc) {
             setIngredient('G', vanilla(Material.GLASS_BOTTLE))
             setIngredient('C', item("crystal_essence"))
             setIngredient('R', vanilla(Material.REDSTONE))
+        }
+    }
+
+    // ── Enchant Dust → Random Scroll ─────────────────────────────────────────
+
+    // Result is a PAPER placeholder; CustomCraftingListener overrides it with a
+    // random eligible enchant scroll (level 1) at PrepareItemCraftEvent time.
+    private fun registerEnchantDustRecipes() {
+        addRecipe(ENCHANT_DUST_SCROLL_RECIPE, ItemStack(Material.PAPER)) {
+            shape("DDD", "DBD", "DDD")
+            setIngredient('D', item("enchanted_dust"))
+            setIngredient('B', vanilla(Material.BOOK))
         }
     }
 
