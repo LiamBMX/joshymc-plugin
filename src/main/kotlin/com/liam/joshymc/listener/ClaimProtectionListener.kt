@@ -31,6 +31,7 @@ import org.bukkit.event.player.PlayerBucketEmptyEvent
 import org.bukkit.event.player.PlayerBucketFillEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.vehicle.VehicleDestroyEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -323,6 +324,24 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
     fun onBlockBurn(event: BlockBurnEvent) {
         if (plugin.claimManager.getClaimAt(event.block.location) != null) {
             event.isCancelled = true
+        }
+    }
+
+    // 20. Player movement — block denied players from entering a claim.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPlayerMove(event: PlayerMoveEvent) {
+        val from = event.from
+        val to = event.to
+        // Only react on block-boundary crossings to avoid firing every frame.
+        if (from.blockX == to.blockX && from.blockZ == to.blockZ) return
+        val player = event.player
+        if (!plugin.claimManager.isDenied(player, to)) return
+        event.isCancelled = true
+        val now = System.currentTimeMillis()
+        val last = messageCooldowns[player.uniqueId] ?: 0L
+        if (now - last >= 1000L) {
+            messageCooldowns[player.uniqueId] = now
+            plugin.commsManager.send(player, Component.text("You have been banned from this claim.", NamedTextColor.RED))
         }
     }
 

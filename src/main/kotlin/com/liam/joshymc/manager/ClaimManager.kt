@@ -45,7 +45,8 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         val ownerUuid: UUID,
         val teamName: String?,
         val createdAt: Long,
-        val trusted: MutableSet<UUID> = mutableSetOf()
+        val trusted: MutableSet<UUID> = mutableSetOf(),
+        val denied: MutableSet<UUID> = mutableSetOf()
     ) {
         val minX get() = min(x1, x2)
         val maxX get() = max(x1, x2)
@@ -168,6 +169,14 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         """.trimIndent())
 
         plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS claim_denied (
+                claim_id INTEGER NOT NULL,
+                player_uuid TEXT NOT NULL,
+                PRIMARY KEY (claim_id, player_uuid)
+            )
+        """.trimIndent())
+
+        plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS claim_blocks (
                 uuid TEXT PRIMARY KEY,
                 total_blocks INTEGER NOT NULL DEFAULT $startingBlocks
@@ -195,6 +204,9 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
             val trustedUuids = plugin.databaseManager.query(
                 "SELECT player_uuid FROM claim_trusted WHERE claim_id = ?", id
             ) { tr -> UUID.fromString(tr.getString("player_uuid")) }
+            val deniedUuids = plugin.databaseManager.query(
+                "SELECT player_uuid FROM claim_denied WHERE claim_id = ?", id
+            ) { dr -> UUID.fromString(dr.getString("player_uuid")) }
             Claim(
                 id = id, world = rs.getString("world"),
                 x1 = rs.getInt("x1"), z1 = rs.getInt("z1"),
@@ -202,7 +214,8 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
                 ownerUuid = UUID.fromString(rs.getString("owner_uuid")),
                 teamName = rs.getString("team_name"),
                 createdAt = rs.getLong("created_at"),
-                trusted = trustedUuids.toMutableSet()
+                trusted = trustedUuids.toMutableSet(),
+                denied = deniedUuids.toMutableSet()
             )
         })
     }
@@ -360,8 +373,9 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         }
         subclaims.removeAll(subs.toSet())
 
-        // Remove trusted players
+        // Remove trusted and denied players
         plugin.databaseManager.execute("DELETE FROM claim_trusted WHERE claim_id = ?", claim.id)
+        plugin.databaseManager.execute("DELETE FROM claim_denied WHERE claim_id = ?", claim.id)
 
         // Restore terrain only when an admin force-deletes someone else's claim.
         // When the owner voluntarily unclims, skip restore so legitimately mined
@@ -519,6 +533,40 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     }
 
     fun getTrustedPlayers(claim: Claim): Set<UUID> = claim.trusted
+
+    // ══════════════════════════════════════════════════════════
+    //  DENY SYSTEM
+    // ══════════════════════════════════════════════════════════
+
+    fun denyPlayer(claim: Claim, targetUuid: UUID): Boolean {
+        if (claim.denied.contains(targetUuid)) return false
+        plugin.databaseManager.execute(
+            "INSERT OR IGNORE INTO claim_denied (claim_id, player_uuid) VALUES (?, ?)",
+            claim.id, targetUuid.toString()
+        )
+        claim.denied.add(targetUuid)
+        return true
+    }
+
+    fun undenyPlayer(claim: Claim, targetUuid: UUID): Boolean {
+        if (!claim.denied.contains(targetUuid)) return false
+        plugin.databaseManager.execute(
+            "DELETE FROM claim_denied WHERE claim_id = ? AND player_uuid = ?",
+            claim.id, targetUuid.toString()
+        )
+        claim.denied.remove(targetUuid)
+        return true
+    }
+
+    fun getDeniedPlayers(claim: Claim): Set<UUID> = claim.denied
+
+    fun isDenied(player: Player, location: Location): Boolean {
+        if (player.hasPermission("joshymc.claim.bypass")) return false
+        val claim = getClaimAt(location) ?: return false
+        if (claim.ownerUuid == player.uniqueId) return false
+        if (claim.teamName != null && plugin.teamManager.getPlayerTeam(player.uniqueId) == claim.teamName) return false
+        return claim.denied.contains(player.uniqueId)
+    }
 
     sealed class ClaimCreateResult {
         data class Success(val claim: Claim) : ClaimCreateResult()
