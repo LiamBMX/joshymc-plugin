@@ -27,6 +27,7 @@ import com.liam.joshymc.listener.ConsumableListener
 import com.liam.joshymc.listener.BubbleButtListener
 import com.liam.joshymc.listener.CustomArmorListener
 import com.liam.joshymc.listener.CustomDropListener
+import com.liam.joshymc.listener.AuctionBidListener
 import com.liam.joshymc.listener.SellWandListener
 import com.liam.joshymc.listener.VoidBoreListener
 import com.liam.joshymc.listener.enchant.CombatEnchantListener
@@ -104,6 +105,9 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.claimManager, plugin)
         pm.registerEvents(ClaimProtectionListener(plugin), plugin)
         pm.registerEvents(com.liam.joshymc.command.SubclaimCommand(plugin), plugin)
+
+        // Auction bid chat input
+        pm.registerEvents(AuctionBidListener(plugin), plugin)
 
         // Sell Wand
         pm.registerEvents(SellWandListener(plugin), plugin)
