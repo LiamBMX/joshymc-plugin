@@ -331,7 +331,9 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("chatcolor")?.let { val c = ChatColorCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Market ──────────────────────────────────
-        plugin.getCommand("market")?.let { val c = MarketCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        if (plugin.isFeatureEnabled("market")) {
+            plugin.getCommand("market")?.let { val c = MarketCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        }
 
         // ── Quests ──────────────────────────────────
         plugin.getCommand("quests")?.let { val c = QuestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }

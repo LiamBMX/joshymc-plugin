@@ -23,6 +23,7 @@ class MarketManager(private val plugin: Joshymc) {
 
     private val multiplierCache = ConcurrentHashMap<Material, Double>()
 
+    private var started = false
     private var recalculateTask: BukkitTask? = null
     private var cleanupTask: BukkitTask? = null
 
@@ -75,6 +76,7 @@ class MarketManager(private val plugin: Joshymc) {
             )
         }, 72000L, 72000L)
 
+        started = true
         plugin.logger.info("[Market] MarketManager started.")
     }
 
@@ -83,11 +85,13 @@ class MarketManager(private val plugin: Joshymc) {
         cleanupTask?.cancel()
         recalculateTask = null
         cleanupTask = null
+        started = false
     }
 
     // ── Transaction Recording ───────────────────────────────────────────
 
     fun recordTransaction(material: Material, type: String, amount: Int) {
+        if (!started) return
         plugin.databaseManager.execute(
             "INSERT INTO market_transactions (material, type, amount, timestamp) VALUES (?, ?, ?, ?)",
             material.name, type, amount, System.currentTimeMillis()
@@ -150,6 +154,7 @@ class MarketManager(private val plugin: Joshymc) {
     }
 
     fun getMultiplier(material: Material): Double {
+        if (!started) return 1.0
         return multiplierCache.getOrDefault(material, 1.0)
     }
 
