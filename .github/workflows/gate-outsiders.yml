@@ -1,0 +1,35 @@
+name: Gate outsider issues
+
+# Public-repo guard. Anyone with a GitHub account can file an issue on
+# this repo, and every issue fires the Claude pipeline (Claude rate
+# limit + Actions minutes burn). This workflow closes any issue from
+# a non-collaborator immediately, with a friendly explanation, so the
+# automation budget is reserved for actual maintainers.
+#
+# Allowed author_association values: OWNER, COLLABORATOR, MEMBER.
+# Anyone else gets the close-with-comment treatment.
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  gate:
+    if: |
+      github.event.issue.author_association != 'OWNER' &&
+      github.event.issue.author_association != 'COLLABORATOR' &&
+      github.event.issue.author_association != 'MEMBER'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close non-collaborator issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUM: ${{ github.event.issue.number }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+        run: |
+          gh issue comment "$NUM" --repo "$REPO" --body "Hi @${AUTHOR} — thanks for the interest. This repo's issue tracker is reserved for the maintainers because every issue triggers an automated pipeline against the maintainer's account quotas. If you've found a bug on Joshy's server, please report it in-game or via Discord. If you're curious about the code, feel free to fork — the source is open. Closing this for now."
+          gh issue close "$NUM" --repo "$REPO" --reason "not_planned"

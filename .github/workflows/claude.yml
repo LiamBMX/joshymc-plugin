@@ -14,14 +14,30 @@ on:
 
 jobs:
   claude:
-    # New issues always run.
-    # Comments/reviews only run if they mention @claude.
+    # Author gating: only fire for OWNER / COLLABORATOR / MEMBER on a public repo.
+    # New issues run. Comments/reviews run if they mention @claude.
     # PR open/sync runs only for claude/* branches (Claude's own PRs).
     if: |
-      github.event_name == 'issues' ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && (
+        github.event.issue.author_association == 'OWNER' ||
+        github.event.issue.author_association == 'COLLABORATOR' ||
+        github.event.issue.author_association == 'MEMBER'
+      )) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'COLLABORATOR' ||
+        github.event.comment.author_association == 'MEMBER'
+      )) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'COLLABORATOR' ||
+        github.event.comment.author_association == 'MEMBER'
+      )) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && (
+        github.event.review.author_association == 'OWNER' ||
+        github.event.review.author_association == 'COLLABORATOR' ||
+        github.event.review.author_association == 'MEMBER'
+      )) ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'claude/'))
     runs-on: ubuntu-latest
     permissions:
