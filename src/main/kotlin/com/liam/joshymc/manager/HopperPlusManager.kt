@@ -37,9 +37,6 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
     /** Tick counters per hopper for speed scheduling */
     private val tickCounters = mutableMapOf<String, Int>()
 
-    /** Unregistered hoppers whose vanilla transfers we have taken over at 4/sec */
-    private val activeVanillaHoppers = mutableSetOf<String>()
-
     fun start() {
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS upgraded_hoppers (
@@ -62,7 +59,6 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
         tickTask = null
         tickCounters.clear()
         cache.clear()
-        activeVanillaHoppers.clear()
     }
 
     // ── Database ────────────────────────────────────────────
@@ -134,9 +130,6 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
 
     private fun startTickTask() {
         tickTask = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
-            val globalTick = (tickCounters["__global"] ?: 0) + 1
-            tickCounters["__global"] = globalTick
-
             // Registered hoppers (speed 1–5)
             for ((k, data) in cache) {
                 val world = plugin.server.getWorld(data.world) ?: continue
@@ -149,12 +142,12 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
                 tickCounters[k] = counter
 
                 val interval = when (data.speed) {
-                    1 -> 5  // 4/sec (base speed)
+                    1 -> 8  // vanilla speed (2.5/sec)
                     2 -> 4  // 5/sec
                     3 -> 2  // 10/sec
                     4 -> 1  // 20/sec
                     5 -> 1  // every tick, full stack
-                    else -> 5
+                    else -> 8
                 }
 
                 if (counter % interval != 0) continue
@@ -167,22 +160,6 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
                         data.x + 0.5, data.y + 1.0, data.z + 0.5,
                         1, 0.2, 0.1, 0.2, 0.0
                     )
-                }
-            }
-
-            // Vanilla (unregistered) hoppers — boosted to 4/sec
-            if (globalTick % 5 == 0) {
-                for (k in activeVanillaHoppers.toList()) {
-                    val parts = k.split(":")
-                    if (parts.size != 4) { activeVanillaHoppers.remove(k); continue }
-                    val world = plugin.server.getWorld(parts[0]) ?: continue
-                    val x = parts[1].toIntOrNull() ?: continue
-                    val y = parts[2].toIntOrNull() ?: continue
-                    val z = parts[3].toIntOrNull() ?: continue
-                    val block = world.getBlockAt(x, y, z)
-                    if (block.type != Material.HOPPER) { activeVanillaHoppers.remove(k); continue }
-                    val hopperState = block.state as? Hopper ?: continue
-                    transferItems(hopperState, HopperData(parts[0], x, y, z, 1, null))
                 }
             }
         }, 1L, 1L)
@@ -355,22 +332,12 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        // Source-hopper checks: take over speed for all hoppers (registered and vanilla)
+        // Source-hopper checks: only intercept registered (upgraded/filtered) hoppers
         val srcHolder = event.source.holder
         if (srcHolder is Hopper) {
             val loc = srcHolder.block.location
             val k = key(loc)
-            val data = cache[k]
-
-            if (data == null) {
-                // Unregistered vanilla hopper: take over at 4/sec
-                event.isCancelled = true
-                activeVanillaHoppers.add(k)
-                return
-            }
-
-            // Registered hopper: clean up vanilla tracking if it was previously unregistered
-            activeVanillaHoppers.remove(k)
+            val data = cache[k] ?: return  // unregistered vanilla hopper — let Bukkit handle it
 
             if (data.filterItem != null) {
                 val filterMat = try { Material.valueOf(data.filterItem!!) } catch (_: Exception) { null }
@@ -380,7 +347,7 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
                 }
             }
 
-            // Cancel vanilla for all speeds — our tick task handles transfers now
+            // Cancel vanilla transfer — our tick task handles transfers for registered hoppers
             event.isCancelled = true
         }
     }
@@ -393,7 +360,6 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
 
         val loc = event.block.location
         val k = key(loc)
-        activeVanillaHoppers.remove(k)
         val data = cache[k] ?: return
 
         delete(loc.world.name, loc.blockX, loc.blockY, loc.blockZ)
