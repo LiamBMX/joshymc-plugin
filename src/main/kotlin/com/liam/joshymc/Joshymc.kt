@@ -26,6 +26,7 @@ import com.liam.joshymc.manager.ResourceWorldManager
 import com.liam.joshymc.manager.ScoreboardManager
 import com.liam.joshymc.manager.ChatTagManager
 import com.liam.joshymc.manager.MarketManager
+import com.liam.joshymc.manager.DailyQuestManager
 import com.liam.joshymc.manager.QuestManager
 import com.liam.joshymc.manager.EmoteManager
 import com.liam.joshymc.manager.FishingManager
@@ -190,6 +191,8 @@ class Joshymc : JavaPlugin() {
     lateinit var rtpCommand: com.liam.joshymc.command.RtpCommand
     lateinit var questManager: QuestManager
         private set
+    lateinit var dailyQuestManager: DailyQuestManager
+        private set
     lateinit var talismanManager: TalismanManager
         private set
     lateinit var fishingManager: FishingManager
@@ -286,6 +289,7 @@ class Joshymc : JavaPlugin() {
         autoRestartManager = AutoRestartManager(this)
         playtimeManager = PlaytimeManager(this)
         questManager = QuestManager(this)
+        dailyQuestManager = DailyQuestManager(this)
         talismanManager = TalismanManager(this)
         fishingManager = FishingManager(this)
         skillManager = SkillManager(this)
@@ -345,6 +349,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("chat-games")) chatGamesManager.start()
 
         if (isFeatureEnabled("quests")) questManager.start()
+        if (isFeatureEnabled("quests")) dailyQuestManager.start()
         if (isFeatureEnabled("talismans")) talismanManager.start()
         if (isFeatureEnabled("custom-fishing")) fishingManager.start()
         if (isFeatureEnabled("skills")) skillManager.start()
@@ -405,6 +410,7 @@ class Joshymc : JavaPlugin() {
         announcementManager.stop()
         autoRestartManager.stop()
         playtimeManager.stop()
+        dailyQuestManager.stop()
         resourceWorldManager.stop()
         combatManager.stop()
         lagCleanerManager.stop()

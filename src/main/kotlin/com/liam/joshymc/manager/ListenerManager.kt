@@ -114,6 +114,7 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // Quest events
         pm.registerEvents(plugin.questManager, plugin)
+        pm.registerEvents(plugin.dailyQuestManager, plugin)
 
         // Talisman effects
         pm.registerEvents(plugin.talismanManager, plugin)
