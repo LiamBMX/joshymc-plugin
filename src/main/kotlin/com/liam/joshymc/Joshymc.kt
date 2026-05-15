@@ -602,6 +602,32 @@ class Joshymc : JavaPlugin() {
             description = "Auto-replants crops when broken"))
         cem.register(CustomEnchant("blessing", "Blessing", 1, EnchantTarget.HOE,
             description = "Auto-regrows replanted crops (requires Great Harvest)"))
+
+        // ── Mace ─────────────────────────────────────────
+        cem.register(CustomEnchant("meteor", "Meteor", 1, EnchantTarget.MACE,
+            description = "Higher fall = wider smash damage radius"))
+        cem.register(CustomEnchant("crater", "Crater", 3, EnchantTarget.MACE,
+            description = "Smash attacks stun nearby enemies"))
+
+        // ── Fishing Rod ──────────────────────────────────
+        cem.register(CustomEnchant("barbed_hook", "Barbed Hook", 4, EnchantTarget.FISHING_ROD,
+            description = "Hooked entities take damage over time"))
+        cem.register(CustomEnchant("netcaster", "Netcaster", 3, EnchantTarget.FISHING_ROD,
+            description = "Chance to catch multiple fish at once"))
+
+        // ── Crossbow ─────────────────────────────────────
+        cem.register(CustomEnchant("shrapnel", "Shrapnel", 3, EnchantTarget.CROSSBOW,
+            description = "Arrows explode on impact"))
+        cem.register(CustomEnchant("sniper", "Sniper", 1, EnchantTarget.CROSSBOW,
+            description = "Increased damage the further the target"))
+        cem.register(CustomEnchant("hunter", "Hunter", 5, EnchantTarget.CROSSBOW,
+            description = "Bonus damage to flying mobs and gliding players"))
+
+        // ── Trident ──────────────────────────────────────
+        cem.register(CustomEnchant("harpoon", "Harpoon", 1, EnchantTarget.TRIDENT,
+            description = "Thrown tridents drag hit entities back toward you"))
+        cem.register(CustomEnchant("tidal_leap", "Tidal Leap", 1, EnchantTarget.TRIDENT,
+            description = "Riptide launches even without rain (requires Riptide)"))
     }
 
     /**
