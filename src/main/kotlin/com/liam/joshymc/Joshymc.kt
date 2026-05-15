@@ -227,6 +227,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var timezoneManager: TimezoneManager
         private set
+    lateinit var eventManager: com.liam.joshymc.manager.EventManager
+        private set
 
     override fun onEnable() {
         instance = this
@@ -308,6 +310,7 @@ class Joshymc : JavaPlugin() {
         spawnWorldManager = SpawnWorldManager(this)
         customEnchantManager = CustomEnchantManager(this)
         serverShopManager = ServerShopManager(this)
+        eventManager = com.liam.joshymc.manager.EventManager(this)
 
         itemManager.registerAll()
         recipeManager.registerAll()
@@ -368,6 +371,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("portals")) portalManager.start()
         if (isFeatureEnabled("voting")) voteManager.start()
         spawnDecorationManager.start()
+        eventManager.start()
 
         discordManager.start()
 
@@ -414,6 +418,7 @@ class Joshymc : JavaPlugin() {
         resourceWorldManager.stop()
         combatManager.stop()
         lagCleanerManager.stop()
+        eventManager.shutdown()
         resourcePackManager.shutdown()
         discordManager.shutdown()
         databaseManager.shutdown()
