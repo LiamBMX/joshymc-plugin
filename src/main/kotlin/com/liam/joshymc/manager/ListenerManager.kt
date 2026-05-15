@@ -131,6 +131,7 @@ class ListenerManager(private val plugin: Joshymc) {
         // Arena + World flags + portals + voting
         pm.registerEvents(plugin.arenaManager, plugin)
         pm.registerEvents(plugin.worldFlagManager, plugin)
+        pm.registerEvents(plugin.eventManager, plugin)
         pm.registerEvents(plugin.portalManager, plugin)
         pm.registerEvents(plugin.voteManager, plugin)
 

@@ -310,6 +310,9 @@ commands:
   arena:
     description: Manage PvP arenas
     usage: /arena <wand|create|delete|list|info|enable|disable|points|undo|clear|tp>
+  event:
+    description: Manage the event world and mini-games
+    usage: /event <wand|save|pvp|build|break|setworld|start|stop|status>
   portal:
     description: Manage custom portals
     usage: /portal <wand|create|delete|action|cooldown|message|list|info|tp>
@@ -760,6 +763,9 @@ permissions:
     default: op
   joshymc.arena:
     description: Manage PvP arenas
+    default: op
+  joshymc.event:
+    description: Manage the event world and mini-games
     default: op
   joshymc.portal:
     description: Manage portals

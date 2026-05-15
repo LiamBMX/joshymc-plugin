@@ -526,6 +526,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd); it.tabCompleter = cmd
         }
 
+        // ── Event ─────────────────────────────────────────
+        plugin.getCommand("event")?.let {
+            val cmd = plugin.eventManager.EventCommand()
+            it.setExecutor(cmd); it.tabCompleter = cmd
+        }
+
         // ── Portals ──────────────────────────────────────
         plugin.getCommand("portal")?.let { val c = PortalCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
