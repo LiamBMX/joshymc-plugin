@@ -33,6 +33,7 @@ import com.liam.joshymc.listener.VoidBoreListener
 import com.liam.joshymc.listener.enchant.CombatEnchantListener
 import com.liam.joshymc.listener.enchant.PassiveEnchantListener
 import com.liam.joshymc.listener.enchant.ToolEnchantListener
+import com.liam.joshymc.listener.enchant.WeaponEnchantListener
 
 class ListenerManager(private val plugin: Joshymc) {
 
@@ -97,6 +98,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.customEnchantManager, plugin)
         pm.registerEvents(CombatEnchantListener(plugin), plugin)
         pm.registerEvents(ToolEnchantListener(plugin), plugin)
+        pm.registerEvents(WeaponEnchantListener(plugin), plugin)
         passiveEnchantListener = PassiveEnchantListener(plugin)
         passiveEnchantListener!!.start()
         pm.registerEvents(passiveEnchantListener!!, plugin)

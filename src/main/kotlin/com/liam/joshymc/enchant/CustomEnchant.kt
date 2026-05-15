@@ -29,6 +29,8 @@ enum class EnchantTarget {
     BOW,
     CROSSBOW,
     TRIDENT,
+    MACE,
+    FISHING_ROD,
     HELMET,
     CHESTPLATE,
     LEGGINGS,
@@ -49,6 +51,8 @@ enum class EnchantTarget {
             BOW -> name == "BOW"
             CROSSBOW -> name == "CROSSBOW"
             TRIDENT -> name == "TRIDENT"
+            MACE -> name == "MACE"
+            FISHING_ROD -> name == "FISHING_ROD"
             HELMET -> name.endsWith("_HELMET") || name == "TURTLE_HELMET"
             CHESTPLATE -> name.endsWith("_CHESTPLATE") || name == "ELYTRA"
             LEGGINGS -> name.endsWith("_LEGGINGS")
