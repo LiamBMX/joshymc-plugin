@@ -27,12 +27,40 @@ class ResurgeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val sub = args.getOrNull(0)?.lowercase()
 
         when (sub) {
+            "help" -> showHelp(sender)
             "balance", "bal" -> showBalance(sender)
             "top", "leaderboard", "lb" -> showLeaderboard(sender)
             "confirm" -> doResurge(sender)
             else -> showStatus(sender)
         }
         return true
+    }
+
+    private fun showHelp(player: Player) {
+        plugin.commsManager.send(player, Component.text("─── What is Resurge? ───", TextColor.color(0xFFAA00)))
+        plugin.commsManager.send(player, Component.text("  Resurge is a prestige system. Once you meet", NamedTextColor.GRAY))
+        plugin.commsManager.send(player, Component.text("  the requirements, you can reset your skills &", NamedTextColor.GRAY))
+        plugin.commsManager.send(player, Component.text("  quests in exchange for rewards and a harder", NamedTextColor.GRAY))
+        plugin.commsManager.send(player, Component.text("  challenge on your next playthrough.", NamedTextColor.GRAY))
+        plugin.commsManager.send(player, Component.text(" ", NamedTextColor.GRAY))
+        plugin.commsManager.send(player, Component.text("─── Requirements ───", TextColor.color(0xFFAA00)))
+        plugin.commsManager.send(player, Component.text("  • All 9 skills at the required level", NamedTextColor.YELLOW)
+            .append(Component.text(" (level × 5 per Resurge)", NamedTextColor.GRAY)))
+        plugin.commsManager.send(player, Component.text("    Skills: Mining, Farming, Combat, Fishing,", NamedTextColor.GRAY))
+        plugin.commsManager.send(player, Component.text("    Woodcutting, Excavation, Enchanting,", NamedTextColor.GRAY))
+        plugin.commsManager.send(player, Component.text("    Alchemy, Taming", NamedTextColor.GRAY))
+        plugin.commsManager.send(player, Component.text("  • Complete all Mining, Fishing & Farming quests", NamedTextColor.YELLOW))
+        plugin.commsManager.send(player, Component.text(" ", NamedTextColor.GRAY))
+        plugin.commsManager.send(player, Component.text("─── Rewards ───", TextColor.color(0xFFAA00)))
+        plugin.commsManager.send(player, Component.text("  • $10,000,000 cash", NamedTextColor.GREEN))
+        plugin.commsManager.send(player, Component.text("  • 1 Resurge Key ", NamedTextColor.GREEN)
+            .append(Component.text("(2 keys on milestones: 5, 10, 15…)", NamedTextColor.GRAY)))
+        plugin.commsManager.send(player, Component.text("  • Quest difficulty +20% per Resurge", NamedTextColor.RED))
+        plugin.commsManager.send(player, Component.text(" ", NamedTextColor.GRAY))
+        plugin.commsManager.send(player, Component.text("─── Commands ───", TextColor.color(0xFFAA00)))
+        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  §e/resurge §7— check your status & requirements"))
+        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  §e/resurge confirm §7— Resurge when ready"))
+        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  §e/resurge top §7— view the leaderboard"))
     }
 
     private fun showBalance(player: Player) {
@@ -104,7 +132,7 @@ class ResurgeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) {
-            return listOf("balance", "top", "confirm").filter { it.startsWith(args[0].lowercase()) }
+            return listOf("help", "balance", "top", "confirm").filter { it.startsWith(args[0].lowercase()) }
         }
         return emptyList()
     }
