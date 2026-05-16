@@ -585,6 +585,13 @@ class SkillManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    // ── Reset (used by Resurge) ──────────────────────────────────────────
+
+    fun resetSkills(uuid: UUID) {
+        plugin.databaseManager.execute("DELETE FROM player_skills WHERE uuid = ?", uuid.toString())
+        cache.remove(uuid)
+    }
+
     // ── Leaderboard ─────────────────────────────────────────────────────
 
     fun getTopPlayers(skill: Skill, limit: Int = 10): List<Triple<String, Int, Long>> {

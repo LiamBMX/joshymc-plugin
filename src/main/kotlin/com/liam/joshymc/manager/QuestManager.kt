@@ -325,8 +325,9 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
         if (current.completed) return
 
-        val newProgress = (current.progress + amount).coerceAtMost(quest.amount)
-        val completed = newProgress >= quest.amount
+        val effectiveAmount = plugin.resurgeManager.getEffectiveAmount(uuid, quest.amount)
+        val newProgress = (current.progress + amount).coerceAtMost(effectiveAmount)
+        val completed = newProgress >= effectiveAmount
 
         val updated = current.copy(progress = newProgress, completed = completed)
         playerMap[questId] = updated
@@ -411,8 +412,9 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         val current = playerMap[quest.id] ?: PlayerQuestProgress(quest.id, 0, false, false)
         if (current.completed) return
 
-        val newProgress = minOf(seconds, quest.amount)
-        val completed = newProgress >= quest.amount
+        val effectiveAmount = plugin.resurgeManager.getEffectiveAmount(uuid, quest.amount)
+        val newProgress = minOf(seconds, effectiveAmount)
+        val completed = newProgress >= effectiveAmount
         if (newProgress == current.progress && completed == current.completed) return
 
         playerMap[quest.id] = current.copy(progress = newProgress, completed = completed)
@@ -645,14 +647,16 @@ class QuestManager(private val plugin: Joshymc) : Listener {
             val progress = getPlayerProgress(uuid, quest.id)
             val canStartQuest = canStart(uuid, quest.id)
 
+            val effectiveAmount = plugin.resurgeManager.getEffectiveAmount(uuid, quest.amount)
             val icon = try {
-                questIcon(quest, progress, canStartQuest)
+                questIcon(quest, progress, canStartQuest, effectiveAmount)
             } catch (e: Exception) {
                 plugin.logger.warning("[Quests] Failed to render icon for quest '${quest.id}': ${e.message}")
                 ItemStack(quest.category.icon)
             }
             val questRef = quest
             val progressRef = progress
+            val effectiveAmountRef = effectiveAmount
             gui.setItem(contentSlots[i], icon) { p, _ ->
                 if (progressRef.completed && !progressRef.claimedReward) {
                     if (claimReward(p, questRef.id)) {
@@ -661,11 +665,11 @@ class QuestManager(private val plugin: Joshymc) : Listener {
                     }
                 } else {
                     // Show quest info in chat for incomplete quests
-                    val percent = if (questRef.amount > 0) (progressRef.progress * 100) / questRef.amount else 0
+                    val percent = if (effectiveAmountRef > 0) (progressRef.progress * 100) / effectiveAmountRef else 0
                     plugin.commsManager.send(p, plugin.commsManager.parseLegacy("&e--- ${questRef.name} ---"))
                     plugin.commsManager.send(p, plugin.commsManager.parseLegacy("  &7${questRef.description}"))
                     plugin.commsManager.send(p, plugin.commsManager.parseLegacy(
-                        "  &7Progress: &a${progressRef.progress}&7/&a${questRef.amount} &7($percent%)"
+                        "  &7Progress: &a${progressRef.progress}&7/&a${effectiveAmountRef} &7($percent%)"
                     ))
                     p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
                 }
@@ -1180,7 +1184,7 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    private fun questIcon(quest: Quest, progress: PlayerQuestProgress, canStartQuest: Boolean): ItemStack {
+    private fun questIcon(quest: Quest, progress: PlayerQuestProgress, canStartQuest: Boolean, effectiveAmount: Int = quest.amount): ItemStack {
         val iconMaterial = when {
             progress.completed && progress.claimedReward -> Material.LIME_STAINED_GLASS_PANE
             progress.completed -> Material.GREEN_STAINED_GLASS_PANE
@@ -1220,7 +1224,7 @@ class QuestManager(private val plugin: Joshymc) : Listener {
                     .decoration(TextDecoration.ITALIC, false))
             } else {
                 // Progress bar
-                lore.add(plugin.commsManager.parseLegacy("  ${progressBar(progress.progress, quest.amount, quest.type)}")
+                lore.add(plugin.commsManager.parseLegacy("  ${progressBar(progress.progress, effectiveAmount, quest.type)}")
                     .decoration(TextDecoration.ITALIC, false))
             }
 

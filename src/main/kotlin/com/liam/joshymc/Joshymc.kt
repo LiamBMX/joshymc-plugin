@@ -229,6 +229,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var eventManager: com.liam.joshymc.manager.EventManager
         private set
+    lateinit var resurgeManager: com.liam.joshymc.manager.ResurgeManager
+        private set
 
     override fun onEnable() {
         instance = this
@@ -311,6 +313,7 @@ class Joshymc : JavaPlugin() {
         customEnchantManager = CustomEnchantManager(this)
         serverShopManager = ServerShopManager(this)
         eventManager = com.liam.joshymc.manager.EventManager(this)
+        resurgeManager = com.liam.joshymc.manager.ResurgeManager(this)
 
         itemManager.registerAll()
         recipeManager.registerAll()
@@ -351,6 +354,7 @@ class Joshymc : JavaPlugin() {
         chatGamesManager = com.liam.joshymc.manager.ChatGamesManager(this)
         if (isFeatureEnabled("chat-games")) chatGamesManager.start()
 
+        resurgeManager.start()
         if (isFeatureEnabled("quests")) questManager.start()
         if (isFeatureEnabled("quests")) dailyQuestManager.start()
         if (isFeatureEnabled("talismans")) talismanManager.start()
