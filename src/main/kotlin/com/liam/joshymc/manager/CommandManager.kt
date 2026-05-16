@@ -120,6 +120,7 @@ import com.liam.joshymc.command.VoteCommand
 import com.liam.joshymc.command.WorldCommand
 import com.liam.joshymc.command.WorldFlagCommand
 import com.liam.joshymc.command.RestartCommand
+import com.liam.joshymc.command.ResurgeCommand
 
 class CommandManager(private val plugin: Joshymc) {
 
@@ -360,6 +361,9 @@ class CommandManager(private val plugin: Joshymc) {
 
         // ── Skills ────────────────────────────────────
         plugin.getCommand("skills")?.let { val c = SkillsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        // ── Resurge ───────────────────────────────────
+        plugin.getCommand("resurge")?.let { val c = ResurgeCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Talismans ─────────────────────────────────
         plugin.getCommand("talisman")?.let { val c = TalismanCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
