@@ -2,6 +2,8 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.event.ClickEvent
+import net.kyori.adventure.text.event.HoverEvent
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -59,7 +61,7 @@ class ResurgeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         plugin.commsManager.send(player, Component.text(" ", NamedTextColor.GRAY))
         plugin.commsManager.send(player, Component.text("─── Commands ───", TextColor.color(0xFFAA00)))
         plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  §e/resurge §7— check your status & requirements"))
-        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  §e/resurge confirm §7— Resurge when ready"))
+        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  §e/resurge confirm §7— confirm & perform the Resurge"))
         plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  §e/resurge top §7— view the leaderboard"))
     }
 
@@ -113,8 +115,11 @@ class ResurgeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val missing = plugin.resurgeManager.getMissingRequirements(uuid)
         if (missing.isEmpty()) {
             plugin.commsManager.send(player, Component.text("  ✔ All requirements met!", NamedTextColor.GREEN))
-            plugin.commsManager.send(player, Component.text("  Type /resurge confirm to Resurge!", NamedTextColor.YELLOW)
-                .decoration(TextDecoration.BOLD, true))
+            val confirmButton = Component.text("  [ Click here or type /resurge confirm to Resurge! ]", TextColor.color(0xFFAA00))
+                .decoration(TextDecoration.BOLD, true)
+                .clickEvent(ClickEvent.runCommand("/resurge confirm"))
+                .hoverEvent(HoverEvent.showText(Component.text("Click to Resurge!", NamedTextColor.YELLOW)))
+            plugin.commsManager.send(player, confirmButton)
         } else {
             plugin.commsManager.send(player, Component.text("  Remaining requirements:", NamedTextColor.RED))
             missing.forEach { req ->
