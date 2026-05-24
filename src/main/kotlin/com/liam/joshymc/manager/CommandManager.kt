@@ -122,6 +122,7 @@ import com.liam.joshymc.command.WorldCommand
 import com.liam.joshymc.command.WorldFlagCommand
 import com.liam.joshymc.command.RestartCommand
 import com.liam.joshymc.command.InvestCommand
+import com.liam.joshymc.command.LotteryCommand
 import com.liam.joshymc.command.ResurgeCommand
 
 class CommandManager(private val plugin: Joshymc) {
@@ -561,6 +562,9 @@ class CommandManager(private val plugin: Joshymc) {
 
         // ── Investments ──────────────────────────────────
         plugin.getCommand("invest")?.let { val c = InvestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        // ── Lottery ──────────────────────────────────────
+        plugin.getCommand("lottery")?.let { val c = LotteryCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── World Flags ──────────────────────────────────
         plugin.getCommand("worldflag")?.let { val c = WorldFlagCommand(plugin); it.setExecutor(c); it.tabCompleter = c }

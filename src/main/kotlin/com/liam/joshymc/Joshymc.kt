@@ -63,6 +63,7 @@ import com.liam.joshymc.manager.ArenaManager
 import com.liam.joshymc.manager.PortalManager
 import com.liam.joshymc.manager.SpawnDecorationManager
 import com.liam.joshymc.manager.VoteManager
+import com.liam.joshymc.manager.LotteryManager
 import com.liam.joshymc.manager.WorldFlagManager
 import org.bukkit.Bukkit
 import org.bukkit.GameRule
@@ -159,6 +160,8 @@ class Joshymc : JavaPlugin() {
     lateinit var economyManager: EconomyManager
         private set
     lateinit var investManager: InvestManager
+        private set
+    lateinit var lotteryManager: LotteryManager
         private set
     lateinit var guiManager: GuiManager
         private set
@@ -262,6 +265,9 @@ class Joshymc : JavaPlugin() {
 
         investManager = InvestManager(this)
         investManager.start()
+
+        lotteryManager = LotteryManager(this)
+        lotteryManager.start()
 
         guiManager = GuiManager()
 
@@ -417,6 +423,7 @@ class Joshymc : JavaPlugin() {
         antiCheatManager.stop()
         portalManager.stop()
         voteManager.stop()
+        lotteryManager.stop()
         spawnDecorationManager.stop()
         listenerManager.passiveEnchantListener?.stop()
         claimManager.stop()
