@@ -78,7 +78,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     // --- State ---
 
-    private val crateKeyKey = NamespacedKey(plugin, "crate_key")
+    val crateKeyKey = NamespacedKey(plugin, "crate_key")
     private val crates = mutableMapOf<String, CrateDef>()
     private val crateLocations = mutableListOf<CrateLocation>()
     private val activeAnimations = mutableSetOf<UUID>()

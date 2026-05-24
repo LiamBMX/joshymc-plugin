@@ -192,6 +192,9 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
                     .decoration(TextDecoration.ITALIC, false)
             ))
             meta.persistentDataContainer.set(resurgeKeyKey, PersistentDataType.STRING, "resurge")
+            // Also register as a crate key for the "resurge" crate type so the CrateManager
+            // accepts this key at any crate block configured with id "resurge".
+            meta.persistentDataContainer.set(plugin.crateManager.crateKeyKey, PersistentDataType.STRING, "resurge")
         }
         return item
     }
