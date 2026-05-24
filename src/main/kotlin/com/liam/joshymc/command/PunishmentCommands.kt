@@ -343,6 +343,64 @@ class WarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     }
 }
 
+// ── /unwarn ─────────────────────────────────────────────────
+
+class UnwarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
+
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        if (!sender.hasPermission("joshymc.warn")) {
+            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            return true
+        }
+        if (args.isEmpty()) {
+            sender.sendMessage(Component.text("Usage: /unwarn <player> [id]", NamedTextColor.RED))
+            return true
+        }
+
+        val target = resolveOfflinePlayer(args[0])
+        if (target == null) {
+            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            return true
+        }
+
+        val warnId = if (args.size > 1) {
+            val parsed = args[1].toIntOrNull()
+            if (parsed == null) {
+                sender.sendMessage(Component.text("Invalid warning ID: ${args[1]}", NamedTextColor.RED))
+                return true
+            }
+            parsed
+        } else null
+
+        val removed = plugin.punishmentManager.unwarn(target.first, warnId)
+        if (!removed) {
+            val detail = if (warnId != null) "Warning #$warnId not found for ${target.second}." else "${target.second} has no active warnings."
+            sender.sendMessage(Component.text(detail, NamedTextColor.RED))
+            return true
+        }
+
+        val remaining = plugin.punishmentManager.getWarnings(target.first).count { it.active }
+        val msg = Component.text("Warning removed from ${target.second}", NamedTextColor.GREEN)
+            .append(Component.text(" ($remaining remaining)", NamedTextColor.GRAY))
+        sender.sendMessage(msg)
+        notifyStaff(sender, msg)
+
+        // Notify target if online
+        val online = Bukkit.getPlayer(target.first)
+        if (online != null) {
+            plugin.commsManager.send(online, Component.text("A warning has been removed from your record.", NamedTextColor.GREEN),
+                CommunicationsManager.Category.ADMIN
+            )
+        }
+
+        return true
+    }
+
+    override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
+        return if (args.size == 1) onlinePlayerNames(args[0]) else emptyList()
+    }
+}
+
 // ── /kick ───────────────────────────────────────────────────
 
 class KickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {

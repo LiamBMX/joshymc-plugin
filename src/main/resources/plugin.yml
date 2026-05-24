@@ -383,6 +383,9 @@ commands:
   warn:
     description: Warn a player
     usage: /warn <player> [reason]
+  unwarn:
+    description: Remove a warning from a player
+    usage: /unwarn <player> [id]
   pkick:
     description: Kick a player with reason
     usage: /pkick <player> [reason]

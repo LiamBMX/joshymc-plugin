@@ -22,6 +22,7 @@ import com.liam.joshymc.command.TempmuteCommand
 import com.liam.joshymc.command.UnbanCommand
 import com.liam.joshymc.command.UnmuteCommand
 import com.liam.joshymc.command.VanishCommand
+import com.liam.joshymc.command.UnwarnCommand
 import com.liam.joshymc.command.WarnCommand
 import com.liam.joshymc.command.BackCommand
 import com.liam.joshymc.command.ClaimCommand
@@ -458,6 +459,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("tempmute")?.let { val c = TempmuteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("unmute")?.let { val c = UnmuteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("warn")?.let { val c = WarnCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("unwarn")?.let { val c = UnwarnCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("pkick")?.let { val c = KickCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("history")?.let { val c = HistoryCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
