@@ -7,7 +7,7 @@ import kotlin.math.pow
 class InvestManager(private val plugin: Joshymc) {
 
     companion object {
-        private const val INTEREST_RATE = 0.005  // 0.5% per hour
+        private const val INTEREST_RATE = 0.0025  // 0.25% per hour
     }
 
     fun start() {
