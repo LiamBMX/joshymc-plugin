@@ -6,12 +6,13 @@ import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.World
 import org.bukkit.entity.Display
-import org.bukkit.entity.Entity
-import org.bukkit.entity.Player
 import org.bukkit.entity.TextDisplay
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.world.WorldLoadEvent
 import java.util.UUID
 
-class HologramManager(private val plugin: Joshymc) {
+class HologramManager(private val plugin: Joshymc) : Listener {
 
     private val legacySerializer = LegacyComponentSerializer.legacyAmpersand()
 
@@ -43,6 +44,11 @@ class HologramManager(private val plugin: Joshymc) {
         try { plugin.databaseManager.execute("ALTER TABLE holograms ADD COLUMN scale REAL DEFAULT 1.0") } catch (_: Exception) {}
         try { plugin.databaseManager.execute("ALTER TABLE holograms ADD COLUMN yaw REAL DEFAULT 0.0") } catch (_: Exception) {}
         try { plugin.databaseManager.execute("ALTER TABLE holograms ADD COLUMN locked INTEGER DEFAULT 0") } catch (_: Exception) {}
+
+        // Listen for worlds that load after the initial loadAll() tick so holograms
+        // in those worlds are still spawned (e.g. plugin-managed worlds that finish
+        // loading slightly after tick 1).
+        plugin.server.pluginManager.registerEvents(this, plugin)
 
         // Spawn all saved holograms once the server is ready
         plugin.server.scheduler.runTaskLater(plugin, Runnable { loadAll() }, 1L)
@@ -279,33 +285,61 @@ class HologramManager(private val plugin: Joshymc) {
         }
         entities.clear()
 
-        data class HoloRow(val id: String, val location: Location, val lines: List<String>, val style: HoloStyle)
-
-        val holograms = plugin.databaseManager.query<HoloRow?>(
+        var spawned = 0
+        var skipped = 0
+        plugin.databaseManager.query(
             "SELECT id, world, x, y, z, lines, scale, yaw, locked FROM holograms"
         ) { rs ->
-            val world = Bukkit.getWorld(rs.getString("world"))
-            if (world != null) {
-                HoloRow(
-                    id = rs.getString("id"),
-                    location = Location(world, rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z")),
-                    lines = rs.getString("lines").let { if (it.isEmpty()) emptyList() else it.split("\n") },
-                    style = HoloStyle(
-                        scale = rs.getFloat("scale").let { if (it <= 0f) 1f else it },
-                        yaw = rs.getFloat("yaw"),
-                        locked = rs.getInt("locked") == 1
-                    )
+            val worldName = rs.getString("world")
+            val world = Bukkit.getWorld(worldName)
+            if (world == null) {
+                // World not loaded yet — WorldLoadEvent handler will pick it up later.
+                plugin.logger.warning("[Holograms] Skipping hologram '${rs.getString("id")}' — world '$worldName' is not loaded.")
+                skipped++
+                return@query
+            }
+            spawnEntities(
+                id = rs.getString("id"),
+                origin = Location(world, rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z")),
+                lines = rs.getString("lines").let { if (it.isEmpty()) emptyList() else it.split("\n") },
+                style = HoloStyle(
+                    scale = rs.getFloat("scale").let { if (it <= 0f) 1f else it },
+                    yaw = rs.getFloat("yaw"),
+                    locked = rs.getInt("locked") == 1
                 )
-            } else null
-        }.filterNotNull()
-
-        for (row in holograms) {
-            spawnEntities(row.id, row.location, row.lines, row.style)
+            )
+            spawned++
         }
 
-        if (holograms.isNotEmpty()) {
-            plugin.logger.info("[Holograms] Loaded ${holograms.size} hologram(s).")
+        if (spawned > 0) plugin.logger.info("[Holograms] Loaded $spawned hologram(s).")
+        if (skipped > 0) plugin.logger.warning("[Holograms] $skipped hologram(s) deferred — awaiting world load.")
+    }
+
+    /** Spawns any holograms in a world that just became available (missed by loadAll). */
+    @EventHandler
+    fun onWorldLoad(event: WorldLoadEvent) {
+        val worldName = event.world.name
+        var spawned = 0
+        plugin.databaseManager.query(
+            "SELECT id, world, x, y, z, lines, scale, yaw, locked FROM holograms WHERE world = ?",
+            worldName
+        ) { rs ->
+            val id = rs.getString("id")
+            if (entities.containsKey(id)) return@query  // already tracked
+            val world = Bukkit.getWorld(worldName) ?: return@query
+            spawnEntities(
+                id = id,
+                origin = Location(world, rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z")),
+                lines = rs.getString("lines").let { if (it.isEmpty()) emptyList() else it.split("\n") },
+                style = HoloStyle(
+                    scale = rs.getFloat("scale").let { if (it <= 0f) 1f else it },
+                    yaw = rs.getFloat("yaw"),
+                    locked = rs.getInt("locked") == 1
+                )
+            )
+            spawned++
         }
+        if (spawned > 0) plugin.logger.info("[Holograms] Spawned $spawned hologram(s) for late-loading world '$worldName'.")
     }
 
     private fun spawnEntities(id: String, origin: Location, lines: List<String>, style: HoloStyle = loadStyle(id)) {
