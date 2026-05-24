@@ -43,7 +43,7 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             player,
             Component.text("Investment balance: ", NamedTextColor.GRAY)
                 .append(Component.text(plugin.economyManager.format(balance), NamedTextColor.GOLD))
-                .append(Component.text(" (0.5% interest/hour)", NamedTextColor.DARK_GRAY)),
+                .append(Component.text(" (0.25% interest/hour)", NamedTextColor.DARK_GRAY)),
             CommunicationsManager.Category.ECONOMY
         )
     }
