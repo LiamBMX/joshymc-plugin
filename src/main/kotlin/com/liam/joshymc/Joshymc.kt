@@ -44,6 +44,7 @@ import com.liam.joshymc.manager.ServerShopManager
 import com.liam.joshymc.manager.AuctionManager
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.EconomyManager
+import com.liam.joshymc.manager.InvestManager
 import com.liam.joshymc.manager.CrateManager
 import com.liam.joshymc.manager.HologramManager
 import com.liam.joshymc.manager.KitManager
@@ -157,6 +158,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var economyManager: EconomyManager
         private set
+    lateinit var investManager: InvestManager
+        private set
     lateinit var guiManager: GuiManager
         private set
     lateinit var antiCheatManager: AntiCheatManager
@@ -256,6 +259,9 @@ class Joshymc : JavaPlugin() {
 
         economyManager = EconomyManager(this)
         economyManager.start()
+
+        investManager = InvestManager(this)
+        investManager.start()
 
         guiManager = GuiManager()
 

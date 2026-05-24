@@ -115,6 +115,9 @@ commands:
     description: Open the auction house
     usage: /ah [sell <price>] [bid <starting price>]
     aliases: [auction, auctionhouse]
+  invest:
+    description: Manage your bank investment account
+    usage: /invest <deposit|withdraw|balance> <amount>
   eco:
     description: Manage player economy
     usage: /eco <give|take|set|reset> <player> <amount>
@@ -906,3 +909,6 @@ permissions:
   joshymc.leaderboard:
     description: Create / delete / refresh leaderboard holograms
     default: op
+  joshymc.invest:
+    description: Use the /invest command to deposit and withdraw from a bank account
+    default: true
