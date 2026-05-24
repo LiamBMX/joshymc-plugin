@@ -22,6 +22,7 @@ import com.liam.joshymc.listener.UnknownCommandListener
 import com.liam.joshymc.listener.TradeInteractListener
 import com.liam.joshymc.command.BackLocationListener
 import com.liam.joshymc.listener.WelcomeListener
+import com.liam.joshymc.listener.WorthListener
 import com.liam.joshymc.listener.ClaimProtectionListener
 import com.liam.joshymc.listener.ConsumableListener
 import com.liam.joshymc.listener.BubbleButtListener
@@ -178,6 +179,9 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // Utilities
         pm.registerEvents(UnknownCommandListener(plugin), plugin)
+
+        // Item worth action bar on hotbar scroll
+        pm.registerEvents(WorthListener(plugin), plugin)
 
         plugin.logger.info("Listeners registered.")
     }

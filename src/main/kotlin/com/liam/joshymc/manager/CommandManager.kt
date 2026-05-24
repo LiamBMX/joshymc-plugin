@@ -124,6 +124,7 @@ import com.liam.joshymc.command.RestartCommand
 import com.liam.joshymc.command.InvestCommand
 import com.liam.joshymc.command.LotteryCommand
 import com.liam.joshymc.command.ResurgeCommand
+import com.liam.joshymc.command.WorthCommand
 
 class CommandManager(private val plugin: Joshymc) {
 
@@ -323,6 +324,7 @@ class CommandManager(private val plugin: Joshymc) {
         }
 
         plugin.getCommand("shop")?.setExecutor(ShopCommand(plugin))
+        plugin.getCommand("worth")?.setExecutor(WorthCommand(plugin))
 
         plugin.getCommand("sell")?.let {
             val cmd = SellCommand(plugin)
