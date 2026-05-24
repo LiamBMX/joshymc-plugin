@@ -130,6 +130,26 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         ) { rs -> mapRecord(rs) }
     }
 
+    /** Remove the most recent active warning, or a specific one by [warnId]. Returns true if a row was updated. */
+    fun unwarn(targetUuid: UUID, warnId: Int? = null): Boolean {
+        return if (warnId != null) {
+            plugin.databaseManager.executeUpdate(
+                "UPDATE punishments SET active = 0 WHERE id = ? AND target_uuid = ? AND type = 'WARN' AND active = 1",
+                warnId, targetUuid.toString()
+            ) > 0
+        } else {
+            val record = plugin.databaseManager.queryFirst(
+                "SELECT id FROM punishments WHERE target_uuid = ? AND type = 'WARN' AND active = 1 ORDER BY created_at DESC LIMIT 1",
+                targetUuid.toString()
+            ) { rs -> rs.getInt("id") } ?: return false
+            plugin.databaseManager.execute(
+                "UPDATE punishments SET active = 0 WHERE id = ?",
+                record
+            )
+            true
+        }
+    }
+
     // ── Kicks ───────────────────────────────────────────────
 
     fun kick(targetUuid: UUID, targetName: String, punisherName: String, punisherUuid: UUID? = null, reason: String? = null) {
