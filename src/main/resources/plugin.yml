@@ -147,6 +147,9 @@ commands:
   shop:
     description: Open the server shop
     usage: /shop
+  worth:
+    description: Check the buy and sell value of your held item
+    usage: /worth
   sell:
     description: Sell items for money
     usage: /sell [hand|all]
@@ -632,6 +635,9 @@ permissions:
     default: true
   joshymc.shop:
     description: Access the server shop
+    default: true
+  joshymc.worth:
+    description: Check item buy/sell worth
     default: true
   joshymc.sell:
     description: Sell items
