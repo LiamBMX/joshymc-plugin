@@ -118,6 +118,9 @@ commands:
   invest:
     description: Manage your bank investment account
     usage: /invest <deposit|withdraw|balance> <amount>
+  lottery:
+    description: Buy lottery tickets or check the current prize pool
+    usage: /lottery <buy <amount>|prize|tickets>
   eco:
     description: Manage player economy
     usage: /eco <give|take|set|reset> <player> <amount>
@@ -911,4 +914,7 @@ permissions:
     default: op
   joshymc.invest:
     description: Use the /invest command to deposit and withdraw from a bank account
+    default: true
+  joshymc.lottery:
+    description: Use the /lottery command to buy tickets and check the prize pool
     default: true
