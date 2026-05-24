@@ -65,6 +65,15 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return true
         }
 
+        if (args.isNotEmpty() && args[0].equals("notify", ignoreCase = true)) {
+            if (args.size < 2 || !args[1].equals("on", ignoreCase = true) && !args[1].equals("off", ignoreCase = true)) {
+                plugin.commsManager.send(sender, Component.text("Usage: /ah notify <on|off>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                return true
+            }
+            plugin.auctionManager.setNotifications(sender, args[1].equals("on", ignoreCase = true))
+            return true
+        }
+
         // No args or unknown subcommand -> open GUI
         plugin.auctionManager.openMainGui(sender)
         return true
@@ -72,7 +81,10 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) {
-            return listOf("sell", "bid").filter { it.startsWith(args[0].lowercase()) }
+            return listOf("sell", "bid", "notify").filter { it.startsWith(args[0].lowercase()) }
+        }
+        if (args.size == 2 && args[0].equals("notify", ignoreCase = true)) {
+            return listOf("on", "off").filter { it.startsWith(args[1].lowercase()) }
         }
         return emptyList()
     }

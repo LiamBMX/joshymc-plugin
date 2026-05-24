@@ -93,6 +93,7 @@ class AuctionManager(private val plugin: Joshymc) {
     // State tracking
     private val playerPages = mutableMapOf<UUID, Int>()
     val pendingBidInputs = ConcurrentHashMap<UUID, BidListing>()
+    private val notificationsEnabled = mutableSetOf<UUID>()
 
     private var expiryTask: BukkitTask? = null
 
@@ -143,6 +144,16 @@ class AuctionManager(private val plugin: Joshymc) {
             )
         """.trimIndent())
 
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS auction_notifications (
+                player_uuid TEXT PRIMARY KEY
+            )
+        """.trimIndent())
+
+        plugin.databaseManager.query(
+            "SELECT player_uuid FROM auction_notifications"
+        ) { rs -> UUID.fromString(rs.getString("player_uuid")) }.forEach { notificationsEnabled.add(it) }
+
         // Expiry check every 60 seconds (1200 ticks)
         expiryTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
             checkExpired()
@@ -157,6 +168,52 @@ class AuctionManager(private val plugin: Joshymc) {
         expiryTask = null
         playerPages.clear()
         pendingBidInputs.clear()
+        notificationsEnabled.clear()
+    }
+
+    // ---- Notifications ----
+
+    fun setNotifications(player: Player, enabled: Boolean) {
+        if (enabled) {
+            notificationsEnabled.add(player.uniqueId)
+            plugin.databaseManager.execute(
+                "INSERT OR IGNORE INTO auction_notifications (player_uuid) VALUES (?)",
+                player.uniqueId.toString()
+            )
+            plugin.commsManager.send(player, Component.text("Auction House notifications ", NamedTextColor.GREEN)
+                .append(Component.text("enabled", NamedTextColor.AQUA))
+                .append(Component.text(".", NamedTextColor.GREEN)), CommunicationsManager.Category.DEFAULT)
+        } else {
+            notificationsEnabled.remove(player.uniqueId)
+            plugin.databaseManager.execute(
+                "DELETE FROM auction_notifications WHERE player_uuid = ?",
+                player.uniqueId.toString()
+            )
+            plugin.commsManager.send(player, Component.text("Auction House notifications ", NamedTextColor.GREEN)
+                .append(Component.text("disabled", NamedTextColor.RED))
+                .append(Component.text(".", NamedTextColor.GREEN)), CommunicationsManager.Category.DEFAULT)
+        }
+    }
+
+    fun hasNotifications(uuid: UUID) = uuid in notificationsEnabled
+
+    private fun broadcastListing(seller: Player, item: ItemStack, price: Double, isBid: Boolean) {
+        val priceText = if (isBid)
+            Component.text("starting at ", NamedTextColor.GRAY).append(Component.text(plugin.economyManager.format(price), NamedTextColor.GOLD))
+        else
+            Component.text(plugin.economyManager.format(price), NamedTextColor.GOLD)
+
+        val msg = Component.text("[AH] ", TextColor.color(0x55FFFF))
+            .append(Component.text(seller.name, NamedTextColor.WHITE))
+            .append(Component.text(" listed ", NamedTextColor.GRAY))
+            .append(item.displayName())
+            .append(Component.text(" for ", NamedTextColor.GRAY))
+            .append(priceText)
+            .append(Component.text(".", NamedTextColor.GRAY))
+
+        Bukkit.getOnlinePlayers()
+            .filter { it.uniqueId != seller.uniqueId && it.uniqueId in notificationsEnabled }
+            .forEach { plugin.commsManager.send(it, msg, CommunicationsManager.Category.DEFAULT) }
     }
 
     // ---- Item serialization ----
@@ -248,6 +305,8 @@ class AuctionManager(private val plugin: Joshymc) {
                 .append(Component.text(plugin.economyManager.format(price), NamedTextColor.GOLD)),
             CommunicationsManager.Category.DEFAULT
         )
+
+        broadcastListing(player, held, price, isBid = false)
     }
 
     fun buyItem(player: Player, listingId: Int) {
@@ -453,6 +512,8 @@ class AuctionManager(private val plugin: Joshymc) {
                 .append(Component.text(". Ends in ${bidDurationHours}h.", NamedTextColor.GREEN)),
             CommunicationsManager.Category.DEFAULT
         )
+
+        broadcastListing(player, held, startingPrice, isBid = true)
     }
 
     fun placeBid(player: Player, listingId: Int, amount: Double) {
