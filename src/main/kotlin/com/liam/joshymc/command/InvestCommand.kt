@@ -50,11 +50,16 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleDeposit(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /invest deposit <amount>", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            plugin.commsManager.send(player, Component.text("Usage: /invest deposit <amount|all>", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
         }
 
-        val amount = plugin.economyManager.parseAmount(args[1])
+        val amount = if (args[1].equals("all", ignoreCase = true)) {
+            plugin.economyManager.getBalance(player.uniqueId)
+        } else {
+            plugin.economyManager.parseAmount(args[1])
+        }
+
         if (amount == null || amount <= 0) {
             plugin.commsManager.send(player, Component.text("Invalid amount. Use numbers like 100, 10k, 1.5m", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
@@ -79,11 +84,16 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleWithdraw(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /invest withdraw <amount>", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            plugin.commsManager.send(player, Component.text("Usage: /invest withdraw <amount|all>", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
         }
 
-        val amount = plugin.economyManager.parseAmount(args[1])
+        val amount = if (args[1].equals("all", ignoreCase = true)) {
+            plugin.investManager.getBalance(player.uniqueId)
+        } else {
+            plugin.economyManager.parseAmount(args[1])
+        }
+
         if (amount == null || amount <= 0) {
             plugin.commsManager.send(player, Component.text("Invalid amount. Use numbers like 100, 10k, 1.5m", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
@@ -107,14 +117,14 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     }
 
     private fun sendUsage(player: Player) {
-        plugin.commsManager.send(player, Component.text("Usage: /invest <deposit|withdraw|balance> <amount>", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+        plugin.commsManager.send(player, Component.text("Usage: /invest <deposit|withdraw|balance> <amount|all>", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
             1 -> listOf("deposit", "withdraw", "balance").filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
-                "deposit", "withdraw" -> listOf("100", "1000", "10000").filter { it.startsWith(args[1]) }
+                "deposit", "withdraw" -> listOf("all", "100", "1000", "10000").filter { it.startsWith(args[1].lowercase()) }
                 else -> emptyList()
             }
             else -> emptyList()
