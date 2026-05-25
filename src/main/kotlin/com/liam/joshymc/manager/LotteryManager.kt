@@ -119,7 +119,13 @@ class LotteryManager(private val plugin: Joshymc) {
         val winChance = String.format("%.1f", winnerTickets.toDouble() / totalTickets * 100)
         val prizeStr = plugin.economyManager.format(prize)
 
-        plugin.economyManager.deposit(winner, prize)
+        try {
+            plugin.economyManager.deposit(winner, prize)
+            plugin.logger.info("[Lottery] Deposited $prizeStr to $winnerName ($winner)")
+        } catch (e: Exception) {
+            plugin.logger.severe("[Lottery] Failed to deposit $prizeStr to $winnerName ($winner): ${e.message}")
+            e.printStackTrace()
+        }
 
         Bukkit.broadcast(
             Component.text("🎫 ", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true)
@@ -132,6 +138,18 @@ class LotteryManager(private val plugin: Joshymc) {
         Bukkit.broadcast(
             Component.text("  $totalTickets ticket(s) sold | $winnerTickets ticket(s) held by winner ($winChance% chance)", NamedTextColor.DARK_GRAY)
         )
+
+        val onlineWinner = Bukkit.getPlayer(winner)
+        if (onlineWinner != null) {
+            plugin.commsManager.send(
+                onlineWinner,
+                Component.text("You won the lottery! ", NamedTextColor.GOLD)
+                    .append(Component.text(prizeStr, NamedTextColor.GREEN))
+                    .append(Component.text(" has been added to your balance.", NamedTextColor.GOLD)),
+                com.liam.joshymc.manager.CommunicationsManager.Category.ECONOMY
+            )
+        }
+
         for (player in Bukkit.getOnlinePlayers()) {
             player.playSound(player.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.7f, 1.0f)
         }
