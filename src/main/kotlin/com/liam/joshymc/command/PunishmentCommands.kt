@@ -319,9 +319,9 @@ class WarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         plugin.punishmentManager.warn(target.first, target.second, punisherName, punisherUuid, reason)
 
-        val warnings = plugin.punishmentManager.getWarnings(target.first)
+        val activeWarns = plugin.punishmentManager.getWarnings(target.first).count { it.active }
         val msg = Component.text("${target.second} has been warned", NamedTextColor.YELLOW)
-            .append(Component.text(" (${warnings.size} total)", NamedTextColor.GRAY))
+            .append(Component.text(" ($activeWarns active)", NamedTextColor.GRAY))
             .let { if (reason != null) it.append(Component.text(" - $reason", NamedTextColor.GRAY)) else it }
         sender.sendMessage(msg)
         notifyStaff(sender, msg)
@@ -348,7 +348,7 @@ class WarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 class UnwarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (!sender.hasPermission("joshymc.warn")) {
+        if (!sender.hasPermission("joshymc.unwarn")) {
             sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
             return true
         }

@@ -395,6 +395,7 @@ commands:
   unwarn:
     description: Remove a warning from a player
     usage: /unwarn <player> [id]
+    permission: joshymc.unwarn
   pkick:
     description: Kick a player with reason
     usage: /pkick <player> [reason]
@@ -848,6 +849,9 @@ permissions:
     default: op
   joshymc.warn:
     description: Warn players
+    default: op
+  joshymc.unwarn:
+    description: Remove warnings from players
     default: op
   joshymc.kick:
     description: Kick players
