@@ -516,6 +516,7 @@ class Joshymc : JavaPlugin() {
         safe("antiCheatManager.start") { antiCheatManager.start() }
         safe("registerEnchants") { registerEnchants() }
         safe("customEnchantManager.start") { customEnchantManager.start() }
+        safe("lotteryManager.start") { lotteryManager.start() }
 
         logger.info("JoshyMC has been fully reloaded!")
     }
