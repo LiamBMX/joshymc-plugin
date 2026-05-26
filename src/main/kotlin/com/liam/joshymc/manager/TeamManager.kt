@@ -29,6 +29,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     data class BountyInfo(val id: Int, val targetUuid: String, val targetName: String, val placedByUuid: String, val placedByName: String, val amount: Double, val placedAt: Long)
 
     private val openEchests = mutableMapOf<UUID, String>() // player UUID -> team name
+    private val teamChatEnabled = mutableSetOf<UUID>()
 
     fun start() {
         plugin.databaseManager.createTable("""
@@ -123,6 +124,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
 
     fun deleteTeam(name: String): Boolean {
         val team = getTeam(name) ?: return false
+        getTeamMembers(name).forEach { teamChatEnabled.remove(UUID.fromString(it.uuid)) }
         plugin.databaseManager.execute("DELETE FROM team_invites WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_members WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_balances WHERE team_name = ?", name)
@@ -221,6 +223,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
 
         if (member == "owner") return false
 
+        teamChatEnabled.remove(uuid)
         plugin.databaseManager.execute(
             "DELETE FROM team_members WHERE uuid = ? AND team_name = ?",
             uuid.toString(), teamName
@@ -232,6 +235,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         val role = getPlayerRole(uuid) ?: return false
         if (role == "owner") return false
 
+        teamChatEnabled.remove(uuid)
         plugin.databaseManager.execute("DELETE FROM team_members WHERE uuid = ?", uuid.toString())
         return true
     }
@@ -411,6 +415,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onEchestQuit(event: PlayerQuitEvent) {
         val player = event.player
+        teamChatEnabled.remove(player.uniqueId)
         val teamName = openEchests.remove(player.uniqueId) ?: return
         val inv = player.openInventory.topInventory
         saveTeamEchest(teamName, inv)
@@ -534,19 +539,32 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         val player = event.player
         val plainMessage = PlainTextComponentSerializer.plainText().serialize(event.message())
 
-        if (!plainMessage.startsWith("!")) return
-
-        event.isCancelled = true
-
-        val teamName = getPlayerTeam(player.uniqueId) ?: run {
-            plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+        if (plainMessage.startsWith("!")) {
+            event.isCancelled = true
+            val teamName = getPlayerTeam(player.uniqueId) ?: run {
+                plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                return
+            }
+            val msg = plainMessage.removePrefix("!").trim()
+            if (msg.isEmpty()) return
+            sendTeamMessage(player, teamName, msg)
             return
         }
 
-        val msg = plainMessage.removePrefix("!").trim()
-        if (msg.isEmpty()) return
+        if (player.uniqueId in teamChatEnabled) {
+            val teamName = getPlayerTeam(player.uniqueId) ?: run {
+                teamChatEnabled.remove(player.uniqueId)
+                return
+            }
+            event.isCancelled = true
+            sendTeamMessage(player, teamName, plainMessage)
+        }
+    }
 
-        sendTeamMessage(player, teamName, msg)
+    fun isTeamChatEnabled(uuid: UUID): Boolean = uuid in teamChatEnabled
+
+    fun setTeamChat(uuid: UUID, enabled: Boolean) {
+        if (enabled) teamChatEnabled.add(uuid) else teamChatEnabled.remove(uuid)
     }
 
     fun sendTeamMessage(sender: Player, teamName: String, message: String) {
