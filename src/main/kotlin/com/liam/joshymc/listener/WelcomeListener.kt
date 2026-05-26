@@ -23,6 +23,9 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         ""
     )
 
+    // uuid \u2192 join timestamp (ms) for new players; cleared after 10 seconds
+    val recentNewPlayers = mutableMapOf<java.util.UUID, Long>()
+
     // ── Lifecycle ───────────────────────────────────────
 
     fun start() {
@@ -65,10 +68,17 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
 
         if (isFirstJoin) {
             // Record first join in DB
+            val now = System.currentTimeMillis()
             plugin.databaseManager.execute(
                 "INSERT OR IGNORE INTO first_joins (uuid, joined_at) VALUES (?, ?)",
-                player.uniqueId.toString(), System.currentTimeMillis()
+                player.uniqueId.toString(), now
             )
+
+            // Track so /welcome can fire within 10 seconds
+            recentNewPlayers[player.uniqueId] = now
+            plugin.server.scheduler.runTaskLater(plugin, Runnable {
+                recentNewPlayers.remove(player.uniqueId)
+            }, 200L) // 200 ticks = 10 seconds
 
             // Broadcast first-join welcome
             if (firstJoinBroadcast) {
