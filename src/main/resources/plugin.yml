@@ -218,6 +218,9 @@ commands:
   booster:
     description: Activate or view server boosters
     usage: /booster <sellmulti|skillmulti|questmulti|list> [args...]
+  tokens:
+    description: Give or sell server tokens
+    usage: /tokens <give|sell> [args...]
   welcome:
     description: Welcome a newly joined player and earn an AFK key
     usage: /welcome
@@ -940,4 +943,10 @@ permissions:
     default: op
   joshymc.welcome:
     description: Welcome a new player and earn an AFK key
+    default: true
+  joshymc.tokens.give:
+    description: Give tokens to players via /tokens give
+    default: op
+  joshymc.tokens.sell:
+    description: Sell tokens via /tokens sell
     default: true

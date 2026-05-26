@@ -82,6 +82,7 @@ class ItemManager(private val plugin: Joshymc) {
         register(ClaimBlockToken())
         register(SkillTomeMining())
         register(SkillTomeFarming())
+        register(Token())
 
         plugin.logger.info("Registered ${items.size} custom item(s).")
     }
