@@ -41,6 +41,9 @@ class ListenerManager(private val plugin: Joshymc) {
     var passiveEnchantListener: PassiveEnchantListener? = null
         private set
 
+    lateinit var welcomeListener: WelcomeListener
+        private set
+
     fun registerAll() {
         val pm = plugin.server.pluginManager
 
@@ -173,7 +176,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.playtimeManager, plugin)
 
         // Welcome/MOTD (join/quit messages)
-        val welcomeListener = WelcomeListener(plugin)
+        welcomeListener = WelcomeListener(plugin)
         welcomeListener.start()
         pm.registerEvents(welcomeListener, plugin)
 
