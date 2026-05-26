@@ -99,6 +99,9 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
      *  of leaving stale items in the open GUI for a few seconds. */
     private val openStorageGuis = ConcurrentHashMap<UUID, Pair<BlockKey, Int>>()
 
+    /** Trust list: ownerUuid -> (trustedUuid -> expiresAtEpochSecond, -1L = permanent) */
+    private val trustMap = ConcurrentHashMap<UUID, ConcurrentHashMap<UUID, Long>>()
+
     /** Base storage rows per stack count. Each stack adds this many rows (max 6 per page). */
     private val rowsPerStack = 1
 
@@ -126,8 +129,18 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
             )
         } catch (_: Exception) { /* already exists */ }
 
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS spawner_trust (
+                owner_uuid TEXT NOT NULL,
+                trusted_uuid TEXT NOT NULL,
+                expires_at INTEGER NOT NULL DEFAULT -1,
+                PRIMARY KEY (owner_uuid, trusted_uuid)
+            )
+        """.trimIndent())
+
         loadTypes()
         loadBlocks()
+        loadTrust()
 
         // Drop generation tick — runs every second, processes spawners whose interval has elapsed
         tickTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickSpawners() }, 20L, 20L)
@@ -215,6 +228,71 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
             )
         }
         for (block in rows) blocks[block.key] = block
+    }
+
+    private fun loadTrust() {
+        trustMap.clear()
+        val now = System.currentTimeMillis() / 1000L
+        val rows = plugin.databaseManager.query(
+            "SELECT owner_uuid, trusted_uuid, expires_at FROM spawner_trust"
+        ) { rs ->
+            Triple(rs.getString("owner_uuid"), rs.getString("trusted_uuid"), rs.getLong("expires_at"))
+        }
+        for ((ownerStr, trustedStr, expiresAt) in rows) {
+            if (expiresAt != -1L && expiresAt < now) continue // expired, skip
+            try {
+                val ownerUuid = UUID.fromString(ownerStr)
+                val trustedUuid = UUID.fromString(trustedStr)
+                trustMap.getOrPut(ownerUuid) { ConcurrentHashMap() }[trustedUuid] = expiresAt
+            } catch (_: Exception) {}
+        }
+        // Purge expired entries from DB
+        plugin.databaseManager.execute(
+            "DELETE FROM spawner_trust WHERE expires_at != -1 AND expires_at < ?", now
+        )
+    }
+
+    // ── Public Trust API ────────────────────────────────────
+
+    /** Grant [trustedUuid] access to all spawners owned by [ownerUuid].
+     *  [expiresAt] is epoch-seconds; use -1L for permanent. */
+    fun addTrust(ownerUuid: UUID, trustedUuid: UUID, expiresAt: Long) {
+        trustMap.getOrPut(ownerUuid) { ConcurrentHashMap() }[trustedUuid] = expiresAt
+        plugin.databaseManager.execute(
+            """INSERT INTO spawner_trust (owner_uuid, trusted_uuid, expires_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(owner_uuid, trusted_uuid) DO UPDATE SET expires_at = excluded.expires_at""",
+            ownerUuid.toString(), trustedUuid.toString(), expiresAt
+        )
+    }
+
+    fun removeTrust(ownerUuid: UUID, trustedUuid: UUID) {
+        trustMap[ownerUuid]?.remove(trustedUuid)
+        plugin.databaseManager.execute(
+            "DELETE FROM spawner_trust WHERE owner_uuid = ? AND trusted_uuid = ?",
+            ownerUuid.toString(), trustedUuid.toString()
+        )
+    }
+
+    /** Returns map of trustedUuid -> expiresAt (-1 = permanent). */
+    fun getTrustedPlayers(ownerUuid: UUID): Map<UUID, Long> =
+        trustMap[ownerUuid]?.toMap() ?: emptyMap()
+
+    /** Returns true if [playerUuid] is currently trusted by [ownerUuid]. */
+    fun isTrusted(ownerUuid: UUID, playerUuid: UUID): Boolean {
+        val entry = trustMap[ownerUuid]?.get(playerUuid) ?: return false
+        if (entry == -1L) return true
+        val now = System.currentTimeMillis() / 1000L
+        if (entry < now) {
+            // Expired — evict lazily
+            trustMap[ownerUuid]?.remove(playerUuid)
+            plugin.databaseManager.execute(
+                "DELETE FROM spawner_trust WHERE owner_uuid = ? AND trusted_uuid = ?",
+                ownerUuid.toString(), playerUuid.toString()
+            )
+            return false
+        }
+        return true
     }
 
     private fun saveBlock(block: SpawnerBlock) {
@@ -491,12 +569,12 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         // Don't let players sneak-place items onto custom spawners
         event.isCancelled = true
 
-        // Owner: full access
-        // Trusted (claim): view-only
-        // OPs/admins: view-only override
+        // Owner / explicitly trusted: full access
+        // Admins / claim members: view-only
         // Others: blocked
         val isOwner = spawnerBlock.ownerUuid == player.uniqueId
-        val canView = isOwner ||
+        val isTrusted = !isOwner && isTrusted(spawnerBlock.ownerUuid, player.uniqueId)
+        val canView = isOwner || isTrusted ||
                 player.hasPermission("joshymc.spawners.admin") ||
                 plugin.claimManager.canAccess(player, block.location)
 
@@ -506,7 +584,7 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        openMainGui(player, spawnerBlock, isOwner)
+        openMainGui(player, spawnerBlock, isOwner || isTrusted)
     }
 
     /** Cancel vanilla mob spawning for our custom spawners. */
