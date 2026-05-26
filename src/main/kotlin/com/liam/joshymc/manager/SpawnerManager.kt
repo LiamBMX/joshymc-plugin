@@ -557,8 +557,10 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         val held = player.inventory.itemInMainHand
         if (player.isSneaking && isCustomSpawnerItem(held) && getSpawnerIdFromItem(held) == spawnerBlock.spawnerId) {
             event.isCancelled = true
-            // Only owner (or admin) can stack
-            if (spawnerBlock.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.spawners.admin")) {
+            // Owner, trusted players, and admins can stack
+            if (spawnerBlock.ownerUuid != player.uniqueId &&
+                !isTrusted(spawnerBlock.ownerUuid, player.uniqueId) &&
+                !player.hasPermission("joshymc.spawners.admin")) {
                 plugin.commsManager.send(player, Component.text("That spawner belongs to someone else.", NamedTextColor.RED))
                 return
             }

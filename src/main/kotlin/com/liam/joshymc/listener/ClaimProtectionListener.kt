@@ -82,6 +82,14 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         // anyone with a key can use them even at spawn.
         if (plugin.crateManager.getCrateTypeAt(block) != null) return
 
+        // Custom spawners manage their own trust system — if the player is the owner
+        // or spawner-trusted, skip claim protection and let SpawnerManager handle it.
+        if (block.type == Material.SPAWNER) {
+            val sb = plugin.spawnerManager.getSpawnerAt(block)
+            if (sb != null && (sb.ownerUuid == player.uniqueId ||
+                        plugin.spawnerManager.isTrusted(sb.ownerUuid, player.uniqueId))) return
+        }
+
         if (!plugin.claimManager.canAccess(player, block.location)) {
             event.isCancelled = true
             denyWithMessage(player)
