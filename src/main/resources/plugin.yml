@@ -454,8 +454,8 @@ commands:
     description: View and manage upgraded hoppers
     usage: /hopper <info|reset|filter [hand|<material>|clear]>
   spawner:
-    description: Open the spawner shop, or admin spawner commands
-    usage: /spawner [shop|give|list]
+    description: Open the spawner shop, manage trust, or run admin spawner commands
+    usage: /spawner [shop|trust|untrust|trustedlist|give|list]
     aliases: [spawners]
   team:
     description: Team management
