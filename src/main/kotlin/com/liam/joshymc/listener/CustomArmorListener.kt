@@ -1,6 +1,7 @@
 package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
+import org.bukkit.Material
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -15,14 +16,32 @@ import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
 import org.bukkit.scheduler.BukkitTask
 import java.util.UUID
+import java.util.Collections
 
 class CustomArmorListener(private val plugin: Joshymc) : Listener {
+
+    companion object {
+        /** Harvested crop items that receive the 20% sell bonus from the Flower set. */
+        val FLOWER_CROP_MATERIALS: Set<Material> = setOf(
+            Material.WHEAT, Material.CARROT, Material.POTATO, Material.BEETROOT,
+            Material.SUGAR_CANE, Material.MELON_SLICE, Material.MELON,
+            Material.PUMPKIN, Material.CACTUS, Material.BAMBOO,
+            Material.COCOA_BEANS, Material.NETHER_WART, Material.SWEET_BERRIES,
+            Material.GLOW_BERRIES, Material.KELP, Material.DRIED_KELP,
+            Material.CHORUS_FRUIT, Material.BROWN_MUSHROOM, Material.RED_MUSHROOM,
+            Material.SUGAR
+        )
+
+        private val flowerSetPlayers: MutableSet<UUID> = Collections.synchronizedSet(mutableSetOf())
+
+        fun hasFlowerSetBonus(uuid: UUID): Boolean = uuid in flowerSetPlayers
+    }
 
     private val armorSetCache = mutableMapOf<UUID, String?>()
     private var task: BukkitTask? = null
     private val pdcKey = NamespacedKey(plugin, "custom_item_id")
 
-    private val ARMOR_SET_PREFIXES = setOf("void", "inferno", "crystal", "soul")
+    private val ARMOR_SET_PREFIXES = setOf("void", "inferno", "crystal", "soul", "flower")
 
     /**
      * Start the repeating task that checks armor and applies set bonuses.
@@ -39,6 +58,8 @@ class CustomArmorListener(private val plugin: Joshymc) : Listener {
                         removeSetEffects(player, cachedSet)
                     }
                     armorSetCache[player.uniqueId] = currentSet
+                    if (currentSet == "flower") flowerSetPlayers.add(player.uniqueId)
+                    else flowerSetPlayers.remove(player.uniqueId)
                 }
 
                 if (currentSet != null) {
@@ -61,6 +82,7 @@ class CustomArmorListener(private val plugin: Joshymc) : Listener {
             }
         }
         armorSetCache.clear()
+        flowerSetPlayers.clear()
     }
 
     /**
@@ -143,6 +165,13 @@ class CustomArmorListener(private val plugin: Joshymc) : Listener {
                 player.addPotionEffect(PotionEffect(PotionEffectType.NIGHT_VISION, 400, 0, true, false, true), true)
                 player.addPotionEffect(PotionEffect(PotionEffectType.RESISTANCE, duration, 0, true, false, true), true)
             }
+            "flower" -> {
+                // Saturation during daytime, always remove poison
+                if (player.world.time < 12300L) {
+                    player.addPotionEffect(PotionEffect(PotionEffectType.SATURATION, duration, 0, true, false, true), true)
+                }
+                player.removePotionEffect(PotionEffectType.POISON)
+            }
         }
     }
 
@@ -164,6 +193,10 @@ class CustomArmorListener(private val plugin: Joshymc) : Listener {
             "soul" -> {
                 player.removePotionEffect(PotionEffectType.NIGHT_VISION)
                 player.removePotionEffect(PotionEffectType.RESISTANCE)
+            }
+            "flower" -> {
+                player.removePotionEffect(PotionEffectType.SATURATION)
+                flowerSetPlayers.remove(player.uniqueId)
             }
         }
     }
@@ -191,6 +224,11 @@ class CustomArmorListener(private val plugin: Joshymc) : Listener {
             }
             "soul" -> {
                 if (event.cause == EntityDamageEvent.DamageCause.WITHER) {
+                    event.isCancelled = true
+                }
+            }
+            "flower" -> {
+                if (event.cause == EntityDamageEvent.DamageCause.POISON) {
                     event.isCancelled = true
                 }
             }
@@ -230,5 +268,6 @@ class CustomArmorListener(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onPlayerQuit(event: PlayerQuitEvent) {
         armorSetCache.remove(event.player.uniqueId)
+        flowerSetPlayers.remove(event.player.uniqueId)
     }
 }

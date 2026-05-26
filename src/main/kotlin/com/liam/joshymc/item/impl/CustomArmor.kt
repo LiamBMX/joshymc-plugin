@@ -319,3 +319,79 @@ class SoulBoots : CustomItem() {
         setArmorModel(meta, "soul", EquipmentSlot.FEET)
     }
 }
+
+// ── Flower Armor Set (Netherite, bright green) ──────────────────────────────
+
+private val FLOWER_COLOR = TextColor.color(0x55FF00)
+private val FLOWER_LORE = LoreBuilder.build(
+    type = "Flower Armor",
+    description = listOf("Full set bonus: Saturation (day), Poison Immunity, +20% crop sell price"),
+    usage = "Equip full set for bonus.",
+)
+
+private fun applyFlowerMeta(meta: ItemMeta) {
+    meta.addEnchant(Enchantment.PROTECTION, 4, true)
+    meta.addEnchant(Enchantment.UNBREAKING, 3, true)
+    meta.addEnchant(Enchantment.THORNS, 3, true)
+    meta.isUnbreakable = true
+}
+
+class FlowerHelmet : CustomItem() {
+    override val id = "flower_helmet"
+    override val material = Material.NETHERITE_HELMET
+    override val hasGlint = true
+    override val displayName: Component = Component.text("Flower Helmet", FLOWER_COLOR)
+        .decoration(TextDecoration.ITALIC, false)
+        .decoration(TextDecoration.BOLD, true)
+    override val lore = FLOWER_LORE
+    override fun applyMeta(meta: ItemMeta) {
+        applyFlowerMeta(meta)
+        meta.setItemModel(NamespacedKey(Joshymc.instance, "flower_helmet"))
+        setArmorModel(meta, "flower", EquipmentSlot.HEAD)
+    }
+}
+
+class FlowerChestplate : CustomItem() {
+    override val id = "flower_chestplate"
+    override val material = Material.NETHERITE_CHESTPLATE
+    override val hasGlint = true
+    override val displayName: Component = Component.text("Flower Chestplate", FLOWER_COLOR)
+        .decoration(TextDecoration.ITALIC, false)
+        .decoration(TextDecoration.BOLD, true)
+    override val lore = FLOWER_LORE
+    override fun applyMeta(meta: ItemMeta) {
+        applyFlowerMeta(meta)
+        meta.setItemModel(NamespacedKey(Joshymc.instance, "flower_chestplate"))
+        setArmorModel(meta, "flower", EquipmentSlot.CHEST)
+    }
+}
+
+class FlowerLeggings : CustomItem() {
+    override val id = "flower_leggings"
+    override val material = Material.NETHERITE_LEGGINGS
+    override val hasGlint = true
+    override val displayName: Component = Component.text("Flower Leggings", FLOWER_COLOR)
+        .decoration(TextDecoration.ITALIC, false)
+        .decoration(TextDecoration.BOLD, true)
+    override val lore = FLOWER_LORE
+    override fun applyMeta(meta: ItemMeta) {
+        applyFlowerMeta(meta)
+        meta.setItemModel(NamespacedKey(Joshymc.instance, "flower_leggings"))
+        setArmorModel(meta, "flower", EquipmentSlot.LEGS)
+    }
+}
+
+class FlowerBoots : CustomItem() {
+    override val id = "flower_boots"
+    override val material = Material.NETHERITE_BOOTS
+    override val hasGlint = true
+    override val displayName: Component = Component.text("Flower Boots", FLOWER_COLOR)
+        .decoration(TextDecoration.ITALIC, false)
+        .decoration(TextDecoration.BOLD, true)
+    override val lore = FLOWER_LORE
+    override fun applyMeta(meta: ItemMeta) {
+        applyFlowerMeta(meta)
+        meta.setItemModel(NamespacedKey(Joshymc.instance, "flower_boots"))
+        setArmorModel(meta, "flower", EquipmentSlot.FEET)
+    }
+}

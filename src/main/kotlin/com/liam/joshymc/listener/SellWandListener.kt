@@ -69,9 +69,10 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
 
         for (i in 0 until inventory.size) {
             val slot = inventory.getItem(i) ?: continue
-            val price = plugin.serverShopManager.getSellPrice(slot.type) ?: 0.0
-            if (price <= 0) continue
+            val basePrice = plugin.serverShopManager.getSellPrice(slot.type) ?: 0.0
+            if (basePrice <= 0) continue
 
+            val price = plugin.serverShopManager.applyCropBonus(basePrice, slot.type, player.uniqueId)
             totalEarned += price * multiplier * slot.amount
             breakdown[slot.type] = (breakdown[slot.type] ?: 0) + slot.amount
             inventory.setItem(i, null)

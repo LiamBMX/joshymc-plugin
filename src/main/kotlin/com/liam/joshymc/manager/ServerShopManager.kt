@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.listener.CustomArmorListener
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -13,6 +14,7 @@ import org.bukkit.entity.Player
 import org.bukkit.event.inventory.ClickType
 import org.bukkit.inventory.ItemStack
 import java.io.File
+import java.util.UUID
 
 class ServerShopManager(private val plugin: Joshymc) {
 
@@ -87,6 +89,16 @@ class ServerShopManager(private val plugin: Joshymc) {
             if (item != null && item.sellPrice > 0) return item.sellPrice
         }
         return null
+    }
+
+    /** Returns the sell price with the Flower Armor 1.2x crop bonus applied if applicable. */
+    fun applyCropBonus(price: Double, material: Material, playerUuid: UUID): Double {
+        return if (material in CustomArmorListener.FLOWER_CROP_MATERIALS &&
+                   CustomArmorListener.hasFlowerSetBonus(playerUuid)) {
+            price * 1.2
+        } else {
+            price
+        }
     }
 
     // ── Main Menu ───────────────────────────────────────────────────────
@@ -321,8 +333,8 @@ class ServerShopManager(private val plugin: Joshymc) {
         when (clickType) {
             ClickType.LEFT, ClickType.SHIFT_LEFT ->
                 if (liveBuy > 0) openBuyQuantityGui(player, shopItem, liveBuy) else noBuy()
-            ClickType.RIGHT -> if (liveSell > 0) sellItem(player, shopItem.material, liveSell, 1) else noSell()
-            ClickType.SHIFT_RIGHT -> if (liveSell > 0) sellItem(player, shopItem.material, liveSell, -1) else noSell()
+            ClickType.RIGHT -> if (liveSell > 0) sellItem(player, shopItem.material, applyCropBonus(liveSell, shopItem.material, player.uniqueId), 1) else noSell()
+            ClickType.SHIFT_RIGHT -> if (liveSell > 0) sellItem(player, shopItem.material, applyCropBonus(liveSell, shopItem.material, player.uniqueId), -1) else noSell()
             else -> {}
         }
     }
