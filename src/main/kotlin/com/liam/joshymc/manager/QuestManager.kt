@@ -325,7 +325,9 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
         if (current.completed) return
 
-        val effectiveAmount = plugin.resurgeManager.getEffectiveAmount(uuid, quest.amount)
+        val effectiveAmount = plugin.boosterManager.applyQuestBooster(
+            plugin.resurgeManager.getEffectiveAmount(uuid, quest.amount)
+        )
         val newProgress = (current.progress + amount).coerceAtMost(effectiveAmount)
         val completed = newProgress >= effectiveAmount
 

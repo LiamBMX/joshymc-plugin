@@ -578,6 +578,9 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        // ── Boosters ─────────────────────────────────────
+        plugin.getCommand("booster")?.let { val c = com.liam.joshymc.command.BoosterCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
         plugin.logger.info("Commands registered.")
     }
 
