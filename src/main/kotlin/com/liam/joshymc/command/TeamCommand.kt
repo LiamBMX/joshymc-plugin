@@ -72,7 +72,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "/team disband" to "Disband your team",
             "/team info [team]" to "View team info",
             "/team list" to "List all teams",
-            "/team chat <message>" to "Send team message",
+            "/team chat <on/off>" to "Toggle always-on team chat",
             "/team deposit <amount>" to "Deposit to team bank",
             "/team withdraw <amount>" to "Withdraw from team bank",
             "/team balance" to "View team balance",
@@ -492,18 +492,26 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleChat(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team chat <message>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            plugin.commsManager.send(player, Component.text("Usage: /team chat <on/off>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
 
-        val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
-        if (teamName == null) {
+        if (plugin.teamManager.getPlayerTeam(player.uniqueId) == null) {
             plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
 
-        val message = args.drop(1).joinToString(" ")
-        plugin.teamManager.sendTeamMessage(player, teamName, message)
+        when (args[1].lowercase()) {
+            "on" -> {
+                plugin.teamManager.setTeamChat(player.uniqueId, true)
+                plugin.commsManager.send(player, Component.text("Team chat enabled. All your messages will go to your team. Use ! prefix for a quick team message.", NamedTextColor.GREEN), CommunicationsManager.Category.DEFAULT)
+            }
+            "off" -> {
+                plugin.teamManager.setTeamChat(player.uniqueId, false)
+                plugin.commsManager.send(player, Component.text("Team chat disabled.", NamedTextColor.GRAY), CommunicationsManager.Category.DEFAULT)
+            }
+            else -> plugin.commsManager.send(player, Component.text("Usage: /team chat <on/off>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+        }
     }
 
     private fun handleDeposit(player: Player, args: Array<out String>) {
@@ -667,6 +675,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     }.filter { it.startsWith(args[1], ignoreCase = true) && !it.equals(sender.name, ignoreCase = true) }
                 }
                 "info" -> plugin.teamManager.getAllTeams().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                "chat" -> listOf("on", "off").filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
             }
         }
