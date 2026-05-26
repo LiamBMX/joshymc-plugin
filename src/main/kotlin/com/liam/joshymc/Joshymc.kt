@@ -65,6 +65,7 @@ import com.liam.joshymc.manager.SpawnDecorationManager
 import com.liam.joshymc.manager.VoteManager
 import com.liam.joshymc.manager.LotteryManager
 import com.liam.joshymc.manager.WorldFlagManager
+import com.liam.joshymc.manager.BoosterManager
 import org.bukkit.Bukkit
 import org.bukkit.GameRule
 import org.bukkit.Location
@@ -237,6 +238,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var resurgeManager: com.liam.joshymc.manager.ResurgeManager
         private set
+    lateinit var boosterManager: BoosterManager
+        private set
 
     override fun onEnable() {
         instance = this
@@ -326,6 +329,7 @@ class Joshymc : JavaPlugin() {
         serverShopManager = ServerShopManager(this)
         eventManager = com.liam.joshymc.manager.EventManager(this)
         resurgeManager = com.liam.joshymc.manager.ResurgeManager(this)
+        boosterManager = BoosterManager(this)
 
         itemManager.registerAll()
         recipeManager.registerAll()

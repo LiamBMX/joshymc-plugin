@@ -215,6 +215,9 @@ commands:
     description: View and perform the Resurge prestige system
     usage: /resurge [balance|top|confirm]
     aliases: [prestige]
+  booster:
+    description: Activate or view server boosters
+    usage: /booster <sellmulti|skillmulti|questmulti|list> [args...]
   rewards:
     description: Claim all quest rewards
     usage: /rewards
@@ -928,3 +931,6 @@ permissions:
   joshymc.lottery:
     description: Use the /lottery command to buy tickets and check the prize pool
     default: true
+  joshymc.booster:
+    description: Activate server boosters via /booster
+    default: op

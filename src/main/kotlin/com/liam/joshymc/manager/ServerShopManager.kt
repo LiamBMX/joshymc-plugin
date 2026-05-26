@@ -71,13 +71,20 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     fun getCategory(id: String): ShopCategory? = categories.find { it.id == id }
 
+    fun getCategoryIdForMaterial(material: Material): String? {
+        for (category in categories) {
+            if (category.items.any { it.material == material && it.sellPrice > 0 }) return category.id
+        }
+        return null
+    }
+
     fun getSellPrice(material: Material): Double? {
         for (category in categories) {
             val item = category.items.find { it.material == material }
             if (item != null && item.sellPrice > 0) {
-                // Apply market multiplier for dynamic pricing
-                val multiplier = plugin.marketManager.getMultiplier(material)
-                return item.sellPrice * multiplier
+                val marketMultiplier = plugin.marketManager.getMultiplier(material)
+                val boosterMultiplier = plugin.boosterManager.getSellMultiplier(material)
+                return item.sellPrice * marketMultiplier * boosterMultiplier
             }
         }
         return null

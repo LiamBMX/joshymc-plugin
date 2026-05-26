@@ -137,10 +137,11 @@ class SkillManager(private val plugin: Joshymc) : Listener {
         val uuid = player.uniqueId
         val map = cache.getOrPut(uuid) { loadPlayerMap(uuid) }
         val (oldLevel, oldXp) = map.getOrDefault(skill, Pair(1, 0L))
+        val boostedAmount = (amount * plugin.boosterManager.getSkillMultiplier()).toInt().coerceAtLeast(amount)
 
         if (oldLevel >= MAX_LEVEL) return
 
-        val newXp = oldXp + amount
+        val newXp = oldXp + boostedAmount
         var newLevel = oldLevel
 
         // Check level ups
@@ -151,7 +152,7 @@ class SkillManager(private val plugin: Joshymc) : Listener {
         map[skill] = Pair(newLevel, newXp)
 
         // Action bar XP display (throttled)
-        showActionBar(player, skill, amount, newLevel, newXp)
+        showActionBar(player, skill, boostedAmount, newLevel, newXp)
 
         // Level up notifications
         if (newLevel > oldLevel) {
