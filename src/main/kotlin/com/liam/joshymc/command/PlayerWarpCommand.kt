@@ -97,6 +97,14 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             return
         }
 
+        val worldEnv = sender.world.environment
+        if (worldEnv != org.bukkit.World.Environment.NORMAL &&
+            worldEnv != org.bukkit.World.Environment.NETHER &&
+            worldEnv != org.bukkit.World.Environment.THE_END) {
+            plugin.commsManager.send(sender, Component.text("Player warps can only be set in the Overworld, Nether, or End.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            return
+        }
+
         // Check if name is taken by another player
         val existingOwner = plugin.warpManager.getPlayerWarpOwnerName(name)
         val existingWarps = plugin.warpManager.getAllPlayerWarps()
