@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "joshymc:flower"
+      }
+    ],
+    "humanoid_leggings": [
+      {
+        "texture": "joshymc:flower"
+      }
+    ]
+  }
+}

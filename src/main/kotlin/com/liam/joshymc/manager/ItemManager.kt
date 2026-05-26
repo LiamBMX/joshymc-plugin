@@ -62,6 +62,7 @@ class ItemManager(private val plugin: Joshymc) {
         register(InfernoHelmet()); register(InfernoChestplate()); register(InfernoLeggings()); register(InfernoBoots())
         register(CrystalHelmet()); register(CrystalChestplate()); register(CrystalLeggings()); register(CrystalBoots())
         register(SoulHelmet()); register(SoulChestplate()); register(SoulLeggings()); register(SoulBoots())
+        register(FlowerHelmet()); register(FlowerChestplate()); register(FlowerLeggings()); register(FlowerBoots())
 
         // Consumables
         register(MoneyPouchSmall())

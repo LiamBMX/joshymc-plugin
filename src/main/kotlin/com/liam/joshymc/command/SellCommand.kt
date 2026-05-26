@@ -126,8 +126,9 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             val item = inv.getItem(i) ?: continue
             if (item.type == Material.AIR) continue
 
-            val price = plugin.serverShopManager.getSellPrice(item.type) ?: 0.0
-            if (price > 0) {
+            val basePrice = plugin.serverShopManager.getSellPrice(item.type) ?: 0.0
+            if (basePrice > 0) {
+                val price = plugin.serverShopManager.applyCropBonus(basePrice, item.type, player.uniqueId)
                 totalEarned += price * item.amount
                 breakdown[item.type] = (breakdown[item.type] ?: 0) + item.amount
             } else {
@@ -180,9 +181,10 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
 
         for (i in 0 until player.inventory.size) {
             val item = player.inventory.getItem(i) ?: continue
-            val price = plugin.serverShopManager.getSellPrice(item.type) ?: 0.0
-            if (price <= 0) continue
+            val basePrice = plugin.serverShopManager.getSellPrice(item.type) ?: 0.0
+            if (basePrice <= 0) continue
 
+            val price = plugin.serverShopManager.applyCropBonus(basePrice, item.type, player.uniqueId)
             totalEarned += price * item.amount
             breakdown[item.type] = (breakdown[item.type] ?: 0) + item.amount
             player.inventory.setItem(i, null)
@@ -212,11 +214,13 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             return
         }
 
-        val price = plugin.serverShopManager.getSellPrice(material) ?: 0.0
-        if (price <= 0) {
+        val basePrice = plugin.serverShopManager.getSellPrice(material) ?: 0.0
+        if (basePrice <= 0) {
             plugin.commsManager.send(player, Component.text("That item cannot be sold.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
         }
+
+        val price = plugin.serverShopManager.applyCropBonus(basePrice, material, player.uniqueId)
 
         var count = 0
         for (i in 0 until player.inventory.size) {
@@ -250,13 +254,14 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             return
         }
 
-        val price = plugin.serverShopManager.getSellPrice(handItem.type) ?: 0.0
-        if (price <= 0) {
+        val basePrice = plugin.serverShopManager.getSellPrice(handItem.type) ?: 0.0
+        if (basePrice <= 0) {
             plugin.commsManager.send(player, Component.text("This item cannot be sold.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
         }
 
         val material = handItem.type
+        val price = plugin.serverShopManager.applyCropBonus(basePrice, material, player.uniqueId)
         val totalAmount: Int
         val totalEarned: Double
 
