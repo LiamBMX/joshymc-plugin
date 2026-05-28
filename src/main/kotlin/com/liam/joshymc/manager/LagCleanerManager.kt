@@ -6,6 +6,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
+import org.bukkit.entity.Animals
 import org.bukkit.entity.ArmorStand
 import org.bukkit.entity.EnderDragon
 import org.bukkit.entity.Item
@@ -24,6 +25,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
     private var entityThreshold: Int = 500
     private var itemThreshold: Int = 200
     private var checkIntervalSeconds: Int = 30
+    private var passiveMobThreshold: Int = 700
 
     fun start() {
         val enabled = plugin.config.getBoolean("lag-cleaner.enabled", true)
@@ -32,6 +34,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
         entityThreshold = plugin.config.getInt("lag-cleaner.entity-threshold", 1500)
         itemThreshold = plugin.config.getInt("lag-cleaner.item-threshold", 800)
         checkIntervalSeconds = plugin.config.getInt("lag-cleaner.check-interval-seconds", 60)
+        passiveMobThreshold = plugin.config.getInt("lag-cleaner.passive-mob-threshold", 700)
 
         val checkTicks = checkIntervalSeconds * 20L
 
@@ -125,6 +128,15 @@ class LagCleanerManager(private val plugin: Joshymc) {
         var itemCount = 0
         var mobCount = 0
 
+        // Count passive mobs first to decide whether to clear them
+        var passiveTotal = 0
+        for (world in plugin.server.worlds) {
+            for (entity in world.entities) {
+                if (entity is Animals && entity !is Player && !isProtected(entity)) passiveTotal++
+            }
+        }
+        val clearPassive = passiveTotal >= passiveMobThreshold
+
         for (world in plugin.server.worlds) {
             for (entity in world.entities) {
                 when {
@@ -133,10 +145,12 @@ class LagCleanerManager(private val plugin: Joshymc) {
                         entity.remove()
                         itemCount++
                     }
-                    // Clear all living non-player mobs (except protected ones)
+                    // Clear living non-player mobs; passive mobs only if above threshold
                     entity is LivingEntity && entity !is Player && !isProtected(entity) -> {
-                        entity.remove()
-                        mobCount++
+                        if (clearPassive || entity !is Animals) {
+                            entity.remove()
+                            mobCount++
+                        }
                     }
                 }
             }

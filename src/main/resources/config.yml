@@ -129,6 +129,7 @@ lag-cleaner:
   entity-threshold: 1500
   item-threshold: 800
   check-interval-seconds: 60
+  passive-mob-threshold: 700
 
 # Mining — Veinminer, Auto Smelt, Tree Feller
 mining:
