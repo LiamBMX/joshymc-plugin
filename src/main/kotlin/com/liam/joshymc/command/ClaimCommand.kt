@@ -59,6 +59,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "blocks" -> handleBlocks(sender, args)
             "expand" -> handleExpand(sender, args)
             "shrink" -> handleShrink(sender, args)
+            "pvp" -> handlePvp(sender, args)
             else -> showHelp(sender)
         }
         return true
@@ -429,6 +430,31 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
     }
 
+    private fun handlePvp(player: Player, args: Array<out String>) {
+        val claim = plugin.claimManager.getClaimAt(player.location)
+        if (claim == null) {
+            plugin.commsManager.send(player, Component.text("You're not standing in a claim.", NamedTextColor.RED))
+            return
+        }
+        if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) {
+            plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED))
+            return
+        }
+        val toggle = args.getOrNull(1)?.lowercase()
+        if (toggle != "on" && toggle != "off") {
+            plugin.commsManager.send(player, Component.text("Usage: /claim pvp <on|off>", NamedTextColor.RED))
+            return
+        }
+        val enabled = toggle == "on"
+        plugin.claimManager.setClaimPvp(claim.id, enabled)
+        plugin.commsManager.send(
+            player,
+            Component.text("PvP in this claim is now ", NamedTextColor.GREEN)
+                .append(Component.text(if (enabled) "enabled" else "disabled", if (enabled) NamedTextColor.RED else NamedTextColor.GRAY))
+                .append(Component.text(".", NamedTextColor.GREEN))
+        )
+    }
+
     private fun showHelp(player: Player) {
         val gold = TextColor.color(0xFFD700)
         val msg = Component.text()
@@ -449,6 +475,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             .append(Component.text("  /claim shrink [dir] <amount>", NamedTextColor.YELLOW)).append(Component.text(" — shrink claim edge\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim deny <player>", NamedTextColor.YELLOW)).append(Component.text(" — ban player from entering\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim undeny <player>", NamedTextColor.YELLOW)).append(Component.text(" — remove entry ban\n", NamedTextColor.GRAY))
+            .append(Component.text("  /claim pvp <on|off>", NamedTextColor.YELLOW)).append(Component.text(" — toggle PvP in your claim\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim team", NamedTextColor.YELLOW)).append(Component.text(" — share with team\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim personal", NamedTextColor.YELLOW)).append(Component.text(" — un-share\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim map", NamedTextColor.YELLOW)).append(Component.text(" — nearby claims\n", NamedTextColor.GRAY))
@@ -462,11 +489,12 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (alias.equals("unclaim", true)) return emptyList()
         val directions = listOf("north", "south", "east", "west")
         return when (args.size) {
-            1 -> listOf("wand", "trust", "untrust", "trusted", "deny", "undeny", "denied", "show", "team", "personal", "map", "info", "list", "blocks", "expand", "shrink", "help").filter { it.startsWith(args[0].lowercase()) }
+            1 -> listOf("wand", "trust", "untrust", "trusted", "deny", "undeny", "denied", "show", "team", "personal", "map", "info", "list", "blocks", "expand", "shrink", "pvp", "help").filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
                 "blocks" -> listOf("give").filter { it.startsWith(args[1].lowercase()) }
                 "trust", "untrust", "deny", "undeny" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], true) }
                 "expand", "shrink" -> directions.filter { it.startsWith(args[1].lowercase()) }
+                "pvp" -> listOf("on", "off").filter { it.startsWith(args[1].lowercase()) }
                 else -> emptyList()
             }
             3 -> when {
