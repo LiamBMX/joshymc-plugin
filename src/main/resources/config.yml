@@ -33,6 +33,20 @@ features:
   arenas: true
   npcs: false
   chat-games: true
+  lottery: true
+
+# Lottery — periodic draw where players buy tickets for a chance to win
+lottery:
+  # Cost per ticket in in-game money
+  ticket-cost: 10000.0
+  # Base prize guaranteed even with no tickets sold
+  base-prize: 50000.0
+  # Extra prize added per ticket sold (grows the pot as more players enter)
+  prize-per-ticket: 10000.0
+  # How often a draw is held, in minutes
+  draw-interval-minutes: 60
+  # Maximum tickets one player can hold in a single round (0 = unlimited)
+  max-tickets-per-player: 0
 
 # Chat formatting
 chat:
