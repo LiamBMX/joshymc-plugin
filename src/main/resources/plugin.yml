@@ -219,8 +219,8 @@ commands:
     description: Activate or view server boosters
     usage: /booster <sellmulti|skillmulti|questmulti|list> [args...]
   tokens:
-    description: Give or sell server tokens
-    usage: /tokens <give|sell> [args...]
+    description: Give, sell, or buy server tokens
+    usage: /tokens <give|sell|buy> [args...]
   welcome:
     description: Welcome a newly joined player and earn an AFK key
     usage: /welcome
@@ -965,4 +965,7 @@ permissions:
     default: op
   joshymc.tokens.sell:
     description: Sell tokens via /tokens sell
+    default: true
+  joshymc.tokens.buy:
+    description: Buy tokens via /tokens buy
     default: true
