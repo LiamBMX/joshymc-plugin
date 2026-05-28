@@ -267,6 +267,7 @@ commands:
   gmc:
     description: Creative mode
     usage: /gmc [player]
+    permission: joshymc.gamemode.creative
   gms:
     description: Survival mode
     usage: /gms [player]
@@ -276,6 +277,7 @@ commands:
   gmsp:
     description: Spectator mode
     usage: /gmsp [player]
+    permission: joshymc.gamemode.spectator
   fly:
     description: Toggle flight
     usage: /fly [player]
@@ -729,7 +731,13 @@ permissions:
     description: Use /back
     default: true
   joshymc.gamemode:
-    description: Change own gamemode
+    description: Change own gamemode (survival/adventure via /gms, /gma, /gamemode)
+    default: op
+  joshymc.gamemode.creative:
+    description: Change own gamemode to creative (/gmc)
+    default: op
+  joshymc.gamemode.spectator:
+    description: Change own gamemode to spectator (/gmsp)
     default: op
   joshymc.gamemode.others:
     description: Change others' gamemode
