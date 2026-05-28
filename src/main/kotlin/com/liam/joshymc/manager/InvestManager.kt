@@ -54,4 +54,18 @@ class InvestManager(private val plugin: Joshymc) {
         )
         return true
     }
+
+    fun getTopBalances(limit: Int): List<Pair<String, Double>> {
+        val rows = plugin.databaseManager.query(
+            "SELECT uuid, balance, last_updated FROM bank_investments WHERE balance > 0",
+        ) { rs -> Triple(rs.getString("uuid"), rs.getDouble("balance"), rs.getLong("last_updated")) }
+        val now = System.currentTimeMillis() / 1000
+        return rows
+            .map { (uuid, balance, lastUpdated) ->
+                val hoursElapsed = (now - lastUpdated) / 3600.0
+                uuid to balance * (1.0 + INTEREST_RATE).pow(hoursElapsed)
+            }
+            .sortedByDescending { it.second }
+            .take(limit)
+    }
 }
