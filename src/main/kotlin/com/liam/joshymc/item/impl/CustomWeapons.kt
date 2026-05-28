@@ -4,12 +4,17 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.item.CustomItem
 import com.liam.joshymc.util.LoreBuilder
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
+import org.bukkit.attribute.Attribute
+import org.bukkit.attribute.AttributeModifier
 import org.bukkit.enchantments.Enchantment
+import org.bukkit.inventory.EquipmentSlotGroup
 import org.bukkit.inventory.meta.ItemMeta
+import org.bukkit.persistence.PersistentDataType
 
 class VoidBlade : CustomItem() {
 
@@ -141,5 +146,72 @@ class CarrotLauncher : CustomItem() {
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
         meta.setItemModel(NamespacedKey(Joshymc.instance, "carrot_launcher"))
+    }
+}
+
+private val FLOWER_YELLOW = TextColor.color(0xFFFF55)
+
+class FlowerSpade : CustomItem() {
+
+    override val id = "flower_spade"
+    override val material = Material.NETHERITE_SHOVEL
+    override val hasGlint = true
+
+    override val displayName: Component = Component.text("Flower Spade", FLOWER_YELLOW)
+        .decoration(TextDecoration.ITALIC, false)
+        .decoration(TextDecoration.BOLD, true)
+
+    override val lore = LoreBuilder.build(
+        type = "Flower Weapon",
+        description = listOf(
+            "11 Attack Damage",
+            "Part of the Flower set",
+        ),
+        usage = "Melee",
+    )
+
+    override fun applyMeta(meta: ItemMeta) {
+        meta.setItemModel(NamespacedKey(Joshymc.instance, "flower_spade"))
+
+        meta.addAttributeModifier(
+            Attribute.ATTACK_DAMAGE,
+            AttributeModifier(
+                NamespacedKey(Joshymc.instance, "flower_spade_damage"),
+                11.0,
+                AttributeModifier.Operation.ADD_NUMBER,
+                EquipmentSlotGroup.MAINHAND,
+            )
+        )
+
+        meta.addAttributeModifier(
+            Attribute.ATTACK_SPEED,
+            AttributeModifier(
+                NamespacedKey(Joshymc.instance, "flower_spade_speed"),
+                -2.4,
+                AttributeModifier.Operation.ADD_NUMBER,
+                EquipmentSlotGroup.MAINHAND,
+            )
+        )
+
+        meta.addEnchant(Enchantment.SHARPNESS, 4, true)
+        meta.addEnchant(Enchantment.UNBREAKING, 3, true)
+        meta.isUnbreakable = true
+
+        // Store custom enchants in PDC so the combat listener can read them
+        val plugin = Joshymc.instance
+        meta.persistentDataContainer.set(
+            NamespacedKey(plugin, "enchant_lifesteal"), PersistentDataType.INTEGER, 3
+        )
+        meta.persistentDataContainer.set(
+            NamespacedKey(plugin, "enchant_bleed"), PersistentDataType.INTEGER, 1
+        )
+
+        // Add custom enchant lore lines (zero-width-space prefix matches updateLore format)
+        val existingLore = meta.lore()?.toMutableList() ?: mutableListOf()
+        val enchantLines = listOf(
+            Component.text("​Lifesteal III", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+            Component.text("​Bleed I", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+        )
+        meta.lore(enchantLines + existingLore)
     }
 }
