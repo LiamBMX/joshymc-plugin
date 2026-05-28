@@ -47,12 +47,8 @@ class WelcomeCommand(private val plugin: Joshymc) : CommandExecutor {
         val msg = "&6&l★ &e${sender.name} &awelcomed &f${newPlayer.name} &ato the server! &6&l★"
         plugin.server.broadcast(plugin.commsManager.parseLegacy(msg))
 
-        // Give the welcoming player one AFK key
-        val afkKey = plugin.itemManager.getItem("afk_key")?.createItemStack(1)
-        if (afkKey != null) {
-            val leftover = sender.inventory.addItem(afkKey)
-            leftover.values.forEach { sender.world.dropItemNaturally(sender.location, it) }
-        }
+        // Give the welcoming player one AFK crate key
+        plugin.crateManager.giveKey(sender, "afk", 1)
 
         plugin.commsManager.send(sender, plugin.commsManager.parseLegacy("&aYou received an &bAFK Key &afor welcoming ${newPlayer.name}!"))
 
