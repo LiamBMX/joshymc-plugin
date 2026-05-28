@@ -153,10 +153,7 @@ class MarketManager(private val plugin: Joshymc) {
         }
     }
 
-    fun getMultiplier(material: Material): Double {
-        if (!started) return 1.0
-        return multiplierCache.getOrDefault(material, 1.0)
-    }
+    fun getMultiplier(material: Material): Double = 1.0
 
     fun getCurrentBuyPrice(material: Material): Double? {
         val base = getBaseBuyPrice(material) ?: return null
