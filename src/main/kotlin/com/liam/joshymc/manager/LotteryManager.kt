@@ -11,19 +11,28 @@ import java.util.concurrent.ThreadLocalRandom
 
 class LotteryManager(private val plugin: Joshymc) {
 
-    companion object {
-        const val TICKET_COST = 10_000.0
-        const val BASE_PRIZE = 50_000.0
-        const val PRIZE_PER_TICKET = 10_000.0
-        private const val DRAW_INTERVAL_MINUTES = 60
-    }
-
     // uuid -> ticket count for the current round
     private val tickets = mutableMapOf<UUID, Int>()
     private var taskId = -1
     private var minuteCounter = 0
 
+    // Config-driven values (reloaded on start())
+    var ticketCost = 10_000.0; private set
+    var basePrize = 50_000.0; private set
+    var prizePerTicket = 10_000.0; private set
+    var drawIntervalMinutes = 60; private set
+    var maxTicketsPerPlayer = 0; private set  // 0 = unlimited
+
     fun start() {
+        stop()
+
+        val cfg = plugin.config
+        ticketCost = cfg.getDouble("lottery.ticket-cost", 10_000.0)
+        basePrize = cfg.getDouble("lottery.base-prize", 50_000.0)
+        prizePerTicket = cfg.getDouble("lottery.prize-per-ticket", 10_000.0)
+        drawIntervalMinutes = cfg.getInt("lottery.draw-interval-minutes", 60).coerceAtLeast(1)
+        maxTicketsPerPlayer = cfg.getInt("lottery.max-tickets-per-player", 0).coerceAtLeast(0)
+
         tickets.clear()
         minuteCounter = 0
 
@@ -33,7 +42,7 @@ class LotteryManager(private val plugin: Joshymc) {
             onMinuteTick()
         }, 1200L, 1200L)
 
-        plugin.logger.info("[Lottery] LotteryManager started. Draw every $DRAW_INTERVAL_MINUTES minutes.")
+        plugin.logger.info("[Lottery] Started. Draw every $drawIntervalMinutes minutes. Ticket cost: ${plugin.economyManager.format(ticketCost)}.")
     }
 
     fun stop() {
@@ -44,13 +53,13 @@ class LotteryManager(private val plugin: Joshymc) {
     }
 
     private fun onMinuteTick() {
-        val minuteInHour = minuteCounter % DRAW_INTERVAL_MINUTES
+        val minuteInCycle = minuteCounter % drawIntervalMinutes
         when {
-            minuteInHour == 0 -> drawLottery()
-            minuteInHour == 15 -> broadcastReminder(45)
-            minuteInHour == 30 -> broadcastReminder(30)
-            minuteInHour == 45 -> broadcastReminder(15)
-            minuteInHour in 55..59 -> broadcastReminder(DRAW_INTERVAL_MINUTES - minuteInHour)
+            minuteInCycle == 0 -> drawLottery()
+            drawIntervalMinutes - minuteInCycle == 15 -> broadcastReminder(15)
+            drawIntervalMinutes - minuteInCycle == 30 -> broadcastReminder(30)
+            drawIntervalMinutes - minuteInCycle == 45 -> broadcastReminder(45)
+            drawIntervalMinutes - minuteInCycle in 1..5 -> broadcastReminder(drawIntervalMinutes - minuteInCycle)
         }
     }
 
@@ -64,7 +73,7 @@ class LotteryManager(private val plugin: Joshymc) {
                 .append(Component.text("  |  $totalTickets ticket(s) sold", NamedTextColor.DARK_GRAY))
         } else {
             Component.text("  Prize Pool: ", NamedTextColor.GRAY)
-                .append(Component.text(plugin.economyManager.format(BASE_PRIZE), NamedTextColor.GREEN))
+                .append(Component.text(plugin.economyManager.format(basePrize), NamedTextColor.GREEN))
                 .append(Component.text("  (no entries yet)", NamedTextColor.DARK_GRAY))
         }
 
@@ -78,7 +87,7 @@ class LotteryManager(private val plugin: Joshymc) {
             Component.text("  Use ", NamedTextColor.GRAY)
                 .append(Component.text("/lottery buy <amount>", NamedTextColor.AQUA))
                 .append(Component.text(" to enter. Each ticket costs ", NamedTextColor.GRAY))
-                .append(Component.text(plugin.economyManager.format(TICKET_COST), NamedTextColor.GOLD))
+                .append(Component.text(plugin.economyManager.format(ticketCost), NamedTextColor.GOLD))
                 .append(Component.text(".", NamedTextColor.GRAY))
         )
         for (player in Bukkit.getOnlinePlayers()) {
@@ -158,22 +167,31 @@ class LotteryManager(private val plugin: Joshymc) {
     }
 
     fun buyTickets(uuid: UUID, count: Int): Boolean {
-        val cost = TICKET_COST * count
+        if (maxTicketsPerPlayer > 0) {
+            val held = tickets[uuid] ?: 0
+            if (held + count > maxTicketsPerPlayer) return false
+        }
+        val cost = ticketCost * count
         if (!plugin.economyManager.has(uuid, cost)) return false
         plugin.economyManager.withdraw(uuid, cost)
         tickets[uuid] = (tickets[uuid] ?: 0) + count
         return true
     }
 
+    fun wouldExceedMax(uuid: UUID, count: Int): Boolean {
+        if (maxTicketsPerPlayer <= 0) return false
+        return (tickets[uuid] ?: 0) + count > maxTicketsPerPlayer
+    }
+
     fun getTicketCount(uuid: UUID): Int = tickets[uuid] ?: 0
 
     fun getTotalTickets(): Int = tickets.values.sum()
 
-    fun getPrize(): Double = BASE_PRIZE + getTotalTickets() * PRIZE_PER_TICKET
+    fun getPrize(): Double = basePrize + getTotalTickets() * prizePerTicket
 
     fun getMinutesUntilDraw(): Int {
-        val minuteInHour = minuteCounter % DRAW_INTERVAL_MINUTES
-        return if (minuteInHour == 0 && minuteCounter == 0) DRAW_INTERVAL_MINUTES
-        else DRAW_INTERVAL_MINUTES - minuteInHour
+        val minuteInCycle = minuteCounter % drawIntervalMinutes
+        return if (minuteInCycle == 0 && minuteCounter == 0) drawIntervalMinutes
+        else drawIntervalMinutes - minuteInCycle
     }
 }

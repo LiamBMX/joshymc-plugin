@@ -2,7 +2,6 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
-import com.liam.joshymc.manager.LotteryManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -53,8 +52,25 @@ class LotteryCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return
         }
 
-        val cost = LotteryManager.TICKET_COST * count
-        val success = plugin.lotteryManager.buyTickets(player.uniqueId, count)
+        val lm = plugin.lotteryManager
+        val cost = lm.ticketCost * count
+
+        if (lm.wouldExceedMax(player.uniqueId, count)) {
+            val max = lm.maxTicketsPerPlayer
+            val held = lm.getTicketCount(player.uniqueId)
+            plugin.commsManager.send(
+                player,
+                Component.text("You can only hold ", NamedTextColor.RED)
+                    .append(Component.text("$max ticket(s)", NamedTextColor.GOLD))
+                    .append(Component.text(" per round. You already hold ", NamedTextColor.RED))
+                    .append(Component.text("$held", NamedTextColor.GOLD))
+                    .append(Component.text(".", NamedTextColor.RED)),
+                CommunicationsManager.Category.ECONOMY
+            )
+            return
+        }
+
+        val success = lm.buyTickets(player.uniqueId, count)
         if (!success) {
             plugin.commsManager.send(
                 player,

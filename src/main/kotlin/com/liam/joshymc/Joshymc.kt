@@ -270,7 +270,7 @@ class Joshymc : JavaPlugin() {
         investManager.start()
 
         lotteryManager = LotteryManager(this)
-        lotteryManager.start()
+        if (isFeatureEnabled("lottery")) lotteryManager.start()
 
         guiManager = GuiManager()
 
@@ -520,7 +520,7 @@ class Joshymc : JavaPlugin() {
         safe("antiCheatManager.start") { antiCheatManager.start() }
         safe("registerEnchants") { registerEnchants() }
         safe("customEnchantManager.start") { customEnchantManager.start() }
-        safe("lotteryManager.start") { lotteryManager.start() }
+        safe("lotteryManager") { lotteryManager.stop(); if (isFeatureEnabled("lottery")) lotteryManager.start() }
 
         logger.info("JoshyMC has been fully reloaded!")
     }
