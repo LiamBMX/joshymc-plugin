@@ -75,11 +75,6 @@ class BackLocationListener(private val plugin: Joshymc) : Listener {
 class GamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (!sender.hasPermission("joshymc.gamemode")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
-            return true
-        }
-
         // Shorthand commands: /gmc, /gms, /gma, /gmsp
         val mode = when (label.lowercase()) {
             "gmc" -> GameMode.CREATIVE
@@ -94,6 +89,16 @@ class GamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
                     return true
                 }
             }
+        }
+
+        val requiredPermission = when (mode) {
+            GameMode.CREATIVE -> "joshymc.gamemode.creative"
+            GameMode.SPECTATOR -> "joshymc.gamemode.spectator"
+            else -> "joshymc.gamemode"
+        }
+        if (!sender.hasPermission(requiredPermission)) {
+            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            return true
         }
 
         // Target player
