@@ -49,6 +49,7 @@ class ItemManager(private val plugin: Joshymc) {
         register(InfernoAxe())
         register(CrystalMace())
         register(CarrotLauncher())
+        register(FlowerSpade())
 
         // Custom tools
         register(AutoMiner())

@@ -63,6 +63,15 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
                 || item.type == Material.NETHERITE_SWORD
     }
 
+    private fun isShovel(item: ItemStack): Boolean {
+        return item.type == Material.WOODEN_SHOVEL
+                || item.type == Material.STONE_SHOVEL
+                || item.type == Material.IRON_SHOVEL
+                || item.type == Material.GOLDEN_SHOVEL
+                || item.type == Material.DIAMOND_SHOVEL
+                || item.type == Material.NETHERITE_SHOVEL
+    }
+
     // ══════════════════════════════════════════════════════════
     //  ENTITY DAMAGE BY ENTITY — offensive + some defensive
     // ══════════════════════════════════════════════════════════
@@ -84,6 +93,12 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
             handleLifesteal(event, attacker, weapon)
             handleBleed(attacker, victim, weapon)
             handleStriker(attacker, victim, weapon)
+        }
+
+        // ── Shovel enchants (weapon shovels like Flower Spade) ──
+        if (isShovel(weapon)) {
+            handleLifesteal(event, attacker, weapon)
+            handleBleed(attacker, victim, weapon)
         }
 
         // ── Axe enchants ────────────────────────────────────
