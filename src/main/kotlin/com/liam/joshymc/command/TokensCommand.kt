@@ -22,6 +22,7 @@ class TokensCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         return when (sub) {
             "give" -> handleGive(sender, args)
             "sell" -> handleSell(sender, args)
+            "buy" -> handleBuy(sender, args)
             else -> {
                 sendUsage(sender)
                 true
@@ -114,6 +115,60 @@ class TokensCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         return true
     }
 
+    private fun handleBuy(sender: CommandSender, args: Array<out String>): Boolean {
+        if (sender !is Player) {
+            sender.sendMessage(Component.text("Only players can buy tokens.", NamedTextColor.RED))
+            return true
+        }
+        if (!sender.hasPermission("joshymc.tokens.buy")) {
+            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            return true
+        }
+        if (args.size < 2) {
+            sender.sendMessage(Component.text("Usage: /tokens buy <amount>", NamedTextColor.YELLOW))
+            return true
+        }
+        val amount = args[1].toIntOrNull()
+        if (amount == null || amount <= 0) {
+            sender.sendMessage(Component.text("Amount must be a positive integer.", NamedTextColor.RED))
+            return true
+        }
+
+        val cost = amount * TOKEN_VALUE
+        val balance = plugin.economyManager.getBalance(sender.uniqueId)
+        if (balance < cost) {
+            sender.sendMessage(
+                Component.text("You need ", NamedTextColor.RED)
+                    .append(Component.text(plugin.economyManager.format(cost), NamedTextColor.GOLD))
+                    .append(Component.text(" but only have ", NamedTextColor.RED))
+                    .append(Component.text(plugin.economyManager.format(balance), NamedTextColor.GOLD))
+                    .append(Component.text(".", NamedTextColor.RED))
+            )
+            return true
+        }
+
+        val tokenItem = plugin.itemManager.getItem("token")?.createItemStack(amount)
+        if (tokenItem == null) {
+            sender.sendMessage(Component.text("Token item not found. Contact an administrator.", NamedTextColor.RED))
+            return true
+        }
+
+        plugin.economyManager.withdraw(sender.uniqueId, cost)
+        val overflow = sender.inventory.addItem(tokenItem)
+        if (overflow.isNotEmpty()) {
+            sender.world.dropItemNaturally(sender.location, overflow.values.first())
+        }
+
+        sender.sendMessage(
+            Component.text("Bought ", NamedTextColor.GREEN)
+                .append(Component.text("$amount token(s)", NamedTextColor.YELLOW))
+                .append(Component.text(" for ", NamedTextColor.GREEN))
+                .append(Component.text(plugin.economyManager.format(cost), NamedTextColor.GOLD))
+                .append(Component.text(".", NamedTextColor.GREEN))
+        )
+        return true
+    }
+
     private fun countTokens(player: Player): Int {
         return player.inventory.contents
             .orEmpty()
@@ -143,7 +198,8 @@ class TokensCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         sender.sendMessage(
             Component.text("Usage:", NamedTextColor.YELLOW).append(Component.newline())
                 .append(Component.text("  /tokens give <amount> <player>", NamedTextColor.GOLD)).append(Component.newline())
-                .append(Component.text("  /tokens sell <amount>", NamedTextColor.GOLD))
+                .append(Component.text("  /tokens sell <amount>", NamedTextColor.GOLD)).append(Component.newline())
+                .append(Component.text("  /tokens buy <amount>", NamedTextColor.GOLD))
         )
     }
 
@@ -152,10 +208,12 @@ class TokensCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             1 -> buildList {
                 if (sender.hasPermission("joshymc.tokens.give")) add("give")
                 if (sender.hasPermission("joshymc.tokens.sell")) add("sell")
+                if (sender.hasPermission("joshymc.tokens.buy")) add("buy")
             }.filter { it.startsWith(args[0], ignoreCase = true) }
             2 -> when (args[0].lowercase()) {
                 "give" -> listOf("1", "5", "10").filter { it.startsWith(args[1]) }
                 "sell" -> listOf("1", "5", "10").filter { it.startsWith(args[1]) }
+                "buy" -> listOf("1", "5", "10").filter { it.startsWith(args[1]) }
                 else -> emptyList()
             }
             3 -> if (args[0].lowercase() == "give" && sender.hasPermission("joshymc.tokens.give")) {

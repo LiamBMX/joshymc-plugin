@@ -25,9 +25,9 @@ class Token : CustomItem() {
         type = "Currency",
         description = listOf(
             "A rare server token.",
-            "Sell for \$100,000 each.",
+            "Buy or sell for \$100,000 each.",
         ),
-        usage = "/tokens sell <amount>",
+        usage = "/tokens buy|sell <amount>",
     )
 
     override fun applyMeta(meta: ItemMeta) {
