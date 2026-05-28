@@ -93,6 +93,8 @@ class GamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
         val requiredPermission = when (mode) {
             GameMode.CREATIVE -> "joshymc.gamemode.creative"
+            GameMode.SURVIVAL -> "joshymc.gamemode.survival"
+            GameMode.ADVENTURE -> "joshymc.gamemode.adventure"
             GameMode.SPECTATOR -> "joshymc.gamemode.spectator"
             else -> "joshymc.gamemode"
         }

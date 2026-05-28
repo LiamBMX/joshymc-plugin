@@ -271,9 +271,11 @@ commands:
   gms:
     description: Survival mode
     usage: /gms [player]
+    permission: joshymc.gamemode.survival
   gma:
     description: Adventure mode
     usage: /gma [player]
+    permission: joshymc.gamemode.adventure
   gmsp:
     description: Spectator mode
     usage: /gmsp [player]
@@ -731,10 +733,16 @@ permissions:
     description: Use /back
     default: true
   joshymc.gamemode:
-    description: Change own gamemode (survival/adventure via /gms, /gma, /gamemode)
+    description: Change own gamemode (catch-all for /gamemode)
     default: op
   joshymc.gamemode.creative:
     description: Change own gamemode to creative (/gmc)
+    default: op
+  joshymc.gamemode.survival:
+    description: Change own gamemode to survival (/gms)
+    default: op
+  joshymc.gamemode.adventure:
+    description: Change own gamemode to adventure (/gma)
     default: op
   joshymc.gamemode.spectator:
     description: Change own gamemode to spectator (/gmsp)
