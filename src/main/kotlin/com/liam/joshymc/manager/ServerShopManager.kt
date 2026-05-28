@@ -82,9 +82,7 @@ class ServerShopManager(private val plugin: Joshymc) {
         for (category in categories) {
             val item = category.items.find { it.material == material }
             if (item != null && item.sellPrice > 0) {
-                val marketMultiplier = plugin.marketManager.getMultiplier(material)
-                val boosterMultiplier = plugin.boosterManager.getSellMultiplier(material)
-                return item.sellPrice * marketMultiplier * boosterMultiplier
+                return item.sellPrice * plugin.boosterManager.getSellMultiplier(material)
             }
         }
         return null
@@ -271,21 +269,10 @@ class ServerShopManager(private val plugin: Joshymc) {
 
                 val lore = mutableListOf<Component>()
 
-                // Dynamic prices from market
-                val multiplier = plugin.marketManager.getMultiplier(shopItem.material)
-                val liveBuy = if (shopItem.buyPrice > 0) shopItem.buyPrice * multiplier else 0.0
-                val liveSell = if (shopItem.sellPrice > 0) shopItem.sellPrice * multiplier else 0.0
-                val pctChange = ((multiplier - 1.0) * 100).toInt()
-                val trendText = when {
-                    pctChange > 2 -> " &a(+$pctChange%)"
-                    pctChange < -2 -> " &c($pctChange%)"
-                    else -> ""
-                }
-
                 // Buy price
-                if (liveBuy > 0) {
+                if (shopItem.buyPrice > 0) {
                     lore.add(
-                        plugin.commsManager.parseLegacy("&7Buy: &a${plugin.economyManager.format(liveBuy)}$trendText")
+                        plugin.commsManager.parseLegacy("&7Buy: &a${plugin.economyManager.format(shopItem.buyPrice)}")
                             .decoration(TextDecoration.ITALIC, false)
                     )
                 } else {
@@ -293,9 +280,9 @@ class ServerShopManager(private val plugin: Joshymc) {
                 }
 
                 // Sell price
-                if (liveSell > 0) {
+                if (shopItem.sellPrice > 0) {
                     lore.add(
-                        plugin.commsManager.parseLegacy("&7Sell: &e${plugin.economyManager.format(liveSell)}$trendText")
+                        plugin.commsManager.parseLegacy("&7Sell: &e${plugin.economyManager.format(shopItem.sellPrice)}")
                             .decoration(TextDecoration.ITALIC, false)
                     )
                 } else {
@@ -330,18 +317,14 @@ class ServerShopManager(private val plugin: Joshymc) {
     // ── Click Handler ───────────────────────────────────────────────────
 
     private fun handleItemClick(player: Player, shopItem: ShopItem, clickType: ClickType) {
-        val multiplier = plugin.marketManager.getMultiplier(shopItem.material)
-        val liveBuy = shopItem.buyPrice * multiplier
-        val liveSell = shopItem.sellPrice * multiplier
-
         val noSell = { plugin.commsManager.send(player, Component.text("You cannot sell this item.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY); player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f) }
         val noBuy = { plugin.commsManager.send(player, Component.text("This item is not for sale.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY); player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f) }
 
         when (clickType) {
             ClickType.LEFT, ClickType.SHIFT_LEFT ->
-                if (liveBuy > 0) openBuyQuantityGui(player, shopItem, liveBuy) else noBuy()
-            ClickType.RIGHT -> if (liveSell > 0) sellItem(player, shopItem.material, applyCropBonus(liveSell, shopItem.material, player.uniqueId), 1) else noSell()
-            ClickType.SHIFT_RIGHT -> if (liveSell > 0) sellItem(player, shopItem.material, applyCropBonus(liveSell, shopItem.material, player.uniqueId), -1) else noSell()
+                if (shopItem.buyPrice > 0) openBuyQuantityGui(player, shopItem, shopItem.buyPrice) else noBuy()
+            ClickType.RIGHT -> if (shopItem.sellPrice > 0) sellItem(player, shopItem.material, applyCropBonus(shopItem.sellPrice, shopItem.material, player.uniqueId), 1) else noSell()
+            ClickType.SHIFT_RIGHT -> if (shopItem.sellPrice > 0) sellItem(player, shopItem.material, applyCropBonus(shopItem.sellPrice, shopItem.material, player.uniqueId), -1) else noSell()
             else -> {}
         }
     }
@@ -433,10 +416,7 @@ class ServerShopManager(private val plugin: Joshymc) {
         // the visual on each click but the bound handler persists.
         gui.setItem(22, ItemStack(Material.LIME_CONCRETE)) { p, _ ->
             p.closeInventory()
-            // Re-fetch the live price on confirm so a market price tick
-            // mid-GUI doesn't let the player lock in a stale rate.
-            val currentPrice = shopItem.buyPrice * plugin.marketManager.getMultiplier(shopItem.material)
-            buyItem(p, shopItem.material, currentPrice, amount.coerceIn(1, MAX_BUY))
+            buyItem(p, shopItem.material, shopItem.buyPrice, amount.coerceIn(1, MAX_BUY))
         }
 
         renderDynamic()
@@ -507,9 +487,6 @@ class ServerShopManager(private val plugin: Joshymc) {
             CommunicationsManager.Category.ECONOMY
         )
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.2f)
-
-        // Record transaction for market price fluctuation
-        plugin.marketManager.recordTransaction(material, "BUY", amount)
     }
 
     // ── Sell Logic ──────────────────────────────────────────────────────
@@ -565,7 +542,6 @@ class ServerShopManager(private val plugin: Joshymc) {
                 CommunicationsManager.Category.ECONOMY
             )
             player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.0f)
-            plugin.marketManager.recordTransaction(material, "SELL", totalCount)
         } else {
             // Sell specific amount
             if (!inventory.contains(material, amount)) {
@@ -596,7 +572,6 @@ class ServerShopManager(private val plugin: Joshymc) {
 
             val totalEarned = sellPrice * amount
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
-            plugin.marketManager.recordTransaction(material, "SELL", amount)
 
             plugin.commsManager.send(player,
                 Component.text("Sold ", NamedTextColor.YELLOW)
