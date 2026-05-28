@@ -228,6 +228,21 @@ class CombatListener(private val plugin: Joshymc) : Listener {
     }
 
     /**
+     * TNT minecarts and End Crystals are not resolved by resolvePlayerSource, so
+     * the standard onDamage PvP gate skips them. Cancel damage from these sources
+     * when the victim has PvP disabled.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onExplosiveDamage(event: EntityDamageByEntityEvent) {
+        val victim = event.entity as? Player ?: return
+        val type = event.damager.type.name
+        if (type != "TNT_MINECART" && type != "END_CRYSTAL") return
+        if (!plugin.combatManager.canPvP(victim)) {
+            event.isCancelled = true
+        }
+    }
+
+    /**
      * Traces back to the originating Player from direct hits, projectiles, and TNT.
      */
     private fun resolvePlayerSource(event: EntityDamageByEntityEvent): Player? {
