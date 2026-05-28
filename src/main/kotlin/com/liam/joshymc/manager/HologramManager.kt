@@ -360,9 +360,10 @@ class HologramManager(private val plugin: Joshymc) : Listener {
                 entity.isShadowed = true
                 entity.addScoreboardTag("joshymc_holo_$id")
 
-                // Don't persist — the DB is the source of truth; loadAll() re-spawns on restart.
-                // Persistent entities would double-spawn on top of the freshly-spawned ones.
-                entity.isPersistent = false
+                // Persist so the entity survives chunk unloads (e.g. when everyone moves to
+                // the spawn world). loadAll() removes all tagged entities at startup before
+                // re-spawning from DB, so no duplicates accumulate across restarts.
+                entity.isPersistent = true
 
                 // Apply scale via Display transformation
                 if (style.scale != 1f) {
