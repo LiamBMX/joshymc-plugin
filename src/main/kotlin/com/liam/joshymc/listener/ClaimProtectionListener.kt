@@ -103,10 +103,11 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         val victim = event.entity
 
         if (victim is Player) {
-            // PvP — cancel if victim is in a claim and attacker can't access
             val claim = plugin.claimManager.getClaimAt(victim.location) ?: return
+            // Owner opted in to PvP — allow it
+            if (claim.pvpEnabled) return
             val attackerClaim = plugin.claimManager.getClaimAt(attacker.location)
-            // Allow PvP if both are in the same claim (same chunk claim)
+            // Allow PvP if both are in the same claim
             if (attackerClaim != null && attackerClaim == claim) return
             event.isCancelled = true
             denyWithMessage(attacker)
