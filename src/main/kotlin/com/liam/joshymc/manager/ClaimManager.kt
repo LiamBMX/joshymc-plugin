@@ -47,7 +47,8 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         val createdAt: Long,
         val trusted: MutableSet<UUID> = mutableSetOf(),
         val denied: MutableSet<UUID> = mutableSetOf(),
-        var pvpEnabled: Boolean = false
+        var pvpEnabled: Boolean = false,
+        var tntEnabled: Boolean = false
     ) {
         val minX get() = min(x1, x2)
         val maxX get() = max(x1, x2)
@@ -130,6 +131,10 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
         try {
             plugin.databaseManager.execute("ALTER TABLE claims_v2 ADD COLUMN pvp_enabled INTEGER NOT NULL DEFAULT 0")
+        } catch (_: Exception) { /* column already exists */ }
+
+        try {
+            plugin.databaseManager.execute("ALTER TABLE claims_v2 ADD COLUMN tnt_enabled INTEGER NOT NULL DEFAULT 0")
         } catch (_: Exception) { /* column already exists */ }
 
         // Migrate: drop old chunk-based subclaims table if it has the wrong schema
@@ -221,7 +226,8 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
                 createdAt = rs.getLong("created_at"),
                 trusted = trustedUuids.toMutableSet(),
                 denied = deniedUuids.toMutableSet(),
-                pvpEnabled = rs.getInt("pvp_enabled") == 1
+                pvpEnabled = rs.getInt("pvp_enabled") == 1,
+                tntEnabled = rs.getInt("tnt_enabled") == 1
             )
         })
     }
@@ -519,6 +525,15 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         claim.pvpEnabled = enabled
         plugin.databaseManager.execute(
             "UPDATE claims_v2 SET pvp_enabled = ? WHERE id = ?",
+            if (enabled) 1 else 0, claimId
+        )
+    }
+
+    fun setClaimTnt(claimId: Int, enabled: Boolean) {
+        val claim = claims.find { it.id == claimId } ?: return
+        claim.tntEnabled = enabled
+        plugin.databaseManager.execute(
+            "UPDATE claims_v2 SET tnt_enabled = ? WHERE id = ?",
             if (enabled) 1 else 0, claimId
         )
     }
