@@ -616,6 +616,8 @@ class Joshymc : JavaPlugin() {
             description = "Automatically condenses ores into blocks"))
         cem.register(CustomEnchant("explosive", "Explosive", 3, EnchantTarget.PICKAXE,
             description = "Chance to blow up a 3x3x3 area"))
+        cem.register(CustomEnchant("bedrock_breaker", "Bedrock Breaker", 1, EnchantTarget.PICKAXE,
+            description = "Mine bedrock in 60 seconds (no drops)"))
 
         // ── Hoe ─────────────────────────────────────────
         cem.register(CustomEnchant("ground_pound", "Ground Pound", 1, EnchantTarget.HOE,
