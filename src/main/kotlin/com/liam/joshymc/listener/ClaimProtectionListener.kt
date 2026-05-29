@@ -22,6 +22,7 @@ import org.bukkit.event.block.BlockBurnEvent
 import org.bukkit.event.block.BlockRedstoneEvent
 import org.bukkit.event.block.BlockSpreadEvent
 import org.bukkit.event.entity.EntityChangeBlockEvent
+import org.bukkit.entity.TNTPrimed
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityExplodeEvent
 import org.bukkit.event.hanging.HangingBreakByEntityEvent
@@ -170,10 +171,25 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         }
     }
 
-    // 10. Entity explosion — remove claimed blocks from explosion
+    // 10. Entity explosion — protect claimed blocks; honour per-claim TNT toggle for primed TNT
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onEntityExplode(event: EntityExplodeEvent) {
-        event.blockList().removeIf { plugin.claimManager.getClaimAt(it.location) != null }
+        if (event.entity is TNTPrimed) {
+            val sourceClaim = plugin.claimManager.getClaimAt(event.entity.location)
+            if (sourceClaim != null && sourceClaim.tntEnabled) {
+                // TNT placed inside a claim that has TNT enabled: allow damage within
+                // the same claim, but still protect blocks belonging to other claims.
+                event.blockList().removeIf { block ->
+                    val target = plugin.claimManager.getClaimAt(block.location)
+                    target != null && target.id != sourceClaim.id
+                }
+            } else {
+                // TNT outside any claim, or in a claim with TNT disabled: protect all claimed blocks.
+                event.blockList().removeIf { plugin.claimManager.getClaimAt(it.location) != null }
+            }
+        } else {
+            event.blockList().removeIf { plugin.claimManager.getClaimAt(it.location) != null }
+        }
     }
 
     // 11. Block explosion — remove claimed blocks from explosion
