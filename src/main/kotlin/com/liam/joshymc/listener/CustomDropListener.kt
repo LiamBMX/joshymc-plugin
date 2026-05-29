@@ -38,15 +38,16 @@ class CustomDropListener(private val plugin: Joshymc) : Listener {
         val location = event.entity.location
         val world = event.entity.world
 
+        val cfg = plugin.config
         when (event.entity.type) {
             // Void Shard drops
             EntityType.ENDERMAN -> {
-                if (Random.nextDouble() < 0.05) {
+                if (Random.nextDouble() < cfg.getDouble("custom-drops.void-shard.enderman", 0.05)) {
                     world.dropItemNaturally(location, voidShard.createItemStack())
                 }
             }
             EntityType.SHULKER -> {
-                if (Random.nextDouble() < 0.15) {
+                if (Random.nextDouble() < cfg.getDouble("custom-drops.void-shard.shulker", 0.05)) {
                     val amount = Random.nextInt(1, 3) // 1-2
                     world.dropItemNaturally(location, voidShard.createItemStack(amount))
                 }
@@ -58,12 +59,12 @@ class CustomDropListener(private val plugin: Joshymc) : Listener {
 
             // Soul Fragment drops
             EntityType.WITHER_SKELETON -> {
-                if (Random.nextDouble() < 0.03) {
+                if (Random.nextDouble() < cfg.getDouble("custom-drops.soul-fragment.wither-skeleton", 0.03)) {
                     world.dropItemNaturally(location, soulFragment.createItemStack())
                 }
             }
             EntityType.GHAST -> {
-                if (Random.nextDouble() < 0.10) {
+                if (Random.nextDouble() < cfg.getDouble("custom-drops.soul-fragment.ghast", 0.05)) {
                     world.dropItemNaturally(location, soulFragment.createItemStack())
                 }
             }
@@ -74,19 +75,19 @@ class CustomDropListener(private val plugin: Joshymc) : Listener {
 
             // Inferno Core drops
             EntityType.BLAZE -> {
-                if (Random.nextDouble() < 0.05) {
+                if (Random.nextDouble() < cfg.getDouble("custom-drops.inferno-core.blaze", 0.05)) {
                     world.dropItemNaturally(location, infernoCore.createItemStack())
                 }
             }
             EntityType.MAGMA_CUBE -> {
-                if (Random.nextDouble() < 0.08) {
+                if (Random.nextDouble() < cfg.getDouble("custom-drops.inferno-core.magma-cube", 0.05)) {
                     world.dropItemNaturally(location, infernoCore.createItemStack())
                 }
             }
 
             // Ancient Rune drops
             EntityType.ELDER_GUARDIAN -> {
-                if (Random.nextDouble() < 0.50) {
+                if (Random.nextDouble() < cfg.getDouble("custom-drops.ancient-rune.elder-guardian", 0.05)) {
                     world.dropItemNaturally(location, ancientRune.createItemStack())
                 }
             }
@@ -109,7 +110,7 @@ class CustomDropListener(private val plugin: Joshymc) : Listener {
             Material.DEEPSLATE_DIAMOND_ORE,
             Material.EMERALD_ORE,
             Material.DEEPSLATE_EMERALD_ORE -> {
-                if (Random.nextDouble() < 0.10) {
+                if (Random.nextDouble() < plugin.config.getDouble("custom-drops.crystal-essence.diamond-ore", 0.05)) {
                     event.block.world.dropItemNaturally(
                         event.block.location,
                         crystalEssence.createItemStack(),
@@ -125,7 +126,7 @@ class CustomDropListener(private val plugin: Joshymc) : Listener {
         val player = event.enchanter
         if (player.gameMode == GameMode.CREATIVE) return
 
-        if (Random.nextDouble() < 0.20) {
+        if (Random.nextDouble() < plugin.config.getDouble("custom-drops.enchanted-dust.enchanting", 0.05)) {
             player.world.dropItemNaturally(player.location, enchantedDust.createItemStack())
         }
     }
@@ -145,7 +146,7 @@ class CustomDropListener(private val plugin: Joshymc) : Listener {
         val result = event.currentItem ?: return
         if (result.type.isAir) return
 
-        if (Random.nextDouble() < 0.30) {
+        if (Random.nextDouble() < plugin.config.getDouble("custom-drops.enchanted-dust.grindstone", 0.05)) {
             val amount = Random.nextInt(1, 3) // 1-2
             player.world.dropItemNaturally(player.location, enchantedDust.createItemStack(amount))
         }
