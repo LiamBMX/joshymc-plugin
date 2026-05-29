@@ -18,6 +18,7 @@ import org.bukkit.event.block.BlockSpreadEvent
 import org.bukkit.event.block.LeavesDecayEvent
 import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityChangeBlockEvent
+import org.bukkit.event.entity.EntityPortalEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityExplodeEvent
@@ -412,6 +413,16 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
 
         val worldName = event.entity.world.name
         if (!getFlag(worldName, WorldFlag.MOB_SPAWN)) {
+            event.isCancelled = true
+        }
+    }
+
+    // Block mobs from entering worlds with MOB_SPAWN disabled via portals (end portals, nether portals, etc.)
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onEntityPortal(event: EntityPortalEvent) {
+        if (event.entity is Player) return
+        val destWorld = event.to?.world?.name ?: return
+        if (!getFlag(destWorld, WorldFlag.MOB_SPAWN)) {
             event.isCancelled = true
         }
     }
