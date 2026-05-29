@@ -329,6 +329,26 @@ voting:
     14: 250000
     30: 1000000
 
+# Custom Item Drops — chance (0.0–1.0) that each item drops from its source
+# 0.05 = 5%, 0.10 = 10%, etc. Guaranteed boss drops are not listed here.
+custom-drops:
+  crystal-essence:
+    diamond-ore: 0.05       # Mining diamond/emerald ore
+  enchanted-dust:
+    enchanting: 0.05        # Using an enchanting table
+    grindstone: 0.05        # Taking an item from a grindstone
+  void-shard:
+    enderman: 0.05          # Killing an Enderman
+    shulker: 0.05           # Killing a Shulker
+  soul-fragment:
+    wither-skeleton: 0.03   # Killing a Wither Skeleton
+    ghast: 0.05             # Killing a Ghast
+  inferno-core:
+    blaze: 0.05             # Killing a Blaze
+    magma-cube: 0.05        # Killing a Magma Cube
+  ancient-rune:
+    elder-guardian: 0.05    # Killing an Elder Guardian
+
 # Claims — block-based land protection with golden shovel
 claims:
   starting-blocks: 500     # Claim blocks each player starts with
