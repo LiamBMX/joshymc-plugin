@@ -23,8 +23,10 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         ""
     )
 
-    // uuid \u2192 join timestamp (ms) for new players; cleared after 10 seconds
-    val recentNewPlayers = mutableMapOf<java.util.UUID, Long>()
+    data class WelcomeEntry(val joinedAt: Long, val welcomers: MutableSet<java.util.UUID> = mutableSetOf())
+
+    // uuid \u2192 WelcomeEntry for new players; cleared after 10 seconds
+    val recentNewPlayers = mutableMapOf<java.util.UUID, WelcomeEntry>()
 
     // ── Lifecycle ───────────────────────────────────────
 
@@ -74,8 +76,8 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
                 player.uniqueId.toString(), now
             )
 
-            // Track so /welcome can fire within 10 seconds
-            recentNewPlayers[player.uniqueId] = now
+            // Track so /welcome can fire within 10 seconds (first 10 welcomers rewarded)
+            recentNewPlayers[player.uniqueId] = WelcomeEntry(now)
             plugin.server.scheduler.runTaskLater(plugin, Runnable {
                 recentNewPlayers.remove(player.uniqueId)
             }, 200L) // 200 ticks = 10 seconds
