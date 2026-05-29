@@ -30,6 +30,7 @@ import org.bukkit.event.hanging.HangingPlaceEvent
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent
 import org.bukkit.event.player.PlayerBucketEmptyEvent
 import org.bukkit.event.player.PlayerBucketFillEvent
+import org.bukkit.event.player.PlayerFishEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerMoveEvent
@@ -352,7 +353,16 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         }
     }
 
-    // 20. Player movement — block denied players from entering a claim.
+    // 20. Fishing rod — prevent hooking lit TNT to stop it being reeled into claims.
+    //     PlayerFishEvent fires when the hook makes contact; cancelling it releases the entity.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onFishEntity(event: PlayerFishEvent) {
+        if (event.state != PlayerFishEvent.State.CAUGHT_ENTITY) return
+        if (event.caught !is TNTPrimed) return
+        event.isCancelled = true
+    }
+
+    // 21. Player movement — block denied players from entering a claim.
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onPlayerMove(event: PlayerMoveEvent) {
         val from = event.from
