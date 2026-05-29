@@ -22,12 +22,13 @@ class WelcomeCommand(private val plugin: Joshymc) : CommandExecutor {
         }
 
         // Pick the most recently joined new player still within the window
-        val target = newPlayers.entries.maxByOrNull { it.value }
+        val target = newPlayers.entries.maxByOrNull { it.value.joinedAt }
         if (target == null) {
             plugin.commsManager.send(sender, plugin.commsManager.parseLegacy("&cThere are no new players to welcome right now."))
             return true
         }
 
+        val entry = target.value
         val newPlayer = plugin.server.getPlayer(target.key)
         if (newPlayer == null || !newPlayer.isOnline) {
             newPlayers.remove(target.key)
@@ -40,8 +41,17 @@ class WelcomeCommand(private val plugin: Joshymc) : CommandExecutor {
             return true
         }
 
-        // Remove from map so only one player gets the reward per new player
-        newPlayers.remove(target.key)
+        if (sender.uniqueId in entry.welcomers) {
+            plugin.commsManager.send(sender, plugin.commsManager.parseLegacy("&cYou already welcomed ${newPlayer.name}!"))
+            return true
+        }
+
+        if (entry.welcomers.size >= 10) {
+            plugin.commsManager.send(sender, plugin.commsManager.parseLegacy("&c10 players have already welcomed ${newPlayer.name}."))
+            return true
+        }
+
+        entry.welcomers.add(sender.uniqueId)
 
         // Broadcast welcome message
         val msg = "&6&l★ &e${sender.name} &awelcomed &f${newPlayer.name} &ato the server! &6&l★"
@@ -51,6 +61,11 @@ class WelcomeCommand(private val plugin: Joshymc) : CommandExecutor {
         plugin.crateManager.giveKey(sender, "afk", 1)
 
         plugin.commsManager.send(sender, plugin.commsManager.parseLegacy("&aYou received an &bAFK Key &afor welcoming ${newPlayer.name}!"))
+
+        // Remove from map once all 10 welcome slots are filled
+        if (entry.welcomers.size >= 10) {
+            newPlayers.remove(target.key)
+        }
 
         return true
     }
