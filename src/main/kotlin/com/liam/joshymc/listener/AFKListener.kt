@@ -47,11 +47,10 @@ class AFKListener(private val plugin: Joshymc) : Listener {
         // Ignore teleport-caused movement (AFK manager sets a flag during teleports)
         if (plugin.afkManager.isTeleporting(player)) return
 
-        // Inside the AFK world, suppress any displacement rather than cancel AFK.
-        // Staff teleporting to an AFK player can cause a physics push large enough
-        // to trip this threshold — we pin the player in place instead.
+        // Inside the AFK world, moving (not just looking) cancels AFK and
+        // teleports the player back to where they were before typing /afk.
         if (player.world.name == plugin.afkManager.worldName) {
-            event.isCancelled = true
+            plugin.afkManager.setAfk(player, false)
             return
         }
 
