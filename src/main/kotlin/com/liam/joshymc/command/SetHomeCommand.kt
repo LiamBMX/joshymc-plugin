@@ -37,6 +37,12 @@ class SetHomeCommand(private val plugin: Joshymc) : CommandExecutor {
             return true
         }
 
+        val claim = plugin.claimManager.getClaimAt(sender.location)
+        if (claim != null && !plugin.claimManager.canAccess(sender, sender.location)) {
+            plugin.commsManager.send(sender, Component.text("You cannot set a home inside someone else's claim.", NamedTextColor.RED), CommunicationsManager.Category.HOME)
+            return true
+        }
+
         if (!sender.hasPermission("joshymc.sethome.unlimited")) {
             val max = homeLimit(sender)
             if (max != -1) {
