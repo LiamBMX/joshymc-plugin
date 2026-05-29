@@ -6,6 +6,8 @@ import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.GameMode
+import org.bukkit.entity.AreaEffectCloud
+import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
 import org.bukkit.entity.TNTPrimed
@@ -14,14 +16,17 @@ import org.bukkit.Bukkit
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.entity.AreaEffectCloudApplyEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.entity.ProjectileLaunchEvent
+import org.bukkit.event.entity.PotionSplashEvent
 import org.bukkit.event.player.PlayerCommandPreprocessEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerToggleFlightEvent
+import org.bukkit.potion.PotionEffectType
 
 class CombatListener(private val plugin: Joshymc) : Listener {
 
@@ -44,6 +49,19 @@ class CombatListener(private val plugin: Joshymc) : Listener {
         private val BLOCKED_COMBAT_PREFIXED = BLOCKED_COMBAT_COMMANDS.flatMap {
             listOf("joshymc:$it", "minecraft:$it", "essentials:$it", "bukkit:$it")
         }.toSet()
+
+        private val NEGATIVE_POTION_EFFECTS = setOf(
+            PotionEffectType.INSTANT_DAMAGE,
+            PotionEffectType.WEAKNESS,
+            PotionEffectType.POISON,
+            PotionEffectType.SLOWNESS,
+            PotionEffectType.MINING_FATIGUE,
+            PotionEffectType.BLINDNESS,
+            PotionEffectType.NAUSEA,
+            PotionEffectType.WITHER,
+            PotionEffectType.LEVITATION,
+            PotionEffectType.DARKNESS,
+        )
     }
 
     /**
@@ -240,6 +258,71 @@ class CombatListener(private val plugin: Joshymc) : Listener {
         if (!plugin.combatManager.canPvP(victim)) {
             event.isCancelled = true
         }
+    }
+
+    /**
+     * Deny negative splash potions from affecting players with PvP toggled off.
+     * Mirrors the onDamage pattern: blocks the throw if the thrower has PvP off,
+     * and protects the victim if the victim has PvP off.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onPotionSplash(event: PotionSplashEvent) {
+        if (event.entity.effects.none { it.type in NEGATIVE_POTION_EFFECTS }) return
+        val thrower = event.entity.shooter as? Player
+
+        for (entity in event.affectedEntities.toList()) {
+            val victim = entity as? Player ?: continue
+            if (thrower != null && victim == thrower) continue
+            val throwerPvpOff = thrower != null && !plugin.combatManager.canPvP(thrower)
+            val victimPvpOff = !plugin.combatManager.canPvP(victim)
+            if (throwerPvpOff || victimPvpOff) {
+                event.setIntensity(victim, 0.0)
+                if (thrower != null) {
+                    if (throwerPvpOff) {
+                        plugin.commsManager.sendActionBar(thrower,
+                            Component.text("Your PvP is disabled. /pvp on", NamedTextColor.RED))
+                    } else {
+                        plugin.commsManager.sendActionBar(thrower,
+                            Component.text("That player has PvP disabled.", NamedTextColor.RED))
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Deny negative lingering potions (area effect clouds) from affecting players
+     * with PvP toggled off. Handles both custom-effect clouds and vanilla base-type clouds.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onAreaEffectCloudApply(event: AreaEffectCloudApplyEvent) {
+        val cloud = event.entity
+        val isNegativeCloud = cloud.customEffects.any { it.type in NEGATIVE_POTION_EFFECTS } ||
+            cloud.basePotionType?.effectType?.let { it in NEGATIVE_POTION_EFFECTS } == true
+        if (!isNegativeCloud) return
+
+        val thrower = cloud.source as? Player
+        val toRemove = mutableListOf<LivingEntity>()
+
+        for (entity in event.affectedEntities) {
+            val victim = entity as? Player ?: continue
+            if (thrower != null && victim == thrower) continue
+            val throwerPvpOff = thrower != null && !plugin.combatManager.canPvP(thrower)
+            val victimPvpOff = !plugin.combatManager.canPvP(victim)
+            if (throwerPvpOff || victimPvpOff) {
+                toRemove.add(entity)
+                if (thrower != null) {
+                    if (throwerPvpOff) {
+                        plugin.commsManager.sendActionBar(thrower,
+                            Component.text("Your PvP is disabled. /pvp on", NamedTextColor.RED))
+                    } else {
+                        plugin.commsManager.sendActionBar(thrower,
+                            Component.text("That player has PvP disabled.", NamedTextColor.RED))
+                    }
+                }
+            }
+        }
+        event.affectedEntities.removeAll(toRemove)
     }
 
     /**
