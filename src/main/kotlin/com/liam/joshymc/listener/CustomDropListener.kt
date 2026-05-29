@@ -99,7 +99,7 @@ class CustomDropListener(private val plugin: Joshymc) : Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onBlockBreak(event: BlockBreakEvent) {
         val player = event.player
         if (player.gameMode == GameMode.CREATIVE) return
