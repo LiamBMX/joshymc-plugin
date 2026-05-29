@@ -801,8 +801,11 @@ permissions:
   joshymc.smithing:
     description: Open portable smithing table
     default: op
-  joshymc.repair:
-    description: Use /repair on held / worn items
+  joshymc.repair.hand:
+    description: Use /repair hand (costs 50000)
+    default: op
+  joshymc.repair.all:
+    description: Use /repair all (costs 500000)
     default: op
   joshymc.gencave:
     description: Generate caves

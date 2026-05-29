@@ -690,12 +690,14 @@ class SmithingCommand(private val plugin: Joshymc) : CommandExecutor {
 // ══════════════════════════════════════════════════════════
 
 class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
+    companion object {
+        const val COST_HAND = 50_000.0
+        const val COST_ALL  = 500_000.0
+    }
+
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) { sender.sendMessage("Players only."); return true }
-        if (!sender.hasPermission("joshymc.repair")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
-            return true
-        }
+
         // Combat-tagged players can't use /repair to fix gear mid-fight.
         if (plugin.combatManager.isTagged(sender)) {
             plugin.commsManager.send(sender, Component.text("Can't repair while in combat.", NamedTextColor.RED))
@@ -703,10 +705,37 @@ class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         val mode = args.getOrNull(0)?.lowercase() ?: "hand"
-        var repaired = 0
         when (mode) {
-            "hand" -> if (repairItem(sender.inventory.itemInMainHand)) repaired++
+            "hand" -> {
+                if (!sender.hasPermission("joshymc.repair.hand")) {
+                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    return true
+                }
+                val balance = plugin.economyManager.getBalance(sender.uniqueId)
+                if (balance < COST_HAND) {
+                    plugin.commsManager.send(sender, Component.text("You need \$${"%.0f".format(COST_HAND)} to repair your held item.", NamedTextColor.RED))
+                    return true
+                }
+                val repaired = if (repairItem(sender.inventory.itemInMainHand)) 1 else 0
+                if (repaired == 0) {
+                    plugin.commsManager.send(sender, Component.text("Nothing to repair.", NamedTextColor.GRAY))
+                } else {
+                    plugin.economyManager.withdraw(sender.uniqueId, COST_HAND)
+                    plugin.commsManager.send(sender, Component.text("Repaired held item for \$${"%.0f".format(COST_HAND)}.", NamedTextColor.GREEN))
+                    sender.playSound(sender.location, org.bukkit.Sound.BLOCK_ANVIL_USE, 0.6f, 1.4f)
+                }
+            }
             "all" -> {
+                if (!sender.hasPermission("joshymc.repair.all")) {
+                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    return true
+                }
+                val balance = plugin.economyManager.getBalance(sender.uniqueId)
+                if (balance < COST_ALL) {
+                    plugin.commsManager.send(sender, Component.text("You need \$${"%.0f".format(COST_ALL)} to repair all items.", NamedTextColor.RED))
+                    return true
+                }
+                var repaired = 0
                 for (item in sender.inventory.contents) {
                     if (repairItem(item)) repaired++
                 }
@@ -714,18 +743,17 @@ class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
                     if (armor != null && repairItem(armor)) repaired++
                 }
                 if (repairItem(sender.inventory.itemInOffHand)) repaired++
+                if (repaired == 0) {
+                    plugin.commsManager.send(sender, Component.text("Nothing to repair.", NamedTextColor.GRAY))
+                } else {
+                    plugin.economyManager.withdraw(sender.uniqueId, COST_ALL)
+                    plugin.commsManager.send(sender, Component.text("Repaired $repaired item${if (repaired != 1) "s" else ""} for \$${"%.0f".format(COST_ALL)}.", NamedTextColor.GREEN))
+                    sender.playSound(sender.location, org.bukkit.Sound.BLOCK_ANVIL_USE, 0.6f, 1.4f)
+                }
             }
             else -> {
                 plugin.commsManager.send(sender, Component.text("Usage: /repair [hand|all]", NamedTextColor.RED))
-                return true
             }
-        }
-
-        if (repaired == 0) {
-            plugin.commsManager.send(sender, Component.text("Nothing to repair.", NamedTextColor.GRAY))
-        } else {
-            plugin.commsManager.send(sender, Component.text("Repaired $repaired item${if (repaired != 1) "s" else ""}.", NamedTextColor.GREEN))
-            sender.playSound(sender.location, org.bukkit.Sound.BLOCK_ANVIL_USE, 0.6f, 1.4f)
         }
         return true
     }
