@@ -1,7 +1,11 @@
 package com.liam.joshymc.listener.enchant
 
 import com.liam.joshymc.Joshymc
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
+import org.bukkit.GameMode
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.block.data.Ageable
 import org.bukkit.entity.Player
@@ -14,8 +18,10 @@ import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockDamageEvent
 import org.bukkit.event.block.BlockDropItemEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.PlayerInventory
+import org.bukkit.scheduler.BukkitTask
 import java.util.UUID
 
 class ToolEnchantListener(private val plugin: Joshymc) : Listener {
@@ -25,6 +31,10 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
     /** Prevents recursive triggers for explosive and ground_pound. */
     private val explosiveProcessing = mutableSetOf<UUID>()
     private val groundPoundProcessing = mutableSetOf<UUID>()
+
+    // bedrock_breaker — tracks active 60-second mining tasks
+    private data class BedrockMineData(val location: Location, var elapsed: Int, val task: BukkitTask)
+    private val bedrockMining = mutableMapOf<UUID, BedrockMineData>()
 
     // ── Smelt map (autosmelt) ───────────────────────────
 
@@ -167,6 +177,67 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
         ) {
             event.instaBreak = true
         }
+
+        // bedrock_breaker — pickaxe only, survival only
+        if (isPickaxe(item.type)
+            && enchants.hasEnchant(item, "bedrock_breaker")
+            && event.block.type == Material.BEDROCK
+            && player.gameMode != GameMode.CREATIVE
+        ) {
+            val loc = event.block.location
+            val existing = bedrockMining[player.uniqueId]
+
+            // Already tracking this exact block — don't restart the timer
+            if (existing != null && existing.location == loc) return
+
+            // Different block — cancel the previous task first
+            existing?.task?.cancel()
+            bedrockMining.remove(player.uniqueId)
+
+            val task = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
+                val current = bedrockMining[player.uniqueId] ?: return@Runnable
+                val target = player.getTargetBlockExact(5)
+                val held = player.inventory.itemInMainHand
+
+                // Cancel if the player looks away, switches items, or loses the enchant
+                if (target == null
+                    || target.location != current.location
+                    || !isPickaxe(held.type)
+                    || !enchants.hasEnchant(held, "bedrock_breaker")
+                ) {
+                    current.task.cancel()
+                    bedrockMining.remove(player.uniqueId)
+                    player.sendActionBar(Component.text("Mining interrupted.", NamedTextColor.RED))
+                    return@Runnable
+                }
+
+                current.elapsed++
+                val remaining = 60 - current.elapsed
+
+                if (remaining <= 0) {
+                    val block = current.location.block
+                    if (block.type == Material.BEDROCK) {
+                        block.type = Material.AIR
+                        player.playSound(player.location, Sound.BLOCK_STONE_BREAK, 1.0f, 0.8f)
+                        player.sendActionBar(Component.text("Bedrock destroyed!", NamedTextColor.GREEN))
+                    }
+                    current.task.cancel()
+                    bedrockMining.remove(player.uniqueId)
+                } else {
+                    player.sendActionBar(
+                        Component.text("Mining Bedrock... ", NamedTextColor.YELLOW)
+                            .append(Component.text("${remaining}s remaining", NamedTextColor.GOLD))
+                    )
+                }
+            }, 20L, 20L)
+
+            bedrockMining[player.uniqueId] = BedrockMineData(loc, 0, task)
+        }
+    }
+
+    @EventHandler
+    fun onPlayerQuit(event: PlayerQuitEvent) {
+        bedrockMining.remove(event.player.uniqueId)?.task?.cancel()
     }
 
     // ═══════════════════════════════════════════════════════
