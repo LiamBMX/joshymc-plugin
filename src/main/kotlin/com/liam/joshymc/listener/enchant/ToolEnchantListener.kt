@@ -185,6 +185,13 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
             && player.gameMode != GameMode.CREATIVE
         ) {
             val loc = event.block.location
+
+            // Respect claim protection — cannot mine bedrock in a claim without access
+            if (!plugin.claimManager.canAccess(player, loc)) {
+                player.sendActionBar(Component.text("You don't have access to this claim.", NamedTextColor.RED))
+                return
+            }
+
             val existing = bedrockMining[player.uniqueId]
 
             // Already tracking this exact block — don't restart the timer
@@ -216,10 +223,12 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
 
                 if (remaining <= 0) {
                     val block = current.location.block
-                    if (block.type == Material.BEDROCK) {
+                    if (block.type == Material.BEDROCK && plugin.claimManager.canAccess(player, current.location)) {
                         block.type = Material.AIR
                         player.playSound(player.location, Sound.BLOCK_STONE_BREAK, 1.0f, 0.8f)
                         player.sendActionBar(Component.text("Bedrock destroyed!", NamedTextColor.GREEN))
+                    } else if (block.type == Material.BEDROCK) {
+                        player.sendActionBar(Component.text("Mining interrupted — claim access lost.", NamedTextColor.RED))
                     }
                     current.task.cancel()
                     bedrockMining.remove(player.uniqueId)
