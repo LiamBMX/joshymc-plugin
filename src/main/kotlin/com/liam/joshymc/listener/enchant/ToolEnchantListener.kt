@@ -32,8 +32,8 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
     private val explosiveProcessing = mutableSetOf<UUID>()
     private val groundPoundProcessing = mutableSetOf<UUID>()
 
-    // bedrock_breaker — tracks active 60-second mining tasks
-    private data class BedrockMineData(val location: Location, var elapsed: Int, val task: BukkitTask)
+    // bedrock_breaker — tracks active mining tasks; maxSeconds varies by enchant level
+    private data class BedrockMineData(val location: Location, var elapsed: Int, val maxSeconds: Int, val task: BukkitTask)
     private val bedrockMining = mutableMapOf<UUID, BedrockMineData>()
 
     // ── Smelt map (autosmelt) ───────────────────────────
@@ -201,6 +201,13 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
             existing?.task?.cancel()
             bedrockMining.remove(player.uniqueId)
 
+            val level = enchants.getLevel(item, "bedrock_breaker")
+            val maxSeconds = when (level) {
+                3 -> 30
+                2 -> 45
+                else -> 60
+            }
+
             val task = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
                 val current = bedrockMining[player.uniqueId] ?: return@Runnable
                 val target = player.getTargetBlockExact(5)
@@ -219,7 +226,7 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
                 }
 
                 current.elapsed++
-                val remaining = 60 - current.elapsed
+                val remaining = current.maxSeconds - current.elapsed
 
                 if (remaining <= 0) {
                     val block = current.location.block
@@ -240,7 +247,7 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
                 }
             }, 20L, 20L)
 
-            bedrockMining[player.uniqueId] = BedrockMineData(loc, 0, task)
+            bedrockMining[player.uniqueId] = BedrockMineData(loc, 0, maxSeconds, task)
         }
     }
 
