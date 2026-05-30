@@ -380,7 +380,8 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
             lore.add(Component.text("  Drops:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
             for (drop in type.drops) {
                 val chanceText = if (drop.chance < 1.0) " &8(&7${(drop.chance * 100).toInt()}%&8)" else ""
-                lore.add(legacy.deserialize("  &7- &f${drop.amount}x ${formatMaterialName(drop.material)} &8(&6$${"%.0f".format(drop.sellPrice)}&8)$chanceText")
+                val shopPrice = plugin.serverShopManager.getBaseSellPrice(drop.material) ?: drop.sellPrice
+                lore.add(legacy.deserialize("  &7- &f${drop.amount}x ${formatMaterialName(drop.material)} &8(&6$${"%.0f".format(shopPrice)}&8)$chanceText")
                     .decoration(TextDecoration.ITALIC, false))
             }
             lore.add(Component.empty())
@@ -909,7 +910,8 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
                 lore.add(Component.text("  Drops:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
                 for (drop in type.drops) {
                     val chanceText = if (drop.chance < 1.0) " &8(&7${(drop.chance * 100).toInt()}%&8)" else ""
-                    lore.add(legacy.deserialize("  &7- &f${drop.amount}x ${formatMaterialName(drop.material)} &8(&6$${"%.0f".format(drop.sellPrice)}&8)$chanceText")
+                    val shopPrice = plugin.serverShopManager.getBaseSellPrice(drop.material) ?: drop.sellPrice
+                    lore.add(legacy.deserialize("  &7- &f${drop.amount}x ${formatMaterialName(drop.material)} &8(&6$${"%.0f".format(shopPrice)}&8)$chanceText")
                         .decoration(TextDecoration.ITALIC, false))
                 }
                 lore.add(Component.empty())
@@ -1099,10 +1101,9 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
             meta.displayName(Component.text("Sell All", NamedTextColor.GOLD)
                 .decoration(TextDecoration.ITALIC, false)
                 .decoration(TextDecoration.BOLD, true))
-            // Calculate total value
+            // Calculate total value using /shop prices
             val totalValue = block.storage.sumOf { stack ->
-                val drop = type.drops.firstOrNull { it.material == stack.type }
-                (drop?.sellPrice ?: 0.0) * stack.amount
+                (plugin.serverShopManager.getSellPrice(stack.type) ?: 0.0) * stack.amount
             }
             meta.lore(listOf(
                 Component.empty(),
@@ -1122,9 +1123,9 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
             val iter = block.storage.iterator()
             while (iter.hasNext()) {
                 val stack = iter.next()
-                val drop = type.drops.firstOrNull { it.material == stack.type }
-                if (drop != null) {
-                    totalValue += drop.sellPrice * stack.amount
+                val price = plugin.serverShopManager.getSellPrice(stack.type)
+                if (price != null) {
+                    totalValue += price * stack.amount
                     iter.remove()
                 }
             }
