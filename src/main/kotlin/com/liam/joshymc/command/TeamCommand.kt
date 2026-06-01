@@ -54,6 +54,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "echest" -> handleEchest(sender)
             "sethome" -> handleSetHome(sender)
             "home" -> handleHome(sender)
+            "rename" -> handleRename(sender, args)
             else -> sendUsage(sender)
         }
         return true
@@ -79,7 +80,8 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "/team balance" to "View team balance",
             "/team echest" to "Open team ender chest",
             "/team sethome" to "Set the team home (owner only)",
-            "/team home" to "Teleport to the team home"
+            "/team home" to "Teleport to the team home",
+            "/team rename <name>" to "Rename the team (owner only, once per week)"
         )
         commands.forEach { (cmd, desc) ->
             player.sendMessage(
@@ -661,11 +663,68 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         plugin.commsManager.send(player, Component.text("Teleported to team home.", NamedTextColor.GREEN), CommunicationsManager.Category.DEFAULT)
     }
 
+    private fun handleRename(player: Player, args: Array<out String>) {
+        if (args.size < 2) {
+            plugin.commsManager.send(player, Component.text("Usage: /team rename <new name>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
+        if (teamName == null) {
+            plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (plugin.teamManager.getPlayerRole(player.uniqueId) != "owner") {
+            plugin.commsManager.send(player, Component.text("Only the owner can rename the team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        val cooldownMs = 7L * 24 * 60 * 60 * 1000
+        val lastRenamed = plugin.teamManager.getLastRenamedAt(teamName)
+        val elapsed = System.currentTimeMillis() - lastRenamed
+        if (elapsed < cooldownMs && !player.hasPermission("joshymc.team.admin")) {
+            val remaining = cooldownMs - elapsed
+            val days = remaining / (24 * 60 * 60 * 1000)
+            val hours = (remaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000)
+            plugin.commsManager.send(
+                player,
+                Component.text("You can rename your team again in ", NamedTextColor.RED)
+                    .append(Component.text("${days}d ${hours}h", NamedTextColor.WHITE)),
+                CommunicationsManager.Category.DEFAULT
+            )
+            return
+        }
+
+        val newDisplayName = args.drop(1).joinToString(" ")
+        if (newDisplayName.length > 32) {
+            plugin.commsManager.send(player, Component.text("Team name must be 32 characters or less.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        val oldDisplayName = plugin.teamManager.getTeam(teamName)!!.displayName
+        plugin.teamManager.renameTeam(teamName, newDisplayName)
+
+        plugin.teamManager.getTeamMembers(teamName).forEach { member ->
+            val online = Bukkit.getPlayer(UUID.fromString(member.uuid))
+            if (online != null) {
+                plugin.commsManager.send(
+                    online,
+                    Component.text("Team renamed from ", NamedTextColor.GRAY)
+                        .append(Component.text(oldDisplayName, NamedTextColor.WHITE))
+                        .append(Component.text(" to ", NamedTextColor.GRAY))
+                        .append(Component.text(newDisplayName, NamedTextColor.GREEN)),
+                    CommunicationsManager.Category.DEFAULT
+                )
+            }
+        }
+    }
+
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (sender !is Player) return emptyList()
 
         if (args.size == 1) {
-            return listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home")
+            return listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home", "rename")
                 .filter { it.startsWith(args[0], ignoreCase = true) }
         }
 
