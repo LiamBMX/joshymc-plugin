@@ -602,6 +602,8 @@ class Joshymc : JavaPlugin() {
             description = "No fall damage"))
         cem.register(CustomEnchant("rockets", "Rockets", 1, EnchantTarget.BOOTS,
             description = "Levitation when below 2 hearts"))
+        cem.register(CustomEnchant("lava_walker", "Lava Walker", 3, EnchantTarget.BOOTS,
+            description = "Converts nearby lava to obsidian as you walk"))
 
         // ── Shovel ──────────────────────────────────────
         cem.register(CustomEnchant("glass_breaker", "Glass Breaker", 1, EnchantTarget.SHOVEL,

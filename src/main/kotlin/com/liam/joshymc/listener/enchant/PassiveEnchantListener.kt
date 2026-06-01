@@ -12,6 +12,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.EntityPotionEffectEvent
+import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerToggleSneakEvent
 import org.bukkit.inventory.meta.Damageable
@@ -469,6 +470,33 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
             }
         } else {
             saturationProgress[uuid] = seconds
+        }
+    }
+
+    // ── Lava Walker (boots) ────────────────────────────────────────────
+
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    fun onPlayerMove(event: PlayerMoveEvent) {
+        val from = event.from
+        val to = event.to
+        if (from.blockX == to.blockX && from.blockY == to.blockY && from.blockZ == to.blockZ) return
+
+        val player = event.player
+        val boots = player.inventory.boots ?: return
+        val level = plugin.customEnchantManager.getLevel(boots, "lava_walker")
+        if (level <= 0) return
+
+        val radius = level + 1
+        val world = to.world
+        val floorY = to.blockY - 1
+
+        for (x in (to.blockX - radius)..(to.blockX + radius)) {
+            for (z in (to.blockZ - radius)..(to.blockZ + radius)) {
+                val block = world.getBlockAt(x, floorY, z)
+                if (block.type != Material.LAVA) continue
+                val lavaData = block.blockData as? org.bukkit.block.data.Levelled ?: continue
+                if (lavaData.level == 0) block.type = Material.OBSIDIAN
+            }
         }
     }
 
