@@ -9,6 +9,7 @@ import org.bukkit.inventory.RecipeChoice
 import org.bukkit.inventory.ShapedRecipe
 
 const val ENCHANT_DUST_SCROLL_RECIPE = "enchant_dust_scroll"
+const val BEDROCK_BREAKER_SCROLL_RECIPE = "bedrock_breaker_scroll"
 
 class CustomRecipes(private val plugin: Joshymc) {
 
@@ -26,6 +27,7 @@ class CustomRecipes(private val plugin: Joshymc) {
         registerConsumableRecipes()
         registerLegendaryRecipes()
         registerEnchantDustRecipes()
+        registerScrollRecipes()
 
         plugin.logger.info("Registered ${registeredKeys.size} custom recipe(s).")
     }
@@ -191,6 +193,24 @@ class CustomRecipes(private val plugin: Joshymc) {
             shape("DDD", "DBD", "DDD")
             setIngredient('D', item("enchanted_dust"))
             setIngredient('B', vanilla(Material.BOOK))
+        }
+    }
+
+    // ── Specific Enchant Scroll Recipes ──────────────────────────────────────
+
+    // Results are PAPER placeholders; CustomCraftingListener overrides each
+    // with the specific scroll at PrepareItemCraftEvent time.
+    private fun registerScrollRecipes() {
+        // Bedrock Breaker I (100% chance):
+        //   F R F    F = soul_fragment, R = ancient_rune
+        //   N * N    N = netherite_ingot, * = nether_star
+        //   F R F
+        addRecipe(BEDROCK_BREAKER_SCROLL_RECIPE, ItemStack(Material.PAPER)) {
+            shape("FRF", "NSN", "FRF")
+            setIngredient('F', item("soul_fragment"))
+            setIngredient('R', item("ancient_rune"))
+            setIngredient('N', vanilla(Material.NETHERITE_INGOT))
+            setIngredient('S', vanilla(Material.NETHER_STAR))
         }
     }
 

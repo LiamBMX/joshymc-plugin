@@ -2,6 +2,7 @@ package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.enchant.EnchantTarget
+import com.liam.joshymc.recipe.BEDROCK_BREAKER_SCROLL_RECIPE
 import com.liam.joshymc.recipe.ENCHANT_DUST_SCROLL_RECIPE
 import org.bukkit.Material
 import org.bukkit.event.EventHandler
@@ -43,6 +44,15 @@ class CustomCraftingListener(private val plugin: Joshymc) : Listener {
                 event.inventory.result = null
                 return
             }
+        }
+
+        // For specific scroll recipes, replace the placeholder PAPER with the
+        // named scroll at level 1 with 100% success chance.
+        if (recipe.key.key == BEDROCK_BREAKER_SCROLL_RECIPE) {
+            event.inventory.result = plugin.customEnchantManager.createScroll(
+                "bedrock_breaker", level = 1, chance = 100
+            )
+            return
         }
 
         // For the enchant dust recipe, replace the placeholder PAPER result
