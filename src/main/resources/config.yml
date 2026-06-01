@@ -354,6 +354,7 @@ claims:
   starting-blocks: 500     # Claim blocks each player starts with
   blocks-per-hour: 100     # Blocks earned per hour of playtime
   max-blocks: 50000        # Maximum total claim blocks a player can have
+  end-island-radius: 1000  # Blocks from 0,0 in The End that cannot be claimed (covers main island + buffer)
 
 # Ranks — displayed as chat tags before the player's name
 # Tag uses & color codes (e.g., &c = red, &l = bold, &a = green)
