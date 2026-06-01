@@ -147,6 +147,9 @@ class ListenerManager(private val plugin: Joshymc) {
         // Admin panel
         pm.registerEvents(plugin.adminManager, plugin)
 
+        // Mob stacking
+        pm.registerEvents(plugin.mobStackManager, plugin)
+
         // Custom items
         pm.registerEvents(CustomDropListener(plugin), plugin)
         pm.registerEvents(ConsumableListener(plugin), plugin)
