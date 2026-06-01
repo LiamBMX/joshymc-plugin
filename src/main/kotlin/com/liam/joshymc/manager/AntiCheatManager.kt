@@ -611,18 +611,27 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
 
         // ── KillAura Check ──────────────────────────────
         if (isCheckEnabled(CheckType.KILL_AURA)) {
-            // Attack rate check
-            if (now - data.lastAttackResetTime >= 1000L) {
-                data.attackCountInSecond = 0
-                data.lastAttackResetTime = now
-            }
-            data.attackCountInSecond++
+            // Sweep hits (Sweeping Edge) are part of the same physical swing — don't count them
+            // toward the attack rate, or players fighting groups with a sweeping sword will false-flag.
+            val isSweep = event.cause == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK
 
-            if (data.attackCountInSecond > 25) {
-                flag(attacker, CheckType.KILL_AURA, 2.0, "rate=${data.attackCountInSecond}/s")
+            if (!isSweep) {
+                // Attack rate check
+                if (now - data.lastAttackResetTime >= 1000L) {
+                    data.attackCountInSecond = 0
+                    data.lastAttackResetTime = now
+                }
+                data.attackCountInSecond++
+
+                if (data.attackCountInSecond > 25) {
+                    flag(attacker, CheckType.KILL_AURA, 2.0, "rate=${data.attackCountInSecond}/s")
+                }
+
+                data.lastAttackTime = now
             }
 
             // Angle check — is the target behind the player?
+            // Applies even on sweep hits: a real sweep arc only reaches targets in front of the player.
             val eyeDir = attacker.eyeLocation.direction.normalize()
             val toTarget = victim.location.toVector().subtract(attacker.eyeLocation.toVector()).normalize()
             val dot = eyeDir.dot(toTarget)
@@ -631,8 +640,6 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             if (dot < -0.3) {
                 flag(attacker, CheckType.KILL_AURA, 5.0, "angle=behind dot=${"%.2f".format(dot)}")
             }
-
-            data.lastAttackTime = now
         }
     }
 
