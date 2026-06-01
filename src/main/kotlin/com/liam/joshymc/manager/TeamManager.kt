@@ -24,6 +24,10 @@ import java.util.UUID
 
 class TeamManager(private val plugin: Joshymc) : Listener {
 
+    companion object {
+        const val MAX_TEAM_SIZE = 10
+    }
+
     data class TeamInfo(val name: String, val displayName: String, val ownerUuid: String, val createdAt: Long)
     data class TeamMember(val uuid: String, val teamName: String, val role: String, val joinedAt: Long)
     data class BountyInfo(val id: Int, val targetUuid: String, val targetName: String, val placedByUuid: String, val placedByName: String, val amount: Double, val placedAt: Long)
@@ -203,6 +207,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         ) { true } ?: return false
 
         if (getPlayerTeam(uuid) != null) return false
+        if (getTeamMembers(teamName).size >= MAX_TEAM_SIZE) return false
 
         plugin.databaseManager.execute(
             "DELETE FROM team_invites WHERE uuid = ? AND team_name = ?",
