@@ -116,6 +116,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         startingBlocks = plugin.config.getInt("claims.starting-blocks", 500)
         blocksPerHour = plugin.config.getInt("claims.blocks-per-hour", 100)
         maxTotalBlocks = plugin.config.getInt("claims.max-blocks", 50000)
+        endIslandRadius = plugin.config.getInt("claims.end-island-radius", 1000)
 
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS claims_v2 (
@@ -313,8 +314,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
      * Create a claim between two corners. Returns the new claim or null on failure.
      */
     private val blockedWorlds = setOf("resource", "spawn", "afk")
-    // Claims within this radius of 0,0 in the_end are blocked (covers the main island + buffer before outer islands).
-    private val endIslandRadius = 1000
+    private var endIslandRadius = 1000
 
     private fun isOnMainEndIsland(minX: Int, minZ: Int, maxX: Int, maxZ: Int): Boolean {
         return maxX >= -endIslandRadius && minX <= endIslandRadius &&
