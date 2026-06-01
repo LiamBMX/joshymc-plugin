@@ -148,7 +148,9 @@ class TrailManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
-        lastLocations.remove(event.player.uniqueId)
+        val uuid = event.player.uniqueId
+        lastLocations.remove(uuid)
+        playerTrails.remove(uuid)
     }
 
     @EventHandler

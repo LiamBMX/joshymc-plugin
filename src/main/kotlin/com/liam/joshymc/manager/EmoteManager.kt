@@ -12,13 +12,16 @@ import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.scheduler.BukkitRunnable
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.cos
 import kotlin.math.sin
 
-class EmoteManager(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
+class EmoteManager(private val plugin: Joshymc) : CommandExecutor, TabCompleter, Listener {
 
     data class Emote(
         val id: String,
@@ -42,7 +45,14 @@ class EmoteManager(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             it.tabCompleter = this
         }
 
+        plugin.server.pluginManager.registerEvents(this, plugin)
+
         plugin.logger.info("[Emote] Registered ${emotes.size} emotes.")
+    }
+
+    @EventHandler
+    fun onQuit(event: PlayerQuitEvent) {
+        cooldowns.remove(event.player.uniqueId)
     }
 
     // ── Command ─────────────────────────────────────────────────────

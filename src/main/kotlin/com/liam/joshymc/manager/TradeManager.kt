@@ -494,9 +494,11 @@ class TradeManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
         val player = event.player
-        val trade = activeTrades[player.uniqueId] ?: return
+        val uuid = player.uniqueId
 
-        // Force-cancel trade on disconnect to prevent item loss/dupe
+        pendingRequests.remove(uuid)
+
+        val trade = activeTrades[uuid] ?: return
         if (!trade.completing) {
             cancelTrade(trade)
         }

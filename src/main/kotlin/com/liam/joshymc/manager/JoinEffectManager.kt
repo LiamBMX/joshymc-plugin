@@ -18,6 +18,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.scheduler.BukkitRunnable
 import java.util.UUID
@@ -359,6 +360,11 @@ class JoinEffectManager(private val plugin: Joshymc) : Listener {
     fun evictCache(uuid: UUID) {
         equippedEffects.remove(uuid)
         equippedMessages.remove(uuid)
+    }
+
+    @EventHandler
+    fun onQuit(event: PlayerQuitEvent) {
+        evictCache(event.player.uniqueId)
     }
 
     // ── Effect registration ─────────────────────────────────────────

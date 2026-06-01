@@ -10,13 +10,16 @@ import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.Sound
 import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.scheduler.BukkitTask
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-class AuctionManager(private val plugin: Joshymc) {
+class AuctionManager(private val plugin: Joshymc) : Listener {
 
     companion object {
         private val MAIN_TITLE: Component = Component.text("         ")
@@ -1313,6 +1316,11 @@ class AuctionManager(private val plugin: Joshymc) {
         val hours = remaining / 3_600_000
         val minutes = (remaining % 3_600_000) / 60_000
         return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+    }
+
+    @EventHandler
+    fun onQuit(event: PlayerQuitEvent) {
+        pendingBidInputs.remove(event.player.uniqueId)
     }
 
 }

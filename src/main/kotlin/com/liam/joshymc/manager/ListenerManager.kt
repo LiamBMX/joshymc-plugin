@@ -113,7 +113,8 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(ClaimProtectionListener(plugin), plugin)
         pm.registerEvents(com.liam.joshymc.command.SubclaimCommand(plugin), plugin)
 
-        // Auction bid chat input
+        // Auction bid chat input + auction manager quit cleanup
+        pm.registerEvents(plugin.auctionManager, plugin)
         pm.registerEvents(AuctionBidListener(plugin), plugin)
 
         // Sell Wand
