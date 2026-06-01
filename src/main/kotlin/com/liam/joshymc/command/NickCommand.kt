@@ -29,10 +29,9 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
-
         when (args.getOrNull(0)?.lowercase()) {
             "set" -> {
+                if (sender !is Player) { sender.sendMessage("Players only."); return true }
                 if (!sender.hasPermission("joshymc.nick")) {
                     plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
                     return true
@@ -62,32 +61,60 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 plugin.commsManager.send(sender, Component.text("Nickname set to ", NamedTextColor.GREEN).append(display))
             }
             "reset", "off", "clear" -> {
-                plugin.databaseManager.execute("DELETE FROM nicknames WHERE uuid = ?", sender.uniqueId.toString())
-                sender.displayName(Component.text(sender.name))
-                sender.playerListName(Component.text(sender.name))
-                plugin.commsManager.send(sender, Component.text("Nickname cleared.", NamedTextColor.GREEN))
+                val targetName = args.getOrNull(1)
+                if (targetName != null) {
+                    // Admin reset another player's nickname — works for console and ops
+                    if (!sender.hasPermission("joshymc.nick.others")) {
+                        if (sender is Player) plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                        else sender.sendMessage("No permission.")
+                        return true
+                    }
+                    val target = Bukkit.getPlayer(targetName)
+                    if (target == null) {
+                        if (sender is Player) plugin.commsManager.send(sender, Component.text("Player not found or not online.", NamedTextColor.RED))
+                        else sender.sendMessage("Player not found or not online.")
+                        return true
+                    }
+                    plugin.databaseManager.execute("DELETE FROM nicknames WHERE uuid = ?", target.uniqueId.toString())
+                    target.displayName(Component.text(target.name))
+                    target.playerListName(Component.text(target.name))
+                    if (sender is Player) plugin.commsManager.send(sender, Component.text("Cleared ${target.name}'s nickname.", NamedTextColor.GREEN))
+                    else sender.sendMessage("Cleared ${target.name}'s nickname.")
+                    plugin.commsManager.send(target, Component.text("Your nickname was cleared by an admin.", NamedTextColor.YELLOW))
+                } else {
+                    // Self reset — requires being a player
+                    if (sender !is Player) { sender.sendMessage("Usage: /nick reset <player>"); return true }
+                    plugin.databaseManager.execute("DELETE FROM nicknames WHERE uuid = ?", sender.uniqueId.toString())
+                    sender.displayName(Component.text(sender.name))
+                    sender.playerListName(Component.text(sender.name))
+                    plugin.commsManager.send(sender, Component.text("Nickname cleared.", NamedTextColor.GREEN))
+                }
             }
             "other" -> {
                 // /nick other <player> <nick> — admin set someone else's nick
                 if (!sender.hasPermission("joshymc.nick.others")) {
-                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    if (sender is Player) plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    else sender.sendMessage("No permission.")
                     return true
                 }
                 val targetName = args.getOrNull(1)
                 val nick = args.drop(2).joinToString(" ")
                 if (targetName == null || nick.isBlank()) {
-                    plugin.commsManager.send(sender, Component.text("Usage: /nick other <player> <nickname>", NamedTextColor.RED))
+                    if (sender is Player) plugin.commsManager.send(sender, Component.text("Usage: /nick other <player> <nickname>", NamedTextColor.RED))
+                    else sender.sendMessage("Usage: /nick other <player> <nickname>")
                     return true
                 }
                 val target = Bukkit.getPlayer(targetName)
                 if (target == null) {
-                    plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+                    if (sender is Player) plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+                    else sender.sendMessage("Player not found.")
                     return true
                 }
                 val plain = nick.replace("&[0-9a-fk-or]".toRegex(), "")
                 if (ProfanityFilter.contains(plain) && !sender.hasPermission("joshymc.nick.bypassfilter")) {
                     val hit = ProfanityFilter.firstHit(plain) ?: "banned word"
-                    plugin.commsManager.send(sender, Component.text("Nickname rejected — contains '$hit'.", NamedTextColor.RED))
+                    if (sender is Player) plugin.commsManager.send(sender, Component.text("Nickname rejected — contains '$hit'.", NamedTextColor.RED))
+                    else sender.sendMessage("Nickname rejected — contains '$hit'.")
                     return true
                 }
                 plugin.databaseManager.execute(
@@ -97,17 +124,20 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 val display = renderNick(target, nick)
                 target.displayName(display)
                 target.playerListName(display)
-                plugin.commsManager.send(sender, Component.text("Set ${target.name}'s nickname to ", NamedTextColor.GREEN).append(display))
+                if (sender is Player) plugin.commsManager.send(sender, Component.text("Set ${target.name}'s nickname to ", NamedTextColor.GREEN).append(display))
+                else sender.sendMessage("Set ${target.name}'s nickname to ${nick}.")
             }
             else -> {
-                plugin.commsManager.send(sender,
-                    Component.text("/nick set <name>", NamedTextColor.YELLOW)
-                        .append(Component.text(" — set your nickname\n", NamedTextColor.GRAY))
-                        .append(Component.text("/nick reset", NamedTextColor.YELLOW))
-                        .append(Component.text(" — clear your nickname\n", NamedTextColor.GRAY))
-                        .append(Component.text("/nick other <player> <name>", NamedTextColor.YELLOW))
-                        .append(Component.text(" — set someone's nickname (admin)", NamedTextColor.GRAY))
-                )
+                val help = Component.text("/nick set <name>", NamedTextColor.YELLOW)
+                    .append(Component.text(" — set your nickname\n", NamedTextColor.GRAY))
+                    .append(Component.text("/nick reset", NamedTextColor.YELLOW))
+                    .append(Component.text(" — clear your nickname\n", NamedTextColor.GRAY))
+                    .append(Component.text("/nick reset <player>", NamedTextColor.YELLOW))
+                    .append(Component.text(" — clear someone's nickname (admin)\n", NamedTextColor.GRAY))
+                    .append(Component.text("/nick other <player> <name>", NamedTextColor.YELLOW))
+                    .append(Component.text(" — set someone's nickname (admin)", NamedTextColor.GRAY))
+                if (sender is Player) plugin.commsManager.send(sender, help)
+                else sender.sendMessage("/nick reset <player>  — clear someone's nickname (admin)\n/nick other <player> <name>  — set someone's nickname (admin)")
             }
         }
         return true
@@ -116,7 +146,13 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
             1 -> listOf("set", "reset", "other").filter { it.startsWith(args[0].lowercase()) }
-            2 -> if (args[0].equals("other", true)) Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], true) } else emptyList()
+            2 -> when {
+                args[0].equals("other", true) && sender.hasPermission("joshymc.nick.others") ->
+                    Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], true) }
+                args[0].equals("reset", true) && sender.hasPermission("joshymc.nick.others") ->
+                    Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], true) }
+                else -> emptyList()
+            }
             else -> emptyList()
         }
     }
