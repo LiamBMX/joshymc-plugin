@@ -101,6 +101,10 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
+        try {
+            plugin.databaseManager.execute("ALTER TABLE teams ADD COLUMN last_renamed_at INTEGER DEFAULT 0")
+        } catch (_: Exception) {}
+
         plugin.logger.info("[Teams] TeamManager started.")
     }
 
@@ -291,6 +295,19 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             newOwnerUuid.toString(), teamName
         )
         return true
+    }
+
+    fun renameTeam(teamName: String, newDisplayName: String) {
+        plugin.databaseManager.execute(
+            "UPDATE teams SET display_name = ?, last_renamed_at = ? WHERE name = ?",
+            newDisplayName, System.currentTimeMillis(), teamName
+        )
+    }
+
+    fun getLastRenamedAt(teamName: String): Long {
+        return plugin.databaseManager.queryFirst(
+            "SELECT last_renamed_at FROM teams WHERE name = ?", teamName
+        ) { rs -> rs.getLong("last_renamed_at") } ?: 0L
     }
 
     fun isTeammate(uuid1: UUID, uuid2: UUID): Boolean {
