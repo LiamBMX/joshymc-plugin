@@ -14,9 +14,11 @@ import org.bukkit.event.Listener
 import org.bukkit.event.entity.EntityPotionEffectEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerToggleSneakEvent
+import org.bukkit.inventory.meta.Damageable
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
 import org.bukkit.scheduler.BukkitTask
+import org.bukkit.World
 import java.util.UUID
 
 class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
@@ -24,6 +26,16 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
     private var tickTask: BukkitTask? = null
     private val xrayTasks = mutableMapOf<UUID, BukkitTask>()
     private val overloadPlayers = mutableSetOf<UUID>()
+
+    // Crab Claw — track which players have extended reach active
+    private val crabClawActive = mutableSetOf<UUID>()
+    private val DEFAULT_BLOCK_RANGE = 4.5
+
+    // Absorb — last repair timestamp per "uuid:slot" key
+    private val absorbRepairTimestamps = mutableMapOf<String, Long>()
+
+    // Saturation — accumulated seconds per player
+    private val saturationProgress = mutableMapOf<UUID, Int>()
 
     // Negative effects that clarity can shorten (but not fully block)
     private val clarityReduceEffects = setOf(
@@ -75,6 +87,9 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
                 handleOverload(player)
                 handleGears(player)
                 handleSprings(player)
+                handleCrabClaw(player)
+                handleAbsorb(player)
+                handleSaturation(player)
             }
         }, 0L, 20L)
     }
@@ -96,6 +111,14 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
             Bukkit.getPlayer(uuid)?.getAttribute(Attribute.MAX_HEALTH)?.baseValue = 20.0
         }
         overloadPlayers.clear()
+
+        // Reset Crab Claw reach for online players
+        for (uuid in crabClawActive) {
+            Bukkit.getPlayer(uuid)?.getAttribute(Attribute.BLOCK_INTERACTION_RANGE)?.baseValue = DEFAULT_BLOCK_RANGE
+        }
+        crabClawActive.clear()
+        saturationProgress.clear()
+        absorbRepairTimestamps.clear()
     }
 
     @EventHandler
@@ -355,6 +378,100 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
         }
     }
 
+    // ── Crab Claw (all tools) ──────────────────────────────────────────
+
+    private fun handleCrabClaw(player: Player) {
+        val item = player.inventory.itemInMainHand
+        val level = if (item.type != Material.AIR) plugin.customEnchantManager.getLevel(item, "crab_claw") else 0
+        val uuid = player.uniqueId
+        val attr = player.getAttribute(Attribute.BLOCK_INTERACTION_RANGE) ?: return
+
+        if (level > 0) {
+            val targetRange = 5.0 + level  // level 1→6, 2→7, 3→8
+            if (attr.baseValue != targetRange) attr.baseValue = targetRange
+            crabClawActive.add(uuid)
+        } else if (uuid in crabClawActive) {
+            if (attr.baseValue != DEFAULT_BLOCK_RANGE) attr.baseValue = DEFAULT_BLOCK_RANGE
+            crabClawActive.remove(uuid)
+        }
+    }
+
+    // ── Absorb (all items) ─────────────────────────────────────────────
+
+    private fun isInSunlight(player: Player): Boolean {
+        val world = player.world
+        if (world.environment != World.Environment.NORMAL) return false
+        if (world.hasStorm()) return false
+        if (!world.isDayTime) return false
+        return player.location.block.lightFromSky.toInt() >= 15
+    }
+
+    private fun handleAbsorb(player: Player) {
+        if (!isInSunlight(player)) return
+        val now = System.currentTimeMillis()
+        val cem = plugin.customEnchantManager
+
+        repairWithAbsorb(player, "helmet", player.inventory.helmet, now, cem)
+        repairWithAbsorb(player, "chestplate", player.inventory.chestplate, now, cem)
+        repairWithAbsorb(player, "leggings", player.inventory.leggings, now, cem)
+        repairWithAbsorb(player, "boots", player.inventory.boots, now, cem)
+        val mainhand = player.inventory.itemInMainHand.takeUnless { it.type == Material.AIR }
+        val offhand = player.inventory.itemInOffHand.takeUnless { it.type == Material.AIR }
+        repairWithAbsorb(player, "mainhand", mainhand, now, cem)
+        repairWithAbsorb(player, "offhand", offhand, now, cem)
+    }
+
+    private fun repairWithAbsorb(
+        player: Player,
+        slot: String,
+        item: org.bukkit.inventory.ItemStack?,
+        now: Long,
+        cem: com.liam.joshymc.enchant.CustomEnchantManager
+    ) {
+        item ?: return
+        if (item.type.maxDurability <= 0) return
+        val level = cem.getLevel(item, "absorb")
+        if (level <= 0) return
+
+        val thresholdMs = when (level) {
+            1 -> 60_000L
+            2 -> 45_000L
+            3 -> 30_000L
+            else -> 15_000L
+        }
+
+        val key = "${player.uniqueId}:$slot"
+        val lastRepair = absorbRepairTimestamps.getOrDefault(key, 0L)
+        if (now - lastRepair < thresholdMs) return
+
+        val meta = item.itemMeta as? Damageable ?: return
+        if (meta.damage <= 0) return
+        meta.damage--
+        item.itemMeta = meta
+        absorbRepairTimestamps[key] = now
+    }
+
+    // ── Saturation (helmet) ────────────────────────────────────────────
+
+    private fun handleSaturation(player: Player) {
+        val helmet = player.inventory.helmet
+        if (helmet == null || !plugin.customEnchantManager.hasEnchant(helmet, "saturation")) {
+            saturationProgress.remove(player.uniqueId)
+            return
+        }
+
+        val uuid = player.uniqueId
+        val seconds = saturationProgress.getOrDefault(uuid, 0) + 1
+        if (seconds >= 20) {
+            saturationProgress[uuid] = 0
+            if (player.foodLevel < 20) {
+                player.foodLevel = (player.foodLevel + 1).coerceAtMost(20)
+            }
+        } else {
+            saturationProgress[uuid] = seconds
+        }
+    }
+
     // ── Cleanup on quit ────────────────────────────────────────────────
 
     @EventHandler
@@ -370,5 +487,15 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
             attribute?.baseValue = 20.0
             overloadPlayers.remove(uuid)
         }
+
+        // Reset Crab Claw reach
+        if (uuid in crabClawActive) {
+            event.player.getAttribute(Attribute.BLOCK_INTERACTION_RANGE)?.baseValue = DEFAULT_BLOCK_RANGE
+            crabClawActive.remove(uuid)
+        }
+
+        saturationProgress.remove(uuid)
+        val uuidStr = uuid.toString()
+        absorbRepairTimestamps.keys.removeAll { it.startsWith("$uuidStr:") }
     }
 }

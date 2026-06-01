@@ -47,6 +47,10 @@ class WeaponEnchantListener(private val plugin: Joshymc) : Listener {
     // Tidal Leap cooldowns (ms timestamp)
     private val tidalLeapCooldowns = mutableMapOf<UUID, Long>()
 
+    // Spyglass Hunter — cooldowns + active glow removal tasks
+    private val eagleEyeCooldowns = mutableMapOf<UUID, Long>()
+    private val eagleEyeTasks = mutableMapOf<UUID, BukkitTask>()
+
     // Recursion guard for mace AOE
     private val processingDamage = mutableSetOf<UUID>()
 
@@ -154,13 +158,14 @@ class WeaponEnchantListener(private val plugin: Joshymc) : Listener {
         }
     }
 
-    // ── Tidal Leap ───────────────────────────────────────────────────────
+    // ── Tidal Leap + Spyglass Hunter ─────────────────────────────────────
 
     @EventHandler(priority = EventPriority.HIGH)
     fun onInteract(event: PlayerInteractEvent) {
         if (event.hand != EquipmentSlot.HAND) return
         if (event.action != Action.RIGHT_CLICK_AIR && event.action != Action.RIGHT_CLICK_BLOCK) return
         handleTidalLeap(event)
+        handleEagleEye(event)
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -382,6 +387,54 @@ class WeaponEnchantListener(private val plugin: Joshymc) : Listener {
     }
 
     // ════════════════════════════════════════════════════════════════════
+    //  SPYGLASS HANDLER
+    // ════════════════════════════════════════════════════════════════════
+
+    // Eagle Eye: right-click spyglass highlights all nearby living entities
+    private fun handleEagleEye(event: PlayerInteractEvent) {
+        val player = event.player
+        val item = player.inventory.itemInMainHand
+        if (item.type != Material.SPYGLASS) return
+        val level = cem.getLevel(item, "spyglass_hunter")
+        if (level <= 0) return
+
+        val glowSeconds = when (level) { 1 -> 3; 2 -> 5; else -> 8 }
+        val cooldownMs = (glowSeconds * 1000L) + 2000L
+
+        val now = System.currentTimeMillis()
+        val lastUse = eagleEyeCooldowns[player.uniqueId] ?: 0L
+        if (now - lastUse < cooldownMs) return
+
+        eagleEyeCooldowns[player.uniqueId] = now
+
+        val radius = 30.0
+        val targets = player.getNearbyEntities(radius, radius, radius)
+            .filterIsInstance<org.bukkit.entity.LivingEntity>()
+            .filter { it != player }
+
+        if (targets.isEmpty()) return
+
+        eagleEyeTasks.remove(player.uniqueId)?.cancel()
+        targets.forEach { it.isGlowing = true }
+
+        val uuid = player.uniqueId
+        val task = plugin.server.scheduler.runTaskLater(plugin, Runnable {
+            targets.forEach { entity -> if (entity.isValid) entity.isGlowing = false }
+            eagleEyeTasks.remove(uuid)
+        }, glowSeconds * 20L)
+
+        eagleEyeTasks[uuid] = task
+
+        player.playSound(player.location, Sound.ENTITY_ENDERMAN_STARE, 0.3f, 2.0f)
+        player.sendActionBar(
+            net.kyori.adventure.text.Component.text(
+                "Targets illuminated for ${glowSeconds}s",
+                net.kyori.adventure.text.format.NamedTextColor.YELLOW
+            )
+        )
+    }
+
+    // ════════════════════════════════════════════════════════════════════
     //  CLEANUP
     // ════════════════════════════════════════════════════════════════════
 
@@ -395,6 +448,8 @@ class WeaponEnchantListener(private val plugin: Joshymc) : Listener {
         val uuid = event.player.uniqueId
         barbedHookTasks.remove(uuid)?.cancel()
         tidalLeapCooldowns.remove(uuid)
+        eagleEyeCooldowns.remove(uuid)
+        eagleEyeTasks.remove(uuid)?.cancel()
         trackedArrows.entries.removeIf { it.value.shooter.uniqueId == uuid }
         trackedTridents.entries.removeIf { it.value.shooter.uniqueId == uuid }
     }

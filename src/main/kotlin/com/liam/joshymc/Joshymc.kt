@@ -552,6 +552,8 @@ class Joshymc : JavaPlugin() {
         cem.register(CustomEnchant("striker", "Striker", 3, EnchantTarget.SWORD,
             conflicts = setOf("fire_aspect_conflict"),
             description = "Chance to strike lightning on the enemy"))
+        cem.register(CustomEnchant("slayer", "Slayer", 2, EnchantTarget.SWORD,
+            description = "Increases XP gained from killing mobs"))
 
         // ── Axe ─────────────────────────────────────────
         cem.register(CustomEnchant("cleave", "Cleave", 3, EnchantTarget.AXE,
@@ -572,6 +574,8 @@ class Joshymc : JavaPlugin() {
             description = "Reduces axe damage taken"))
         cem.register(CustomEnchant("xray", "Xray", 5, EnchantTarget.HELMET,
             description = "While crouching, ores glow nearby. Higher levels = larger radius"))
+        cem.register(CustomEnchant("saturation", "Saturation", 1, EnchantTarget.HELMET,
+            description = "Slowly restores hunger over time"))
 
         // ── Chestplate ──────────────────────────────────
         cem.register(CustomEnchant("overload", "Overload", 3, EnchantTarget.CHESTPLATE,
@@ -603,9 +607,11 @@ class Joshymc : JavaPlugin() {
         cem.register(CustomEnchant("glass_breaker", "Glass Breaker", 1, EnchantTarget.SHOVEL,
             description = "Breaks glass instantly"))
 
-        // ── Pickaxe / Shovel / Axe ──────────────────────
+        // ── Pickaxe / Shovel / Axe / Hoe ────────────────
         cem.register(CustomEnchant("magnet", "Magnet", 1, EnchantTarget.ALL_TOOLS,
             description = "Mined blocks go straight to your inventory"))
+        cem.register(CustomEnchant("crab_claw", "Crab Claw", 3, EnchantTarget.ALL_TOOLS,
+            description = "Extends block-mining reach by 1-3 blocks"))
 
         // ── Pickaxe ─────────────────────────────────────
         cem.register(CustomEnchant("autosmelt", "Autosmelt", 1, EnchantTarget.PICKAXE,
@@ -652,6 +658,22 @@ class Joshymc : JavaPlugin() {
             description = "Thrown tridents drag hit entities back toward you"))
         cem.register(CustomEnchant("tidal_leap", "Tidal Leap", 1, EnchantTarget.TRIDENT,
             description = "Riptide launches even without rain (requires Riptide)"))
+
+        // ── Shield ───────────────────────────────────────
+        cem.register(CustomEnchant("reflect", "Reflect", 3, EnchantTarget.SHIELD,
+            description = "Chance to reflect incoming damage back at the attacker"))
+
+        // ── Elytra ───────────────────────────────────────
+        cem.register(CustomEnchant("cloudstep", "Cloudstep", 1, EnchantTarget.ELYTRA,
+            description = "Prevents collision damage while gliding with an elytra"))
+
+        // ── Spyglass ─────────────────────────────────────
+        cem.register(CustomEnchant("spyglass_hunter", "Hunter", 3, EnchantTarget.SPYGLASS,
+            description = "Highlights nearby players and mobs while zoomed in"))
+
+        // ── Any item ─────────────────────────────────────
+        cem.register(CustomEnchant("absorb", "Absorb", 4, EnchantTarget.ALL,
+            description = "Slowly repairs durability while exposed to sunlight"))
     }
 
     /**

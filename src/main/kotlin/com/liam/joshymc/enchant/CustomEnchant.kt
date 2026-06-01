@@ -31,8 +31,10 @@ enum class EnchantTarget {
     TRIDENT,
     MACE,
     FISHING_ROD,
+    SHIELD,
     HELMET,
     CHESTPLATE,
+    ELYTRA,
     LEGGINGS,
     BOOTS,
     ALL_ARMOR,
@@ -41,6 +43,7 @@ enum class EnchantTarget {
     HOE,
     ALL_TOOLS,
     MELEE_WEAPON,
+    SPYGLASS,
     ALL;
 
     fun canApplyTo(item: ItemStack): Boolean {
@@ -53,8 +56,10 @@ enum class EnchantTarget {
             TRIDENT -> name == "TRIDENT"
             MACE -> name == "MACE"
             FISHING_ROD -> name == "FISHING_ROD"
+            SHIELD -> name == "SHIELD"
             HELMET -> name.endsWith("_HELMET") || name == "TURTLE_HELMET"
             CHESTPLATE -> name.endsWith("_CHESTPLATE") || name == "ELYTRA"
+            ELYTRA -> name == "ELYTRA"
             LEGGINGS -> name.endsWith("_LEGGINGS")
             BOOTS -> name.endsWith("_BOOTS")
             ALL_ARMOR -> HELMET.canApplyTo(item) || CHESTPLATE.canApplyTo(item)
@@ -65,6 +70,7 @@ enum class EnchantTarget {
             ALL_TOOLS -> PICKAXE.canApplyTo(item) || SHOVEL.canApplyTo(item)
                     || HOE.canApplyTo(item) || AXE.canApplyTo(item)
             MELEE_WEAPON -> SWORD.canApplyTo(item) || AXE.canApplyTo(item)
+            SPYGLASS -> name == "SPYGLASS"
             ALL -> true
         }
     }
