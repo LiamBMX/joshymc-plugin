@@ -16,16 +16,56 @@ import org.bukkit.event.Listener
 import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.persistence.PersistentDataType
+import org.bukkit.scheduler.BukkitTask
+import java.util.UUID
 
 class MobStackManager(private val plugin: Joshymc) : Listener {
 
     val stackKey = NamespacedKey(plugin, "mob_stack_count")
+    private var mergeTask: BukkitTask? = null
 
     private val stackRadius: Double
         get() = plugin.config.getDouble("mob-stacking.radius", 5.0)
 
     private val maxStackSize: Int
         get() = plugin.config.getInt("mob-stacking.max-stack-size", 50)
+
+    fun start() {
+        mergeTask = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
+            if (!plugin.isFeatureEnabled("mob-stacking")) return@Runnable
+            mergeNearbyStacks()
+        }, 100L, 40L)
+    }
+
+    fun stop() {
+        mergeTask?.cancel()
+        mergeTask = null
+    }
+
+    private fun mergeNearbyStacks() {
+        val processed = mutableSetOf<UUID>()
+        val r = stackRadius
+
+        for (world in plugin.server.worlds) {
+            val candidates = world.livingEntities.filter { isStackable(it) }
+            for (entity in candidates) {
+                if (entity.uniqueId in processed || !entity.isValid) continue
+                processed.add(entity.uniqueId)
+
+                val nearby = world.getNearbyEntities(entity.location, r, r, r)
+                    .filterIsInstance<LivingEntity>()
+                    .filter { it.uniqueId != entity.uniqueId && it.type == entity.type && isStackable(it) && it.uniqueId !in processed }
+
+                for (other in nearby) {
+                    val combined = getCount(entity) + getCount(other)
+                    if (combined > maxStackSize) continue
+                    setCount(entity, combined)
+                    processed.add(other.uniqueId)
+                    other.remove()
+                }
+            }
+        }
+    }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     fun onCreatureSpawn(event: CreatureSpawnEvent) {
