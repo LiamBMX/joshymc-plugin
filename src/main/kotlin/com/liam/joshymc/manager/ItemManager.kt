@@ -85,6 +85,9 @@ class ItemManager(private val plugin: Joshymc) {
         register(SkillTomeFarming())
         register(Token())
 
+        // Economy tools
+        register(SellChest())
+
         plugin.logger.info("Registered ${items.size} custom item(s).")
     }
 
