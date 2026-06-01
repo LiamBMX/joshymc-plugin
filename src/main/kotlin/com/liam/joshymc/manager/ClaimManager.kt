@@ -19,6 +19,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitTask
@@ -874,6 +875,11 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
             "INSERT OR IGNORE INTO claim_blocks (uuid, total_blocks) VALUES (?, ?)",
             uuid.toString(), startingBlocks
         )
+    }
+
+    @EventHandler
+    fun onQuit(event: PlayerQuitEvent) {
+        pendingCorner1.remove(event.player.uniqueId)
     }
 
     // ══════════════════════════════════════════════════════════
