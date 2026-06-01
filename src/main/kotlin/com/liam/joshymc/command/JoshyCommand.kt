@@ -38,17 +38,26 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /joshymc give <item_id> [player]", NamedTextColor.RED))
+            sender.sendMessage(Component.text("Usage: /joshymc give <item_id> <amount> [player]", NamedTextColor.RED))
             return
         }
 
         val itemId = args[1]
 
+        val amount = if (args.size >= 3) {
+            args[2].toIntOrNull()?.coerceIn(1, 64) ?: run {
+                sender.sendMessage(Component.text("Amount must be a number between 1 and 64.", NamedTextColor.RED))
+                return
+            }
+        } else {
+            1
+        }
+
         // Special "eggs" keyword — give all egg items
         if (itemId.equals("eggs", ignoreCase = true)) {
-            val target: Player = if (args.size >= 3) {
-                plugin.server.getPlayer(args[2]) ?: run {
-                    sender.sendMessage(Component.text("Player not found: ${args[2]}", NamedTextColor.RED))
+            val target: Player = if (args.size >= 4) {
+                plugin.server.getPlayer(args[3]) ?: run {
+                    sender.sendMessage(Component.text("Player not found: ${args[3]}", NamedTextColor.RED))
                     return
                 }
             } else if (sender is Player) {
@@ -60,10 +69,10 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
             val eggs = plugin.itemManager.getAllItems().filter { it.id.endsWith("_egg") }
             for (egg in eggs) {
-                target.inventory.addItem(egg.createItemStack())
+                target.inventory.addItem(egg.createItemStack(amount))
             }
             sender.sendMessage(
-                Component.text("Gave ${eggs.size} eggs to ${target.name}", NamedTextColor.GREEN)
+                Component.text("Gave ${eggs.size} eggs (x$amount) to ${target.name}", NamedTextColor.GREEN)
             )
             return
         }
@@ -77,9 +86,9 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "bunny_set" to listOf("bunny_helmet", "bunny_chestplate", "bunny_leggings", "bunny_boots"),
         )
         if (itemId.lowercase() in setMap) {
-            val target: Player = if (args.size >= 3) {
-                plugin.server.getPlayer(args[2]) ?: run {
-                    sender.sendMessage(Component.text("Player not found: ${args[2]}", NamedTextColor.RED))
+            val target: Player = if (args.size >= 4) {
+                plugin.server.getPlayer(args[3]) ?: run {
+                    sender.sendMessage(Component.text("Player not found: ${args[3]}", NamedTextColor.RED))
                     return
                 }
             } else if (sender is Player) sender else {
@@ -87,9 +96,9 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             }
             val ids = setMap[itemId.lowercase()]!!
             for (id in ids) {
-                plugin.itemManager.getItem(id)?.let { target.inventory.addItem(it.createItemStack()) }
+                plugin.itemManager.getItem(id)?.let { target.inventory.addItem(it.createItemStack(amount)) }
             }
-            sender.sendMessage(Component.text("Gave ${itemId} to ${target.name}", NamedTextColor.GREEN))
+            sender.sendMessage(Component.text("Gave $itemId (x$amount) to ${target.name}", NamedTextColor.GREEN))
             return
         }
 
@@ -101,9 +110,9 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
 
-        val target: Player = if (args.size >= 3) {
-            plugin.server.getPlayer(args[2]) ?: run {
-                sender.sendMessage(Component.text("Player not found: ${args[2]}", NamedTextColor.RED))
+        val target: Player = if (args.size >= 4) {
+            plugin.server.getPlayer(args[3]) ?: run {
+                sender.sendMessage(Component.text("Player not found: ${args[3]}", NamedTextColor.RED))
                 return
             }
         } else if (sender is Player) {
@@ -113,11 +122,11 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
 
-        target.inventory.addItem(customItem.createItemStack())
+        target.inventory.addItem(customItem.createItemStack(amount))
         sender.sendMessage(
             Component.text("Gave ", NamedTextColor.GREEN)
                 .append(customItem.displayName)
-                .append(Component.text(" to ${target.name}", NamedTextColor.GREEN))
+                .append(Component.text(" x$amount to ${target.name}", NamedTextColor.GREEN))
         )
     }
 
@@ -158,7 +167,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun sendUsage(sender: CommandSender) {
         sender.sendMessage(Component.text("Usage:", NamedTextColor.GRAY))
-        sender.sendMessage(Component.text("  /joshymc give <item_id> [player]", NamedTextColor.GRAY))
+        sender.sendMessage(Component.text("  /joshymc give <item_id> <amount> [player]", NamedTextColor.GRAY))
         sender.sendMessage(Component.text("  /joshymc reload", NamedTextColor.GRAY))
         sender.sendMessage(Component.text("  /joshymc reload hard", NamedTextColor.GRAY))
     }
@@ -176,6 +185,16 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                     (plugin.itemManager.getAllItems().map { it.id } + listOf("eggs", "void_set", "inferno_set", "crystal_set", "soul_set", "bunny_set")).filter { it.startsWith(args[1], ignoreCase = true) }
                 args[0].equals("reload", ignoreCase = true) ->
                     listOf("hard").filter { it.startsWith(args[1], ignoreCase = true) }
+                else -> emptyList()
+            }
+            3 -> when {
+                args[0].equals("give", ignoreCase = true) ->
+                    listOf("1", "16", "32", "64").filter { it.startsWith(args[2]) }
+                else -> emptyList()
+            }
+            4 -> when {
+                args[0].equals("give", ignoreCase = true) ->
+                    plugin.server.onlinePlayers.map { it.name }.filter { it.startsWith(args[3], ignoreCase = true) }
                 else -> emptyList()
             }
             else -> emptyList()
