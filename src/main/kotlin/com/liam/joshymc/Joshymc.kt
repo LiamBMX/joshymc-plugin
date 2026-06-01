@@ -334,6 +334,7 @@ class Joshymc : JavaPlugin() {
         resurgeManager = com.liam.joshymc.manager.ResurgeManager(this)
         boosterManager = BoosterManager(this)
         mobStackManager = MobStackManager(this)
+        if (isFeatureEnabled("mob-stacking")) mobStackManager.start()
 
         itemManager.registerAll()
         recipeManager.registerAll()
@@ -443,6 +444,7 @@ class Joshymc : JavaPlugin() {
         resourceWorldManager.stop()
         combatManager.stop()
         lagCleanerManager.stop()
+        mobStackManager.stop()
         eventManager.shutdown()
         resourcePackManager.shutdown()
         discordManager.shutdown()
