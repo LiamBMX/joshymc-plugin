@@ -50,6 +50,7 @@ class DailyQuestManager(private val plugin: Joshymc) : Listener {
 
     // uuid → questId → daily progress
     private val progressCache = ConcurrentHashMap<UUID, MutableMap<String, DailyProgress>>()
+    private val tasks = mutableListOf<org.bukkit.scheduler.BukkitTask>()
     private val dailyDistanceAcc = ConcurrentHashMap<UUID, Double>()
 
     data class DailyProgress(
@@ -92,16 +93,18 @@ class DailyQuestManager(private val plugin: Joshymc) : Listener {
         loadOrGeneratePool()
 
         // Check for day rollover every 30 seconds (600 ticks)
-        Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+        tasks += Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
             val today = todayStr()
             if (today != currentDateStr) rolloverToNewDay()
         }, 600L, 600L)
 
         // Flush progress every 5 minutes
-        Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, Runnable { flushAllProgress() }, 6000L, 6000L)
+        tasks += Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, Runnable { flushAllProgress() }, 6000L, 6000L)
     }
 
     fun stop() {
+        tasks.forEach { it.cancel() }
+        tasks.clear()
         flushAllProgress()
         progressCache.clear()
         dailyDistanceAcc.clear()

@@ -1321,6 +1321,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
         pendingBidInputs.remove(event.player.uniqueId)
+        playerPages.remove(event.player.uniqueId)
     }
 
 }

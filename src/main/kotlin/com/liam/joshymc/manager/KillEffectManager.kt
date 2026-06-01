@@ -13,6 +13,7 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.EntityDeathEvent
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.ItemStack
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -152,6 +153,11 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
 
     fun evictCache(uuid: UUID) {
         equipped.remove(uuid)
+    }
+
+    @EventHandler
+    fun onQuit(event: PlayerQuitEvent) {
+        equipped.remove(event.player.uniqueId)
     }
 
     // ── Kill Listener ─────────────────────────────────────

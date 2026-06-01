@@ -18,6 +18,7 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.scheduler.BukkitTask
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.enchantment.EnchantItemEvent
@@ -123,6 +124,7 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
     private val quests = mutableMapOf<String, Quest>()
     private val progressCache = ConcurrentHashMap<UUID, MutableMap<String, PlayerQuestProgress>>()
+    private val tasks = mutableListOf<BukkitTask>()
     private val distanceAccumulator = ConcurrentHashMap<UUID, Double>()
     private val visitedBiomes = ConcurrentHashMap<UUID, MutableSet<String>>()
     // TIME_PLAYED quests without an explicit prerequisite get chained by ascending
@@ -162,13 +164,13 @@ class QuestManager(private val plugin: Joshymc) : Listener {
         reconcileStaleProgress()
 
         // Periodic flush every 5 minutes (6000 ticks)
-        Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, Runnable { flushAllProgress() }, 6000L, 6000L)
+        tasks += Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, Runnable { flushAllProgress() }, 6000L, 6000L)
 
         // TIME_PLAYED sync: every 60 seconds, set each online player's TIME_PLAYED
         // quest progress from their real PLAY_ONE_MINUTE statistic. Using the live
         // stat (instead of incrementing) keeps every quest in sync with the same
         // number and wipes stale progress left over from old quest definitions.
-        Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+        tasks += Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
             for (player in Bukkit.getOnlinePlayers()) {
                 syncAllTimePlayedQuests(player)
             }
@@ -176,7 +178,7 @@ class QuestManager(private val plugin: Joshymc) : Listener {
 
         // Biome discovery tick: every 3 seconds, check each online player's current biome
         // and record it if they haven't visited it before.
-        Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+        tasks += Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
             for (player in Bukkit.getOnlinePlayers()) {
                 if (isExempt(player)) continue
                 recordBiome(player)
@@ -187,6 +189,8 @@ class QuestManager(private val plugin: Joshymc) : Listener {
     }
 
     fun stop() {
+        tasks.forEach { it.cancel() }
+        tasks.clear()
         flushAllProgress()
         progressCache.clear()
         distanceAccumulator.clear()

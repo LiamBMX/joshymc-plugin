@@ -880,6 +880,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
         pendingCorner1.remove(event.player.uniqueId)
+        selections.remove(event.player.uniqueId)
     }
 
     // ══════════════════════════════════════════════════════════
