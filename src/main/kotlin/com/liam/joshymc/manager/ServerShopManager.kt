@@ -415,8 +415,9 @@ class ServerShopManager(private val plugin: Joshymc) {
         // Confirm button — handler is bound here; renderDynamic() overwrites
         // the visual on each click but the bound handler persists.
         gui.setItem(22, ItemStack(Material.LIME_CONCRETE)) { p, _ ->
-            p.closeInventory()
-            buyItem(p, shopItem.material, shopItem.buyPrice, amount.coerceIn(1, MAX_BUY))
+            if (buyItem(p, shopItem.material, shopItem.buyPrice, amount.coerceIn(1, MAX_BUY))) {
+                openMainMenu(p)
+            }
         }
 
         renderDynamic()
@@ -450,7 +451,7 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     // ── Buy Logic ───────────────────────────────────────────────────────
 
-    private fun buyItem(player: Player, material: Material, buyPrice: Double, amount: Int) {
+    private fun buyItem(player: Player, material: Material, buyPrice: Double, amount: Int): Boolean {
         val totalCost = buyPrice * amount
 
         if (!plugin.economyManager.has(player.uniqueId, totalCost)) {
@@ -463,7 +464,7 @@ class ServerShopManager(private val plugin: Joshymc) {
                 CommunicationsManager.Category.ECONOMY
             )
             player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
-            return
+            return false
         }
 
         plugin.economyManager.withdraw(player.uniqueId, totalCost)
@@ -487,6 +488,7 @@ class ServerShopManager(private val plugin: Joshymc) {
             CommunicationsManager.Category.ECONOMY
         )
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.2f)
+        return true
     }
 
     // ── Sell Logic ──────────────────────────────────────────────────────
