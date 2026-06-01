@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.manager.TeamManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -142,6 +143,11 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         if (plugin.teamManager.getPlayerTeam(target.uniqueId) != null) {
             plugin.commsManager.send(player, Component.text("That player is already in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (plugin.teamManager.getTeamMembers(teamName).size >= TeamManager.MAX_TEAM_SIZE) {
+            plugin.commsManager.send(player, Component.text("Your team is full (max ${TeamManager.MAX_TEAM_SIZE} members).", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
 
