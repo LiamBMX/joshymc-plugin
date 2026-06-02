@@ -34,7 +34,7 @@ features:
   npcs: false
   chat-games: true
   lottery: true
-  mob-stacking: true
+  mob-stacking: false
 
 # Mob Stacking — merges nearby mobs of the same type into a single entity
 mob-stacking:
