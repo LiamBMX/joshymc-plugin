@@ -26,6 +26,7 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "remove" -> handleRemove(sender, args)
             "list" -> handleList(sender)
             "check" -> handleCheck(sender, args)
+            "promote" -> handlePromote(sender, args)
             else -> showHelp(sender)
         }
 
@@ -154,6 +155,72 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
     }
 
+    private fun handlePromote(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.rank.set")) {
+            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+
+        val playerName = args.getOrNull(1)
+        if (playerName == null) {
+            sender.sendMessage(Component.text("Usage: /rank promote <player> [rank]", NamedTextColor.RED))
+            return
+        }
+
+        val target = Bukkit.getPlayer(playerName) ?: Bukkit.getOfflinePlayer(playerName)
+        val specifiedRankId = args.getOrNull(2)?.lowercase()
+
+        val newRankId: String
+        val newRankTag: String
+
+        if (specifiedRankId != null) {
+            val rank = plugin.rankManager.getRank(specifiedRankId)
+            if (rank == null) {
+                sender.sendMessage(Component.text("Unknown rank: $specifiedRankId. Use /rank list to see available ranks.", NamedTextColor.RED))
+                return
+            }
+            newRankId = rank.id
+            newRankTag = rank.displayTag
+        } else {
+            val assignedIds = plugin.rankManager.getPlayerRankIds(target.uniqueId)
+            val currentWeight = assignedIds
+                .mapNotNull { plugin.rankManager.getRank(it) }
+                .filter { it.id != "default" }
+                .maxByOrNull { it.weight }
+                ?.weight ?: 0
+
+            val promoteTo = plugin.rankManager.getAllRanks()
+                .filter { it.id != "default" && it.weight > currentWeight }
+                .minByOrNull { it.weight }
+
+            if (promoteTo == null) {
+                sender.sendMessage(Component.text("$playerName is already at the highest rank.", NamedTextColor.RED))
+                return
+            }
+            newRankId = promoteTo.id
+            newRankTag = promoteTo.displayTag
+        }
+
+        plugin.rankManager.setPlayerRank(target.uniqueId, newRankId)
+        val tagDisplay = plugin.commsManager.parseLegacy(newRankTag)
+
+        sender.sendMessage(
+            Component.text("Promoted ", NamedTextColor.GREEN)
+                .append(Component.text(playerName, NamedTextColor.WHITE))
+                .append(Component.text(" to ", NamedTextColor.GREEN))
+                .append(tagDisplay)
+        )
+
+        val onlineTarget = Bukkit.getPlayer(playerName)
+        if (onlineTarget != null) {
+            plugin.commsManager.send(
+                onlineTarget,
+                Component.text("You have been promoted to ", NamedTextColor.GREEN)
+                    .append(tagDisplay)
+            )
+        }
+    }
+
     private fun showHelp(sender: CommandSender) {
         val gold = TextColor.color(0xFFD700)
         val msg = Component.text()
@@ -161,6 +228,9 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             .append(Component.newline())
             .append(Component.text("/rank set <player> <rank>", NamedTextColor.YELLOW))
             .append(Component.text(" — Assign a rank", NamedTextColor.GRAY))
+            .append(Component.newline())
+            .append(Component.text("/rank promote <player> [rank]", NamedTextColor.YELLOW))
+            .append(Component.text(" — Promote to next (or specified) rank", NamedTextColor.GRAY))
             .append(Component.newline())
             .append(Component.text("/rank remove <player>", NamedTextColor.YELLOW))
             .append(Component.text(" — Remove a player's rank", NamedTextColor.GRAY))
@@ -176,13 +246,13 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
-            1 -> listOf("set", "remove", "list", "check").filter { it.startsWith(args[0].lowercase()) }
+            1 -> listOf("set", "promote", "remove", "list", "check").filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
-                "set", "remove", "check" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                "set", "remove", "check", "promote" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
-                "set" -> plugin.rankManager.getRankIds().filter { it.startsWith(args[2].lowercase()) }.toList()
+                "set", "promote" -> plugin.rankManager.getRankIds().filter { it.startsWith(args[2].lowercase()) }.toList()
                 else -> emptyList()
             }
             else -> emptyList()
