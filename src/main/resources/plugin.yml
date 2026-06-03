@@ -462,7 +462,7 @@ commands:
     usage: /subclaim <wand|create|add|remove|delete|list>
   rank:
     description: Manage player ranks
-    usage: /rank <set|remove|list|check>
+    usage: /rank <set|promote|remove|list|check>
     aliases: [ranks]
   hopper:
     description: View and manage upgraded hoppers
