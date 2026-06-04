@@ -185,6 +185,12 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
+        val targetingOther = target != sender
+        if (targetingOther && !sender.hasPermission("joshymc.fly.others")) {
+            sender.sendMessage(Component.text("You don't have permission to toggle flight for other players.", NamedTextColor.RED))
+            return true
+        }
+
         // Block combat-tagged players (or staff trying to enable fly on a
         // tagged target) from using fly to escape PvP.
         if (plugin.combatManager.isTagged(target)) {
@@ -201,14 +207,16 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         val state = if (target.allowFlight) "enabled" else "disabled"
         val color = if (target.allowFlight) NamedTextColor.GREEN else NamedTextColor.RED
         plugin.commsManager.send(target, Component.text("Flight $state.", color))
-        if (target != sender && sender is Player) {
+        if (targetingOther && sender is Player) {
             plugin.commsManager.send(sender, Component.text("Flight $state for ${target.name}.", color))
         }
         return true
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (args.size == 1) return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
+        if (args.size == 1 && sender.hasPermission("joshymc.fly.others")) {
+            return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
+        }
         return emptyList()
     }
 }

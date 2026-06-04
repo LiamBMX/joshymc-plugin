@@ -758,6 +758,9 @@ permissions:
   joshymc.fly:
     description: Toggle flight
     default: op
+  joshymc.fly.others:
+    description: Toggle flight for other players
+    default: op
   joshymc.heal:
     description: Heal players
     default: op
