@@ -129,7 +129,8 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             val basePrice = plugin.serverShopManager.getSellPrice(item.type) ?: 0.0
             if (basePrice > 0) {
                 val price = plugin.serverShopManager.applyCropBonus(basePrice, item.type, player.uniqueId)
-                totalEarned += price * item.amount
+                val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
+                totalEarned += price * mutMult * item.amount
                 breakdown[item.type] = (breakdown[item.type] ?: 0) + item.amount
             } else {
                 unsellable.add(item.clone())
@@ -185,7 +186,8 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             if (basePrice <= 0) continue
 
             val price = plugin.serverShopManager.applyCropBonus(basePrice, item.type, player.uniqueId)
-            totalEarned += price * item.amount
+            val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
+            totalEarned += price * mutMult * item.amount
             breakdown[item.type] = (breakdown[item.type] ?: 0) + item.amount
             player.inventory.setItem(i, null)
         }
@@ -223,9 +225,12 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         val price = plugin.serverShopManager.applyCropBonus(basePrice, material, player.uniqueId)
 
         var count = 0
+        var totalEarned = 0.0
         for (i in 0 until player.inventory.size) {
             val item = player.inventory.getItem(i) ?: continue
             if (item.type == material) {
+                val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
+                totalEarned += price * mutMult * item.amount
                 count += item.amount
                 player.inventory.setItem(i, null)
             }
@@ -235,8 +240,6 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             plugin.commsManager.send(player, Component.text("You don't have any of that item.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
         }
-
-        val totalEarned = price * count
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
         plugin.marketManager.recordTransaction(material, "SELL", count)
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
@@ -267,18 +270,21 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
 
         if (allOfType) {
             var count = 0
+            var earned = 0.0
             for (i in 0 until player.inventory.size) {
                 val item = player.inventory.getItem(i) ?: continue
                 if (item.type == material) {
+                    val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
+                    earned += price * mutMult * item.amount
                     count += item.amount
                     player.inventory.setItem(i, null)
                 }
             }
             totalAmount = count
-            totalEarned = price * totalAmount
+            totalEarned = earned
         } else {
             totalAmount = handItem.amount
-            totalEarned = price * totalAmount
+            totalEarned = price * plugin.mutationsManager.getMutationMultiplier(handItem) * totalAmount
             player.inventory.setItemInMainHand(null)
         }
 

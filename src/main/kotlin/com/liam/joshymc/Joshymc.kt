@@ -243,6 +243,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var mobStackManager: MobStackManager
         private set
+    lateinit var mutationsManager: com.liam.joshymc.manager.MutationsManager
+        private set
 
     override fun onEnable() {
         instance = this
@@ -335,6 +337,8 @@ class Joshymc : JavaPlugin() {
         boosterManager = BoosterManager(this)
         mobStackManager = MobStackManager(this)
         if (isFeatureEnabled("mob-stacking")) mobStackManager.start()
+        mutationsManager = com.liam.joshymc.manager.MutationsManager(this)
+        mutationsManager.start()
 
         itemManager.registerAll()
         recipeManager.registerAll()
@@ -445,6 +449,7 @@ class Joshymc : JavaPlugin() {
         combatManager.stop()
         lagCleanerManager.stop()
         mobStackManager.stop()
+        mutationsManager.stop()
         eventManager.shutdown()
         resourcePackManager.shutdown()
         discordManager.shutdown()
