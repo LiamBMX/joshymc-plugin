@@ -497,13 +497,16 @@ class ServerShopManager(private val plugin: Joshymc) {
         val inventory = player.inventory
 
         if (amount == -1) {
-            // Sell all of that material
+            // Sell all of that material — compute earnings per slot to honour mutation multipliers
             var totalCount = 0
+            var totalEarned = 0.0
             for (slot in 0 until inventory.size) {
                 val stack = inventory.getItem(slot) ?: continue
-                if (stack.type == material) {
-                    totalCount += stack.amount
-                }
+                if (stack.type != material) continue
+                val mutMult = plugin.mutationsManager.getMutationMultiplier(stack)
+                totalEarned += sellPrice * mutMult * stack.amount
+                totalCount += stack.amount
+                inventory.setItem(slot, null)
             }
 
             if (totalCount == 0) {
@@ -517,22 +520,6 @@ class ServerShopManager(private val plugin: Joshymc) {
                 return
             }
 
-            // Remove all of that material
-            var remaining = totalCount
-            for (slot in 0 until inventory.size) {
-                if (remaining <= 0) break
-                val stack = inventory.getItem(slot) ?: continue
-                if (stack.type == material) {
-                    val take = remaining.coerceAtMost(stack.amount)
-                    stack.amount -= take
-                    remaining -= take
-                    if (stack.amount <= 0) {
-                        inventory.setItem(slot, null)
-                    }
-                }
-            }
-
-            val totalEarned = sellPrice * totalCount
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
 
             plugin.commsManager.send(player,
@@ -545,7 +532,7 @@ class ServerShopManager(private val plugin: Joshymc) {
             )
             player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.0f)
         } else {
-            // Sell specific amount
+            // Sell specific amount — drain slots in order and apply per-slot mutation multipliers
             if (!inventory.contains(material, amount)) {
                 plugin.commsManager.send(player,
                     Component.text("You don't have enough ", NamedTextColor.RED)
@@ -557,22 +544,20 @@ class ServerShopManager(private val plugin: Joshymc) {
                 return
             }
 
-            // Remove the items
             var remaining = amount
+            var totalEarned = 0.0
             for (slot in 0 until inventory.size) {
                 if (remaining <= 0) break
                 val stack = inventory.getItem(slot) ?: continue
-                if (stack.type == material) {
-                    val take = remaining.coerceAtMost(stack.amount)
-                    stack.amount -= take
-                    remaining -= take
-                    if (stack.amount <= 0) {
-                        inventory.setItem(slot, null)
-                    }
-                }
+                if (stack.type != material) continue
+                val take = remaining.coerceAtMost(stack.amount)
+                val mutMult = plugin.mutationsManager.getMutationMultiplier(stack)
+                totalEarned += sellPrice * mutMult * take
+                stack.amount -= take
+                remaining -= take
+                if (stack.amount <= 0) inventory.setItem(slot, null)
             }
 
-            val totalEarned = sellPrice * amount
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
 
             plugin.commsManager.send(player,

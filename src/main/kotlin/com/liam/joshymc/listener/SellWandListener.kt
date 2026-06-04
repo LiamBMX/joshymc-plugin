@@ -73,7 +73,8 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
             if (basePrice <= 0) continue
 
             val price = plugin.serverShopManager.applyCropBonus(basePrice, slot.type, player.uniqueId)
-            totalEarned += price * multiplier * slot.amount
+            val mutMult = plugin.mutationsManager.getMutationMultiplier(slot)
+            totalEarned += price * multiplier * mutMult * slot.amount
             breakdown[slot.type] = (breakdown[slot.type] ?: 0) + slot.amount
             inventory.setItem(i, null)
         }

@@ -493,6 +493,11 @@ commands:
     description: Manage leaderboard holograms
     usage: /leaderboard <create|delete|list|refresh>
     aliases: [lb, leaderboards]
+  mutations:
+    description: Start or stop a server-wide mutations event
+    usage: /mutations <catalyst <seconds>|stop|status>
+    permission: joshymc.mutations
+    aliases: [mutation]
 
 permissions:
   joshymc.give:
@@ -972,3 +977,6 @@ permissions:
   joshymc.tokens.buy:
     description: Buy tokens via /tokens buy
     default: true
+  joshymc.mutations:
+    description: Start or stop server mutations events
+    default: op
