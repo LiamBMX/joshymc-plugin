@@ -12,6 +12,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
+import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.inventory.InventoryMoveItemEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.inventory.Inventory
@@ -26,7 +27,8 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
         val y: Int,
         val z: Int,
         var speed: Int,
-        var filterItem: String?
+        var filterItem: String?,
+        val isFastHopper: Boolean = false
     )
 
     /** In-memory cache keyed by "world:x:y:z" */
@@ -44,9 +46,17 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
                 x INTEGER NOT NULL, y INTEGER NOT NULL, z INTEGER NOT NULL,
                 speed INTEGER NOT NULL DEFAULT 1,
                 filter_item TEXT,
+                is_fast_hopper INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (world, x, y, z)
             )
         """.trimIndent())
+
+        // Schema migration for existing installs
+        try {
+            plugin.databaseManager.execute(
+                "ALTER TABLE upgraded_hoppers ADD COLUMN is_fast_hopper INTEGER NOT NULL DEFAULT 0"
+            )
+        } catch (_: Exception) {}
 
         loadAll()
         startTickTask()
@@ -66,7 +76,7 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
     private fun loadAll() {
         cache.clear()
         val hoppers = plugin.databaseManager.query(
-            "SELECT world, x, y, z, speed, filter_item FROM upgraded_hoppers"
+            "SELECT world, x, y, z, speed, filter_item, is_fast_hopper FROM upgraded_hoppers"
         ) { rs ->
             HopperData(
                 rs.getString("world"),
@@ -74,7 +84,8 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
                 rs.getInt("y"),
                 rs.getInt("z"),
                 rs.getInt("speed"),
-                rs.getString("filter_item")
+                rs.getString("filter_item"),
+                rs.getInt("is_fast_hopper") == 1
             )
         }
         for (data in hoppers) {
@@ -84,8 +95,8 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
 
     private fun save(data: HopperData) {
         plugin.databaseManager.execute(
-            "INSERT OR REPLACE INTO upgraded_hoppers (world, x, y, z, speed, filter_item) VALUES (?, ?, ?, ?, ?, ?)",
-            data.world, data.x, data.y, data.z, data.speed, data.filterItem
+            "INSERT OR REPLACE INTO upgraded_hoppers (world, x, y, z, speed, filter_item, is_fast_hopper) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            data.world, data.x, data.y, data.z, data.speed, data.filterItem, if (data.isFastHopper) 1 else 0
         )
     }
 
@@ -248,6 +259,10 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
             }
 
             val data = cache[k] ?: HopperData(loc.world.name, loc.blockX, loc.blockY, loc.blockZ, 1, null)
+            if (data.isFastHopper) {
+                plugin.commsManager.send(player, Component.text("Fast Hoppers cannot be upgraded.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                return
+            }
             if (data.speed >= 5) {
                 plugin.commsManager.send(player, Component.text("This hopper is already max level (5).", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
                 return
@@ -352,6 +367,19 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    // ── Event: Register fast hoppers when placed ────────────
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onBlockPlace(event: BlockPlaceEvent) {
+        if (event.blockPlaced.type != Material.HOPPER) return
+        if (!plugin.itemManager.isCustomItem(event.itemInHand, "fast_hopper")) return
+
+        val loc = event.blockPlaced.location
+        val data = HopperData(loc.world.name, loc.blockX, loc.blockY, loc.blockZ, 2, null, isFastHopper = true)
+        cache[key(loc)] = data
+        save(data)
+    }
+
     // ── Event: Clean up when hopper is broken ───────────────
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -364,16 +392,26 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
 
         delete(loc.world.name, loc.blockX, loc.blockY, loc.blockZ)
 
-        // Refund diamonds based on level (level - 1 diamonds spent)
-        val refund = data.speed - 1
-        if (refund > 0) {
-            event.block.world.dropItemNaturally(loc, ItemStack(Material.DIAMOND, refund))
+        if (data.isFastHopper) {
+            // Drop the fast hopper item instead of a vanilla hopper
+            event.isDropItems = false
+            event.block.world.dropItemNaturally(loc, plugin.itemManager.getItem("fast_hopper")!!.createItemStack(1))
+            plugin.commsManager.send(
+                event.player,
+                Component.text("Fast Hopper broken.", NamedTextColor.YELLOW),
+                CommunicationsManager.Category.DEFAULT
+            )
+        } else {
+            // Refund diamonds based on level (level - 1 diamonds spent)
+            val refund = data.speed - 1
+            if (refund > 0) {
+                event.block.world.dropItemNaturally(loc, ItemStack(Material.DIAMOND, refund))
+            }
+            plugin.commsManager.send(
+                event.player,
+                Component.text("Upgraded hopper broken. $refund diamond(s) refunded.", NamedTextColor.YELLOW),
+                CommunicationsManager.Category.DEFAULT
+            )
         }
-
-        plugin.commsManager.send(
-            event.player,
-            Component.text("Upgraded hopper broken. $refund diamond(s) refunded.", NamedTextColor.YELLOW),
-            CommunicationsManager.Category.DEFAULT
-        )
     }
 }
