@@ -23,8 +23,8 @@ commands:
     usage: /nightvision [on|off]
     aliases: [nv]
   pvp:
-    description: Toggle PvP combat
-    usage: /pvp [on|off]
+    description: Toggle PvP combat or allow elytra/ender pearls in combat (ops only)
+    usage: /pvp [on|off] | /pvp <elytra|enderpearl> <on|off>
   sit:
     description: Sit down where you are
     usage: /sit

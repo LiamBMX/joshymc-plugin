@@ -131,12 +131,14 @@ class CombatListener(private val plugin: Joshymc) : Listener {
 
     /**
      * Block elytra while combat tagged — survival mode only.
+     * Skipped when the server-wide allow-elytra toggle is on.
      */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onToggleGlide(event: org.bukkit.event.entity.EntityToggleGlideEvent) {
         val player = event.entity as? Player ?: return
         if (!event.isGliding) return
         if (player.gameMode != GameMode.SURVIVAL) return
+        if (plugin.combatManager.allowElytraInCombat) return
         if (plugin.combatManager.isTagged(player)) {
             event.isCancelled = true
             plugin.commsManager.send(player,
@@ -149,12 +151,14 @@ class CombatListener(private val plugin: Joshymc) : Listener {
     /**
      * Block ender pearl + chorus fruit launches while combat tagged.
      * Pearls let players escape combat instantly otherwise.
+     * Skipped for ender pearls when the server-wide allow-enderpearl toggle is on.
      */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onPearlLaunch(event: ProjectileLaunchEvent) {
         val shooter = event.entity.shooter as? Player ?: return
         if (!plugin.combatManager.isTagged(shooter)) return
         val type = event.entity.type.name
+        if (type == "ENDER_PEARL" && plugin.combatManager.allowEnderpearlInCombat) return
         if (type == "ENDER_PEARL" || type == "CHORUS_FRUIT") {
             event.isCancelled = true
             plugin.commsManager.sendActionBar(shooter,
