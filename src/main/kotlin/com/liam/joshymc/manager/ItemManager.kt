@@ -76,6 +76,9 @@ class ItemManager(private val plugin: Joshymc) {
         register(MinersBrew())
         register(WardensHeart())
 
+        // Utility blocks
+        register(FastHopper())
+
         // Legendary items
         register(BlazeKingsCrown())
         register(PhantomCloak())
