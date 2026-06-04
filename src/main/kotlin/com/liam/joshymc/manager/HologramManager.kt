@@ -101,6 +101,13 @@ class HologramManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    /** Snap the hologram's X/Z to the center of its current block (+ 0.5), keeping Y unchanged. */
+    fun centerHologram(id: String): Boolean {
+        val loc = getLocation(id) ?: return false
+        val centered = Location(loc.world, Math.floor(loc.x) + 0.5, loc.y, Math.floor(loc.z) + 0.5)
+        return moveHologram(id, centered)
+    }
+
     fun moveHologram(id: String, location: Location): Boolean {
         val lines = getLines(id) ?: return false
 
