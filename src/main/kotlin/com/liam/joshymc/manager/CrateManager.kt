@@ -561,6 +561,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val item = deserializeItem(reward.itemBase64)
                 ?: ItemStack(reward.material, reward.amount.coerceIn(1, 64))
             item.amount = reward.amount.coerceIn(1, 64)
+            val existingLore = item.itemMeta?.lore() ?: emptyList()
             item.editMeta { meta ->
                 meta.displayName(
                     Component.text(reward.displayName, TextColor.color(0xFFAA00))
@@ -574,7 +575,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                         .append(Component.text("${reward.amount}", NamedTextColor.WHITE))
                         .decoration(TextDecoration.ITALIC, false)
                 )
-                if (reward.enchantments.isNotEmpty()) {
+                if (existingLore.isNotEmpty()) {
+                    lore.add(Component.empty())
+                    lore.addAll(existingLore)
+                } else if (reward.enchantments.isNotEmpty()) {
                     lore.add(Component.empty())
                     lore.add(Component.text("  Enchantments:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
                     for ((ench, level) in reward.enchantments) {
@@ -877,17 +881,23 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val base = deserializeItem(reward.itemBase64) ?: ItemStack(reward.material, reward.amount)
         if (base.amount != reward.amount) base.amount = reward.amount
 
+        val existingLore = base.itemMeta?.lore() ?: emptyList()
+
         base.editMeta { meta ->
             meta.displayName(
                 Component.text(reward.displayName, TextColor.color(0xFFAA00))
                     .decoration(TextDecoration.ITALIC, false)
                     .decoration(TextDecoration.BOLD, true)
             )
-            meta.lore(listOf(
-                Component.empty(),
-                Component.text("  x${reward.amount}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.empty()
-            ))
+            val lore = mutableListOf<Component>()
+            lore.add(Component.empty())
+            lore.add(Component.text("  x${reward.amount}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+            if (existingLore.isNotEmpty()) {
+                lore.add(Component.empty())
+                lore.addAll(existingLore)
+            }
+            lore.add(Component.empty())
+            meta.lore(lore)
         }
         return base
     }
@@ -998,6 +1008,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             // Use serialized item if present (preserves trims, custom items)
             val item = deserializeItem(reward.itemBase64) ?: ItemStack(reward.material, reward.amount)
             item.amount = reward.amount.coerceIn(1, 64)
+            val existingLore = item.itemMeta?.lore() ?: emptyList()
             item.editMeta { meta ->
                 meta.displayName(
                     Component.text(reward.displayName, TextColor.color(0xFFAA00))
@@ -1018,7 +1029,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                         .decoration(TextDecoration.ITALIC, false)
                 )
 
-                if (reward.enchantments.isNotEmpty()) {
+                if (existingLore.isNotEmpty()) {
+                    lore.add(Component.empty())
+                    lore.addAll(existingLore)
+                } else if (reward.enchantments.isNotEmpty()) {
                     lore.add(Component.empty())
                     lore.add(Component.text("  Enchantments:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
                     for ((ench, level) in reward.enchantments) {
