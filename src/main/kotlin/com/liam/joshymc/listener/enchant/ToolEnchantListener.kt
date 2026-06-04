@@ -317,7 +317,7 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
             val explosiveLevel = enchants.getLevel(item, "explosive")
             if (explosiveLevel > 0 && player.uniqueId !in explosiveProcessing) {
                 val chance = 0.05 * explosiveLevel
-                if (Math.random() < chance) {
+                if (Math.random() < chance && !isNearUnauthorizedClaim(player, event.block.location, 5)) {
                     explosiveProcessing.add(player.uniqueId)
                     try {
                         val center = event.block
@@ -436,4 +436,20 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
 
     private fun isTool(type: Material): Boolean =
         isPickaxe(type) || isShovel(type) || isAxe(type) || isHoe(type)
+
+    // Returns true if any block within [radius] blocks (x/z plane) is in a claim the player can't access.
+    // Claims are 2D so we only sweep x/z; a 5-block buffer keeps the explosion away from claim borders.
+    private fun isNearUnauthorizedClaim(player: Player, center: Location, radius: Int): Boolean {
+        val world = center.world ?: return false
+        val cx = center.blockX
+        val cz = center.blockZ
+        val y = center.blockY.toDouble()
+        for (dx in -radius..radius) {
+            for (dz in -radius..radius) {
+                val loc = Location(world, (cx + dx).toDouble(), y, (cz + dz).toDouble())
+                if (plugin.claimManager.getClaimAt(loc) != null && !plugin.claimManager.canAccess(player, loc)) return true
+            }
+        }
+        return false
+    }
 }
