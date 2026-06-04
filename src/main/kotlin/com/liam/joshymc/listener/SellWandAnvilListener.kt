@@ -17,16 +17,13 @@ class SellWandAnvilListener(private val plugin: Joshymc) : Listener {
         if (!plugin.itemManager.isCustomItem(left, "sell_wand")) return
         if (!plugin.itemManager.isCustomItem(right, "sell_wand")) return
 
-        val combinedUses = minOf(
-            SellWandCommand.getUses(plugin, left) + SellWandCommand.getUses(plugin, right),
-            1000
-        )
-        val combinedMultiplier = maxOf(
-            SellWandCommand.getMultiplier(plugin, left),
-            SellWandCommand.getMultiplier(plugin, right)
-        )
+        val leftMultiplier = SellWandCommand.getMultiplier(plugin, left)
+        val rightMultiplier = SellWandCommand.getMultiplier(plugin, right)
+        if (leftMultiplier != rightMultiplier) return
 
-        event.result = SellWandCommand.createSellWand(plugin, combinedMultiplier, combinedUses)
+        val combinedUses = SellWandCommand.getUses(plugin, left) + SellWandCommand.getUses(plugin, right)
+
+        event.result = SellWandCommand.createSellWand(plugin, leftMultiplier, combinedUses)
         event.inventory.repairCost = 0
     }
 }
