@@ -86,6 +86,10 @@ recipe-blocker:
 # Combat — PvP toggle, combat tagging, flight/elytra disable
 combat:
   tag-duration-seconds: 15
+  # Whether players can use elytra while combat-tagged (toggle via /pvp elytra <on|off>)
+  allow-elytra: false
+  # Whether players can throw ender pearls while combat-tagged (toggle via /pvp enderpearl <on|off>)
+  allow-enderpearl: false
 
 # External plugin integrations
 integrations:

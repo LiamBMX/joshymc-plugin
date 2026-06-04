@@ -24,6 +24,9 @@ class CombatManager(private val plugin: Joshymc) {
     private var combatDurationMs: Long = 15_000
     private var tickTaskId: Int = -1
 
+    var allowElytraInCombat: Boolean = false
+    var allowEnderpearlInCombat: Boolean = false
+
     // Combat log NPC data
     data class CombatNPC(
         val entityUuid: UUID,
@@ -41,6 +44,8 @@ class CombatManager(private val plugin: Joshymc) {
 
     fun start() {
         combatDurationMs = plugin.config.getLong("combat.tag-duration-seconds", 15) * 1000
+        allowElytraInCombat = plugin.config.getBoolean("combat.allow-elytra", false)
+        allowEnderpearlInCombat = plugin.config.getBoolean("combat.allow-enderpearl", false)
 
         // Tick task — runs every tick (50ms) for smooth countdown
         tickTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
@@ -110,7 +115,7 @@ class CombatManager(private val plugin: Joshymc) {
                     CommunicationsManager.Category.COMBAT
                 )
             }
-            if (player.isGliding) {
+            if (player.isGliding && !allowElytraInCombat) {
                 player.isGliding = false
                 plugin.commsManager.send(player,
                     Component.text("Elytra disabled — you are in combat!", NamedTextColor.RED),
