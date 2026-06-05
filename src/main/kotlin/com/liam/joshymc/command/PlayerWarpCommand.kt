@@ -71,11 +71,17 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         return true
     }
 
-    // Returns -1 for unlimited, otherwise the max player warps allowed for this player's rank.
+    // Returns -1 for unlimited, otherwise the highest pwarp limit across all of this player's ranks.
     private fun pwarpLimit(player: Player): Int {
-        val rankId = plugin.rankManager.getPlayerRank(player)?.id ?: "default"
-        val rankLimit = plugin.config.getInt("warps.limits-by-rank.$rankId", Int.MIN_VALUE)
-        return if (rankLimit != Int.MIN_VALUE) rankLimit
+        val rankIds = plugin.rankManager.getPlayerRankIds(player.uniqueId).ifEmpty { setOf("default") }
+        var best = Int.MIN_VALUE
+        for (rankId in rankIds) {
+            val limit = plugin.config.getInt("warps.limits-by-rank.$rankId", Int.MIN_VALUE)
+            if (limit == Int.MIN_VALUE) continue
+            if (limit == -1 || best == -1) return -1
+            best = maxOf(best, limit)
+        }
+        return if (best != Int.MIN_VALUE) best
                else plugin.config.getInt("warps.player-max-per-player", 3)
     }
 
