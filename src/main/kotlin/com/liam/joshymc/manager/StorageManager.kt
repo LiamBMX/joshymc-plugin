@@ -317,12 +317,6 @@ class StorageManager(private val plugin: Joshymc) : Listener {
 
         // Save own vault if one is open
         val vaultNumber = openVaults.remove(player.uniqueId) ?: return
-
-        val title = event.view.title()
-        val expectedTitle = Component.text("$VAULT_TITLE_PREFIX$vaultNumber")
-            .decoration(TextDecoration.ITALIC, false)
-        if (title != expectedTitle) return
-
         saveVault(player, vaultNumber, event.inventory)
     }
 
