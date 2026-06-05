@@ -187,11 +187,16 @@ class CombatListener(private val plugin: Joshymc) : Listener {
     }
 
     /**
-     * Clear combat tag on death.
+     * Clear combat tag on death. Also suppress item drops for combat-logged players
+     * so loot comes exclusively from the NPC and never from the death event itself.
      */
     @EventHandler
     fun onDeath(event: PlayerDeathEvent) {
-        plugin.combatManager.untag(event.player)
+        val player = event.player
+        plugin.combatManager.untag(player)
+        if (plugin.combatManager.isCombatLogged(player)) {
+            event.drops.clear()
+        }
     }
 
     /**
