@@ -174,8 +174,9 @@ class CombatManager(private val plugin: Joshymc) {
         val loc = player.location
         val world = loc.world
 
-        // Store inventory before clearing
-        val invContents = player.inventory.contents.map { it?.clone() }.toTypedArray()
+        // Store inventory before clearing. Use storageContents (36 main slots only) so
+        // armor and offhand are never double-counted — they are captured separately below.
+        val invContents = player.inventory.storageContents.map { it?.clone() }.toTypedArray()
         val armorContents = player.inventory.armorContents.map { it?.clone() }.toTypedArray()
         val offhand = player.inventory.itemInOffHand.clone()
 
@@ -267,6 +268,8 @@ class CombatManager(private val plugin: Joshymc) {
     }
 
     fun isCombatNPC(entityUuid: UUID): Boolean = activeNPCs.containsKey(entityUuid)
+
+    fun isCombatLogged(player: Player): Boolean = combatLoggedPlayers.contains(player.uniqueId)
 
     private fun dropLoot(loc: org.bukkit.Location, npc: CombatNPC) {
         val world = loc.world
