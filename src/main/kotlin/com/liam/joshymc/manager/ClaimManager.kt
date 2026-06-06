@@ -754,8 +754,12 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
         val subclaim = getSubclaimAt(location)
         if (subclaim != null) {
-            if (subclaim.accessList.contains(player.uniqueId)) return true
             if (subclaim.ownerUuid == player.uniqueId) return true
+            if (subclaim.accessList.contains(player.uniqueId)) return true
+            // Claim managers (owner + team owner/admin) always have full access
+            if (canManageClaim(player, claim)) return true
+            // Inside a subclaim but no explicit access — deny even claim-trusted players
+            return false
         }
 
         if (claim.ownerUuid == player.uniqueId) return true
