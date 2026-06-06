@@ -59,7 +59,7 @@ class CustomCraftingListener(private val plugin: Joshymc) : Listener {
         // with a random level-1 scroll drawn from the eligible enchant pool.
         if (recipe.key.key == ENCHANT_DUST_SCROLL_RECIPE) {
             val eligible = plugin.customEnchantManager.getAllEnchants()
-                .filter { it.target in SCROLL_ELIGIBLE_TARGETS }
+                .filter { it.target in SCROLL_ELIGIBLE_TARGETS && it.id != "bedrock_breaker" }
             if (eligible.isEmpty()) {
                 event.inventory.result = null
                 return
