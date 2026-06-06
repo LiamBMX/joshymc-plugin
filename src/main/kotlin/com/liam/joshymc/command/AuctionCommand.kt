@@ -50,8 +50,8 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 return true
             }
 
-            if (args.size < 2) {
-                plugin.commsManager.send(sender, Component.text("Usage: /ah bid <starting price>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            if (args.size < 3) {
+                plugin.commsManager.send(sender, Component.text("Usage: /ah bid <starting price> <time>  (e.g. 5m, 30m, 1h, 2h)", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
                 return true
             }
 
@@ -61,7 +61,21 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 return true
             }
 
-            plugin.auctionManager.listBidItem(sender, price)
+            val durationMs = parseDurationMs(args[2])
+            if (durationMs == null) {
+                plugin.commsManager.send(sender, Component.text("Invalid time. Use formats like 5m, 30m, 1h, 2h.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                return true
+            }
+            if (durationMs < MIN_BID_DURATION_MS) {
+                plugin.commsManager.send(sender, Component.text("Minimum bid duration is 5 minutes.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                return true
+            }
+            if (durationMs > MAX_BID_DURATION_MS) {
+                plugin.commsManager.send(sender, Component.text("Maximum bid duration is 2 hours.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                return true
+            }
+
+            plugin.auctionManager.listBidItem(sender, price, durationMs)
             return true
         }
 
@@ -86,6 +100,23 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         if (args.size == 2 && args[0].equals("notify", ignoreCase = true)) {
             return listOf("on", "off").filter { it.startsWith(args[1].lowercase()) }
         }
+        if (args.size == 3 && args[0].equals("bid", ignoreCase = true)) {
+            return listOf("5m", "15m", "30m", "1h", "2h").filter { it.startsWith(args[2].lowercase()) }
+        }
         return emptyList()
+    }
+
+    companion object {
+        private const val MIN_BID_DURATION_MS = 5 * 60_000L
+        private const val MAX_BID_DURATION_MS = 2 * 3_600_000L
+    }
+
+    private fun parseDurationMs(input: String): Long? {
+        val lower = input.lowercase()
+        return when {
+            lower.endsWith("h") -> lower.dropLast(1).toLongOrNull()?.let { it * 3_600_000L }
+            lower.endsWith("m") -> lower.dropLast(1).toLongOrNull()?.let { it * 60_000L }
+            else -> lower.toLongOrNull()?.let { it * 60_000L }
+        }
     }
 }

@@ -476,7 +476,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         plugin.commsManager.send(player, Component.text("Expired item claimed.", NamedTextColor.GREEN), CommunicationsManager.Category.DEFAULT)
     }
 
-    fun listBidItem(player: Player, startingPrice: Double) {
+    fun listBidItem(player: Player, startingPrice: Double, durationMs: Long = bidDurationHours * 3_600_000L) {
         val held = player.inventory.itemInMainHand
         if (held.type == Material.AIR) {
             plugin.commsManager.send(player, Component.text("Hold the item you want to bid out.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
@@ -495,7 +495,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         }
 
         val now = System.currentTimeMillis()
-        val expiresAt = now + (bidDurationHours * 3_600_000L)
+        val expiresAt = now + durationMs
         val serialized = serializeItem(held)
 
         plugin.databaseManager.execute(
@@ -512,7 +512,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
                 .append(held.displayName())
                 .append(Component.text(" for bidding. Starting at ", NamedTextColor.GREEN))
                 .append(Component.text(plugin.economyManager.format(startingPrice), NamedTextColor.GOLD))
-                .append(Component.text(". Ends in ${bidDurationHours}h.", NamedTextColor.GREEN)),
+                .append(Component.text(". Ends in ${formatDuration(durationMs)}.", NamedTextColor.GREEN)),
             CommunicationsManager.Category.DEFAULT
         )
 
@@ -1316,6 +1316,16 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         val hours = remaining / 3_600_000
         val minutes = (remaining % 3_600_000) / 60_000
         return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+    }
+
+    private fun formatDuration(ms: Long): String {
+        val hours = ms / 3_600_000
+        val minutes = (ms % 3_600_000) / 60_000
+        return when {
+            hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+            hours > 0 -> "${hours}h"
+            else -> "${minutes}m"
+        }
     }
 
     @EventHandler
