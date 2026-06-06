@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "joshymc:item/flower_chestplate_yellow"
+    "layer0": "joshymc:item/flower_chestplate"
   }
 }
