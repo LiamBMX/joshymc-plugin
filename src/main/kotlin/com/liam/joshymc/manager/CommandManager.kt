@@ -57,6 +57,7 @@ import com.liam.joshymc.command.FishCommand
 import com.liam.joshymc.command.SkillsCommand
 import com.liam.joshymc.command.MarketCommand
 import com.liam.joshymc.command.DailyCommand
+import com.liam.joshymc.command.DiscordCommand
 import com.liam.joshymc.command.QuestCommand
 import com.liam.joshymc.command.RewardsCommand
 import com.liam.joshymc.command.TagCommand
@@ -389,6 +390,7 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Help & Rules GUI ─────────────────────────
         plugin.getCommand("help")?.setExecutor(HelpCommand(plugin))
         plugin.getCommand("rules")?.setExecutor(RulesCommand(plugin))
+        plugin.getCommand("discord")?.setExecutor(DiscordCommand(plugin))
 
         // ── Essentials-style commands ────────────────
         plugin.getCommand("back")?.setExecutor(BackCommand(plugin))
