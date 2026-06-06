@@ -257,6 +257,9 @@ commands:
   rules:
     description: View the server rules
     usage: /rules
+  discord:
+    description: Get the Discord invite link
+    usage: /discord
   back:
     description: Teleport to your last location
     usage: /back
