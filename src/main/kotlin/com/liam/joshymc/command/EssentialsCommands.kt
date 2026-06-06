@@ -191,12 +191,16 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
-        // Block combat-tagged players (or staff trying to enable fly on a
-        // tagged target) from using fly to escape PvP.
-        if (plugin.combatManager.isTagged(target)) {
+        // Block combat-tagged players or players in a PvP arena from flying.
+        val blockedReason = when {
+            plugin.combatManager.isTagged(target) -> "in combat"
+            plugin.arenaManager.playersInArena.containsKey(target.uniqueId) -> "in a PvP arena"
+            else -> null
+        }
+        if (blockedReason != null) {
             plugin.commsManager.send(
                 if (sender is Player) sender else target,
-                Component.text("Can't toggle flight while in combat.", NamedTextColor.RED)
+                Component.text("Can't toggle flight while $blockedReason.", NamedTextColor.RED)
             )
             return true
         }

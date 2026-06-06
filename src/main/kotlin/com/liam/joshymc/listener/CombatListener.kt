@@ -114,16 +114,18 @@ class CombatListener(private val plugin: Joshymc) : Listener {
     }
 
     /**
-     * Block flight while combat tagged — survival mode only.
+     * Block flight while combat tagged or inside a PvP arena — survival mode only.
      */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onToggleFlight(event: PlayerToggleFlightEvent) {
         if (!event.isFlying) return
         if (event.player.gameMode != GameMode.SURVIVAL) return
-        if (plugin.combatManager.isTagged(event.player)) {
+        val player = event.player
+        if (plugin.combatManager.isTagged(player) || plugin.arenaManager.playersInArena.containsKey(player.uniqueId)) {
             event.isCancelled = true
-            plugin.commsManager.send(event.player,
-                Component.text("You cannot fly while in combat!", NamedTextColor.RED),
+            val reason = if (plugin.combatManager.isTagged(player)) "in combat" else "in a PvP arena"
+            plugin.commsManager.send(player,
+                Component.text("You cannot fly while $reason!", NamedTextColor.RED),
                 CommunicationsManager.Category.COMBAT
             )
         }
