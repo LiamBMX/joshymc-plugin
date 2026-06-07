@@ -109,6 +109,10 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             plugin.databaseManager.execute("ALTER TABLE teams ADD COLUMN last_renamed_at INTEGER DEFAULT 0")
         } catch (_: Exception) {}
 
+        try {
+            plugin.databaseManager.execute("ALTER TABLE teams ADD COLUMN pvp_enabled INTEGER NOT NULL DEFAULT 0")
+        } catch (_: Exception) {}
+
         plugin.logger.info("[Teams] TeamManager started.")
     }
 
@@ -313,6 +317,19 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         return plugin.databaseManager.queryFirst(
             "SELECT last_renamed_at FROM teams WHERE name = ?", teamName
         ) { rs -> rs.getLong("last_renamed_at") } ?: 0L
+    }
+
+    fun isTeamPvpEnabled(teamName: String): Boolean {
+        return plugin.databaseManager.queryFirst(
+            "SELECT pvp_enabled FROM teams WHERE name = ?", teamName
+        ) { rs -> rs.getInt("pvp_enabled") == 1 } ?: false
+    }
+
+    fun setTeamPvp(teamName: String, enabled: Boolean) {
+        plugin.databaseManager.execute(
+            "UPDATE teams SET pvp_enabled = ? WHERE name = ?",
+            if (enabled) 1 else 0, teamName
+        )
     }
 
     fun isTeammate(uuid1: UUID, uuid2: UUID): Boolean {
@@ -617,12 +634,15 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         if (attacker == null || attacker == victim) return
 
         if (isTeammate(attacker.uniqueId, victim.uniqueId)) {
-            event.isCancelled = true
-            plugin.commsManager.send(
-                attacker,
-                Component.text("You cannot hurt your teammate!", NamedTextColor.RED),
-                CommunicationsManager.Category.DEFAULT
-            )
+            val teamName = getPlayerTeam(attacker.uniqueId) ?: return
+            if (!isTeamPvpEnabled(teamName)) {
+                event.isCancelled = true
+                plugin.commsManager.send(
+                    attacker,
+                    Component.text("You cannot hurt your teammate! (Team PvP is off)", NamedTextColor.RED),
+                    CommunicationsManager.Category.DEFAULT
+                )
+            }
         }
     }
 
