@@ -13,6 +13,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerMoveEvent
 import java.io.File
 import java.util.UUID
 
@@ -237,5 +238,16 @@ class SpawnWorldManager(private val plugin: Joshymc) : Listener {
                 }
             }, 5L)
         }
+    }
+
+    @EventHandler
+    fun onVoidFall(event: PlayerMoveEvent) {
+        val player = event.player
+        if (player.world.name != worldName) return
+        if (event.to.y > 0) return
+        val spawn = plugin.warpManager.getSpawn()
+            ?: Bukkit.getWorld(worldName)?.spawnLocation
+            ?: return
+        player.teleport(spawn)
     }
 }
