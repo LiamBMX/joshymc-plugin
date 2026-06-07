@@ -18,8 +18,15 @@ import java.util.UUID
 class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy")
+    // sender name -> (team name, expiry ms)
+    private val pendingDeletes = mutableMapOf<String, Pair<String, Long>>()
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        if (args.isNotEmpty() && args[0].lowercase() == "delete") {
+            handleDelete(sender, args)
+            return true
+        }
+
         if (sender !is Player) {
             sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
             return true
@@ -402,6 +409,66 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
     }
 
+    private fun handleDelete(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.team.admin") && !sender.isOp) {
+            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+
+        if (args.size < 2) {
+            sender.sendMessage(Component.text("Usage: /team delete <team> [confirm]", NamedTextColor.RED))
+            return
+        }
+
+        val teamName = args[1].lowercase()
+        val team = plugin.teamManager.getTeam(teamName)
+        if (team == null) {
+            sender.sendMessage(Component.text("Team '$teamName' not found.", NamedTextColor.RED))
+            return
+        }
+
+        val confirming = args.size >= 3 && args[2].lowercase() == "confirm"
+        val key = sender.name
+        val pending = pendingDeletes[key]
+
+        if (!confirming || pending == null || pending.first != teamName || System.currentTimeMillis() > pending.second) {
+            pendingDeletes[key] = teamName to (System.currentTimeMillis() + 30_000L)
+            sender.sendMessage(
+                Component.text("Are you sure you want to delete team ", NamedTextColor.YELLOW)
+                    .append(Component.text(team.displayName, NamedTextColor.RED))
+                    .append(Component.text("? Run ", NamedTextColor.YELLOW))
+                    .append(Component.text("/team delete $teamName confirm", NamedTextColor.WHITE))
+                    .append(Component.text(" within 30 seconds to confirm.", NamedTextColor.YELLOW))
+            )
+            return
+        }
+
+        pendingDeletes.remove(key)
+        val members = plugin.teamManager.getTeamMembers(teamName)
+
+        if (plugin.teamManager.deleteTeam(teamName)) {
+            members.forEach { member ->
+                val online = Bukkit.getPlayer(UUID.fromString(member.uuid))
+                if (online != null) {
+                    plugin.commsManager.send(
+                        online,
+                        Component.text("Your team ", NamedTextColor.GRAY)
+                            .append(Component.text(team.displayName, NamedTextColor.RED))
+                            .append(Component.text(" was deleted by an administrator.", NamedTextColor.GRAY)),
+                        CommunicationsManager.Category.DEFAULT
+                    )
+                }
+            }
+            sender.sendMessage(
+                Component.text("Team ", NamedTextColor.GRAY)
+                    .append(Component.text(team.displayName, NamedTextColor.RED))
+                    .append(Component.text(" has been deleted.", NamedTextColor.GRAY))
+            )
+        } else {
+            sender.sendMessage(Component.text("Could not delete team.", NamedTextColor.RED))
+        }
+    }
+
     private fun handleDisband(player: Player) {
         val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
         if (teamName == null) {
@@ -776,28 +843,45 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (sender !is Player) return emptyList()
+        val isAdmin = sender.hasPermission("joshymc.team.admin") || sender.isOp
+
+        // Console only gets completions for admin-only subcommands
+        if (sender !is Player) {
+            if (args.size == 1 && isAdmin) return listOf("delete").filter { it.startsWith(args[0], ignoreCase = true) }
+            if (args.size == 2 && args[0].lowercase() == "delete" && isAdmin) return plugin.teamManager.getAllTeams().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+            if (args.size == 3 && args[0].lowercase() == "delete" && isAdmin) return listOf("confirm").filter { it.startsWith(args[2], ignoreCase = true) }
+            return emptyList()
+        }
 
         if (args.size == 1) {
-            return listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home", "rename", "pvp")
-                .filter { it.startsWith(args[0], ignoreCase = true) }
+            val base = listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home", "rename", "pvp")
+            val all = if (isAdmin) base + "delete" else base
+            return all.filter { it.startsWith(args[0], ignoreCase = true) }
         }
 
         if (args.size == 2) {
             return when (args[0].lowercase()) {
                 "invite" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
-                "accept" -> plugin.teamManager.getPendingInvites(sender.uniqueId).filter { it.startsWith(args[1], ignoreCase = true) }
+                "accept" -> {
+                    if (sender !is Player) return emptyList()
+                    plugin.teamManager.getPendingInvites(sender.uniqueId).filter { it.startsWith(args[1], ignoreCase = true) }
+                }
                 "kick", "promote", "demote", "transfer" -> {
+                    if (sender !is Player) return emptyList()
                     val teamName = plugin.teamManager.getPlayerTeam(sender.uniqueId) ?: return emptyList()
                     plugin.teamManager.getTeamMembers(teamName).mapNotNull { member ->
                         val p = Bukkit.getOfflinePlayer(UUID.fromString(member.uuid))
                         p.name
                     }.filter { it.startsWith(args[1], ignoreCase = true) && !it.equals(sender.name, ignoreCase = true) }
                 }
-                "info" -> plugin.teamManager.getAllTeams().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                "info", "delete" -> plugin.teamManager.getAllTeams().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
                 "chat", "pvp" -> listOf("on", "off").filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
             }
+        }
+
+        if (args.size == 3 && args[0].lowercase() == "delete") {
+            return listOf("confirm").filter { it.startsWith(args[2], ignoreCase = true) }
         }
 
         return emptyList()
