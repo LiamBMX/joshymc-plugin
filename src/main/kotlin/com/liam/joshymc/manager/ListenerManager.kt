@@ -23,6 +23,7 @@ import com.liam.joshymc.listener.TradeInteractListener
 import com.liam.joshymc.command.BackLocationListener
 import com.liam.joshymc.listener.WelcomeListener
 import com.liam.joshymc.listener.WorthListener
+import com.liam.joshymc.listener.WrittenBookListener
 import com.liam.joshymc.listener.ClaimProtectionListener
 import com.liam.joshymc.listener.ConsumableListener
 import com.liam.joshymc.listener.BubbleButtListener
@@ -185,6 +186,9 @@ class ListenerManager(private val plugin: Joshymc) {
         welcomeListener = WelcomeListener(plugin)
         welcomeListener.start()
         pm.registerEvents(welcomeListener, plugin)
+
+        // Written book page limit
+        pm.registerEvents(WrittenBookListener(plugin), plugin)
 
         // Utilities
         pm.registerEvents(UnknownCommandListener(plugin), plugin)
