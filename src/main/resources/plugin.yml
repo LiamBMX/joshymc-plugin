@@ -462,7 +462,7 @@ commands:
     usage: /unclaim
   subclaim:
     description: Manage subclaims within your claims
-    usage: /subclaim <wand|create|add|remove|delete|list>
+    usage: /subclaim <wand|create|add|remove|delete|list|show>
   rank:
     description: Manage player ranks
     usage: /rank <set|promote|remove|list|check>
