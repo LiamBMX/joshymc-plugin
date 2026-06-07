@@ -185,7 +185,7 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
             && player.gameMode != GameMode.CREATIVE
         ) {
             val worldName = player.world.name
-            if (worldName in setOf("spawn", "afk")
+            if (worldName in setOf("spawn", "afk", "pvp")
                 || plugin.arenaManager.isInArena(player)
                 || worldName == plugin.eventManager.eventWorldName
             ) {
