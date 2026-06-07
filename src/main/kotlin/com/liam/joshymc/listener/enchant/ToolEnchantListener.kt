@@ -178,12 +178,17 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
             event.instaBreak = true
         }
 
-        // bedrock_breaker — pickaxe only, survival only
+        // bedrock_breaker — pickaxe only, survival only, overworld/nether/end/resource only
         if (isPickaxe(item.type)
             && enchants.hasEnchant(item, "bedrock_breaker")
             && event.block.type == Material.BEDROCK
             && player.gameMode != GameMode.CREATIVE
         ) {
+            if (player.world.name in setOf("spawn", "afk")) {
+                player.sendActionBar(Component.text("Bedrock Breaker cannot be used in this world.", NamedTextColor.RED))
+                return
+            }
+
             val loc = event.block.location
 
             // Respect claim protection — cannot mine bedrock in a claim without access
