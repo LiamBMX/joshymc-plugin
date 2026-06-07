@@ -10,15 +10,17 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
+import java.util.UUID
 
 class DrillMiningListener(private val plugin: Joshymc) : Listener {
 
-    private var isProcessing = false
+    private val processingPlayers = mutableSetOf<UUID>()
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onBlockBreak(event: BlockBreakEvent) {
         val player = event.player
         val item = player.inventory.itemInMainHand
+        val playerId = player.uniqueId
 
         val radius = when {
             plugin.itemManager.isCustomItem(item, "void_drill") -> 1
@@ -27,7 +29,7 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
             else -> return
         }
 
-        if (isProcessing) return
+        if (playerId in processingPlayers) return
 
         val origin = event.block
         val face = getTargetBlockFace(player)
@@ -38,7 +40,7 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
 
         if (blocksToBreak.isEmpty()) return
 
-        isProcessing = true
+        processingPlayers.add(playerId)
 
         player.world.playSound(origin.location, Sound.BLOCK_PISTON_EXTEND, 0.8f, 1.6f)
 
@@ -62,13 +64,13 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
 
                 if (index == chunks.lastIndex) {
                     player.world.playSound(origin.location, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0f, 1.2f)
-                    isProcessing = false
+                    processingPlayers.remove(playerId)
                 }
             }, (index * 2).toLong())
         }
 
         plugin.server.scheduler.runTaskLater(plugin, Runnable {
-            isProcessing = false
+            processingPlayers.remove(playerId)
         }, ((chunks.size * 2) + 5).toLong())
     }
 
