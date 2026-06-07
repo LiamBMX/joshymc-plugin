@@ -184,8 +184,12 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
             && event.block.type == Material.BEDROCK
             && player.gameMode != GameMode.CREATIVE
         ) {
-            if (player.world.name in setOf("spawn", "afk")) {
-                player.sendActionBar(Component.text("Bedrock Breaker cannot be used in this world.", NamedTextColor.RED))
+            val worldName = player.world.name
+            if (worldName in setOf("spawn", "afk")
+                || plugin.arenaManager.isInArena(player)
+                || worldName == plugin.eventManager.eventWorldName
+            ) {
+                player.sendActionBar(Component.text("Bedrock Breaker cannot be used here.", NamedTextColor.RED))
                 return
             }
 
