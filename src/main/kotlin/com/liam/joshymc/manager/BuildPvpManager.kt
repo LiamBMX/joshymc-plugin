@@ -20,6 +20,7 @@ import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.EquipmentSlot
@@ -197,9 +198,15 @@ class BuildPvpManager(private val plugin: Joshymc) : Listener {
     private fun startBossBar() {
         bossBar?.removeAll()
         bossBar = Bukkit.createBossBar("Build PvP", BarColor.GREEN, BarStyle.SEGMENTED_10)
-        Bukkit.getOnlinePlayers().forEach { bossBar?.addPlayer(it) }
+        val worldName = region?.world
+        Bukkit.getOnlinePlayers().filter { it.world.name == worldName }.forEach { bossBar?.addPlayer(it) }
         updateBossBar()
         bossBarTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, Runnable { updateBossBar() }, 0L, 20L)
+    }
+
+    private fun updateBossBarVisibility(player: Player) {
+        val bar = bossBar ?: return
+        if (player.world.name == region?.world) bar.addPlayer(player) else bar.removePlayer(player)
     }
 
     private fun updateBossBar() {
@@ -337,11 +344,17 @@ class BuildPvpManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler
     fun onPlayerJoin(event: PlayerJoinEvent) {
-        bossBar?.addPlayer(event.player)
+        updateBossBarVisibility(event.player)
     }
 
     @EventHandler
     fun onPlayerQuit(event: PlayerQuitEvent) {
+        bossBar?.removePlayer(event.player)
         pos1.remove(event.player.uniqueId)
+    }
+
+    @EventHandler
+    fun onWorldChange(event: PlayerChangedWorldEvent) {
+        updateBossBarVisibility(event.player)
     }
 }
