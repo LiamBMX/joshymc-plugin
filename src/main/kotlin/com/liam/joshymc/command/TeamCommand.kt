@@ -55,6 +55,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "sethome" -> handleSetHome(sender)
             "home" -> handleHome(sender)
             "rename" -> handleRename(sender, args)
+            "pvp" -> handlePvp(sender, args)
             else -> sendUsage(sender)
         }
         return true
@@ -81,7 +82,8 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "/team echest" to "Open team ender chest",
             "/team sethome" to "Set the team home (owner only)",
             "/team home" to "Teleport to the team home",
-            "/team rename <name>" to "Rename the team (owner only, once per week)"
+            "/team rename <name>" to "Rename the team (owner only, once per week)",
+            "/team pvp <on/off>" to "Toggle friendly fire within the team (owner/admin only)"
         )
         commands.forEach { (cmd, desc) ->
             player.sendMessage(
@@ -720,11 +722,64 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
     }
 
+    private fun handlePvp(player: Player, args: Array<out String>) {
+        if (args.size < 2) {
+            plugin.commsManager.send(player, Component.text("Usage: /team pvp <on/off>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
+        if (teamName == null) {
+            plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        val role = plugin.teamManager.getPlayerRole(player.uniqueId)
+        if (role != "owner" && role != "admin") {
+            plugin.commsManager.send(player, Component.text("Only the owner or admins can change team PvP.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        when (args[1].lowercase()) {
+            "on" -> {
+                plugin.teamManager.setTeamPvp(teamName, true)
+                plugin.teamManager.getTeamMembers(teamName).forEach { member ->
+                    val online = Bukkit.getPlayer(UUID.fromString(member.uuid))
+                    if (online != null) {
+                        plugin.commsManager.send(
+                            online,
+                            Component.text("Team PvP has been ", NamedTextColor.GRAY)
+                                .append(Component.text("enabled", NamedTextColor.GREEN))
+                                .append(Component.text(". Teammates can now damage each other.", NamedTextColor.GRAY)),
+                            CommunicationsManager.Category.DEFAULT
+                        )
+                    }
+                }
+            }
+            "off" -> {
+                plugin.teamManager.setTeamPvp(teamName, false)
+                plugin.teamManager.getTeamMembers(teamName).forEach { member ->
+                    val online = Bukkit.getPlayer(UUID.fromString(member.uuid))
+                    if (online != null) {
+                        plugin.commsManager.send(
+                            online,
+                            Component.text("Team PvP has been ", NamedTextColor.GRAY)
+                                .append(Component.text("disabled", NamedTextColor.RED))
+                                .append(Component.text(". Teammates cannot damage each other.", NamedTextColor.GRAY)),
+                            CommunicationsManager.Category.DEFAULT
+                        )
+                    }
+                }
+            }
+            else -> plugin.commsManager.send(player, Component.text("Usage: /team pvp <on/off>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+        }
+    }
+
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (sender !is Player) return emptyList()
 
         if (args.size == 1) {
-            return listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home", "rename")
+            return listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home", "rename", "pvp")
                 .filter { it.startsWith(args[0], ignoreCase = true) }
         }
 
@@ -740,7 +795,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     }.filter { it.startsWith(args[1], ignoreCase = true) && !it.equals(sender.name, ignoreCase = true) }
                 }
                 "info" -> plugin.teamManager.getAllTeams().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
-                "chat" -> listOf("on", "off").filter { it.startsWith(args[1], ignoreCase = true) }
+                "chat", "pvp" -> listOf("on", "off").filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
             }
         }
