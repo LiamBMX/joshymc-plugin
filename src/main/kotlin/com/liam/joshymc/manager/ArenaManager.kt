@@ -818,6 +818,21 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 "undo" -> handleUndo(sender)
                 "clear" -> handleClear(sender)
                 "tp" -> handleTeleport(sender, args)
+                "buildwand" -> {
+                    sender.inventory.addItem(plugin.buildPvpManager.createWand())
+                    comms.send(sender, Component.text("Build PvP wand added. Right-click corner 1, then corner 2 to set the arena.", NamedTextColor.GREEN))
+                }
+                "resetbuild" -> {
+                    if (plugin.buildPvpManager.region == null) {
+                        comms.send(sender, Component.text("No Build PvP arena is set.", NamedTextColor.RED))
+                    } else {
+                        plugin.buildPvpManager.resetArena()
+                        comms.send(sender, Component.text("Build PvP arena manually reset.", NamedTextColor.GREEN))
+                    }
+                }
+                "clearbuild" -> {
+                    plugin.buildPvpManager.clearRegion(sender)
+                }
                 "debug" -> {
                     val loc = sender.location
                     comms.send(sender, Component.text("Your position: ${loc.x.toInt()}, ${loc.z.toInt()}", NamedTextColor.GRAY))
@@ -848,6 +863,9 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 "&e/arena info <name> &7- Arena details",
                 "&e/arena enable/disable <name> &7- Toggle arena",
                 "&e/arena tp <name> &7- Teleport to arena center",
+                "&e/arena buildwand &7- Get Build PvP wand (2-corner cuboid)",
+                "&e/arena resetbuild &7- Manually reset Build PvP arena",
+                "&e/arena clearbuild &7- Remove Build PvP arena",
                 ""
             )
             for (line in lines) {
@@ -1020,7 +1038,7 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
 
             return when (args.size) {
                 1 -> {
-                    val subs = listOf("wand", "create", "delete", "list", "info", "enable", "disable", "points", "undo", "clear", "tp")
+                    val subs = listOf("wand", "create", "delete", "list", "info", "enable", "disable", "points", "undo", "clear", "tp", "buildwand", "resetbuild", "clearbuild")
                     subs.filter { it.startsWith(args[0].lowercase()) }
                 }
                 2 -> {

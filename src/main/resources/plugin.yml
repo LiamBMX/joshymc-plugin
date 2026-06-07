@@ -339,7 +339,7 @@ commands:
     aliases: [worlds]
   arena:
     description: Manage PvP arenas
-    usage: /arena <wand|create|delete|list|info|enable|disable|points|undo|clear|tp>
+    usage: /arena <wand|create|delete|list|info|enable|disable|points|undo|clear|tp|buildwand|resetbuild|clearbuild>
   event:
     description: Manage the event world and mini-games
     usage: /event <wand|save|pvp|build|break|setworld|start|stop|status>

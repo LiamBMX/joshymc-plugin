@@ -60,6 +60,7 @@ import com.liam.joshymc.manager.WarpManager
 import com.liam.joshymc.command.VanishCommand
 import com.liam.joshymc.command.WorldCommand
 import com.liam.joshymc.manager.ArenaManager
+import com.liam.joshymc.manager.BuildPvpManager
 import com.liam.joshymc.manager.PortalManager
 import com.liam.joshymc.manager.SpawnDecorationManager
 import com.liam.joshymc.manager.VoteManager
@@ -225,6 +226,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var arenaManager: ArenaManager
         private set
+    lateinit var buildPvpManager: BuildPvpManager
+        private set
     lateinit var portalManager: PortalManager
         private set
     lateinit var voteManager: VoteManager
@@ -326,6 +329,7 @@ class Joshymc : JavaPlugin() {
         adminManager = AdminManager(this)
         worldFlagManager = WorldFlagManager(this)
         arenaManager = ArenaManager(this)
+        buildPvpManager = BuildPvpManager(this)
         portalManager = PortalManager(this)
         voteManager = VoteManager(this)
         spawnDecorationManager = SpawnDecorationManager(this)
@@ -397,6 +401,7 @@ class Joshymc : JavaPlugin() {
         spawnWorldManager.start()
 
         if (isFeatureEnabled("arenas")) arenaManager.start()
+        buildPvpManager.start()
         if (isFeatureEnabled("portals")) portalManager.start()
         if (isFeatureEnabled("voting")) voteManager.start()
         spawnDecorationManager.start()
@@ -446,6 +451,7 @@ class Joshymc : JavaPlugin() {
         playtimeManager.stop()
         dailyQuestManager.stop()
         resourceWorldManager.stop()
+        buildPvpManager.stop()
         combatManager.stop()
         lagCleanerManager.stop()
         mobStackManager.stop()
