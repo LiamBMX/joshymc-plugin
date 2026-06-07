@@ -222,7 +222,7 @@ class ConsumableListener(private val plugin: Joshymc) : Listener {
 
             // ── Auto Miner ──────────────────────────────
             im.isCustomItem(item, "auto_miner") -> {
-                if (isOnCooldown(player, "auto_miner", 30_000L)) {
+                if (isOnCooldown(player, "auto_miner", 10_000L)) {
                     event.isCancelled = true
                     return
                 }
