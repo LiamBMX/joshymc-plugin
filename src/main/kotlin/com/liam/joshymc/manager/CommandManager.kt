@@ -160,7 +160,7 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("sit")?.setExecutor(SitCommand(plugin))
 
-        plugin.getCommand("spawn")?.setExecutor(SpawnCommand(plugin))
+        plugin.getCommand("spawn")?.let { val c = SpawnCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("setspawn")?.setExecutor(SetSpawnCommand(plugin))
 
         // Server warps

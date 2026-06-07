@@ -44,6 +44,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         BLOCK_BREAK("Block Break", "Allow breaking blocks"),
         BLOCK_PLACE("Block Place", "Allow placing blocks"),
         INTERACT("Interact", "Allow interacting with blocks (doors, chests, buttons)"),
+        CONTAINER("Containers", "Allow opening containers (chests, barrels, ender chests)"),
         MOB_DAMAGE("Mob Damage", "Allow mobs to damage players"),
         HUNGER("Hunger", "Allow hunger drain"),
         FALL_DAMAGE("Fall Damage", "Allow fall damage"),
@@ -55,6 +56,23 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         LEAF_DECAY("Leaf Decay", "Allow leaf decay"),
         ENDERMAN_GRIEF("Enderman Grief", "Allow enderman to pick up blocks"),
         COMMAND_USE("Command Use", "Allow command usage (non-staff)"),
+    }
+
+    // ──────────────────────────────────────────────
+    //  Container materials
+    // ──────────────────────────────────────────────
+
+    private val containerMaterials = setOf(
+        Material.CHEST,
+        Material.TRAPPED_CHEST,
+        Material.BARREL,
+        Material.ENDER_CHEST,
+    )
+
+    private fun isContainer(material: Material): Boolean {
+        if (material in containerMaterials) return true
+        if (material.name.endsWith("_SHULKER_BOX")) return true
+        return false
     }
 
     // ──────────────────────────────────────────────
@@ -111,6 +129,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
                 WorldFlag.BLOCK_BREAK to false,
                 WorldFlag.BLOCK_PLACE to false,
                 WorldFlag.INTERACT to true,
+                WorldFlag.CONTAINER to true,
                 WorldFlag.MOB_DAMAGE to false,
                 WorldFlag.HUNGER to false,
                 WorldFlag.FALL_DAMAGE to false,
@@ -332,6 +351,14 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         // unreachable for everyone without bypass.
         if (plugin.crateManager.getCrateTypeAt(block) != null) return
 
+        // Container flag — blocks chest/barrel/ender-chest/shulker access
+        // independently of the broader INTERACT flag.
+        if (isContainer(block.type) && !isAllowed(event.player, WorldFlag.CONTAINER)) {
+            event.isCancelled = true
+            denyMessage(event.player, WorldFlag.CONTAINER)
+            return
+        }
+
         if (!isAllowed(event.player, WorldFlag.INTERACT)) {
             event.isCancelled = true
             denyMessage(event.player, WorldFlag.INTERACT)
@@ -454,12 +481,22 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    // — Enderman Grief —
+    // — Enderman Grief / Crop Trampling —
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     fun onEntityChangeBlock(event: EntityChangeBlockEvent) {
         if (event.entity is Enderman) {
             if (!getFlag(event.entity.world.name, WorldFlag.ENDERMAN_GRIEF)) {
+                event.isCancelled = true
+                return
+            }
+        }
+
+        // Players trampling farmland fires EntityChangeBlockEvent with the
+        // FARMLAND block. Block it in worlds where BLOCK_BREAK is disabled
+        // so crops at spawn can't be destroyed by jumping.
+        if (event.entity is Player && event.block.type == Material.FARMLAND) {
+            if (!isAllowed(event.entity as Player, WorldFlag.BLOCK_BREAK)) {
                 event.isCancelled = true
             }
         }

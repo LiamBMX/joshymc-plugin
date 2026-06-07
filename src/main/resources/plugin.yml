@@ -29,8 +29,8 @@ commands:
     description: Sit down where you are
     usage: /sit
   spawn:
-    description: Teleport to spawn
-    usage: /spawn
+    description: Teleport to spawn, or manage spawn settings (ops)
+    usage: /spawn [drops|containers] [on|off]
   setspawn:
     description: Set the server spawn
     usage: /setspawn
@@ -545,6 +545,9 @@ permissions:
   joshymc.spawn:
     description: Allows teleporting to spawn
     default: true
+  joshymc.spawn.admin:
+    description: Allows managing spawn world settings (drops, containers)
+    default: false
   joshymc.setspawn:
     description: Allows setting the server spawn
     default: false
