@@ -16,6 +16,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
 import org.bukkit.event.entity.EntitySpawnEvent
 import org.bukkit.event.entity.ProjectileHitEvent
+import org.bukkit.event.player.PlayerEggThrowEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
@@ -80,6 +81,13 @@ class EasterEggListener(private val plugin: Joshymc) : Listener {
             Component.text("You opened an Easter Egg and got: ", TextColor.color(0xFFD700))
                 .append(prizeItem.displayName)
         )
+    }
+
+    // --- Prevent baby chickens from hatching on egg throw ---
+
+    @EventHandler
+    fun onEggThrow(event: PlayerEggThrowEvent) {
+        event.isHatching = false
     }
 
     // --- Track custom egg projectiles to prevent chicken spawns ---
