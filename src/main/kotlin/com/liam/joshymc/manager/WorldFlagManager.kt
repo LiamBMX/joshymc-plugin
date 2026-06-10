@@ -222,9 +222,11 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         val victim = event.entity
         val attacker = event.damager
 
-        // PvP check
+        // PvP check — skip world flag when either player is in an arena;
+        // ArenaManager handles allow/deny at HIGHEST priority for arena fights.
         if (victim is Player && attacker is Player) {
             if (!isAllowed(attacker, WorldFlag.PVP)) {
+                if (plugin.arenaManager.isInArena(attacker) || plugin.arenaManager.isInArena(victim)) return
                 event.isCancelled = true
                 denyMessage(attacker, WorldFlag.PVP)
                 return
