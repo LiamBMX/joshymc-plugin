@@ -63,6 +63,9 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "home" -> handleHome(sender)
             "rename" -> handleRename(sender, args)
             "pvp" -> handlePvp(sender, args)
+            "open" -> handleOpen(sender)
+            "close" -> handleClose(sender)
+            "join" -> handleJoin(sender, args)
             else -> sendUsage(sender)
         }
         return true
@@ -90,7 +93,10 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "/team sethome" to "Set the team home (owner only)",
             "/team home" to "Teleport to the team home",
             "/team rename <name>" to "Rename the team (owner only, once per week)",
-            "/team pvp <on/off>" to "Toggle friendly fire within the team (owner/admin only)"
+            "/team pvp <on/off>" to "Toggle friendly fire within the team (owner/admin only)",
+            "/team open" to "Open the team so anyone can join without an invite (owner only)",
+            "/team close" to "Close the team to invite-only (owner only)",
+            "/team join <team>" to "Join an open team"
         )
         commands.forEach { (cmd, desc) ->
             player.sendMessage(
@@ -545,6 +551,9 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             )
         }
 
+        val isOpen = plugin.teamManager.isTeamOpen(team.name)
+        player.sendMessage(Component.text(" Status: ", NamedTextColor.GRAY)
+            .append(if (isOpen) Component.text("Open", NamedTextColor.GREEN) else Component.text("Invite Only", NamedTextColor.YELLOW)))
         player.sendMessage(Component.text(" Created: ", NamedTextColor.GRAY)
             .append(Component.text(dateFormat.format(Date(team.createdAt)), NamedTextColor.WHITE)))
     }
@@ -842,6 +851,122 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
     }
 
+    private fun handleOpen(player: Player) {
+        val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
+        if (teamName == null) {
+            plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (plugin.teamManager.getPlayerRole(player.uniqueId) != "owner") {
+            plugin.commsManager.send(player, Component.text("Only the owner can open the team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (plugin.teamManager.isTeamOpen(teamName)) {
+            plugin.commsManager.send(player, Component.text("Your team is already open.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        plugin.teamManager.setTeamOpen(teamName, true)
+        plugin.teamManager.getTeamMembers(teamName).forEach { member ->
+            val online = Bukkit.getPlayer(UUID.fromString(member.uuid))
+            if (online != null) {
+                plugin.commsManager.send(
+                    online,
+                    Component.text("Your team is now ", NamedTextColor.GRAY)
+                        .append(Component.text("open", NamedTextColor.GREEN))
+                        .append(Component.text(". Anyone can join with /team join ${teamName}.", NamedTextColor.GRAY)),
+                    CommunicationsManager.Category.DEFAULT
+                )
+            }
+        }
+    }
+
+    private fun handleClose(player: Player) {
+        val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
+        if (teamName == null) {
+            plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (plugin.teamManager.getPlayerRole(player.uniqueId) != "owner") {
+            plugin.commsManager.send(player, Component.text("Only the owner can close the team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (!plugin.teamManager.isTeamOpen(teamName)) {
+            plugin.commsManager.send(player, Component.text("Your team is already invite-only.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        plugin.teamManager.setTeamOpen(teamName, false)
+        plugin.teamManager.getTeamMembers(teamName).forEach { member ->
+            val online = Bukkit.getPlayer(UUID.fromString(member.uuid))
+            if (online != null) {
+                plugin.commsManager.send(
+                    online,
+                    Component.text("Your team is now ", NamedTextColor.GRAY)
+                        .append(Component.text("invite-only", NamedTextColor.YELLOW))
+                        .append(Component.text(". Players need an invite to join.", NamedTextColor.GRAY)),
+                    CommunicationsManager.Category.DEFAULT
+                )
+            }
+        }
+    }
+
+    private fun handleJoin(player: Player, args: Array<out String>) {
+        if (args.size < 2) {
+            plugin.commsManager.send(player, Component.text("Usage: /team join <team>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (plugin.teamManager.getPlayerTeam(player.uniqueId) != null) {
+            plugin.commsManager.send(player, Component.text("You are already in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        val teamName = args[1].lowercase()
+        val team = plugin.teamManager.getTeam(teamName)
+        if (team == null) {
+            plugin.commsManager.send(player, Component.text("Team not found.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (!plugin.teamManager.isTeamOpen(teamName)) {
+            plugin.commsManager.send(player, Component.text("That team is invite-only. Ask a member to invite you.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (plugin.teamManager.getTeamMembers(teamName).size >= TeamManager.MAX_TEAM_SIZE) {
+            plugin.commsManager.send(player, Component.text("That team is full.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (plugin.teamManager.joinOpenTeam(player.uniqueId, teamName)) {
+            plugin.commsManager.send(
+                player,
+                Component.text("You joined team ", NamedTextColor.GRAY)
+                    .append(Component.text(team.displayName, NamedTextColor.GREEN)),
+                CommunicationsManager.Category.DEFAULT
+            )
+
+            plugin.teamManager.getTeamMembers(teamName).forEach { member ->
+                val online = Bukkit.getPlayer(UUID.fromString(member.uuid))
+                if (online != null && online != player) {
+                    plugin.commsManager.send(
+                        online,
+                        Component.text(player.name, NamedTextColor.GREEN)
+                            .append(Component.text(" joined the team.", NamedTextColor.GRAY)),
+                        CommunicationsManager.Category.DEFAULT
+                    )
+                }
+            }
+        } else {
+            plugin.commsManager.send(player, Component.text("Could not join that team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+        }
+    }
+
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         val isAdmin = sender.hasPermission("joshymc.team.admin") || sender.isOp
 
@@ -854,7 +979,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         if (args.size == 1) {
-            val base = listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home", "rename", "pvp")
+            val base = listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home", "rename", "pvp", "open", "close", "join")
             val all = if (isAdmin) base + "delete" else base
             return all.filter { it.startsWith(args[0], ignoreCase = true) }
         }
@@ -875,6 +1000,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     }.filter { it.startsWith(args[1], ignoreCase = true) && !it.equals(sender.name, ignoreCase = true) }
                 }
                 "info", "delete" -> plugin.teamManager.getAllTeams().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                "join" -> plugin.teamManager.getAllTeams().filter { plugin.teamManager.isTeamOpen(it.name) }.map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
                 "chat", "pvp" -> listOf("on", "off").filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
             }

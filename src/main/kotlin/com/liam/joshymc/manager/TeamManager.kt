@@ -113,6 +113,10 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             plugin.databaseManager.execute("ALTER TABLE teams ADD COLUMN pvp_enabled INTEGER NOT NULL DEFAULT 0")
         } catch (_: Exception) {}
 
+        try {
+            plugin.databaseManager.execute("ALTER TABLE teams ADD COLUMN is_open INTEGER NOT NULL DEFAULT 0")
+        } catch (_: Exception) {}
+
         plugin.logger.info("[Teams] TeamManager started.")
     }
 
@@ -330,6 +334,31 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             "UPDATE teams SET pvp_enabled = ? WHERE name = ?",
             if (enabled) 1 else 0, teamName
         )
+    }
+
+    fun isTeamOpen(teamName: String): Boolean {
+        return plugin.databaseManager.queryFirst(
+            "SELECT is_open FROM teams WHERE name = ?", teamName
+        ) { rs -> rs.getInt("is_open") == 1 } ?: false
+    }
+
+    fun setTeamOpen(teamName: String, open: Boolean) {
+        plugin.databaseManager.execute(
+            "UPDATE teams SET is_open = ? WHERE name = ?",
+            if (open) 1 else 0, teamName
+        )
+    }
+
+    fun joinOpenTeam(uuid: UUID, teamName: String): Boolean {
+        if (!isTeamOpen(teamName)) return false
+        if (getPlayerTeam(uuid) != null) return false
+        if (getTeamMembers(teamName).size >= MAX_TEAM_SIZE) return false
+
+        plugin.databaseManager.execute(
+            "INSERT INTO team_members (uuid, team_name, role, joined_at) VALUES (?, ?, ?, ?)",
+            uuid.toString(), teamName, "member", System.currentTimeMillis()
+        )
+        return true
     }
 
     fun isTeammate(uuid1: UUID, uuid2: UUID): Boolean {
