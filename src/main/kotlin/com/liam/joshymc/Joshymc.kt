@@ -411,6 +411,8 @@ class Joshymc : JavaPlugin() {
 
         // Ensure dungeon void world exists
         WorldCommand.ensureDungeonWorld(this)
+        // Auto-import the pvp world if the folder exists on disk
+        WorldCommand.ensurePvpWorld(this)
 
         // Ensure default overworld has structures disabled (only resource world has structures)
         enforceServerStructures()

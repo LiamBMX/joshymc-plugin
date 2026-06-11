@@ -57,6 +57,29 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
             plugin.logger.info("Dungeon world created successfully.")
         }
+
+        /**
+         * Auto-imports the "pvp" world on startup if the folder exists on disk.
+         * Called from Joshymc.onEnable().
+         */
+        fun ensurePvpWorld(plugin: Joshymc) {
+            val name = "pvp"
+            if (Bukkit.getWorld(name) != null) return
+
+            val worldFolder = File(Bukkit.getWorldContainer(), name)
+            if (!worldFolder.exists() || !File(worldFolder, "level.dat").exists()) {
+                plugin.logger.info("[PvP World] No 'pvp' world folder found on disk — skipping auto-import.")
+                return
+            }
+
+            plugin.logger.info("[PvP World] Auto-importing 'pvp' world...")
+            val world = WorldCreator(name).createWorld()
+            if (world == null) {
+                plugin.logger.warning("[PvP World] Failed to auto-import 'pvp' world!")
+            } else {
+                plugin.logger.info("[PvP World] 'pvp' world loaded successfully.")
+            }
+        }
     }
 
     /**
