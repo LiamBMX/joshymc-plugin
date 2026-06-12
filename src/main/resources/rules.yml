@@ -1,0 +1,113 @@
+rules:
+  - icon: BARRIER
+    title: "No Hacking or Cheating"
+    color: "#FF5555"
+    lines:
+      - "No hacked clients, x-ray, or exploit mods."
+      - "Allowed: Optifine, minimaps, shaders,"
+      - "Fabric/Forge performance mods."
+      - "Macro / autoclickers are not allowed."
+
+  - icon: HOPPER
+    title: "No Duping or Exploits"
+    color: "#AA00AA"
+    lines:
+      - "No duplication glitches of any kind."
+      - "Includes vanilla and plugin exploits."
+      - "Report any bugs or exploits to staff."
+      - "Do not abuse unintended mechanics."
+
+  - icon: DIAMOND_SWORD
+    title: "No Toxic PvP Behavior"
+    color: "#5555FF"
+    lines:
+      - "No spawn killing or portal trapping."
+      - "No repeatedly targeting the same player."
+      - "PvP is only allowed in designated areas"
+      - "or when both players have PvP enabled."
+
+  - icon: GOLDEN_APPLE
+    title: "Be Honest & Play Fair"
+    color: "#FFAA00"
+    lines:
+      - "Honor all trades and agreements."
+      - "No scamming, stealing, or deception."
+      - "Do not use alt accounts to gain"
+      - "an unfair advantage."
+
+  - icon: PLAYER_HEAD
+    title: "Be Respectful"
+    color: "#55FF55"
+    lines:
+      - "No harassment, bullying, racism, sexism,"
+      - "homophobia, or any form of hate speech."
+      - "Treat all players with respect."
+      - "Keep all content appropriate."
+
+  - icon: WRITABLE_BOOK
+    title: "No Spam or Advertising"
+    color: "#FFFF55"
+    lines:
+      - "Do not spam chat, commands, or repeat messages."
+      - "No advertising other servers, discords,"
+      - "or websites in any form."
+
+  - icon: REDSTONE
+    title: "No Lag Machines"
+    color: "#FF5555"
+    lines:
+      - "Do not build redstone contraptions or"
+      - "mob farms that cause excessive lag."
+      - "Staff may remove builds that impact"
+      - "server performance without warning."
+
+  - icon: BRICKS
+    title: "Build With the Community in Mind"
+    color: "#55FFFF"
+    lines:
+      - "No inappropriate or offensive builds."
+      - "Do not build too close to other players"
+      - "without permission. Respect shared spaces."
+
+  - icon: SHIELD
+    title: "Listen to Staff"
+    color: "#55FF55"
+    lines:
+      - "Staff have final say on all disputes."
+      - "Follow instructions from moderators."
+      - "Do not argue with staff decisions in chat."
+      - "Appeal via Discord if you disagree."
+
+  - icon: ENDER_EYE
+    title: "Use Common Sense"
+    color: "#AA55FF"
+    lines:
+      - "If something feels wrong, it probably is."
+      - "Loopholes do not make it allowed."
+      - "Ignorance of the rules is not an excuse."
+
+  - icon: IRON_DOOR
+    title: "No Inside Raiding"
+    color: "#FF5555"
+    lines:
+      - "Do not betray teammates or allies."
+      - "No stealing from team chests or bases"
+      - "that you were given access to."
+      - "Leaving a team does not entitle you to loot."
+
+  - icon: LEATHER_BOOTS
+    title: "No Combat Logging"
+    color: "#FFAA00"
+    lines:
+      - "Do not disconnect during PvP combat."
+      - "If you are tagged in combat, you must"
+      - "stay online until the fight is over."
+      - "Combat logging will result in death."
+
+  - icon: GOLD_INGOT
+    title: "No Farming Bounties"
+    color: "#FFFF55"
+    lines:
+      - "Do not place bounties on friends or alts"
+      - "and have them collect the reward."
+      - "No arranging kills to farm bounty money."
