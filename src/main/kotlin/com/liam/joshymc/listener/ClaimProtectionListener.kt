@@ -92,6 +92,10 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
                         plugin.spawnerManager.isTrusted(sb.ownerUuid, player.uniqueId))) return
         }
 
+        // Ender chests are personal storage — every player sees only their own
+        // inventory, so blocking them via claim protection serves no purpose.
+        if (block.type == Material.ENDER_CHEST) return
+
         if (!plugin.claimManager.canAccess(player, block.location)) {
             event.isCancelled = true
             denyWithMessage(player)
