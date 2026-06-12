@@ -11,6 +11,7 @@ import org.bukkit.Sound
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
+import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 
@@ -23,82 +24,54 @@ class RulesCommand(private val plugin: Joshymc) : CommandExecutor {
         val lines: List<String>
     )
 
-    private val rules = listOf(
-        Rule(Material.BARRIER, "No Hacking or Cheating", TextColor.color(0xFF5555), listOf(
-            "No hacked clients, x-ray, or exploit mods.",
-            "Allowed: Optifine, minimaps, shaders,",
-            "Fabric/Forge performance mods.",
-            "Macro / autoclickers are not allowed."
-        )),
-        Rule(Material.HOPPER, "No Duping or Exploits", TextColor.color(0xAA00AA), listOf(
-            "No duplication glitches of any kind.",
-            "Includes vanilla and plugin exploits.",
-            "Report any bugs or exploits to staff.",
-            "Do not abuse unintended mechanics."
-        )),
-        Rule(Material.DIAMOND_SWORD, "No Toxic PvP Behavior", TextColor.color(0x5555FF), listOf(
-            "No spawn killing or portal trapping.",
-            "No repeatedly targeting the same player.",
-            "PvP is only allowed in designated areas",
-            "or when both players have PvP enabled."
-        )),
-        Rule(Material.GOLDEN_APPLE, "Be Honest & Play Fair", TextColor.color(0xFFAA00), listOf(
-            "Honor all trades and agreements.",
-            "No scamming, stealing, or deception.",
-            "Do not use alt accounts to gain",
-            "an unfair advantage."
-        )),
-        Rule(Material.PLAYER_HEAD, "Be Respectful", TextColor.color(0x55FF55), listOf(
-            "No harassment, bullying, racism, sexism,",
-            "homophobia, or any form of hate speech.",
-            "Treat all players with respect.",
-            "Keep all content appropriate."
-        )),
-        Rule(Material.WRITABLE_BOOK, "No Spam or Advertising", TextColor.color(0xFFFF55), listOf(
-            "Do not spam chat, commands, or repeat messages.",
-            "No advertising other servers, discords,",
-            "or websites in any form."
-        )),
-        Rule(Material.REDSTONE, "No Lag Machines", TextColor.color(0xFF5555), listOf(
-            "Do not build redstone contraptions or",
-            "mob farms that cause excessive lag.",
-            "Staff may remove builds that impact",
-            "server performance without warning."
-        )),
-        Rule(Material.BRICKS, "Build With the Community in Mind", TextColor.color(0x55FFFF), listOf(
-            "No inappropriate or offensive builds.",
-            "Do not build too close to other players",
-            "without permission. Respect shared spaces."
-        )),
-        Rule(Material.SHIELD, "Listen to Staff", TextColor.color(0x55FF55), listOf(
-            "Staff have final say on all disputes.",
-            "Follow instructions from moderators.",
-            "Do not argue with staff decisions in chat.",
-            "Appeal via Discord if you disagree."
-        )),
-        Rule(Material.ENDER_EYE, "Use Common Sense", TextColor.color(0xAA55FF), listOf(
-            "If something feels wrong, it probably is.",
-            "Loopholes do not make it allowed.",
-            "Ignorance of the rules is not an excuse."
-        )),
-        Rule(Material.IRON_DOOR, "No Inside Raiding", TextColor.color(0xFF5555), listOf(
-            "Do not betray teammates or allies.",
-            "No stealing from team chests or bases",
-            "that you were given access to.",
-            "Leaving a team does not entitle you to loot."
-        )),
-        Rule(Material.LEATHER_BOOTS, "No Combat Logging", TextColor.color(0xFFAA00), listOf(
-            "Do not disconnect during PvP combat.",
-            "If you are tagged in combat, you must",
-            "stay online until the fight is over.",
-            "Combat logging will result in death."
-        )),
-        Rule(Material.GOLD_INGOT, "No Farming Bounties", TextColor.color(0xFFFF55), listOf(
-            "Do not place bounties on friends or alts",
-            "and have them collect the reward.",
-            "No arranging kills to farm bounty money."
-        ))
-    )
+    private val rules = mutableListOf<Rule>()
+
+    init {
+        loadRules()
+    }
+
+    private fun loadRules() {
+        rules.clear()
+
+        val file = plugin.configFile("rules.yml")
+        if (!file.exists()) {
+            try {
+                plugin.saveResource("rules.yml", false)
+            } catch (_: IllegalArgumentException) {
+                plugin.logger.warning("[RulesCommand] rules.yml not found in jar.")
+                return
+            }
+        }
+
+        val config = YamlConfiguration.loadConfiguration(file)
+        val section = config.getMapList("rules")
+        for (entry in section) {
+            @Suppress("UNCHECKED_CAST")
+            val map = entry as? Map<String, Any> ?: continue
+            val iconName = (map["icon"] as? String) ?: continue
+            val title = (map["title"] as? String) ?: continue
+            val colorHex = (map["color"] as? String) ?: "#FFFFFF"
+            @Suppress("UNCHECKED_CAST")
+            val lines = (map["lines"] as? List<String>) ?: emptyList()
+
+            val icon = runCatching { Material.valueOf(iconName.uppercase()) }.getOrElse {
+                plugin.logger.warning("[RulesCommand] Unknown material '$iconName' for rule '$title', skipping.")
+                null
+            } ?: continue
+
+            val color = runCatching {
+                val hex = colorHex.trimStart('#')
+                TextColor.color(Integer.parseInt(hex, 16))
+            }.getOrElse {
+                plugin.logger.warning("[RulesCommand] Invalid color '$colorHex' for rule '$title', using white.")
+                TextColor.color(0xFFFFFF)
+            }
+
+            rules.add(Rule(icon, title, color, lines))
+        }
+
+        plugin.logger.info("[RulesCommand] Loaded ${rules.size} rule(s) from rules.yml.")
+    }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
