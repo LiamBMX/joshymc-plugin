@@ -30,6 +30,7 @@ import com.liam.joshymc.listener.BubbleButtListener
 import com.liam.joshymc.listener.CustomArmorListener
 import com.liam.joshymc.listener.CustomDropListener
 import com.liam.joshymc.listener.AuctionBidListener
+import com.liam.joshymc.listener.CustomArmorAnvilListener
 import com.liam.joshymc.listener.SellWandAnvilListener
 import com.liam.joshymc.listener.SellWandListener
 import com.liam.joshymc.listener.VoidBoreListener
@@ -121,6 +122,7 @@ class ListenerManager(private val plugin: Joshymc) {
         // Sell Wand
         pm.registerEvents(SellWandListener(plugin), plugin)
         pm.registerEvents(SellWandAnvilListener(plugin), plugin)
+        pm.registerEvents(CustomArmorAnvilListener(plugin), plugin)
 
         // Quest events
         pm.registerEvents(plugin.questManager, plugin)
