@@ -52,6 +52,8 @@ class ResurgeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         plugin.commsManager.send(player, Component.text("    Woodcutting, Excavation, Enchanting,", NamedTextColor.GRAY))
         plugin.commsManager.send(player, Component.text("    Alchemy, Taming", NamedTextColor.GRAY))
         plugin.commsManager.send(player, Component.text("  • Complete all Mining, Fishing & Farming quests", NamedTextColor.YELLOW))
+        plugin.commsManager.send(player, Component.text("  • $1,000,000,000 per Resurge level", NamedTextColor.YELLOW)
+            .append(Component.text(" (×$1B each time)", NamedTextColor.GRAY)))
         plugin.commsManager.send(player, Component.text(" ", NamedTextColor.GRAY))
         plugin.commsManager.send(player, Component.text("─── Rewards ───", TextColor.color(0xFFAA00)))
         plugin.commsManager.send(player, Component.text("  • $10,000,000 cash", NamedTextColor.GREEN))
@@ -98,6 +100,7 @@ class ResurgeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val count = plugin.resurgeManager.getCount(uuid)
         val nextLevel = count + 1
         val requiredSkillLevel = plugin.resurgeManager.getRequiredSkillLevel(uuid)
+        val requiredMoney = plugin.resurgeManager.getRequiredMoney(uuid)
         val multiplierPct = ((plugin.resurgeManager.getMultiplier(uuid) - 1.0) * 100).toInt()
 
         plugin.commsManager.send(player, Component.text("─── Resurge ───", TextColor.color(0xFFAA00)))
@@ -111,6 +114,8 @@ class ResurgeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
         plugin.commsManager.send(player, Component.text("  Required skill level: ", NamedTextColor.GRAY)
             .append(Component.text(requiredSkillLevel.toString(), NamedTextColor.AQUA)))
+        plugin.commsManager.send(player, Component.text("  Money cost: ", NamedTextColor.GRAY)
+            .append(Component.text(plugin.economyManager.format(requiredMoney), NamedTextColor.GOLD)))
 
         val missing = plugin.resurgeManager.getMissingRequirements(uuid)
         if (missing.isEmpty()) {

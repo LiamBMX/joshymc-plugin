@@ -83,6 +83,9 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
     /** The minimum skill level required for the player's next resurge. */
     fun getRequiredSkillLevel(uuid: UUID): Int = (getCount(uuid) + 1) * SKILL_LEVEL_INCREMENT
 
+    /** The money cost for the player's next resurge: $1B × (resurgeCount + 1). */
+    fun getRequiredMoney(uuid: UUID): Double = (getCount(uuid) + 1) * 1_000_000_000.0
+
     // ── Eligibility check ───────────────────────────────────────────────
 
     fun canResurge(uuid: UUID): Boolean {
@@ -95,6 +98,7 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
             if (categoryQuests.isEmpty()) continue
             if (categoryQuests.any { !plugin.questManager.isCompleted(uuid, it.id) }) return false
         }
+        if (plugin.economyManager.getBalance(uuid) < getRequiredMoney(uuid)) return false
         return true
     }
 
@@ -118,6 +122,12 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
             }
         }
 
+        val requiredMoney = getRequiredMoney(uuid)
+        val balance = plugin.economyManager.getBalance(uuid)
+        if (balance < requiredMoney) {
+            missing.add("Money: ${formatMoney(balance)} / ${formatMoney(requiredMoney)}")
+        }
+
         return missing
     }
 
@@ -127,7 +137,11 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
         val uuid = player.uniqueId
         if (!canResurge(uuid)) return false
 
+        val cost = getRequiredMoney(uuid)
         val newCount = getCount(uuid) + 1
+
+        // Deduct money cost
+        plugin.economyManager.withdraw(uuid, cost)
 
         // Reset quests and skills
         plugin.questManager.resetAllProgress(uuid)
@@ -221,6 +235,7 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
 
     private fun formatMoney(amount: Double): String {
         return when {
+            amount >= 1_000_000_000 -> "$${(amount / 1_000_000_000).toInt()}B"
             amount >= 1_000_000 -> "$${(amount / 1_000_000).toInt()}M"
             amount >= 1_000 -> "$${(amount / 1_000).toInt()}K"
             else -> "$${amount.toLong()}"
