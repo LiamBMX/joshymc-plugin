@@ -48,6 +48,15 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
             return
         }
 
+        if (!plugin.claimManager.canAccess(player, block.location)) {
+            plugin.commsManager.send(
+                player,
+                Component.text("You can't use a Sell Wand in someone else's claim.", NamedTextColor.RED),
+                CommunicationsManager.Category.ECONOMY
+            )
+            return
+        }
+
         // Read multiplier and uses from PDC
         val multiplier = SellWandCommand.getMultiplier(plugin, item)
         val usesLeft = SellWandCommand.getUses(plugin, item)
