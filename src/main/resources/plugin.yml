@@ -855,8 +855,17 @@ permissions:
     description: Moderation actions - kick, mute, tempmute, warn, freeze, history (Mod)
     default: op
   joshymc.admin.helper:
-    description: View player info and logs only (Helper)
+    description: Helper moderation — tempmute, unmute, warn, history, reports view
     default: op
+    children:
+      joshymc.tempmute: true
+      joshymc.unmute: true
+      joshymc.warn: true
+      joshymc.history: true
+      joshymc.reports.view: true
+      joshymc.punishment.notify: true
+      joshymc.ban: false
+      joshymc.unban: false
   joshymc.enchant:
     description: Use /enchant command (no level limits)
     default: op
