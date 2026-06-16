@@ -22,6 +22,7 @@ import org.bukkit.event.block.BlockBurnEvent
 import org.bukkit.event.block.BlockRedstoneEvent
 import org.bukkit.event.block.BlockSpreadEvent
 import org.bukkit.event.entity.EntityChangeBlockEvent
+import org.bukkit.entity.FallingBlock
 import org.bukkit.entity.TNTPrimed
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityExplodeEvent
@@ -212,6 +213,10 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
                 event.isCancelled = true
                 denyWithMessage(entity)
             }
+        } else if (entity is FallingBlock) {
+            // Gravity blocks (sand, gravel, concrete powder, etc.) landing inside a
+            // claim is normal physics — don't block it.
+            return
         } else {
             // Non-player entity (enderman, wither, etc.) — block if in a claim
             if (plugin.claimManager.getClaimAt(event.block.location) != null) {
