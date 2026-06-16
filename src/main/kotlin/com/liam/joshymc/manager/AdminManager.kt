@@ -581,6 +581,9 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                         val durationStr = PunishmentManager.formatDuration(pending.duration)
                         logAction(admin, "MUTE", Bukkit.getOfflinePlayer(targetUuid), "$durationStr - $reason")
                         plugin.commsManager.send(admin, Component.text("Muted $targetName for $durationStr - $reason", NamedTextColor.LIGHT_PURPLE), CommunicationsManager.Category.ADMIN)
+                    } else if (!admin.hasPermission(PERM_MODERATE) && !admin.hasPermission(PERM_ADMIN)) {
+                        plugin.commsManager.send(admin, Component.text("No permission for permanent mute.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+                        return@Runnable
                     } else {
                         plugin.punishmentManager.mute(targetUuid, targetName, admin.name, admin.uniqueId, reason)
                         logAction(admin, "MUTE", Bukkit.getOfflinePlayer(targetUuid), "Permanent - $reason")
@@ -656,8 +659,8 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        // Mute List — moderate+
-        if (admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
+        // Mute List — helper+ (helpers can view it to unmute)
+        if (admin.hasPermission(PERM_HELPER) || admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
             gui.setItem(15, buildItem(Material.BELL, "Mute List", NamedTextColor.LIGHT_PURPLE,
                 "View and manage active mutes")) { p, _ ->
                 openMuteList(p, 0)
@@ -887,8 +890,8 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        // Mute (slot 15) — moderate+
-        if (admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
+        // Mute (slot 15) — helper+ (helpers limited to tempmute; permanent mute requires moderate+)
+        if (admin.hasPermission(PERM_HELPER) || admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
             gui.setItem(15, buildItem(Material.PURPLE_WOOL, "Mute", NamedTextColor.LIGHT_PURPLE, "Mute this player")) { p, _ ->
                 openDurationSelector(p, target.uniqueId, targetName, "mute")
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
@@ -952,8 +955,8 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        // Punishment History (slot 23) — moderate+
-        if (admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
+        // Punishment History (slot 23) — helper+
+        if (admin.hasPermission(PERM_HELPER) || admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
             gui.setItem(23, buildItem(Material.CLOCK, "Punishment History", NamedTextColor.YELLOW,
                 "View punishment history")) { p, _ ->
                 openPunishmentHistory(p, target.uniqueId, targetName, 0)
