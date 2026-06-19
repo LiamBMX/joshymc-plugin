@@ -102,6 +102,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     val showingParticles = mutableSetOf<UUID>()
     private var particleTask: BukkitTask? = null
     private var blockAccrualTask: BukkitTask? = null
+    private var claimExpiryTask: BukkitTask? = null
 
     private var startingBlocks = 500
     private var blocksPerHour = 100
@@ -199,6 +200,8 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         loadSubclaims()
         startParticleTask()
         startBlockAccrualTask()
+        purgeInactiveClaims()
+        startClaimExpiryTask()
 
         plugin.logger.info("[Claims] Started with ${claims.size} claim(s) and ${subclaims.size} subclaim(s).")
     }
@@ -206,6 +209,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     fun stop() {
         particleTask?.cancel(); particleTask = null
         blockAccrualTask?.cancel(); blockAccrualTask = null
+        claimExpiryTask?.cancel(); claimExpiryTask = null
         showingParticles.clear()
     }
 
@@ -295,6 +299,57 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
                 addBlocks(player.uniqueId, blocksPerInterval)
             }
         }, 6000L, 6000L) // Every 5 minutes
+    }
+
+    private fun startClaimExpiryTask() {
+        val ticksPerDay = 20L * 60 * 60 * 24
+        claimExpiryTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+            purgeInactiveClaims()
+        }, ticksPerDay, ticksPerDay)
+    }
+
+    private fun purgeInactiveClaims() {
+        val thirtyDaysMs = 30L * 24 * 60 * 60 * 1000
+        val cutoff = System.currentTimeMillis() - thirtyDaysMs
+
+        val ownerUuids = plugin.databaseManager.query("SELECT DISTINCT owner_uuid FROM claims_v2") { rs ->
+            rs.getString("owner_uuid")
+        }
+
+        var purgedClaims = 0
+        for (uuidStr in ownerUuids) {
+            val uuid = UUID.fromString(uuidStr)
+            // Never purge claims of currently online players
+            if (Bukkit.getPlayer(uuid) != null) continue
+
+            val lastSeen = plugin.databaseManager.queryFirst(
+                "SELECT last_join FROM playtime WHERE uuid = ?", uuidStr
+            ) { it.getLong("last_join") } ?: Bukkit.getOfflinePlayer(uuid).lastPlayed
+
+            // lastSeen == 0L means no data — skip to avoid false positives
+            if (lastSeen == 0L || lastSeen >= cutoff) continue
+
+            val playerClaims = claims.filter { it.ownerUuid == uuid }
+            for (claim in playerClaims) {
+                val subs = subclaims.filter { it.parentClaimId == claim.id }
+                for (sc in subs) {
+                    plugin.databaseManager.execute("DELETE FROM subclaim_access WHERE subclaim_id = ?", sc.id)
+                    plugin.databaseManager.execute("DELETE FROM subclaims WHERE id = ?", sc.id)
+                }
+                subclaims.removeAll(subs.toSet())
+
+                plugin.databaseManager.execute("DELETE FROM claim_trusted WHERE claim_id = ?", claim.id)
+                plugin.databaseManager.execute("DELETE FROM claim_denied WHERE claim_id = ?", claim.id)
+                getSnapshotFile(claim).let { if (it.exists()) it.delete() }
+                plugin.databaseManager.execute("DELETE FROM claims_v2 WHERE id = ?", claim.id)
+                purgedClaims++
+            }
+            claims.removeAll(playerClaims.toSet())
+        }
+
+        if (purgedClaims > 0) {
+            plugin.logger.info("[Claims] Purged $purgedClaims claim(s) from players inactive for 30+ days.")
+        }
     }
 
     // ══════════════════════════════════════════════════════════
