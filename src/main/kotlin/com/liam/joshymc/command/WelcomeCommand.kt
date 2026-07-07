@@ -5,6 +5,7 @@ import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
+import kotlin.random.Random
 
 class WelcomeCommand(private val plugin: Joshymc) : CommandExecutor {
 
@@ -57,10 +58,17 @@ class WelcomeCommand(private val plugin: Joshymc) : CommandExecutor {
         val msg = "&6&l★ &e${sender.name} &awelcomed &f${newPlayer.name} &ato the server! &6&l★"
         plugin.server.broadcast(plugin.commsManager.parseLegacy(msg))
 
-        // Give the welcoming player one AFK crate key
-        plugin.crateManager.giveKey(sender, "afk", 1)
+        // Flat money reward
+        plugin.economyManager.deposit(sender.uniqueId, 10000.0)
 
-        plugin.commsManager.send(sender, plugin.commsManager.parseLegacy("&aYou received an &bAFK Key &afor welcoming ${newPlayer.name}!"))
+        // 10% chance of 1 credit, otherwise an AFK crate key
+        if (Random.nextDouble() < 0.1) {
+            plugin.creditsManager.deposit(sender.uniqueId, 1.0)
+            plugin.commsManager.send(sender, plugin.commsManager.parseLegacy("&aYou received &f${plugin.economyManager.format(10000.0)} &aand &b1 Credit &afor welcoming ${newPlayer.name}!"))
+        } else {
+            plugin.crateManager.giveKey(sender, "afk", 1)
+            plugin.commsManager.send(sender, plugin.commsManager.parseLegacy("&aYou received &f${plugin.economyManager.format(10000.0)} &aand an &bAFK Key &afor welcoming ${newPlayer.name}!"))
+        }
 
         // Remove from map once all 10 welcome slots are filled
         if (entry.welcomers.size >= 10) {
