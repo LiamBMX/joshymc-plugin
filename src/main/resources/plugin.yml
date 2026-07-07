@@ -228,7 +228,7 @@ commands:
     description: Browse or manage the credits-only shop
     usage: /cshop [additem|removeitem|category|list] [args...]
   welcome:
-    description: Welcome a newly joined player and earn an AFK key
+    description: Welcome a newly joined player for money and a chance at a credit or AFK key
     usage: /welcome
     permission: joshymc.welcome
   rewards:
@@ -1005,7 +1005,7 @@ permissions:
     description: Activate server boosters via /booster
     default: op
   joshymc.welcome:
-    description: Welcome a new player and earn an AFK key
+    description: Welcome a new player and earn money plus a chance at a credit or AFK key
     default: true
   joshymc.tokens.give:
     description: Give tokens to players via /tokens give
