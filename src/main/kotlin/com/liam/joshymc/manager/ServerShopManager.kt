@@ -30,6 +30,12 @@ class ServerShopManager(private val plugin: Joshymc) {
     private val buyCategories = mutableListOf<ShopCategory>()
     private val sellCategories = mutableListOf<ShopCategory>()
 
+    // What the /sell shop GUI actually browses - shop.yml's sellable items and
+    // shop_sell.yml's sell-only items merged per category, so an item that's
+    // sellable (per getSellPrice) is never missing from the GUI just because it
+    // wasn't (or couldn't be) duplicated into shop_sell.yml.
+    private val mergedSellCategories = mutableListOf<ShopCategory>()
+
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
         editMeta { it.displayName(Component.empty()) }
     }
@@ -43,6 +49,7 @@ class ServerShopManager(private val plugin: Joshymc) {
     fun start() {
         buyCategories.clear()
         sellCategories.clear()
+        mergedSellCategories.clear()
 
         // shop.yml is the buy catalog for the /shop GUI (buying only - the buy
         // shop no longer sells items in its UI). Its per-item "sell" prices are
@@ -52,11 +59,35 @@ class ServerShopManager(private val plugin: Joshymc) {
         // catalog checked only when a material has no shop.yml entry at all.
         loadCategoriesInto(buyCategories, "shop.yml")
         loadCategoriesInto(sellCategories, "shop_sell.yml")
+        buildMergedSellCategories()
 
         plugin.logger.info(
             "Loaded ${buyCategories.size} buy categories (${buyCategories.sumOf { it.items.size }} items) " +
                 "and ${sellCategories.size} sell categories (${sellCategories.sumOf { it.items.size }} items)"
         )
+    }
+
+    /** Builds the category list the /sell shop GUI browses - see [mergedSellCategories]. */
+    private fun buildMergedSellCategories() {
+        val order = LinkedHashSet<String>()
+        buyCategories.forEach { order.add(it.id) }
+        sellCategories.forEach { order.add(it.id) }
+
+        for (id in order) {
+            val fromBuy = buyCategories.find { it.id == id }
+            val fromSell = sellCategories.find { it.id == id }
+            val name = fromSell?.name ?: fromBuy!!.name
+            val icon = fromSell?.icon ?: fromBuy!!.icon
+
+            val items = LinkedHashMap<Material, ShopItem>()
+            for (category in listOfNotNull(fromBuy, fromSell)) {
+                for (item in category.items) {
+                    if (item.sellPrice > 0) items.putIfAbsent(item.material, item)
+                }
+            }
+
+            mergedSellCategories.add(ShopCategory(id, name, icon, items.values.toList()))
+        }
     }
 
     private fun loadCategoriesInto(target: MutableList<ShopCategory>, fileName: String) {
@@ -100,10 +131,14 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     fun getCategory(id: String): ShopCategory? = buyCategories.find { it.id == id }
 
-    /** Sell-shop categories (shop_sell.yml) - used to browse/sell in the /sell shop GUI. */
-    fun getSellCategories(): List<ShopCategory> = sellCategories.toList()
+    /**
+     * Sell-shop categories - shop.yml's sellable items and shop_sell.yml's
+     * sell-only items merged per category. Used to browse/sell in the /sell
+     * shop GUI.
+     */
+    fun getSellCategories(): List<ShopCategory> = mergedSellCategories.toList()
 
-    fun getSellCategory(id: String): ShopCategory? = sellCategories.find { it.id == id }
+    fun getSellCategory(id: String): ShopCategory? = mergedSellCategories.find { it.id == id }
 
     /**
      * What's sellable and for how much - sourced from shop.yml's hidden sell

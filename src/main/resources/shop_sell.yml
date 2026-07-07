@@ -6,9 +6,11 @@
 # buy: 0 means not buyable, sell: 0 means not sellable.
 #
 # The buy shop (/shop) is buy-only - it no longer sells items directly.
-# /sell (and the sell wand / auto-sellers) look ONLY at this file to
-# decide what can be sold and for how much. Prices below were migrated
-# from shop.yml's old "sell" values so nothing changes for players.
+# /sell (and the sell wand / auto-sellers) check shop.yml's hidden sell
+# fields first, falling back to this file for materials shop.yml doesn't
+# list at all. The /sell shop GUI browses a merge of both files per
+# category, so an item doesn't need to be duplicated here to be sellable
+# or browsable - this file only needs to cover sell-only items.
 
 categories:
   farming:
