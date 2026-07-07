@@ -30,13 +30,11 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
     // Custom head textures (base64-encoded Mojang skin URLs)
     companion object {
         // Grass block head
-        private const val OVERWORLD_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjJhNmIwNmRiMzRmYmI0NWE3NjhiNzE0ZjFiMTFkMWYzYzJhYjJiOGViNjk3YzdiMmI4NWQ3NDk5Y2NlZSJ9fX0="
+        private const val OVERWORLD_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzQ3ZjIwMTgxNWMyYWI1Y2RmZWUwZmEyOTIyNTJlOGE5YmU2YWM2Y2FmMmIyODRiNDlkODc2ZGVjMDlmZWYxMSJ9fX0="
         // Netherrack head
-        private const val NETHER_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZGI2NTRkNTc2Y2I5MzEzZGRhOWEyYTM0MDhhNGUxOGVmYWQ4NTA1OGM5ZWI5NThkODdkNjdiYjljNWUwZjEifX19"
+        private const val NETHER_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvN2FiNGY2NzA4OWQ4YTZmNTdmMTkxNzI2YmI5ZGU5MTMyMGY0MGFmMDlkYzMwYjIyNmJhYzdlNDIwNzVhNmRiYSJ9fX0="
         // End stone head
-        private const val END_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvN2E2OGMxZjdmZDBjMjY4YjM3MjFjNzJmNmFlOWI1OTQyMmFhODJmYzRlZTk1YjUyNjRlMWI1ZjQxMDk4NjQifX19"
-        // Compass/globe head
-        private const val RESOURCE_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNDUyOGVkNDRmODhjZmI1ZjI0ZmM4NmE4NTVjOTQyODFhNGQzNGI2Njg1NjM2MzI1MjMxNGI2MTRiMjk4NWIxIn19fQ=="
+        private const val END_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjJmODRmMWZjNTMzN2IwMDIyODFlNDQ1MDQ2Yjg0MjU3OWYwOTAyMDY0MDZlZmFmNjhjYjE4OGU3Mzg0YTdjNyJ9fX0="
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
@@ -79,7 +77,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
         border.editMeta { it.displayName(Component.empty()) }
         gui.border(border)
 
-        // Overworld (slot 10)
+        // Overworld (slot 11)
         val overworldHead = createCustomHead(
             OVERWORLD_TEXTURE,
             Component.text("Overworld", TextColor.color(0x55FF55))
@@ -94,7 +92,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
                 Component.empty()
             )
         )
-        gui.setItem(10, overworldHead) { p, _ ->
+        gui.setItem(11, overworldHead) { p, _ ->
             p.closeInventory()
             val resourceWorldName = plugin.config.getString("resource-world.world-name", "resource") ?: "resource"
             // Find the main survival overworld — NORMAL environment, not spawn, not resource
@@ -112,7 +110,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
             startRtp(p, world)
         }
 
-        // Nether (slot 12)
+        // Nether (slot 13)
         val netherHead = createCustomHead(
             NETHER_TEXTURE,
             Component.text("The Nether", TextColor.color(0xFF5555))
@@ -127,7 +125,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
                 Component.empty()
             )
         )
-        gui.setItem(12, netherHead) { p, _ ->
+        gui.setItem(13, netherHead) { p, _ ->
             p.closeInventory()
             val world = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.NETHER }
             if (world == null) {
@@ -137,7 +135,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
             startRtp(p, world)
         }
 
-        // The End (slot 14)
+        // The End (slot 15)
         val endHead = createCustomHead(
             END_TEXTURE,
             Component.text("The End", TextColor.color(0xAA55FF))
@@ -152,38 +150,11 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
                 Component.empty()
             )
         )
-        gui.setItem(14, endHead) { p, _ ->
+        gui.setItem(15, endHead) { p, _ ->
             p.closeInventory()
             val world = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.THE_END }
             if (world == null) {
                 plugin.commsManager.send(p, Component.text("No end world found.", NamedTextColor.RED))
-                return@setItem
-            }
-            startRtp(p, world)
-        }
-
-        // Resource World (slot 16)
-        val resourceHead = createCustomHead(
-            RESOURCE_TEXTURE,
-            Component.text("Resource World", TextColor.color(0xFFAA00))
-                .decoration(TextDecoration.BOLD, true)
-                .decoration(TextDecoration.ITALIC, false),
-            listOf(
-                Component.empty(),
-                Component.text("  Teleport to a random location", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.text("  in the resource world.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.text("  This world resets periodically!", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false),
-                Component.empty(),
-                Component.text("  Click to teleport!", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false),
-                Component.empty()
-            )
-        )
-        gui.setItem(16, resourceHead) { p, _ ->
-            p.closeInventory()
-            val resourceWorldName = plugin.config.getString("resource-world.world-name", "resource") ?: "resource"
-            val world = Bukkit.getWorld(resourceWorldName)
-            if (world == null) {
-                plugin.commsManager.send(p, Component.text("Resource world is not loaded.", NamedTextColor.RED))
                 return@setItem
             }
             startRtp(p, world)
