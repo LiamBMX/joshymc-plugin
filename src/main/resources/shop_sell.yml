@@ -1,0 +1,11 @@
+# JoshyMC Shop - Sell-Only Items
+# This file is loaded alongside shop.yml so sell-only items can be kept
+# separate from the main buy/sell catalog. Categories here work exactly
+# like shop.yml (name, icon, items with buy/sell), but are meant for
+# items you only want players to be able to SELL.
+# buy: 0 means not buyable, sell: 0 means not sellable.
+#
+# If a category id here matches one already in shop.yml, the items are
+# merged into that same section. Otherwise it shows up as its own section.
+
+categories: {}
