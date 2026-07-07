@@ -36,9 +36,18 @@ class ServerShopManager(private val plugin: Joshymc) {
     fun start() {
         categories.clear()
 
-        val file = plugin.configFile("shop.yml")
+        // shop.yml is the main buy/sell catalog. shop_sell.yml lets sell-only
+        // items live in a separate file/section instead of bloating shop.yml.
+        loadCategoriesFrom("shop.yml")
+        loadCategoriesFrom("shop_sell.yml")
+
+        plugin.logger.info("Loaded ${categories.size} shop categories with ${categories.sumOf { it.items.size }} items")
+    }
+
+    private fun loadCategoriesFrom(fileName: String) {
+        val file = plugin.configFile(fileName)
         if (!file.exists()) {
-            plugin.saveResource("shop.yml", false)
+            plugin.saveResource(fileName, false)
         }
 
         val config = YamlConfiguration.loadConfiguration(file)
@@ -61,10 +70,16 @@ class ServerShopManager(private val plugin: Joshymc) {
                 items.add(ShopItem(material, buyPrice, sellPrice))
             }
 
-            categories.add(ShopCategory(categoryId, name, icon, items))
+            // Merge into an existing category of the same id (e.g. defined in both
+            // files) instead of creating a duplicate section.
+            val existing = categories.indexOfFirst { it.id == categoryId }
+            if (existing >= 0) {
+                val merged = categories[existing]
+                categories[existing] = merged.copy(items = merged.items + items)
+            } else {
+                categories.add(ShopCategory(categoryId, name, icon, items))
+            }
         }
-
-        plugin.logger.info("Loaded ${categories.size} shop categories with ${categories.sumOf { it.items.size }} items")
     }
 
     fun getCategories(): List<ShopCategory> = categories.toList()
