@@ -17,6 +17,7 @@ import com.liam.joshymc.command.MuteCommand
 import com.liam.joshymc.command.NickCommand
 import com.liam.joshymc.command.ReportCommand
 import com.liam.joshymc.command.RulesCommand
+import com.liam.joshymc.command.TutorialCommand
 import com.liam.joshymc.command.TempbanCommand
 import com.liam.joshymc.command.TempmuteCommand
 import com.liam.joshymc.command.UnbanCommand
@@ -390,6 +391,7 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Help & Rules GUI ─────────────────────────
         plugin.getCommand("help")?.setExecutor(HelpCommand(plugin))
         plugin.getCommand("rules")?.setExecutor(RulesCommand(plugin))
+        plugin.getCommand("tutorial")?.setExecutor(TutorialCommand(plugin))
         plugin.getCommand("discord")?.setExecutor(DiscordCommand(plugin))
 
         // ── Essentials-style commands ────────────────

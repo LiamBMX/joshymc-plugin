@@ -263,6 +263,9 @@ commands:
   rules:
     description: View the server rules
     usage: /rules
+  tutorial:
+    description: View the getting-started tutorial GUI
+    usage: /tutorial [reload]
   discord:
     description: Get the Discord invite link
     usage: /discord
@@ -754,6 +757,9 @@ permissions:
     default: op
   joshymc.restart:
     description: Schedule and cancel server restarts
+    default: op
+  joshymc.tutorial.reload:
+    description: Reload tutorial.yml
     default: op
   joshymc.back:
     description: Use /back
