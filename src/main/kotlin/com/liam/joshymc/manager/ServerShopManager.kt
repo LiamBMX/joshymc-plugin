@@ -21,20 +21,9 @@ class ServerShopManager(private val plugin: Joshymc) {
     data class ShopItem(val material: Material, val buyPrice: Double, val sellPrice: Double)
     data class ShopCategory(val id: String, val name: String, val icon: Material, val items: List<ShopItem>)
 
-    // shop.yml is the buy catalog browsed/bought from the /shop GUI. Every item in
-    // it already carries a "sell" price alongside its "buy" price, so shop.yml
-    // doubles as the sell catalog too - the GUI just never surfaces the sell side
-    // (no sell button, no sell lore), so it's effectively a hidden sell list living
-    // inside the buy shop. shop_sell.yml is still loaded as a secondary catalog for
-    // sell-only items that don't have a buy-shop entry at all.
-    private val buyCategories = mutableListOf<ShopCategory>()
-    private val sellCategories = mutableListOf<ShopCategory>()
-
-    // What the /sell shop GUI actually browses - shop.yml's sellable items and
-    // shop_sell.yml's sell-only items merged per category, so an item that's
-    // sellable (per getSellPrice) is never missing from the GUI just because it
-    // wasn't (or couldn't be) duplicated into shop_sell.yml.
-    private val mergedSellCategories = mutableListOf<ShopCategory>()
+    // shop.yml is the single buy/sell catalog browsed from the /shop GUI. Every
+    // item carries both a "buy" and a "sell" price.
+    private val categories = mutableListOf<ShopCategory>()
 
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
         editMeta { it.displayName(Component.empty()) }
@@ -47,47 +36,11 @@ class ServerShopManager(private val plugin: Joshymc) {
     private val ITEMS_PER_PAGE = 28 // rows 1-4, columns 1-7
 
     fun start() {
-        buyCategories.clear()
-        sellCategories.clear()
-        mergedSellCategories.clear()
+        categories.clear()
 
-        // shop.yml is the buy catalog for the /shop GUI (buying only - the buy
-        // shop no longer sells items in its UI). Its per-item "sell" prices are
-        // used by /sell (and the sell wand / auto-sellers) as the primary
-        // source of what's sellable and for how much - a hidden sell list that
-        // rides along with the buy catalog. shop_sell.yml is a secondary
-        // catalog checked only when a material has no shop.yml entry at all.
-        loadCategoriesInto(buyCategories, "shop.yml")
-        loadCategoriesInto(sellCategories, "shop_sell.yml")
-        buildMergedSellCategories()
+        loadCategoriesInto(categories, "shop.yml")
 
-        plugin.logger.info(
-            "Loaded ${buyCategories.size} buy categories (${buyCategories.sumOf { it.items.size }} items) " +
-                "and ${sellCategories.size} sell categories (${sellCategories.sumOf { it.items.size }} items)"
-        )
-    }
-
-    /** Builds the category list the /sell shop GUI browses - see [mergedSellCategories]. */
-    private fun buildMergedSellCategories() {
-        val order = LinkedHashSet<String>()
-        buyCategories.forEach { order.add(it.id) }
-        sellCategories.forEach { order.add(it.id) }
-
-        for (id in order) {
-            val fromBuy = buyCategories.find { it.id == id }
-            val fromSell = sellCategories.find { it.id == id }
-            val name = fromSell?.name ?: fromBuy!!.name
-            val icon = fromSell?.icon ?: fromBuy!!.icon
-
-            val items = LinkedHashMap<Material, ShopItem>()
-            for (category in listOfNotNull(fromBuy, fromSell)) {
-                for (item in category.items) {
-                    if (item.sellPrice > 0) items.putIfAbsent(item.material, item)
-                }
-            }
-
-            mergedSellCategories.add(ShopCategory(id, name, icon, items.values.toList()))
-        }
+        plugin.logger.info("Loaded ${categories.size} shop categories with ${categories.sumOf { it.items.size }} items")
     }
 
     private fun loadCategoriesInto(target: MutableList<ShopCategory>, fileName: String) {
@@ -126,30 +79,12 @@ class ServerShopManager(private val plugin: Joshymc) {
         }
     }
 
-    /** Buy-shop categories (shop.yml) - used to browse/buy in the /shop GUI. */
-    fun getCategories(): List<ShopCategory> = buyCategories.toList()
+    fun getCategories(): List<ShopCategory> = categories.toList()
 
-    fun getCategory(id: String): ShopCategory? = buyCategories.find { it.id == id }
+    fun getCategory(id: String): ShopCategory? = categories.find { it.id == id }
 
-    /**
-     * Sell-shop categories - shop.yml's sellable items and shop_sell.yml's
-     * sell-only items merged per category. Used to browse/sell in the /sell
-     * shop GUI.
-     */
-    fun getSellCategories(): List<ShopCategory> = mergedSellCategories.toList()
-
-    fun getSellCategory(id: String): ShopCategory? = mergedSellCategories.find { it.id == id }
-
-    /**
-     * What's sellable and for how much - sourced from shop.yml's hidden sell
-     * prices first, falling back to shop_sell.yml for sell-only materials that
-     * have no shop.yml entry at all.
-     */
     fun getCategoryIdForMaterial(material: Material): String? {
-        for (category in buyCategories) {
-            if (category.items.any { it.material == material && it.sellPrice > 0 }) return category.id
-        }
-        for (category in sellCategories) {
+        for (category in categories) {
             if (category.items.any { it.material == material && it.sellPrice > 0 }) return category.id
         }
         return null
@@ -161,11 +96,7 @@ class ServerShopManager(private val plugin: Joshymc) {
     }
 
     fun getBaseSellPrice(material: Material): Double? {
-        for (category in buyCategories) {
-            val item = category.items.find { it.material == material && it.sellPrice > 0 }
-            if (item != null) return item.sellPrice
-        }
-        for (category in sellCategories) {
+        for (category in categories) {
             val item = category.items.find { it.material == material && it.sellPrice > 0 }
             if (item != null) return item.sellPrice
         }
@@ -199,10 +130,10 @@ class ServerShopManager(private val plugin: Joshymc) {
             availableSlots.add(9 + col) // row 1
         }
 
-        val centered = centerInRow(buyCategories.size, availableSlots)
+        val centered = centerInRow(categories.size, availableSlots)
 
         for ((index, slot) in centered.withIndex()) {
-            val category = buyCategories[index]
+            val category = categories[index]
             val icon = ItemStack(category.icon).apply {
                 editMeta { meta ->
                     meta.displayName(
@@ -332,229 +263,6 @@ class ServerShopManager(private val plugin: Joshymc) {
         plugin.guiManager.open(player, gui)
     }
 
-    // ── Sell Shop Menu ───────────────────────────────────────────────────
-
-    fun openSellShopMenu(player: Player) {
-        val title = Component.text("Sell Shop", NamedTextColor.GOLD)
-            .decoration(TextDecoration.BOLD, true)
-            .decoration(TextDecoration.ITALIC, false)
-
-        val gui = CustomGui(title, 27)
-        gui.fill(FILLER.clone())
-        gui.border(BORDER.clone())
-
-        val availableSlots = mutableListOf<Int>()
-        for (col in 1..7) {
-            availableSlots.add(9 + col) // row 1
-        }
-
-        val centered = centerInRow(sellCategories.size, availableSlots)
-
-        for ((index, slot) in centered.withIndex()) {
-            val category = sellCategories[index]
-            val icon = ItemStack(category.icon).apply {
-                editMeta { meta ->
-                    meta.displayName(
-                        Component.text(category.name, NamedTextColor.GOLD)
-                            .decoration(TextDecoration.BOLD, true)
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                    meta.lore(listOf(
-                        Component.empty(),
-                        Component.text("${category.items.size} items", NamedTextColor.GRAY)
-                            .decoration(TextDecoration.ITALIC, false),
-                        Component.empty(),
-                        Component.text("Click to browse", NamedTextColor.YELLOW)
-                            .decoration(TextDecoration.ITALIC, false)
-                    ))
-                }
-            }
-
-            gui.setItem(slot, icon) { p, _ ->
-                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
-                openSellShopCategory(p, category.id, 0)
-            }
-        }
-
-        plugin.guiManager.open(player, gui)
-        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
-    }
-
-    // ── Sell Shop Category Page ─────────────────────────────────────────
-
-    fun openSellShopCategory(player: Player, categoryId: String, page: Int) {
-        val category = getSellCategory(categoryId) ?: return
-
-        val title = Component.text(category.name, NamedTextColor.GOLD)
-            .decoration(TextDecoration.BOLD, true)
-            .decoration(TextDecoration.ITALIC, false)
-
-        val gui = CustomGui(title, 54)
-
-        gui.fill(FILLER.clone())
-        for (i in 0..8) gui.inventory.setItem(i, BORDER.clone())
-        for (i in 45..53) gui.inventory.setItem(i, BORDER.clone())
-
-        val sellableItems = category.items.filter { it.sellPrice > 0 }
-
-        val totalPages = ((sellableItems.size - 1) / ITEMS_PER_PAGE).coerceAtLeast(0)
-        val startIndex = page * ITEMS_PER_PAGE
-        val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(sellableItems.size)
-        val pageItems = if (startIndex < sellableItems.size) sellableItems.subList(startIndex, endIndex) else emptyList()
-
-        val itemSlots = mutableListOf<Int>()
-        for (row in 1..4) {
-            for (col in 1..7) {
-                itemSlots.add(row * 9 + col)
-            }
-        }
-
-        for ((index, shopItem) in pageItems.withIndex()) {
-            val slot = itemSlots[index]
-            val icon = buildSellShopItemIcon(player, shopItem)
-
-            gui.setItem(slot, icon) { p, _ ->
-                sellAllOfMaterial(p, shopItem.material)
-                openSellShopCategory(p, categoryId, page) // refresh counts/prices after selling
-            }
-        }
-
-        // Back button - slot 49 (center)
-        val backItem = ItemStack(Material.BARRIER).apply {
-            editMeta { meta ->
-                meta.displayName(
-                    Component.text("Back to Categories", NamedTextColor.RED)
-                        .decoration(TextDecoration.ITALIC, false)
-                        .decoration(TextDecoration.BOLD, true)
-                )
-            }
-        }
-        gui.setItem(49, backItem) { p, _ ->
-            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
-            openSellShopMenu(p)
-        }
-
-        // Previous page - slot 46
-        if (page > 0) {
-            val prevItem = ItemStack(Material.ARROW).apply {
-                editMeta { meta ->
-                    meta.displayName(
-                        Component.text("Previous Page", NamedTextColor.YELLOW)
-                            .decoration(TextDecoration.ITALIC, false)
-                            .decoration(TextDecoration.BOLD, true)
-                    )
-                }
-            }
-            gui.setItem(46, prevItem) { p, _ ->
-                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
-                openSellShopCategory(p, categoryId, page - 1)
-            }
-        }
-
-        // Next page - slot 52
-        if (page < totalPages) {
-            val nextItem = ItemStack(Material.ARROW).apply {
-                editMeta { meta ->
-                    meta.displayName(
-                        Component.text("Next Page", NamedTextColor.YELLOW)
-                            .decoration(TextDecoration.ITALIC, false)
-                            .decoration(TextDecoration.BOLD, true)
-                    )
-                }
-            }
-            gui.setItem(52, nextItem) { p, _ ->
-                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
-                openSellShopCategory(p, categoryId, page + 1)
-            }
-        }
-
-        plugin.guiManager.open(player, gui)
-    }
-
-    private fun buildSellShopItemIcon(player: Player, shopItem: ShopItem): ItemStack {
-        val basePrice = getSellPrice(shopItem.material) ?: shopItem.sellPrice
-        val price = applyCropBonus(basePrice, shopItem.material, player.uniqueId)
-        val owned = player.inventory.contents.filterNotNull().filter { it.type == shopItem.material }.sumOf { it.amount }
-
-        return ItemStack(shopItem.material).apply {
-            editMeta { meta ->
-                meta.displayName(
-                    Component.text(formatMaterialName(shopItem.material), NamedTextColor.WHITE)
-                        .decoration(TextDecoration.BOLD, true)
-                        .decoration(TextDecoration.ITALIC, false)
-                )
-
-                val lore = mutableListOf<Component>()
-                lore.add(
-                    plugin.commsManager.parseLegacy("&7Sell price: &a${plugin.economyManager.format(price)} &7each")
-                        .decoration(TextDecoration.ITALIC, false)
-                )
-                lore.add(
-                    Component.text("You have: ", NamedTextColor.GRAY)
-                        .append(Component.text("$owned", NamedTextColor.WHITE))
-                        .decoration(TextDecoration.ITALIC, false)
-                )
-                lore.add(Component.empty())
-
-                if (owned > 0) {
-                    lore.add(
-                        Component.text("Click to sell all (", NamedTextColor.GREEN)
-                            .append(Component.text(plugin.economyManager.format(price * owned), NamedTextColor.GOLD))
-                            .append(Component.text(")", NamedTextColor.GREEN))
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                } else {
-                    lore.add(Component.text("You have none to sell", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
-                }
-
-                meta.lore(lore)
-            }
-        }
-    }
-
-    /** Sells every stack of [material] in [player]'s inventory. Returns true if anything sold. */
-    fun sellAllOfMaterial(player: Player, material: Material): Boolean {
-        val basePrice = getSellPrice(material) ?: 0.0
-        if (basePrice <= 0) {
-            plugin.commsManager.send(player, Component.text("That item cannot be sold.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
-            return false
-        }
-
-        val price = applyCropBonus(basePrice, material, player.uniqueId)
-
-        var count = 0
-        var totalEarned = 0.0
-        for (i in 0 until player.inventory.size) {
-            val item = player.inventory.getItem(i) ?: continue
-            if (item.type == material) {
-                val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
-                totalEarned += price * mutMult * item.amount
-                count += item.amount
-                player.inventory.setItem(i, null)
-            }
-        }
-
-        if (count == 0) {
-            plugin.commsManager.send(player, Component.text("You don't have any of that item.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
-            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
-            return false
-        }
-
-        plugin.economyManager.deposit(player.uniqueId, totalEarned)
-        plugin.marketManager.recordTransaction(material, "SELL", count)
-        player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
-
-        plugin.commsManager.send(player,
-            Component.text("Sold ", NamedTextColor.GREEN)
-                .append(Component.text("${count}x ${formatMaterialName(material)}", NamedTextColor.WHITE))
-                .append(Component.text(" for ", NamedTextColor.GREEN))
-                .append(Component.text(plugin.economyManager.format(totalEarned), NamedTextColor.GOLD))
-                .append(Component.text(".", NamedTextColor.GREEN)),
-            CommunicationsManager.Category.ECONOMY
-        )
-        return true
-    }
-
     // ── Item Icon Builder ───────────────────────────────────────────────
 
     private fun buildShopItemIcon(shopItem: ShopItem): ItemStack {
@@ -578,12 +286,32 @@ class ServerShopManager(private val plugin: Joshymc) {
                     lore.add(Component.text("Not for sale", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
                 }
 
+                // Sell price
+                if (shopItem.sellPrice > 0) {
+                    lore.add(
+                        plugin.commsManager.parseLegacy("&7Sell: &e${plugin.economyManager.format(shopItem.sellPrice)}")
+                            .decoration(TextDecoration.ITALIC, false)
+                    )
+                } else {
+                    lore.add(Component.text("Cannot sell", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+                }
+
                 lore.add(Component.empty())
 
-                // Action hints - the buy shop is buy-only, use /sell to sell items
+                // Action hints
                 if (shopItem.buyPrice > 0) {
                     lore.add(
                         Component.text("Left-click to choose buy amount", NamedTextColor.GREEN)
+                            .decoration(TextDecoration.ITALIC, false)
+                    )
+                }
+                if (shopItem.sellPrice > 0) {
+                    lore.add(
+                        Component.text("Right-click to sell 1", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                    )
+                    lore.add(
+                        Component.text("Shift+right to sell all", NamedTextColor.YELLOW)
                             .decoration(TextDecoration.ITALIC, false)
                     )
                 }
@@ -596,12 +324,14 @@ class ServerShopManager(private val plugin: Joshymc) {
     // ── Click Handler ───────────────────────────────────────────────────
 
     private fun handleItemClick(player: Player, shopItem: ShopItem, clickType: ClickType) {
+        val noSell = { plugin.commsManager.send(player, Component.text("You cannot sell this item.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY); player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f) }
         val noBuy = { plugin.commsManager.send(player, Component.text("This item is not for sale.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY); player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f) }
 
-        // The buy shop is buy-only - selling happens through /sell instead.
         when (clickType) {
             ClickType.LEFT, ClickType.SHIFT_LEFT ->
                 if (shopItem.buyPrice > 0) openBuyQuantityGui(player, shopItem, shopItem.buyPrice) else noBuy()
+            ClickType.RIGHT -> if (shopItem.sellPrice > 0) sellItem(player, shopItem.material, applyCropBonus(shopItem.sellPrice, shopItem.material, player.uniqueId), 1) else noSell()
+            ClickType.SHIFT_RIGHT -> if (shopItem.sellPrice > 0) sellItem(player, shopItem.material, applyCropBonus(shopItem.sellPrice, shopItem.material, player.uniqueId), -1) else noSell()
             else -> {}
         }
     }
@@ -766,6 +496,89 @@ class ServerShopManager(private val plugin: Joshymc) {
         )
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.2f)
         return true
+    }
+
+    // ── Sell Logic ──────────────────────────────────────────────────────
+
+    fun sellItem(player: Player, material: Material, sellPrice: Double, amount: Int) {
+        val inventory = player.inventory
+
+        if (amount == -1) {
+            // Sell all of that material — compute earnings per slot to honour mutation multipliers
+            var totalCount = 0
+            var totalEarned = 0.0
+            for (slot in 0 until inventory.size) {
+                val stack = inventory.getItem(slot) ?: continue
+                if (stack.type != material) continue
+                val mutMult = plugin.mutationsManager.getMutationMultiplier(stack)
+                totalEarned += sellPrice * mutMult * stack.amount
+                totalCount += stack.amount
+                inventory.setItem(slot, null)
+            }
+
+            if (totalCount == 0) {
+                plugin.commsManager.send(player,
+                    Component.text("You don't have any ", NamedTextColor.RED)
+                        .append(Component.text(formatMaterialName(material), NamedTextColor.WHITE))
+                        .append(Component.text(" to sell.", NamedTextColor.RED)),
+                    CommunicationsManager.Category.ECONOMY
+                )
+                player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                return
+            }
+
+            plugin.economyManager.deposit(player.uniqueId, totalEarned)
+            plugin.marketManager.recordTransaction(material, "SELL", totalCount)
+
+            plugin.commsManager.send(player,
+                Component.text("Sold ", NamedTextColor.YELLOW)
+                    .append(Component.text("${totalCount}x ${formatMaterialName(material)}", NamedTextColor.WHITE))
+                    .append(Component.text(" for ", NamedTextColor.YELLOW))
+                    .append(Component.text(plugin.economyManager.format(totalEarned), NamedTextColor.GOLD))
+                    .append(Component.text(".", NamedTextColor.YELLOW)),
+                CommunicationsManager.Category.ECONOMY
+            )
+            player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.0f)
+        } else {
+            // Sell specific amount — drain slots in order and apply per-slot mutation multipliers
+            if (!inventory.contains(material, amount)) {
+                plugin.commsManager.send(player,
+                    Component.text("You don't have enough ", NamedTextColor.RED)
+                        .append(Component.text(formatMaterialName(material), NamedTextColor.WHITE))
+                        .append(Component.text(" to sell.", NamedTextColor.RED)),
+                    CommunicationsManager.Category.ECONOMY
+                )
+                player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                return
+            }
+
+            var remaining = amount
+            var totalEarned = 0.0
+            for (slot in 0 until inventory.size) {
+                if (remaining <= 0) break
+                val stack = inventory.getItem(slot) ?: continue
+                if (stack.type != material) continue
+                val take = remaining.coerceAtMost(stack.amount)
+                val mutMult = plugin.mutationsManager.getMutationMultiplier(stack)
+                totalEarned += sellPrice * mutMult * take
+                stack.amount -= take
+                remaining -= take
+                if (stack.amount <= 0) inventory.setItem(slot, null)
+            }
+
+            plugin.economyManager.deposit(player.uniqueId, totalEarned)
+            plugin.marketManager.recordTransaction(material, "SELL", amount)
+
+            plugin.commsManager.send(player,
+                Component.text("Sold ", NamedTextColor.YELLOW)
+                    .append(Component.text("${amount}x ${formatMaterialName(material)}", NamedTextColor.WHITE))
+                    .append(Component.text(" for ", NamedTextColor.YELLOW))
+                    .append(Component.text(plugin.economyManager.format(totalEarned), NamedTextColor.GOLD))
+                    .append(Component.text(".", NamedTextColor.YELLOW)),
+                CommunicationsManager.Category.ECONOMY
+            )
+            player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.0f)
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
