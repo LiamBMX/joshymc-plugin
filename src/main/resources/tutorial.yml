@@ -1,0 +1,50 @@
+steps:
+  - icon: GRASS_BLOCK
+    title: "Step 1: Get Your Bearings"
+    color: "#55FF55"
+    lines:
+      - "Use /spawn to return to spawn anytime."
+      - "Use /kit to claim your starter kit."
+      - "Use /rtp to random teleport and find"
+      - "a good spot to settle down."
+
+  - icon: GOLDEN_SHOVEL
+    title: "Step 2: Claim Your Land"
+    color: "#FFAA00"
+    lines:
+      - "Use /claim to protect your builds"
+      - "from griefing and theft."
+      - "Claim blocks are earned over time,"
+      - "or bought with /claim buyblocks."
+      - "Use /team to team up with friends"
+      - "and share a claim."
+
+  - icon: EMERALD
+    title: "Step 3: Make Some Money"
+    color: "#55FFFF"
+    lines:
+      - "Sell items at /shop or /market."
+      - "Set up your own /chestshop to sell"
+      - "to other players."
+      - "Check /ah to buy and sell in the"
+      - "auction house."
+
+  - icon: DIAMOND_SWORD
+    title: "Step 4: Gear Up & Fight"
+    color: "#FF5555"
+    lines:
+      - "Craft custom items and enchants"
+      - "found around the server."
+      - "PvP is allowed in designated areas"
+      - "or with mutual consent."
+      - "Fight fair, read the /rules."
+
+  - icon: EXPERIENCE_BOTTLE
+    title: "Step 5: Keep Progressing"
+    color: "#AA55FF"
+    lines:
+      - "Complete /quests and /daily quests"
+      - "for rewards."
+      - "Level up with /skills."
+      - "Equip /talisman and /cosmetics to"
+      - "customize your character."
