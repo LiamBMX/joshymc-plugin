@@ -21,9 +21,12 @@ class ServerShopManager(private val plugin: Joshymc) {
     data class ShopItem(val material: Material, val buyPrice: Double, val sellPrice: Double)
     data class ShopCategory(val id: String, val name: String, val icon: Material, val items: List<ShopItem>)
 
-    // shop.yml (buy catalog, browsed/bought from the /shop GUI) and shop_sell.yml
-    // (sell catalog, the only source /sell and other sellers look at) are kept as
-    // fully separate category lists so the two never shadow each other.
+    // shop.yml is the buy catalog browsed/bought from the /shop GUI. Every item in
+    // it already carries a "sell" price alongside its "buy" price, so shop.yml
+    // doubles as the sell catalog too - the GUI just never surfaces the sell side
+    // (no sell button, no sell lore), so it's effectively a hidden sell list living
+    // inside the buy shop. shop_sell.yml is still loaded as a secondary catalog for
+    // sell-only items that don't have a buy-shop entry at all.
     private val buyCategories = mutableListOf<ShopCategory>()
     private val sellCategories = mutableListOf<ShopCategory>()
 
@@ -42,10 +45,11 @@ class ServerShopManager(private val plugin: Joshymc) {
         sellCategories.clear()
 
         // shop.yml is the buy catalog for the /shop GUI (buying only - the buy
-        // shop no longer sells items). shop_sell.yml is the ONLY source /sell
-        // (and the sell wand / auto-sellers) look at to decide what's sellable
-        // and for how much. The two files are kept fully separate so neither
-        // shadows the other.
+        // shop no longer sells items in its UI). Its per-item "sell" prices are
+        // used by /sell (and the sell wand / auto-sellers) as the primary
+        // source of what's sellable and for how much - a hidden sell list that
+        // rides along with the buy catalog. shop_sell.yml is a secondary
+        // catalog checked only when a material has no shop.yml entry at all.
         loadCategoriesInto(buyCategories, "shop.yml")
         loadCategoriesInto(sellCategories, "shop_sell.yml")
 
@@ -96,8 +100,15 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     fun getCategory(id: String): ShopCategory? = buyCategories.find { it.id == id }
 
-    /** Sell-shop categories (shop_sell.yml) - the only source of truth for what's sellable. */
+    /**
+     * What's sellable and for how much - sourced from shop.yml's hidden sell
+     * prices first, falling back to shop_sell.yml for sell-only materials that
+     * have no shop.yml entry at all.
+     */
     fun getCategoryIdForMaterial(material: Material): String? {
+        for (category in buyCategories) {
+            if (category.items.any { it.material == material && it.sellPrice > 0 }) return category.id
+        }
         for (category in sellCategories) {
             if (category.items.any { it.material == material && it.sellPrice > 0 }) return category.id
         }
@@ -105,16 +116,15 @@ class ServerShopManager(private val plugin: Joshymc) {
     }
 
     fun getSellPrice(material: Material): Double? {
-        for (category in sellCategories) {
-            val item = category.items.find { it.material == material && it.sellPrice > 0 }
-            if (item != null) {
-                return item.sellPrice * plugin.boosterManager.getSellMultiplier(material)
-            }
-        }
-        return null
+        val base = getBaseSellPrice(material) ?: return null
+        return base * plugin.boosterManager.getSellMultiplier(material)
     }
 
     fun getBaseSellPrice(material: Material): Double? {
+        for (category in buyCategories) {
+            val item = category.items.find { it.material == material && it.sellPrice > 0 }
+            if (item != null) return item.sellPrice
+        }
         for (category in sellCategories) {
             val item = category.items.find { it.material == material && it.sellPrice > 0 }
             if (item != null) return item.sellPrice
