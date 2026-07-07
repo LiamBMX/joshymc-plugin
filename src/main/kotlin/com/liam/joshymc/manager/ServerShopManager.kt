@@ -95,8 +95,8 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     fun getSellPrice(material: Material): Double? {
         for (category in categories) {
-            val item = category.items.find { it.material == material }
-            if (item != null && item.sellPrice > 0) {
+            val item = category.items.find { it.material == material && it.sellPrice > 0 }
+            if (item != null) {
                 return item.sellPrice * plugin.boosterManager.getSellMultiplier(material)
             }
         }
@@ -105,8 +105,8 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     fun getBaseSellPrice(material: Material): Double? {
         for (category in categories) {
-            val item = category.items.find { it.material == material }
-            if (item != null && item.sellPrice > 0) return item.sellPrice
+            val item = category.items.find { it.material == material && it.sellPrice > 0 }
+            if (item != null) return item.sellPrice
         }
         return null
     }
