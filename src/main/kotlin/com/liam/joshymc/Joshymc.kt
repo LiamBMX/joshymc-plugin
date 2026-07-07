@@ -176,6 +176,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var serverShopManager: ServerShopManager
         private set
+    lateinit var creditShopManager: com.liam.joshymc.manager.CreditShopManager
+        private set
     lateinit var rankManager: RankManager
         private set
     lateinit var claimManager: ClaimManager
@@ -339,6 +341,7 @@ class Joshymc : JavaPlugin() {
         spawnWorldManager = SpawnWorldManager(this)
         customEnchantManager = CustomEnchantManager(this)
         serverShopManager = ServerShopManager(this)
+        creditShopManager = com.liam.joshymc.manager.CreditShopManager(this)
         eventManager = com.liam.joshymc.manager.EventManager(this)
         resurgeManager = com.liam.joshymc.manager.ResurgeManager(this)
         boosterManager = BoosterManager(this)
@@ -380,6 +383,7 @@ class Joshymc : JavaPlugin() {
         registerEnchants()
         if (isFeatureEnabled("custom-enchants")) customEnchantManager.start()
         serverShopManager.start()
+        creditShopManager.start()
 
         marketManager = MarketManager(this)
         if (isFeatureEnabled("market")) marketManager.start()
