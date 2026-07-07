@@ -11,19 +11,20 @@ import java.util.UUID
 
 /**
  * "Credits" — a secondary currency only obtainable via /credits admin
- * grants or passively from playtime (0.1 credit per hour, tracked against
- * credited_hours so hours already paid out aren't double-counted).
+ * grants or passively from playtime (credits.per-hour in config.yml,
+ * tracked against credited_hours so hours already paid out aren't
+ * double-counted).
  */
 class CreditsManager(private val plugin: Joshymc) : Listener {
 
-    companion object {
-        const val CREDITS_PER_HOUR = 0.1
-    }
+    private var creditsPerHour: Double = 1.0
 
     private val formatter = DecimalFormat("#,##0.0")
     private var tickTaskId: Int = -1
 
     fun start() {
+        creditsPerHour = plugin.config.getDouble("credits.per-hour", 1.0)
+
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS credits (
                 uuid TEXT PRIMARY KEY,
@@ -39,7 +40,7 @@ class CreditsManager(private val plugin: Joshymc) : Listener {
         }
 
         // Every 5 minutes, check online players for newly-crossed playtime
-        // hours and pay out 0.1 credits per hour since they were last paid.
+        // hours and pay out credits.per-hour credits since they were last paid.
         tickTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
             for (player in Bukkit.getOnlinePlayers()) {
                 awardPlaytimeCredits(player.uniqueId)
@@ -67,7 +68,7 @@ class CreditsManager(private val plugin: Joshymc) : Listener {
         if (hours <= creditedHours) return
 
         val delta = hours - creditedHours
-        deposit(uuid, delta * CREDITS_PER_HOUR)
+        deposit(uuid, delta * creditsPerHour)
         setCreditedHours(uuid, hours)
     }
 

@@ -368,6 +368,10 @@ claims:
   max-blocks: 50000        # Maximum total claim blocks a player can have
   end-island-radius: 1000  # Blocks from 0,0 in The End that cannot be claimed (covers main island + buffer)
 
+# Credits — secondary currency, passively earned from playtime
+credits:
+  per-hour: 1.0  # Credits awarded per hour of playtime
+
 # Ranks — displayed as chat tags before the player's name
 # Tag uses & color codes (e.g., &c = red, &l = bold, &a = green)
 # OR hex colors with &#RRGGBB format (e.g., &#FF5555&lAdmin for hex red bold)
