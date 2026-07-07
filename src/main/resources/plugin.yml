@@ -221,6 +221,9 @@ commands:
   tokens:
     description: Give, sell, or buy server tokens
     usage: /tokens <give|sell|buy> [args...]
+  credits:
+    description: Manage player credits (admin)
+    usage: /credits <give|take|reset> <player> <amount>
   welcome:
     description: Welcome a newly joined player and earn an AFK key
     usage: /welcome
@@ -646,6 +649,9 @@ permissions:
     default: true
   joshymc.eco:
     description: Manage economy (admin)
+    default: op
+  joshymc.credits:
+    description: Manage player credits via /credits (admin)
     default: op
   joshymc.balance:
     description: Check balance

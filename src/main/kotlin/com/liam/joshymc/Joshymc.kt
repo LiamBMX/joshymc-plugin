@@ -161,6 +161,8 @@ class Joshymc : JavaPlugin() {
     lateinit var teamManager: TeamManager
         private set
     lateinit var economyManager: EconomyManager
+
+    lateinit var creditsManager: com.liam.joshymc.manager.CreditsManager
         private set
     lateinit var investManager: InvestManager
         private set
@@ -315,6 +317,7 @@ class Joshymc : JavaPlugin() {
         announcementManager = AnnouncementManager(this)
         autoRestartManager = AutoRestartManager(this)
         playtimeManager = PlaytimeManager(this)
+        creditsManager = com.liam.joshymc.manager.CreditsManager(this)
         questManager = QuestManager(this)
         dailyQuestManager = DailyQuestManager(this)
         talismanManager = TalismanManager(this)
@@ -373,6 +376,7 @@ class Joshymc : JavaPlugin() {
         announcementManager.start()
         autoRestartManager.start()
         playtimeManager.start()
+        creditsManager.start()
         registerEnchants()
         if (isFeatureEnabled("custom-enchants")) customEnchantManager.start()
         serverShopManager.start()
@@ -451,6 +455,7 @@ class Joshymc : JavaPlugin() {
         announcementManager.stop()
         autoRestartManager.stop()
         playtimeManager.stop()
+        creditsManager.stop()
         dailyQuestManager.stop()
         resourceWorldManager.stop()
         buildPvpManager.stop()

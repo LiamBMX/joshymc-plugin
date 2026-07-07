@@ -171,6 +171,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         }
 
         val balance = formatCompact(plugin.economyManager.getBalance(player))
+        val credits = plugin.creditsManager.format(plugin.creditsManager.getBalance(player))
         val rank = plugin.rankManager.getPlayerRank(player)
         val rankTagComponent = rank?.displayTag?.let { plugin.commsManager.parseLegacy(it) }
             ?: plugin.commsManager.parseLegacy("&7None")
@@ -206,6 +207,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         lines.add(Component.empty())
         lines.add(plugin.commsManager.parseLegacy("&6&lStats:"))
         lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D0D\u1D0F\u0274\u1D07\u028F&6: &a$$balance"))
+        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D04\u0280\u1D07\u1D05\u026A\u1D1B\uA731&6: &b$credits"))
         lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D0B\u026A\u029F\u029F\uA731&6: &c$playerKills"))
         lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D18\u029F\u1D00\u028F\u1D1B\u026A\u1D0D\u1D07&6: &e$playtime"))
         lines.add(Component.empty())
