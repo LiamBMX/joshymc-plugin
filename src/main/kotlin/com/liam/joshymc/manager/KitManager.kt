@@ -323,6 +323,7 @@ class KitManager(private val plugin: Joshymc) {
                 if (hasPermission && !onCooldown) {
                     lore.add(Component.text("  Click to claim", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
                 }
+                lore.add(Component.text("  Right-click to preview", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
 
                 meta.lore(lore)
 
@@ -333,10 +334,35 @@ class KitManager(private val plugin: Joshymc) {
             }
 
         val kitName = kitDef.name
-        gui.setItem(slot, item) { p, _ ->
-            p.closeInventory()
-            claimKit(p, kitName)
+        gui.setItem(slot, item) { p, event ->
+            if (event.click.isRightClick) {
+                openKitPreviewGui(p, kitDef)
+            } else {
+                p.closeInventory()
+                claimKit(p, kitName)
+            }
         }
+    }
+
+    /** Read-only preview of a kit's contents — items can be hovered for full tooltips (enchants, attributes, etc.) but not taken. */
+    fun openKitPreviewGui(player: Player, kitDef: KitDef) {
+        val sortedItems = kitDef.items.toSortedMap().values.toList()
+        val rows = (((sortedItems.size - 1) / 9) + 1).coerceIn(1, 6)
+        val size = rows * 9
+
+        val title = Component.text("Preview: ")
+            .append(Component.text(kitDef.name, TextColor.color(0x55FFFF)))
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+        val gui = CustomGui(title, size)
+
+        for ((index, kitItem) in sortedItems.withIndex()) {
+            if (index >= size) break
+            gui.inventory.setItem(index, kitItem.clone())
+        }
+
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.4f, 1.4f)
     }
 
     fun openCreateKitGui(player: Player, kitName: String) {
