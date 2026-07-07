@@ -224,6 +224,9 @@ commands:
   credits:
     description: Manage player credits (admin)
     usage: /credits <give|take|reset> <player> <amount>
+  cshop:
+    description: Browse or manage the credits-only shop
+    usage: /cshop [additem|removeitem|category|list] [args...]
   welcome:
     description: Welcome a newly joined player and earn an AFK key
     usage: /welcome
@@ -652,6 +655,12 @@ permissions:
     default: op
   joshymc.credits:
     description: Manage player credits via /credits (admin)
+    default: op
+  joshymc.cshop:
+    description: Access the credits-only shop
+    default: true
+  joshymc.cshop.admin:
+    description: Manage the credits shop (add/remove items, categories)
     default: op
   joshymc.balance:
     description: Check balance
