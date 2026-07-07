@@ -49,6 +49,10 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         }
 
         return when (args.getOrNull(0)?.lowercase()) {
+            "shop" -> {
+                plugin.serverShopManager.openSellShopMenu(sender)
+                true
+            }
             "hand" -> {
                 val sellAllOfType = args.getOrNull(1)?.lowercase() == "all"
                 sellHand(sender, sellAllOfType)
@@ -76,6 +80,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
                 plugin.commsManager.send(sender,
                     Component.text("Usage:\n", NamedTextColor.YELLOW)
                         .append(Component.text("  /sell", NamedTextColor.GOLD)).append(Component.text(" — open sell GUI\n", NamedTextColor.GRAY))
+                        .append(Component.text("  /sell shop", NamedTextColor.GOLD)).append(Component.text(" — browse the sell shop\n", NamedTextColor.GRAY))
                         .append(Component.text("  /sell all <item>", NamedTextColor.GOLD)).append(Component.text(" — sell all of an item\n", NamedTextColor.GRAY))
                         .append(Component.text("  /sell hand", NamedTextColor.GOLD)).append(Component.text(" — sell held item\n", NamedTextColor.GRAY))
                         .append(Component.text("  /sell hand all", NamedTextColor.GOLD)).append(Component.text(" — sell all of held item type", NamedTextColor.GRAY)),
@@ -323,7 +328,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         if (sender !is Player) return emptyList()
 
         return when (args.size) {
-            1 -> listOf("all", "hand").filter { it.startsWith(args[0].lowercase()) }
+            1 -> listOf("all", "hand", "shop").filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
                 "hand" -> listOf("all").filter { it.startsWith(args[1], ignoreCase = true) }
                 "all" -> sellableMaterials.filter { it.startsWith(args[1].lowercase()) }.take(30)

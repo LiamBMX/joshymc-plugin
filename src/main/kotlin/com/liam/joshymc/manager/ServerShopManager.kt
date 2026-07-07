@@ -100,6 +100,11 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     fun getCategory(id: String): ShopCategory? = buyCategories.find { it.id == id }
 
+    /** Sell-shop categories (shop_sell.yml) - used to browse/sell in the /sell shop GUI. */
+    fun getSellCategories(): List<ShopCategory> = sellCategories.toList()
+
+    fun getSellCategory(id: String): ShopCategory? = sellCategories.find { it.id == id }
+
     /**
      * What's sellable and for how much - sourced from shop.yml's hidden sell
      * prices first, falling back to shop_sell.yml for sell-only materials that
@@ -290,6 +295,229 @@ class ServerShopManager(private val plugin: Joshymc) {
         }
 
         plugin.guiManager.open(player, gui)
+    }
+
+    // ── Sell Shop Menu ───────────────────────────────────────────────────
+
+    fun openSellShopMenu(player: Player) {
+        val title = Component.text("Sell Shop", NamedTextColor.GOLD)
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+
+        val gui = CustomGui(title, 27)
+        gui.fill(FILLER.clone())
+        gui.border(BORDER.clone())
+
+        val availableSlots = mutableListOf<Int>()
+        for (col in 1..7) {
+            availableSlots.add(9 + col) // row 1
+        }
+
+        val centered = centerInRow(sellCategories.size, availableSlots)
+
+        for ((index, slot) in centered.withIndex()) {
+            val category = sellCategories[index]
+            val icon = ItemStack(category.icon).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text(category.name, NamedTextColor.GOLD)
+                            .decoration(TextDecoration.BOLD, true)
+                            .decoration(TextDecoration.ITALIC, false)
+                    )
+                    meta.lore(listOf(
+                        Component.empty(),
+                        Component.text("${category.items.size} items", NamedTextColor.GRAY)
+                            .decoration(TextDecoration.ITALIC, false),
+                        Component.empty(),
+                        Component.text("Click to browse", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                    ))
+                }
+            }
+
+            gui.setItem(slot, icon) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openSellShopCategory(p, category.id, 0)
+            }
+        }
+
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    // ── Sell Shop Category Page ─────────────────────────────────────────
+
+    fun openSellShopCategory(player: Player, categoryId: String, page: Int) {
+        val category = getSellCategory(categoryId) ?: return
+
+        val title = Component.text(category.name, NamedTextColor.GOLD)
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+
+        val gui = CustomGui(title, 54)
+
+        gui.fill(FILLER.clone())
+        for (i in 0..8) gui.inventory.setItem(i, BORDER.clone())
+        for (i in 45..53) gui.inventory.setItem(i, BORDER.clone())
+
+        val sellableItems = category.items.filter { it.sellPrice > 0 }
+
+        val totalPages = ((sellableItems.size - 1) / ITEMS_PER_PAGE).coerceAtLeast(0)
+        val startIndex = page * ITEMS_PER_PAGE
+        val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(sellableItems.size)
+        val pageItems = if (startIndex < sellableItems.size) sellableItems.subList(startIndex, endIndex) else emptyList()
+
+        val itemSlots = mutableListOf<Int>()
+        for (row in 1..4) {
+            for (col in 1..7) {
+                itemSlots.add(row * 9 + col)
+            }
+        }
+
+        for ((index, shopItem) in pageItems.withIndex()) {
+            val slot = itemSlots[index]
+            val icon = buildSellShopItemIcon(player, shopItem)
+
+            gui.setItem(slot, icon) { p, _ ->
+                sellAllOfMaterial(p, shopItem.material)
+                openSellShopCategory(p, categoryId, page) // refresh counts/prices after selling
+            }
+        }
+
+        // Back button - slot 49 (center)
+        val backItem = ItemStack(Material.BARRIER).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text("Back to Categories", NamedTextColor.RED)
+                        .decoration(TextDecoration.ITALIC, false)
+                        .decoration(TextDecoration.BOLD, true)
+                )
+            }
+        }
+        gui.setItem(49, backItem) { p, _ ->
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            openSellShopMenu(p)
+        }
+
+        // Previous page - slot 46
+        if (page > 0) {
+            val prevItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Previous Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(46, prevItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openSellShopCategory(p, categoryId, page - 1)
+            }
+        }
+
+        // Next page - slot 52
+        if (page < totalPages) {
+            val nextItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Next Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(52, nextItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openSellShopCategory(p, categoryId, page + 1)
+            }
+        }
+
+        plugin.guiManager.open(player, gui)
+    }
+
+    private fun buildSellShopItemIcon(player: Player, shopItem: ShopItem): ItemStack {
+        val basePrice = getSellPrice(shopItem.material) ?: shopItem.sellPrice
+        val price = applyCropBonus(basePrice, shopItem.material, player.uniqueId)
+        val owned = player.inventory.contents.filterNotNull().filter { it.type == shopItem.material }.sumOf { it.amount }
+
+        return ItemStack(shopItem.material).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text(formatMaterialName(shopItem.material), NamedTextColor.WHITE)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+
+                val lore = mutableListOf<Component>()
+                lore.add(
+                    plugin.commsManager.parseLegacy("&7Sell price: &a${plugin.economyManager.format(price)} &7each")
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                lore.add(
+                    Component.text("You have: ", NamedTextColor.GRAY)
+                        .append(Component.text("$owned", NamedTextColor.WHITE))
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                lore.add(Component.empty())
+
+                if (owned > 0) {
+                    lore.add(
+                        Component.text("Click to sell all (", NamedTextColor.GREEN)
+                            .append(Component.text(plugin.economyManager.format(price * owned), NamedTextColor.GOLD))
+                            .append(Component.text(")", NamedTextColor.GREEN))
+                            .decoration(TextDecoration.ITALIC, false)
+                    )
+                } else {
+                    lore.add(Component.text("You have none to sell", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+                }
+
+                meta.lore(lore)
+            }
+        }
+    }
+
+    /** Sells every stack of [material] in [player]'s inventory. Returns true if anything sold. */
+    fun sellAllOfMaterial(player: Player, material: Material): Boolean {
+        val basePrice = getSellPrice(material) ?: 0.0
+        if (basePrice <= 0) {
+            plugin.commsManager.send(player, Component.text("That item cannot be sold.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return false
+        }
+
+        val price = applyCropBonus(basePrice, material, player.uniqueId)
+
+        var count = 0
+        var totalEarned = 0.0
+        for (i in 0 until player.inventory.size) {
+            val item = player.inventory.getItem(i) ?: continue
+            if (item.type == material) {
+                val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
+                totalEarned += price * mutMult * item.amount
+                count += item.amount
+                player.inventory.setItem(i, null)
+            }
+        }
+
+        if (count == 0) {
+            plugin.commsManager.send(player, Component.text("You don't have any of that item.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+            return false
+        }
+
+        plugin.economyManager.deposit(player.uniqueId, totalEarned)
+        plugin.marketManager.recordTransaction(material, "SELL", count)
+        player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
+
+        plugin.commsManager.send(player,
+            Component.text("Sold ", NamedTextColor.GREEN)
+                .append(Component.text("${count}x ${formatMaterialName(material)}", NamedTextColor.WHITE))
+                .append(Component.text(" for ", NamedTextColor.GREEN))
+                .append(Component.text(plugin.economyManager.format(totalEarned), NamedTextColor.GOLD))
+                .append(Component.text(".", NamedTextColor.GREEN)),
+            CommunicationsManager.Category.ECONOMY
+        )
+        return true
     }
 
     // ── Item Icon Builder ───────────────────────────────────────────────
