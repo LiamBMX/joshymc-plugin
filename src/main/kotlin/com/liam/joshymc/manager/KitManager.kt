@@ -252,9 +252,10 @@ class KitManager(private val plugin: Joshymc) {
         // Side borders (rows 1-3)
         for (row in 1..3) { gui.inventory.setItem(row * 9, BORDER.clone()); gui.inventory.setItem(row * 9 + 8, BORDER.clone()) }
 
-        // Place kits in middle area (rows 1-3, cols 1-7)
+        // Place kits in a centered 3x3 area (rows 1-3, cols 3-5) instead of spanning
+        // the full row, so the kit order (rank progression) reads top-to-bottom, left-to-right.
         val slots = mutableListOf<Int>()
-        for (row in 1..3) for (col in 1..7) slots.add(row * 9 + col)
+        for (row in 1..3) for (col in 3..5) slots.add(row * 9 + col)
 
         var rendered = 0
         for ((idx, kitDef) in kits.values.withIndex()) {
