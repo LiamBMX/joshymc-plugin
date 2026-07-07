@@ -791,10 +791,11 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             }
 
             // Team
-            val team = plugin.teamManager.getPlayerTeam(target.uniqueId)
-            if (team != null) {
+            val teamName = plugin.teamManager.getPlayerTeam(target.uniqueId)
+            if (teamName != null) {
+                val teamDisplayName = plugin.teamManager.getTeam(teamName)?.displayName ?: teamName
                 lore.add(Component.text("Team: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
-                    .append(Component.text(team, NamedTextColor.WHITE)))
+                    .append(Component.text(teamDisplayName, NamedTextColor.WHITE)))
             }
 
             // Balance

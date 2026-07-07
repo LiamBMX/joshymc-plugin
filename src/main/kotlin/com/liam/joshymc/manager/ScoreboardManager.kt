@@ -175,7 +175,8 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val rank = plugin.rankManager.getPlayerRank(player)
         val rankTagComponent = rank?.displayTag?.let { plugin.commsManager.parseLegacy(it) }
             ?: plugin.commsManager.parseLegacy("&7None")
-        val team = plugin.teamManager.getPlayerTeam(player.uniqueId) ?: "None"
+        val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
+        val team = teamName?.let { plugin.teamManager.getTeam(it)?.displayName } ?: "None"
         val playerKills = kills.getOrDefault(player.uniqueId, 0)
         val playtime = formatPlaytime(plugin.playtimeManager.getPlaytime(player.uniqueId))
         val ping = player.ping
