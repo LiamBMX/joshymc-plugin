@@ -506,14 +506,6 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
 
         val player = event.player
 
-        // Only the owner can pick it up
-        if (spawnerBlock.ownerUuid != player.uniqueId) {
-            event.isCancelled = true
-            plugin.commsManager.send(player,
-                Component.text("This spawner is owner-locked. Only the owner can pick it up.", NamedTextColor.RED))
-            return
-        }
-
         // Must use a pickaxe
         val tool = player.inventory.itemInMainHand
         if (!tool.type.name.endsWith("_PICKAXE")) {
