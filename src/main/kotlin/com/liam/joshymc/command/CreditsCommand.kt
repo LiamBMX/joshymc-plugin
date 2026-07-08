@@ -18,6 +18,10 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return handleBalance(sender, args)
         }
 
+        if (args[0].equals("pay", ignoreCase = true)) {
+            return handlePay(sender, args)
+        }
+
         if (!sender.hasPermission("joshymc.credits")) {
             sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
             return true
@@ -89,7 +93,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 }
             }
             else -> {
-                sender.sendMessage(Component.text("Usage: /credits <balance|give|take|reset> [player] [amount]", NamedTextColor.RED))
+                sender.sendMessage(Component.text("Usage: /credits <balance|pay|give|take|reset> [player] [amount]", NamedTextColor.RED))
             }
         }
 
@@ -135,12 +139,86 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         return true
     }
 
+    private fun handlePay(sender: CommandSender, args: Array<out String>): Boolean {
+        if (sender !is Player) {
+            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            return true
+        }
+
+        if (!sender.hasPermission("joshymc.credits.pay")) {
+            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return true
+        }
+
+        if (args.size < 3) {
+            plugin.commsManager.send(sender, Component.text("Usage: /credits pay <amount> <player>", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return true
+        }
+
+        val amount = args[1].toDoubleOrNull()
+        if (amount == null || amount <= 0) {
+            plugin.commsManager.send(sender, Component.text("Invalid amount.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return true
+        }
+
+        val target = Bukkit.getPlayer(args[2])
+        if (target == null) {
+            plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return true
+        }
+
+        if (target.uniqueId == sender.uniqueId) {
+            plugin.commsManager.send(sender, Component.text("You cannot pay yourself.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return true
+        }
+
+        val success = plugin.creditsManager.withdraw(sender.uniqueId, amount)
+        if (!success) {
+            plugin.commsManager.send(sender, Component.text("You don't have enough credits.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return true
+        }
+
+        plugin.creditsManager.deposit(target.uniqueId, amount)
+
+        val formatted = plugin.creditsManager.format(amount)
+        plugin.commsManager.send(
+            sender,
+            Component.text("You sent ", NamedTextColor.GREEN)
+                .append(Component.text(formatted, NamedTextColor.AQUA))
+                .append(Component.text(" credits to ", NamedTextColor.GREEN))
+                .append(Component.text(target.name, NamedTextColor.WHITE)),
+            CommunicationsManager.Category.ECONOMY
+        )
+
+        plugin.commsManager.send(
+            target,
+            Component.text("You received ", NamedTextColor.GREEN)
+                .append(Component.text(formatted, NamedTextColor.AQUA))
+                .append(Component.text(" credits from ", NamedTextColor.GREEN))
+                .append(Component.text(sender.name, NamedTextColor.WHITE)),
+            CommunicationsManager.Category.ECONOMY
+        )
+
+        return true
+    }
+
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
+        val sub = args.getOrNull(0)?.lowercase()
         return when (args.size) {
-            1 -> listOf("balance", "give", "take", "reset").filter { it.startsWith(args[0].lowercase()) }
-            2 -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.lowercase().startsWith(args[1].lowercase()) }
+            1 -> listOf("balance", "pay", "give", "take", "reset").filter { it.startsWith(args[0].lowercase()) }
+            2 -> {
+                if (sub == "pay") {
+                    listOf("1", "5", "10", "100").filter { it.startsWith(args[1]) }
+                } else {
+                    Bukkit.getOnlinePlayers().map { it.name }.filter { it.lowercase().startsWith(args[1].lowercase()) }
+                }
+            }
             3 -> {
-                if (args[0].lowercase() != "reset" && args[0].lowercase() != "balance") {
+                if (sub == "pay") {
+                    Bukkit.getOnlinePlayers().map { it.name }
+                        .filter { it != sender.name }
+                        .filter { it.lowercase().startsWith(args[2].lowercase()) }
+                } else if (sub != "reset" && sub != "balance") {
                     listOf("1", "5", "10", "100").filter { it.startsWith(args[2]) }
                 } else emptyList()
             }

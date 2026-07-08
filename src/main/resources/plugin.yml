@@ -222,8 +222,8 @@ commands:
     description: Give, sell, or buy server tokens
     usage: /tokens <give|sell|buy> [args...]
   credits:
-    description: Check credits balance, or manage player credits (admin)
-    usage: /credits balance [player]
+    description: Check credits balance, pay other players, or manage player credits (admin)
+    usage: /credits <balance|pay> [args...]
     aliases: [credit]
   cshop:
     description: Browse or manage the credits-only shop
@@ -663,6 +663,9 @@ permissions:
   joshymc.credits:
     description: Manage player credits via /credits (admin)
     default: op
+  joshymc.credits.pay:
+    description: Pay other players credits via /credits pay
+    default: true
   joshymc.cshop:
     description: Access the credits-only shop
     default: true
