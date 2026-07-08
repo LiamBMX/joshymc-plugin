@@ -223,7 +223,7 @@ commands:
     usage: /tokens <give|sell|buy> [args...]
   credits:
     description: Check credits balance, pay other players, or manage player credits (admin)
-    usage: /credits <balance|pay> [args...]
+    usage: /credits <balance|bal|pay> [args...]
     aliases: [credit]
   cshop:
     description: Browse or manage the credits-only shop
