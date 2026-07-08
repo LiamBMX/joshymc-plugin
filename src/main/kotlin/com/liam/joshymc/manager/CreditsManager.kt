@@ -10,10 +10,10 @@ import java.text.DecimalFormat
 import java.util.UUID
 
 /**
- * "Credits" — a secondary currency only obtainable via /credits admin
- * grants or passively from playtime (credits.per-hour in config.yml,
- * tracked against credited_hours so hours already paid out aren't
- * double-counted).
+ * "Credits" — a secondary currency obtainable via /credits admin grants,
+ * passively from playtime (credits.per-hour in config.yml, tracked
+ * against credited_hours so hours already paid out aren't double-counted),
+ * or from other players via /credits pay.
  */
 class CreditsManager(private val plugin: Joshymc) : Listener {
 
