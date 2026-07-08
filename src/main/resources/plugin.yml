@@ -222,8 +222,9 @@ commands:
     description: Give, sell, or buy server tokens
     usage: /tokens <give|sell|buy> [args...]
   credits:
-    description: Manage player credits (admin)
-    usage: /credits <give|take|reset> <player> <amount>
+    description: Check credits balance, or manage player credits (admin)
+    usage: /credits balance [player]
+    aliases: [credit]
   cshop:
     description: Browse or manage the credits-only shop
     usage: /cshop [additem|removeitem|category|list] [args...]
