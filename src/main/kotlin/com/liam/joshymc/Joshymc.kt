@@ -896,6 +896,15 @@ class Joshymc : JavaPlugin() {
             permission = "joshymc.deathcoords"
         ))
         settingsManager.register(SettingsManager.SettingDef(
+            key = "random_coords",
+            displayName = "Random Coords",
+            description = "Randomize X/Z shown to you (Y stays real)",
+            material = org.bukkit.Material.ENDER_PEARL,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = false,
+            permission = "joshymc.randomcoords"
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
             key = "pvp",
             displayName = "PvP",
             description = "Toggle player vs player combat",

@@ -527,6 +527,9 @@ permissions:
   joshymc.deathcoords:
     description: Shows death coordinates
     default: true
+  joshymc.randomcoords:
+    description: Allows randomizing X/Z shown in death coordinates
+    default: true
   joshymc.chatitem:
     description: Allows using [i] to show items in chat
     default: true
