@@ -14,7 +14,7 @@ import org.bukkit.entity.Player
 class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (args.isEmpty() || args[0].equals("balance", ignoreCase = true)) {
+        if (args.isEmpty() || args[0].equals("balance", ignoreCase = true) || args[0].equals("bal", ignoreCase = true)) {
             return handleBalance(sender, args)
         }
 
@@ -93,7 +93,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 }
             }
             else -> {
-                sender.sendMessage(Component.text("Usage: /credits <balance|pay|give|take|reset> [player] [amount]", NamedTextColor.RED))
+                sender.sendMessage(Component.text("Usage: /credits <balance|bal|pay|give|take|reset> [player] [amount]", NamedTextColor.RED))
             }
         }
 
@@ -205,7 +205,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         val sub = args.getOrNull(0)?.lowercase()
         return when (args.size) {
-            1 -> listOf("balance", "pay", "give", "take", "reset").filter { it.startsWith(args[0].lowercase()) }
+            1 -> listOf("balance", "bal", "pay", "give", "take", "reset").filter { it.startsWith(args[0].lowercase()) }
             2 -> {
                 if (sub == "pay") {
                     listOf("1", "5", "10", "100").filter { it.startsWith(args[1]) }
@@ -218,7 +218,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                     Bukkit.getOnlinePlayers().map { it.name }
                         .filter { it != sender.name }
                         .filter { it.lowercase().startsWith(args[2].lowercase()) }
-                } else if (sub != "reset" && sub != "balance") {
+                } else if (sub != "reset" && sub != "balance" && sub != "bal") {
                     listOf("1", "5", "10", "100").filter { it.startsWith(args[2]) }
                 } else emptyList()
             }
