@@ -910,7 +910,7 @@ class Joshymc : JavaPlugin() {
             description = "Toggle player vs player combat",
             material = org.bukkit.Material.DIAMOND_SWORD,
             disabledMaterial = org.bukkit.Material.WOODEN_SWORD,
-            default = false,
+            default = true,
             permission = "joshymc.pvp"
         ))
         settingsManager.register(SettingsManager.SettingDef(
