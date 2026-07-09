@@ -116,12 +116,17 @@ class TradeManager(private val plugin: Joshymc) : Listener {
 
         plugin.commsManager.send(sender, Component.text("Trade request sent to ${target.name}.", NamedTextColor.GREEN))
 
-        val clickable = Component.text("[Click to accept]", NamedTextColor.GREEN, TextDecoration.BOLD)
-            .clickEvent(ClickEvent.runCommand("/trade ${sender.name}"))
+        val acceptComponent = Component.text("[Accept]", NamedTextColor.GREEN, TextDecoration.BOLD)
+            .clickEvent(ClickEvent.runCommand("/trade accept ${sender.name}"))
+        val denyComponent = Component.text("[Deny]", NamedTextColor.RED, TextDecoration.BOLD)
+            .clickEvent(ClickEvent.runCommand("/trade deny ${sender.name}"))
 
         plugin.commsManager.send(
             target,
-            Component.text("${sender.name} wants to trade! ", NamedTextColor.YELLOW).append(clickable)
+            Component.text("${sender.name} wants to trade! ", NamedTextColor.YELLOW)
+                .append(acceptComponent)
+                .append(Component.text(" ", NamedTextColor.YELLOW))
+                .append(denyComponent)
         )
 
         // Schedule expiry cleanup
@@ -131,6 +136,57 @@ class TradeManager(private val plugin: Joshymc) : Listener {
                 pendingRequests.remove(target.uniqueId)
             }
         }, 600L) // 30 seconds
+    }
+
+    fun acceptRequest(player: Player, fromName: String?) {
+        val incoming = pendingRequests[player.uniqueId]
+        if (incoming == null || System.currentTimeMillis() >= incoming.expiresAt) {
+            plugin.commsManager.send(player, Component.text("You have no pending trade requests.", NamedTextColor.RED))
+            return
+        }
+
+        val sender = plugin.server.getPlayer(incoming.sender)
+        if (sender == null) {
+            pendingRequests.remove(player.uniqueId)
+            plugin.commsManager.send(player, Component.text("That player is no longer online.", NamedTextColor.RED))
+            return
+        }
+
+        if (fromName != null && !sender.name.equals(fromName, ignoreCase = true)) {
+            plugin.commsManager.send(player, Component.text("No pending trade request from that player.", NamedTextColor.RED))
+            return
+        }
+
+        if (activeTrades.containsKey(player.uniqueId) || activeTrades.containsKey(sender.uniqueId)) {
+            plugin.commsManager.send(player, Component.text("You or that player are already in a trade.", NamedTextColor.RED))
+            return
+        }
+
+        if (plugin.combatManager.isTagged(player) || plugin.combatManager.isTagged(sender)) {
+            plugin.commsManager.send(player, Component.text("You cannot trade while in combat.", NamedTextColor.RED))
+            return
+        }
+
+        pendingRequests.remove(player.uniqueId)
+        startTrade(sender, player)
+    }
+
+    fun denyRequest(player: Player, fromName: String?) {
+        val incoming = pendingRequests[player.uniqueId]
+        if (incoming == null || System.currentTimeMillis() >= incoming.expiresAt) {
+            plugin.commsManager.send(player, Component.text("You have no pending trade requests.", NamedTextColor.RED))
+            return
+        }
+
+        val sender = plugin.server.getPlayer(incoming.sender)
+        if (fromName != null && (sender == null || !sender.name.equals(fromName, ignoreCase = true))) {
+            plugin.commsManager.send(player, Component.text("No pending trade request from that player.", NamedTextColor.RED))
+            return
+        }
+
+        pendingRequests.remove(player.uniqueId)
+        plugin.commsManager.send(player, Component.text("Trade request denied.", NamedTextColor.RED))
+        sender?.let { plugin.commsManager.send(it, Component.text("${player.name} denied your trade request.", NamedTextColor.RED)) }
     }
 
     // ---- Trade lifecycle ----
