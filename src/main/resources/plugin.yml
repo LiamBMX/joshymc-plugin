@@ -28,6 +28,9 @@ commands:
   sit:
     description: Sit down where you are
     usage: /sit
+  end:
+    description: Open or close the End dimension (ops only)
+    usage: /end <open|close>
   spawn:
     description: Teleport to spawn, or manage spawn settings (ops)
     usage: /spawn [drops|containers] [on|off]
@@ -875,6 +878,12 @@ permissions:
     default: op
   joshymc.worldflag.bypass:
     description: Bypass world flag restrictions
+    default: op
+  joshymc.end.admin:
+    description: Open or close the End dimension
+    default: op
+  joshymc.end.bypass:
+    description: Bypass the End dimension being closed
     default: op
   joshymc.admin:
     description: Full admin panel access (Owner/Admin)
