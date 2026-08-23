@@ -65,6 +65,7 @@ import com.liam.joshymc.manager.PortalManager
 import com.liam.joshymc.manager.SpawnDecorationManager
 import com.liam.joshymc.manager.VoteManager
 import com.liam.joshymc.manager.LotteryManager
+import com.liam.joshymc.manager.EndManager
 import com.liam.joshymc.manager.WorldFlagManager
 import com.liam.joshymc.manager.BoosterManager
 import com.liam.joshymc.manager.MobStackManager
@@ -228,6 +229,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var worldFlagManager: WorldFlagManager
         private set
+    lateinit var endManager: EndManager
+        private set
     lateinit var arenaManager: ArenaManager
         private set
     lateinit var buildPvpManager: BuildPvpManager
@@ -333,6 +336,7 @@ class Joshymc : JavaPlugin() {
         gadgetManager = GadgetManager(this)
         adminManager = AdminManager(this)
         worldFlagManager = WorldFlagManager(this)
+        endManager = EndManager(this)
         arenaManager = ArenaManager(this)
         buildPvpManager = BuildPvpManager(this)
         portalManager = PortalManager(this)
@@ -405,6 +409,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("glow")) glowManager.start()
         adminManager.start()
         worldFlagManager.start()
+        endManager.start()
         // Start spawn world BEFORE arenas so the world exists when arena ticks begin
         spawnWorldManager.start()
 

@@ -91,6 +91,13 @@ combat:
   # Whether players can throw ender pearls while combat-tagged (toggle via /pvp enderpearl <on|off>)
   allow-enderpearl: false
 
+# The End — toggle via /end <open|close> (ops only)
+end:
+  # Whether players can teleport into the End through end portals.
+  # When false, players walking into an end portal simply phase through it
+  # instead of being teleported.
+  open: true
+
 # External plugin integrations
 integrations:
   # Grim AntiCheat — when JoshyMC sees Grim is installed, it auto-injects a

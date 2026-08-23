@@ -87,6 +87,7 @@ import com.liam.joshymc.command.DelWarpCommand
 import com.liam.joshymc.command.PlayerHomeCommand
 import com.liam.joshymc.command.EditWarpCommand
 import com.liam.joshymc.command.HomeCommand
+import com.liam.joshymc.command.EndCommand
 import com.liam.joshymc.command.JoshyCommand
 import com.liam.joshymc.command.LinkCommand
 import com.liam.joshymc.command.NightVisionCommand
@@ -160,6 +161,12 @@ class CommandManager(private val plugin: Joshymc) {
         }
 
         plugin.getCommand("sit")?.setExecutor(SitCommand(plugin))
+
+        plugin.getCommand("end")?.let {
+            val cmd = EndCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
 
         plugin.getCommand("spawn")?.let { val c = SpawnCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("setspawn")?.setExecutor(SetSpawnCommand(plugin))
