@@ -31,6 +31,9 @@ commands:
   end:
     description: Open or close the End dimension (ops only)
     usage: /end <open|close>
+  chat:
+    description: Mute or unmute global chat (ops only)
+    usage: /chat <mute|unmute>
   spawn:
     description: Teleport to spawn, or manage spawn settings (ops)
     usage: /spawn [drops|containers] [on|off]
@@ -884,6 +887,12 @@ permissions:
     default: op
   joshymc.end.bypass:
     description: Bypass the End dimension being closed
+    default: op
+  joshymc.chat.admin:
+    description: Mute or unmute global chat
+    default: op
+  joshymc.chat.mod.bypass:
+    description: Bypass a global chat mute
     default: op
   joshymc.admin:
     description: Full admin panel access (Owner/Admin)

@@ -88,6 +88,7 @@ import com.liam.joshymc.command.PlayerHomeCommand
 import com.liam.joshymc.command.EditWarpCommand
 import com.liam.joshymc.command.HomeCommand
 import com.liam.joshymc.command.EndCommand
+import com.liam.joshymc.command.ChatCommand
 import com.liam.joshymc.command.JoshyCommand
 import com.liam.joshymc.command.LinkCommand
 import com.liam.joshymc.command.NightVisionCommand
@@ -164,6 +165,12 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("end")?.let {
             val cmd = EndCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("chat")?.let {
+            val cmd = ChatCommand(plugin)
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
