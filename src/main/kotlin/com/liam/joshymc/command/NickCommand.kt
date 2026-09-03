@@ -14,6 +14,10 @@ import org.bukkit.entity.Player
 
 class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
+    // Custom hex colors (&#RRGGBB) are reserved for admin/config-defined text —
+    // players picking their own nickname are limited to the standard 16 codes.
+    private val HEX_CODE = Regex("&#[0-9A-Fa-f]{6}")
+
     /**
      * Build the actual displayed nickname Component. Non-op players get a
      * `~` prefix in front of their nick to make it obvious it's a fake name;
@@ -39,6 +43,10 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 val nick = args.drop(1).joinToString(" ")
                 if (nick.isBlank()) {
                     plugin.commsManager.send(sender, Component.text("Usage: /nick set <nickname>", NamedTextColor.RED))
+                    return true
+                }
+                if (HEX_CODE.containsMatchIn(nick)) {
+                    plugin.commsManager.send(sender, Component.text("Custom hex colors aren't allowed in nicknames — use a standard color code instead.", NamedTextColor.RED))
                     return true
                 }
                 val plain = nick.replace("&[0-9a-fk-or]".toRegex(), "")
