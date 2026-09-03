@@ -7,13 +7,10 @@ import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
-import org.bukkit.entity.Wither
-import org.bukkit.entity.WitherSkull
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockDropItemEvent
-import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
@@ -31,8 +28,10 @@ class MutationsManager(private val plugin: Joshymc) : Listener {
     private var activeEvent: MutationEvent? = null
     private var endTask: BukkitTask? = null
 
-    // Blocks that trigger the Catalyst mutation on their emerald ore drops
+    // Emerald ore gets a higher mutation chance; every other block/mob drop uses the default chance
     private val EMERALD_ORE_BLOCKS = setOf(Material.EMERALD_ORE, Material.DEEPSLATE_EMERALD_ORE)
+    private val EMERALD_ORE_CHANCE = 0.01
+    private val DEFAULT_MUTATION_CHANCE = 0.005
 
     fun start() {
         Bukkit.getPluginManager().registerEvents(this, plugin)
@@ -128,13 +127,7 @@ class MutationsManager(private val plugin: Joshymc) : Listener {
     fun onBlockDrop(event: BlockDropItemEvent) {
         if (activeEvent != MutationEvent.CATALYST) return
         val blockType = event.blockState.type
-
-        val chance = when (blockType) {
-            in EMERALD_ORE_BLOCKS -> 0.01   // 1% for emerald ore
-            Material.BEETROOTS -> 0.005      // 0.5% for beetroot
-            Material.WITHER_ROSE -> 0.005    // 0.5% for wither rose (block break)
-            else -> return
-        }
+        val chance = if (blockType in EMERALD_ORE_BLOCKS) EMERALD_ORE_CHANCE else DEFAULT_MUTATION_CHANCE
 
         for (item in event.items) {
             val stack = item.itemStack
@@ -151,17 +144,12 @@ class MutationsManager(private val plugin: Joshymc) : Listener {
     fun onEntityDeath(event: EntityDeathEvent) {
         if (activeEvent != MutationEvent.CATALYST) return
 
-        // Wither roses drop when an entity is slain by a wither or wither skull
-        val cause = event.entity.lastDamageCause
-        val isWitherKill = cause is EntityDamageByEntityEvent &&
-            (cause.damager is Wither || cause.damager is WitherSkull)
-        if (!isWitherKill) return
-
         val toAdd = mutableListOf<ItemStack>()
         val iter = event.drops.iterator()
         while (iter.hasNext()) {
             val drop = iter.next()
-            if (drop.type == Material.WITHER_ROSE && Random.nextDouble() < 0.005) {
+            if (drop.type == Material.AIR) continue
+            if (Random.nextDouble() < DEFAULT_MUTATION_CHANCE) {
                 iter.remove()
                 val mutated = drop.clone()
                 applyMutation(mutated)
