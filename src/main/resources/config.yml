@@ -35,6 +35,7 @@ features:
   chat-games: true
   lottery: true
   mob-stacking: false
+  kill-streaks: true
 
 # Mob Stacking — merges nearby mobs of the same type into a single entity
 mob-stacking:
@@ -90,6 +91,38 @@ combat:
   allow-elytra: false
   # Whether players can throw ender pearls while combat-tagged (toggle via /pvp enderpearl <on|off>)
   allow-enderpearl: false
+
+# PvP Kill Streaks — consecutive kills without dying. Milestones pay out cash,
+# and once a player's streak reaches the bounty threshold, killing them
+# transfers a % of their money to whoever ends their streak.
+kill-streaks:
+  # Whether ANY death (mob, fall, lava, void, etc.) resets the current streak.
+  # If false, only PvP deaths reset it.
+  reset-on-any-death: true
+  # Streaks that trigger a milestone reward. Reward = milestone x reward-per-kill.
+  milestones: [3, 5, 10, 15, 25, 50, 100, 200, 500]
+  # Milestones at or above this streak get a server-wide broadcast; below it,
+  # only the killer is told.
+  milestone-broadcast-min-streak: 5
+  milestone-rewards:
+    enabled: true
+    reward-per-kill: 10000
+  bounty:
+    enabled: true
+    # Current streak a player must be on before dying puts their money at risk.
+    minimum-streak: 5
+    # % of the victim's current balance transferred to the killer.
+    percentage: 10.0
+    broadcast: true
+  anti-farm:
+    # The same killer -> victim pair only earns streak/bounty credit once per window.
+    same-victim-cooldown-minutes: 30
+  environmental-streak-loss:
+    # Broadcast when a player loses a large streak to a non-PvP death (no money changes hands).
+    broadcast: true
+    minimum-streak: 10
+  # Personal "You killed X! Kill Streak: N" message on every valid streak kill.
+  kill-message: true
 
 # The End — toggle via /end <open|close> (ops only)
 end:

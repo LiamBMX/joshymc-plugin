@@ -7,6 +7,7 @@ import com.liam.joshymc.manager.CombatManager
 import com.liam.joshymc.manager.CommandManager
 import com.liam.joshymc.manager.DatabaseManager
 import com.liam.joshymc.manager.ItemManager
+import com.liam.joshymc.manager.KillStreakManager
 import com.liam.joshymc.manager.LagCleanerManager
 import com.liam.joshymc.manager.ListenerManager
 import com.liam.joshymc.manager.RecipeManager
@@ -196,6 +197,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var playtimeManager: PlaytimeManager
         private set
+    lateinit var killStreakManager: KillStreakManager
+        private set
     lateinit var chatTagManager: ChatTagManager
         private set
     lateinit var marketManager: MarketManager
@@ -311,6 +314,7 @@ class Joshymc : JavaPlugin() {
         hopperPlusManager = HopperPlusManager(this)
         spawnerManager = SpawnerManager(this)
         teamManager = TeamManager(this)
+        killStreakManager = KillStreakManager(this)
         resourcePackManager = ResourcePackManager(this)
         discordManager = DiscordManager(this)
         lagCleanerManager = LagCleanerManager(this)
@@ -375,6 +379,7 @@ class Joshymc : JavaPlugin() {
         hopperPlusManager.start()
         spawnerManager.start()
         teamManager.start()
+        if (isFeatureEnabled("kill-streaks")) killStreakManager.start()
         resourcePackManager.start()
         lagCleanerManager.start()
         combatManager.start()
@@ -469,6 +474,7 @@ class Joshymc : JavaPlugin() {
         announcementManager.stop()
         autoRestartManager.stop()
         playtimeManager.stop()
+        killStreakManager.stop()
         creditsManager.stop()
         questCycleManager.stop()
         resourceWorldManager.stop()
@@ -511,6 +517,7 @@ class Joshymc : JavaPlugin() {
         safe("questCycleManager.stop") { questCycleManager.stop() }
         safe("spawnerManager.stop") { spawnerManager.stop() }
         safe("afkManager.stop") { afkManager.stop() }
+        safe("killStreakManager.stop") { killStreakManager.stop() }
         safe("antiCheatManager.stop") { antiCheatManager.stop() }
         safe("combatManager.stop") { combatManager.stop() }
         safe("autoRestartManager.stop") { autoRestartManager.stop() }
@@ -542,6 +549,7 @@ class Joshymc : JavaPlugin() {
         safe("hopperPlusManager.start") { hopperPlusManager.start() }
         safe("spawnerManager.start") { spawnerManager.start() }
         safe("teamManager.start") { teamManager.start() }
+        if (isFeatureEnabled("kill-streaks")) safe("killStreakManager.start") { killStreakManager.start() }
         safe("resourcePackManager.start") { resourcePackManager.start() }
 
         // 7. Commands just get new instances (executors are swapped, not re-registered)
