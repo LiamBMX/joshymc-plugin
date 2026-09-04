@@ -27,7 +27,7 @@ class QuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return true
         }
 
-        if (!sender.hasPermission("joshymc.quests")) {
+        if (!sender.hasPermission("joshymc.questbook")) {
             plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
             return true
         }
@@ -51,7 +51,7 @@ class QuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleReset(sender: CommandSender, args: Array<out String>) {
         // Console always allowed; players require admin permission.
-        if (sender is Player && !sender.hasPermission("joshymc.quests.admin")) {
+        if (sender is Player && !sender.hasPermission("joshymc.questbook.admin")) {
             plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
             return
         }
@@ -207,8 +207,8 @@ class QuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        val isAdmin = sender !is Player || sender.hasPermission("joshymc.quests.admin")
-        val canBrowse = sender is Player && sender.hasPermission("joshymc.quests")
+        val isAdmin = sender !is Player || sender.hasPermission("joshymc.questbook.admin")
+        val canBrowse = sender is Player && sender.hasPermission("joshymc.questbook")
         if (!isAdmin && !canBrowse) return emptyList()
 
         if (args.size == 1) {

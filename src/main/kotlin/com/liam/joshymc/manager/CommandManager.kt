@@ -60,6 +60,7 @@ import com.liam.joshymc.command.MarketCommand
 import com.liam.joshymc.command.DailyCommand
 import com.liam.joshymc.command.DiscordCommand
 import com.liam.joshymc.command.QuestCommand
+import com.liam.joshymc.command.QuestCycleCommand
 import com.liam.joshymc.command.RewardsCommand
 import com.liam.joshymc.command.TagCommand
 import com.liam.joshymc.command.TalismanCommand
@@ -364,7 +365,10 @@ class CommandManager(private val plugin: Joshymc) {
         }
 
         // ── Quests ──────────────────────────────────
-        plugin.getCommand("quests")?.let { val c = QuestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        // /quests: unified Daily/Weekly/Quest Master GUI. /questbook: the older permanent
+        // achievement-style quest journal (renamed off /quests to make room).
+        plugin.getCommand("quests")?.let { val c = QuestCycleCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("questbook")?.let { val c = QuestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("rewards")?.setExecutor(RewardsCommand(plugin))
         plugin.getCommand("daily")?.setExecutor(DailyCommand(plugin))
 
