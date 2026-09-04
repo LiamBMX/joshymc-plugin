@@ -199,6 +199,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var killStreakManager: KillStreakManager
         private set
+    lateinit var loginStreakManager: com.liam.joshymc.manager.LoginStreakManager
+        private set
     lateinit var chatTagManager: ChatTagManager
         private set
     lateinit var marketManager: MarketManager
@@ -315,6 +317,7 @@ class Joshymc : JavaPlugin() {
         spawnerManager = SpawnerManager(this)
         teamManager = TeamManager(this)
         killStreakManager = KillStreakManager(this)
+        loginStreakManager = com.liam.joshymc.manager.LoginStreakManager(this)
         resourcePackManager = ResourcePackManager(this)
         discordManager = DiscordManager(this)
         lagCleanerManager = LagCleanerManager(this)
@@ -380,6 +383,7 @@ class Joshymc : JavaPlugin() {
         spawnerManager.start()
         teamManager.start()
         if (isFeatureEnabled("kill-streaks")) killStreakManager.start()
+        if (isFeatureEnabled("login-streaks")) loginStreakManager.start()
         resourcePackManager.start()
         lagCleanerManager.start()
         combatManager.start()
@@ -475,6 +479,7 @@ class Joshymc : JavaPlugin() {
         autoRestartManager.stop()
         playtimeManager.stop()
         killStreakManager.stop()
+        loginStreakManager.stop()
         creditsManager.stop()
         questCycleManager.stop()
         resourceWorldManager.stop()
@@ -518,6 +523,7 @@ class Joshymc : JavaPlugin() {
         safe("spawnerManager.stop") { spawnerManager.stop() }
         safe("afkManager.stop") { afkManager.stop() }
         safe("killStreakManager.stop") { killStreakManager.stop() }
+        safe("loginStreakManager.stop") { loginStreakManager.stop() }
         safe("antiCheatManager.stop") { antiCheatManager.stop() }
         safe("combatManager.stop") { combatManager.stop() }
         safe("autoRestartManager.stop") { autoRestartManager.stop() }
@@ -550,6 +556,7 @@ class Joshymc : JavaPlugin() {
         safe("spawnerManager.start") { spawnerManager.start() }
         safe("teamManager.start") { teamManager.start() }
         if (isFeatureEnabled("kill-streaks")) safe("killStreakManager.start") { killStreakManager.start() }
+        if (isFeatureEnabled("login-streaks")) safe("loginStreakManager.start") { loginStreakManager.start() }
         safe("resourcePackManager.start") { resourcePackManager.start() }
 
         // 7. Commands just get new instances (executors are swapped, not re-registered)

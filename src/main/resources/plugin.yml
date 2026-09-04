@@ -504,6 +504,10 @@ commands:
     description: View PvP kill streak stats and bounty status
     usage: /killstreak [player|set|reset|sethighest]
     aliases: [streak, ks]
+  loginstreak:
+    description: View and manage your Daily Login Streak
+    usage: /loginstreak [player|info|set|reset|complete|playtime|grace|reload]
+    aliases: [dailylogin, loginrewards]
   customenchant:
     description: Apply custom enchants to items
     usage: /customenchant <add|remove|list|info>
@@ -702,6 +706,12 @@ permissions:
     default: true
   joshymc.killstreak.admin:
     description: Set or reset a player's kill streak
+    default: op
+  joshymc.loginstreak:
+    description: View and manage your Daily Login Streak
+    default: true
+  joshymc.loginstreak.admin:
+    description: Set, reset, or complete a player's Login Streak
     default: op
   joshymc.questtop:
     description: View quest leaderboard
