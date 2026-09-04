@@ -99,6 +99,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.spawnerManager, plugin)
         pm.registerEvents(plugin.teamManager, plugin)
         pm.registerEvents(plugin.killStreakManager, plugin)
+        pm.registerEvents(plugin.loginStreakManager, plugin)
 
         // AntiCheat
         pm.registerEvents(plugin.antiCheatManager, plugin)

@@ -36,6 +36,7 @@ features:
   lottery: true
   mob-stacking: false
   kill-streaks: true
+  login-streaks: true
 
 # Mob Stacking — merges nearby mobs of the same type into a single entity
 mob-stacking:
@@ -123,6 +124,39 @@ kill-streaks:
     minimum-streak: 10
   # Personal "You killed X! Kill Streak: N" message on every valid streak kill.
   kill-message: true
+
+# Daily Login Streak — /loginstreak. Reuses the existing economy for the
+# daily reward, Credits for the weekly bonus, and the crate system for the
+# weekly bonus key. A day begins/ends at midnight in `timezone`. AFK time
+# (per AFKManager) never counts toward the playtime requirement.
+login-streaks:
+  enabled: true
+  # IANA time zone used for the daily boundary (handles DST automatically).
+  # Matches the existing Daily Quest reset schedule by default.
+  timezone: "America/New_York"
+  # Eligible (non-AFK) playtime required to complete a Login day.
+  required-playtime-minutes: 30
+  gui:
+    title: "Daily Login Streak"
+    # How often the open GUI re-renders playtime/streak progress, in seconds.
+    refresh-seconds: 2
+  daily-reward:
+    amount: 100000
+  weekly-bonus:
+    enabled: true
+    # Every Nth completed streak day awards the bonus on top of the daily reward.
+    every-days: 7
+    credits: 100
+    # One key is chosen at random from this list and given on a weekly bonus.
+    eligible-keys:
+      - "common"
+      - "rare"
+      - "joshy"
+  grace:
+    enabled: true
+    # Number of consecutive successful Login completions required to restore
+    # Grace after it's consumed.
+    recharge-completed-days: 7
 
 # The End — toggle via /end <open|close> (ops only)
 end:

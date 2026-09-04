@@ -112,6 +112,7 @@ import com.liam.joshymc.command.CrateEditorCommand
 import com.liam.joshymc.command.AuctionCommand
 import com.liam.joshymc.command.BountyCommand
 import com.liam.joshymc.command.KillStreakCommand
+import com.liam.joshymc.command.LoginStreakCommand
 import com.liam.joshymc.command.HopperPlusCommand
 import com.liam.joshymc.command.SignShopCommand
 import com.liam.joshymc.command.SpawnerCommand
@@ -343,6 +344,12 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("killstreak")?.let {
             val cmd = KillStreakCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("loginstreak")?.let {
+            val cmd = LoginStreakCommand(plugin)
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
