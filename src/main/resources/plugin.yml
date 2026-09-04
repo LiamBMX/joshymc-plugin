@@ -500,6 +500,10 @@ commands:
   bounty:
     description: Place and manage bounties
     usage: /bounty <set|list|cancel>
+  killstreak:
+    description: View PvP kill streak stats and bounty status
+    usage: /killstreak [player|set|reset|sethighest]
+    aliases: [streak, ks]
   customenchant:
     description: Apply custom enchants to items
     usage: /customenchant <add|remove|list|info>
@@ -693,6 +697,12 @@ permissions:
   joshymc.killtop:
     description: View kill leaderboard
     default: true
+  joshymc.killstreak:
+    description: View PvP kill streak stats and bounty status
+    default: true
+  joshymc.killstreak.admin:
+    description: Set or reset a player's kill streak
+    default: op
   joshymc.questtop:
     description: View quest leaderboard
     default: true
