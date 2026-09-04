@@ -4,11 +4,11 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.StockMarketManager
-import com.liam.joshymc.manager.StockPricingEngine
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Material
 import org.bukkit.entity.Player
+import kotlin.math.abs
 import kotlin.math.ceil
 
 /**
@@ -193,16 +193,14 @@ object StockTradingGui {
         val econ = plugin.economyManager
 
         val preview: Pair<Double, Double> = if (isBuy) {
-            val r = StockPricingEngine.computeBuy(stock.price, stock.sharesOutstanding, dollarAmount, market.maxSingleTradeImpact, market.minLiquidityFloor)
-            r.sharesMinted to r.impactFraction
+            val r = market.computeBuyLeg(stock, dollarAmount)
+            val impact = if (stock.price > 0.0) abs(r.newPrice - stock.price) / stock.price else 0.0
+            r.sharesMinted to impact
         } else {
             val holding = market.getHolding(stock.ticker, player.uniqueId)
-            val r = StockPricingEngine.computeSell(
-                stock.price, stock.sharesOutstanding, dollarAmount,
-                holding?.shares ?: 0.0, holding?.costBasis ?: 0.0,
-                market.maxSingleTradeImpact, market.minLiquidityFloor
-            )
-            r.sharesRemoved to r.impactFraction
+            val r = market.computeSellLeg(stock, holding?.shares ?: 0.0, holding?.costBasis ?: 0.0, dollarAmount)
+            val impact = if (stock.price > 0.0) abs(r.newPrice - stock.price) / stock.price else 0.0
+            r.sharesRemoved to impact
         }
         val (estShares, impact) = preview
         val impactPercent = impact * 100.0 * (if (isBuy) 1.0 else -1.0)
