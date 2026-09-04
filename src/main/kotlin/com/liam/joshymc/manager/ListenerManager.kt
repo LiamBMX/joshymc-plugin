@@ -30,6 +30,7 @@ import com.liam.joshymc.listener.BubbleButtListener
 import com.liam.joshymc.listener.CustomArmorListener
 import com.liam.joshymc.listener.CustomDropListener
 import com.liam.joshymc.listener.AuctionBidListener
+import com.liam.joshymc.listener.StockTradeChatListener
 import com.liam.joshymc.listener.CustomArmorAnvilListener
 import com.liam.joshymc.listener.SellWandAnvilListener
 import com.liam.joshymc.listener.SellWandListener
@@ -118,6 +119,9 @@ class ListenerManager(private val plugin: Joshymc) {
         // Auction bid chat input + auction manager quit cleanup
         pm.registerEvents(plugin.auctionManager, plugin)
         pm.registerEvents(AuctionBidListener(plugin), plugin)
+
+        // Stock market chat input (create name / buy amount / sell amount) + quit cleanup
+        pm.registerEvents(StockTradeChatListener(plugin), plugin)
 
         // Sell Wand
         pm.registerEvents(SellWandListener(plugin), plugin)

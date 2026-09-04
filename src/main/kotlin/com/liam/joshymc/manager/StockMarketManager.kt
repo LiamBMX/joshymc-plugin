@@ -1,0 +1,683 @@
+package com.liam.joshymc.manager
+
+import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.ProfanityFilter
+import org.bukkit.Material
+import org.bukkit.entity.Player
+import java.sql.ResultSet
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * Owns the player-driven stock market: table creation, stock creation flow,
+ * buy/sell orchestration (delegating math to [StockPricingEngine]), holdings/portfolio
+ * queries, ticker generation, name validation, the JoshyMC 1% mechanic, and the
+ * one-time migration of the old `bank_investments` bank-interest table.
+ *
+ * Pricing/persistence assumption (see StockPricingEngine doc): this is a bonding-curve
+ * market, not an order book — buys mint shares_outstanding, sells burn it, and there is
+ * no counterparty. Trades always execute at the average of pre/post price, which is what
+ * makes an immediate buy-then-sell of the same stock a net loss (prevents free-money
+ * round-tripping).
+ */
+class StockMarketManager(private val plugin: Joshymc) {
+
+    companion object {
+        /** Fixed UUID string used to store JoshyMC's own server-controlled position as a normal holdings row. */
+        const val SERVER_STOCK_UUID_STRING = "00000000-0000-0000-0000-000000000001"
+        val SERVER_STOCK_UUID: UUID = UUID.fromString(SERVER_STOCK_UUID_STRING)
+        const val JOSH_TICKER = "JOSH"
+        const val JOSH_NAME = "JoshyMC"
+
+        /** Below this, share counts / market caps are treated as effectively zero. */
+        const val EPSILON = StockPricingEngine.EPSILON
+    }
+
+    // ── Config (loaded in start()) ──────────────────────────────────
+    var minimumBuy = 1000.0
+        private set
+    var stockCreationCost = 1_000_000.0
+        private set
+    var defaultStockPrice = 10.0
+        private set
+    var initialShares = 100_000.0
+        private set
+    var serverContribution = 0.01
+        private set
+    var maxSingleTradeImpact = 0.10
+        private set
+    var minLiquidityFloor = 1000.0
+        private set
+    var activityPeriodHours = 24
+        private set
+    var largeTransactionThreshold = 500_000.0
+        private set
+    var chatInputTimeoutSeconds = 30
+        private set
+    var nameMinLength = 3
+        private set
+    var nameMaxLength = 24
+        private set
+
+    private var activityVeryHigh = 1_000_000.0
+    private var activityHigh = 250_000.0
+    private var activityModerate = 50_000.0
+    private var activityLow = 5_000.0
+    private var trendStableBandPercent = 2.0
+
+    var iconMaterials: List<Material> = emptyList()
+        private set
+
+    private val chatInputTimeoutMs: Long get() = chatInputTimeoutSeconds * 1000L
+
+    // ── Pending chat-input state (consumed by StockTradeChatListener) ──
+    data class PendingCreateName(val expiresAt: Long)
+    data class PendingTradeInput(val ticker: String, val expiresAt: Long)
+    data class PendingStockCreation(val name: String, val ticker: String, val expiresAt: Long)
+    data class PendingTradeConfirmation(
+        val ticker: String,
+        val dollarAmount: Double,
+        val isBuy: Boolean,
+        val expiresAt: Long,
+    )
+
+    val pendingCreateNameInputs = ConcurrentHashMap<UUID, PendingCreateName>()
+    val pendingBuyInputs = ConcurrentHashMap<UUID, PendingTradeInput>()
+    val pendingSellInputs = ConcurrentHashMap<UUID, PendingTradeInput>()
+    val pendingStockConfirmations = ConcurrentHashMap<UUID, PendingStockCreation>()
+    val pendingTradeConfirmations = ConcurrentHashMap<UUID, PendingTradeConfirmation>()
+
+    /** Only one pending chat-input type may be active per player at a time. */
+    fun setPendingCreateName(uuid: UUID) {
+        pendingBuyInputs.remove(uuid)
+        pendingSellInputs.remove(uuid)
+        pendingCreateNameInputs[uuid] = PendingCreateName(System.currentTimeMillis() + chatInputTimeoutMs)
+    }
+
+    fun setPendingBuy(uuid: UUID, ticker: String) {
+        pendingCreateNameInputs.remove(uuid)
+        pendingSellInputs.remove(uuid)
+        pendingBuyInputs[uuid] = PendingTradeInput(ticker, System.currentTimeMillis() + chatInputTimeoutMs)
+    }
+
+    fun setPendingSell(uuid: UUID, ticker: String) {
+        pendingCreateNameInputs.remove(uuid)
+        pendingBuyInputs.remove(uuid)
+        pendingSellInputs[uuid] = PendingTradeInput(ticker, System.currentTimeMillis() + chatInputTimeoutMs)
+    }
+
+    fun clearAllPending(uuid: UUID) {
+        pendingCreateNameInputs.remove(uuid)
+        pendingBuyInputs.remove(uuid)
+        pendingSellInputs.remove(uuid)
+        pendingStockConfirmations.remove(uuid)
+        pendingTradeConfirmations.remove(uuid)
+    }
+
+    fun isExpired(expiresAt: Long): Boolean = System.currentTimeMillis() > expiresAt
+
+    fun needsConfirmation(dollarAmount: Double): Boolean = dollarAmount >= largeTransactionThreshold
+
+    // ── Data classes ─────────────────────────────────────────────────
+    data class Stock(
+        val ticker: String,
+        val name: String,
+        val nameLower: String,
+        val creatorUuid: String?,
+        val icon: Material,
+        val price: Double,
+        val sharesOutstanding: Double,
+        val isServerOwned: Boolean,
+        val createdAt: Long,
+    )
+
+    data class Holding(
+        val ticker: String,
+        val uuid: String,
+        val shares: Double,
+        val costBasis: Double,
+    )
+
+    data class MarketStats(
+        val volume24h: Double,
+        val buyVolume24h: Double,
+        val sellVolume24h: Double,
+        val open24h: Double,
+        val high24h: Double,
+        val low24h: Double,
+        val changePercent24h: Double,
+        val activity: StockPricingEngine.ActivityLevel,
+        val trend: StockPricingEngine.TrendLevel,
+    )
+
+    sealed class TradeOutcome {
+        data class BuySuccess(
+            val stock: Stock,
+            val dollarAmount: Double,
+            val sharesMinted: Double,
+            val avgExecutionPrice: Double,
+            val previousPrice: Double,
+            val newPrice: Double,
+        ) : TradeOutcome()
+
+        data class SellSuccess(
+            val stock: Stock,
+            val dollarAmount: Double,
+            val sharesSold: Double,
+            val avgExecutionPrice: Double,
+            val previousPrice: Double,
+            val newPrice: Double,
+            val realizedPL: Double,
+            val remainingShares: Double,
+            val remainingValue: Double,
+        ) : TradeOutcome()
+
+        data class Failure(val message: String) : TradeOutcome()
+    }
+
+    sealed class CreateOutcome {
+        data class Success(val stock: Stock) : CreateOutcome()
+        data class Failure(val message: String) : CreateOutcome()
+    }
+
+    // ── Lifecycle ────────────────────────────────────────────────────
+
+    fun start() {
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS stocks (
+                ticker TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                name_lower TEXT NOT NULL UNIQUE,
+                creator_uuid TEXT,
+                icon TEXT NOT NULL,
+                price REAL NOT NULL,
+                shares_outstanding REAL NOT NULL,
+                is_server_owned INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL
+            )
+        """.trimIndent())
+
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS stock_holdings (
+                ticker TEXT NOT NULL,
+                uuid TEXT NOT NULL,
+                shares REAL NOT NULL DEFAULT 0,
+                cost_basis REAL NOT NULL DEFAULT 0,
+                PRIMARY KEY (ticker, uuid)
+            )
+        """.trimIndent())
+
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS stock_trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                uuid TEXT NOT NULL,
+                is_buy INTEGER NOT NULL,
+                dollar_amount REAL NOT NULL,
+                shares REAL NOT NULL,
+                price REAL NOT NULL,
+                server_triggered INTEGER NOT NULL DEFAULT 0,
+                timestamp INTEGER NOT NULL
+            )
+        """.trimIndent())
+
+        loadConfig()
+        migrateOldBankInvestments()
+        ensureJoshyMcStock()
+
+        plugin.logger.info("[StockMarket] StockMarketManager started (${getAllStocks().size} stocks).")
+    }
+
+    private fun loadConfig() {
+        val cfg = plugin.config
+        minimumBuy = cfg.getDouble("stock-market.minimum-buy", 1000.0)
+        stockCreationCost = cfg.getDouble("stock-market.stock-creation-cost", 1_000_000.0)
+        defaultStockPrice = cfg.getDouble("stock-market.default-stock-price", 10.0)
+        initialShares = cfg.getDouble("stock-market.initial-shares", 100_000.0)
+        serverContribution = cfg.getDouble("stock-market.joshymc-server-contribution", 0.01)
+        maxSingleTradeImpact = cfg.getDouble("stock-market.maximum-single-trade-price-impact", 0.10)
+        minLiquidityFloor = cfg.getDouble("stock-market.minimum-liquidity-floor", 1000.0)
+        activityPeriodHours = cfg.getInt("stock-market.market-activity-period-hours", 24)
+        largeTransactionThreshold = cfg.getDouble("stock-market.large-transaction-threshold", 500_000.0)
+        chatInputTimeoutSeconds = cfg.getInt("stock-market.chat-input-timeout-seconds", 30)
+        nameMinLength = cfg.getInt("stock-market.name-min-length", 3)
+        nameMaxLength = cfg.getInt("stock-market.name-max-length", 24)
+
+        activityVeryHigh = cfg.getDouble("stock-market.activity-thresholds.very-high", 1_000_000.0)
+        activityHigh = cfg.getDouble("stock-market.activity-thresholds.high", 250_000.0)
+        activityModerate = cfg.getDouble("stock-market.activity-thresholds.moderate", 50_000.0)
+        activityLow = cfg.getDouble("stock-market.activity-thresholds.low", 5_000.0)
+        trendStableBandPercent = cfg.getDouble("stock-market.trend-stable-band-percent", 2.0)
+
+        val defaultIcons = listOf(
+            "DIAMOND", "EMERALD", "PRISMARINE_CRYSTALS", "PRISMARINE_SHARD",
+            "AMETHYST_SHARD", "ECHO_SHARD", "NETHER_STAR", "BLAZE_POWDER",
+            "FIRE_CHARGE", "GHAST_TEAR", "HEART_OF_THE_SEA", "RABBIT_FOOT", "MAGMA_CREAM",
+        )
+        val configured = cfg.getStringList("stock-market.icon-materials")
+        val names = if (configured.isNotEmpty()) configured else defaultIcons
+        iconMaterials = names.mapNotNull { Material.matchMaterial(it) }.ifEmpty { listOf(Material.DIAMOND) }
+    }
+
+    /**
+     * Old `bank_investments` (flat balance + 0.25%/hour compound interest) doesn't map onto
+     * stock ownership, so we cash it out flat (no interest recompute — simplification, see
+     * completion summary) into the real economy balance, then zero the row so a restart is
+     * idempotent. The table itself is left in place (harmless if unused).
+     */
+    private fun migrateOldBankInvestments() {
+        try {
+            val rows = plugin.databaseManager.query(
+                "SELECT uuid, balance FROM bank_investments WHERE balance > 0"
+            ) { rs -> rs.getString("uuid") to rs.getDouble("balance") }
+
+            if (rows.isEmpty()) return
+
+            for ((uuidStr, balance) in rows) {
+                try {
+                    val uuid = UUID.fromString(uuidStr)
+                    plugin.economyManager.deposit(uuid, balance)
+                    plugin.databaseManager.execute("UPDATE bank_investments SET balance = 0 WHERE uuid = ?", uuidStr)
+                } catch (e: Exception) {
+                    plugin.logger.warning("[StockMarket] Failed to migrate bank_investments row for $uuidStr: ${e.message}")
+                }
+            }
+            plugin.logger.info("[StockMarket] Migrated ${rows.size} old bank_investments balance(s) into the economy.")
+        } catch (e: Exception) {
+            // Table doesn't exist (fresh install) — nothing to migrate.
+        }
+    }
+
+    /**
+     * Creates the permanent JoshyMC server stock once, on first-ever start. A restart must
+     * NOT reseed it — we only insert if the JOSH ticker doesn't already exist.
+     */
+    private fun ensureJoshyMcStock() {
+        val existing = getStock(JOSH_TICKER)
+        if (existing != null) return
+
+        val icon = iconMaterials.randomOrNull() ?: Material.NETHER_STAR
+        val now = System.currentTimeMillis() / 1000
+        val seedCostBasis = defaultStockPrice * initialShares
+
+        plugin.databaseManager.execute(
+            "INSERT INTO stocks (ticker, name, name_lower, creator_uuid, icon, price, shares_outstanding, is_server_owned, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            JOSH_TICKER, JOSH_NAME, JOSH_NAME.lowercase(), null, icon.name, defaultStockPrice, initialShares, 1, now
+        )
+        plugin.databaseManager.execute(
+            "INSERT INTO stock_holdings (ticker, uuid, shares, cost_basis) VALUES (?,?,?,?)",
+            JOSH_TICKER, SERVER_STOCK_UUID_STRING, initialShares, seedCostBasis
+        )
+
+        plugin.logger.info("[StockMarket] Created the permanent JoshyMC ($JOSH_TICKER) server stock.")
+    }
+
+    // ── Row mapping ──────────────────────────────────────────────────
+
+    private fun mapStock(rs: ResultSet): Stock {
+        val iconName = rs.getString("icon")
+        val icon = Material.matchMaterial(iconName) ?: Material.DIAMOND
+        return Stock(
+            ticker = rs.getString("ticker"),
+            name = rs.getString("name"),
+            nameLower = rs.getString("name_lower"),
+            creatorUuid = rs.getString("creator_uuid"),
+            icon = icon,
+            price = rs.getDouble("price"),
+            sharesOutstanding = rs.getDouble("shares_outstanding"),
+            isServerOwned = rs.getInt("is_server_owned") != 0,
+            createdAt = rs.getLong("created_at"),
+        )
+    }
+
+    private fun mapHolding(rs: ResultSet): Holding = Holding(
+        ticker = rs.getString("ticker"),
+        uuid = rs.getString("uuid"),
+        shares = rs.getDouble("shares"),
+        costBasis = rs.getDouble("cost_basis"),
+    )
+
+    // ── Queries ──────────────────────────────────────────────────────
+
+    fun getStock(ticker: String): Stock? =
+        plugin.databaseManager.queryFirst("SELECT * FROM stocks WHERE ticker = ?", ticker) { mapStock(it) }
+
+    fun getAllStocks(): List<Stock> =
+        plugin.databaseManager.query("SELECT * FROM stocks") { mapStock(it) }
+
+    fun getHolding(ticker: String, uuid: UUID): Holding? =
+        plugin.databaseManager.queryFirst(
+            "SELECT * FROM stock_holdings WHERE ticker = ? AND uuid = ?", ticker, uuid.toString()
+        ) { mapHolding(it) }
+
+    fun getHoldingsForPlayer(uuid: UUID): List<Holding> =
+        plugin.databaseManager.query(
+            "SELECT * FROM stock_holdings WHERE uuid = ? AND shares > ?", uuid.toString(), EPSILON
+        ) { mapHolding(it) }
+
+    fun getHolderCount(ticker: String): Int =
+        plugin.databaseManager.queryFirst(
+            "SELECT COUNT(*) AS c FROM stock_holdings WHERE ticker = ? AND shares > ?", ticker, EPSILON
+        ) { it.getInt("c") } ?: 0
+
+    fun getMarketCap(stock: Stock): Double = StockPricingEngine.marketCap(stock.price, stock.sharesOutstanding)
+
+    fun getMarketStats(stock: Stock): MarketStats {
+        val periodStart = System.currentTimeMillis() / 1000 - activityPeriodHours * 3600L
+        data class TradeRow(val isBuy: Boolean, val dollarAmount: Double, val price: Double)
+
+        val trades = plugin.databaseManager.query(
+            "SELECT is_buy, dollar_amount, price FROM stock_trades WHERE ticker = ? AND timestamp >= ? ORDER BY id ASC",
+            stock.ticker, periodStart
+        ) { rs -> TradeRow(rs.getInt("is_buy") == 1, rs.getDouble("dollar_amount"), rs.getDouble("price")) }
+
+        val buyVolume = trades.filter { it.isBuy }.sumOf { it.dollarAmount }
+        val sellVolume = trades.filter { !it.isBuy }.sumOf { it.dollarAmount }
+        val volume = buyVolume + sellVolume
+
+        val open = trades.firstOrNull()?.price ?: stock.price
+        val prices = trades.map { it.price } + stock.price
+        val high = prices.maxOrNull() ?: stock.price
+        val low = prices.minOrNull() ?: stock.price
+        val changePercent = if (open > 0.0) ((stock.price - open) / open) * 100.0 else 0.0
+
+        val activity = StockPricingEngine.classifyActivity(volume, activityVeryHigh, activityHigh, activityModerate, activityLow)
+        val trend = StockPricingEngine.classifyTrend(changePercent, trendStableBandPercent)
+
+        return MarketStats(volume, buyVolume, sellVolume, open, high, low, changePercent, activity, trend)
+    }
+
+    /** Unrealized P/L (dollar, percent) for a holding at the stock's current price. */
+    fun unrealizedPL(holding: Holding, currentPrice: Double): Pair<Double, Double> {
+        val value = holding.shares * currentPrice
+        val pl = value - holding.costBasis
+        val plPercent = if (holding.costBasis > 0.0) (pl / holding.costBasis) * 100.0 else 0.0
+        return pl to plPercent
+    }
+
+    // ── Ticker generation & name validation ─────────────────────────
+
+    private fun tickerExists(ticker: String): Boolean =
+        plugin.databaseManager.queryFirst("SELECT 1 FROM stocks WHERE ticker = ?", ticker) { true } != null
+
+    fun generateTicker(name: String): String {
+        val base = name.filter { it.isLetterOrDigit() }.uppercase().take(4).ifEmpty { "STCK" }
+        if (!tickerExists(base)) return base
+        var i = 1
+        while (true) {
+            val candidate = "$base$i"
+            if (!tickerExists(candidate)) return candidate
+            i++
+        }
+    }
+
+    /** Returns an error message, or null if the name is valid & available. */
+    fun validateStockName(rawName: String): String? {
+        val name = rawName.trim()
+        if (name.isEmpty()) return "Stock name cannot be empty."
+        if (name.length < nameMinLength) return "Stock name must be at least $nameMinLength characters."
+        if (name.length > nameMaxLength) return "Stock name must be at most $nameMaxLength characters."
+        if (name.none { it.isLetterOrDigit() }) return "Stock name must contain at least one letter or number."
+        if (ProfanityFilter.contains(name)) return "That stock name isn't allowed."
+
+        val lower = name.lowercase()
+        val existing = plugin.databaseManager.queryFirst(
+            "SELECT 1 FROM stocks WHERE name_lower = ?", lower
+        ) { true }
+        if (existing != null) return "A stock with that name already exists."
+
+        return null
+    }
+
+    // ── Stock creation flow ─────────────────────────────────────────
+
+    /**
+     * Stage 1: validate + generate ticker, stash a pending confirmation for [player].
+     * Returns an error message, or null on success (retrieve the staged name/ticker via
+     * [getPendingCreation]).
+     */
+    fun prepareStockCreation(player: Player, rawName: String): String? {
+        val error = validateStockName(rawName)
+        if (error != null) return error
+
+        if (!plugin.economyManager.has(player.uniqueId, stockCreationCost)) {
+            return "You need ${plugin.economyManager.format(stockCreationCost)} to create a stock."
+        }
+
+        val name = rawName.trim()
+        val ticker = generateTicker(name)
+        pendingStockConfirmations[player.uniqueId] = PendingStockCreation(
+            name, ticker, System.currentTimeMillis() + chatInputTimeoutMs
+        )
+        return null
+    }
+
+    fun getPendingCreation(uuid: UUID): PendingStockCreation? {
+        val pending = pendingStockConfirmations[uuid] ?: return null
+        if (isExpired(pending.expiresAt)) {
+            pendingStockConfirmations.remove(uuid)
+            return null
+        }
+        return pending
+    }
+
+    /** Stage 2: charge $creationCost and atomically create the stock. Never charges on failure. */
+    fun finalizeStockCreation(player: Player): CreateOutcome {
+        val pending = pendingStockConfirmations.remove(player.uniqueId)
+            ?: return CreateOutcome.Failure("Your stock creation request expired. Please start again.")
+        if (isExpired(pending.expiresAt)) {
+            return CreateOutcome.Failure("Your stock creation request expired. Please start again.")
+        }
+
+        // Re-validate server-side — never trust GUI state alone.
+        val error = validateStockName(pending.name)
+        if (error != null) return CreateOutcome.Failure(error)
+        if (!plugin.economyManager.has(player.uniqueId, stockCreationCost)) {
+            return CreateOutcome.Failure("You need ${plugin.economyManager.format(stockCreationCost)} to create a stock.")
+        }
+
+        var created: Stock? = null
+        try {
+            plugin.databaseManager.transaction {
+                if (!plugin.economyManager.withdraw(player.uniqueId, stockCreationCost)) {
+                    throw IllegalStateException("insufficient_funds")
+                }
+
+                val icon = iconMaterials.randomOrNull() ?: Material.DIAMOND
+                val now = System.currentTimeMillis() / 1000
+
+                plugin.databaseManager.execute(
+                    "INSERT INTO stocks (ticker, name, name_lower, creator_uuid, icon, price, shares_outstanding, is_server_owned, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                    pending.ticker, pending.name, pending.name.lowercase(), player.uniqueId.toString(),
+                    icon.name, defaultStockPrice, initialShares, 0, now
+                )
+                plugin.databaseManager.execute(
+                    "INSERT INTO stock_holdings (ticker, uuid, shares, cost_basis) VALUES (?,?,?,?)",
+                    pending.ticker, player.uniqueId.toString(), initialShares, stockCreationCost
+                )
+                plugin.databaseManager.execute(
+                    "INSERT INTO stock_trades (ticker, uuid, is_buy, dollar_amount, shares, price, server_triggered, timestamp) VALUES (?,?,?,?,?,?,?,?)",
+                    pending.ticker, player.uniqueId.toString(), 1, stockCreationCost, initialShares, defaultStockPrice, 0, now
+                )
+
+                created = Stock(
+                    pending.ticker, pending.name, pending.name.lowercase(), player.uniqueId.toString(),
+                    icon, defaultStockPrice, initialShares, false, now
+                )
+            }
+        } catch (e: Exception) {
+            return CreateOutcome.Failure("Stock creation failed (${e.message ?: "unknown error"}). You have not been charged.")
+        }
+
+        return CreateOutcome.Success(created!!)
+    }
+
+    // ── Buy/Sell precondition checks (shared by orchestration + GUI previews) ─
+
+    fun checkBuyAmount(player: Player, amount: Double): String? {
+        if (!StockPricingEngine.isSafePositiveAmount(amount)) return "Invalid amount."
+        if (amount < minimumBuy) return "Minimum purchase is ${plugin.economyManager.format(minimumBuy)}."
+        if (!plugin.economyManager.has(player.uniqueId, amount)) return "You don't have enough money."
+        return null
+    }
+
+    fun checkSellAmount(holding: Holding?, amount: Double): String? {
+        if (holding == null || holding.shares <= EPSILON) return "You don't own shares in this stock."
+        if (!StockPricingEngine.isSafePositiveAmount(amount)) return "Invalid amount."
+        return null
+    }
+
+    // ── Buy/Sell orchestration ───────────────────────────────────────
+
+    private fun executeBuyLeg(uuid: UUID, stock: Stock, dollarAmount: Double, serverTriggered: Boolean): Pair<Stock, StockPricingEngine.BuyResult> {
+        val holding = getHolding(stock.ticker, uuid)
+        val result = StockPricingEngine.computeBuy(stock.price, stock.sharesOutstanding, dollarAmount, maxSingleTradeImpact, minLiquidityFloor)
+
+        plugin.databaseManager.execute(
+            "UPDATE stocks SET price = ?, shares_outstanding = ? WHERE ticker = ?",
+            result.newPrice, result.newSharesOutstanding, stock.ticker
+        )
+
+        val newShares = (holding?.shares ?: 0.0) + result.sharesMinted
+        val newCostBasis = (holding?.costBasis ?: 0.0) + dollarAmount
+        plugin.databaseManager.execute(
+            "INSERT INTO stock_holdings (ticker, uuid, shares, cost_basis) VALUES (?,?,?,?) " +
+                "ON CONFLICT(ticker, uuid) DO UPDATE SET shares = ?, cost_basis = ?",
+            stock.ticker, uuid.toString(), newShares, newCostBasis, newShares, newCostBasis
+        )
+
+        plugin.databaseManager.execute(
+            "INSERT INTO stock_trades (ticker, uuid, is_buy, dollar_amount, shares, price, server_triggered, timestamp) VALUES (?,?,?,?,?,?,?,?)",
+            stock.ticker, uuid.toString(), 1, dollarAmount, result.sharesMinted, result.avgExecutionPrice,
+            if (serverTriggered) 1 else 0, System.currentTimeMillis() / 1000
+        )
+
+        return stock.copy(price = result.newPrice, sharesOutstanding = result.newSharesOutstanding) to result
+    }
+
+    private fun executeSellLeg(uuid: UUID, stock: Stock, dollarAmount: Double, serverTriggered: Boolean): Pair<Stock, StockPricingEngine.SellResult> {
+        val holding = getHolding(stock.ticker, uuid) ?: Holding(stock.ticker, uuid.toString(), 0.0, 0.0)
+        val result = StockPricingEngine.computeSell(
+            stock.price, stock.sharesOutstanding, dollarAmount, holding.shares, holding.costBasis, maxSingleTradeImpact, minLiquidityFloor
+        )
+
+        plugin.databaseManager.execute(
+            "UPDATE stocks SET price = ?, shares_outstanding = ? WHERE ticker = ?",
+            result.newPrice, result.newSharesOutstanding, stock.ticker
+        )
+
+        val newShares = (holding.shares - result.sharesRemoved).coerceAtLeast(0.0)
+        val newCostBasis = (holding.costBasis - result.costBasisRemoved).coerceAtLeast(0.0)
+        plugin.databaseManager.execute(
+            "INSERT INTO stock_holdings (ticker, uuid, shares, cost_basis) VALUES (?,?,?,?) " +
+                "ON CONFLICT(ticker, uuid) DO UPDATE SET shares = ?, cost_basis = ?",
+            stock.ticker, uuid.toString(), newShares, newCostBasis, newShares, newCostBasis
+        )
+
+        plugin.databaseManager.execute(
+            "INSERT INTO stock_trades (ticker, uuid, is_buy, dollar_amount, shares, price, server_triggered, timestamp) VALUES (?,?,?,?,?,?,?,?)",
+            stock.ticker, uuid.toString(), 0, dollarAmount, result.sharesRemoved, result.avgExecutionPrice,
+            if (serverTriggered) 1 else 0, System.currentTimeMillis() / 1000
+        )
+
+        return stock.copy(price = result.newPrice, sharesOutstanding = result.newSharesOutstanding) to result
+    }
+
+    /**
+     * Buy [dollarAmount] worth of [ticker] for [player]. Fully atomic: on any failure the
+     * player is not charged and no shares are minted. If [ticker] is JOSH and this call is
+     * itself a player-initiated buy, also runs the JoshyMC 1% server-mirroring mechanic
+     * (recursion-safe: the mirrored leg is always `serverTriggered = true` and never mirrors itself).
+     */
+    fun buyStock(player: Player, ticker: String, dollarAmount: Double): TradeOutcome {
+        val stock = getStock(ticker) ?: return TradeOutcome.Failure("That stock no longer exists.")
+        checkBuyAmount(player, dollarAmount)?.let { return TradeOutcome.Failure(it) }
+
+        var outcome: TradeOutcome = TradeOutcome.Failure("Transaction failed.")
+        try {
+            plugin.databaseManager.transaction {
+                if (!plugin.economyManager.withdraw(player.uniqueId, dollarAmount)) {
+                    throw IllegalStateException("insufficient_funds")
+                }
+
+                val (updatedStock, result) = executeBuyLeg(player.uniqueId, stock, dollarAmount, serverTriggered = false)
+                var finalStock = updatedStock
+
+                if (updatedStock.ticker == JOSH_TICKER) {
+                    val serverAmount = dollarAmount * serverContribution
+                    if (StockPricingEngine.isSafePositiveAmount(serverAmount)) {
+                        val (s2, _) = executeBuyLeg(SERVER_STOCK_UUID, finalStock, serverAmount, serverTriggered = true)
+                        finalStock = s2
+                    }
+                }
+
+                outcome = TradeOutcome.BuySuccess(
+                    finalStock, dollarAmount, result.sharesMinted, result.avgExecutionPrice, stock.price, finalStock.price
+                )
+            }
+        } catch (e: Exception) {
+            return TradeOutcome.Failure("Transaction failed (${e.message ?: "unknown error"}). You have not been charged.")
+        }
+        return outcome
+    }
+
+    /**
+     * Sell [dollarAmountRequested] worth of [ticker] for [player] (clamped to their current
+     * holding value). Fully atomic. Mirrors the JOSH 1% mechanic on sells, same recursion guard.
+     */
+    fun sellStock(player: Player, ticker: String, dollarAmountRequested: Double): TradeOutcome {
+        val stock = getStock(ticker) ?: return TradeOutcome.Failure("That stock no longer exists.")
+        val holding = getHolding(ticker, player.uniqueId)
+        checkSellAmount(holding, dollarAmountRequested)?.let { return TradeOutcome.Failure(it) }
+        holding!!
+
+        val maxValue = holding.shares * stock.price
+        val dollarAmount = dollarAmountRequested.coerceAtMost(maxValue)
+        if (dollarAmount <= 0.0) return TradeOutcome.Failure("Invalid amount.")
+
+        var outcome: TradeOutcome = TradeOutcome.Failure("Transaction failed.")
+        try {
+            plugin.databaseManager.transaction {
+                val (updatedStock, result) = executeSellLeg(player.uniqueId, stock, dollarAmount, serverTriggered = false)
+
+                // Credit real proceeds to the player. sharesRemoved * avgExecutionPrice equals
+                // dollarAmount unless the sell was clamped to the holder's remaining shares.
+                val proceeds = result.sharesRemoved * result.avgExecutionPrice
+                plugin.economyManager.deposit(player.uniqueId, proceeds)
+
+                var finalStock = updatedStock
+                if (updatedStock.ticker == JOSH_TICKER) {
+                    val serverHolding = getHolding(JOSH_TICKER, SERVER_STOCK_UUID)
+                    val serverAmount = (dollarAmount * serverContribution)
+                        .let { if (serverHolding != null) it.coerceAtMost(serverHolding.shares * updatedStock.price) else 0.0 }
+                    if (StockPricingEngine.isSafePositiveAmount(serverAmount)) {
+                        val (s2, _) = executeSellLeg(SERVER_STOCK_UUID, finalStock, serverAmount, serverTriggered = true)
+                        finalStock = s2
+                    }
+                }
+
+                val remainingHolding = getHolding(ticker, player.uniqueId)
+                val remainingShares = remainingHolding?.shares ?: 0.0
+
+                outcome = TradeOutcome.SellSuccess(
+                    finalStock, dollarAmount, result.sharesRemoved, result.avgExecutionPrice,
+                    stock.price, finalStock.price, result.realizedPL, remainingShares, remainingShares * finalStock.price
+                )
+            }
+        } catch (e: Exception) {
+            return TradeOutcome.Failure("Transaction failed (${e.message ?: "unknown error"}). You have not been charged.")
+        }
+        return outcome
+    }
+
+    // ── Sort types for the Trading GUI ──────────────────────────────
+
+    enum class SortMode(val displayName: String) {
+        MOST_HOLDERS("Most Holders"),
+        MOST_ACTIVE("Most Active"),
+        HIGHEST_MARKET_CAP("Highest Market Cap"),
+        LEAST_ACTIVE("Least Active");
+
+        fun next(): SortMode = entries[(ordinal + 1) % entries.size]
+    }
+}

@@ -122,8 +122,8 @@ commands:
     usage: /ah [sell <price>] [bid <starting price>] [notify <on|off>]
     aliases: [auction, auctionhouse]
   invest:
-    description: Manage your bank investment account
-    usage: /invest <deposit|withdraw|balance> <amount>
+    description: Open the player-driven stock market (trade, create, and track stocks)
+    usage: /invest
   lottery:
     description: Buy lottery tickets or check the current prize pool
     usage: /lottery <buy <amount>|prize|tickets>
@@ -1021,7 +1021,7 @@ permissions:
     description: Create / delete / refresh leaderboard holograms
     default: op
   joshymc.invest:
-    description: Use the /invest command to deposit and withdraw from a bank account
+    description: Use the /invest command to trade, create, and track stocks
     default: true
   joshymc.lottery:
     description: Use the /lottery command to buy tickets and check the prize pool

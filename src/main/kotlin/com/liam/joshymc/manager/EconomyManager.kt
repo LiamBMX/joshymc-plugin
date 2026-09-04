@@ -59,6 +59,34 @@ class EconomyManager(private val plugin: Joshymc) {
     }
 
     /**
+     * Compact K/M/B/T formatting for large financial values (balances, market caps,
+     * P/L, volume, shares, etc.). Display-only — never round the underlying stored value.
+     * Handles negative amounts by formatting the sign then the magnitude.
+     */
+    fun formatShort(amount: Double): String {
+        if (amount.isNaN()) return "0"
+        if (amount.isInfinite()) return if (amount > 0) "∞" else "-∞"
+
+        val sign = if (amount < 0) "-" else ""
+        val magnitude = kotlin.math.abs(amount)
+
+        val (scaled, suffix) = when {
+            magnitude >= 1_000_000_000_000.0 -> magnitude / 1_000_000_000_000.0 to "T"
+            magnitude >= 1_000_000_000.0 -> magnitude / 1_000_000_000.0 to "B"
+            magnitude >= 1_000_000.0 -> magnitude / 1_000_000.0 to "M"
+            magnitude >= 1_000.0 -> magnitude / 1_000.0 to "K"
+            else -> magnitude to ""
+        }
+
+        var numeric = "%.2f".format(scaled)
+        if (numeric.contains('.')) {
+            numeric = numeric.trimEnd('0').trimEnd('.')
+        }
+
+        return "$sign$numeric$suffix"
+    }
+
+    /**
      * Parses shorthand amounts: 10k, 1.5m, 2b, 1t, or plain numbers.
      * Returns null if the input is invalid.
      */
