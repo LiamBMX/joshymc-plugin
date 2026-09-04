@@ -155,6 +155,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var auctionManager: AuctionManager
         private set
+    lateinit var orderManager: com.liam.joshymc.manager.OrderManager
+        private set
     lateinit var signShopManager: SignShopManager
         private set
     lateinit var hopperPlusManager: HopperPlusManager
@@ -312,6 +314,7 @@ class Joshymc : JavaPlugin() {
         npcManager = NPCManager(this)
         crateManager = CrateManager(this)
         auctionManager = AuctionManager(this)
+        orderManager = com.liam.joshymc.manager.OrderManager(this)
         signShopManager = SignShopManager(this)
         hopperPlusManager = HopperPlusManager(this)
         spawnerManager = SpawnerManager(this)
@@ -378,6 +381,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("npcs")) npcManager.start()
         crateManager.start()
         auctionManager.start()
+        if (isFeatureEnabled("orders")) orderManager.start()
         signShopManager.start()
         hopperPlusManager.start()
         spawnerManager.start()
@@ -464,6 +468,7 @@ class Joshymc : JavaPlugin() {
         npcManager.stop()
         crateManager.stop()
         auctionManager.stop()
+        orderManager.stop()
         hopperPlusManager.stop()
         spawnerManager.stop()
         afkManager.stop()
@@ -518,6 +523,7 @@ class Joshymc : JavaPlugin() {
         safe("npcManager.stop") { npcManager.stop() }
         safe("crateManager.stop") { crateManager.stop() }
         safe("auctionManager.stop") { auctionManager.stop() }
+        safe("orderManager.stop") { orderManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
         safe("questCycleManager.stop") { questCycleManager.stop() }
         safe("spawnerManager.stop") { spawnerManager.stop() }
@@ -551,6 +557,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("quests")) safe("questCycleManager.start") { questCycleManager.start() }
         safe("crateManager.start") { crateManager.start() }
         safe("auctionManager.start") { auctionManager.start() }
+        if (isFeatureEnabled("orders")) safe("orderManager.start") { orderManager.start() }
         safe("signShopManager.start") { signShopManager.start() }
         safe("hopperPlusManager.start") { hopperPlusManager.start() }
         safe("spawnerManager.start") { spawnerManager.start() }

@@ -121,6 +121,10 @@ commands:
     description: Open the auction house
     usage: /ah [sell <price>] [bid <starting price>] [notify <on|off>]
     aliases: [auction, auctionhouse]
+  orders:
+    description: Open the Buy Orders marketplace
+    usage: /orders [admin <view|info|cancel|remove> ...]
+    aliases: [buyorders, order]
   invest:
     description: Open the player-driven stock market (trade, create, and track stocks)
     usage: /invest
@@ -674,6 +678,24 @@ permissions:
   joshymc.ah.sell:
     description: List items on the auction house
     default: true
+  joshymc.orders:
+    description: Browse the Buy Orders marketplace
+    default: true
+  joshymc.orders.create:
+    description: Create Buy Orders
+    default: true
+  joshymc.orders.fulfill:
+    description: Sell items into another player's Buy Order
+    default: true
+  joshymc.orders.admin:
+    description: View, cancel, or remove any player's Buy Orders
+    default: op
+  joshymc.orders.limit.vip:
+    description: Grants the VIP active Buy Order limit
+    default: false
+  joshymc.orders.limit.admin:
+    description: Grants the admin active Buy Order limit
+    default: op
   joshymc.eco:
     description: Manage economy (admin)
     default: op

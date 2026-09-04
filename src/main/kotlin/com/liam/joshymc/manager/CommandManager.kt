@@ -290,6 +290,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("orders")?.let {
+            val cmd = com.liam.joshymc.command.OrdersCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
         plugin.getCommand("eco")?.let {
             val cmd = EcoCommand(plugin)
             it.setExecutor(cmd)
