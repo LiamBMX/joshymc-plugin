@@ -491,4 +491,47 @@ anticheat:
     nuker: true          # Detects nuker (breaking >80 blocks/sec)
     badpackets: true     # Detects invalid packets (impossible pitch, actions while dead)
     illegitems: true     # Detects illegal items (over-enchanted, stacked unstackables)
+
+# Daily / Weekly / Quest Master quest system — /quests
+# Quest definitions themselves (names, objectives, amounts, per-quest rewards,
+# icons, categories) live in a separate player-editable file:
+# plugins/Joshymc/config/quest-cycle.yml (see that file for the full list).
+# This section only controls selection counts, reset schedule, repeat
+# protection, and the bonus/completion rewards.
+quests:
+  # IANA time zone used for all daily/weekly scheduling (handles DST automatically)
+  timezone: "America/New_York"
+
+  daily:
+    selected-medium: 2
+    selected-hard: 1
+    reset:
+      hour: 0
+      minute: 0
+    repeat-protection-days: 7
+    completion-reward:
+      enabled: true
+      # {player} is replaced with the player's name. Commands run from console.
+      commands:
+        - "crate givekey joshy {player} 1"
+
+  weekly:
+    selected: 3
+    reset:
+      day: "MONDAY"
+      hour: 0
+      minute: 0
+    repeat-protection-weeks: 4
+    completion-reward:
+      enabled: true
+      commands:
+        - "crate givekey joshy {player} 3"
+
+  quest-master:
+    enabled: true
+    required-daily-sets: 5
+    require-weekly-completion: true
+    reward:
+      commands:
+        - "credits give {player} 100"
     inventory: true      # Detects inventory hacks (>25 clicks/sec)

@@ -130,7 +130,7 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // Quest events
         pm.registerEvents(plugin.questManager, plugin)
-        pm.registerEvents(plugin.dailyQuestManager, plugin)
+        pm.registerEvents(plugin.questCycleManager, plugin)
         pm.registerEvents(plugin.resurgeManager, plugin)
 
         // Talisman effects

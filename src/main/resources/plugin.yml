@@ -177,12 +177,15 @@ commands:
     usage: /market [price|trends|info]
     aliases: [stocks]
   quests:
-    description: Browse and track quests
-    usage: /quests [list|progress|info|reset <player> [quest_id|all]]
+    description: Open the Daily / Weekly / Quest Master quest hub
+    usage: /quests
     aliases: [quest, q]
+  questbook:
+    description: Browse and track the permanent achievement quest journal
+    usage: /questbook [list|progress|info|reset <player> [quest_id|all]]
   daily:
-    description: View and claim daily quests
-    usage: /daily [claim]
+    description: Open the Daily / Weekly / Quest Master quest hub (alias for /quests)
+    usage: /daily
   cosmetics:
     description: Open the cosmetics hub
     usage: /cosmetics
@@ -712,14 +715,19 @@ permissions:
     description: Use the stock market
     default: true
   joshymc.quests:
-    description: Use the quest system
+    description: Use the Daily/Weekly/Quest Master quest system
     default: true
   joshymc.quests.admin:
-    description: Reset player quest progress (also available from console)
+    description: Force resets, view rotations, and edit quest progress (also available from console)
+    default: op
+  joshymc.questbook:
+    description: Browse the permanent achievement quest journal
+    default: true
+  joshymc.questbook.admin:
+    description: Reset player achievement quest progress (also available from console)
   joshymc.daily:
     description: Use the daily quest system
     default: true
-    default: op
   joshymc.cosmetics:
     description: Open cosmetics hub
     default: true

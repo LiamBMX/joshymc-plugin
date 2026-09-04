@@ -26,7 +26,7 @@ import com.liam.joshymc.manager.ResourceWorldManager
 import com.liam.joshymc.manager.ScoreboardManager
 import com.liam.joshymc.manager.ChatTagManager
 import com.liam.joshymc.manager.MarketManager
-import com.liam.joshymc.manager.DailyQuestManager
+import com.liam.joshymc.manager.QuestCycleManager
 import com.liam.joshymc.manager.QuestManager
 import com.liam.joshymc.manager.EmoteManager
 import com.liam.joshymc.manager.FishingManager
@@ -206,7 +206,7 @@ class Joshymc : JavaPlugin() {
     lateinit var rtpCommand: com.liam.joshymc.command.RtpCommand
     lateinit var questManager: QuestManager
         private set
-    lateinit var dailyQuestManager: DailyQuestManager
+    lateinit var questCycleManager: QuestCycleManager
         private set
     lateinit var talismanManager: TalismanManager
         private set
@@ -327,7 +327,7 @@ class Joshymc : JavaPlugin() {
         playtimeManager = PlaytimeManager(this)
         creditsManager = com.liam.joshymc.manager.CreditsManager(this)
         questManager = QuestManager(this)
-        dailyQuestManager = DailyQuestManager(this)
+        questCycleManager = QuestCycleManager(this)
         talismanManager = TalismanManager(this)
         fishingManager = FishingManager(this)
         skillManager = SkillManager(this)
@@ -401,7 +401,7 @@ class Joshymc : JavaPlugin() {
 
         resurgeManager.start()
         if (isFeatureEnabled("quests")) questManager.start()
-        if (isFeatureEnabled("quests")) dailyQuestManager.start()
+        if (isFeatureEnabled("quests")) questCycleManager.start()
         if (isFeatureEnabled("talismans")) talismanManager.start()
         if (isFeatureEnabled("custom-fishing")) fishingManager.start()
         if (isFeatureEnabled("skills")) skillManager.start()
@@ -470,7 +470,7 @@ class Joshymc : JavaPlugin() {
         autoRestartManager.stop()
         playtimeManager.stop()
         creditsManager.stop()
-        dailyQuestManager.stop()
+        questCycleManager.stop()
         resourceWorldManager.stop()
         buildPvpManager.stop()
         combatManager.stop()
@@ -508,6 +508,7 @@ class Joshymc : JavaPlugin() {
         safe("crateManager.stop") { crateManager.stop() }
         safe("auctionManager.stop") { auctionManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
+        safe("questCycleManager.stop") { questCycleManager.stop() }
         safe("spawnerManager.stop") { spawnerManager.stop() }
         safe("afkManager.stop") { afkManager.stop() }
         safe("antiCheatManager.stop") { antiCheatManager.stop() }
@@ -534,6 +535,7 @@ class Joshymc : JavaPlugin() {
         safe("storageManager.start") { storageManager.start() }
         safe("hologramManager.start") { hologramManager.start() }
         if (isFeatureEnabled("npcs")) safe("npcManager.start") { npcManager.start() }
+        if (isFeatureEnabled("quests")) safe("questCycleManager.start") { questCycleManager.start() }
         safe("crateManager.start") { crateManager.start() }
         safe("auctionManager.start") { auctionManager.start() }
         safe("signShopManager.start") { signShopManager.start() }
