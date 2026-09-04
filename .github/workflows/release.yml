@@ -13,12 +13,16 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  pull-requests: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -74,8 +78,97 @@ jobs:
           name: joshymc-jar
           path: jar/joshymc-*-all.jar
 
-      - name: Create GitHub Release
+      - name: Generate release notes
+        id: gen-notes
         if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.tag != ''
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: '--allowed-tools "Bash(git:*),Bash(gh:*),Read,Write" --max-turns 15'
+          prompt: |
+            Write user-facing GitHub Release notes for tag ${{ steps.ver.outputs.tag }}
+            of the JoshyMC Paper plugin, and save them to `RELEASE_NOTES.md` at the
+            repo root. Do not commit, push, or change anything else.
+
+            Find the previous release tag:
+              git tag --sort=-v:refname
+
+            Take the tag directly below ${{ steps.ver.outputs.tag }} in that sorted list.
+
+            If ${{ steps.ver.outputs.tag }} is the only or oldest tag, treat this as
+            the first release and summarize all relevant history instead of a diff.
+
+            Review what actually shipped between the previous tag and
+            ${{ steps.ver.outputs.tag }}/HEAD:
+
+              git log <previous-tag>..HEAD --oneline
+
+            If PR numbers are referenced in commit messages, use:
+
+              gh pr view <number>
+
+            to read the PR description for additional context.
+
+            Write RELEASE_NOTES.md using these section headings and formatting.
+            Use only as many bullet points as are actually meaningful.
+            Do not invent filler bullets.
+
+            ## What's New
+
+            • [Major player-facing feature/change]
+            • [Major player-facing feature/change]
+
+            ## Commands
+
+            • `/command` — Description
+
+            Omit this section if no commands were added or changed.
+
+            ## Configuration
+
+            • [Important configurable setting]
+
+            Omit this section if no configuration was added or changed.
+
+            ## Technical
+
+            • [Important backend/safety improvement]
+
+            Omit this section if there are no meaningful technical changes worth
+            mentioning to server owners.
+
+            Keep the notes concise and focused on meaningful changes.
+
+            Do NOT include:
+            - individual file names
+            - minor refactors
+            - trivial code changes
+            - test implementation details
+            - long explanations
+            - the full GitHub issue specification
+
+      - name: Check for generated release notes
+        id: notes
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.tag != ''
+        run: |
+          if [ -s RELEASE_NOTES.md ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        if: (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.tag != '') && steps.notes.outputs.found == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          files: release/joshymc-${{ steps.ver.outputs.version }}.jar
+
+      - name: Create GitHub Release (fallback notes)
+        if: (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.tag != '') && steps.notes.outputs.found != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
@@ -86,7 +179,7 @@ jobs:
       - name: Dispatch Discord notification
         # softprops/action-gh-release creates the release via GITHUB_TOKEN, so the
         # `release: published` event is suppressed (anti-recursion). Dispatch the
-        # notify workflow directly — workflow_dispatch is exempt from that rule.
+        # notify workflow directly because workflow_dispatch is exempt from that rule.
         if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
