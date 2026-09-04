@@ -10,15 +10,20 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Owns the player-driven stock market: table creation, stock creation flow,
- * buy/sell orchestration (delegating math to [StockPricingEngine]), holdings/portfolio
- * queries, ticker generation, name validation, the JoshyMC 1% mechanic, and the
- * one-time migration of the old `bank_investments` bank-interest table.
+ * buy/sell orchestration, holdings/portfolio queries, ticker generation, name
+ * validation, and the one-time migration of the old `bank_investments` table.
  *
- * Pricing/persistence assumption (see StockPricingEngine doc): this is a bonding-curve
- * market, not an order book — buys mint shares_outstanding, sells burn it, and there is
- * no counterparty. Trades always execute at the average of pre/post price, which is what
- * makes an immediate buy-then-sell of the same stock a net loss (prevents free-money
- * round-tripping).
+ * Two pricing models live side by side, selected per-stock via `is_server_owned`:
+ * - Player-created stocks use the [StockPricingEngine] bonding curve (tanh-bounded
+ *   trade impact against market-cap liquidity).
+ * - Server-owned stocks (currently just JOSH) use the [ServerStockPricingEngine]
+ *   nonlinear supply curve — price is a direct function of circulating supply, with
+ *   no server-funded contribution/adjustment on either side of a trade.
+ *
+ * Pricing/persistence assumption: this is a bonding-curve market, not an order book —
+ * buys mint shares_outstanding, sells burn it, and there is no counterparty. Trades
+ * always execute at the average of pre/post price, which is what makes an immediate
+ * buy-then-sell of the same stock a net loss (prevents free-money round-tripping).
  */
 class StockMarketManager(private val plugin: Joshymc) {
 
@@ -42,11 +47,17 @@ class StockMarketManager(private val plugin: Joshymc) {
         private set
     var initialShares = 100_000.0
         private set
-    var serverContribution = 0.01
-        private set
     var maxSingleTradeImpact = 0.10
         private set
     var minLiquidityFloor = 1000.0
+        private set
+    var serverStockCurveStrength = 4.0
+        private set
+    var serverStockCurveExponent = 1.6
+        private set
+    var serverStockMinimumPrice = 10.0
+        private set
+    var serverStockMaximumPrice = 250_000.0
         private set
     var activityPeriodHours = 24
         private set
@@ -234,9 +245,13 @@ class StockMarketManager(private val plugin: Joshymc) {
         stockCreationCost = cfg.getDouble("stock-market.stock-creation-cost", 1_000_000.0)
         defaultStockPrice = cfg.getDouble("stock-market.default-stock-price", 10.0)
         initialShares = cfg.getDouble("stock-market.initial-shares", 100_000.0)
-        serverContribution = cfg.getDouble("stock-market.joshymc-server-contribution", 0.01)
         maxSingleTradeImpact = cfg.getDouble("stock-market.maximum-single-trade-price-impact", 0.10)
         minLiquidityFloor = cfg.getDouble("stock-market.minimum-liquidity-floor", 1000.0)
+        serverStockCurveStrength = cfg.getDouble("stock-market.server-stock-curve-strength", 4.0).coerceAtLeast(0.0)
+        serverStockCurveExponent = cfg.getDouble("stock-market.server-stock-curve-exponent", 1.6).coerceAtLeast(0.01)
+        serverStockMinimumPrice = cfg.getDouble("stock-market.server-stock-minimum-price", 10.0)
+        serverStockMaximumPrice = cfg.getDouble("stock-market.server-stock-maximum-price", 250_000.0)
+            .coerceAtLeast(serverStockMinimumPrice)
         activityPeriodHours = cfg.getInt("stock-market.market-activity-period-hours", 24)
         largeTransactionThreshold = cfg.getDouble("stock-market.large-transaction-threshold", 500_000.0)
         chatInputTimeoutSeconds = cfg.getInt("stock-market.chat-input-timeout-seconds", 30)
@@ -529,9 +544,61 @@ class StockMarketManager(private val plugin: Joshymc) {
 
     // ── Buy/Sell orchestration ───────────────────────────────────────
 
-    private fun executeBuyLeg(uuid: UUID, stock: Stock, dollarAmount: Double, serverTriggered: Boolean): Pair<Stock, StockPricingEngine.BuyResult> {
+    /** Pricing-engine-agnostic result of a buy leg, shared by both [StockPricingEngine] and [ServerStockPricingEngine]. */
+    data class BuyLegResult(
+        val avgExecutionPrice: Double,
+        val sharesMinted: Double,
+        val newPrice: Double,
+        val newSharesOutstanding: Double,
+    )
+
+    /** Pricing-engine-agnostic result of a sell leg, shared by both [StockPricingEngine] and [ServerStockPricingEngine]. */
+    data class SellLegResult(
+        val avgExecutionPrice: Double,
+        val sharesRemoved: Double,
+        val newPrice: Double,
+        val newSharesOutstanding: Double,
+        val realizedPL: Double,
+        val costBasisRemoved: Double,
+    )
+
+    /**
+     * Pure (no persistence) buy computation for [stock], routed to the pricing engine that
+     * matches [Stock.isServerOwned]. Used both by the real trade execution below and by GUI
+     * previews, so the two never drift apart.
+     */
+    fun computeBuyLeg(stock: Stock, dollarAmount: Double): BuyLegResult {
+        return if (stock.isServerOwned) {
+            val r = ServerStockPricingEngine.computeBuy(
+                stock.sharesOutstanding, dollarAmount, defaultStockPrice,
+                serverStockCurveStrength, serverStockCurveExponent, serverStockMinimumPrice, serverStockMaximumPrice,
+            )
+            BuyLegResult(r.avgExecutionPrice, r.sharesMinted, r.newPrice, r.newSharesOutstanding)
+        } else {
+            val r = StockPricingEngine.computeBuy(stock.price, stock.sharesOutstanding, dollarAmount, maxSingleTradeImpact, minLiquidityFloor)
+            BuyLegResult(r.avgExecutionPrice, r.sharesMinted, r.newPrice, r.newSharesOutstanding)
+        }
+    }
+
+    /** Pure (no persistence) sell computation — see [computeBuyLeg]. */
+    fun computeSellLeg(stock: Stock, holderShares: Double, holderCostBasis: Double, dollarAmount: Double): SellLegResult {
+        return if (stock.isServerOwned) {
+            val r = ServerStockPricingEngine.computeSell(
+                stock.sharesOutstanding, dollarAmount, holderShares, holderCostBasis, defaultStockPrice,
+                serverStockCurveStrength, serverStockCurveExponent, serverStockMinimumPrice, serverStockMaximumPrice,
+            )
+            SellLegResult(r.avgExecutionPrice, r.sharesRemoved, r.newPrice, r.newSharesOutstanding, r.realizedPL, r.costBasisRemoved)
+        } else {
+            val r = StockPricingEngine.computeSell(
+                stock.price, stock.sharesOutstanding, dollarAmount, holderShares, holderCostBasis, maxSingleTradeImpact, minLiquidityFloor
+            )
+            SellLegResult(r.avgExecutionPrice, r.sharesRemoved, r.newPrice, r.newSharesOutstanding, r.realizedPL, r.costBasisRemoved)
+        }
+    }
+
+    private fun executeBuyLeg(uuid: UUID, stock: Stock, dollarAmount: Double): Pair<Stock, BuyLegResult> {
         val holding = getHolding(stock.ticker, uuid)
-        val result = StockPricingEngine.computeBuy(stock.price, stock.sharesOutstanding, dollarAmount, maxSingleTradeImpact, minLiquidityFloor)
+        val result = computeBuyLeg(stock, dollarAmount)
 
         plugin.databaseManager.execute(
             "UPDATE stocks SET price = ?, shares_outstanding = ? WHERE ticker = ?",
@@ -549,17 +616,15 @@ class StockMarketManager(private val plugin: Joshymc) {
         plugin.databaseManager.execute(
             "INSERT INTO stock_trades (ticker, uuid, is_buy, dollar_amount, shares, price, server_triggered, timestamp) VALUES (?,?,?,?,?,?,?,?)",
             stock.ticker, uuid.toString(), 1, dollarAmount, result.sharesMinted, result.avgExecutionPrice,
-            if (serverTriggered) 1 else 0, System.currentTimeMillis() / 1000
+            0, System.currentTimeMillis() / 1000
         )
 
         return stock.copy(price = result.newPrice, sharesOutstanding = result.newSharesOutstanding) to result
     }
 
-    private fun executeSellLeg(uuid: UUID, stock: Stock, dollarAmount: Double, serverTriggered: Boolean): Pair<Stock, StockPricingEngine.SellResult> {
+    private fun executeSellLeg(uuid: UUID, stock: Stock, dollarAmount: Double): Pair<Stock, SellLegResult> {
         val holding = getHolding(stock.ticker, uuid) ?: Holding(stock.ticker, uuid.toString(), 0.0, 0.0)
-        val result = StockPricingEngine.computeSell(
-            stock.price, stock.sharesOutstanding, dollarAmount, holding.shares, holding.costBasis, maxSingleTradeImpact, minLiquidityFloor
-        )
+        val result = computeSellLeg(stock, holding.shares, holding.costBasis, dollarAmount)
 
         plugin.databaseManager.execute(
             "UPDATE stocks SET price = ?, shares_outstanding = ? WHERE ticker = ?",
@@ -577,7 +642,7 @@ class StockMarketManager(private val plugin: Joshymc) {
         plugin.databaseManager.execute(
             "INSERT INTO stock_trades (ticker, uuid, is_buy, dollar_amount, shares, price, server_triggered, timestamp) VALUES (?,?,?,?,?,?,?,?)",
             stock.ticker, uuid.toString(), 0, dollarAmount, result.sharesRemoved, result.avgExecutionPrice,
-            if (serverTriggered) 1 else 0, System.currentTimeMillis() / 1000
+            0, System.currentTimeMillis() / 1000
         )
 
         return stock.copy(price = result.newPrice, sharesOutstanding = result.newSharesOutstanding) to result
@@ -585,9 +650,8 @@ class StockMarketManager(private val plugin: Joshymc) {
 
     /**
      * Buy [dollarAmount] worth of [ticker] for [player]. Fully atomic: on any failure the
-     * player is not charged and no shares are minted. If [ticker] is JOSH and this call is
-     * itself a player-initiated buy, also runs the JoshyMC 1% server-mirroring mechanic
-     * (recursion-safe: the mirrored leg is always `serverTriggered = true` and never mirrors itself).
+     * player is not charged and no shares are minted. Pays only the normal calculated
+     * transaction value — no server-funded contribution or hidden adjustment on either side.
      */
     fun buyStock(player: Player, ticker: String, dollarAmount: Double): TradeOutcome {
         val stock = getStock(ticker) ?: return TradeOutcome.Failure("That stock no longer exists.")
@@ -600,16 +664,7 @@ class StockMarketManager(private val plugin: Joshymc) {
                     throw IllegalStateException("insufficient_funds")
                 }
 
-                val (updatedStock, result) = executeBuyLeg(player.uniqueId, stock, dollarAmount, serverTriggered = false)
-                var finalStock = updatedStock
-
-                if (updatedStock.ticker == JOSH_TICKER) {
-                    val serverAmount = dollarAmount * serverContribution
-                    if (StockPricingEngine.isSafePositiveAmount(serverAmount)) {
-                        val (s2, _) = executeBuyLeg(SERVER_STOCK_UUID, finalStock, serverAmount, serverTriggered = true)
-                        finalStock = s2
-                    }
-                }
+                val (finalStock, result) = executeBuyLeg(player.uniqueId, stock, dollarAmount)
 
                 outcome = TradeOutcome.BuySuccess(
                     finalStock, dollarAmount, result.sharesMinted, result.avgExecutionPrice, stock.price, finalStock.price
@@ -623,7 +678,8 @@ class StockMarketManager(private val plugin: Joshymc) {
 
     /**
      * Sell [dollarAmountRequested] worth of [ticker] for [player] (clamped to their current
-     * holding value). Fully atomic. Mirrors the JOSH 1% mechanic on sells, same recursion guard.
+     * holding value). Fully atomic. Credits only the normal calculated sale value — no
+     * server-funded deduction or hidden adjustment on either side.
      */
     fun sellStock(player: Player, ticker: String, dollarAmountRequested: Double): TradeOutcome {
         val stock = getStock(ticker) ?: return TradeOutcome.Failure("That stock no longer exists.")
@@ -638,23 +694,12 @@ class StockMarketManager(private val plugin: Joshymc) {
         var outcome: TradeOutcome = TradeOutcome.Failure("Transaction failed.")
         try {
             plugin.databaseManager.transaction {
-                val (updatedStock, result) = executeSellLeg(player.uniqueId, stock, dollarAmount, serverTriggered = false)
+                val (finalStock, result) = executeSellLeg(player.uniqueId, stock, dollarAmount)
 
                 // Credit real proceeds to the player. sharesRemoved * avgExecutionPrice equals
                 // dollarAmount unless the sell was clamped to the holder's remaining shares.
                 val proceeds = result.sharesRemoved * result.avgExecutionPrice
                 plugin.economyManager.deposit(player.uniqueId, proceeds)
-
-                var finalStock = updatedStock
-                if (updatedStock.ticker == JOSH_TICKER) {
-                    val serverHolding = getHolding(JOSH_TICKER, SERVER_STOCK_UUID)
-                    val serverAmount = (dollarAmount * serverContribution)
-                        .let { if (serverHolding != null) it.coerceAtMost(serverHolding.shares * updatedStock.price) else 0.0 }
-                    if (StockPricingEngine.isSafePositiveAmount(serverAmount)) {
-                        val (s2, _) = executeSellLeg(SERVER_STOCK_UUID, finalStock, serverAmount, serverTriggered = true)
-                        finalStock = s2
-                    }
-                }
 
                 val remainingHolding = getHolding(ticker, player.uniqueId)
                 val remainingShares = remainingHolding?.shares ?: 0.0

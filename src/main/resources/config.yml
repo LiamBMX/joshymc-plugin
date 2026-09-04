@@ -307,19 +307,31 @@ stock-market:
   minimum-buy: 1000.0
   # Cost for a player to create their own public stock.
   stock-creation-cost: 1000000.0
-  # Starting price/share for newly created stocks (and the seed price for JoshyMC).
+  # Starting price/share for newly created stocks. Also used as the base price
+  # (the "price at zero circulating supply") for server-owned stocks like JOSH.
   default-stock-price: 10.0
   # Shares outstanding a newly created stock starts with (creator owns all of them).
   initial-shares: 100000.0
-  # When a player buys/sells the JoshyMC (JOSH) stock, the server automatically
-  # buys/sells this fraction of the player's trade in the same direction. Never recurses.
-  joshymc-server-contribution: 0.01
-  # Maximum price movement (as a fraction) a single trade can ever cause. The bonding
-  # curve uses tanh() so this is a hard ceiling, not a typical trade's actual impact.
+  # Maximum price movement (as a fraction) a single trade can ever cause on PLAYER-created
+  # stocks. The bonding curve uses tanh() so this is a hard ceiling, not a typical trade's
+  # actual impact. Does not apply to server-owned stocks — see server-stock-* below.
   maximum-single-trade-price-impact: 0.10
-  # Floor used in the liquidity/impact calculation so a freshly-crashed stock (near-zero
-  # market cap) can't divide-by-zero or produce an absurd price swing.
+  # Floor used in the liquidity/impact calculation so a freshly-crashed PLAYER stock
+  # (near-zero market cap) can't divide-by-zero or produce an absurd price swing.
   minimum-liquidity-floor: 1000.0
+  # ── Server-owned stocks (e.g. JOSH) — nonlinear supply-curve pricing ──────────
+  # There is NO server-funded buy/sell contribution or adjustment of any kind; buying and
+  # selling always use the plain calculated transaction value. Instead, price is a direct,
+  # increasingly-steep function of circulating supply (shares currently held by players):
+  #   price(supply) = base-price + curve-strength * (supply / 1,000,000)^curve-exponent
+  # Higher curve-strength/curve-exponent = more aggressive price growth as supply rises.
+  server-stock-curve-strength: 4.0
+  server-stock-curve-exponent: 1.6
+  # Hard price floor for server-owned stocks (never goes below this).
+  server-stock-minimum-price: 10.0
+  # Hard price ceiling for server-owned stocks — safety cap against runaway/overflow
+  # values at extreme circulating supply.
+  server-stock-maximum-price: 250000.0
   # Trading window (hours) used for 24h open/high/low/volume/activity/trend stats.
   market-activity-period-hours: 24
   # Buy/sell dollar amount at or above which a confirmation GUI is shown before executing.
