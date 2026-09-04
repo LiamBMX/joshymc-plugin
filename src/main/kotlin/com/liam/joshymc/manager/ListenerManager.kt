@@ -122,6 +122,10 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.auctionManager, plugin)
         pm.registerEvents(AuctionBidListener(plugin), plugin)
 
+        // Buy Orders chat input (create order quantity/price, custom sell amount) + join/quit cleanup
+        pm.registerEvents(plugin.orderManager, plugin)
+        pm.registerEvents(com.liam.joshymc.listener.OrderChatListener(plugin), plugin)
+
         // Stock market chat input (create name / buy amount / sell amount) + quit cleanup
         pm.registerEvents(StockTradeChatListener(plugin), plugin)
 

@@ -37,6 +37,7 @@ features:
   mob-stacking: false
   kill-streaks: true
   login-streaks: true
+  orders: true
 
 # Mob Stacking — merges nearby mobs of the same type into a single entity
 mob-stacking:
@@ -300,6 +301,26 @@ auction:
   min-price: 1
   max-price: 1000000000
   tax-percent: 5
+
+# Buy Orders — /orders, a player-driven "I want this item" marketplace.
+# Complements /ah (players sell what they have) without duplicating it —
+# buy orders are always fully escrowed and only ever filled by real players.
+orders:
+  expiration-days: 7
+  default-active-order-limit: 10
+  minimum-price-per-item: 1
+  maximum-price-per-item: 1000000000
+  maximum-quantity-per-order: 100000
+  # Custom items (PDC-tagged) cannot be requested/sold into orders unless enabled here.
+  custom-items:
+    enabled: false
+  notifications:
+    enabled: true
+  # Permission-based active-order limits. Highest limit the player has permission
+  # for wins. Permission node is "joshymc.orders.limit.<key>".
+  limits:
+    vip: 15
+    admin: 50
 
 # Stock Market — /invest, a player-driven stock market (bonding-curve pricing, no order book)
 stock-market:
