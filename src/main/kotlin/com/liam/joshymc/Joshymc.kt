@@ -44,7 +44,7 @@ import com.liam.joshymc.manager.ServerShopManager
 import com.liam.joshymc.manager.AuctionManager
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.EconomyManager
-import com.liam.joshymc.manager.InvestManager
+import com.liam.joshymc.manager.StockMarketManager
 import com.liam.joshymc.manager.CrateManager
 import com.liam.joshymc.manager.HologramManager
 import com.liam.joshymc.manager.KitManager
@@ -166,7 +166,7 @@ class Joshymc : JavaPlugin() {
 
     lateinit var creditsManager: com.liam.joshymc.manager.CreditsManager
         private set
-    lateinit var investManager: InvestManager
+    lateinit var stockMarketManager: StockMarketManager
         private set
     lateinit var lotteryManager: LotteryManager
         private set
@@ -284,8 +284,8 @@ class Joshymc : JavaPlugin() {
         economyManager = EconomyManager(this)
         economyManager.start()
 
-        investManager = InvestManager(this)
-        investManager.start()
+        stockMarketManager = StockMarketManager(this)
+        stockMarketManager.start()
 
         lotteryManager = LotteryManager(this)
         if (isFeatureEnabled("lottery")) lotteryManager.start()

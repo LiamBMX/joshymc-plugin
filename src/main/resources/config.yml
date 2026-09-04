@@ -234,6 +234,59 @@ auction:
   max-price: 1000000000
   tax-percent: 5
 
+# Stock Market — /invest, a player-driven stock market (bonding-curve pricing, no order book)
+stock-market:
+  # Minimum dollar amount for a single purchase.
+  minimum-buy: 1000.0
+  # Cost for a player to create their own public stock.
+  stock-creation-cost: 1000000.0
+  # Starting price/share for newly created stocks (and the seed price for JoshyMC).
+  default-stock-price: 10.0
+  # Shares outstanding a newly created stock starts with (creator owns all of them).
+  initial-shares: 100000.0
+  # When a player buys/sells the JoshyMC (JOSH) stock, the server automatically
+  # buys/sells this fraction of the player's trade in the same direction. Never recurses.
+  joshymc-server-contribution: 0.01
+  # Maximum price movement (as a fraction) a single trade can ever cause. The bonding
+  # curve uses tanh() so this is a hard ceiling, not a typical trade's actual impact.
+  maximum-single-trade-price-impact: 0.10
+  # Floor used in the liquidity/impact calculation so a freshly-crashed stock (near-zero
+  # market cap) can't divide-by-zero or produce an absurd price swing.
+  minimum-liquidity-floor: 1000.0
+  # Trading window (hours) used for 24h open/high/low/volume/activity/trend stats.
+  market-activity-period-hours: 24
+  # Buy/sell dollar amount at or above which a confirmation GUI is shown before executing.
+  large-transaction-threshold: 500000.0
+  # How long (seconds) a chat-input prompt (name/buy amount/sell amount) stays valid.
+  chat-input-timeout-seconds: 30
+  # Stock name length limits (players choose the full name; the ticker is auto-generated).
+  name-min-length: 3
+  name-max-length: 24
+  # Pool of non-placeable materials randomly (and permanently) assigned as a stock's icon.
+  icon-materials:
+    - DIAMOND
+    - EMERALD
+    - PRISMARINE_CRYSTALS
+    - PRISMARINE_SHARD
+    - AMETHYST_SHARD
+    - ECHO_SHARD
+    - NETHER_STAR
+    - BLAZE_POWDER
+    - FIRE_CHARGE
+    - GHAST_TEAR
+    - HEART_OF_THE_SEA
+    - RABBIT_FOOT
+    - MAGMA_CREAM
+  # 24h dollar-volume thresholds used to classify a stock's Market Activity tier.
+  activity-thresholds:
+    very-high: 1000000.0
+    high: 250000.0
+    moderate: 50000.0
+    low: 5000.0
+  # A stock's 24h % price change must exceed +/- this band to count as Growing/Decaying
+  # rather than Stable.
+  trend-stable-band-percent: 2.0
+
 # Spawn World — auto-loads a schematic into a flat world
 spawn-world:
   enabled: true
