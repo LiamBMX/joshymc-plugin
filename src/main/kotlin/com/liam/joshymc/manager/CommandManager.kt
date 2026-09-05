@@ -7,6 +7,7 @@ import com.liam.joshymc.command.AdminCommand
 import com.liam.joshymc.command.AnvilCommand
 import com.liam.joshymc.command.ChatGameCommand
 import com.liam.joshymc.command.LeaderboardCommand
+import com.liam.joshymc.command.ModModeCommand
 import com.liam.joshymc.command.RepairCommand
 import com.liam.joshymc.command.SmithingCommand
 import com.liam.joshymc.command.ViolationBridgeCommand
@@ -248,6 +249,12 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("pv")?.let {
             val cmd = PlayerVaultCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("modmode")?.let {
+            val cmd = ModModeCommand(plugin)
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }

@@ -288,6 +288,44 @@ afk:
 vaults:
   max: 10
 
+# Moderator Mode — /modmode staff toolkit (joshymc.modmode)
+modmode:
+  # Automatically vanish the staff member when Moderator Mode is enabled (unless already vanished)
+  auto-vanish: true
+  # Random Teleport tool eligibility
+  rtp:
+    exclude-vanished: true
+    exclude-modmode-staff: true
+  # Hotbar tool materials/names — leave a key out to use its default
+  tools:
+    punish:
+      material: MACE
+      name: "&cPunish"
+    rtp:
+      material: ENDER_PEARL
+      name: "&dRandom TP"
+    freeze:
+      material: PACKED_ICE
+      name: "&bFreeze / Unfreeze"
+    totemguard:
+      material: TOTEM_OF_UNDYING
+      name: "&6Totem Guard"
+    vanish:
+      material: SLIME_BALL
+      name: "&aVanish"
+    invsee:
+      material: ENDER_CHEST
+      name: "&5Invsee"
+    spectator:
+      material: ENDER_EYE
+      name: "&3Spectator"
+    ecsee:
+      material: CHEST
+      name: "&6ECSee"
+    vault:
+      material: BARREL
+      name: "&2Player Vault"
+
 # RTP — Random Teleport
 rtp:
   min-range: 500

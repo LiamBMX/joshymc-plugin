@@ -91,6 +91,17 @@ class ItemManager(private val plugin: Joshymc) {
         register(SkillTomeFarming())
         register(Token())
 
+        // Moderator Mode hotbar tools
+        register(ModModePunish(plugin))
+        register(ModModeRandomTp(plugin))
+        register(ModModeFreeze(plugin))
+        register(ModModeTotemGuard(plugin))
+        register(ModModeVanish(plugin))
+        register(ModModeInvsee(plugin))
+        register(ModModeSpectator(plugin))
+        register(ModModeEcsee(plugin))
+        register(ModModeVault(plugin))
+
         plugin.logger.info("Registered ${items.size} custom item(s).")
         validateModelIds()
     }

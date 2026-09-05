@@ -446,6 +446,10 @@ commands:
     description: Toggle vanish mode
     usage: /vanish [player]
     aliases: [v]
+  modmode:
+    description: Toggle Moderator Mode
+    usage: /modmode [on|off]
+    aliases: [mmode]
   report:
     description: Report a player
     usage: /report <player> <reason>
@@ -1009,6 +1013,12 @@ permissions:
     default: op
   joshymc.punishment.notify:
     description: Receive punishment notifications
+    default: op
+  joshymc.modmode:
+    description: Use Moderator Mode (Moderator and higher)
+    default: op
+  joshymc.modmode.edit:
+    description: Edit inventories/Ender Chests/vaults viewed via Moderator Mode (Lead Moderator+)
     default: op
   joshymc.vanish:
     description: Toggle vanish mode
