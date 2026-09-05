@@ -492,7 +492,7 @@ commands:
     usage: /subclaim <wand|create|add|remove|delete|list|show>
   rank:
     description: Manage player ranks
-    usage: /rank <set|promote|remove|list|check>
+    usage: /rank <add|remove|list|check>
     aliases: [ranks]
   hopper:
     description: View and manage upgraded hoppers
@@ -1050,8 +1050,17 @@ permissions:
   joshymc.rank:
     description: Use rank commands
     default: op
-  joshymc.rank.set:
-    description: Set/remove player ranks
+  joshymc.rank.check:
+    description: Check a player's ranks
+    default: op
+  joshymc.rank.list:
+    description: List all managed ranks
+    default: op
+  joshymc.rank.add:
+    description: Add a rank to a player
+    default: op
+  joshymc.rank.remove:
+    description: Remove a rank from a player
     default: op
   joshymc.sellwand.give:
     description: Give sell wands to players

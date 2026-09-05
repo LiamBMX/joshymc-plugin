@@ -22,7 +22,8 @@ class RankManager(private val plugin: Joshymc) : Listener {
     data class Rank(
         val id: String,
         val displayTag: String,   // e.g., "&c&lAdmin"
-        val weight: Int           // Higher = more important
+        val weight: Int,          // Higher = more important
+        val category: String = "Ranks"  // Grouping shown by /rank list, e.g. "Staff Ranks"
     )
 
     private val ranks = mutableMapOf<String, Rank>()
@@ -232,17 +233,18 @@ class RankManager(private val plugin: Joshymc) : Listener {
         if (section == null) {
             plugin.logger.info("[Ranks] No ranks found in config, creating defaults...")
             val defaults = mapOf(
-                "owner" to ("&4&lOwner" to 100),
-                "admin" to ("&c&lAdmin" to 90),
-                "mod" to ("&9&lMod" to 80),
-                "helper" to ("&a&lHelper" to 70),
-                "vip" to ("&6&lVIP" to 50),
-                "member" to ("&7Member" to 10),
-                "default" to ("&8Player" to 0)
+                "owner" to Triple("&4&lOwner", 100, "Special Ranks"),
+                "admin" to Triple("&c&lAdmin", 90, "Staff Ranks"),
+                "mod" to Triple("&9&lMod", 80, "Staff Ranks"),
+                "helper" to Triple("&a&lHelper", 70, "Staff Ranks"),
+                "vip" to Triple("&6&lVIP", 50, "Player Ranks"),
+                "member" to Triple("&7Member", 10, "Player Ranks"),
+                "default" to Triple("&8Player", 0, "Player Ranks")
             )
-            for ((id, pair) in defaults) {
-                plugin.config.set("ranks.list.$id.tag", pair.first)
-                plugin.config.set("ranks.list.$id.weight", pair.second)
+            for ((id, triple) in defaults) {
+                plugin.config.set("ranks.list.$id.tag", triple.first)
+                plugin.config.set("ranks.list.$id.weight", triple.second)
+                plugin.config.set("ranks.list.$id.category", triple.third)
             }
             plugin.saveConfig()
             section = plugin.config.getConfigurationSection("ranks.list")
@@ -254,7 +256,8 @@ class RankManager(private val plugin: Joshymc) : Listener {
             val rankSection = section.getConfigurationSection(id) ?: continue
             val tag = rankSection.getString("tag", "&7$id") ?: "&7$id"
             val weight = rankSection.getInt("weight", 0)
-            ranks[id] = Rank(id, tag, weight)
+            val category = rankSection.getString("category", "Ranks") ?: "Ranks"
+            ranks[id] = Rank(id, tag, weight, category)
         }
     }
 
@@ -338,6 +341,76 @@ class RankManager(private val plugin: Joshymc) : Listener {
         Bukkit.getPlayer(uuid)?.let { applyTeamFor(it) }
 
         syncWithLuckPerms(uuid, rankId)
+    }
+
+    /**
+     * Add ONLY [rankId] to [uuid]'s rank set, leaving every other rank the
+     * player already has untouched. Returns false (no changes made) if the
+     * player already has this rank.
+     */
+    fun addRank(uuid: UUID, rankId: String): Boolean {
+        val set = playerRanks.getOrPut(uuid) { mutableSetOf() }
+        if (rankId in set) return false
+        set.add(rankId)
+        plugin.databaseManager.execute(
+            "INSERT OR IGNORE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
+            uuid.toString(), rankId
+        )
+        // Preserve the default rank alongside any non-default rank so players
+        // retain their base permissions/display when a special rank is added.
+        if (rankId != "default" && ranks.containsKey("default") && set.add("default")) {
+            plugin.databaseManager.execute(
+                "INSERT OR IGNORE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
+                uuid.toString(), "default"
+            )
+            addLuckPermsGroup(uuid, "default")
+        }
+
+        Bukkit.getPlayer(uuid)?.let { applyTeamFor(it) }
+        addLuckPermsGroup(uuid, rankId)
+        return true
+    }
+
+    /**
+     * Remove ONLY [rankId] from [uuid]'s rank set, leaving every other rank
+     * the player has untouched. Returns false (no changes made) if the
+     * player doesn't have this rank.
+     */
+    fun removeRank(uuid: UUID, rankId: String): Boolean {
+        val set = playerRanks[uuid] ?: return false
+        if (rankId !in set) return false
+        set.remove(rankId)
+        if (set.isEmpty()) playerRanks.remove(uuid)
+        plugin.databaseManager.execute(
+            "DELETE FROM player_ranks WHERE uuid = ? AND rank_id = ?",
+            uuid.toString(), rankId
+        )
+
+        Bukkit.getPlayer(uuid)?.let { applyTeamFor(it) }
+        removeLuckPermsGroup(uuid, rankId)
+        return true
+    }
+
+    /** Add a single LuckPerms parent node without touching any other group. */
+    private fun addLuckPermsGroup(uuid: UUID, rankId: String) {
+        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) return
+        val name = Bukkit.getOfflinePlayer(uuid).name ?: return
+        try {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent add $rankId")
+        } catch (e: Exception) {
+            plugin.logger.warning("[Ranks] LuckPerms add failed for $name ($rankId): ${e.message}")
+        }
+    }
+
+    /** Remove a single LuckPerms parent node without touching any other group. */
+    private fun removeLuckPermsGroup(uuid: UUID, rankId: String) {
+        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) return
+        val name = Bukkit.getOfflinePlayer(uuid).name ?: return
+        try {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent remove $rankId")
+        } catch (e: Exception) {
+            plugin.logger.warning("[Ranks] LuckPerms remove failed for $name ($rankId): ${e.message}")
+        }
     }
 
     private fun syncWithLuckPerms(uuid: UUID, rankId: String?) {
