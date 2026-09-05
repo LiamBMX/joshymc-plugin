@@ -403,6 +403,10 @@ stock-market:
   # Stocks (matched by ticker or name, case-insensitive) that /invest admin reset/delete may
   # never target. The JOSH server stock is always protected regardless of this list.
   protected-stocks: []
+  # A single buy/sell is split into this many equal sub-chunks, repricing after each one, so a
+  # large lump-sum trade approximates many small consecutive trades instead of executing
+  # entirely at the starting price. Higher = more accurate but more computation per trade.
+  bulk-purchase-steps: 1000
   # Pool of non-placeable materials randomly (and permanently) assigned as a stock's icon.
   icon-materials:
     - DIAMOND
