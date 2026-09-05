@@ -127,7 +127,7 @@ commands:
     aliases: [buyorders, order]
   invest:
     description: Open the player-driven stock market (trade, create, and track stocks)
-    usage: /invest
+    usage: /invest [admin <reset|delete|confirm|cancel> <stock>]
   lottery:
     description: Buy lottery tickets or check the current prize pool
     usage: /lottery <buy <amount>|prize|tickets>
@@ -1092,6 +1092,15 @@ permissions:
   joshymc.invest:
     description: Use the /invest command to trade, create, and track stocks
     default: true
+  joshymc.invest.admin.reset:
+    description: Reset a stock to its base state, refunding all investors at cost basis
+    default: op
+  joshymc.invest.admin.delete:
+    description: Permanently delete a stock, refunding all investors at cost basis
+    default: op
+  joshymc.invest.admin.*:
+    description: All /invest admin permissions (wildcard)
+    default: op
   joshymc.lottery:
     description: Use the /lottery command to buy tickets and check the prize pool
     default: true

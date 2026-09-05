@@ -2,6 +2,9 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.util.ProfanityFilter
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
+import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.entity.Player
 import java.sql.ResultSet
@@ -79,6 +82,10 @@ class StockMarketManager(private val plugin: Joshymc) {
     var iconMaterials: List<Material> = emptyList()
         private set
 
+    /** Tickers/names (lowercased) that `/invest admin reset|delete` may never target. */
+    var protectedStocks: Set<String> = emptySet()
+        private set
+
     private val chatInputTimeoutMs: Long get() = chatInputTimeoutSeconds * 1000L
 
     // ── Pending chat-input state (consumed by StockTradeChatListener) ──
@@ -97,6 +104,38 @@ class StockMarketManager(private val plugin: Joshymc) {
     val pendingSellInputs = ConcurrentHashMap<UUID, PendingTradeInput>()
     val pendingStockConfirmations = ConcurrentHashMap<UUID, PendingStockCreation>()
     val pendingTradeConfirmations = ConcurrentHashMap<UUID, PendingTradeConfirmation>()
+
+    // ── Admin reset/delete pending confirmations ────────────────────
+    // Keyed by "admin key" (player UUID string, or "CONSOLE") rather than UUID, since
+    // console is allowed to run these — only the same admin who requested an action can
+    // confirm/cancel it.
+    enum class AdminActionType(val verb: String, val pastTense: String) {
+        RESET("reset", "reset"),
+        DELETE("delete", "deleted"),
+    }
+
+    data class PendingAdminAction(
+        val actionType: AdminActionType,
+        val ticker: String,
+        val expiresAt: Long,
+    )
+
+    sealed class AdminActionPreview {
+        data class Ready(val stock: Stock, val investorCount: Int, val refundTotal: Double) : AdminActionPreview()
+        data class Failure(val message: String) : AdminActionPreview()
+    }
+
+    sealed class AdminActionResult {
+        data class Success(
+            val actionType: AdminActionType,
+            val ticker: String,
+            val investorsRefunded: Int,
+            val totalRefunded: Double,
+        ) : AdminActionResult()
+        data class Failure(val message: String) : AdminActionResult()
+    }
+
+    val pendingAdminActions = ConcurrentHashMap<String, PendingAdminAction>()
 
     /** Only one pending chat-input type may be active per player at a time. */
     fun setPendingCreateName(uuid: UUID) {
@@ -232,6 +271,19 @@ class StockMarketManager(private val plugin: Joshymc) {
             )
         """.trimIndent())
 
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS stock_admin_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                name TEXT NOT NULL,
+                action TEXT NOT NULL,
+                admin_name TEXT NOT NULL,
+                investors_refunded INTEGER NOT NULL,
+                total_refunded REAL NOT NULL,
+                timestamp INTEGER NOT NULL
+            )
+        """.trimIndent())
+
         loadConfig()
         migrateOldBankInvestments()
         ensureJoshyMcStock()
@@ -257,6 +309,7 @@ class StockMarketManager(private val plugin: Joshymc) {
         chatInputTimeoutSeconds = cfg.getInt("stock-market.chat-input-timeout-seconds", 30)
         nameMinLength = cfg.getInt("stock-market.name-min-length", 3)
         nameMaxLength = cfg.getInt("stock-market.name-max-length", 24)
+        protectedStocks = cfg.getStringList("stock-market.protected-stocks").map { it.trim().lowercase() }.toSet()
 
         activityVeryHigh = cfg.getDouble("stock-market.activity-thresholds.very-high", 1_000_000.0)
         activityHigh = cfg.getDouble("stock-market.activity-thresholds.high", 250_000.0)
@@ -370,6 +423,11 @@ class StockMarketManager(private val plugin: Joshymc) {
             "SELECT * FROM stock_holdings WHERE uuid = ? AND shares > ?", uuid.toString(), EPSILON
         ) { mapHolding(it) }
 
+    fun getHoldingsForStock(ticker: String): List<Holding> =
+        plugin.databaseManager.query(
+            "SELECT * FROM stock_holdings WHERE ticker = ? AND shares > ?", ticker, EPSILON
+        ) { mapHolding(it) }
+
     fun getHolderCount(ticker: String): Int =
         plugin.databaseManager.queryFirst(
             "SELECT COUNT(*) AS c FROM stock_holdings WHERE ticker = ? AND shares > ?", ticker, EPSILON
@@ -442,6 +500,130 @@ class StockMarketManager(private val plugin: Joshymc) {
         if (existing != null) return "A stock with that name already exists."
 
         return null
+    }
+
+    /** Looks up a stock by exact ticker first, then by name (case-insensitive). */
+    fun resolveStock(input: String): Stock? {
+        val trimmed = input.trim()
+        getStock(trimmed.uppercase())?.let { return it }
+        return plugin.databaseManager.queryFirst(
+            "SELECT * FROM stocks WHERE name_lower = ?", trimmed.lowercase()
+        ) { mapStock(it) }
+    }
+
+    /** JOSH (server-owned) is always protected; config can add more via `protected-stocks`. */
+    fun isProtectedStock(stock: Stock): Boolean =
+        stock.isServerOwned || protectedStocks.contains(stock.ticker.lowercase()) || protectedStocks.contains(stock.nameLower)
+
+    // ── Admin reset/delete flow ──────────────────────────────────────
+
+    /**
+     * Stage 1: validate + preview a reset/delete, stashing a pending confirmation keyed by
+     * [adminKey] (player UUID string, or "CONSOLE"). Only the same key can confirm/cancel it.
+     */
+    fun prepareAdminAction(adminKey: String, actionType: AdminActionType, tickerOrName: String): AdminActionPreview {
+        val stock = resolveStock(tickerOrName)
+            ?: return AdminActionPreview.Failure("Stock '$tickerOrName' not found.")
+        if (isProtectedStock(stock)) {
+            return AdminActionPreview.Failure("${stock.name} (${stock.ticker}) is protected and cannot be ${actionType.verb}.")
+        }
+
+        val holdings = getHoldingsForStock(stock.ticker)
+        val refundTotal = holdings.sumOf { it.costBasis }
+
+        pendingAdminActions[adminKey] = PendingAdminAction(
+            actionType, stock.ticker, System.currentTimeMillis() + chatInputTimeoutMs
+        )
+        return AdminActionPreview.Ready(stock, holdings.size, refundTotal)
+    }
+
+    fun cancelAdminAction(adminKey: String): PendingAdminAction? {
+        val pending = pendingAdminActions.remove(adminKey) ?: return null
+        if (isExpired(pending.expiresAt)) return null
+        return pending
+    }
+
+    /**
+     * Stage 2: revalidate against LIVE holdings/stock state (never the stale preview) and
+     * execute atomically. Refunds use each holding's stored cost basis, never current market
+     * price, so an admin action can't create artificial profit/loss. On any failure nothing
+     * is changed — no partial refunds, no deleted holdings/stock.
+     */
+    fun confirmAdminAction(adminKey: String, adminName: String): AdminActionResult {
+        val pending = pendingAdminActions.remove(adminKey)
+            ?: return AdminActionResult.Failure("You have no pending stock action.")
+        if (isExpired(pending.expiresAt)) {
+            return AdminActionResult.Failure("Your pending stock action has expired.")
+        }
+
+        val stock = getStock(pending.ticker)
+            ?: return AdminActionResult.Failure("That stock no longer exists.")
+        if (isProtectedStock(stock)) {
+            return AdminActionResult.Failure("${stock.name} (${stock.ticker}) is protected and cannot be ${pending.actionType.verb}.")
+        }
+
+        var investorsRefunded = 0
+        var totalRefunded = 0.0
+        val refundedUuids = mutableListOf<Pair<UUID, Double>>()
+        try {
+            plugin.databaseManager.transaction {
+                val holdings = getHoldingsForStock(stock.ticker)
+                for (holding in holdings) {
+                    val refund = holding.costBasis
+                    if (refund > 0.0) {
+                        val uuid = UUID.fromString(holding.uuid)
+                        plugin.economyManager.deposit(uuid, refund)
+                        totalRefunded += refund
+                        refundedUuids += uuid to refund
+                    }
+                    investorsRefunded++
+                }
+
+                plugin.databaseManager.execute("DELETE FROM stock_holdings WHERE ticker = ?", stock.ticker)
+                plugin.databaseManager.execute("DELETE FROM stock_trades WHERE ticker = ?", stock.ticker)
+
+                when (pending.actionType) {
+                    AdminActionType.RESET -> plugin.databaseManager.execute(
+                        "UPDATE stocks SET price = ?, shares_outstanding = ? WHERE ticker = ?",
+                        defaultStockPrice, initialShares, stock.ticker
+                    )
+                    AdminActionType.DELETE -> plugin.databaseManager.execute(
+                        "DELETE FROM stocks WHERE ticker = ?", stock.ticker
+                    )
+                }
+
+                plugin.databaseManager.execute(
+                    "INSERT INTO stock_admin_actions (ticker, name, action, admin_name, investors_refunded, total_refunded, timestamp) VALUES (?,?,?,?,?,?,?)",
+                    stock.ticker, stock.name, pending.actionType.name, adminName,
+                    investorsRefunded, totalRefunded, System.currentTimeMillis() / 1000
+                )
+            }
+        } catch (e: Exception) {
+            plugin.logger.severe(
+                "[StockMarket] Admin ${pending.actionType.verb} of ${stock.ticker} by $adminName FAILED — no changes were made: ${e.message}"
+            )
+            return AdminActionResult.Failure("Action failed (${e.message ?: "unknown error"}). Nothing was changed.")
+        }
+
+        plugin.logger.info(
+            "[StockMarket] $adminName ${pending.actionType.pastTense} stock ${stock.ticker} (${stock.name}) " +
+                "— refunded $investorsRefunded investor(s) a total of ${plugin.economyManager.format(totalRefunded)}."
+        )
+
+        for ((uuid, refund) in refundedUuids) {
+            Bukkit.getPlayer(uuid)?.let { online ->
+                plugin.commsManager.send(
+                    online,
+                    Component.text(
+                        "Your position in ${stock.name} (${stock.ticker}) was refunded ${plugin.economyManager.format(refund)} — the stock was ${pending.actionType.pastTense} by an admin.",
+                        NamedTextColor.YELLOW
+                    ),
+                    CommunicationsManager.Category.ECONOMY
+                )
+            }
+        }
+
+        return AdminActionResult.Success(pending.actionType, stock.ticker, investorsRefunded, totalRefunded)
     }
 
     // ── Stock creation flow ─────────────────────────────────────────

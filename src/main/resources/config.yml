@@ -400,6 +400,9 @@ stock-market:
   # Stock name length limits (players choose the full name; the ticker is auto-generated).
   name-min-length: 3
   name-max-length: 24
+  # Stocks (matched by ticker or name, case-insensitive) that /invest admin reset/delete may
+  # never target. The JOSH server stock is always protected regardless of this list.
+  protected-stocks: []
   # Pool of non-placeable materials randomly (and permanently) assigned as a stock's icon.
   icon-materials:
     - DIAMOND
