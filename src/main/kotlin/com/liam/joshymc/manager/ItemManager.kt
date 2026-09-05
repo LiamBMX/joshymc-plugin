@@ -79,6 +79,9 @@ class ItemManager(private val plugin: Joshymc) {
         // Utility blocks
         register(FastHopper())
 
+        // Wands
+        register(SellWand())
+
         // Legendary items
         register(BlazeKingsCrown())
         register(PhantomCloak())
@@ -89,10 +92,30 @@ class ItemManager(private val plugin: Joshymc) {
         register(Token())
 
         plugin.logger.info("Registered ${items.size} custom item(s).")
+        validateModelIds()
     }
 
     private fun register(item: CustomItem) {
         items[item.id] = item
+    }
+
+    /**
+     * Warns (without failing startup) if two different custom items resolve to the same
+     * `minecraft:item_model` id, e.g. from copy-pasting an existing item class and forgetting
+     * to change its model id. This can't verify the resourcepack assets themselves (those
+     * aren't shipped inside the plugin jar), only that two in-code items don't collide.
+     */
+    private fun validateModelIds() {
+        val ownerByModelId = mutableMapOf<String, String>()
+        for (item in items.values) {
+            val modelId = item.createItemStack().itemMeta?.itemModel?.key ?: continue
+            val existingOwner = ownerByModelId.putIfAbsent(modelId, item.id)
+            if (existingOwner != null && existingOwner != item.id) {
+                plugin.logger.warning(
+                    "Custom item model ID collision: '$modelId' is used by both '$existingOwner' and '${item.id}'."
+                )
+            }
+        }
     }
 
     fun clear() {
