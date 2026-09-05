@@ -511,9 +511,26 @@ class StockMarketManager(private val plugin: Joshymc) {
         ) { mapStock(it) }
     }
 
-    /** JOSH (server-owned) is always protected; config can add more via `protected-stocks`. */
-    fun isProtectedStock(stock: Stock): Boolean =
-        stock.isServerOwned || protectedStocks.contains(stock.ticker.lowercase()) || protectedStocks.contains(stock.nameLower)
+    /**
+     * Server-owned stocks (JOSH) may always be reset by an authorized admin — server-owned
+     * status only protects against deletion, never resets. Config `protected-stocks` blocks
+     * both reset and delete for whichever tickers/names it lists.
+     */
+    fun isProtectedFromAction(stock: Stock, actionType: AdminActionType): Boolean {
+        if (stock.isServerOwned) return actionType == AdminActionType.DELETE
+        return protectedStocks.contains(stock.ticker.lowercase()) || protectedStocks.contains(stock.nameLower)
+    }
+
+    private fun protectionMessage(stock: Stock, actionType: AdminActionType): String =
+        if (stock.isServerOwned && actionType == AdminActionType.DELETE) {
+            "${stock.name} is a permanent server stock and cannot be deleted. Use /invest admin reset ${stock.name} instead."
+        } else {
+            "${stock.name} (${stock.ticker}) is protected and cannot be ${actionType.verb}."
+        }
+
+    /** Holdings for [ticker] excluding JOSH's server-controlled seed position — real investors only. */
+    private fun investorHoldings(ticker: String): List<Holding> =
+        getHoldingsForStock(ticker).filter { it.uuid != SERVER_STOCK_UUID_STRING }
 
     // ── Admin reset/delete flow ──────────────────────────────────────
 
@@ -524,11 +541,11 @@ class StockMarketManager(private val plugin: Joshymc) {
     fun prepareAdminAction(adminKey: String, actionType: AdminActionType, tickerOrName: String): AdminActionPreview {
         val stock = resolveStock(tickerOrName)
             ?: return AdminActionPreview.Failure("Stock '$tickerOrName' not found.")
-        if (isProtectedStock(stock)) {
-            return AdminActionPreview.Failure("${stock.name} (${stock.ticker}) is protected and cannot be ${actionType.verb}.")
+        if (isProtectedFromAction(stock, actionType)) {
+            return AdminActionPreview.Failure(protectionMessage(stock, actionType))
         }
 
-        val holdings = getHoldingsForStock(stock.ticker)
+        val holdings = investorHoldings(stock.ticker)
         val refundTotal = holdings.sumOf { it.costBasis }
 
         pendingAdminActions[adminKey] = PendingAdminAction(
@@ -558,8 +575,8 @@ class StockMarketManager(private val plugin: Joshymc) {
 
         val stock = getStock(pending.ticker)
             ?: return AdminActionResult.Failure("That stock no longer exists.")
-        if (isProtectedStock(stock)) {
-            return AdminActionResult.Failure("${stock.name} (${stock.ticker}) is protected and cannot be ${pending.actionType.verb}.")
+        if (isProtectedFromAction(stock, pending.actionType)) {
+            return AdminActionResult.Failure(protectionMessage(stock, pending.actionType))
         }
 
         var investorsRefunded = 0
@@ -567,7 +584,7 @@ class StockMarketManager(private val plugin: Joshymc) {
         val refundedUuids = mutableListOf<Pair<UUID, Double>>()
         try {
             plugin.databaseManager.transaction {
-                val holdings = getHoldingsForStock(stock.ticker)
+                val holdings = investorHoldings(stock.ticker)
                 for (holding in holdings) {
                     val refund = holding.costBasis
                     if (refund > 0.0) {
@@ -583,10 +600,20 @@ class StockMarketManager(private val plugin: Joshymc) {
                 plugin.databaseManager.execute("DELETE FROM stock_trades WHERE ticker = ?", stock.ticker)
 
                 when (pending.actionType) {
-                    AdminActionType.RESET -> plugin.databaseManager.execute(
-                        "UPDATE stocks SET price = ?, shares_outstanding = ? WHERE ticker = ?",
-                        defaultStockPrice, initialShares, stock.ticker
-                    )
+                    AdminActionType.RESET -> {
+                        plugin.databaseManager.execute(
+                            "UPDATE stocks SET price = ?, shares_outstanding = ? WHERE ticker = ?",
+                            defaultStockPrice, initialShares, stock.ticker
+                        )
+                        if (stock.isServerOwned) {
+                            // Restore the server's own seed position so circulating supply
+                            // still matches shares_outstanding, same as first-ever creation.
+                            plugin.databaseManager.execute(
+                                "INSERT INTO stock_holdings (ticker, uuid, shares, cost_basis) VALUES (?,?,?,?)",
+                                stock.ticker, SERVER_STOCK_UUID_STRING, initialShares, defaultStockPrice * initialShares
+                            )
+                        }
+                    }
                     AdminActionType.DELETE -> plugin.databaseManager.execute(
                         "DELETE FROM stocks WHERE ticker = ?", stock.ticker
                     )
