@@ -72,6 +72,9 @@ class StockMarketManager(private val plugin: Joshymc) {
         private set
     var nameMaxLength = 24
         private set
+    /** Number of progressively-repriced sub-chunks a single buy/sell is split into (see [computeBuyLeg]). */
+    var bulkPurchaseSteps = 1000
+        private set
 
     private var activityVeryHigh = 1_000_000.0
     private var activityHigh = 250_000.0
@@ -309,6 +312,7 @@ class StockMarketManager(private val plugin: Joshymc) {
         chatInputTimeoutSeconds = cfg.getInt("stock-market.chat-input-timeout-seconds", 30)
         nameMinLength = cfg.getInt("stock-market.name-min-length", 3)
         nameMaxLength = cfg.getInt("stock-market.name-max-length", 24)
+        bulkPurchaseSteps = cfg.getInt("stock-market.bulk-purchase-steps", 1000).coerceAtLeast(1)
         protectedStocks = cfg.getStringList("stock-market.protected-stocks").map { it.trim().lowercase() }.toSet()
 
         activityVeryHigh = cfg.getDouble("stock-market.activity-thresholds.very-high", 1_000_000.0)
@@ -748,34 +752,78 @@ class StockMarketManager(private val plugin: Joshymc) {
      * Pure (no persistence) buy computation for [stock], routed to the pricing engine that
      * matches [Stock.isServerOwned]. Used both by the real trade execution below and by GUI
      * previews, so the two never drift apart.
+     *
+     * Splits [dollarAmount] into [bulkPurchaseSteps] equal sub-chunks and reprices after each
+     * one (price/supply carried forward chunk-to-chunk) so a large lump-sum buy approximates
+     * many small consecutive buys instead of executing entirely at the starting price.
      */
     fun computeBuyLeg(stock: Stock, dollarAmount: Double): BuyLegResult {
-        return if (stock.isServerOwned) {
-            val r = ServerStockPricingEngine.computeBuy(
-                stock.sharesOutstanding, dollarAmount, defaultStockPrice,
-                serverStockCurveStrength, serverStockCurveExponent, serverStockMinimumPrice, serverStockMaximumPrice,
-            )
-            BuyLegResult(r.avgExecutionPrice, r.sharesMinted, r.newPrice, r.newSharesOutstanding)
-        } else {
-            val r = StockPricingEngine.computeBuy(stock.price, stock.sharesOutstanding, dollarAmount, maxSingleTradeImpact, minLiquidityFloor)
-            BuyLegResult(r.avgExecutionPrice, r.sharesMinted, r.newPrice, r.newSharesOutstanding)
+        val steps = bulkPurchaseSteps
+        val chunkAmount = dollarAmount / steps
+        var price = stock.price
+        var supply = stock.sharesOutstanding
+        var totalSharesMinted = 0.0
+
+        repeat(steps) {
+            if (stock.isServerOwned) {
+                val r = ServerStockPricingEngine.computeBuy(
+                    supply, chunkAmount, defaultStockPrice,
+                    serverStockCurveStrength, serverStockCurveExponent, serverStockMinimumPrice, serverStockMaximumPrice,
+                )
+                price = r.newPrice
+                supply = r.newSharesOutstanding
+                totalSharesMinted += r.sharesMinted
+            } else {
+                val r = StockPricingEngine.computeBuy(price, supply, chunkAmount, maxSingleTradeImpact, minLiquidityFloor)
+                price = r.newPrice
+                supply = r.newSharesOutstanding
+                totalSharesMinted += r.sharesMinted
+            }
         }
+
+        val avgExecutionPrice = if (totalSharesMinted > StockPricingEngine.EPSILON) dollarAmount / totalSharesMinted else price
+        return BuyLegResult(avgExecutionPrice, totalSharesMinted, price, supply)
     }
 
-    /** Pure (no persistence) sell computation — see [computeBuyLeg]. */
+    /** Pure (no persistence) sell computation — see [computeBuyLeg] (same chunked-repricing approach). */
     fun computeSellLeg(stock: Stock, holderShares: Double, holderCostBasis: Double, dollarAmount: Double): SellLegResult {
-        return if (stock.isServerOwned) {
-            val r = ServerStockPricingEngine.computeSell(
-                stock.sharesOutstanding, dollarAmount, holderShares, holderCostBasis, defaultStockPrice,
-                serverStockCurveStrength, serverStockCurveExponent, serverStockMinimumPrice, serverStockMaximumPrice,
-            )
-            SellLegResult(r.avgExecutionPrice, r.sharesRemoved, r.newPrice, r.newSharesOutstanding, r.realizedPL, r.costBasisRemoved)
-        } else {
-            val r = StockPricingEngine.computeSell(
-                stock.price, stock.sharesOutstanding, dollarAmount, holderShares, holderCostBasis, maxSingleTradeImpact, minLiquidityFloor
-            )
-            SellLegResult(r.avgExecutionPrice, r.sharesRemoved, r.newPrice, r.newSharesOutstanding, r.realizedPL, r.costBasisRemoved)
+        val steps = bulkPurchaseSteps
+        val chunkAmount = dollarAmount / steps
+        var price = stock.price
+        var supply = stock.sharesOutstanding
+        var shares = holderShares
+        var costBasis = holderCostBasis
+        var totalSharesRemoved = 0.0
+        var totalRealizedPL = 0.0
+        var totalCostBasisRemoved = 0.0
+
+        repeat(steps) {
+            if (stock.isServerOwned) {
+                val r = ServerStockPricingEngine.computeSell(
+                    supply, chunkAmount, shares, costBasis, defaultStockPrice,
+                    serverStockCurveStrength, serverStockCurveExponent, serverStockMinimumPrice, serverStockMaximumPrice,
+                )
+                price = r.newPrice
+                supply = r.newSharesOutstanding
+                shares -= r.sharesRemoved
+                costBasis -= r.costBasisRemoved
+                totalSharesRemoved += r.sharesRemoved
+                totalRealizedPL += r.realizedPL
+                totalCostBasisRemoved += r.costBasisRemoved
+            } else {
+                val r = StockPricingEngine.computeSell(price, supply, chunkAmount, shares, costBasis, maxSingleTradeImpact, minLiquidityFloor)
+                price = r.newPrice
+                supply = r.newSharesOutstanding
+                shares -= r.sharesRemoved
+                costBasis -= r.costBasisRemoved
+                totalSharesRemoved += r.sharesRemoved
+                totalRealizedPL += r.realizedPL
+                totalCostBasisRemoved += r.costBasisRemoved
+            }
         }
+
+        val avgExecutionPrice = if (totalSharesRemoved > StockPricingEngine.EPSILON) dollarAmount / totalSharesRemoved else price
+        return SellLegResult(avgExecutionPrice, totalSharesRemoved, price, supply, totalRealizedPL, totalCostBasisRemoved)
     }
 
     private fun executeBuyLeg(uuid: UUID, stock: Stock, dollarAmount: Double): Pair<Stock, BuyLegResult> {
