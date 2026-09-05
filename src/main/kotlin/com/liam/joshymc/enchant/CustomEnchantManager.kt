@@ -360,7 +360,11 @@ class CustomEnchantManager(private val plugin: Joshymc) : Listener {
         meta.persistentDataContainer.set(scrollChanceKey, PersistentDataType.INTEGER, clampedChance)
         meta.setEnchantmentGlintOverride(true)
 
-        // Per-enchant model so the resource pack can show a unique-tinted scroll.
+        // Per-enchant model so the resource pack can show a unique-tinted scroll. New enchants
+        // need a matching `joshymc:item/enchant_scroll_<enchantId>` model+texture+item-definition
+        // in the resourcepack, or they silently fall back to plain paper — add the enchant to
+        // ENCHANT_COLORS in resourcepack/generate_scroll_textures.py and rerun it to generate
+        // all three files at once.
         meta.setItemModel(NamespacedKey(plugin, "enchant_scroll_$enchantId"))
 
         item.itemMeta = meta
