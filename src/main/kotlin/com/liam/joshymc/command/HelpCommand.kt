@@ -129,8 +129,9 @@ class HelpCommand(private val plugin: Joshymc) : CommandExecutor {
             HelpEntry("/claim map", "View a map of nearby claims")
         )),
         Category(Material.NAME_TAG, "Ranks", NamedTextColor.GOLD, listOf(
-            HelpEntry("/rank set <player> <rank>", "Set a player's rank", staffOnly = true),
-            HelpEntry("/rank remove <player>", "Remove a player's rank", staffOnly = true),
+            HelpEntry("/rank add <player> <rank>", "Add a rank to a player", staffOnly = true),
+            HelpEntry("/rank remove <player> <rank>", "Remove a rank from a player", staffOnly = true),
+            HelpEntry("/rank check <player>", "Check a player's ranks", staffOnly = true),
             HelpEntry("/rank list", "List all available ranks", staffOnly = true)
         )),
         Category(Material.PLAYER_HEAD, "Teams", NamedTextColor.BLUE, listOf(

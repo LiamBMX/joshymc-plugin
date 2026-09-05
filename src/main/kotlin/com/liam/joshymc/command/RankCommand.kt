@@ -1,18 +1,26 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
-import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
+import org.bukkit.OfflinePlayer
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 
+/**
+ * `/rank` manages exact rank membership: `add`/`remove` only ever touch the
+ * one rank named on the command line, so a player can hold any combination
+ * of ranks (e.g. a purchasable rank + a staff rank) without one clobbering
+ * the other. There is intentionally no `set`/`promote` — those implied a
+ * single "current rank" model that doesn't hold once multiple rank
+ * categories can coexist.
+ */
 class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
@@ -22,202 +30,197 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         when (args.getOrNull(0)?.lowercase()) {
-            "set" -> handleSet(sender, args)
-            "remove" -> handleRemove(sender, args)
-            "list" -> handleList(sender)
             "check" -> handleCheck(sender, args)
-            "promote" -> handlePromote(sender, args)
+            "list" -> handleList(sender)
+            "add" -> handleAdd(sender, args)
+            "remove" -> handleRemove(sender, args)
             else -> showHelp(sender)
         }
 
         return true
     }
 
-    private fun handleSet(sender: CommandSender, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.rank.set")) {
+    private fun handleAdd(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.rank.add")) {
             sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
             return
         }
 
         val playerName = args.getOrNull(1)
         val rankId = args.getOrNull(2)?.lowercase()
-
         if (playerName == null || rankId == null) {
-            sender.sendMessage(Component.text("Usage: /rank set <player> <rank>", NamedTextColor.RED))
+            sender.sendMessage(Component.text("Usage: /rank add <player> <rank>", NamedTextColor.RED))
             return
         }
 
-        val target = Bukkit.getPlayer(playerName) ?: Bukkit.getOfflinePlayer(playerName)
+        val target = resolveTarget(playerName)
+        val displayName = target.name ?: playerName
         val rank = plugin.rankManager.getRank(rankId)
         if (rank == null) {
             sender.sendMessage(Component.text("Unknown rank: $rankId. Use /rank list to see available ranks.", NamedTextColor.RED))
             return
         }
 
-        plugin.rankManager.setPlayerRank(target.uniqueId, rankId)
-
         val tagDisplay = plugin.commsManager.parseLegacy(rank.displayTag)
-        if (sender is Player) {
-            plugin.commsManager.send(
+        val added = plugin.rankManager.addRank(target.uniqueId, rankId)
+        if (!added) {
+            reply(
                 sender,
-                Component.text("Set ", NamedTextColor.GREEN)
-                    .append(Component.text(playerName, NamedTextColor.WHITE))
-                    .append(Component.text("'s rank to ", NamedTextColor.GREEN))
+                Component.text("$displayName already has the ", NamedTextColor.RED)
                     .append(tagDisplay)
+                    .append(Component.text(" rank.", NamedTextColor.RED))
             )
+            return
         }
+
+        if (sender is Player) {
+            plugin.adminManager.logAction(sender, "RANK_ADD", target, rankId)
+        }
+
+        reply(
+            sender,
+            Component.text("Added ", NamedTextColor.GREEN)
+                .append(tagDisplay)
+                .append(Component.text(" to $displayName.", NamedTextColor.GREEN))
+        )
 
         val onlineTarget = Bukkit.getPlayer(playerName)
         if (onlineTarget != null && onlineTarget != sender) {
             plugin.commsManager.send(
                 onlineTarget,
-                Component.text("Your rank has been set to ", NamedTextColor.GREEN)
+                Component.text("You were given the ", NamedTextColor.GREEN)
                     .append(tagDisplay)
+                    .append(Component.text(" rank.", NamedTextColor.GREEN))
             )
         }
     }
 
     private fun handleRemove(sender: CommandSender, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.rank.set")) {
+        if (!sender.hasPermission("joshymc.rank.remove")) {
             sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
             return
         }
 
         val playerName = args.getOrNull(1)
-        if (playerName == null) {
-            sender.sendMessage(Component.text("Usage: /rank remove <player>", NamedTextColor.RED))
+        val rankId = args.getOrNull(2)?.lowercase()
+        if (playerName == null || rankId == null) {
+            sender.sendMessage(Component.text("Usage: /rank remove <player> <rank>", NamedTextColor.RED))
             return
         }
 
-        val target = Bukkit.getPlayer(playerName) ?: Bukkit.getOfflinePlayer(playerName)
-        plugin.rankManager.setPlayerRank(target.uniqueId, null)
+        val target = resolveTarget(playerName)
+        val displayName = target.name ?: playerName
+        val rank = plugin.rankManager.getRank(rankId)
+        if (rank == null) {
+            sender.sendMessage(Component.text("Unknown rank: $rankId. Use /rank list to see available ranks.", NamedTextColor.RED))
+            return
+        }
 
-        sender.sendMessage(
-            Component.text("Removed rank from ", NamedTextColor.GREEN)
-                .append(Component.text(playerName, NamedTextColor.WHITE))
+        val tagDisplay = plugin.commsManager.parseLegacy(rank.displayTag)
+        val removed = plugin.rankManager.removeRank(target.uniqueId, rankId)
+        if (!removed) {
+            reply(
+                sender,
+                Component.text("$displayName does not have the ", NamedTextColor.RED)
+                    .append(tagDisplay)
+                    .append(Component.text(" rank.", NamedTextColor.RED))
+            )
+            return
+        }
+
+        if (sender is Player) {
+            plugin.adminManager.logAction(sender, "RANK_REMOVE", target, rankId)
+        }
+
+        reply(
+            sender,
+            Component.text("Removed ", NamedTextColor.GREEN)
+                .append(tagDisplay)
+                .append(Component.text(" from $displayName.", NamedTextColor.GREEN))
         )
+
+        val onlineTarget = Bukkit.getPlayer(playerName)
+        if (onlineTarget != null && onlineTarget != sender) {
+            plugin.commsManager.send(
+                onlineTarget,
+                Component.text("Your ", NamedTextColor.YELLOW)
+                    .append(tagDisplay)
+                    .append(Component.text(" rank was removed.", NamedTextColor.YELLOW))
+            )
+        }
     }
 
     private fun handleList(sender: CommandSender) {
-        val ranks = plugin.rankManager.getAllRanks()
         val gold = TextColor.color(0xFFD700)
+        // Group by category, ordering categories by their lowest-weight rank
+        // first so cheaper/earlier ranks (e.g. player ranks) list ahead of
+        // higher ones (e.g. staff, then special) without hardcoding names.
+        val byCategory = plugin.rankManager.getAllRanks()
+            .sortedBy { it.weight }
+            .groupBy { it.category }
 
         val msg = Component.text()
-            .append(Component.text("--- Ranks (${ranks.size}) ---", gold).decoration(TextDecoration.BOLD, true))
+            .append(Component.text("--- Ranks ---", gold).decoration(TextDecoration.BOLD, true))
 
-        for (rank in ranks) {
-            val tagDisplay = plugin.commsManager.parseLegacy(rank.displayTag)
+        for ((category, rankList) in byCategory) {
             msg.append(Component.newline())
-                .append(Component.text("  ${rank.id}", NamedTextColor.GRAY))
-                .append(Component.text(" → ", NamedTextColor.DARK_GRAY))
-                .append(tagDisplay)
-                .append(Component.text(" (weight: ${rank.weight})", NamedTextColor.DARK_GRAY))
+                .append(Component.text(category, NamedTextColor.YELLOW).decoration(TextDecoration.BOLD, true))
+            for (rank in rankList.sortedByDescending { it.weight }) {
+                msg.append(Component.newline())
+                    .append(Component.text("  - ", NamedTextColor.DARK_GRAY))
+                    .append(plugin.commsManager.parseLegacy(rank.displayTag))
+                    .append(Component.text(" (${rank.id})", NamedTextColor.DARK_GRAY))
+            }
         }
 
         sender.sendMessage(msg.build())
     }
 
     private fun handleCheck(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.rank.check")) {
+            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+
         val playerName = args.getOrNull(1) ?: (sender as? Player)?.name
         if (playerName == null) {
             sender.sendMessage(Component.text("Usage: /rank check <player>", NamedTextColor.RED))
             return
         }
 
-        val target = Bukkit.getPlayer(playerName)
-        if (target == null) {
-            sender.sendMessage(Component.text("Player not online.", NamedTextColor.RED))
-            return
-        }
-
+        val target = resolveTarget(playerName)
+        val displayName = target.name ?: playerName
         val assignedIds = plugin.rankManager.getPlayerRankIds(target.uniqueId)
-        val displayRank = plugin.rankManager.getPlayerRank(target)
 
         if (assignedIds.isEmpty()) {
-            val tagDisplay = displayRank?.let { plugin.commsManager.parseLegacy(it.displayTag) }
-                ?: Component.text("none", NamedTextColor.GRAY)
-            sender.sendMessage(
-                Component.text(playerName, NamedTextColor.WHITE)
-                    .append(Component.text("'s rank: ", NamedTextColor.GRAY))
-                    .append(tagDisplay)
-                    .append(Component.text(" (default)", NamedTextColor.DARK_GRAY))
+            reply(
+                sender,
+                Component.text("$displayName currently has no managed ranks.", NamedTextColor.GRAY)
             )
-        } else {
-            val tagDisplay = displayRank?.let { plugin.commsManager.parseLegacy(it.displayTag) }
-                ?: Component.text("none", NamedTextColor.GRAY)
-            val allTags = assignedIds.sorted().joinToString(", ")
-            sender.sendMessage(
-                Component.text(playerName, NamedTextColor.WHITE)
-                    .append(Component.text("'s rank: ", NamedTextColor.GRAY))
-                    .append(tagDisplay)
-                    .append(Component.text(" [$allTags]", NamedTextColor.DARK_GRAY))
-            )
+            return
         }
+
+        val tags = assignedIds.mapNotNull { plugin.rankManager.getRank(it) }.sortedByDescending { it.weight }
+        val msg = Component.text()
+            .append(Component.text("$displayName's ranks: ", NamedTextColor.GRAY))
+        for ((index, rank) in tags.withIndex()) {
+            if (index > 0) msg.append(Component.text(", ", NamedTextColor.GRAY))
+            msg.append(plugin.commsManager.parseLegacy(rank.displayTag))
+        }
+
+        reply(sender, msg.build())
     }
 
-    private fun handlePromote(sender: CommandSender, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.rank.set")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
-            return
-        }
+    /** Online players resolve directly; offline lookups fall back to name-based lookup like the rest of the plugin's admin commands. */
+    private fun resolveTarget(playerName: String): OfflinePlayer =
+        Bukkit.getPlayer(playerName) ?: Bukkit.getOfflinePlayer(playerName)
 
-        val playerName = args.getOrNull(1)
-        if (playerName == null) {
-            sender.sendMessage(Component.text("Usage: /rank promote <player> [rank]", NamedTextColor.RED))
-            return
-        }
-
-        val target = Bukkit.getPlayer(playerName) ?: Bukkit.getOfflinePlayer(playerName)
-        val specifiedRankId = args.getOrNull(2)?.lowercase()
-
-        val newRankId: String
-        val newRankTag: String
-
-        if (specifiedRankId != null) {
-            val rank = plugin.rankManager.getRank(specifiedRankId)
-            if (rank == null) {
-                sender.sendMessage(Component.text("Unknown rank: $specifiedRankId. Use /rank list to see available ranks.", NamedTextColor.RED))
-                return
-            }
-            newRankId = rank.id
-            newRankTag = rank.displayTag
+    /** Sends via commsManager (prefix + chat rules) for players; plain for console. */
+    private fun reply(sender: CommandSender, message: Component) {
+        if (sender is Player) {
+            plugin.commsManager.send(sender, message)
         } else {
-            val assignedIds = plugin.rankManager.getPlayerRankIds(target.uniqueId)
-            val currentWeight = assignedIds
-                .mapNotNull { plugin.rankManager.getRank(it) }
-                .filter { it.id != "default" }
-                .maxByOrNull { it.weight }
-                ?.weight ?: 0
-
-            val promoteTo = plugin.rankManager.getAllRanks()
-                .filter { it.id != "default" && it.weight > currentWeight }
-                .minByOrNull { it.weight }
-
-            if (promoteTo == null) {
-                sender.sendMessage(Component.text("$playerName is already at the highest rank.", NamedTextColor.RED))
-                return
-            }
-            newRankId = promoteTo.id
-            newRankTag = promoteTo.displayTag
-        }
-
-        plugin.rankManager.setPlayerRank(target.uniqueId, newRankId)
-        val tagDisplay = plugin.commsManager.parseLegacy(newRankTag)
-
-        sender.sendMessage(
-            Component.text("Promoted ", NamedTextColor.GREEN)
-                .append(Component.text(playerName, NamedTextColor.WHITE))
-                .append(Component.text(" to ", NamedTextColor.GREEN))
-                .append(tagDisplay)
-        )
-
-        val onlineTarget = Bukkit.getPlayer(playerName)
-        if (onlineTarget != null) {
-            plugin.commsManager.send(
-                onlineTarget,
-                Component.text("You have been promoted to ", NamedTextColor.GREEN)
-                    .append(tagDisplay)
-            )
+            sender.sendMessage(message)
         }
     }
 
@@ -226,33 +229,36 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         val msg = Component.text()
             .append(Component.text("--- Ranks ---", gold).decoration(TextDecoration.BOLD, true))
             .append(Component.newline())
-            .append(Component.text("/rank set <player> <rank>", NamedTextColor.YELLOW))
-            .append(Component.text(" — Assign a rank", NamedTextColor.GRAY))
+            .append(Component.text("/rank add <player> <rank>", NamedTextColor.YELLOW))
+            .append(Component.text(" — Add a rank to a player", NamedTextColor.GRAY))
             .append(Component.newline())
-            .append(Component.text("/rank promote <player> [rank]", NamedTextColor.YELLOW))
-            .append(Component.text(" — Promote to next (or specified) rank", NamedTextColor.GRAY))
-            .append(Component.newline())
-            .append(Component.text("/rank remove <player>", NamedTextColor.YELLOW))
-            .append(Component.text(" — Remove a player's rank", NamedTextColor.GRAY))
+            .append(Component.text("/rank remove <player> <rank>", NamedTextColor.YELLOW))
+            .append(Component.text(" — Remove a rank from a player", NamedTextColor.GRAY))
             .append(Component.newline())
             .append(Component.text("/rank list", NamedTextColor.YELLOW))
-            .append(Component.text(" — Show all ranks", NamedTextColor.GRAY))
+            .append(Component.text(" — Show all managed ranks", NamedTextColor.GRAY))
             .append(Component.newline())
             .append(Component.text("/rank check [player]", NamedTextColor.YELLOW))
-            .append(Component.text(" — Check a player's rank", NamedTextColor.GRAY))
+            .append(Component.text(" — Check a player's ranks", NamedTextColor.GRAY))
 
         sender.sendMessage(msg.build())
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
-            1 -> listOf("set", "promote", "remove", "list", "check").filter { it.startsWith(args[0].lowercase()) }
+            1 -> listOf("check", "list", "add", "remove").filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
-                "set", "remove", "check", "promote" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                "check", "add", "remove" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
-                "set", "promote" -> plugin.rankManager.getRankIds().filter { it.startsWith(args[2].lowercase()) }.toList()
+                "add" -> plugin.rankManager.getRankIds().filter { it.startsWith(args[2].lowercase()) }.toList()
+                "remove" -> {
+                    val targetUuid = Bukkit.getPlayer(args[1])?.uniqueId ?: Bukkit.getOfflinePlayer(args[1]).uniqueId
+                    val assigned = plugin.rankManager.getPlayerRankIds(targetUuid)
+                    val pool = assigned.ifEmpty { plugin.rankManager.getRankIds() }
+                    pool.filter { it.startsWith(args[2].lowercase()) }.toList()
+                }
                 else -> emptyList()
             }
             else -> emptyList()

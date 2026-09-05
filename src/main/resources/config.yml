@@ -573,30 +573,38 @@ credits:
 # Ranks — displayed as chat tags before the player's name
 # Tag uses & color codes (e.g., &c = red, &l = bold, &a = green)
 # OR hex colors with &#RRGGBB format (e.g., &#FF5555&lAdmin for hex red bold)
-# Weight determines display priority (higher = more important)
+# Weight determines display priority (higher = more important).
+# category groups ranks together in /rank list (e.g. "Player Ranks", "Staff Ranks", "Special Ranks").
 ranks:
   list:
     owner:
       tag: "&4&lOwner"
       weight: 100
+      category: "Special Ranks"
     admin:
       tag: "&c&lAdmin"
       weight: 90
+      category: "Staff Ranks"
     mod:
       tag: "&9&lMod"
       weight: 80
+      category: "Staff Ranks"
     helper:
       tag: "&a&lHelper"
       weight: 70
+      category: "Staff Ranks"
     vip:
       tag: "&6&lVIP"
       weight: 50
+      category: "Player Ranks"
     member:
       tag: "&7Member"
       weight: 10
+      category: "Player Ranks"
     default:
       tag: "&8Player"
       weight: 0
+      category: "Player Ranks"
 
 # Auto Restart — periodically restart the server to prevent memory-related disconnects
 auto-restart:
