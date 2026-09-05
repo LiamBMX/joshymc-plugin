@@ -128,6 +128,7 @@ commands:
   invest:
     description: Open the player-driven stock market (trade, create, and track stocks)
     usage: /invest [admin <reset|delete|confirm|cancel> <stock>]
+    aliases: [stocks]
   lottery:
     description: Buy lottery tickets or check the current prize pool
     usage: /lottery <buy <amount>|prize|tickets>
@@ -179,7 +180,6 @@ commands:
   market:
     description: View the dynamic stock market
     usage: /market [price|trends|info]
-    aliases: [stocks]
   quests:
     description: Open the Daily / Weekly / Quest Master quest hub
     usage: /quests
