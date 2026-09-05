@@ -7,18 +7,34 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
+import org.bukkit.NamespacedKey
+import org.bukkit.Registry
 import org.bukkit.Sound
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.event.inventory.ClickType
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.meta.PotionMeta
+import org.bukkit.potion.PotionEffect
+import org.bukkit.potion.PotionEffectType
+import org.bukkit.potion.PotionType
 import java.io.File
 import java.util.UUID
 
 class ServerShopManager(private val plugin: Joshymc) {
 
-    data class ShopItem(val material: Material, val buyPrice: Double, val sellPrice: Double)
+    enum class ShopItemKind { MATERIAL, POTION }
+
+    data class ShopItem(
+        val material: Material,
+        val buyPrice: Double,
+        val sellPrice: Double,
+        val kind: ShopItemKind = ShopItemKind.MATERIAL,
+        val displayName: String? = null,
+        val potionEffect: PotionEffectType? = null,
+        val potionAmplifier: Int = 0
+    )
     data class ShopCategory(val id: String, val name: String, val icon: Material, val items: List<ShopItem>)
 
     // shop.yml is the single buy/sell catalog browsed from the /shop GUI. Every
@@ -54,6 +70,7 @@ class ServerShopManager(private val plugin: Joshymc) {
 
         for (categoryId in categoriesSection.getKeys(false)) {
             val section = categoriesSection.getConfigurationSection(categoryId) ?: continue
+            if (!section.getBoolean("enabled", true)) continue
             val name = section.getString("name") ?: categoryId
             val iconName = section.getString("icon") ?: "CHEST"
             val icon = Material.matchMaterial(iconName) ?: Material.CHEST
@@ -61,12 +78,26 @@ class ServerShopManager(private val plugin: Joshymc) {
             val items = mutableListOf<ShopItem>()
             val itemsSection = section.getConfigurationSection("items") ?: continue
 
-            for (materialName in itemsSection.getKeys(false)) {
-                val material = Material.matchMaterial(materialName) ?: continue
-                val itemSection = itemsSection.getConfigurationSection(materialName) ?: continue
+            for (key in itemsSection.getKeys(false)) {
+                val itemSection = itemsSection.getConfigurationSection(key) ?: continue
+                if (!itemSection.getBoolean("enabled", true)) continue
+
+                // Most entries key directly off the Material name (e.g. "WHEAT:"). Entries that
+                // need a custom id (multiple potions sharing Material.SPLASH_POTION) instead
+                // specify an explicit "material:" field.
+                val material = Material.matchMaterial(itemSection.getString("material") ?: key) ?: continue
                 val buyPrice = itemSection.getDouble("buy", 0.0)
                 val sellPrice = itemSection.getDouble("sell", 0.0)
-                items.add(ShopItem(material, buyPrice, sellPrice))
+                val displayName = itemSection.getString("name")
+
+                val effectName = itemSection.getString("effect")
+                if (effectName != null) {
+                    val effect = Registry.EFFECT.get(NamespacedKey.minecraft(effectName.lowercase())) ?: continue
+                    val amplifier = itemSection.getInt("amplifier", 0)
+                    items.add(ShopItem(material, buyPrice, sellPrice, ShopItemKind.POTION, displayName, effect, amplifier))
+                } else {
+                    items.add(ShopItem(material, buyPrice, sellPrice, ShopItemKind.MATERIAL, displayName))
+                }
             }
 
             val existing = target.indexOfFirst { it.id == categoryId }
@@ -115,6 +146,26 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     // ── Main Menu ───────────────────────────────────────────────────────
 
+    private data class MenuButton(val name: String, val icon: Material, val itemCount: Int, val onClick: (Player) -> Unit)
+
+    /**
+     * Category buttons are driven by shop.yml, plus one synthetic "Spawners" button that
+     * opens the existing, already-configurable /spawner shop instead of duplicating its
+     * pricing/inventory logic here.
+     */
+    private fun buildMenuButtons(): List<MenuButton> {
+        val buttons = categories.map { category ->
+            MenuButton(category.name, category.icon, category.items.size) { p -> openCategory(p, category.id, 0) }
+        }.toMutableList()
+
+        val spawnerCount = plugin.spawnerManager.getTypes().count { it.buyPrice > 0.0 }
+        val spawnerButton = MenuButton("Spawners", Material.SPAWNER, spawnerCount) { p -> plugin.spawnerManager.openShop(p) }
+        val insertAt = (categories.indexOfFirst { it.id == "end" } + 1).coerceAtLeast(0)
+        buttons.add(insertAt.coerceAtMost(buttons.size), spawnerButton)
+
+        return buttons
+    }
+
     fun openMainMenu(player: Player) {
         val title = Component.text("Server Shop", NamedTextColor.AQUA)
             .decoration(TextDecoration.BOLD, true)
@@ -124,26 +175,28 @@ class ServerShopManager(private val plugin: Joshymc) {
         gui.fill(FILLER.clone())
         gui.border(BORDER.clone())
 
+        val buttons = buildMenuButtons()
+
         // Place category icons in the middle area (row 1, columns 1-7)
         val availableSlots = mutableListOf<Int>()
         for (col in 1..7) {
             availableSlots.add(9 + col) // row 1
         }
 
-        val centered = centerInRow(categories.size, availableSlots)
+        val centered = centerInRow(buttons.size, availableSlots)
 
         for ((index, slot) in centered.withIndex()) {
-            val category = categories[index]
-            val icon = ItemStack(category.icon).apply {
+            val button = buttons[index]
+            val icon = ItemStack(button.icon).apply {
                 editMeta { meta ->
                     meta.displayName(
-                        Component.text(category.name, NamedTextColor.AQUA)
+                        Component.text(button.name, NamedTextColor.AQUA)
                             .decoration(TextDecoration.BOLD, true)
                             .decoration(TextDecoration.ITALIC, false)
                     )
                     meta.lore(listOf(
                         Component.empty(),
-                        Component.text("${category.items.size} items", NamedTextColor.GRAY)
+                        Component.text("${button.itemCount} items", NamedTextColor.GRAY)
                             .decoration(TextDecoration.ITALIC, false),
                         Component.empty(),
                         Component.text("Click to browse", NamedTextColor.YELLOW)
@@ -154,7 +207,7 @@ class ServerShopManager(private val plugin: Joshymc) {
 
             gui.setItem(slot, icon) { p, _ ->
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
-                openCategory(p, category.id, 0)
+                button.onClick(p)
             }
         }
 
@@ -263,13 +316,40 @@ class ServerShopManager(private val plugin: Joshymc) {
         plugin.guiManager.open(player, gui)
     }
 
+    // ── Potion Items ─────────────────────────────────────────────────────
+    //
+    // Some shop entries (e.g. "Splash Potion of Strength II") have no vanilla brewing
+    // recipe. We build them directly against PotionMeta: base potion type WATER (so the
+    // client doesn't show a stale "no effects" tooltip) plus a single custom effect.
+
+    private fun buildPotionItem(shopItem: ShopItem): ItemStack {
+        val effect = shopItem.potionEffect ?: return ItemStack(shopItem.material)
+        // Instant effects (Instant Health/Damage) apply immediately; duration is irrelevant.
+        // Everything else uses vanilla's tier-II duration (1:30) to match player expectations.
+        val durationTicks = when (effect) {
+            PotionEffectType.INSTANT_HEALTH, PotionEffectType.INSTANT_DAMAGE -> 1
+            else -> 1800
+        }
+
+        val item = ItemStack(shopItem.material)
+        item.editMeta { meta ->
+            val potionMeta = meta as PotionMeta
+            potionMeta.basePotionType = PotionType.WATER
+            potionMeta.addCustomEffect(PotionEffect(effect, durationTicks, shopItem.potionAmplifier), true)
+        }
+        return item
+    }
+
+    private fun displayLabel(shopItem: ShopItem): String = shopItem.displayName ?: formatMaterialName(shopItem.material)
+
     // ── Item Icon Builder ───────────────────────────────────────────────
 
     private fun buildShopItemIcon(shopItem: ShopItem): ItemStack {
-        return ItemStack(shopItem.material).apply {
+        val base = if (shopItem.kind == ShopItemKind.POTION) buildPotionItem(shopItem) else ItemStack(shopItem.material)
+        return base.apply {
             editMeta { meta ->
                 meta.displayName(
-                    Component.text(formatMaterialName(shopItem.material), NamedTextColor.WHITE)
+                    Component.text(displayLabel(shopItem), NamedTextColor.WHITE)
                         .decoration(TextDecoration.BOLD, true)
                         .decoration(TextDecoration.ITALIC, false)
                 )
@@ -329,7 +409,7 @@ class ServerShopManager(private val plugin: Joshymc) {
 
         when (clickType) {
             ClickType.LEFT, ClickType.SHIFT_LEFT ->
-                if (shopItem.buyPrice > 0) openBuyQuantityGui(player, shopItem, shopItem.buyPrice) else noBuy()
+                if (shopItem.buyPrice > 0) openBuyQuantityGui(player, shopItem) else noBuy()
             ClickType.RIGHT -> if (shopItem.sellPrice > 0) sellItem(player, shopItem.material, applyCropBonus(shopItem.sellPrice, shopItem.material, player.uniqueId), 1) else noSell()
             ClickType.SHIFT_RIGHT -> if (shopItem.sellPrice > 0) sellItem(player, shopItem.material, applyCropBonus(shopItem.sellPrice, shopItem.material, player.uniqueId), -1) else noSell()
             else -> {}
@@ -346,11 +426,12 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     private val MAX_BUY = 640
 
-    private fun openBuyQuantityGui(player: Player, shopItem: ShopItem, livePrice: Double) {
+    private fun openBuyQuantityGui(player: Player, shopItem: ShopItem) {
         var amount = 1
+        val livePrice = shopItem.buyPrice
 
         val gui = CustomGui(
-            Component.text("Buy ${formatMaterialName(shopItem.material)}", NamedTextColor.DARK_GREEN)
+            Component.text("Buy ${displayLabel(shopItem)}", NamedTextColor.DARK_GREEN)
                 .decoration(TextDecoration.BOLD, true)
                 .decoration(TextDecoration.ITALIC, false),
             27
@@ -361,10 +442,11 @@ class ServerShopManager(private val plugin: Joshymc) {
 
         fun renderDynamic() {
             val total = livePrice * amount
-            val itemDisplay = ItemStack(shopItem.material, amount.coerceIn(1, 64))
+            val itemDisplay = if (shopItem.kind == ShopItemKind.POTION) buildPotionItem(shopItem) else ItemStack(shopItem.material)
+            itemDisplay.amount = amount.coerceIn(1, 64)
             itemDisplay.editMeta { meta ->
                 meta.displayName(
-                    Component.text(formatMaterialName(shopItem.material), NamedTextColor.WHITE)
+                    Component.text(displayLabel(shopItem), NamedTextColor.WHITE)
                         .decoration(TextDecoration.ITALIC, false)
                         .decoration(TextDecoration.BOLD, true)
                 )
@@ -422,7 +504,7 @@ class ServerShopManager(private val plugin: Joshymc) {
         // Confirm button — handler is bound here; renderDynamic() overwrites
         // the visual on each click but the bound handler persists.
         gui.setItem(22, ItemStack(Material.LIME_CONCRETE)) { p, _ ->
-            if (buyItem(p, shopItem.material, shopItem.buyPrice, amount.coerceIn(1, MAX_BUY))) {
+            if (buyItem(p, shopItem, amount.coerceIn(1, MAX_BUY))) {
                 openMainMenu(p)
             }
         }
@@ -458,8 +540,8 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     // ── Buy Logic ───────────────────────────────────────────────────────
 
-    private fun buyItem(player: Player, material: Material, buyPrice: Double, amount: Int): Boolean {
-        val totalCost = buyPrice * amount
+    private fun buyItem(player: Player, shopItem: ShopItem, amount: Int): Boolean {
+        val totalCost = shopItem.buyPrice * amount
 
         if (!plugin.economyManager.has(player.uniqueId, totalCost)) {
             plugin.commsManager.send(player,
@@ -474,18 +556,28 @@ class ServerShopManager(private val plugin: Joshymc) {
             return false
         }
 
-        plugin.economyManager.withdraw(player.uniqueId, totalCost)
+        if (!plugin.economyManager.withdraw(player.uniqueId, totalCost)) {
+            plugin.commsManager.send(player, Component.text("Purchase failed.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return false
+        }
 
-        val items = ItemStack(material, amount)
-        val overflow = player.inventory.addItem(items)
+        // Potions cap at 1 per stack (vanilla), so deliver them one at a time rather than
+        // as a single ItemStack with an oversized amount.
+        val overflow = if (shopItem.kind == ShopItemKind.POTION) {
+            val leftovers = mutableListOf<ItemStack>()
+            repeat(amount) { leftovers.addAll(player.inventory.addItem(buildPotionItem(shopItem)).values) }
+            leftovers
+        } else {
+            player.inventory.addItem(ItemStack(shopItem.material, amount)).values.toList()
+        }
 
         // Drop any items that didn't fit; tag them so quest progress is not counted
-        for (remaining in overflow.values) {
+        for (remaining in overflow) {
             val dropped = player.world.dropItemNaturally(player.location, remaining)
             dropped.persistentDataContainer.set(plugin.questManager.shopDropKey, PersistentDataType.BYTE, 1)
         }
 
-        val name = formatMaterialName(material)
+        val name = displayLabel(shopItem)
         plugin.commsManager.send(player,
             Component.text("Bought ", NamedTextColor.GREEN)
                 .append(Component.text("${amount}x $name", NamedTextColor.WHITE))
