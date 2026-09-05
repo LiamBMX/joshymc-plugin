@@ -13,16 +13,18 @@ import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 
 /**
- * `/invest` — opens the player-driven stock market home GUI (Trade / Create Your Own /
- * My Investments). All buying/selling/creation happens through the stock market GUIs
- * (package gui.stock) and StockTradeChatListener. The only subcommand is `admin`, for
- * staff-only stock reset/delete with automatic investor refunds (see StockMarketManager).
+ * `/invest` (aliased as `/stocks`) — opens the player-driven stock market home GUI
+ * (Trade / Create Your Own / My Investments). All buying/selling/creation happens through
+ * the stock market GUIs (package gui.stock) and StockTradeChatListener. The only subcommand
+ * is `admin`, for staff-only stock reset/delete with automatic investor refunds (see
+ * StockMarketManager). Both command names share this single executor, so they always see
+ * the same GUI, holdings, and market state.
  */
 class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isNotEmpty() && args[0].equals("admin", ignoreCase = true)) {
-            return handleAdmin(sender, args)
+            return handleAdmin(sender, label, args)
         }
 
         if (sender !is Player) {
@@ -57,15 +59,15 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
     }
 
-    private fun handleAdmin(sender: CommandSender, args: Array<out String>): Boolean {
+    private fun handleAdmin(sender: CommandSender, label: String, args: Array<out String>): Boolean {
         if (args.size < 2) {
-            reply(sender, Component.text("Usage: /invest admin <reset|delete|confirm|cancel> ...", NamedTextColor.RED))
+            reply(sender, Component.text("Usage: /$label admin <reset|delete|confirm|cancel> ...", NamedTextColor.RED))
             return true
         }
 
         when (args[1].lowercase()) {
-            "reset" -> handleResetOrDelete(sender, args, StockMarketManager.AdminActionType.RESET)
-            "delete" -> handleResetOrDelete(sender, args, StockMarketManager.AdminActionType.DELETE)
+            "reset" -> handleResetOrDelete(sender, label, args, StockMarketManager.AdminActionType.RESET)
+            "delete" -> handleResetOrDelete(sender, label, args, StockMarketManager.AdminActionType.DELETE)
 
             "confirm" -> {
                 if (!hasAnyAdminPerm(sender)) {
@@ -98,13 +100,13 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
                 }
             }
 
-            else -> reply(sender, Component.text("Usage: /invest admin <reset|delete|confirm|cancel> ...", NamedTextColor.RED))
+            else -> reply(sender, Component.text("Usage: /$label admin <reset|delete|confirm|cancel> ...", NamedTextColor.RED))
         }
 
         return true
     }
 
-    private fun handleResetOrDelete(sender: CommandSender, args: Array<out String>, actionType: StockMarketManager.AdminActionType) {
+    private fun handleResetOrDelete(sender: CommandSender, label: String, args: Array<out String>, actionType: StockMarketManager.AdminActionType) {
         val permission = "joshymc.invest.admin.${actionType.verb}"
         if (!hasAdminPerm(sender, permission)) {
             reply(sender, Component.text("No permission.", NamedTextColor.RED))
@@ -113,7 +115,7 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
         val stockInput = args.getOrNull(2)
         if (stockInput == null) {
-            reply(sender, Component.text("Usage: /invest admin ${actionType.verb} <stock>", NamedTextColor.RED))
+            reply(sender, Component.text("Usage: /$label admin ${actionType.verb} <stock>", NamedTextColor.RED))
             return
         }
 
@@ -130,7 +132,7 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
                         NamedTextColor.RED
                     )
                 )
-                reply(sender, Component.text("Run /invest admin confirm within 30 seconds to continue.", NamedTextColor.YELLOW))
+                reply(sender, Component.text("Run /$label admin confirm within 30 seconds to continue.", NamedTextColor.YELLOW))
             }
         }
     }
