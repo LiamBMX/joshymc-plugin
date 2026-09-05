@@ -18,15 +18,17 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Two pricing models live side by side, selected per-stock via `is_server_owned`:
  * - Player-created stocks use the [StockPricingEngine] bonding curve (tanh-bounded
- *   trade impact against market-cap liquidity).
- * - Server-owned stocks (currently just JOSH) use the [ServerStockPricingEngine]
- *   nonlinear supply curve — price is a direct function of circulating supply, with
- *   no server-funded contribution/adjustment on either side of a trade.
- *
- * Pricing/persistence assumption: this is a bonding-curve market, not an order book —
- * buys mint shares_outstanding, sells burn it, and there is no counterparty. Trades
- * always execute at the average of pre/post price, which is what makes an immediate
- * buy-then-sell of the same stock a net loss (prevents free-money round-tripping).
+ *   trade impact against market-cap liquidity). Trades execute at the average of
+ *   pre/post price, which is what makes an immediate buy-then-sell of the same stock a
+ *   net loss (prevents free-money round-tripping) — there is no counterparty, buys mint
+ *   `shares_outstanding` and sells burn it.
+ * - Server-owned stocks (currently just JOSH) use the [PriceLevelPricingEngine] fixed
+ *   price-level ladder — a set number of shares is available at each price level, price
+ *   steps up once a level is fully bought, and selling reverses through the exact same
+ *   levels. Because both directions walk the identical ladder, an immediate buy-then-sell
+ *   round trip is reversible up to floating-point rounding — see `current_level` /
+ *   `shares_used_in_level` on the `stocks` table, which (together with `shares_outstanding`)
+ *   are this model's persisted state.
  */
 class StockMarketManager(private val plugin: Joshymc) {
 
@@ -54,13 +56,11 @@ class StockMarketManager(private val plugin: Joshymc) {
         private set
     var minLiquidityFloor = 1000.0
         private set
-    var serverStockCurveStrength = 4.0
+    var serverStockBasePrice = 10.0
         private set
-    var serverStockCurveExponent = 1.6
+    var serverStockSharesPerLevel = 1_000_000.0
         private set
-    var serverStockMinimumPrice = 10.0
-        private set
-    var serverStockMaximumPrice = 250_000.0
+    var serverStockPriceIncreasePerLevel = 1.0
         private set
     var activityPeriodHours = 24
         private set
@@ -182,6 +182,9 @@ class StockMarketManager(private val plugin: Joshymc) {
         val sharesOutstanding: Double,
         val isServerOwned: Boolean,
         val createdAt: Long,
+        /** Price-level state (server-owned stocks only, see [PriceLevelPricingEngine]); always 0 for player stocks. */
+        val currentLevel: Double = 0.0,
+        val sharesUsedInLevel: Double = 0.0,
     )
 
     data class Holding(
@@ -250,6 +253,15 @@ class StockMarketManager(private val plugin: Joshymc) {
             )
         """.trimIndent())
 
+        // Price-level state for server-owned stocks (see PriceLevelPricingEngine); added in
+        // the price-level pricing rework, backfilled from shares_outstanding below.
+        try {
+            plugin.databaseManager.execute("ALTER TABLE stocks ADD COLUMN current_level REAL NOT NULL DEFAULT 0")
+        } catch (_: Exception) { /* column already exists */ }
+        try {
+            plugin.databaseManager.execute("ALTER TABLE stocks ADD COLUMN shares_used_in_level REAL NOT NULL DEFAULT 0")
+        } catch (_: Exception) { /* column already exists */ }
+
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS stock_holdings (
                 ticker TEXT NOT NULL,
@@ -289,6 +301,7 @@ class StockMarketManager(private val plugin: Joshymc) {
 
         loadConfig()
         migrateOldBankInvestments()
+        migrateServerStockPriceLevels()
         ensureJoshyMcStock()
 
         plugin.logger.info("[StockMarket] StockMarketManager started (${getAllStocks().size} stocks).")
@@ -302,11 +315,9 @@ class StockMarketManager(private val plugin: Joshymc) {
         initialShares = cfg.getDouble("stock-market.initial-shares", 100_000.0)
         maxSingleTradeImpact = cfg.getDouble("stock-market.maximum-single-trade-price-impact", 0.10)
         minLiquidityFloor = cfg.getDouble("stock-market.minimum-liquidity-floor", 1000.0)
-        serverStockCurveStrength = cfg.getDouble("stock-market.server-stock-curve-strength", 4.0).coerceAtLeast(0.0)
-        serverStockCurveExponent = cfg.getDouble("stock-market.server-stock-curve-exponent", 1.6).coerceAtLeast(0.01)
-        serverStockMinimumPrice = cfg.getDouble("stock-market.server-stock-minimum-price", 10.0)
-        serverStockMaximumPrice = cfg.getDouble("stock-market.server-stock-maximum-price", 250_000.0)
-            .coerceAtLeast(serverStockMinimumPrice)
+        serverStockBasePrice = cfg.getDouble("stock-market.server-stock-base-price", 10.0).coerceAtLeast(0.01)
+        serverStockSharesPerLevel = cfg.getDouble("stock-market.server-stock-shares-per-level", 1_000_000.0).coerceAtLeast(1.0)
+        serverStockPriceIncreasePerLevel = cfg.getDouble("stock-market.server-stock-price-increase-per-level", 1.0).coerceAtLeast(0.0)
         activityPeriodHours = cfg.getInt("stock-market.market-activity-period-hours", 24)
         largeTransactionThreshold = cfg.getDouble("stock-market.large-transaction-threshold", 500_000.0)
         chatInputTimeoutSeconds = cfg.getInt("stock-market.chat-input-timeout-seconds", 30)
@@ -361,6 +372,37 @@ class StockMarketManager(private val plugin: Joshymc) {
     }
 
     /**
+     * One-time backfill for servers that ran the old nonlinear/curve pricing model: derives
+     * `(current_level, shares_used_in_level)` from the existing `shares_outstanding` per
+     * `currentLevel = floor(supply / sharesPerLevel)` / `sharesUsedInLevel = supply % sharesPerLevel`,
+     * then recomputes `price` from the new level so it's no longer stale the moment this
+     * update loads. Only touches rows that still have both new columns at their fresh-column
+     * default of 0 but already have real circulating supply — i.e. runs at most once per stock.
+     */
+    private fun migrateServerStockPriceLevels() {
+        val rows = plugin.databaseManager.query(
+            "SELECT ticker, shares_outstanding, current_level, shares_used_in_level FROM stocks WHERE is_server_owned = 1"
+        ) { rs ->
+            Triple(rs.getString("ticker"), rs.getDouble("shares_outstanding"), rs.getDouble("current_level") to rs.getDouble("shares_used_in_level"))
+        }
+
+        for ((ticker, supply, levelAndUsed) in rows) {
+            val (level, used) = levelAndUsed
+            if (level != 0.0 || used != 0.0 || supply <= StockPricingEngine.EPSILON) continue
+
+            val (newLevel, newUsed) = PriceLevelPricingEngine.levelAndUsedFromSupply(supply, serverStockSharesPerLevel)
+            val newPrice = PriceLevelPricingEngine.priceForLevel(newLevel, serverStockBasePrice, serverStockPriceIncreasePerLevel)
+            plugin.databaseManager.execute(
+                "UPDATE stocks SET price = ?, current_level = ?, shares_used_in_level = ? WHERE ticker = ?",
+                newPrice, newLevel, newUsed, ticker
+            )
+            plugin.logger.info(
+                "[StockMarket] Migrated $ticker to price-level pricing: level=$newLevel, used=$newUsed/$serverStockSharesPerLevel, price=$newPrice (from supply=$supply)."
+            )
+        }
+    }
+
+    /**
      * Creates the permanent JoshyMC server stock once, on first-ever start. A restart must
      * NOT reseed it — we only insert if the JOSH ticker doesn't already exist.
      */
@@ -370,15 +412,10 @@ class StockMarketManager(private val plugin: Joshymc) {
 
         val icon = iconMaterials.randomOrNull() ?: Material.NETHER_STAR
         val now = System.currentTimeMillis() / 1000
-        val seedCostBasis = defaultStockPrice * initialShares
 
         plugin.databaseManager.execute(
-            "INSERT INTO stocks (ticker, name, name_lower, creator_uuid, icon, price, shares_outstanding, is_server_owned, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-            JOSH_TICKER, JOSH_NAME, JOSH_NAME.lowercase(), null, icon.name, defaultStockPrice, initialShares, 1, now
-        )
-        plugin.databaseManager.execute(
-            "INSERT INTO stock_holdings (ticker, uuid, shares, cost_basis) VALUES (?,?,?,?)",
-            JOSH_TICKER, SERVER_STOCK_UUID_STRING, initialShares, seedCostBasis
+            "INSERT INTO stocks (ticker, name, name_lower, creator_uuid, icon, price, shares_outstanding, is_server_owned, created_at, current_level, shares_used_in_level) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            JOSH_TICKER, JOSH_NAME, JOSH_NAME.lowercase(), null, icon.name, serverStockBasePrice, 0.0, 1, now, 0.0, 0.0
         )
 
         plugin.logger.info("[StockMarket] Created the permanent JoshyMC ($JOSH_TICKER) server stock.")
@@ -399,6 +436,8 @@ class StockMarketManager(private val plugin: Joshymc) {
             sharesOutstanding = rs.getDouble("shares_outstanding"),
             isServerOwned = rs.getInt("is_server_owned") != 0,
             createdAt = rs.getLong("created_at"),
+            currentLevel = rs.getDouble("current_level"),
+            sharesUsedInLevel = rs.getDouble("shares_used_in_level"),
         )
     }
 
@@ -605,16 +644,17 @@ class StockMarketManager(private val plugin: Joshymc) {
 
                 when (pending.actionType) {
                     AdminActionType.RESET -> {
-                        plugin.databaseManager.execute(
-                            "UPDATE stocks SET price = ?, shares_outstanding = ? WHERE ticker = ?",
-                            defaultStockPrice, initialShares, stock.ticker
-                        )
                         if (stock.isServerOwned) {
-                            // Restore the server's own seed position so circulating supply
-                            // still matches shares_outstanding, same as first-ever creation.
+                            // Price-level stocks reset to an empty market: level 0, 0 shares
+                            // used, 0 circulating supply, price back at the configured base.
                             plugin.databaseManager.execute(
-                                "INSERT INTO stock_holdings (ticker, uuid, shares, cost_basis) VALUES (?,?,?,?)",
-                                stock.ticker, SERVER_STOCK_UUID_STRING, initialShares, defaultStockPrice * initialShares
+                                "UPDATE stocks SET price = ?, shares_outstanding = ?, current_level = ?, shares_used_in_level = ? WHERE ticker = ?",
+                                serverStockBasePrice, 0.0, 0.0, 0.0, stock.ticker
+                            )
+                        } else {
+                            plugin.databaseManager.execute(
+                                "UPDATE stocks SET price = ?, shares_outstanding = ? WHERE ticker = ?",
+                                defaultStockPrice, initialShares, stock.ticker
                             )
                         }
                     }
@@ -757,15 +797,18 @@ class StockMarketManager(private val plugin: Joshymc) {
 
     // ── Buy/Sell orchestration ───────────────────────────────────────
 
-    /** Pricing-engine-agnostic result of a buy leg, shared by both [StockPricingEngine] and [ServerStockPricingEngine]. */
+    /** Pricing-engine-agnostic result of a buy leg, shared by both [StockPricingEngine] and [PriceLevelPricingEngine]. */
     data class BuyLegResult(
         val avgExecutionPrice: Double,
         val sharesMinted: Double,
         val newPrice: Double,
         val newSharesOutstanding: Double,
+        /** Price-level state (server-owned stocks only); 0 for player stocks. */
+        val newLevel: Double = 0.0,
+        val newUsedInLevel: Double = 0.0,
     )
 
-    /** Pricing-engine-agnostic result of a sell leg, shared by both [StockPricingEngine] and [ServerStockPricingEngine]. */
+    /** Pricing-engine-agnostic result of a sell leg, shared by both [StockPricingEngine] and [PriceLevelPricingEngine]. */
     data class SellLegResult(
         val avgExecutionPrice: Double,
         val sharesRemoved: Double,
@@ -773,6 +816,9 @@ class StockMarketManager(private val plugin: Joshymc) {
         val newSharesOutstanding: Double,
         val realizedPL: Double,
         val costBasisRemoved: Double,
+        /** Price-level state (server-owned stocks only); 0 for player stocks. */
+        val newLevel: Double = 0.0,
+        val newUsedInLevel: Double = 0.0,
     )
 
     /**
@@ -780,11 +826,21 @@ class StockMarketManager(private val plugin: Joshymc) {
      * matches [Stock.isServerOwned]. Used both by the real trade execution below and by GUI
      * previews, so the two never drift apart.
      *
-     * Splits [dollarAmount] into [bulkPurchaseSteps] equal sub-chunks and reprices after each
-     * one (price/supply carried forward chunk-to-chunk) so a large lump-sum buy approximates
-     * many small consecutive buys instead of executing entirely at the starting price.
+     * Server-owned stocks price every level they cross in one closed-form pass (see
+     * [PriceLevelPricingEngine]) — there's no need to chunk them. Player stocks still split
+     * [dollarAmount] into [bulkPurchaseSteps] equal sub-chunks, repricing after each one
+     * (price/supply carried forward chunk-to-chunk) so a large lump-sum buy approximates many
+     * small consecutive buys instead of executing entirely at the starting price.
      */
     fun computeBuyLeg(stock: Stock, dollarAmount: Double): BuyLegResult {
+        if (stock.isServerOwned) {
+            val r = PriceLevelPricingEngine.computeBuy(
+                stock.currentLevel, stock.sharesUsedInLevel, dollarAmount,
+                serverStockBasePrice, serverStockSharesPerLevel, serverStockPriceIncreasePerLevel,
+            )
+            return BuyLegResult(r.avgExecutionPrice, r.sharesMinted, r.newPrice, r.newSharesOutstanding, r.newLevel, r.newUsedInLevel)
+        }
+
         val steps = bulkPurchaseSteps
         val chunkAmount = dollarAmount / steps
         var price = stock.price
@@ -792,28 +848,29 @@ class StockMarketManager(private val plugin: Joshymc) {
         var totalSharesMinted = 0.0
 
         repeat(steps) {
-            if (stock.isServerOwned) {
-                val r = ServerStockPricingEngine.computeBuy(
-                    supply, chunkAmount, defaultStockPrice,
-                    serverStockCurveStrength, serverStockCurveExponent, serverStockMinimumPrice, serverStockMaximumPrice,
-                )
-                price = r.newPrice
-                supply = r.newSharesOutstanding
-                totalSharesMinted += r.sharesMinted
-            } else {
-                val r = StockPricingEngine.computeBuy(price, supply, chunkAmount, maxSingleTradeImpact, minLiquidityFloor)
-                price = r.newPrice
-                supply = r.newSharesOutstanding
-                totalSharesMinted += r.sharesMinted
-            }
+            val r = StockPricingEngine.computeBuy(price, supply, chunkAmount, maxSingleTradeImpact, minLiquidityFloor)
+            price = r.newPrice
+            supply = r.newSharesOutstanding
+            totalSharesMinted += r.sharesMinted
         }
 
         val avgExecutionPrice = if (totalSharesMinted > StockPricingEngine.EPSILON) dollarAmount / totalSharesMinted else price
         return BuyLegResult(avgExecutionPrice, totalSharesMinted, price, supply)
     }
 
-    /** Pure (no persistence) sell computation — see [computeBuyLeg] (same chunked-repricing approach). */
+    /** Pure (no persistence) sell computation — see [computeBuyLeg] (server-owned stocks are likewise a single closed-form pass). */
     fun computeSellLeg(stock: Stock, holderShares: Double, holderCostBasis: Double, dollarAmount: Double): SellLegResult {
+        if (stock.isServerOwned) {
+            val r = PriceLevelPricingEngine.computeSell(
+                stock.currentLevel, stock.sharesUsedInLevel, dollarAmount, holderShares, holderCostBasis,
+                serverStockBasePrice, serverStockSharesPerLevel, serverStockPriceIncreasePerLevel,
+            )
+            return SellLegResult(
+                r.avgExecutionPrice, r.sharesRemoved, r.newPrice, r.newSharesOutstanding,
+                r.realizedPL, r.costBasisRemoved, r.newLevel, r.newUsedInLevel,
+            )
+        }
+
         val steps = bulkPurchaseSteps
         val chunkAmount = dollarAmount / steps
         var price = stock.price
@@ -825,28 +882,14 @@ class StockMarketManager(private val plugin: Joshymc) {
         var totalCostBasisRemoved = 0.0
 
         repeat(steps) {
-            if (stock.isServerOwned) {
-                val r = ServerStockPricingEngine.computeSell(
-                    supply, chunkAmount, shares, costBasis, defaultStockPrice,
-                    serverStockCurveStrength, serverStockCurveExponent, serverStockMinimumPrice, serverStockMaximumPrice,
-                )
-                price = r.newPrice
-                supply = r.newSharesOutstanding
-                shares -= r.sharesRemoved
-                costBasis -= r.costBasisRemoved
-                totalSharesRemoved += r.sharesRemoved
-                totalRealizedPL += r.realizedPL
-                totalCostBasisRemoved += r.costBasisRemoved
-            } else {
-                val r = StockPricingEngine.computeSell(price, supply, chunkAmount, shares, costBasis, maxSingleTradeImpact, minLiquidityFloor)
-                price = r.newPrice
-                supply = r.newSharesOutstanding
-                shares -= r.sharesRemoved
-                costBasis -= r.costBasisRemoved
-                totalSharesRemoved += r.sharesRemoved
-                totalRealizedPL += r.realizedPL
-                totalCostBasisRemoved += r.costBasisRemoved
-            }
+            val r = StockPricingEngine.computeSell(price, supply, chunkAmount, shares, costBasis, maxSingleTradeImpact, minLiquidityFloor)
+            price = r.newPrice
+            supply = r.newSharesOutstanding
+            shares -= r.sharesRemoved
+            costBasis -= r.costBasisRemoved
+            totalSharesRemoved += r.sharesRemoved
+            totalRealizedPL += r.realizedPL
+            totalCostBasisRemoved += r.costBasisRemoved
         }
 
         val avgExecutionPrice = if (totalSharesRemoved > StockPricingEngine.EPSILON) dollarAmount / totalSharesRemoved else price
@@ -858,8 +901,8 @@ class StockMarketManager(private val plugin: Joshymc) {
         val result = computeBuyLeg(stock, dollarAmount)
 
         plugin.databaseManager.execute(
-            "UPDATE stocks SET price = ?, shares_outstanding = ? WHERE ticker = ?",
-            result.newPrice, result.newSharesOutstanding, stock.ticker
+            "UPDATE stocks SET price = ?, shares_outstanding = ?, current_level = ?, shares_used_in_level = ? WHERE ticker = ?",
+            result.newPrice, result.newSharesOutstanding, result.newLevel, result.newUsedInLevel, stock.ticker
         )
 
         val newShares = (holding?.shares ?: 0.0) + result.sharesMinted
@@ -876,7 +919,10 @@ class StockMarketManager(private val plugin: Joshymc) {
             0, System.currentTimeMillis() / 1000
         )
 
-        return stock.copy(price = result.newPrice, sharesOutstanding = result.newSharesOutstanding) to result
+        return stock.copy(
+            price = result.newPrice, sharesOutstanding = result.newSharesOutstanding,
+            currentLevel = result.newLevel, sharesUsedInLevel = result.newUsedInLevel,
+        ) to result
     }
 
     private fun executeSellLeg(uuid: UUID, stock: Stock, dollarAmount: Double): Pair<Stock, SellLegResult> {
@@ -884,8 +930,8 @@ class StockMarketManager(private val plugin: Joshymc) {
         val result = computeSellLeg(stock, holding.shares, holding.costBasis, dollarAmount)
 
         plugin.databaseManager.execute(
-            "UPDATE stocks SET price = ?, shares_outstanding = ? WHERE ticker = ?",
-            result.newPrice, result.newSharesOutstanding, stock.ticker
+            "UPDATE stocks SET price = ?, shares_outstanding = ?, current_level = ?, shares_used_in_level = ? WHERE ticker = ?",
+            result.newPrice, result.newSharesOutstanding, result.newLevel, result.newUsedInLevel, stock.ticker
         )
 
         val newShares = (holding.shares - result.sharesRemoved).coerceAtLeast(0.0)
@@ -902,7 +948,10 @@ class StockMarketManager(private val plugin: Joshymc) {
             0, System.currentTimeMillis() / 1000
         )
 
-        return stock.copy(price = result.newPrice, sharesOutstanding = result.newSharesOutstanding) to result
+        return stock.copy(
+            price = result.newPrice, sharesOutstanding = result.newSharesOutstanding,
+            currentLevel = result.newLevel, sharesUsedInLevel = result.newUsedInLevel,
+        ) to result
     }
 
     /**

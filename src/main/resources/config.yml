@@ -366,8 +366,8 @@ stock-market:
   minimum-buy: 1000.0
   # Cost for a player to create their own public stock.
   stock-creation-cost: 1000000.0
-  # Starting price/share for newly created stocks. Also used as the base price
-  # (the "price at zero circulating supply") for server-owned stocks like JOSH.
+  # Starting price/share for newly created (player-owned) stocks. Server-owned stocks like
+  # JOSH use server-stock-base-price instead — see below.
   default-stock-price: 10.0
   # Shares outstanding a newly created stock starts with (creator owns all of them).
   initial-shares: 100000.0
@@ -378,19 +378,18 @@ stock-market:
   # Floor used in the liquidity/impact calculation so a freshly-crashed PLAYER stock
   # (near-zero market cap) can't divide-by-zero or produce an absurd price swing.
   minimum-liquidity-floor: 1000.0
-  # ── Server-owned stocks (e.g. JOSH) — nonlinear supply-curve pricing ──────────
+  # ── Server-owned stocks (e.g. JOSH) — price-level pricing ─────────────────────
   # There is NO server-funded buy/sell contribution or adjustment of any kind; buying and
-  # selling always use the plain calculated transaction value. Instead, price is a direct,
-  # increasingly-steep function of circulating supply (shares currently held by players):
-  #   price(supply) = base-price + curve-strength * (supply / 1,000,000)^curve-exponent
-  # Higher curve-strength/curve-exponent = more aggressive price growth as supply rises.
-  server-stock-curve-strength: 4.0
-  server-stock-curve-exponent: 1.6
-  # Hard price floor for server-owned stocks (never goes below this).
-  server-stock-minimum-price: 10.0
-  # Hard price ceiling for server-owned stocks — safety cap against runaway/overflow
-  # values at extreme circulating supply.
-  server-stock-maximum-price: 250000.0
+  # selling always use the plain calculated transaction value. A fixed number of shares
+  # (server-stock-shares-per-level) is available at each price level; once a level's shares
+  # are fully bought the price steps up by server-stock-price-increase-per-level. Selling
+  # reverses through the exact same levels, cheapest-last, so an immediate buy-then-sell of
+  # the same shares is reversible (no free-money round trip) and a large lump-sum trade
+  # crosses however many levels it can afford instead of pricing the whole order at the
+  # starting level.
+  server-stock-base-price: 10.0
+  server-stock-shares-per-level: 1000000.0
+  server-stock-price-increase-per-level: 1.0
   # Trading window (hours) used for 24h open/high/low/volume/activity/trend stats.
   market-activity-period-hours: 24
   # Buy/sell dollar amount at or above which a confirmation GUI is shown before executing.
@@ -403,9 +402,11 @@ stock-market:
   # Stocks (matched by ticker or name, case-insensitive) that /invest admin reset/delete may
   # never target. The JOSH server stock is always protected regardless of this list.
   protected-stocks: []
-  # A single buy/sell is split into this many equal sub-chunks, repricing after each one, so a
-  # large lump-sum trade approximates many small consecutive trades instead of executing
-  # entirely at the starting price. Higher = more accurate but more computation per trade.
+  # PLAYER-created stocks only: a single buy/sell is split into this many equal sub-chunks,
+  # repricing after each one, so a large lump-sum trade approximates many small consecutive
+  # trades instead of executing entirely at the starting price. Higher = more accurate but
+  # more computation per trade. Server-owned stocks (JOSH) don't use this — see
+  # server-stock-* above, which price every level crossed exactly, in one pass.
   bulk-purchase-steps: 1000
   # Pool of non-placeable materials randomly (and permanently) assigned as a stock's icon.
   icon-materials:
