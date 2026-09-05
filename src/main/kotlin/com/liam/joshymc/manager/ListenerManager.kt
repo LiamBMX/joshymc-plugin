@@ -9,6 +9,7 @@ import com.liam.joshymc.listener.EasterEggListener
 import com.liam.joshymc.listener.GSitListener
 import com.liam.joshymc.listener.LinkGuiListener
 import com.liam.joshymc.listener.MinecraftChatListener
+import com.liam.joshymc.listener.ModModeListener
 import com.liam.joshymc.listener.NightVisionListener
 import com.liam.joshymc.listener.CustomCraftingListener
 import com.liam.joshymc.listener.RecipeBlockerListener
@@ -160,6 +161,9 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // Admin panel
         pm.registerEvents(plugin.adminManager, plugin)
+
+        // Moderator Mode
+        pm.registerEvents(ModModeListener(plugin), plugin)
 
         // Mob stacking
         pm.registerEvents(plugin.mobStackManager, plugin)

@@ -265,6 +265,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var mutationsManager: com.liam.joshymc.manager.MutationsManager
         private set
+    lateinit var modModeManager: com.liam.joshymc.manager.ModModeManager
+        private set
 
     override fun onEnable() {
         instance = this
@@ -348,6 +350,7 @@ class Joshymc : JavaPlugin() {
         glowManager = GlowManager(this)
         gadgetManager = GadgetManager(this)
         adminManager = AdminManager(this)
+        modModeManager = com.liam.joshymc.manager.ModModeManager(this)
         worldFlagManager = WorldFlagManager(this)
         endManager = EndManager(this)
         chatManager = ChatManager(this)
@@ -425,6 +428,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("gadgets")) gadgetManager.start()
         if (isFeatureEnabled("glow")) glowManager.start()
         adminManager.start()
+        modModeManager.start()
         worldFlagManager.start()
         endManager.start()
         chatManager.start()
@@ -493,6 +497,7 @@ class Joshymc : JavaPlugin() {
         lagCleanerManager.stop()
         mobStackManager.stop()
         mutationsManager.stop()
+        modModeManager.stop()
         eventManager.shutdown()
         resourcePackManager.shutdown()
         discordManager.shutdown()
