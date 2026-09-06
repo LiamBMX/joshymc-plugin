@@ -89,7 +89,7 @@ object StockPortfolioGui {
 
         val lore = mutableListOf<Component>()
         lore.add(Component.empty())
-        lore.add(Component.text("Price: ", NamedTextColor.GRAY).append(Component.text(econ.format(stock.price), NamedTextColor.WHITE)))
+        lore.add(Component.text("Price: ", NamedTextColor.GRAY).append(Component.text(econ.formatStockPrice(stock.price), NamedTextColor.WHITE)))
         lore.add(Component.text("Shares: ", NamedTextColor.GRAY).append(Component.text(econ.formatShort(holding.shares), NamedTextColor.WHITE)))
         lore.add(Component.text("Avg. Buy: ", NamedTextColor.GRAY).append(Component.text(econ.format(avgBuy), NamedTextColor.WHITE)))
         lore.add(Component.empty())

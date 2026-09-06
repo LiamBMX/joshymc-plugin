@@ -76,6 +76,27 @@ class EconomyManager(private val plugin: Joshymc) {
     }
 
     /**
+     * Same as [format], but for per-share stock prices that can crash to fractions of a
+     * cent — the normal 2-decimal [formatter] would round anything below $0.01 down to
+     * "$0.00", hiding that the stock still has a real, tradable, nonzero price. Below one
+     * cent this shows just enough decimal places to reveal the first two significant
+     * digits (e.g. 0.00001 -> "$0.00001", 0.0042 -> "$0.0042") instead of a fixed count.
+     */
+    fun formatStockPrice(price: Double): String {
+        if (price.isNaN() || !price.isFinite() || price <= 0.0) return format(0.0)
+        if (price >= 0.01) return format(price)
+
+        val magnitude = kotlin.math.floor(kotlin.math.log10(price)).toInt()
+        val decimals = (-magnitude + 1).coerceIn(2, 10)
+        var digits = DecimalFormat("0." + "0".repeat(decimals)).format(price)
+        if (digits.contains('.')) {
+            digits = digits.trimEnd('0')
+            if (digits.endsWith('.')) digits += "0"
+        }
+        return "$$digits"
+    }
+
+    /**
      * Compact K/M/B/T/Q/Qi/Sx/Sp/Oc/No/Dc formatting for large financial values (balances,
      * market caps, P/L, volume, shares, etc.). Display-only — never round the underlying
      * stored value. Handles negative amounts by formatting the sign then the magnitude.

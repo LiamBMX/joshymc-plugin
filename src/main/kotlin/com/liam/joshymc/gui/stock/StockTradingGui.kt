@@ -94,7 +94,7 @@ object StockTradingGui {
 
         val lore = mutableListOf<Component>()
         lore.add(Component.empty())
-        lore.add(Component.text("Price: ", NamedTextColor.GRAY).append(Component.text(econ.format(stock.price), NamedTextColor.WHITE)))
+        lore.add(Component.text("Price: ", NamedTextColor.GRAY).append(Component.text(econ.formatStockPrice(stock.price), NamedTextColor.WHITE)))
         lore.add(Component.text("Market Cap: ", NamedTextColor.GRAY).append(Component.text(StockGuiUtil.money(marketCap, econ::formatShort), NamedTextColor.WHITE)))
         lore.add(Component.text("Holders: ", NamedTextColor.GRAY).append(Component.text(holders.toString(), NamedTextColor.WHITE)))
         lore.add(
@@ -165,8 +165,8 @@ object StockTradingGui {
                 send(plugin, player, "Investment Successful", NamedTextColor.GOLD)
                 send(plugin, player, "Invested: ${StockGuiUtil.money(outcome.dollarAmount, econ::formatShort)}", NamedTextColor.WHITE)
                 send(plugin, player, "Shares: ${econ.formatShort(outcome.sharesMinted)}", NamedTextColor.WHITE)
-                send(plugin, player, "Avg. Price: ${econ.format(outcome.avgExecutionPrice)}", NamedTextColor.WHITE)
-                send(plugin, player, "New Price: ${econ.format(outcome.newPrice)}", NamedTextColor.WHITE)
+                send(plugin, player, "Avg. Price: ${econ.formatStockPrice(outcome.avgExecutionPrice)}", NamedTextColor.WHITE)
+                send(plugin, player, "New Price: ${econ.formatStockPrice(outcome.newPrice)}", NamedTextColor.WHITE)
             }
             is StockMarketManager.TradeOutcome.SellSuccess -> {
                 send(plugin, player, "Sale Successful", NamedTextColor.GOLD)
@@ -174,7 +174,7 @@ object StockTradingGui {
                 send(plugin, player, "Shares Sold: ${econ.formatShort(outcome.sharesSold)}", NamedTextColor.WHITE)
                 send(plugin, player, "Realized P/L: ${StockGuiUtil.moneyDelta(outcome.realizedPL, econ::formatShort)}", StockGuiUtil.plColor(outcome.realizedPL))
                 send(plugin, player, "Remaining: ${StockGuiUtil.money(outcome.remainingValue, econ::formatShort)}", NamedTextColor.WHITE)
-                send(plugin, player, "New Price: ${econ.format(outcome.newPrice)}", NamedTextColor.WHITE)
+                send(plugin, player, "New Price: ${econ.formatStockPrice(outcome.newPrice)}", NamedTextColor.WHITE)
             }
             is StockMarketManager.TradeOutcome.Failure -> {
                 send(plugin, player, outcome.message, NamedTextColor.RED)
