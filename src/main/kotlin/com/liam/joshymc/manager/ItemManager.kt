@@ -87,8 +87,6 @@ class ItemManager(private val plugin: Joshymc) {
         register(PhantomCloak())
         register(PoseidonsTrident())
         register(ClaimBlockToken())
-        register(SkillTomeMining())
-        register(SkillTomeFarming())
         register(Token())
 
         // Moderator Mode hotbar tools

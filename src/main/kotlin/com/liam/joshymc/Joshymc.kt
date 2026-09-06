@@ -35,7 +35,6 @@ import com.liam.joshymc.manager.GlowManager
 import com.liam.joshymc.manager.JoinEffectManager
 import com.liam.joshymc.manager.KillEffectManager
 import com.liam.joshymc.manager.TrailManager
-import com.liam.joshymc.manager.SkillManager
 import com.liam.joshymc.manager.SpawnWorldManager
 import com.liam.joshymc.manager.TalismanManager
 import com.liam.joshymc.manager.ClaimManager
@@ -216,8 +215,6 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var fishingManager: FishingManager
         private set
-    lateinit var skillManager: SkillManager
-        private set
     lateinit var trailManager: TrailManager
         private set
     lateinit var killEffectManager: KillEffectManager
@@ -338,7 +335,6 @@ class Joshymc : JavaPlugin() {
         questCycleManager = QuestCycleManager(this)
         talismanManager = TalismanManager(this)
         fishingManager = FishingManager(this)
-        skillManager = SkillManager(this)
         trailManager = TrailManager(this)
         killEffectManager = KillEffectManager(this)
         joinEffectManager = JoinEffectManager(this)
@@ -415,7 +411,6 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("quests")) questCycleManager.start()
         if (isFeatureEnabled("talismans")) talismanManager.start()
         if (isFeatureEnabled("custom-fishing")) fishingManager.start()
-        if (isFeatureEnabled("skills")) skillManager.start()
         if (isFeatureEnabled("trails")) trailManager.start()
         if (isFeatureEnabled("kill-effects")) killEffectManager.start()
         if (isFeatureEnabled("join-effects")) joinEffectManager.start()

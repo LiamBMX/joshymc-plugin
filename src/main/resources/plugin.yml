@@ -213,17 +213,13 @@ commands:
     description: View your fish collection
     usage: /fish [stats|leaderboard]
     aliases: [fishing, fishcollection]
-  skills:
-    description: View your skills and levels
-    usage: /skills [skill|top]
-    aliases: [skill, sl]
   resurge:
     description: View and perform the Resurge prestige system
     usage: /resurge [balance|top|confirm]
     aliases: [prestige]
   booster:
     description: Activate or view server boosters
-    usage: /booster <sellmulti|skillmulti|questmulti|list> [args...]
+    usage: /booster <sellmulti|questmulti|list> [args...]
   tokens:
     description: Give, sell, or buy server tokens
     usage: /tokens <give|sell|buy> [args...]
@@ -782,9 +778,6 @@ permissions:
     default: true
   joshymc.fish:
     description: Use fishing collection
-    default: true
-  joshymc.skills:
-    description: View skills
     default: true
   joshymc.resurge:
     description: Use the Resurge prestige system

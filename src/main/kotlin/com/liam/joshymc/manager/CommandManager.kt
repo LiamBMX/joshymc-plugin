@@ -56,7 +56,6 @@ import com.liam.joshymc.command.JoinEffectCommand
 import com.liam.joshymc.command.KillEffectCommand
 import com.liam.joshymc.command.TrailCommand
 import com.liam.joshymc.command.FishCommand
-import com.liam.joshymc.command.SkillsCommand
 import com.liam.joshymc.command.MarketCommand
 import com.liam.joshymc.command.DailyCommand
 import com.liam.joshymc.command.DiscordCommand
@@ -404,9 +403,6 @@ class CommandManager(private val plugin: Joshymc) {
 
         // ── Fishing ───────────────────────────────────
         plugin.getCommand("fish")?.let { val c = FishCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-
-        // ── Skills ────────────────────────────────────
-        plugin.getCommand("skills")?.let { val c = SkillsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Resurge ───────────────────────────────────
         plugin.getCommand("resurge")?.let { val c = ResurgeCommand(plugin); it.setExecutor(c); it.tabCompleter = c }

@@ -27,7 +27,6 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
 
     companion object {
         private const val RESURGE_REWARD_MONEY = 10_000_000.0
-        private const val SKILL_LEVEL_INCREMENT = 5
         private const val DIFFICULTY_MULTIPLIER = 1.2
         private const val REQUIRED_QUEST_MASTER_COMPLETIONS = 1
     }
@@ -93,9 +92,6 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
     fun getEffectiveAmount(uuid: UUID, baseAmount: Int): Int =
         ceil(baseAmount * getMultiplier(uuid)).toInt()
 
-    /** The minimum skill level required for the player's next resurge. */
-    fun getRequiredSkillLevel(uuid: UUID): Int = (getCount(uuid) + 1) * SKILL_LEVEL_INCREMENT
-
     /** The money cost for the player's next resurge: $1B × (resurgeCount + 1). */
     fun getRequiredMoney(uuid: UUID): Double = (getCount(uuid) + 1) * 1_000_000_000.0
 
@@ -108,10 +104,6 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
     // ── Eligibility check ───────────────────────────────────────────────
 
     fun canResurge(uuid: UUID): Boolean {
-        val requiredSkillLevel = getRequiredSkillLevel(uuid)
-        for (skill in SkillManager.Skill.entries) {
-            if (plugin.skillManager.getLevel(uuid, skill) < requiredSkillLevel) return false
-        }
         if (getQuestMasterCompletionsSinceLastResurge(uuid) < REQUIRED_QUEST_MASTER_COMPLETIONS) return false
         if (plugin.economyManager.getBalance(uuid) < getRequiredMoney(uuid)) return false
         return true
@@ -120,14 +112,6 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
     /** Returns a list of human-readable strings describing unmet requirements. */
     fun getMissingRequirements(uuid: UUID): List<String> {
         val missing = mutableListOf<String>()
-        val requiredSkillLevel = getRequiredSkillLevel(uuid)
-
-        for (skill in SkillManager.Skill.entries) {
-            val level = plugin.skillManager.getLevel(uuid, skill)
-            if (level < requiredSkillLevel) {
-                missing.add("${skill.displayName} skill: level $level / $requiredSkillLevel")
-            }
-        }
 
         val questMasterCompletions = getQuestMasterCompletionsSinceLastResurge(uuid)
         if (questMasterCompletions < REQUIRED_QUEST_MASTER_COMPLETIONS) {
@@ -156,9 +140,6 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
         // Deduct money cost
         plugin.economyManager.withdraw(uuid, cost)
 
-        // Reset skills
-        plugin.skillManager.resetSkills(uuid)
-
         // Persist new count + Quest Master baseline (next Resurge requires a fresh completion)
         cache[uuid] = newCount
         questMasterBaselineCache[uuid] = newQuestMasterBaseline
@@ -181,7 +162,7 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
         val title = Title.title(
             Component.text("RESURGE ${newCount}!", TextColor.color(0xFFAA00))
                 .decoration(TextDecoration.BOLD, true),
-            Component.text("Skills have been reset.", NamedTextColor.GRAY),
+            Component.text("Quest difficulty has increased.", NamedTextColor.GRAY),
             Title.Times.times(Duration.ofMillis(500), Duration.ofSeconds(3), Duration.ofMillis(1000))
         )
         player.showTitle(title)

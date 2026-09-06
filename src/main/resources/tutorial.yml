@@ -45,6 +45,5 @@ steps:
     lines:
       - "Complete /quests and /daily quests"
       - "for rewards."
-      - "Level up with /skills."
       - "Equip /talisman and /cosmetics to"
       - "customize your character."

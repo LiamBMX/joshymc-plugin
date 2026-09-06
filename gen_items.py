@@ -208,7 +208,5 @@ gen_armor('blaze_kings_crown', (255, 200, 50))
 gen_armor('phantom_cloak', (40, 40, 50))
 gen_sword('poseidons_trident', (40, 120, 200), (40, 80, 140))
 gen_paper('claim_block_token', (120, 200, 120))
-gen_paper('skill_tome_mining', (80, 200, 255))
-gen_paper('skill_tome_farming', (80, 220, 80))
 
-print('Generated 47 custom item textures')
+print('Generated 45 custom item textures')
