@@ -20,10 +20,10 @@
 #   effect    - potion effect type (e.g. STRENGTH, SPEED, INSTANT_HEALTH) — marks
 #               this entry as a real potion item instead of a plain Material
 #   amplifier - potion effect amplifier, 0 = level I, 1 = level II, etc.
-#
-# The Spawners category is not configured here — it opens the existing, already
-# price-configurable Spawner Shop (see spawners.yml / SpawnerManager) instead of
-# duplicating that pricing/purchase logic in a second place.
+#   spawner   - custom spawner type id from spawners.yml (e.g. "zombie") — marks this
+#               entry as a spawner item delivered via SpawnerManager.createSpawnerItem,
+#               so the correct mob type/PDC tag is always preserved (never a generic
+#               fallback). material defaults to SPAWNER for these entries.
 
 categories:
   pvp_gear:
@@ -150,6 +150,57 @@ categories:
         sell: 0
       SHULKER_SHELL:
         buy: 7000
+        sell: 0
+
+  spawners:
+    name: "Spawners"
+    icon: SPAWNER
+    enabled: true
+    items:
+      zombie_spawner:
+        spawner: zombie
+        name: "Zombie Spawner"
+        buy: 250000
+        sell: 0
+      skeleton_spawner:
+        spawner: skeleton
+        name: "Skeleton Spawner"
+        buy: 300000
+        sell: 0
+      spider_spawner:
+        spawner: spider
+        name: "Spider Spawner"
+        buy: 225000
+        sell: 0
+      cave_spider_spawner:
+        spawner: cave_spider
+        name: "Cave Spider Spawner"
+        buy: 275000
+        sell: 0
+      slime_spawner:
+        spawner: slime
+        name: "Slime Spawner"
+        buy: 400000
+        sell: 0
+      creeper_spawner:
+        spawner: creeper
+        name: "Creeper Spawner"
+        buy: 500000
+        sell: 0
+      blaze_spawner:
+        spawner: blaze
+        name: "Blaze Spawner"
+        buy: 600000
+        sell: 0
+      ghast_spawner:
+        spawner: ghast
+        name: "Ghast Spawner"
+        buy: 800000
+        sell: 0
+      iron_golem_spawner:
+        spawner: iron_golem
+        name: "Iron Golem Spawner"
+        buy: 1200000
         sell: 0
 
   decor:

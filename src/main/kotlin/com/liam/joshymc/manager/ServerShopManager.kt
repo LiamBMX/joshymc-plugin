@@ -24,7 +24,7 @@ import java.util.UUID
 
 class ServerShopManager(private val plugin: Joshymc) {
 
-    enum class ShopItemKind { MATERIAL, POTION }
+    enum class ShopItemKind { MATERIAL, POTION, SPAWNER }
 
     data class ShopItem(
         val material: Material,
@@ -33,7 +33,8 @@ class ServerShopManager(private val plugin: Joshymc) {
         val kind: ShopItemKind = ShopItemKind.MATERIAL,
         val displayName: String? = null,
         val potionEffect: PotionEffectType? = null,
-        val potionAmplifier: Int = 0
+        val potionAmplifier: Int = 0,
+        val spawnerTypeId: String? = null
     )
     data class ShopCategory(val id: String, val name: String, val icon: Material, val items: List<ShopItem>)
 
@@ -54,9 +55,46 @@ class ServerShopManager(private val plugin: Joshymc) {
     fun start() {
         categories.clear()
 
+        mergeMissingCategoriesFromDefaults("shop.yml")
         loadCategoriesInto(categories, "shop.yml")
 
         plugin.logger.info("Loaded ${categories.size} shop categories with ${categories.sumOf { it.items.size }} items")
+    }
+
+    /**
+     * Merge any top-level categories that exist in the bundled `shop.yml` resource but are
+     * missing from the user's saved file (e.g. a new "spawners" category shipped in an
+     * update). Existing categories/items (with admin tweaks) are left untouched — same
+     * pattern as SpawnerManager.mergeMissingFromDefaults.
+     */
+    private fun mergeMissingCategoriesFromDefaults(fileName: String) {
+        val file = plugin.configFile(fileName)
+        if (!file.exists()) {
+            plugin.saveResource(fileName, false)
+            return
+        }
+
+        val defaultStream = plugin.getResource(fileName) ?: return
+        val defaults = YamlConfiguration.loadConfiguration(defaultStream.bufferedReader())
+        val userCfg = YamlConfiguration.loadConfiguration(file)
+
+        val defaultsSection = defaults.getConfigurationSection("categories") ?: return
+        val userSection = userCfg.getConfigurationSection("categories") ?: userCfg.createSection("categories")
+
+        var added = 0
+        for (categoryId in defaultsSection.getKeys(false)) {
+            if (userSection.contains(categoryId)) continue
+            userSection.set(categoryId, defaultsSection.get(categoryId))
+            added++
+        }
+        if (added > 0) {
+            try {
+                userCfg.save(file)
+                plugin.logger.info("[Shop] Merged $added new shop categor${if (added == 1) "y" else "ies"} from bundled defaults.")
+            } catch (e: Exception) {
+                plugin.logger.warning("[Shop] Failed to save merged shop.yml: ${e.message}")
+            }
+        }
     }
 
     private fun loadCategoriesInto(target: MutableList<ShopCategory>, fileName: String) {
@@ -83,20 +121,29 @@ class ServerShopManager(private val plugin: Joshymc) {
                 if (!itemSection.getBoolean("enabled", true)) continue
 
                 // Most entries key directly off the Material name (e.g. "WHEAT:"). Entries that
-                // need a custom id (multiple potions sharing Material.SPLASH_POTION) instead
-                // specify an explicit "material:" field.
-                val material = Material.matchMaterial(itemSection.getString("material") ?: key) ?: continue
+                // need a custom id (multiple potions sharing Material.SPLASH_POTION, or any
+                // number of spawner entries sharing Material.SPAWNER) instead specify an
+                // explicit "material:" field (spawner entries default it to SPAWNER).
+                val spawnerTypeId = itemSection.getString("spawner")
+                val material = if (spawnerTypeId != null) {
+                    Material.SPAWNER
+                } else {
+                    Material.matchMaterial(itemSection.getString("material") ?: key) ?: continue
+                }
                 val buyPrice = itemSection.getDouble("buy", 0.0)
                 val sellPrice = itemSection.getDouble("sell", 0.0)
                 val displayName = itemSection.getString("name")
 
                 val effectName = itemSection.getString("effect")
-                if (effectName != null) {
-                    val effect = Registry.EFFECT.get(NamespacedKey.minecraft(effectName.lowercase())) ?: continue
-                    val amplifier = itemSection.getInt("amplifier", 0)
-                    items.add(ShopItem(material, buyPrice, sellPrice, ShopItemKind.POTION, displayName, effect, amplifier))
-                } else {
-                    items.add(ShopItem(material, buyPrice, sellPrice, ShopItemKind.MATERIAL, displayName))
+                when {
+                    spawnerTypeId != null ->
+                        items.add(ShopItem(material, buyPrice, sellPrice, ShopItemKind.SPAWNER, displayName, spawnerTypeId = spawnerTypeId))
+                    effectName != null -> {
+                        val effect = Registry.EFFECT.get(NamespacedKey.minecraft(effectName.lowercase())) ?: continue
+                        val amplifier = itemSection.getInt("amplifier", 0)
+                        items.add(ShopItem(material, buyPrice, sellPrice, ShopItemKind.POTION, displayName, effect, amplifier))
+                    }
+                    else -> items.add(ShopItem(material, buyPrice, sellPrice, ShopItemKind.MATERIAL, displayName))
                 }
             }
 
@@ -148,22 +195,11 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     private data class MenuButton(val name: String, val icon: Material, val itemCount: Int, val onClick: (Player) -> Unit)
 
-    /**
-     * Category buttons are driven by shop.yml, plus one synthetic "Spawners" button that
-     * opens the existing, already-configurable /spawner shop instead of duplicating its
-     * pricing/inventory logic here.
-     */
+    /** Category buttons are driven entirely by shop.yml, including the Spawners category. */
     private fun buildMenuButtons(): List<MenuButton> {
-        val buttons = categories.map { category ->
+        return categories.map { category ->
             MenuButton(category.name, category.icon, category.items.size) { p -> openCategory(p, category.id, 0) }
-        }.toMutableList()
-
-        val spawnerCount = plugin.spawnerManager.getTypes().count { it.buyPrice > 0.0 }
-        val spawnerButton = MenuButton("Spawners", Material.SPAWNER, spawnerCount) { p -> plugin.spawnerManager.openShop(p) }
-        val insertAt = (categories.indexOfFirst { it.id == "end" } + 1).coerceAtLeast(0)
-        buttons.add(insertAt.coerceAtMost(buttons.size), spawnerButton)
-
-        return buttons
+        }
     }
 
     fun openMainMenu(player: Player) {
@@ -344,7 +380,36 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     // ── Item Icon Builder ───────────────────────────────────────────────
 
+    /**
+     * Spawner entries reuse SpawnerManager.createSpawnerItem so the delivered item is
+     * identical (mob type, PDC tag, drop-table lore) to a spawner bought via /spawner —
+     * there is no separate "shop spawner" format that could ever preserve the wrong mob.
+     */
+    private fun buildSpawnerIcon(shopItem: ShopItem): ItemStack {
+        val typeId = shopItem.spawnerTypeId ?: return ItemStack(Material.BARRIER)
+        val item = plugin.spawnerManager.createSpawnerItem(typeId) ?: return ItemStack(Material.BARRIER)
+        item.editMeta { meta ->
+            val lore = (meta.lore() ?: emptyList()).toMutableList()
+            if (shopItem.buyPrice > 0) {
+                lore.add(
+                    plugin.commsManager.parseLegacy("&7Buy: &a${plugin.economyManager.format(shopItem.buyPrice)}")
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                lore.add(Component.empty())
+                lore.add(
+                    Component.text("Left-click to choose buy amount", NamedTextColor.GREEN)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+            } else {
+                lore.add(Component.text("Not for sale", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+            }
+            meta.lore(lore)
+        }
+        return item
+    }
+
     private fun buildShopItemIcon(shopItem: ShopItem): ItemStack {
+        if (shopItem.kind == ShopItemKind.SPAWNER) return buildSpawnerIcon(shopItem)
         val base = if (shopItem.kind == ShopItemKind.POTION) buildPotionItem(shopItem) else ItemStack(shopItem.material)
         return base.apply {
             editMeta { meta ->
@@ -442,7 +507,11 @@ class ServerShopManager(private val plugin: Joshymc) {
 
         fun renderDynamic() {
             val total = livePrice * amount
-            val itemDisplay = if (shopItem.kind == ShopItemKind.POTION) buildPotionItem(shopItem) else ItemStack(shopItem.material)
+            val itemDisplay = when (shopItem.kind) {
+                ShopItemKind.POTION -> buildPotionItem(shopItem)
+                ShopItemKind.SPAWNER -> shopItem.spawnerTypeId?.let { plugin.spawnerManager.createSpawnerItem(it) } ?: ItemStack(Material.BARRIER)
+                ShopItemKind.MATERIAL -> ItemStack(shopItem.material)
+            }
             itemDisplay.amount = amount.coerceIn(1, 64)
             itemDisplay.editMeta { meta ->
                 meta.displayName(
@@ -562,13 +631,26 @@ class ServerShopManager(private val plugin: Joshymc) {
         }
 
         // Potions cap at 1 per stack (vanilla), so deliver them one at a time rather than
-        // as a single ItemStack with an oversized amount.
-        val overflow = if (shopItem.kind == ShopItemKind.POTION) {
-            val leftovers = mutableListOf<ItemStack>()
-            repeat(amount) { leftovers.addAll(player.inventory.addItem(buildPotionItem(shopItem)).values) }
-            leftovers
-        } else {
-            player.inventory.addItem(ItemStack(shopItem.material, amount)).values.toList()
+        // as a single ItemStack with an oversized amount. Spawners are delivered via
+        // SpawnerManager so the correct mob type/PDC tag is always preserved.
+        val overflow = when (shopItem.kind) {
+            ShopItemKind.POTION -> {
+                val leftovers = mutableListOf<ItemStack>()
+                repeat(amount) { leftovers.addAll(player.inventory.addItem(buildPotionItem(shopItem)).values) }
+                leftovers
+            }
+            ShopItemKind.SPAWNER -> {
+                val stack = shopItem.spawnerTypeId?.let { plugin.spawnerManager.createSpawnerItem(it, amount) }
+                if (stack == null) {
+                    // Delivery is impossible (misconfigured spawner id) — refund instead of
+                    // silently keeping the player's money for an item that can't be given.
+                    plugin.economyManager.deposit(player.uniqueId, totalCost)
+                    plugin.commsManager.send(player, Component.text("Purchase failed; you have been refunded.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+                    return false
+                }
+                player.inventory.addItem(stack).values.toList()
+            }
+            ShopItemKind.MATERIAL -> player.inventory.addItem(ItemStack(shopItem.material, amount)).values.toList()
         }
 
         // Drop any items that didn't fit; tag them so quest progress is not counted
