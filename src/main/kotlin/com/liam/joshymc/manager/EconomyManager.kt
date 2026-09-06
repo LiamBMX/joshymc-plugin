@@ -7,6 +7,23 @@ import java.util.UUID
 
 class EconomyManager(private val plugin: Joshymc) {
 
+    companion object {
+        // Largest-first so formatShort can pick the biggest suffix a magnitude qualifies for.
+        private val SHORT_SCALE_TIERS = listOf(
+            1e33 to "Dc",
+            1e30 to "No",
+            1e27 to "Oc",
+            1e24 to "Sp",
+            1e21 to "Sx",
+            1e18 to "Qi",
+            1e15 to "Q",
+            1_000_000_000_000.0 to "T",
+            1_000_000_000.0 to "B",
+            1_000_000.0 to "M",
+            1_000.0 to "K"
+        )
+    }
+
     private val formatter = DecimalFormat("#,##0.00")
 
     fun start() {
@@ -59,9 +76,12 @@ class EconomyManager(private val plugin: Joshymc) {
     }
 
     /**
-     * Compact K/M/B/T formatting for large financial values (balances, market caps,
-     * P/L, volume, shares, etc.). Display-only — never round the underlying stored value.
-     * Handles negative amounts by formatting the sign then the magnitude.
+     * Compact K/M/B/T/Q/Qi/Sx/Sp/Oc/No/Dc formatting for large financial values (balances,
+     * market caps, P/L, volume, shares, etc.). Display-only — never round the underlying
+     * stored value. Handles negative amounts by formatting the sign then the magnitude.
+     * Ordered largest-first so magnitude picks the biggest suffix it qualifies for; also
+     * re-checks after rounding to 2 decimals so e.g. 999.996T doesn't round up to "1000T"
+     * when a bigger suffix ("1Q") is available.
      */
     fun formatShort(amount: Double): String {
         if (amount.isNaN()) return "0"
@@ -70,44 +90,53 @@ class EconomyManager(private val plugin: Joshymc) {
         val sign = if (amount < 0) "-" else ""
         val magnitude = kotlin.math.abs(amount)
 
-        val (scaled, suffix) = when {
-            magnitude >= 1_000_000_000_000.0 -> magnitude / 1_000_000_000_000.0 to "T"
-            magnitude >= 1_000_000_000.0 -> magnitude / 1_000_000_000.0 to "B"
-            magnitude >= 1_000_000.0 -> magnitude / 1_000_000.0 to "M"
-            magnitude >= 1_000.0 -> magnitude / 1_000.0 to "K"
-            else -> magnitude to ""
+        var index = SHORT_SCALE_TIERS.indexOfFirst { (threshold, _) -> magnitude >= threshold }
+        if (index == -1) {
+            return "$sign${trimNumeric("%.2f".format(magnitude))}"
         }
 
-        var numeric = "%.2f".format(scaled)
-        if (numeric.contains('.')) {
-            numeric = numeric.trimEnd('0').trimEnd('.')
+        var scaled = magnitude / SHORT_SCALE_TIERS[index].first
+        while (scaled >= 1000.0 && index > 0) {
+            index--
+            scaled = magnitude / SHORT_SCALE_TIERS[index].first
         }
 
-        return "$sign$numeric$suffix"
+        return "$sign${trimNumeric("%.2f".format(scaled))}${SHORT_SCALE_TIERS[index].second}"
+    }
+
+    private fun trimNumeric(numeric: String): String {
+        return if (numeric.contains('.')) numeric.trimEnd('0').trimEnd('.') else numeric
     }
 
     /**
-     * Parses shorthand amounts: 10k, 1.5m, 2b, 1t, or plain numbers.
-     * Returns null if the input is invalid.
+     * Parses shorthand amounts: 10k, 1.5m, 2b, 1t, 1q, 1qi, 1sx, 1sp, 1oc, 1no, 1dc,
+     * or plain numbers. Returns null if the input is invalid.
      */
     fun parseAmount(input: String): Double? {
         val cleaned = input.replace(",", "").replace("$", "").trim().lowercase()
         if (cleaned.isEmpty()) return null
 
-        val suffixes = mapOf(
-            'k' to 1_000.0,
-            'm' to 1_000_000.0,
-            'b' to 1_000_000_000.0,
-            't' to 1_000_000_000_000.0
+        // Longest suffix first so "qi" isn't swallowed by a stray single-char match.
+        val suffixes = listOf(
+            "dc" to 1e33,
+            "no" to 1e30,
+            "oc" to 1e27,
+            "sp" to 1e24,
+            "sx" to 1e21,
+            "qi" to 1e18,
+            "q" to 1e15,
+            "t" to 1_000_000_000_000.0,
+            "b" to 1_000_000_000.0,
+            "m" to 1_000_000.0,
+            "k" to 1_000.0
         )
 
-        val lastChar = cleaned.last()
-        val multiplier = suffixes[lastChar]
+        val match = suffixes.firstOrNull { (suffix, _) -> cleaned.endsWith(suffix) }
 
-        return if (multiplier != null) {
-            val number = cleaned.dropLast(1).toDoubleOrNull() ?: return null
+        return if (match != null) {
+            val number = cleaned.removeSuffix(match.first).toDoubleOrNull() ?: return null
             if (number < 0) return null
-            number * multiplier
+            number * match.second
         } else {
             val number = cleaned.toDoubleOrNull() ?: return null
             if (number < 0) return null
