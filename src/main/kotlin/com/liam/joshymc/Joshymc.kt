@@ -28,7 +28,6 @@ import com.liam.joshymc.manager.ScoreboardManager
 import com.liam.joshymc.manager.ChatTagManager
 import com.liam.joshymc.manager.MarketManager
 import com.liam.joshymc.manager.QuestCycleManager
-import com.liam.joshymc.manager.QuestManager
 import com.liam.joshymc.manager.EmoteManager
 import com.liam.joshymc.manager.FishingManager
 import com.liam.joshymc.manager.GadgetManager
@@ -211,8 +210,6 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var vanishCommand: VanishCommand
     lateinit var rtpCommand: com.liam.joshymc.command.RtpCommand
-    lateinit var questManager: QuestManager
-        private set
     lateinit var questCycleManager: QuestCycleManager
         private set
     lateinit var talismanManager: TalismanManager
@@ -338,7 +335,6 @@ class Joshymc : JavaPlugin() {
         autoRestartManager = AutoRestartManager(this)
         playtimeManager = PlaytimeManager(this)
         creditsManager = com.liam.joshymc.manager.CreditsManager(this)
-        questManager = QuestManager(this)
         questCycleManager = QuestCycleManager(this)
         talismanManager = TalismanManager(this)
         fishingManager = FishingManager(this)
@@ -416,7 +412,6 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("chat-games")) chatGamesManager.start()
 
         resurgeManager.start()
-        if (isFeatureEnabled("quests")) questManager.start()
         if (isFeatureEnabled("quests")) questCycleManager.start()
         if (isFeatureEnabled("talismans")) talismanManager.start()
         if (isFeatureEnabled("custom-fishing")) fishingManager.start()

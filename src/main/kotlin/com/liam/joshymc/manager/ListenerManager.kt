@@ -136,7 +136,6 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(CustomArmorAnvilListener(plugin), plugin)
 
         // Quest events
-        pm.registerEvents(plugin.questManager, plugin)
         pm.registerEvents(plugin.questCycleManager, plugin)
         pm.registerEvents(plugin.resurgeManager, plugin)
 

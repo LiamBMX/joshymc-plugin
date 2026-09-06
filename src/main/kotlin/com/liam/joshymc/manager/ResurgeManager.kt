@@ -29,23 +29,26 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
         private const val RESURGE_REWARD_MONEY = 10_000_000.0
         private const val SKILL_LEVEL_INCREMENT = 5
         private const val DIFFICULTY_MULTIPLIER = 1.2
-        private val REQUIRED_QUEST_CATEGORIES = listOf(
-            QuestCategory.MINING,
-            QuestCategory.FISHING,
-            QuestCategory.FARMING
-        )
+        private const val REQUIRED_QUEST_MASTER_COMPLETIONS = 1
     }
 
     val resurgeKeyKey = NamespacedKey(plugin, "resurge_key")
     private val cache = ConcurrentHashMap<UUID, Int>()
+    private val questMasterBaselineCache = ConcurrentHashMap<UUID, Int>()
 
     fun start() {
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS player_resurge (
                 uuid TEXT PRIMARY KEY,
-                count INTEGER DEFAULT 0
+                count INTEGER DEFAULT 0,
+                quest_master_baseline INTEGER DEFAULT 0
             )
         """.trimIndent())
+        try {
+            plugin.databaseManager.execute("ALTER TABLE player_resurge ADD COLUMN quest_master_baseline INTEGER DEFAULT 0")
+        } catch (_: Exception) {
+            // Column already exists.
+        }
 
         Bukkit.getOnlinePlayers().forEach { loadPlayer(it.uniqueId) }
         plugin.logger.info("[Resurge] Resurge manager started.")
@@ -57,10 +60,14 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
     fun onJoin(event: PlayerJoinEvent) = loadPlayer(event.player.uniqueId)
 
     @EventHandler
-    fun onQuit(event: PlayerQuitEvent) = cache.remove(event.player.uniqueId)
+    fun onQuit(event: PlayerQuitEvent) {
+        cache.remove(event.player.uniqueId)
+        questMasterBaselineCache.remove(event.player.uniqueId)
+    }
 
     private fun loadPlayer(uuid: UUID) {
         cache[uuid] = loadCount(uuid)
+        questMasterBaselineCache[uuid] = loadQuestMasterBaseline(uuid)
     }
 
     private fun loadCount(uuid: UUID): Int =
@@ -68,6 +75,12 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
             "SELECT count FROM player_resurge WHERE uuid = ?",
             uuid.toString()
         ) { rs -> rs.getInt("count") } ?: 0
+
+    private fun loadQuestMasterBaseline(uuid: UUID): Int =
+        plugin.databaseManager.queryFirst(
+            "SELECT quest_master_baseline FROM player_resurge WHERE uuid = ?",
+            uuid.toString()
+        ) { rs -> rs.getInt("quest_master_baseline") } ?: 0
 
     // ── Data access ─────────────────────────────────────────────────────
 
@@ -86,6 +99,12 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
     /** The money cost for the player's next resurge: $1B × (resurgeCount + 1). */
     fun getRequiredMoney(uuid: UUID): Double = (getCount(uuid) + 1) * 1_000_000_000.0
 
+    /** Quest Master completions this player has earned since their last Resurge. */
+    fun getQuestMasterCompletionsSinceLastResurge(uuid: UUID): Int {
+        val baseline = questMasterBaselineCache.getOrElse(uuid) { loadQuestMasterBaseline(uuid) }
+        return (plugin.questCycleManager.getLifetimeQuestMasterCompletions(uuid) - baseline).coerceAtLeast(0)
+    }
+
     // ── Eligibility check ───────────────────────────────────────────────
 
     fun canResurge(uuid: UUID): Boolean {
@@ -93,11 +112,7 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
         for (skill in SkillManager.Skill.entries) {
             if (plugin.skillManager.getLevel(uuid, skill) < requiredSkillLevel) return false
         }
-        for (category in REQUIRED_QUEST_CATEGORIES) {
-            val categoryQuests = plugin.questManager.getQuestsByCategory(category)
-            if (categoryQuests.isEmpty()) continue
-            if (categoryQuests.any { !plugin.questManager.isCompleted(uuid, it.id) }) return false
-        }
+        if (getQuestMasterCompletionsSinceLastResurge(uuid) < REQUIRED_QUEST_MASTER_COMPLETIONS) return false
         if (plugin.economyManager.getBalance(uuid) < getRequiredMoney(uuid)) return false
         return true
     }
@@ -114,12 +129,9 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        for (category in REQUIRED_QUEST_CATEGORIES) {
-            val categoryQuests = plugin.questManager.getQuestsByCategory(category)
-            val incomplete = categoryQuests.count { !plugin.questManager.isCompleted(uuid, it.id) }
-            if (incomplete > 0) {
-                missing.add("${category.displayName} quests: $incomplete remaining")
-            }
+        val questMasterCompletions = getQuestMasterCompletionsSinceLastResurge(uuid)
+        if (questMasterCompletions < REQUIRED_QUEST_MASTER_COMPLETIONS) {
+            missing.add("Quest Master completions: $questMasterCompletions / $REQUIRED_QUEST_MASTER_COMPLETIONS")
         }
 
         val requiredMoney = getRequiredMoney(uuid)
@@ -139,19 +151,21 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
 
         val cost = getRequiredMoney(uuid)
         val newCount = getCount(uuid) + 1
+        val newQuestMasterBaseline = plugin.questCycleManager.getLifetimeQuestMasterCompletions(uuid)
 
         // Deduct money cost
         plugin.economyManager.withdraw(uuid, cost)
 
-        // Reset quests and skills
-        plugin.questManager.resetAllProgress(uuid)
+        // Reset skills
         plugin.skillManager.resetSkills(uuid)
 
-        // Persist new count
+        // Persist new count + Quest Master baseline (next Resurge requires a fresh completion)
         cache[uuid] = newCount
+        questMasterBaselineCache[uuid] = newQuestMasterBaseline
         plugin.databaseManager.execute(
-            "INSERT INTO player_resurge (uuid, count) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET count = ?",
-            uuid.toString(), newCount, newCount
+            "INSERT INTO player_resurge (uuid, count, quest_master_baseline) VALUES (?, ?, ?) " +
+                "ON CONFLICT(uuid) DO UPDATE SET count = ?, quest_master_baseline = ?",
+            uuid.toString(), newCount, newQuestMasterBaseline, newCount, newQuestMasterBaseline
         )
 
         // Give $10M
@@ -167,7 +181,7 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
         val title = Title.title(
             Component.text("RESURGE ${newCount}!", TextColor.color(0xFFAA00))
                 .decoration(TextDecoration.BOLD, true),
-            Component.text("Quests and skills have been reset.", NamedTextColor.GRAY),
+            Component.text("Skills have been reset.", NamedTextColor.GRAY),
             Title.Times.times(Duration.ofMillis(500), Duration.ofSeconds(3), Duration.ofMillis(1000))
         )
         player.showTitle(title)

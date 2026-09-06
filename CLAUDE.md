@@ -96,7 +96,7 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 | **AnnouncementManager** | Periodic broadcasts (configured in `config.yml > announcements`). |
 | **ChatTagManager** | Equippable chat tags. |
 | **ChatGamesManager** | Math/unscramble/type/reverse chat games on a timer. |
-| **QuestManager** | Quest system with tier-gating and prereqs. **v1.0.44**: tier-gating via `TIER_GATED_CATEGORIES` set + `lowerDifficulty()` helper (MINING/FARMING/COMBAT must complete easy → medium → hard). |
+| **QuestCycleManager** | The only quest system (the old numbered/permanent quest journal, `QuestManager`, was fully retired — see issue #489). Unified Daily / Weekly / Quest Master quests defined in `quest-cycle.yml`, opened via `/quests` (aliases `/quest`, `/questboard`, `/questbook`, `/daily`). Server-wide rotating pool, per-player progress in `quest_cycle_progress`. `ResurgeManager` gates prestige on lifetime Quest Master completions (not the old per-category quest requirement) and scales quest target amounts via `getEffectiveAmount`. |
 | **TalismanManager** | Equippable talismans/relics. |
 | **FishingManager** | Custom fishing collection. |
 | **SkillManager** | XP/leveling skills. |
