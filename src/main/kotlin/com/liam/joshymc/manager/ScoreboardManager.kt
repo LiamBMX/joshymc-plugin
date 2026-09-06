@@ -103,6 +103,11 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         if (killer != null) {
             kills.merge(killer.uniqueId, 1, Int::plus)
             saveStats(killer.uniqueId)
+
+            val killerTeam = plugin.teamManager.getPlayerTeam(killer.uniqueId)
+            if (killerTeam != null) {
+                plugin.teamManager.addTeamKill(killerTeam)
+            }
         }
     }
 
