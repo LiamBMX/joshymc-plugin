@@ -28,7 +28,6 @@ class BoosterCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
         val type = when (sub) {
             "sellmulti" -> BoosterManager.BoosterType.SELL
-            "skillmulti" -> BoosterManager.BoosterType.SKILL
             "questmulti" -> BoosterManager.BoosterType.QUEST
             else -> {
                 sendUsage(sender)
@@ -66,7 +65,7 @@ class BoosterCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 Component.text("Sell booster (${sellCategory.displayName}) ${multiplier}x activated for ${plugin.boosterManager.formatDuration(durationMs)}!", NamedTextColor.GREEN)
             )
         } else {
-            // /booster skillmulti <mult> <time>  OR  /booster questmulti <mult> <time>
+            // /booster questmulti <mult> <time>
             if (args.size < 3) { sendUsage(sender); return true }
             val multiplier = args[1].toDoubleOrNull()
             if (multiplier == null || multiplier <= 0) {
@@ -116,7 +115,6 @@ class BoosterCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         sender.sendMessage(
             Component.text("Usage:", NamedTextColor.YELLOW).append(Component.newline())
                 .append(Component.text("  /booster sellmulti <mult> <crops|ores|animal|mobs|random> <time>", NamedTextColor.GOLD)).append(Component.newline())
-                .append(Component.text("  /booster skillmulti <mult> <time>", NamedTextColor.GOLD)).append(Component.newline())
                 .append(Component.text("  /booster questmulti <mult> <time>", NamedTextColor.GOLD)).append(Component.newline())
                 .append(Component.text("  /booster list", NamedTextColor.GOLD))
         )
@@ -125,14 +123,14 @@ class BoosterCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (!sender.hasPermission("joshymc.booster")) return emptyList()
         return when (args.size) {
-            1 -> listOf("sellmulti", "skillmulti", "questmulti", "list").filter { it.startsWith(args[0], ignoreCase = true) }
+            1 -> listOf("sellmulti", "questmulti", "list").filter { it.startsWith(args[0], ignoreCase = true) }
             2 -> when (args[0].lowercase()) {
-                "sellmulti", "skillmulti", "questmulti" -> listOf("1.5", "2", "3").filter { it.startsWith(args[1]) }
+                "sellmulti", "questmulti" -> listOf("1.5", "2", "3").filter { it.startsWith(args[1]) }
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
                 "sellmulti" -> listOf("crops", "ores", "animal", "mobs", "random").filter { it.startsWith(args[2], ignoreCase = true) }
-                "skillmulti", "questmulti" -> listOf("30m", "1h", "2h", "6h").filter { it.startsWith(args[2], ignoreCase = true) }
+                "questmulti" -> listOf("30m", "1h", "2h", "6h").filter { it.startsWith(args[2], ignoreCase = true) }
                 else -> emptyList()
             }
             4 -> when (args[0].lowercase()) {

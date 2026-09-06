@@ -11,7 +11,6 @@ class BoosterManager(private val plugin: Joshymc) {
 
     enum class BoosterType(val displayName: String) {
         SELL("Sell"),
-        SKILL("Skill XP"),
         QUEST("Quest")
     }
 
@@ -73,12 +72,6 @@ class BoosterManager(private val plugin: Joshymc) {
         val category = booster.sellCategory ?: return booster.multiplier
         val shopCategoryId = plugin.serverShopManager.getCategoryIdForMaterial(material) ?: return 1.0
         return if (shopCategoryId in category.shopCategoryIds) booster.multiplier else 1.0
-    }
-
-    fun getSkillMultiplier(): Double {
-        val booster = boosters[BoosterType.SKILL] ?: return 1.0
-        if (booster.isExpired()) { boosters.remove(BoosterType.SKILL); return 1.0 }
-        return booster.multiplier
     }
 
     fun getQuestMultiplier(): Double {

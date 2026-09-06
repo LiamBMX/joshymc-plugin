@@ -106,7 +106,7 @@ class PoseidonsTrident : CustomItem() {
     }
 }
 
-// ── Tokens & Skill Tomes ────────────────────────────────────────────────────
+// ── Tokens ──────────────────────────────────────────────────────────────────
 
 class ClaimBlockToken : CustomItem() {
 
@@ -128,44 +128,3 @@ class ClaimBlockToken : CustomItem() {
     }
 }
 
-class SkillTomeMining : CustomItem() {
-
-    override val id = "skill_tome_mining"
-    override val material = Material.BOOK
-    override val hasGlint = true
-
-    override val displayName: Component = Component.text("Mining Skill Tome", TextColor.color(0x55FFFF))
-        .decoration(TextDecoration.ITALIC, false)
-        .decoration(TextDecoration.BOLD, true)
-
-    override val lore = LoreBuilder.build(
-        type = "Skill Tome",
-        description = listOf("Grants 500 Mining XP"),
-        usage = "Right-click to use",
-    )
-
-    override fun applyMeta(meta: ItemMeta) {
-        meta.setItemModel(NamespacedKey(Joshymc.instance, "skill_tome_mining"))
-    }
-}
-
-class SkillTomeFarming : CustomItem() {
-
-    override val id = "skill_tome_farming"
-    override val material = Material.BOOK
-    override val hasGlint = true
-
-    override val displayName: Component = Component.text("Farming Skill Tome", TextColor.color(0x55FF55))
-        .decoration(TextDecoration.ITALIC, false)
-        .decoration(TextDecoration.BOLD, true)
-
-    override val lore = LoreBuilder.build(
-        type = "Skill Tome",
-        description = listOf("Grants 500 Farming XP"),
-        usage = "Right-click to use",
-    )
-
-    override fun applyMeta(meta: ItemMeta) {
-        meta.setItemModel(NamespacedKey(Joshymc.instance, "skill_tome_farming"))
-    }
-}

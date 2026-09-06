@@ -15,7 +15,6 @@ prefix: "&b&lJoshyMC &8» &r"
 features:
   talismans: true
   custom-fishing: true
-  skills: true
   quests: true
   market: true
   trails: true

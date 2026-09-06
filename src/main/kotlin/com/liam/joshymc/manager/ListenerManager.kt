@@ -145,9 +145,6 @@ class ListenerManager(private val plugin: Joshymc) {
         // Fishing
         pm.registerEvents(plugin.fishingManager, plugin)
 
-        // Skills
-        pm.registerEvents(plugin.skillManager, plugin)
-
         // Spawn fly
         pm.registerEvents(plugin.spawnWorldManager, plugin)
 
