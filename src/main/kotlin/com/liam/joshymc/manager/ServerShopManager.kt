@@ -10,7 +10,6 @@ import org.bukkit.Material
 import org.bukkit.NamespacedKey
 import org.bukkit.Registry
 import org.bukkit.Sound
-import org.bukkit.persistence.PersistentDataType
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.event.inventory.ClickType
@@ -653,10 +652,9 @@ class ServerShopManager(private val plugin: Joshymc) {
             ShopItemKind.MATERIAL -> player.inventory.addItem(ItemStack(shopItem.material, amount)).values.toList()
         }
 
-        // Drop any items that didn't fit; tag them so quest progress is not counted
+        // Drop any items that didn't fit
         for (remaining in overflow) {
-            val dropped = player.world.dropItemNaturally(player.location, remaining)
-            dropped.persistentDataContainer.set(plugin.questManager.shopDropKey, PersistentDataType.BYTE, 1)
+            player.world.dropItemNaturally(player.location, remaining)
         }
 
         val name = displayLabel(shopItem)

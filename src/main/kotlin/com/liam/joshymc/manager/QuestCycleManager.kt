@@ -74,14 +74,11 @@ data class CycleProgress(val progress: Int, val completed: Boolean, val rewardCl
 data class QuestMasterState(val dailySets: Int, val weeklyComplete: Boolean, val rewarded: Boolean)
 
 /**
- * Unified Daily / Weekly / Quest Master quest system, opened with /quests.
+ * Unified Daily / Weekly / Quest Master quest system — the only quest system in
+ * JoshyMC, opened with /quests (and its aliases /quest, /daily, /questboard, /questbook).
  *
- * Replaces the old rotate-from-the-permanent-quest-pool DailyQuestManager with a
- * purpose-built pool of 120 quests (60 medium daily, 30 hard daily, 30 weekly)
+ * A purpose-built pool of 120 quests (60 medium daily, 30 hard daily, 30 weekly)
  * defined in quest-cycle.yml. Server-wide rotation, per-player progress.
- *
- * The pre-existing permanent achievement quest journal (QuestManager, /questbook)
- * is untouched — it is a separate, unrelated feature (see repo docs).
  */
 class QuestCycleManager(private val plugin: Joshymc) : Listener {
 
@@ -597,7 +594,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         val map = progressCache.getOrPut(uuid) { loadProgress(uuid) }
         val current = map[quest.id] ?: CycleProgress(0, false, false)
         if (current.completed) return
-        val target = plugin.boosterManager.applyQuestBooster(quest.amount)
+        val target = plugin.boosterManager.applyQuestBooster(plugin.resurgeManager.getEffectiveAmount(uuid, quest.amount))
         val newProgress = (current.progress + amount).coerceIn(0, target)
         val completed = newProgress >= target
         map[quest.id] = current.copy(progress = newProgress, completed = completed)
@@ -691,6 +688,13 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
             uuid.toString(), weeklyCycleId
         ) { rs -> QuestMasterState(rs.getInt("daily_sets"), rs.getInt("weekly_complete") == 1, rs.getInt("rewarded") == 1) }
             ?: QuestMasterState(0, false, false)
+
+    /** Lifetime count of Quest Master weekly cycles this player has been rewarded for. */
+    fun getLifetimeQuestMasterCompletions(uuid: UUID): Int =
+        plugin.databaseManager.queryFirst(
+            "SELECT COUNT(*) AS n FROM quest_master_progress WHERE uuid = ? AND rewarded = 1",
+            uuid.toString()
+        ) { rs -> rs.getInt("n") } ?: 0
 
     private fun runRewardCommands(player: Player, commands: List<String>) {
         for (template in commands) {

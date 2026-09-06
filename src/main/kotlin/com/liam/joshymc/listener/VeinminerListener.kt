@@ -57,9 +57,8 @@ class VeinminerListener(private val plugin: Joshymc) : Listener {
 
         try {
             for (veinBlock in vein) {
-                // Tell QuestManager about the break BEFORE we change the block
-                // so MINE_ORE / BREAK_BLOCK quests count every vein hit.
-                plugin.questManager.recordBlockBreak(player, veinBlock)
+                // Tell the quest system about the break BEFORE we change the block
+                // so mining quests count every vein hit.
                 plugin.questCycleManager.recordBlockBreak(player, veinBlock)
 
                 if (shouldAutoSmelt) {

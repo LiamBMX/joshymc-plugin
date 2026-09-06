@@ -238,9 +238,6 @@ commands:
     description: Welcome a newly joined player for money and a chance at a credit or AFK key
     usage: /welcome
     permission: joshymc.welcome
-  rewards:
-    description: Claim all quest rewards
-    usage: /rewards
   talisman:
     description: Equip talismans and relics
     usage: /talisman [equip|unequip|info|list]

@@ -51,7 +51,7 @@ class ResurgeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         plugin.commsManager.send(player, Component.text("    Skills: Mining, Farming, Combat, Fishing,", NamedTextColor.GRAY))
         plugin.commsManager.send(player, Component.text("    Woodcutting, Excavation, Enchanting,", NamedTextColor.GRAY))
         plugin.commsManager.send(player, Component.text("    Alchemy, Taming", NamedTextColor.GRAY))
-        plugin.commsManager.send(player, Component.text("  • Complete all Mining, Fishing & Farming quests", NamedTextColor.YELLOW))
+        plugin.commsManager.send(player, Component.text("  • Complete a Quest Master since your last Resurge", NamedTextColor.YELLOW))
         plugin.commsManager.send(player, Component.text("  • $1,000,000,000 per Resurge level", NamedTextColor.YELLOW)
             .append(Component.text(" (×$1B each time)", NamedTextColor.GRAY)))
         plugin.commsManager.send(player, Component.text(" ", NamedTextColor.GRAY))
