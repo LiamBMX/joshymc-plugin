@@ -567,35 +567,31 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    private fun mapBountyRow(rs: java.sql.ResultSet): BountyInfo = BountyInfo(
+        rs.getInt("id"),
+        rs.getString("target_uuid"),
+        rs.getString("target_name"),
+        rs.getString("placed_by_uuid"),
+        rs.getString("placed_by_name"),
+        rs.getDouble("amount"),
+        rs.getLong("placed_at")
+    )
+
     fun getBounties(): List<BountyInfo> {
-        return plugin.databaseManager.query("SELECT * FROM bounties ORDER BY amount DESC") { rs ->
-            BountyInfo(
-                rs.getInt("id"),
-                rs.getString("target_uuid"),
-                rs.getString("target_name"),
-                rs.getString("placed_by_uuid"),
-                rs.getString("placed_by_name"),
-                rs.getDouble("amount"),
-                rs.getLong("placed_at")
-            )
-        }
+        // Secondary "id ASC" tiebreak keeps ordering stable/predictable across
+        // refreshes when two bounties share the same amount (bounty-list GUI, #494).
+        return plugin.databaseManager.query("SELECT * FROM bounties ORDER BY amount DESC, id ASC") { rs -> mapBountyRow(rs) }
+    }
+
+    fun getBounty(id: Int): BountyInfo? {
+        return plugin.databaseManager.queryFirst("SELECT * FROM bounties WHERE id = ?", id) { rs -> mapBountyRow(rs) }
     }
 
     fun getBountiesOnPlayer(uuid: UUID): List<BountyInfo> {
         return plugin.databaseManager.query(
-            "SELECT * FROM bounties WHERE target_uuid = ? ORDER BY amount DESC",
+            "SELECT * FROM bounties WHERE target_uuid = ? ORDER BY amount DESC, id ASC",
             uuid.toString()
-        ) { rs ->
-            BountyInfo(
-                rs.getInt("id"),
-                rs.getString("target_uuid"),
-                rs.getString("target_name"),
-                rs.getString("placed_by_uuid"),
-                rs.getString("placed_by_name"),
-                rs.getDouble("amount"),
-                rs.getLong("placed_at")
-            )
-        }
+        ) { rs -> mapBountyRow(rs) }
     }
 
     fun getTotalBounty(uuid: UUID): Double {
@@ -645,24 +641,16 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    fun cancelBounty(id: Int, playerUuid: UUID): Boolean {
-        val bounty = plugin.databaseManager.queryFirst(
-            "SELECT * FROM bounties WHERE id = ? AND placed_by_uuid = ?",
-            id, playerUuid.toString()
-        ) { rs ->
-            BountyInfo(
-                rs.getInt("id"),
-                rs.getString("target_uuid"),
-                rs.getString("target_name"),
-                rs.getString("placed_by_uuid"),
-                rs.getString("placed_by_name"),
-                rs.getDouble("amount"),
-                rs.getLong("placed_at")
-            )
-        } ?: return false
+    /**
+     * Cancels a bounty by id and refunds whoever originally placed it. Callers
+     * (command + GUI) are responsible for the `joshymc.bounty.cancel` permission
+     * check server-side before calling this — see issue #494.
+     */
+    fun cancelBounty(id: Int): Boolean {
+        val bounty = getBounty(id) ?: return false
 
         plugin.databaseManager.execute("DELETE FROM bounties WHERE id = ?", id)
-        plugin.economyManager.deposit(playerUuid, bounty.amount)
+        plugin.economyManager.deposit(UUID.fromString(bounty.placedByUuid), bounty.amount)
         return true
     }
 

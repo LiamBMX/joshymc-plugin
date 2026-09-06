@@ -717,6 +717,9 @@ permissions:
   joshymc.killtop:
     description: View kill leaderboard
     default: true
+  joshymc.bounty.cancel:
+    description: Cancel active bounties from /bounty cancel or the bounty list GUI
+    default: true
   joshymc.killstreak:
     description: View PvP kill streak stats and bounty status
     default: true
