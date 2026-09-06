@@ -118,7 +118,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val objective = board.registerNewObjective(
             "joshymc_sidebar",
             org.bukkit.scoreboard.Criteria.DUMMY,
-            plugin.commsManager.parseLegacy("&6&lJOSHYMC SURVIVAL")
+            plugin.commsManager.parseLegacy("&6&lJoshyMC")
         )
         objective.displaySlot = DisplaySlot.SIDEBAR
         // Hide the red score numbers
@@ -181,44 +181,27 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val rankTagComponent = rank?.displayTag?.let { plugin.commsManager.parseLegacy(it) }
             ?: plugin.commsManager.parseLegacy("&7None")
         val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
-        val team = teamName?.let { plugin.teamManager.getTeam(it)?.displayName } ?: "None"
+        val team = teamName?.let { plugin.teamManager.getTeam(it)?.displayName } ?: "No Team"
         val playerKills = kills.getOrDefault(player.uniqueId, 0)
-        val playtime = formatPlaytime(plugin.playtimeManager.getPlaytime(player.uniqueId))
+        val playerDeaths = deaths.getOrDefault(player.uniqueId, 0)
+        val playtime = plugin.playtimeManager.formatPlaytime(plugin.playtimeManager.getPlaytime(player.uniqueId))
         val ping = player.ping
 
-        // Per-player timezone — defaults to EST when the player hasn't picked one,
-        // overridden via /timezone <zone>. The Minecraft client doesn't tell us
-        // its zone, so we either trust the player's choice or fall back to EST.
-        val zone = plugin.timezoneManager.zoneFor(player)
-        val now = java.time.ZonedDateTime.now(zone)
-        val dateFmt = java.time.format.DateTimeFormatter.ofPattern("MM/dd/yyyy hh:mma")
-        val dateStr = now.format(dateFmt)
-
-        // Build each line as an Adventure Component so hex codes like &#FF5555
-        // on rank tags render via the same native-RGB path as the tab list
-        // (instead of legacy §x which Minecraft may render slightly differently).
         val lines = mutableListOf<Component>()
-        lines.add(plugin.commsManager.parseLegacy("&6&m                         "))
-        lines.add(plugin.commsManager.parseLegacy("&7$dateStr"))
+        lines.add(plugin.commsManager.parseLegacy("&b${player.name} &7\u1D18\u026A\u0274\u0262&8: &f$ping"))
         lines.add(Component.empty())
-        lines.add(plugin.commsManager.parseLegacy("&6&l${player.name}"))
-        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D18\u026A\u0274\u0262&6: &3$ping"))
         lines.add(
-            plugin.commsManager.parseLegacy("&6| &7\u0280\u1D00\u0274\u1D0B&6:&r ")
+            plugin.commsManager.parseLegacy("&d\u2605 &7\u0280\u1D00\u0274\u1D0B&8: ")
                 .append(rankTagComponent)
         )
-        if (team != "None") {
-            lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D1B\u1D07\u1D00\u1D0D&6: &b$team"))
-        }
+        lines.add(plugin.commsManager.parseLegacy("&a$ &7\u1D0D\u1D0F\u0274\u1D07\u028F&8: &a$$balance"))
+        lines.add(plugin.commsManager.parseLegacy("&e\u26C3 &7\u1D04\u0280\u1D07\u1D05\u026A\u1D1B\uA731&8: &e$credits"))
+        lines.add(plugin.commsManager.parseLegacy("&c\u2694 &7\u1D0B\u026A\u029F\u029F\uA731&8: &c$playerKills"))
+        lines.add(plugin.commsManager.parseLegacy("&6\u2620 &7\u1D05\u1D07\u1D00\u1D1B\u029C\uA731&8: &6$playerDeaths"))
         lines.add(Component.empty())
-        lines.add(plugin.commsManager.parseLegacy("&6&lStats:"))
-        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D0D\u1D0F\u0274\u1D07\u028F&6: &a$$balance"))
-        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D04\u0280\u1D07\u1D05\u026A\u1D1B\uA731&6: &b$credits"))
-        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D0B\u026A\u029F\u029F\uA731&6: &c$playerKills"))
-        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D18\u029F\u1D00\u028F\u1D1B\u026A\u1D0D\u1D07&6: &e$playtime"))
-        lines.add(Component.empty())
-        lines.add(plugin.commsManager.parseLegacy("&7\u1D05\u026A\uA731\u1D04\u1D0F\u0280\u1D05.\u0262\u0262/\u1D0A\u1D0F\uA731\u029C\u028F\u1D0D\u1D04"))
-        lines.add(plugin.commsManager.parseLegacy("&6&m                         "))
+        lines.add(plugin.commsManager.parseLegacy("&7&l\u026A\u0274\uA730\u1D0F"))
+        lines.add(plugin.commsManager.parseLegacy("&7\u1D1B\u1D07\u1D00\u1D0D&8: &b$team"))
+        lines.add(plugin.commsManager.parseLegacy("&7\u1D18\u029F\u1D00\u028F\u1D1B\u026A\u1D0D\u1D07&8: &e$playtime"))
 
         // Team-prefix trick: each line is rendered as a team's prefix (Component)
         // attached to a unique invisible "entry" string. Top line gets the highest score.
@@ -239,12 +222,6 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val a = hex[(index / 16) and 0xF]
         val b = hex[index and 0xF]
         return "\u00A7$a\u00A7$b"
-    }
-
-    private fun formatPlaytime(seconds: Long): String {
-        val days = seconds / 86400
-        val hours = (seconds % 86400) / 3600
-        return "${days}d ${hours}h"
     }
 
     // ── Tab List ────────────────────────────────────────────────────
