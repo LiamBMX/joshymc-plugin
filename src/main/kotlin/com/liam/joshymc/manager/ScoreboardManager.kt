@@ -12,6 +12,7 @@ import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.scoreboard.DisplaySlot
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -186,9 +187,11 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val playerDeaths = deaths.getOrDefault(player.uniqueId, 0)
         val playtime = plugin.playtimeManager.formatPlaytime(plugin.playtimeManager.getPlaytime(player.uniqueId))
         val ping = player.ping
+        val dateTime = java.time.ZonedDateTime.now(plugin.timezoneManager.zoneFor(player)).format(DATE_TIME_FMT)
 
         val lines = mutableListOf<Component>()
         lines.add(plugin.commsManager.parseLegacy("&b${player.name} &7[&f$ping&7]"))
+        lines.add(plugin.commsManager.parseLegacy("&f$dateTime"))
         lines.add(Component.empty())
         lines.add(
             plugin.commsManager.parseLegacy("&d\u2605 &f\u0280\u1D00\u0274\u1D0B&8: ")
@@ -331,5 +334,10 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         for (uuid in (kills.keys + deaths.keys)) {
             saveStats(uuid)
         }
+    }
+
+    companion object {
+        /** e.g. "09/06/26 12:36 PM" — compact so the sidebar stays narrow. */
+        private val DATE_TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MM/dd/yy hh:mm a")
     }
 }
