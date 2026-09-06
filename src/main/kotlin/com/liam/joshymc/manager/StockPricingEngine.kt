@@ -36,11 +36,13 @@ object StockPricingEngine {
 
     /**
      * Absolute floor for any stock's price, everywhere in the system (buy, sell, save, load,
-     * display, admin actions). A stock hitting this price represents it being fully depleted —
-     * it must never reach $0 or negative, which would let players buy shares for free and
-     * dupe money on a later price recovery.
+     * display, admin actions). Deliberately a tiny positive epsilon rather than a large hard
+     * floor — stocks are allowed to crash to near-worthless prices; this only guarantees a
+     * price can never reach exactly $0, go negative, or become NaN/Infinity. Exploit protection
+     * for bulk trades comes from the progressive/chunked repricing in [computeBuy]/[computeSell]
+     * (and the sub-chunking callers do around them), not from a high price floor.
      */
-    const val MINIMUM_PRICE = 10.0
+    const val MINIMUM_PRICE = 0.00001
 
     fun marketCap(price: Double, sharesOutstanding: Double): Double = price * sharesOutstanding
 
