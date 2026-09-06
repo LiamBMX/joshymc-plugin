@@ -302,6 +302,7 @@ class StockMarketManager(private val plugin: Joshymc) {
         loadConfig()
         migrateOldBankInvestments()
         migrateServerStockPriceLevels()
+        migrateStockPriceFloor()
         ensureJoshyMcStock()
 
         plugin.logger.info("[StockMarket] StockMarketManager started (${getAllStocks().size} stocks).")
@@ -311,11 +312,11 @@ class StockMarketManager(private val plugin: Joshymc) {
         val cfg = plugin.config
         minimumBuy = cfg.getDouble("stock-market.minimum-buy", 1000.0)
         stockCreationCost = cfg.getDouble("stock-market.stock-creation-cost", 1_000_000.0)
-        defaultStockPrice = cfg.getDouble("stock-market.default-stock-price", 10.0)
+        defaultStockPrice = cfg.getDouble("stock-market.default-stock-price", 10.0).coerceAtLeast(StockPricingEngine.MINIMUM_PRICE)
         initialShares = cfg.getDouble("stock-market.initial-shares", 100_000.0)
         maxSingleTradeImpact = cfg.getDouble("stock-market.maximum-single-trade-price-impact", 0.10)
         minLiquidityFloor = cfg.getDouble("stock-market.minimum-liquidity-floor", 1000.0)
-        serverStockBasePrice = cfg.getDouble("stock-market.server-stock-base-price", 10.0).coerceAtLeast(0.01)
+        serverStockBasePrice = cfg.getDouble("stock-market.server-stock-base-price", 10.0).coerceAtLeast(StockPricingEngine.MINIMUM_PRICE)
         serverStockSharesPerLevel = cfg.getDouble("stock-market.server-stock-shares-per-level", 1_000_000.0).coerceAtLeast(1.0)
         serverStockPriceIncreasePerLevel = cfg.getDouble("stock-market.server-stock-price-increase-per-level", 1.0).coerceAtLeast(0.0)
         activityPeriodHours = cfg.getInt("stock-market.market-activity-period-hours", 24)
@@ -403,6 +404,22 @@ class StockMarketManager(private val plugin: Joshymc) {
     }
 
     /**
+     * One-time (each start, but idempotent) correction for any stock saved with a price below
+     * the [StockPricingEngine.MINIMUM_PRICE] floor — e.g. from a server that ran an older
+     * build before the floor existed. See the class doc's money-dupe note: a stock must never
+     * be loaded/displayed/traded below this price.
+     */
+    private fun migrateStockPriceFloor() {
+        val updated = plugin.databaseManager.executeUpdate(
+            "UPDATE stocks SET price = ? WHERE price < ?",
+            StockPricingEngine.MINIMUM_PRICE, StockPricingEngine.MINIMUM_PRICE
+        )
+        if (updated > 0) {
+            plugin.logger.info("[StockMarket] Corrected $updated stock(s) that were saved below the \$${StockPricingEngine.MINIMUM_PRICE} price floor.")
+        }
+    }
+
+    /**
      * Creates the permanent JoshyMC server stock once, on first-ever start. A restart must
      * NOT reseed it — we only insert if the JOSH ticker doesn't already exist.
      */
@@ -432,7 +449,7 @@ class StockMarketManager(private val plugin: Joshymc) {
             nameLower = rs.getString("name_lower"),
             creatorUuid = rs.getString("creator_uuid"),
             icon = icon,
-            price = rs.getDouble("price"),
+            price = rs.getDouble("price").coerceAtLeast(StockPricingEngine.MINIMUM_PRICE),
             sharesOutstanding = rs.getDouble("shares_outstanding"),
             isServerOwned = rs.getInt("is_server_owned") != 0,
             createdAt = rs.getLong("created_at"),
