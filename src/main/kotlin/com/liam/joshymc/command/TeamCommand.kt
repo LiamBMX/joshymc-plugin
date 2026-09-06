@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gui.team.TeamTopGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.TeamManager
 import net.kyori.adventure.text.Component
@@ -54,6 +55,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "disband" -> handleDisband(sender)
             "info" -> handleInfo(sender, args)
             "list" -> handleList(sender)
+            "top" -> TeamTopGui.open(plugin, sender)
             "chat" -> handleChat(sender, args)
             "deposit" -> handleDeposit(sender, args)
             "withdraw" -> handleWithdraw(sender, args)
@@ -85,6 +87,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "/team disband" to "Disband your team",
             "/team info [team]" to "View team info",
             "/team list" to "List all teams",
+            "/team top" to "Open the team leaderboard GUI",
             "/team chat <on/off>" to "Toggle always-on team chat",
             "/team deposit <amount>" to "Deposit to team bank",
             "/team withdraw <amount>" to "Withdraw from team bank",
@@ -979,7 +982,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         if (args.size == 1) {
-            val base = listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home", "rename", "pvp", "open", "close", "join")
+            val base = listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "top", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home", "rename", "pvp", "open", "close", "join")
             val all = if (isAdmin) base + "delete" else base
             return all.filter { it.startsWith(args[0], ignoreCase = true) }
         }

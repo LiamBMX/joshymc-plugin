@@ -31,6 +31,17 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     data class TeamInfo(val name: String, val displayName: String, val ownerUuid: String, val createdAt: Long)
     data class TeamMember(val uuid: String, val teamName: String, val role: String, val joinedAt: Long)
     data class BountyInfo(val id: Int, val targetUuid: String, val targetName: String, val placedByUuid: String, val placedByName: String, val amount: Double, val placedAt: Long)
+    data class TeamRanking(
+        val name: String,
+        val displayName: String,
+        val ownerUuid: String,
+        val memberCount: Int,
+        val balance: Double,
+        val kills: Long,
+        val isOpen: Boolean
+    )
+
+    enum class TeamSort { KILLS, BALANCE }
 
     private val openEchests = mutableMapOf<UUID, String>() // player UUID -> team name
     private val teamChatEnabled = mutableSetOf<UUID>()
@@ -115,6 +126,10 @@ class TeamManager(private val plugin: Joshymc) : Listener {
 
         try {
             plugin.databaseManager.execute("ALTER TABLE teams ADD COLUMN is_open INTEGER NOT NULL DEFAULT 0")
+        } catch (_: Exception) {}
+
+        try {
+            plugin.databaseManager.execute("ALTER TABLE teams ADD COLUMN total_kills INTEGER NOT NULL DEFAULT 0")
         } catch (_: Exception) {}
 
         plugin.logger.info("[Teams] TeamManager started.")
@@ -417,6 +432,57 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             "INSERT OR REPLACE INTO team_balances (team_name, balance) VALUES (?, ?)",
             teamName, amount
         )
+    }
+
+    // ── Team kills / leaderboard methods ──
+
+    /**
+     * Historical kill counter on the team itself (not derived from current
+     * members' personal stats), so it survives members leaving/joining.
+     */
+    fun addTeamKill(teamName: String) {
+        plugin.databaseManager.execute(
+            "UPDATE teams SET total_kills = total_kills + 1 WHERE name = ?", teamName
+        )
+    }
+
+    fun getTeamKills(teamName: String): Long {
+        return plugin.databaseManager.queryFirst(
+            "SELECT total_kills FROM teams WHERE name = ?", teamName
+        ) { rs -> rs.getLong("total_kills") } ?: 0L
+    }
+
+    /** One query for every team's rank stats, sorted for the requested category. */
+    fun getTeamRankings(sort: TeamSort): List<TeamRanking> {
+        val rows = plugin.databaseManager.query(
+            """
+            SELECT t.name, t.display_name, t.owner_uuid, t.is_open, t.total_kills AS kills,
+                   COALESCE(tb.balance, 0) AS balance,
+                   (SELECT COUNT(*) FROM team_members WHERE team_name = t.name) AS member_count
+            FROM teams t
+            LEFT JOIN team_balances tb ON tb.team_name = t.name
+            """.trimIndent()
+        ) { rs ->
+            TeamRanking(
+                name = rs.getString("name"),
+                displayName = rs.getString("display_name"),
+                ownerUuid = rs.getString("owner_uuid"),
+                memberCount = rs.getInt("member_count"),
+                balance = rs.getDouble("balance"),
+                kills = rs.getLong("kills"),
+                isOpen = rs.getInt("is_open") == 1
+            )
+        }
+
+        val comparator = when (sort) {
+            TeamSort.KILLS -> compareByDescending<TeamRanking> { it.kills }
+                .thenByDescending { it.balance }
+                .thenBy { it.displayName.lowercase() }
+            TeamSort.BALANCE -> compareByDescending<TeamRanking> { it.balance }
+                .thenByDescending { it.kills }
+                .thenBy { it.displayName.lowercase() }
+        }
+        return rows.sortedWith(comparator)
     }
 
     // ── Team echest methods ──
