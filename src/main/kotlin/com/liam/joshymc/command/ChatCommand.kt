@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -18,15 +19,16 @@ class ChatCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
-        val muted = when (args.getOrNull(0)?.lowercase()) {
-            "mute" -> true
-            "unmute" -> false
-            else -> {
-                sendMessage(sender, Component.text("Usage: /chat <mute|unmute>", NamedTextColor.RED))
-                return true
-            }
+        when (args.getOrNull(0)?.lowercase()) {
+            "mute" -> setMuted(sender, true)
+            "unmute" -> setMuted(sender, false)
+            "clear" -> clearChat(sender)
+            else -> sendMessage(sender, Component.text("Usage: /chat <mute|unmute|clear>", NamedTextColor.RED))
         }
+        return true
+    }
 
+    private fun setMuted(sender: CommandSender, muted: Boolean) {
         plugin.chatManager.setMuted(muted)
 
         val status = if (muted) Component.text("muted", NamedTextColor.RED) else Component.text("unmuted", NamedTextColor.GREEN)
@@ -34,7 +36,23 @@ class ChatCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             Component.text("Chat has been ", NamedTextColor.GRAY).append(status).append(Component.text(".", NamedTextColor.GRAY)),
             CommunicationsManager.Category.ADMIN
         )
-        return true
+    }
+
+    private fun clearChat(sender: CommandSender) {
+        val blankLine = Component.text(" ")
+        repeat(CLEAR_LINE_COUNT) {
+            Bukkit.getOnlinePlayers().forEach { it.sendMessage(blankLine) }
+        }
+
+        val staffName = if (sender is Player) sender.name else "Console"
+        val template = plugin.config.getString("chat.clear-message", DEFAULT_CLEAR_MESSAGE) ?: DEFAULT_CLEAR_MESSAGE
+        val message = plugin.commsManager.parseLegacy(template.replace("{player}", staffName))
+        plugin.commsManager.broadcast(message, CommunicationsManager.Category.ADMIN)
+    }
+
+    companion object {
+        private const val CLEAR_LINE_COUNT = 100
+        private const val DEFAULT_CLEAR_MESSAGE = "&7Chat has been cleared by &f{player}&7."
     }
 
     private fun sendMessage(sender: CommandSender, message: Component) {
@@ -44,7 +62,7 @@ class ChatCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) {
-            return listOf("mute", "unmute").filter { it.startsWith(args[0], ignoreCase = true) }
+            return listOf("mute", "unmute", "clear").filter { it.startsWith(args[0], ignoreCase = true) }
         }
         return emptyList()
     }
