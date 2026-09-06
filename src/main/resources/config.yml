@@ -64,6 +64,9 @@ chat:
   # Format for player messages. Placeholders: {prefix}, {suffix}, {tag}, {player}, {message}
   format: "{prefix}{tag}{player}{suffix} &8» &f{message}"
 
+  # Message sent after /chat clear. Placeholders: {player}
+  clear-message: "&7Chat has been cleared by &f{player}&7."
+
 discord:
   # Bot token from https://discord.com/developers/applications
   token: "YOUR_BOT_TOKEN_HERE"

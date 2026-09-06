@@ -32,8 +32,8 @@ commands:
     description: Open or close the End dimension (ops only)
     usage: /end <open|close>
   chat:
-    description: Mute or unmute global chat (ops only)
-    usage: /chat <mute|unmute>
+    description: Mute, unmute, or clear global chat (ops only)
+    usage: /chat <mute|unmute|clear>
   spawn:
     description: Teleport to spawn, or manage spawn settings (ops)
     usage: /spawn [drops|containers] [on|off]
