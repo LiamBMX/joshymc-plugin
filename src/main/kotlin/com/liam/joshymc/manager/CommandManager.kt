@@ -60,7 +60,6 @@ import com.liam.joshymc.command.SkillsCommand
 import com.liam.joshymc.command.MarketCommand
 import com.liam.joshymc.command.DailyCommand
 import com.liam.joshymc.command.DiscordCommand
-import com.liam.joshymc.command.QuestCommand
 import com.liam.joshymc.command.QuestCycleCommand
 import com.liam.joshymc.command.RewardsCommand
 import com.liam.joshymc.command.TagCommand
@@ -120,7 +119,6 @@ import com.liam.joshymc.command.SpawnerCommand
 import com.liam.joshymc.command.TeamCommand
 import com.liam.joshymc.command.BalTopCommand
 import com.liam.joshymc.command.KillTopCommand
-import com.liam.joshymc.command.QuestTopCommand
 import com.liam.joshymc.command.BalanceCommand
 import com.liam.joshymc.command.EcoCommand
 import com.liam.joshymc.command.PayCommand
@@ -323,7 +321,6 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("baltop")?.setExecutor(BalTopCommand(plugin))
         plugin.getCommand("killtop")?.setExecutor(KillTopCommand(plugin))
-        plugin.getCommand("questtop")?.setExecutor(QuestTopCommand(plugin))
 
         plugin.getCommand("chestshop")?.let {
             val cmd = SignShopCommand(plugin)
@@ -392,10 +389,9 @@ class CommandManager(private val plugin: Joshymc) {
         }
 
         // ── Quests ──────────────────────────────────
-        // /quests: unified Daily/Weekly/Quest Master GUI. /questbook: the older permanent
-        // achievement-style quest journal (renamed off /quests to make room).
+        // /quests: unified Daily/Weekly/Quest Master GUI. /quest, /questboard, /questbook are
+        // plain plugin.yml aliases (see aliases: list) that route into this same executor.
         plugin.getCommand("quests")?.let { val c = QuestCycleCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("questbook")?.let { val c = QuestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("rewards")?.setExecutor(RewardsCommand(plugin))
         plugin.getCommand("daily")?.setExecutor(DailyCommand(plugin))
 
