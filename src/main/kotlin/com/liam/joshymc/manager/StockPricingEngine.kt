@@ -34,6 +34,14 @@ object StockPricingEngine {
     /** Tiny floor to keep sharesOutstanding/holder shares from hitting exactly zero or negative. */
     const val EPSILON = 1e-6
 
+    /**
+     * Absolute floor for any stock's price, everywhere in the system (buy, sell, save, load,
+     * display, admin actions). A stock hitting this price represents it being fully depleted —
+     * it must never reach $0 or negative, which would let players buy shares for free and
+     * dupe money on a later price recovery.
+     */
+    const val MINIMUM_PRICE = 10.0
+
     fun marketCap(price: Double, sharesOutstanding: Double): Double = price * sharesOutstanding
 
     fun liquidity(marketCap: Double, minLiquidityFloor: Double): Double = max(marketCap, minLiquidityFloor)
@@ -80,9 +88,9 @@ object StockPricingEngine {
         val liquidity = liquidity(marketCap, minLiquidityFloor)
         val impact = impactFraction(dollarAmount, liquidity, maxSingleTradeImpact)
 
-        val avgExecutionPrice = price * (1.0 + impact / 2.0)
+        val avgExecutionPrice = (price * (1.0 + impact / 2.0)).coerceAtLeast(MINIMUM_PRICE)
         val sharesMinted = if (avgExecutionPrice > 0.0) dollarAmount / avgExecutionPrice else 0.0
-        val newPrice = (price * (1.0 + impact)).coerceAtLeast(EPSILON)
+        val newPrice = (price * (1.0 + impact)).coerceAtLeast(MINIMUM_PRICE)
         val newSharesOutstanding = sharesOutstanding + sharesMinted
 
         return BuyResult(
@@ -114,12 +122,12 @@ object StockPricingEngine {
         val liquidity = liquidity(marketCap, minLiquidityFloor)
         val impact = impactFraction(dollarAmount, liquidity, maxSingleTradeImpact)
 
-        val avgExecutionPrice = price * (1.0 - impact / 2.0)
+        val avgExecutionPrice = (price * (1.0 - impact / 2.0)).coerceAtLeast(MINIMUM_PRICE)
         var sharesRemoved = if (avgExecutionPrice > 0.0) dollarAmount / avgExecutionPrice else 0.0
         // Floating point safety: never remove more than the holder actually owns.
         sharesRemoved = sharesRemoved.coerceAtMost(holderShares).coerceAtLeast(0.0)
 
-        val newPrice = (price * (1.0 - impact)).coerceAtLeast(EPSILON)
+        val newPrice = (price * (1.0 - impact)).coerceAtLeast(MINIMUM_PRICE)
         val newSharesOutstanding = max(sharesOutstanding - sharesRemoved, EPSILON)
 
         val proportion = if (holderShares > 0.0) (sharesRemoved / holderShares).coerceIn(0.0, 1.0) else 0.0

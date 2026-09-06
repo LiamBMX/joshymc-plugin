@@ -34,7 +34,8 @@ import kotlin.math.max
  */
 object PriceLevelPricingEngine {
 
-    private const val MIN_SANE_PRICE = 0.01
+    /** Absolute floor for the base (level-0) price — see [StockPricingEngine.MINIMUM_PRICE]. */
+    private const val MIN_SANE_PRICE = StockPricingEngine.MINIMUM_PRICE
     private const val EPSILON_SHARES = 1e-6
     private const val EPSILON_DOLLARS = 1e-6
     private const val EPSILON_LEVEL = 1e-9
