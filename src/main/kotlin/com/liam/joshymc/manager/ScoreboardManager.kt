@@ -188,7 +188,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val ping = player.ping
 
         val lines = mutableListOf<Component>()
-        lines.add(plugin.commsManager.parseLegacy("&b${player.name} &7\u1D18\u026A\u0274\u0262&8: &f$ping"))
+        lines.add(plugin.commsManager.parseLegacy("&b${player.name} &7[&f$ping&7]"))
         lines.add(Component.empty())
         lines.add(
             plugin.commsManager.parseLegacy("&d\u2605 &f\u0280\u1D00\u0274\u1D0B&8: ")
