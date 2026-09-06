@@ -150,10 +150,6 @@ commands:
     description: View top killers
     usage: /killtop
     aliases: [killerboard]
-  questtop:
-    description: View top questers
-    usage: /questtop
-    aliases: [questboard]
   chestshop:
     description: Chest shop (sign-based) help and management
     usage: /chestshop [help|example|info|remove]
@@ -183,10 +179,7 @@ commands:
   quests:
     description: Open the Daily / Weekly / Quest Master quest hub
     usage: /quests
-    aliases: [quest, q]
-  questbook:
-    description: Browse and track the permanent achievement quest journal
-    usage: /questbook [list|progress|info|reset <player> [quest_id|all]]
+    aliases: [quest, q, questboard, questbook]
   daily:
     description: Open the Daily / Weekly / Quest Master quest hub (alias for /quests)
     usage: /daily
@@ -739,9 +732,6 @@ permissions:
   joshymc.loginstreak.admin:
     description: Set, reset, or complete a player's Login Streak
     default: op
-  joshymc.questtop:
-    description: View quest leaderboard
-    default: true
   joshymc.shop:
     description: Access the server shop
     default: true
@@ -761,16 +751,11 @@ permissions:
     description: Use the stock market
     default: true
   joshymc.quests:
-    description: Use the Daily/Weekly/Quest Master quest system
+    description: Use the Daily/Weekly/Quest Master quest system (also /quest, /questboard, /questbook)
     default: true
   joshymc.quests.admin:
     description: Force resets, view rotations, and edit quest progress (also available from console)
     default: op
-  joshymc.questbook:
-    description: Browse the permanent achievement quest journal
-    default: true
-  joshymc.questbook.admin:
-    description: Reset player achievement quest progress (also available from console)
   joshymc.daily:
     description: Use the daily quest system
     default: true
