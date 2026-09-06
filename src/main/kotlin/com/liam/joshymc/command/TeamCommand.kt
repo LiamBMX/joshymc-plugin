@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gui.team.TeamListGui
 import com.liam.joshymc.gui.team.TeamTopGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.TeamManager
@@ -54,7 +55,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "transfer" -> handleTransfer(sender, args)
             "disband" -> handleDisband(sender)
             "info" -> handleInfo(sender, args)
-            "list" -> handleList(sender)
+            "list" -> TeamListGui.open(plugin, sender)
             "top" -> TeamTopGui.open(plugin, sender)
             "chat" -> handleChat(sender, args)
             "deposit" -> handleDeposit(sender, args)
@@ -86,7 +87,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "/team transfer <player>" to "Transfer ownership",
             "/team disband" to "Disband your team",
             "/team info [team]" to "View team info",
-            "/team list" to "List all teams",
+            "/team list" to "Browse all teams in a GUI",
             "/team top" to "Open the team leaderboard GUI",
             "/team chat <on/off>" to "Toggle always-on team chat",
             "/team deposit <amount>" to "Deposit to team bank",
@@ -559,24 +560,6 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             .append(if (isOpen) Component.text("Open", NamedTextColor.GREEN) else Component.text("Invite Only", NamedTextColor.YELLOW)))
         player.sendMessage(Component.text(" Created: ", NamedTextColor.GRAY)
             .append(Component.text(dateFormat.format(Date(team.createdAt)), NamedTextColor.WHITE)))
-    }
-
-    private fun handleList(player: Player) {
-        val teams = plugin.teamManager.getAllTeams()
-        if (teams.isEmpty()) {
-            plugin.commsManager.send(player, Component.text("No teams exist yet.", NamedTextColor.GRAY), CommunicationsManager.Category.DEFAULT)
-            return
-        }
-
-        player.sendMessage(Component.text("--- Teams ---", NamedTextColor.GREEN))
-        teams.forEach { team ->
-            val memberCount = plugin.teamManager.getTeamMembers(team.name).size
-            player.sendMessage(
-                Component.text(" ${team.displayName} ", NamedTextColor.WHITE)
-                    .append(Component.text("(${team.name})", NamedTextColor.DARK_GRAY))
-                    .append(Component.text(" - $memberCount members", NamedTextColor.GRAY))
-            )
-        }
     }
 
     private fun handleChat(player: Player, args: Array<out String>) {

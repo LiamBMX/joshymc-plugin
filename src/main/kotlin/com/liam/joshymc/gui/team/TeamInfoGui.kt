@@ -2,6 +2,7 @@ package com.liam.joshymc.gui.team
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.TeamManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -16,17 +17,25 @@ import java.util.UUID
 
 /**
  * Single "Team Information" GUI — the one place team details are rendered.
- * Opened by clicking an entry in [TeamTopGui] (per issue #477: reuse one
- * team-details implementation instead of building a second one).
+ * Opened by clicking an entry in [TeamTopGui] or [TeamListGui] (per issue
+ * #477: reuse one team-details implementation instead of building a second
+ * one). [backLabel]/[onBack] let each caller send the player back to wherever
+ * they came from.
  */
 object TeamInfoGui {
 
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy")
 
-    fun open(plugin: Joshymc, player: Player, teamName: String) {
+    fun open(
+        plugin: Joshymc,
+        player: Player,
+        teamName: String,
+        backLabel: Component = Component.text("Back to Leaderboard", NamedTextColor.YELLOW),
+        onBack: (Joshymc, Player) -> Unit = { p, viewer -> TeamTopGui.open(p, viewer) }
+    ) {
         val team = plugin.teamManager.getTeam(teamName)
         if (team == null) {
-            plugin.commsManager.send(player, Component.text("That team no longer exists.", NamedTextColor.RED), com.liam.joshymc.manager.CommunicationsManager.Category.DEFAULT)
+            plugin.commsManager.send(player, Component.text("That team no longer exists.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
 
@@ -73,10 +82,95 @@ object TeamInfoGui {
             gui.setItem(slot, head)
         }
 
-        gui.setItem(40, TeamGuiUtil.item(Material.ARROW, Component.text("Back to Leaderboard", NamedTextColor.YELLOW))) { p, _ ->
-            TeamTopGui.open(plugin, p)
+        gui.setItem(40, TeamGuiUtil.item(Material.ARROW, backLabel)) { p, _ ->
+            onBack(plugin, p)
+        }
+
+        gui.setItem(42, buildJoinItem(plugin, player, teamName, isOpen)) { p, _ ->
+            handleJoinClick(plugin, p, teamName, backLabel, onBack)
         }
 
         plugin.guiManager.open(player, gui)
+    }
+
+    private fun buildJoinItem(plugin: Joshymc, player: Player, teamName: String, isOpen: Boolean) =
+        when {
+            plugin.teamManager.getPlayerTeam(player.uniqueId) != null ->
+                TeamGuiUtil.item(
+                    Material.BARRIER,
+                    Component.text("You Are Already On A Team", NamedTextColor.RED),
+                    listOf(Component.empty(), Component.text("Leave your current team to join another.", NamedTextColor.GRAY))
+                )
+            isOpen ->
+                TeamGuiUtil.item(
+                    Material.LIME_DYE,
+                    Component.text("Join Team", NamedTextColor.GREEN),
+                    listOf(Component.empty(), Component.text("Click to join this team.", NamedTextColor.GRAY))
+                )
+            plugin.teamManager.getPendingInvites(player.uniqueId).contains(teamName) ->
+                TeamGuiUtil.item(
+                    Material.LIME_DYE,
+                    Component.text("Accept Invite", NamedTextColor.GREEN),
+                    listOf(Component.empty(), Component.text("Click to accept your invite to this team.", NamedTextColor.GRAY))
+                )
+            else ->
+                TeamGuiUtil.item(
+                    Material.BARRIER,
+                    Component.text("Invite Only", NamedTextColor.YELLOW),
+                    listOf(Component.empty(), Component.text("You need an invitation from this team to join.", NamedTextColor.GRAY))
+                )
+        }
+
+    /** Reuses the exact join/accept logic + restrictions from `/team join` and `/team accept`. */
+    private fun handleJoinClick(
+        plugin: Joshymc,
+        player: Player,
+        teamName: String,
+        backLabel: Component,
+        onBack: (Joshymc, Player) -> Unit
+    ) {
+        if (plugin.teamManager.getPlayerTeam(player.uniqueId) != null) return
+
+        val team = plugin.teamManager.getTeam(teamName)
+        if (team == null) {
+            plugin.commsManager.send(player, Component.text("That team no longer exists.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            player.closeInventory()
+            return
+        }
+
+        val joined = if (plugin.teamManager.isTeamOpen(teamName)) {
+            plugin.teamManager.joinOpenTeam(player.uniqueId, teamName)
+        } else if (plugin.teamManager.getPendingInvites(player.uniqueId).contains(teamName)) {
+            plugin.teamManager.acceptInvite(player.uniqueId, teamName)
+        } else {
+            false
+        }
+
+        if (!joined) {
+            plugin.commsManager.send(player, Component.text("Could not join that team. It may be full or no longer available.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            // Refresh so the player sees the up-to-date state (e.g. now full).
+            open(plugin, player, teamName, backLabel, onBack)
+            return
+        }
+
+        plugin.commsManager.send(
+            player,
+            Component.text("You joined team ", NamedTextColor.GRAY)
+                .append(Component.text(team.displayName, NamedTextColor.GREEN)),
+            CommunicationsManager.Category.DEFAULT
+        )
+        player.closeInventory()
+
+        plugin.teamManager.getTeamMembers(teamName).forEach { member ->
+            val online = Bukkit.getPlayer(UUID.fromString(member.uuid))
+            if (online != null && online != player) {
+                plugin.commsManager.send(
+                    online,
+                    Component.text(player.name, NamedTextColor.GREEN)
+                        .append(Component.text(" joined the team.", NamedTextColor.GRAY)),
+                    CommunicationsManager.Category.DEFAULT
+                )
+            }
+        }
     }
 }
