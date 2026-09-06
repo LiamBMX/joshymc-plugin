@@ -363,7 +363,7 @@ orders:
     vip: 15
     admin: 50
 
-# Stock Market — /invest, a player-driven stock market (bonding-curve pricing, no order book)
+# Stock Market — /invest, a player-driven stock market (progressive percentage-based pricing)
 stock-market:
   # Minimum dollar amount for a single purchase.
   minimum-buy: 1000.0
@@ -374,25 +374,31 @@ stock-market:
   default-stock-price: 10.0
   # Shares outstanding a newly created stock starts with (creator owns all of them).
   initial-shares: 100000.0
-  # Maximum price movement (as a fraction) a single trade can ever cause on PLAYER-created
-  # stocks. The bonding curve uses tanh() so this is a hard ceiling, not a typical trade's
-  # actual impact. Does not apply to server-owned stocks — see server-stock-* below.
-  maximum-single-trade-price-impact: 0.10
-  # Floor used in the liquidity/impact calculation so a freshly-crashed PLAYER stock
-  # (near-zero market cap) can't divide-by-zero or produce an absurd price swing.
-  minimum-liquidity-floor: 1000.0
-  # ── Server-owned stocks (e.g. JOSH) — price-level pricing ─────────────────────
+  # ── Pricing model — ALL stocks (player-created and server-owned alike) share this one model ──
   # There is NO server-funded buy/sell contribution or adjustment of any kind; buying and
-  # selling always use the plain calculated transaction value. A fixed number of shares
-  # (server-stock-shares-per-level) is available at each price level; once a level's shares
-  # are fully bought the price steps up by server-stock-price-increase-per-level. Selling
-  # reverses through the exact same levels, cheapest-last, so an immediate buy-then-sell of
-  # the same shares is reversible (no free-money round trip) and a large lump-sum trade
-  # crosses however many levels it can afford instead of pricing the whole order at the
-  # starting level.
+  # selling always use the plain calculated transaction value. shares-per-price-step shares
+  # trade at the current price before it takes its next pricing step:
+  #  - below percentage-pricing-threshold: price moves by the flat low-price-tick amount.
+  #  - at/above percentage-pricing-threshold: price moves by price-step-percent (e.g. 1.0 = 1%).
+  # A trade smaller than the remaining capacity at the current price doesn't move it at all; a
+  # large trade walks the ladder progressively, so it gets more expensive as it fills instead of
+  # pricing the whole order at the starting price. Selling steps the price back down through the
+  # exact mathematical inverse, so an immediate buy-then-sell of the same shares is reversible
+  # (no free-money round trip). The ladder position is shared/global per stock (not per-holder),
+  # so splitting one large order into many small ones can't dodge price impact either.
+  # Absolute floor for any stock's price. Never $0, never negative, never NaN/Infinity.
+  minimum-stock-price: 0.001
+  # Flat per-step price movement while a stock is below percentage-pricing-threshold.
+  low-price-tick: 0.01
+  # Price at/above which pricing steps switch from the flat tick to a percentage move.
+  percentage-pricing-threshold: 1.00
+  # Per-step price movement, as a percentage (1.0 = 1%), once at/above the threshold.
+  price-step-percent: 1.0
+  # Shares tradable at the current price before it takes its next pricing step. Lower = price
+  # moves more readily (more volatile); higher = a stock can absorb more volume before moving.
+  shares-per-price-step: 10000.0
+  # Starting price/share for the permanent JoshyMC (JOSH) server stock.
   server-stock-base-price: 10.0
-  server-stock-shares-per-level: 1000000.0
-  server-stock-price-increase-per-level: 1.0
   # Trading window (hours) used for 24h open/high/low/volume/activity/trend stats.
   market-activity-period-hours: 24
   # Buy/sell dollar amount at or above which a confirmation GUI is shown before executing.
@@ -405,12 +411,6 @@ stock-market:
   # Stocks (matched by ticker or name, case-insensitive) that /invest admin reset/delete may
   # never target. The JOSH server stock is always protected regardless of this list.
   protected-stocks: []
-  # PLAYER-created stocks only: a single buy/sell is split into this many equal sub-chunks,
-  # repricing after each one, so a large lump-sum trade approximates many small consecutive
-  # trades instead of executing entirely at the starting price. Higher = more accurate but
-  # more computation per trade. Server-owned stocks (JOSH) don't use this — see
-  # server-stock-* above, which price every level crossed exactly, in one pass.
-  bulk-purchase-steps: 1000
   # Pool of non-placeable materials randomly (and permanently) assigned as a stock's icon.
   icon-materials:
     - DIAMOND

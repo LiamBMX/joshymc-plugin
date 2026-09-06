@@ -1,33 +1,38 @@
 package com.liam.joshymc.manager
 
 import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.tanh
 
 /**
- * Pure, stateless math for the player-driven stock market bonding curve.
+ * Pure, stateless math for the unified progressive percentage-based stock pricing model, used
+ * by every stock — player-created and server-owned (JOSH) alike. There is a single source of
+ * truth for how a stock's price moves; only the seed price and starting supply differ per stock.
  *
- * Deliberately free of any DB/Bukkit calls so the pricing model can be reasoned
- * about (and unit-tested) in isolation from persistence/game concerns.
+ * Price steps in one direction at a time:
+ * - Below `percentage-pricing-threshold` (default $1.00): each step moves by a flat
+ *   `low-price-tick` (default $0.01), clamped so it never overshoots the threshold.
+ * - At/above the threshold: each step moves by `price-step-percent` (default 1%) —
+ *   `nextPrice = price * (1 + priceStepPercent)`.
+ * - A stock sitting exactly at [MINIMUM_PRICE] (the absolute floor, default $0.001) jumps
+ *   straight to `low-price-tick` on its next buy step rather than crawling through
+ *   microscopic in-between values. [previousSellPrice] is the exact inverse of [nextBuyPrice]
+ *   (division instead of multiplication above the threshold, subtraction instead of addition
+ *   below it), so an immediate buy-then-sell retraces the same steps and nets ~$0.
  *
- * Model: this is a bonding curve (shares mint on buy / burn on sell), not an
- * order book — there's no counterparty, the "market" is the curve itself. A
- * trade of dollar value D against a stock with `price` and `sharesOutstanding`:
+ * A pricing step does NOT execute one individual share — `sharesPerPriceStep` shares are
+ * available at the current price before the price takes its next step. This is what makes
+ * a trade's price impact scale with its size: a trade smaller than the remaining capacity at
+ * the current price doesn't move the price at all, while a trade that exhausts many steps'
+ * worth of capacity walks the ladder progressively, exactly like an order book. `sharesUsedAtPrice`
+ * (persisted per-stock alongside `price`) is how much of the *current* step's capacity has
+ * already been consumed — carrying this across separate trades (not just within one trade) is
+ * what prevents splitting a large order into many small ones to dodge price impact.
  *
- *   marketCap = price * sharesOutstanding
- *   liquidity = max(marketCap, MIN_LIQUIDITY_FLOOR)
- *   impactFraction = maxSingleTradeImpact * tanh(D / liquidity)
- *
- * tanh saturates below 1 as D grows, so impactFraction is always strictly less
- * than maxSingleTradeImpact — this is what bounds "maximum single trade impact"
- * while still giving diminishing (not linear) returns for huge trades.
- *
- * Buys execute (and mint shares) at the *average* of the pre- and post-trade
- * price, not the final price; the same holds for sells. Because the execution
- * price is always strictly worse than the theoretical "spot" price in the
- * direction of the trade, an immediate buy-then-sell of the same dollar amount
- * always nets a loss to the trader (classic AMM slippage) — this is what
- * prevents the free-money buy/sell round-trip exploit called out in the issue.
+ * [computeBuy]/[computeSell] process one whole price step per loop iteration (never one share
+ * at a time), bounded by [MAX_PRICE_STEPS_PER_TRADE] as a defensive cap — not a realistic
+ * ceiling. Because dollar depth per step (`sharesPerPriceStep * price`) grows geometrically
+ * once in the percentage zone, even an astronomically large trade only crosses a small number
+ * of steps before its budget or share limit is exhausted, so this is cheap regardless of trade
+ * size (never a per-share loop over billions/trillions of shares).
  */
 object StockPricingEngine {
 
@@ -36,115 +41,190 @@ object StockPricingEngine {
 
     /**
      * Absolute floor for any stock's price, everywhere in the system (buy, sell, save, load,
-     * display, admin actions). Deliberately a tiny positive epsilon rather than a large hard
-     * floor — stocks are allowed to crash to near-worthless prices; this only guarantees a
-     * price can never reach exactly $0, go negative, or become NaN/Infinity. Exploit protection
-     * for bulk trades comes from the progressive/chunked repricing in [computeBuy]/[computeSell]
-     * (and the sub-chunking callers do around them), not from a high price floor.
+     * display, admin actions). A stock is allowed to crash all the way down to this price, but
+     * never to exactly $0, negative, NaN, or Infinity. Configurable via
+     * `stock-market.minimum-stock-price`; this is only the fallback default.
      */
-    const val MINIMUM_PRICE = 0.00001
+    const val MINIMUM_PRICE = 0.001
+
+    /** Defensive iteration cap for [computeBuy]/[computeSell] — see class doc; not a realistic ceiling. */
+    const val MAX_PRICE_STEPS_PER_TRADE = 5_000_000
+
+    private const val FLOOR_TOLERANCE = 1e-9
+    private const val THRESHOLD_TOLERANCE = 1e-9
+    private const val EPSILON_SHARES = 1e-6
+    private const val EPSILON_DOLLARS = 1e-6
 
     fun marketCap(price: Double, sharesOutstanding: Double): Double = price * sharesOutstanding
-
-    fun liquidity(marketCap: Double, minLiquidityFloor: Double): Double = max(marketCap, minLiquidityFloor)
-
-    /**
-     * Fraction of price movement this trade causes, strictly in (0, maxSingleTradeImpact)
-     * for any finite positive dollarAmount.
-     */
-    fun impactFraction(dollarAmount: Double, liquidity: Double, maxSingleTradeImpact: Double): Double {
-        if (liquidity <= 0.0) return 0.0
-        return maxSingleTradeImpact * tanh(dollarAmount / liquidity)
-    }
 
     data class BuyResult(
         val avgExecutionPrice: Double,
         val sharesMinted: Double,
         val newPrice: Double,
-        val newSharesOutstanding: Double,
-        val impactFraction: Double,
+        val newSharesUsedAtPrice: Double,
     )
 
     data class SellResult(
         val avgExecutionPrice: Double,
         val sharesRemoved: Double,
         val newPrice: Double,
-        val newSharesOutstanding: Double,
-        val realizedPL: Double,
-        val costBasisRemoved: Double,
-        val impactFraction: Double,
+        val newSharesUsedAtPrice: Double,
     )
 
     /**
-     * Compute a buy of dollar value [dollarAmount] against a stock currently at [price]
-     * with [sharesOutstanding] shares in circulation.
+     * The price one pricing step above [price] — see the class doc for the low-tick vs.
+     * percentage-step rule. Always finite, always >= [minimumPrice].
      */
-    fun computeBuy(
+    fun nextBuyPrice(
         price: Double,
-        sharesOutstanding: Double,
-        dollarAmount: Double,
-        maxSingleTradeImpact: Double,
-        minLiquidityFloor: Double,
-    ): BuyResult {
-        val marketCap = marketCap(price, sharesOutstanding)
-        val liquidity = liquidity(marketCap, minLiquidityFloor)
-        val impact = impactFraction(dollarAmount, liquidity, maxSingleTradeImpact)
-
-        val avgExecutionPrice = (price * (1.0 + impact / 2.0)).coerceAtLeast(MINIMUM_PRICE)
-        val sharesMinted = if (avgExecutionPrice > 0.0) dollarAmount / avgExecutionPrice else 0.0
-        val newPrice = (price * (1.0 + impact)).coerceAtLeast(MINIMUM_PRICE)
-        val newSharesOutstanding = sharesOutstanding + sharesMinted
-
-        return BuyResult(
-            avgExecutionPrice = avgExecutionPrice,
-            sharesMinted = sharesMinted,
-            newPrice = newPrice,
-            newSharesOutstanding = newSharesOutstanding,
-            impactFraction = impact,
-        )
+        minimumPrice: Double,
+        lowPriceTick: Double,
+        percentageThreshold: Double,
+        priceStepPercent: Double,
+    ): Double {
+        val p = price.coerceAtLeast(minimumPrice)
+        val next = when {
+            p <= minimumPrice + FLOOR_TOLERANCE -> lowPriceTick
+            p < percentageThreshold - THRESHOLD_TOLERANCE -> (p + lowPriceTick).coerceAtMost(percentageThreshold)
+            else -> p * (1.0 + priceStepPercent)
+        }
+        return if (isFiniteSafe(next)) next.coerceAtLeast(minimumPrice) else minimumPrice
     }
 
     /**
-     * Compute a sell of dollar value [dollarAmount] (already clamped by the caller to the
-     * holder's current market value) against a stock currently at [price].
-     *
-     * [holderShares] / [holderCostBasis] are the seller's PRE-trade position, used to compute
-     * weighted-average-cost-basis realized P/L for a partial (or full) sale.
+     * Exact inverse of [nextBuyPrice] — division instead of multiplication above the
+     * threshold, subtraction instead of addition below it. Always finite, always
+     * >= [minimumPrice] (a sell can never push a stock below the absolute floor).
+     */
+    fun previousSellPrice(
+        price: Double,
+        minimumPrice: Double,
+        lowPriceTick: Double,
+        percentageThreshold: Double,
+        priceStepPercent: Double,
+    ): Double {
+        val p = price.coerceAtLeast(minimumPrice)
+        val prev = if (p > percentageThreshold + THRESHOLD_TOLERANCE) {
+            p / (1.0 + priceStepPercent)
+        } else {
+            p - lowPriceTick
+        }
+        return if (isFiniteSafe(prev)) prev.coerceAtLeast(minimumPrice) else minimumPrice
+    }
+
+    /**
+     * Buy [dollarAmount] worth of shares against a stock currently at [price], with
+     * [sharesUsedAtPrice] of the current step's [sharesPerPriceStep] capacity already consumed.
+     * Fills the current price's remaining capacity first, then walks up one whole step at a
+     * time (never per-share) until the budget runs out or [MAX_PRICE_STEPS_PER_TRADE] is hit.
+     */
+    fun computeBuy(
+        price: Double,
+        sharesUsedAtPrice: Double,
+        dollarAmount: Double,
+        sharesPerPriceStep: Double,
+        minimumPrice: Double,
+        lowPriceTick: Double,
+        percentageThreshold: Double,
+        priceStepPercent: Double,
+    ): BuyResult {
+        val stepSize = sharesPerPriceStep.coerceAtLeast(EPSILON_SHARES)
+        var p = price.coerceAtLeast(minimumPrice)
+        var used = sharesUsedAtPrice.coerceIn(0.0, stepSize)
+        var remaining = dollarAmount.coerceAtLeast(0.0)
+        var sharesMinted = 0.0
+        var iterations = 0
+
+        while (remaining > EPSILON_DOLLARS && iterations < MAX_PRICE_STEPS_PER_TRADE) {
+            if (p <= 0.0) break
+            val capacity = (stepSize - used).coerceAtLeast(0.0)
+            if (capacity <= EPSILON_SHARES) {
+                // This step is already fully bought — free pass-through to the next one.
+                p = nextBuyPrice(p, minimumPrice, lowPriceTick, percentageThreshold, priceStepPercent)
+                used = 0.0
+                iterations++
+                continue
+            }
+
+            val costToFill = capacity * p
+            if (remaining < costToFill) {
+                val afford = (remaining / p).coerceIn(0.0, capacity)
+                used += afford
+                sharesMinted += afford
+                remaining -= afford * p
+                break
+            }
+
+            sharesMinted += capacity
+            remaining -= costToFill
+            p = nextBuyPrice(p, minimumPrice, lowPriceTick, percentageThreshold, priceStepPercent)
+            used = 0.0
+            iterations++
+        }
+
+        val actualSpent = (dollarAmount - remaining).coerceAtLeast(0.0)
+        val avgExecutionPrice = if (sharesMinted > EPSILON_SHARES) actualSpent / sharesMinted else p
+        return BuyResult(avgExecutionPrice, sharesMinted, p, used)
+    }
+
+    /**
+     * Sell [dollarAmount] worth of shares (already clamped by the caller to the holder's
+     * current market value) against a stock currently at [price] / [sharesUsedAtPrice]. Unwinds
+     * the current price's used capacity first, then walks down one whole step at a time until
+     * the target payout is reached, the seller's [holderShares] runs out, the market hits the
+     * absolute floor, or [MAX_PRICE_STEPS_PER_TRADE] is hit.
      */
     fun computeSell(
         price: Double,
-        sharesOutstanding: Double,
+        sharesUsedAtPrice: Double,
         dollarAmount: Double,
         holderShares: Double,
-        holderCostBasis: Double,
-        maxSingleTradeImpact: Double,
-        minLiquidityFloor: Double,
+        sharesPerPriceStep: Double,
+        minimumPrice: Double,
+        lowPriceTick: Double,
+        percentageThreshold: Double,
+        priceStepPercent: Double,
     ): SellResult {
-        val marketCap = marketCap(price, sharesOutstanding)
-        val liquidity = liquidity(marketCap, minLiquidityFloor)
-        val impact = impactFraction(dollarAmount, liquidity, maxSingleTradeImpact)
+        val stepSize = sharesPerPriceStep.coerceAtLeast(EPSILON_SHARES)
+        var p = price.coerceAtLeast(minimumPrice)
+        var used = sharesUsedAtPrice.coerceIn(0.0, stepSize)
+        var remaining = dollarAmount.coerceAtLeast(0.0)
+        var sharesRemoved = 0.0
+        var iterations = 0
+        val shareLimit = holderShares.coerceAtLeast(0.0)
 
-        val avgExecutionPrice = (price * (1.0 - impact / 2.0)).coerceAtLeast(MINIMUM_PRICE)
-        var sharesRemoved = if (avgExecutionPrice > 0.0) dollarAmount / avgExecutionPrice else 0.0
-        // Floating point safety: never remove more than the holder actually owns.
-        sharesRemoved = sharesRemoved.coerceAtMost(holderShares).coerceAtLeast(0.0)
+        // Bounding the loop itself by `shareLimit` (rather than clamping `sharesRemoved` after
+        // the fact) keeps the resulting market state consistent: if the seller runs out of
+        // shares mid-step, the step is only partially unwound, not unwound as if the full
+        // (unclamped) amount had actually left circulation.
+        while (remaining > EPSILON_DOLLARS && sharesRemoved < shareLimit - EPSILON_SHARES && iterations < MAX_PRICE_STEPS_PER_TRADE) {
+            if (used <= EPSILON_SHARES) {
+                if (p <= minimumPrice + FLOOR_TOLERANCE) break // already at the absolute floor
+                p = previousSellPrice(p, minimumPrice, lowPriceTick, percentageThreshold, priceStepPercent)
+                used = stepSize
+                iterations++
+                continue
+            }
+            if (p <= 0.0) break
 
-        val newPrice = (price * (1.0 - impact)).coerceAtLeast(MINIMUM_PRICE)
-        val newSharesOutstanding = max(sharesOutstanding - sharesRemoved, EPSILON)
+            val shareCapRemaining = (shareLimit - sharesRemoved).coerceAtLeast(0.0)
+            val affordableByBudget = remaining / p
+            val sharesHere = minOf(used, shareCapRemaining, affordableByBudget).coerceAtLeast(0.0)
 
-        val proportion = if (holderShares > 0.0) (sharesRemoved / holderShares).coerceIn(0.0, 1.0) else 0.0
-        val costBasisRemoved = holderCostBasis * proportion
-        val realizedPL = (sharesRemoved * avgExecutionPrice) - costBasisRemoved
+            sharesRemoved += sharesHere
+            remaining -= sharesHere * p
+            used -= sharesHere
+            iterations++
+            // Deliberately no eager drop here even if `used` just hit exactly 0 — the next
+            // iteration's top-of-loop check handles that lazily. Dropping eagerly would fire
+            // even when the loop is about to terminate (budget/share-limit exhausted exactly on
+            // a step boundary), overshooting one extra step past where the trade actually
+            // stopped and breaking exact buy-then-sell reversibility.
+        }
 
-        return SellResult(
-            avgExecutionPrice = avgExecutionPrice,
-            sharesRemoved = sharesRemoved,
-            newPrice = newPrice,
-            newSharesOutstanding = newSharesOutstanding,
-            realizedPL = realizedPL,
-            costBasisRemoved = costBasisRemoved,
-            impactFraction = impact,
-        )
+        val actualProceeds = (dollarAmount - remaining).coerceAtLeast(0.0)
+        val avgExecutionPrice = if (sharesRemoved > EPSILON_SHARES) actualProceeds / sharesRemoved else p
+        return SellResult(avgExecutionPrice, sharesRemoved, p, used)
     }
 
     enum class ActivityLevel(val displayName: String) {
