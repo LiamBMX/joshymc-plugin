@@ -317,7 +317,7 @@ commands:
   tphere:
     description: Teleport player to you
     usage: /tphere <player>
-    aliases: [tph, s2p]
+    aliases: [tph]
   invsee:
     description: View another player's inventory
     usage: /invsee <player>
