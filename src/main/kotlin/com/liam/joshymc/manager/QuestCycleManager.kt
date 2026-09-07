@@ -499,7 +499,13 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         trackedGuiPlayers.clear()
     }
 
-    private fun createTables() {
+    /**
+     * Creates the quest schema. Called unconditionally on plugin startup (independent of
+     * the "quests" feature toggle) so /quests never hits a missing-table error even when
+     * the feature is disabled or hasn't been [start]ed yet — and again from [start] so
+     * re-enabling the feature later (e.g. via reload) is a no-op against an existing schema.
+     */
+    fun createTables() {
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS quest_cycle_state (
                 cycle_type TEXT PRIMARY KEY,

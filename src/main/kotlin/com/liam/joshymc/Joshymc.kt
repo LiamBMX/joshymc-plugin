@@ -338,6 +338,7 @@ class Joshymc : JavaPlugin() {
         playtimeManager = PlaytimeManager(this)
         creditsManager = com.liam.joshymc.manager.CreditsManager(this)
         questCycleManager = QuestCycleManager(this)
+        questCycleManager.createTables()
         talismanManager = TalismanManager(this)
         fishingManager = FishingManager(this)
         trailManager = TrailManager(this)
