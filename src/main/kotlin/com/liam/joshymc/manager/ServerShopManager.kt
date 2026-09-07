@@ -41,6 +41,11 @@ class ServerShopManager(private val plugin: Joshymc) {
     // item carries both a "buy" and a "sell" price.
     private val categories = mutableListOf<ShopCategory>()
 
+    // sell-prices.yml holds the bulk-resource sell catalog browsed from the read-only
+    // /worth GUI. It feeds getSellPrice()/getBaseSellPrice() alongside shop.yml so /sell
+    // and /worth always agree on a price without a second, separate config.
+    private val sellCategories = mutableListOf<ShopCategory>()
+
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
         editMeta { it.displayName(Component.empty()) }
     }
@@ -53,11 +58,16 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     fun start() {
         categories.clear()
+        sellCategories.clear()
 
         mergeMissingCategoriesFromDefaults("shop.yml")
         loadCategoriesInto(categories, "shop.yml")
 
+        mergeMissingCategoriesFromDefaults("sell-prices.yml")
+        loadCategoriesInto(sellCategories, "sell-prices.yml")
+
         plugin.logger.info("Loaded ${categories.size} shop categories with ${categories.sumOf { it.items.size }} items")
+        plugin.logger.info("Loaded ${sellCategories.size} sell-price categories with ${sellCategories.sumOf { it.items.size }} items")
     }
 
     /**
@@ -177,7 +187,25 @@ class ServerShopManager(private val plugin: Joshymc) {
             val item = category.items.find { it.material == material && it.sellPrice > 0 }
             if (item != null) return item.sellPrice
         }
+        for (category in sellCategories) {
+            val item = category.items.find { it.material == material && it.sellPrice > 0 }
+            if (item != null) return item.sellPrice
+        }
         return null
+    }
+
+    /**
+     * All categories with at least one sellable item, from both shop.yml and
+     * sell-prices.yml — the exact set of items the read-only /worth GUI browses.
+     * A shop.yml category only appears here filtered down to its sellable items,
+     * so /worth never shows an item /sell would reject.
+     */
+    fun getSellableCategories(): List<ShopCategory> {
+        val shopSellable = categories.mapNotNull { category ->
+            val sellable = category.items.filter { it.sellPrice > 0 }
+            if (sellable.isEmpty()) null else category.copy(items = sellable)
+        }
+        return shopSellable + sellCategories.filter { it.items.isNotEmpty() }
     }
 
     /** Returns the sell price with the Flower Armor 1.2x crop bonus applied if applicable. */
@@ -349,6 +377,168 @@ class ServerShopManager(private val plugin: Joshymc) {
         }
 
         plugin.guiManager.open(player, gui)
+    }
+
+    // ── Worth GUI (read-only sell price guide) ──────────────────────────
+    //
+    // Browses getSellableCategories() purely for information. Item slots are never
+    // given a click handler, so GuiManager's "click on top inventory is always
+    // cancelled" rule makes every slot inert — there is no sell/buy logic to trigger.
+
+    fun openWorthMenu(player: Player) {
+        val worthCategories = getSellableCategories()
+
+        val title = Component.text("Worth Guide", NamedTextColor.GOLD)
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+
+        val gui = CustomGui(title, 54)
+        gui.fill(FILLER.clone())
+        for (i in 0..8) gui.inventory.setItem(i, BORDER.clone())
+        for (i in 45..53) gui.inventory.setItem(i, BORDER.clone())
+
+        val slots = mutableListOf<Int>()
+        for (row in 1..4) {
+            for (col in 1..7) {
+                slots.add(row * 9 + col)
+            }
+        }
+
+        for ((index, category) in worthCategories.withIndex()) {
+            if (index >= slots.size) break
+            val slot = slots[index]
+            val icon = ItemStack(category.icon).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text(category.name, NamedTextColor.GOLD)
+                            .decoration(TextDecoration.BOLD, true)
+                            .decoration(TextDecoration.ITALIC, false)
+                    )
+                    meta.lore(listOf(
+                        Component.empty(),
+                        Component.text("${category.items.size} items", NamedTextColor.GRAY)
+                            .decoration(TextDecoration.ITALIC, false),
+                        Component.empty(),
+                        Component.text("Click to browse", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                    ))
+                }
+            }
+
+            gui.setItem(slot, icon) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openWorthCategory(p, category.id, 0)
+            }
+        }
+
+        val closeItem = ItemStack(Material.BARRIER).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text("Close", NamedTextColor.RED)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+            }
+        }
+        gui.setItem(49, closeItem) { p, _ -> p.closeInventory() }
+
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    fun openWorthCategory(player: Player, categoryId: String, page: Int) {
+        val category = getSellableCategories().find { it.id == categoryId } ?: return
+
+        val title = Component.text(category.name, NamedTextColor.GOLD)
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+
+        val gui = CustomGui(title, 54)
+        gui.fill(FILLER.clone())
+        for (i in 0..8) gui.inventory.setItem(i, BORDER.clone())
+        for (i in 45..53) gui.inventory.setItem(i, BORDER.clone())
+
+        val sortedItems = category.items.sortedBy { displayLabel(it) }
+        val totalPages = ((sortedItems.size - 1) / ITEMS_PER_PAGE).coerceAtLeast(0)
+        val startIndex = page * ITEMS_PER_PAGE
+        val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(sortedItems.size)
+        val pageItems = if (startIndex < sortedItems.size) sortedItems.subList(startIndex, endIndex) else emptyList()
+
+        val itemSlots = mutableListOf<Int>()
+        for (row in 1..4) {
+            for (col in 1..7) {
+                itemSlots.add(row * 9 + col)
+            }
+        }
+
+        for ((index, shopItem) in pageItems.withIndex()) {
+            gui.setItem(itemSlots[index], buildWorthItemIcon(shopItem))
+        }
+
+        val backItem = ItemStack(Material.BARRIER).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text("Back to Categories", NamedTextColor.RED)
+                        .decoration(TextDecoration.ITALIC, false)
+                        .decoration(TextDecoration.BOLD, true)
+                )
+            }
+        }
+        gui.setItem(49, backItem) { p, _ ->
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            openWorthMenu(p)
+        }
+
+        if (page > 0) {
+            val prevItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Previous Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(46, prevItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openWorthCategory(p, categoryId, page - 1)
+            }
+        }
+
+        if (page < totalPages) {
+            val nextItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Next Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(52, nextItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openWorthCategory(p, categoryId, page + 1)
+            }
+        }
+
+        plugin.guiManager.open(player, gui)
+    }
+
+    private fun buildWorthItemIcon(shopItem: ShopItem): ItemStack {
+        return ItemStack(shopItem.material).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text(displayLabel(shopItem), NamedTextColor.WHITE)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                meta.lore(listOf(
+                    Component.text("Worth: ", NamedTextColor.GRAY)
+                        .append(Component.text("${plugin.economyManager.format(shopItem.sellPrice)} each", NamedTextColor.GREEN))
+                        .decoration(TextDecoration.ITALIC, false)
+                ))
+            }
+        }
     }
 
     // ── Potion Items ─────────────────────────────────────────────────────
