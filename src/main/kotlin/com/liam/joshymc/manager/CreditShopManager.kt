@@ -85,6 +85,12 @@ class CreditShopManager(private val plugin: Joshymc) {
         return plugin.databaseManager.queryFirst("SELECT * FROM credit_shop_categories WHERE id = ?", id) { mapCategory(it) }
     }
 
+    /** Returns the existing category for [name], or creates it with [icon] if it doesn't exist yet. */
+    fun getOrCreateCategory(name: String, icon: Material): CreditShopCategory {
+        val id = slugify(name)
+        return getCategory(id) ?: createCategory(name, icon) ?: getCategory(id)!!
+    }
+
     fun getItem(id: Int): CreditShopItem? {
         return plugin.databaseManager.queryFirst("SELECT * FROM credit_shop_items WHERE id = ?", id) { mapItem(it) }
     }
@@ -156,9 +162,10 @@ class CreditShopManager(private val plugin: Joshymc) {
                             .decoration(TextDecoration.BOLD, true)
                             .decoration(TextDecoration.ITALIC, false)
                     )
+                    val listingCount = getItemsForCategory(category.id).size + plugin.voucherManager.getVouchersByCategory(category.id).size
                     meta.lore(listOf(
                         Component.empty(),
-                        Component.text("${getItemsForCategory(category.id).size} items", NamedTextColor.GRAY)
+                        Component.text("$listingCount items", NamedTextColor.GRAY)
                             .decoration(TextDecoration.ITALIC, false),
                         Component.empty(),
                         Component.text("Click to browse", NamedTextColor.YELLOW)
@@ -191,6 +198,8 @@ class CreditShopManager(private val plugin: Joshymc) {
     fun openCategory(player: Player, categoryId: String, page: Int) {
         val category = getCategory(categoryId) ?: return
         val items = getItemsForCategory(categoryId)
+        val vouchers = plugin.voucherManager.getVouchersByCategory(categoryId)
+        val listings: List<Any> = items + vouchers
 
         val title = Component.text(category.name, NamedTextColor.LIGHT_PURPLE)
             .decoration(TextDecoration.BOLD, true)
@@ -202,10 +211,10 @@ class CreditShopManager(private val plugin: Joshymc) {
         for (i in 0..8) gui.inventory.setItem(i, BORDER.clone())
         for (i in 45..53) gui.inventory.setItem(i, BORDER.clone())
 
-        val totalPages = ((items.size - 1) / ITEMS_PER_PAGE).coerceAtLeast(0)
+        val totalPages = ((listings.size - 1) / ITEMS_PER_PAGE).coerceAtLeast(0)
         val startIndex = page * ITEMS_PER_PAGE
-        val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(items.size)
-        val pageItems = if (startIndex < items.size) items.subList(startIndex, endIndex) else emptyList()
+        val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(listings.size)
+        val pageListings = if (startIndex < listings.size) listings.subList(startIndex, endIndex) else emptyList()
 
         val itemSlots = mutableListOf<Int>()
         for (row in 1..4) {
@@ -214,14 +223,24 @@ class CreditShopManager(private val plugin: Joshymc) {
             }
         }
 
-        for ((index, shopItem) in pageItems.withIndex()) {
+        for ((index, listing) in pageListings.withIndex()) {
             val slot = itemSlots[index]
-            val icon = buildShopItemIcon(shopItem, category, player)
-
-            gui.setItem(slot, icon) { p, event ->
-                val amount = if (event.click.isShiftClick) shopItem.item.maxStackSize else 1
-                purchase(p, shopItem, amount)
-                openCategory(p, categoryId, page)
+            when (listing) {
+                is CreditShopItem -> {
+                    val icon = buildShopItemIcon(listing, category, player)
+                    gui.setItem(slot, icon) { p, event ->
+                        val amount = if (event.click.isShiftClick) listing.item.maxStackSize else 1
+                        purchase(p, listing, amount)
+                        openCategory(p, categoryId, page)
+                    }
+                }
+                is VoucherManager.Voucher -> {
+                    val icon = plugin.voucherManager.buildIcon(listing, player)
+                    gui.setItem(slot, icon) { p, _ ->
+                        plugin.voucherManager.redeem(p, listing.id)
+                        openCategory(p, categoryId, page)
+                    }
+                }
             }
         }
 
