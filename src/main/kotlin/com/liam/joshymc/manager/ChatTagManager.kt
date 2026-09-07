@@ -288,6 +288,11 @@ class ChatTagManager(private val plugin: Joshymc) {
         val defaults = YamlConfiguration.loadConfiguration(defaultStream.bufferedReader())
         val userCfg = YamlConfiguration.loadConfiguration(userFile)
 
+        if (com.liam.joshymc.util.ConfigUtil.looksLikeParseFailure(userFile, userCfg)) {
+            plugin.logger.severe("[ChatTags] tags.yml failed to load (invalid YAML) — the existing file has been preserved and was NOT overwritten. Fix the syntax error and reload.")
+            return
+        }
+
         val defaultsSection = defaults.getConfigurationSection("tags") ?: return
         val userSection = userCfg.getConfigurationSection("tags")
             ?: userCfg.createSection("tags")
@@ -311,6 +316,7 @@ class ChatTagManager(private val plugin: Joshymc) {
         }
         if (categoriesAdded > 0 || tagsAdded > 0) {
             try {
+                com.liam.joshymc.util.ConfigUtil.backup(userFile, plugin.logger, "ChatTags")
                 userCfg.save(userFile)
                 plugin.logger.info("[ChatTags] Merged $categoriesAdded new categor${if (categoriesAdded == 1) "y" else "ies"} and $tagsAdded new tag${if (tagsAdded == 1) "" else "s"} from bundled defaults.")
             } catch (e: Exception) {

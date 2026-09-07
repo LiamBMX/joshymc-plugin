@@ -227,6 +227,11 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         val defaults = YamlConfiguration.loadConfiguration(defaultStream.bufferedReader())
         val userCfg = YamlConfiguration.loadConfiguration(userFile)
 
+        if (com.liam.joshymc.util.ConfigUtil.looksLikeParseFailure(userFile, userCfg)) {
+            plugin.logger.severe("[QuestCycle] quest-cycle.yml failed to load (invalid YAML) — the existing file has been preserved and was NOT overwritten. Fix the syntax error and reload.")
+            return
+        }
+
         val defaultsSection = defaults.getConfigurationSection("quests") ?: return
         val userSection = userCfg.getConfigurationSection("quests") ?: userCfg.createSection("quests")
 
@@ -238,6 +243,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         }
         if (added > 0) {
             try {
+                com.liam.joshymc.util.ConfigUtil.backup(userFile, plugin.logger, "QuestCycle")
                 userCfg.save(userFile)
                 plugin.logger.info("[QuestCycle] Merged $added new quest definition(s) from bundled defaults.")
             } catch (e: Exception) {
