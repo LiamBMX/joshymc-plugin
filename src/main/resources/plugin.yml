@@ -154,6 +154,11 @@ commands:
     description: View top killers
     usage: /killtop
     aliases: [killerboard, killstop]
+    aliases: [killerboard]
+  deathstop:
+    description: View top deaths
+    usage: /deathstop
+    aliases: [deathboard]
   chestshop:
     description: Chest shop (sign-based) help and management
     usage: /chestshop [help|example|info|remove]
@@ -727,6 +732,9 @@ permissions:
     default: true
   joshymc.killtop:
     description: View kill leaderboard
+    default: true
+  joshymc.deathstop:
+    description: View death leaderboard
     default: true
   joshymc.bounty.cancel:
     description: Cancel active bounties from /bounty cancel or the bounty list GUI

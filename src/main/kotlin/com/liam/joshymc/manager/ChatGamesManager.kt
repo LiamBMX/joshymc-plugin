@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Server-wide chat games. Posts a random challenge to chat on a timer; the
- * first player whose chat message matches the answer wins money + XP. Also
+ * first player whose chat message matches the answer wins Credits. Also
  * exposes [startGame] / [startRandomGame] for the `/chatgame` admin command.
  *
  * Thread model: the active game is held in an [AtomicReference] because
@@ -24,9 +24,7 @@ class ChatGamesManager(private val plugin: Joshymc) {
 
     enum class GameType(val displayName: String) {
         MATH("Math"),
-        UNSCRAMBLE("Unscramble"),
         TYPE("Type"),
-        REVERSE("Reverse"),
     }
 
     data class ActiveGame(
@@ -42,8 +40,9 @@ class ChatGamesManager(private val plugin: Joshymc) {
     private var intervalSeconds = 900L
     private var minPlayers = 2
     private var solveWindowSeconds = 60L
-    private var rewardMoney = 1000.0
-    private var rewardXp = 25
+    private var rewardCredits = 3.0
+
+    private var lastTypePrompt: String? = null
 
     private var autoStartTaskId = -1
 
@@ -68,8 +67,7 @@ class ChatGamesManager(private val plugin: Joshymc) {
 
         minPlayers = cfg.getInt("chat-games.min-players", 2).coerceAtLeast(1)
         solveWindowSeconds = cfg.getLong("chat-games.solve-window-seconds", 60L).coerceAtLeast(10L)
-        rewardMoney = cfg.getDouble("chat-games.reward.money", 1000.0)
-        rewardXp = cfg.getInt("chat-games.reward.xp", 25)
+        rewardCredits = cfg.getDouble("chat-games.reward.credits", 3.0)
 
         // Auto-start a game every interval, if no game is currently running and
         // there are enough players online to make it interesting.
@@ -80,7 +78,7 @@ class ChatGamesManager(private val plugin: Joshymc) {
             startRandomGame()
         }, periodTicks, periodTicks)
 
-        plugin.logger.info("[ChatGames] Started — interval=${intervalSeconds}s, reward=\$${rewardMoney.toInt()} + ${rewardXp}XP.")
+        plugin.logger.info("[ChatGames] Started — interval=${intervalSeconds}s, reward=${plugin.creditsManager.format(rewardCredits)} Credits.")
     }
 
     fun stop() {
@@ -136,17 +134,17 @@ class ChatGamesManager(private val plugin: Joshymc) {
         // gets to award the prize.
         if (!current.compareAndSet(game, null)) return false
 
-        // Award + announce on the main thread so we touch the economy /
+        // Award + announce on the main thread so we touch the Credits /
         // player APIs from the right thread.
         plugin.server.scheduler.runTask(plugin, Runnable {
-            if (rewardMoney > 0.0) plugin.economyManager.deposit(player.uniqueId, rewardMoney)
-            if (rewardXp > 0) player.giveExp(rewardXp)
+            if (rewardCredits > 0.0) plugin.creditsManager.deposit(player.uniqueId, rewardCredits)
 
             Bukkit.broadcast(
                 Component.text("✦ ", TextColor.color(0xFFD700)).decoration(TextDecoration.BOLD, true)
                     .append(Component.text(player.name, NamedTextColor.GREEN))
-                    .append(Component.text(" won the chat game! ", NamedTextColor.YELLOW))
-                    .append(Component.text("(+\$${rewardMoney.toInt()}, +${rewardXp} XP)", NamedTextColor.GRAY))
+                    .append(Component.text(" won the chat game and earned ", NamedTextColor.YELLOW))
+                    .append(Component.text("${plugin.creditsManager.format(rewardCredits)} Credits", NamedTextColor.GOLD))
+                    .append(Component.text("!", NamedTextColor.YELLOW))
             )
             for (online in Bukkit.getOnlinePlayers()) {
                 online.playSound(online.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.5f, 1.4f)
@@ -170,9 +168,7 @@ class ChatGamesManager(private val plugin: Joshymc) {
             .append(Component.text(game.prompt, NamedTextColor.AQUA).decoration(TextDecoration.BOLD, true))
 
         val rewardLine = Component.text("  First in chat wins ", NamedTextColor.GRAY)
-            .append(Component.text("\$${rewardMoney.toInt()}", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true))
-            .append(Component.text(" + ", NamedTextColor.GRAY))
-            .append(Component.text("${rewardXp} XP", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true))
+            .append(Component.text("${plugin.creditsManager.format(rewardCredits)} Credits", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true))
             .append(Component.text("  ·  Time: ", NamedTextColor.DARK_GRAY))
             .append(Component.text("${solveWindowSeconds}s", NamedTextColor.GRAY))
 
@@ -195,55 +191,53 @@ class ChatGamesManager(private val plugin: Joshymc) {
         val r = ThreadLocalRandom.current()
         return when (type) {
             GameType.MATH -> {
-                val a = r.nextInt(2, 100)
-                val b = r.nextInt(2, 25)
                 val op = listOf("+", "-", "×").random()
+                val (a, b) = when (op) {
+                    "+" -> r.nextInt(10, 1000) to r.nextInt(10, 1000)
+                    "-" -> {
+                        // Prefer non-negative answers — pick b <= a.
+                        val x = r.nextInt(10, 1000)
+                        x to r.nextInt(10, x + 1)
+                    }
+                    else -> r.nextInt(12, 100) to r.nextInt(6, 25)
+                }
                 val answer = when (op) {
                     "+" -> a + b
                     "-" -> a - b
-                    "×" -> a * b
-                    else -> 0
+                    else -> a * b
                 }
                 "Solve: $a $op $b" to answer.toString()
             }
-            GameType.UNSCRAMBLE -> {
-                val word = WORDS.random()
-                val scrambled = word.toCharArray().toMutableList()
-                    .also { it.shuffle() }.joinToString("")
-                // Re-roll if shuffle didn't actually scramble it (single-letter
-                // words / unlucky shuffle landed on the original).
-                val finalScrambled = if (scrambled == word) {
-                    word.reversed()
-                } else scrambled
-                "Unscramble \"$finalScrambled\"" to word
-            }
             GameType.TYPE -> {
-                val len = r.nextInt(8, 13)
-                val token = (1..len)
-                    .map { ALPHA_NUM[r.nextInt(ALPHA_NUM.length)] }
-                    .joinToString("")
-                "First to type \"$token\"" to token
-            }
-            GameType.REVERSE -> {
-                val word = WORDS.random()
-                "Type \"$word\" backwards" to word.reversed()
+                val prompt = TYPE_PROMPTS.filter { it != lastTypePrompt }.random()
+                lastTypePrompt = prompt
+                prompt to prompt
             }
         }
     }
 
     companion object {
-        private const val ALPHA_NUM = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        private val WORDS = listOf(
-            "diamond", "creeper", "redstone", "minecraft", "village",
-            "nether", "endstone", "obsidian", "trident", "anvil",
-            "potion", "armor", "elytra", "shulker", "warden",
-            "phantom", "guardian", "blaze", "magma", "wither",
-            "skeleton", "spider", "zombie", "enderman", "ghast",
-            "stronghold", "fortress", "monument", "outpost", "mansion",
-            "beacon", "conduit", "lantern", "torch", "campfire",
-            "pumpkin", "carrot", "potato", "beetroot", "wheat",
-            "salmon", "cod", "tropical", "puffer", "axolotl",
-            "frog", "tadpole", "allay", "vex", "evoker",
+        // FINAL approved Type-game prompt pool (issue #546) — exact strings
+        // only, no normalization. Capitalization/spacing/numbers must be
+        // preserved verbatim between the displayed prompt and expected answer.
+        private val TYPE_PROMPTS = listOf(
+            "JoshyMC is the BEST",
+            "I Dropped a Log",
+            "tbjoshy is GOATED",
+            "BALRIGHT",
+            "Mike Ox is Short",
+            "Cookies Are Yummy",
+            "Banana Man",
+            "Shark doo doo doo",
+            "12059",
+            "CREEPER AW MAN",
+            "THREE NETHERITE INGOTS",
+            "LA PEACE",
+            "DIAMONDS",
+            "EMERALDS",
+            "What the Skibid",
+            "Six Sayven",
+            "Blue 42",
         )
     }
 }

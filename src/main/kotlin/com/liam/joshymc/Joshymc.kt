@@ -916,19 +916,6 @@ class Joshymc : JavaPlugin() {
         // but the toggle keys are still read by their own dedicated command/listener,
         // so they stay registered (hidden) to preserve correct defaults for new players.
         settingsManager.register(SettingsManager.SettingDef(
-            key = "night_vision",
-            displayName = "Night Vision",
-            description = "Permanent night vision effect",
-            material = org.bukkit.Material.ENDER_EYE,
-            disabledMaterial = org.bukkit.Material.ENDER_PEARL,
-            default = false,
-            permission = "joshymc.nightvision",
-            hidden = true,
-            onToggle = { player, enabled ->
-                com.liam.joshymc.command.NightVisionCommand.applyNightVision(player, enabled)
-            }
-        ))
-        settingsManager.register(SettingsManager.SettingDef(
             key = "gsit",
             displayName = "Sit on Blocks",
             description = "Right-click stairs/slabs to sit",
@@ -1010,6 +997,18 @@ class Joshymc : JavaPlugin() {
             permission = "joshymc.scoreboard",
             onToggle = { player, _ ->
                 scoreboardManager.refreshSidebar(player)
+            }
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "night_vision",
+            displayName = "Night Vision",
+            description = "Permanent night vision effect",
+            material = org.bukkit.Material.ENDER_EYE,
+            disabledMaterial = org.bukkit.Material.ENDER_PEARL,
+            default = false,
+            permission = "joshymc.nightvision",
+            onToggle = { player, enabled ->
+                com.liam.joshymc.command.NightVisionCommand.applyNightVision(player, enabled)
             }
         ))
         settingsManager.register(SettingsManager.SettingDef(

@@ -179,8 +179,9 @@ integrations:
     auto-install: true
 
 # Chat games — periodic chat-typing puzzles for online players
-# Game types: math, unscramble, type-this-token, reverse-this-word
-# An admin can manually trigger games with /chatgame [type].
+# Game types: math, type-the-phrase. Status is a utility-only check and is
+# never randomly selected. An admin can manually trigger games with
+# /chatgame [type].
 chat-games:
   enabled: true
   # How often the auto-scheduler triggers a game when no game is running
@@ -193,8 +194,8 @@ chat-games:
   # Auto-expire a game if no one solves it within this many seconds.
   solve-window-seconds: 60
   reward:
-    money: 1000
-    xp: 25
+    # Credits (existing Credits economy) awarded to the winner.
+    credits: 3
 
 # Crates — debug toggles
 # debug-interactions: when true, every right-click on a registered crate (or
