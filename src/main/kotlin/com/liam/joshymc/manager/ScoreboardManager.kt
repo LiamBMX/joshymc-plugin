@@ -176,7 +176,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
             if (t.name.startsWith("sbline_")) t.unregister()
         }
 
-        val balance = formatCompact(plugin.economyManager.getBalance(player))
+        val balance = plugin.economyManager.formatShort(plugin.economyManager.getBalance(player))
         val credits = plugin.creditsManager.format(plugin.creditsManager.getBalance(player))
         val rank = plugin.rankManager.getPlayerRank(player)
         val rankTagComponent = rank?.displayTag?.let { plugin.commsManager.parseLegacy(it) }
@@ -288,16 +288,6 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     }
 
     // ── Utility ─────────────────────────────────────────────────────
-
-    private fun formatCompact(amount: Double): String {
-        return when {
-            amount >= 1_000_000_000_000 -> "${"%.1f".format(amount / 1_000_000_000_000)}T"
-            amount >= 1_000_000_000 -> "${"%.1f".format(amount / 1_000_000_000)}B"
-            amount >= 1_000_000 -> "${"%.1f".format(amount / 1_000_000)}M"
-            amount >= 1_000 -> "${"%.1f".format(amount / 1_000)}K"
-            else -> "${"%.0f".format(amount)}"
-        }.replace(".0K", "K").replace(".0M", "M").replace(".0B", "B").replace(".0T", "T")
-    }
 
     // ── Kill/Death Persistence ──────────────────────────────────────
 
