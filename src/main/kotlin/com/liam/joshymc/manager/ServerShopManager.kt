@@ -37,9 +37,55 @@ class ServerShopManager(private val plugin: Joshymc) {
     )
     data class ShopCategory(val id: String, val name: String, val icon: Material, val items: List<ShopItem>)
 
+    /** The /worth GUI's Filter button cycles through exactly these six modes, in order. */
+    enum class WorthFilterMode(val label: String) {
+        PRICE_DESC("Price: Highest to Lowest"),
+        PRICE_ASC("Price: Lowest to Highest"),
+        ALPHABETICAL("Alphabetical Order"),
+        CATEGORY_RESOURCES("Category: Resources"),
+        CATEGORY_BLOCKS("Category: Blocks"),
+        CATEGORY_UTILITY("Category: Utility");
+
+        fun next(): WorthFilterMode = entries[(ordinal + 1) % entries.size]
+    }
+
+    private enum class WorthBroadCategory { RESOURCES, BLOCKS, UTILITY }
+
+    // Every shop.yml/sell-prices.yml category id collapses into exactly one of the three
+    // broad /worth categories — never more than one, so items never appear twice across
+    // Category: Resources / Blocks / Utility. Unlisted ids default to Utility (catch-all).
+    private val worthBroadCategoryById: Map<String, WorthBroadCategory> = mapOf(
+        "wood" to WorthBroadCategory.RESOURCES,
+        "farming" to WorthBroadCategory.RESOURCES,
+        "mob_drops" to WorthBroadCategory.RESOURCES,
+        "ores" to WorthBroadCategory.RESOURCES,
+        "nether" to WorthBroadCategory.RESOURCES,
+        "end" to WorthBroadCategory.RESOURCES,
+        "ocean" to WorthBroadCategory.RESOURCES,
+        "blocks" to WorthBroadCategory.BLOCKS,
+        "decoration" to WorthBroadCategory.BLOCKS,
+        "decor" to WorthBroadCategory.BLOCKS,
+        "redstone" to WorthBroadCategory.UTILITY,
+        "food" to WorthBroadCategory.UTILITY,
+        "utility" to WorthBroadCategory.UTILITY,
+        "rare_items" to WorthBroadCategory.UTILITY,
+        "other" to WorthBroadCategory.UTILITY,
+        "pvp_gear" to WorthBroadCategory.UTILITY,
+        "spawners" to WorthBroadCategory.UTILITY
+    )
+
+    // Per-player selected /worth filter mode, so paging and re-opening the GUI keeps
+    // whatever mode the player last chose. Defaults to PRICE_DESC (v1.0.49 default).
+    private val worthFilterModeByPlayer = mutableMapOf<UUID, WorthFilterMode>()
+
     // shop.yml is the single buy/sell catalog browsed from the /shop GUI. Every
     // item carries both a "buy" and a "sell" price.
     private val categories = mutableListOf<ShopCategory>()
+
+    // sell-prices.yml holds the bulk-resource sell catalog browsed from the read-only
+    // /worth GUI. It feeds getSellPrice()/getBaseSellPrice() alongside shop.yml so /sell
+    // and /worth always agree on a price without a second, separate config.
+    private val sellCategories = mutableListOf<ShopCategory>()
 
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
         editMeta { it.displayName(Component.empty()) }
@@ -53,11 +99,17 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     fun start() {
         categories.clear()
+        sellCategories.clear()
 
         mergeMissingCategoriesFromDefaults("shop.yml")
+        removeObsoleteCategories("shop.yml", "spawners")
         loadCategoriesInto(categories, "shop.yml")
 
+        mergeMissingCategoriesFromDefaults("sell-prices.yml")
+        loadCategoriesInto(sellCategories, "sell-prices.yml")
+
         plugin.logger.info("Loaded ${categories.size} shop categories with ${categories.sumOf { it.items.size }} items")
+        plugin.logger.info("Loaded ${sellCategories.size} sell-price categories with ${sellCategories.sumOf { it.items.size }} items")
     }
 
     /**
@@ -92,6 +144,34 @@ class ServerShopManager(private val plugin: Joshymc) {
                 plugin.logger.info("[Shop] Merged $added new shop categor${if (added == 1) "y" else "ies"} from bundled defaults.")
             } catch (e: Exception) {
                 plugin.logger.warning("[Shop] Failed to save merged shop.yml: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Drops categories that shipped in an older bundled shop.yml but no longer exist in the
+     * current defaults (e.g. "spawners", replaced by "redstone") from the user's saved file,
+     * so upgraded servers stop serving a category that's supposed to be fully retired.
+     */
+    private fun removeObsoleteCategories(fileName: String, vararg categoryIds: String) {
+        val file = plugin.configFile(fileName)
+        if (!file.exists()) return
+
+        val userCfg = YamlConfiguration.loadConfiguration(file)
+        val userSection = userCfg.getConfigurationSection("categories") ?: return
+
+        var removed = 0
+        for (categoryId in categoryIds) {
+            if (!userSection.contains(categoryId)) continue
+            userSection.set(categoryId, null)
+            removed++
+        }
+        if (removed > 0) {
+            try {
+                userCfg.save(file)
+                plugin.logger.info("[Shop] Removed $removed obsolete shop categor${if (removed == 1) "y" else "ies"} from shop.yml.")
+            } catch (e: Exception) {
+                plugin.logger.warning("[Shop] Failed to save shop.yml after removing obsolete categories: ${e.message}")
             }
         }
     }
@@ -177,7 +257,49 @@ class ServerShopManager(private val plugin: Joshymc) {
             val item = category.items.find { it.material == material && it.sellPrice > 0 }
             if (item != null) return item.sellPrice
         }
+        for (category in sellCategories) {
+            val item = category.items.find { it.material == material && it.sellPrice > 0 }
+            if (item != null) return item.sellPrice
+        }
         return null
+    }
+
+    /**
+     * All categories with at least one sellable item, from both shop.yml and
+     * sell-prices.yml — the exact set of items the read-only /worth GUI browses.
+     * A shop.yml category only appears here filtered down to its sellable items,
+     * so /worth never shows an item /sell would reject.
+     */
+    fun getSellableCategories(): List<ShopCategory> {
+        val shopSellable = categories.mapNotNull { category ->
+            val sellable = category.items.filter { it.sellPrice > 0 }
+            if (sellable.isEmpty()) null else category.copy(items = sellable)
+        }
+        return shopSellable + sellCategories.filter { it.items.isNotEmpty() }
+    }
+
+    /**
+     * The full, flat pool of sellable items the /worth GUI's Filter modes draw from,
+     * sorted/filtered per [mode]. Sorting/filtering happens once per GUI open rather
+     * than per-category, since the GUI now shows one continuous list instead of a
+     * per-category browse.
+     */
+    private fun getWorthItems(mode: WorthFilterMode): List<ShopItem> {
+        val tagged = getSellableCategories().flatMap { category ->
+            val broad = worthBroadCategoryById[category.id] ?: WorthBroadCategory.UTILITY
+            category.items.map { broad to it }
+        }
+        return when (mode) {
+            WorthFilterMode.PRICE_DESC -> tagged.map { it.second }.sortedByDescending { it.sellPrice }
+            WorthFilterMode.PRICE_ASC -> tagged.map { it.second }.sortedBy { it.sellPrice }
+            WorthFilterMode.ALPHABETICAL -> tagged.map { it.second }.sortedBy { displayLabel(it).lowercase() }
+            WorthFilterMode.CATEGORY_RESOURCES -> tagged.filter { it.first == WorthBroadCategory.RESOURCES }
+                .map { it.second }.sortedBy { displayLabel(it).lowercase() }
+            WorthFilterMode.CATEGORY_BLOCKS -> tagged.filter { it.first == WorthBroadCategory.BLOCKS }
+                .map { it.second }.sortedBy { displayLabel(it).lowercase() }
+            WorthFilterMode.CATEGORY_UTILITY -> tagged.filter { it.first == WorthBroadCategory.UTILITY }
+                .map { it.second }.sortedBy { displayLabel(it).lowercase() }
+        }
     }
 
     /** Returns the sell price with the Flower Armor 1.2x crop bonus applied if applicable. */
@@ -351,6 +473,163 @@ class ServerShopManager(private val plugin: Joshymc) {
         plugin.guiManager.open(player, gui)
     }
 
+    // ── Worth GUI (read-only sell price guide) ──────────────────────────
+    //
+    // Browses getWorthItems() purely for information. Item slots are never given a
+    // click handler, so GuiManager's "click on top inventory is always cancelled" rule
+    // makes every slot inert — there is no sell/buy logic to trigger. A single Filter
+    // button cycles through 3 sort modes + 3 broad category modes (see WorthFilterMode);
+    // the selected mode is remembered per-player and only resets pagination back to
+    // page 0 when the mode itself changes, not when paging within a mode.
+
+    fun openWorthMenu(player: Player) {
+        val mode = worthFilterModeByPlayer[player.uniqueId] ?: WorthFilterMode.PRICE_DESC
+        worthFilterModeByPlayer[player.uniqueId] = mode
+        openWorthList(player, mode, 0)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    private fun openWorthList(player: Player, mode: WorthFilterMode, page: Int) {
+        val items = getWorthItems(mode)
+
+        val title = Component.text("Worth Guide", NamedTextColor.GOLD)
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+
+        val gui = CustomGui(title, 54)
+        gui.fill(FILLER.clone())
+        for (i in 0..8) gui.inventory.setItem(i, BORDER.clone())
+        for (i in 45..53) gui.inventory.setItem(i, BORDER.clone())
+
+        val totalPages = ((items.size - 1) / ITEMS_PER_PAGE).coerceAtLeast(0)
+        val startIndex = page * ITEMS_PER_PAGE
+        val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(items.size)
+        val pageItems = if (startIndex < items.size) items.subList(startIndex, endIndex) else emptyList()
+
+        val itemSlots = mutableListOf<Int>()
+        for (row in 1..4) {
+            for (col in 1..7) {
+                itemSlots.add(row * 9 + col)
+            }
+        }
+
+        for ((index, shopItem) in pageItems.withIndex()) {
+            gui.setItem(itemSlots[index], buildWorthItemIcon(shopItem))
+        }
+
+        gui.setItem(45, buildWorthCloseButton()) { p, _ -> p.closeInventory() }
+
+        gui.setItem(49, buildWorthFilterButton(mode)) { p, _ ->
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            val nextMode = mode.next()
+            worthFilterModeByPlayer[p.uniqueId] = nextMode
+            openWorthList(p, nextMode, 0)
+        }
+
+        if (page > 0) {
+            val prevItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Previous Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(46, prevItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openWorthList(p, mode, page - 1)
+            }
+        }
+
+        if (page < totalPages) {
+            val nextItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Next Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(52, nextItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openWorthList(p, mode, page + 1)
+            }
+        }
+
+        plugin.guiManager.open(player, gui)
+    }
+
+    private fun buildWorthCloseButton(): ItemStack {
+        return ItemStack(Material.BARRIER).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text("Close", NamedTextColor.RED)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+            }
+        }
+    }
+
+    private fun buildWorthFilterButton(mode: WorthFilterMode): ItemStack {
+        return ItemStack(Material.HOPPER).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text("Filter", NamedTextColor.GOLD)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                val lore = mutableListOf(
+                    Component.text("Current Mode: ", NamedTextColor.GRAY)
+                        .append(Component.text(mode.label, NamedTextColor.YELLOW))
+                        .decoration(TextDecoration.ITALIC, false),
+                    Component.empty(),
+                    Component.text("Available Modes:", NamedTextColor.GRAY)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                for (option in WorthFilterMode.entries) {
+                    val selected = option == mode
+                    lore.add(
+                        Component.text(if (selected) "» " else "  ", NamedTextColor.GREEN)
+                            .append(
+                                Component.text(
+                                    option.label,
+                                    if (selected) NamedTextColor.GREEN else NamedTextColor.DARK_GRAY
+                                )
+                            )
+                            .decoration(TextDecoration.BOLD, selected)
+                            .decoration(TextDecoration.ITALIC, false)
+                    )
+                }
+                lore.add(Component.empty())
+                lore.add(
+                    Component.text("Click to cycle filter options!", NamedTextColor.YELLOW)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                meta.lore(lore)
+            }
+        }
+    }
+
+    private fun buildWorthItemIcon(shopItem: ShopItem): ItemStack {
+        return ItemStack(shopItem.material).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text(displayLabel(shopItem), NamedTextColor.WHITE)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                meta.lore(listOf(
+                    Component.text("Worth: ", NamedTextColor.GRAY)
+                        .append(Component.text("${plugin.economyManager.format(shopItem.sellPrice)} each", NamedTextColor.GREEN))
+                        .decoration(TextDecoration.ITALIC, false)
+                ))
+            }
+        }
+    }
+
     // ── Potion Items ─────────────────────────────────────────────────────
     //
     // Some shop entries (e.g. "Splash Potion of Strength II") have no vanilla brewing
@@ -430,32 +709,12 @@ class ServerShopManager(private val plugin: Joshymc) {
                     lore.add(Component.text("Not for sale", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
                 }
 
-                // Sell price
-                if (shopItem.sellPrice > 0) {
-                    lore.add(
-                        plugin.commsManager.parseLegacy("&7Sell: &e${plugin.economyManager.format(shopItem.sellPrice)}")
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                } else {
-                    lore.add(Component.text("Cannot sell", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
-                }
-
                 lore.add(Component.empty())
 
                 // Action hints
                 if (shopItem.buyPrice > 0) {
                     lore.add(
                         Component.text("Left-click to choose buy amount", NamedTextColor.GREEN)
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                }
-                if (shopItem.sellPrice > 0) {
-                    lore.add(
-                        Component.text("Right-click to sell 1", NamedTextColor.YELLOW)
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                    lore.add(
-                        Component.text("Shift+right to sell all", NamedTextColor.YELLOW)
                             .decoration(TextDecoration.ITALIC, false)
                     )
                 }
