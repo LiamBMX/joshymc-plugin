@@ -894,6 +894,9 @@ class Joshymc : JavaPlugin() {
     }
 
     private fun registerSettings() {
+        // Legacy settings — retired from the /settings GUI/command (see issue #501),
+        // but the toggle keys are still read by their own dedicated command/listener,
+        // so they stay registered (hidden) to preserve correct defaults for new players.
         settingsManager.register(SettingsManager.SettingDef(
             key = "night_vision",
             displayName = "Night Vision",
@@ -902,6 +905,7 @@ class Joshymc : JavaPlugin() {
             disabledMaterial = org.bukkit.Material.ENDER_PEARL,
             default = false,
             permission = "joshymc.nightvision",
+            hidden = true,
             onToggle = { player, enabled ->
                 com.liam.joshymc.command.NightVisionCommand.applyNightVision(player, enabled)
             }
@@ -913,7 +917,8 @@ class Joshymc : JavaPlugin() {
             material = org.bukkit.Material.OAK_STAIRS,
             disabledMaterial = org.bukkit.Material.BARRIER,
             default = true,
-            permission = "joshymc.gsit"
+            permission = "joshymc.gsit",
+            hidden = true
         ))
         settingsManager.register(SettingsManager.SettingDef(
             key = "death_coords",
@@ -922,7 +927,8 @@ class Joshymc : JavaPlugin() {
             material = org.bukkit.Material.RECOVERY_COMPASS,
             disabledMaterial = org.bukkit.Material.COMPASS,
             default = true,
-            permission = "joshymc.deathcoords"
+            permission = "joshymc.deathcoords",
+            hidden = true
         ))
         settingsManager.register(SettingsManager.SettingDef(
             key = "random_coords",
@@ -931,7 +937,8 @@ class Joshymc : JavaPlugin() {
             material = org.bukkit.Material.ENDER_PEARL,
             disabledMaterial = org.bukkit.Material.GRAY_DYE,
             default = false,
-            permission = "joshymc.randomcoords"
+            permission = "joshymc.randomcoords",
+            hidden = true
         ))
         settingsManager.register(SettingsManager.SettingDef(
             key = "pvp",
@@ -940,7 +947,8 @@ class Joshymc : JavaPlugin() {
             material = org.bukkit.Material.DIAMOND_SWORD,
             disabledMaterial = org.bukkit.Material.WOODEN_SWORD,
             default = true,
-            permission = "joshymc.pvp"
+            permission = "joshymc.pvp",
+            hidden = true
         ))
         settingsManager.register(SettingsManager.SettingDef(
             key = "veinminer",
@@ -949,7 +957,8 @@ class Joshymc : JavaPlugin() {
             material = org.bukkit.Material.DIAMOND_PICKAXE,
             disabledMaterial = org.bukkit.Material.STONE_PICKAXE,
             default = true,
-            permission = "joshymc.veinminer"
+            permission = "joshymc.veinminer",
+            hidden = true
         ))
         settingsManager.register(SettingsManager.SettingDef(
             key = "autosmelt",
@@ -958,7 +967,8 @@ class Joshymc : JavaPlugin() {
             material = org.bukkit.Material.BLAST_FURNACE,
             disabledMaterial = org.bukkit.Material.FURNACE,
             default = false,
-            permission = "joshymc.autosmelt"
+            permission = "joshymc.autosmelt",
+            hidden = true
         ))
         settingsManager.register(SettingsManager.SettingDef(
             key = "treefeller",
@@ -967,11 +977,14 @@ class Joshymc : JavaPlugin() {
             material = org.bukkit.Material.DIAMOND_AXE,
             disabledMaterial = org.bukkit.Material.STONE_AXE,
             default = false,
-            permission = "joshymc.treefeller"
+            permission = "joshymc.treefeller",
+            hidden = true
         ))
+
+        // Active /settings toggles (issue #501)
         settingsManager.register(SettingsManager.SettingDef(
             key = "mob_visibility",
-            displayName = "Show Mobs",
+            displayName = "Mob Visibility",
             description = "Hide mobs from your view (mobs ignore you too)",
             material = org.bukkit.Material.ZOMBIE_HEAD,
             disabledMaterial = org.bukkit.Material.SKELETON_SKULL,
@@ -980,6 +993,38 @@ class Joshymc : JavaPlugin() {
             onToggle = { player, enabled ->
                 com.liam.joshymc.listener.MobVisibilityListener.applyTo(this, player, enabled)
             }
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "payments",
+            displayName = "Payments",
+            description = "Allow other players to send you money",
+            material = org.bukkit.Material.GOLD_INGOT,
+            disabledMaterial = org.bukkit.Material.IRON_INGOT,
+            default = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "credit_payments",
+            displayName = "Credit Payments",
+            description = "Allow other players to send you Credits",
+            material = org.bukkit.Material.SUNFLOWER,
+            disabledMaterial = org.bukkit.Material.WITHER_ROSE,
+            default = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "tpa",
+            displayName = "TPA Requests",
+            description = "Allow other players to send you /tpa requests",
+            material = org.bukkit.Material.ENDER_PEARL,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "tpahere",
+            displayName = "TPAHere Requests",
+            description = "Allow other players to send you /tpahere requests",
+            material = org.bukkit.Material.ENDER_EYE,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = true
         ))
     }
 

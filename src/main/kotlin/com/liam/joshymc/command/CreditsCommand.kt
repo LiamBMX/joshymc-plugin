@@ -172,6 +172,11 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return true
         }
 
+        if (!plugin.settingsManager.getSetting(target, "credit_payments")) {
+            plugin.commsManager.send(sender, Component.text("${target.name} has Credit payments disabled.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return true
+        }
+
         val success = plugin.creditsManager.withdraw(sender.uniqueId, amount)
         if (!success) {
             plugin.commsManager.send(sender, Component.text("You don't have enough credits.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)

@@ -89,6 +89,11 @@ class TpaCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
+        if (!plugin.settingsManager.getSetting(target, "tpa")) {
+            plugin.commsManager.send(sender, Component.text("${target.name} has TPA requests disabled.", NamedTextColor.RED))
+            return true
+        }
+
         // Check for existing pending request
         val existing = TpaRequests.getRequestFrom(target.uniqueId, sender.uniqueId)
         if (existing != null) {
@@ -151,6 +156,11 @@ class TpaHereCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val target = Bukkit.getPlayer(args[0])
         if (target == null || target == sender) {
             plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+            return true
+        }
+
+        if (!plugin.settingsManager.getSetting(target, "tpahere")) {
+            plugin.commsManager.send(sender, Component.text("${target.name} has TPAHere requests disabled.", NamedTextColor.RED))
             return true
         }
 
