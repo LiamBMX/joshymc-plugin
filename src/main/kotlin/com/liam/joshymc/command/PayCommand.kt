@@ -40,6 +40,11 @@ class PayCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
+        if (!plugin.settingsManager.getSetting(target, "payments")) {
+            plugin.commsManager.send(sender, Component.text("${target.name} has payments disabled.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return true
+        }
+
         val amount = plugin.economyManager.parseAmount(args[1])
         if (amount == null || amount <= 0) {
             plugin.commsManager.send(sender, Component.text("Invalid amount. Use numbers like 100, 10k, 1.5m", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)

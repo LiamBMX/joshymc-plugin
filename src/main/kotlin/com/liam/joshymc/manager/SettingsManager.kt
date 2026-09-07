@@ -23,7 +23,11 @@ class SettingsManager(private val plugin: Joshymc) {
         val disabledMaterial: Material = Material.GRAY_DYE,
         val default: Boolean,
         val permission: String? = null,
-        val onToggle: ((Player, Boolean) -> Unit)? = null
+        val onToggle: ((Player, Boolean) -> Unit)? = null,
+        // Hidden settings stay registered (so getSetting/setSetting keep working
+        // for the dedicated command/listener that owns them) but are no longer
+        // shown in the /settings GUI or discoverable via /settings <key>.
+        val hidden: Boolean = false
     )
 
     private val settings = mutableListOf<SettingDef>()
@@ -66,6 +70,10 @@ class SettingsManager(private val plugin: Joshymc) {
 
     fun getRegisteredSettings(): List<SettingDef> = settings.toList()
 
+    fun getVisibleSettings(player: Player): List<SettingDef> = settings.filter { def ->
+        !def.hidden && (def.permission == null || player.hasPermission(def.permission))
+    }
+
     fun getSetting(player: Player, key: String): Boolean {
         val playerCache = cache.getOrPut(player.uniqueId) { loadSettings(player.uniqueId) }
         val def = settings.find { it.key == key }
@@ -88,9 +96,7 @@ class SettingsManager(private val plugin: Joshymc) {
     }
 
     fun openGui(player: Player) {
-        val visibleSettings = settings.filter { def ->
-            def.permission == null || player.hasPermission(def.permission)
-        }
+        val visibleSettings = getVisibleSettings(player)
 
         // 5 rows (45 slots) for a clean look
         val gui = CustomGui(SETTINGS_TITLE, 45)
@@ -129,18 +135,6 @@ class SettingsManager(private val plugin: Joshymc) {
             gui.setItem(slot, buildSettingItem(def, enabled)) { p, event ->
                 if (def.permission != null && !p.hasPermission(def.permission)) {
                     p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
-                    return@setItem
-                }
-
-                // Block PvP toggle while combat-tagged — otherwise a player
-                // who's been hit can disable PvP from /settings and dodge
-                // every subsequent hit.
-                if (def.key == "pvp" && plugin.combatManager.isTagged(p)) {
-                    p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
-                    plugin.commsManager.send(
-                        p,
-                        Component.text("Can't toggle PvP while in combat!", NamedTextColor.RED)
-                    )
                     return@setItem
                 }
 
