@@ -348,6 +348,7 @@ class Joshymc : JavaPlugin() {
         joinEffectManager = JoinEffectManager(this)
         emoteManager = EmoteManager(this)
         glowManager = GlowManager(this)
+        glowManager.createTables()
         gadgetManager = GadgetManager(this)
         adminManager = AdminManager(this)
         modModeManager = com.liam.joshymc.manager.ModModeManager(this)

@@ -63,13 +63,24 @@ class GlowManager(private val plugin: Joshymc) : Listener {
 
     // ── Lifecycle ───────────────────────────────────────────────────
 
-    fun start() {
+    /**
+     * Creates the glow schema. Called unconditionally on plugin startup (independent of
+     * the "glow" feature toggle) since /glow is registered unconditionally too, so it
+     * never hits a missing-table error even when the feature is disabled or hasn't been
+     * [start]ed yet — and again from [start] so re-enabling the feature later (e.g. via
+     * reload) is a no-op against an existing schema.
+     */
+    fun createTables() {
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS player_glow (
                 uuid TEXT PRIMARY KEY,
                 color_id TEXT NOT NULL
             )
         """.trimIndent())
+    }
+
+    fun start() {
+        createTables()
 
         registerColors()
 
