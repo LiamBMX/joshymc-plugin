@@ -230,6 +230,7 @@ commands:
   cshop:
     description: Browse or manage the credits-only shop
     usage: /cshop [additem|removeitem|category|list] [args...]
+    aliases: [creditshop]
   welcome:
     description: Welcome a newly joined player for money and a chance at a credit or AFK key
     usage: /welcome
