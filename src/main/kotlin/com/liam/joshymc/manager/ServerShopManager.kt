@@ -360,9 +360,9 @@ class ServerShopManager(private val plugin: Joshymc) {
         val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(category.items.size)
         val pageItems = if (startIndex < category.items.size) category.items.subList(startIndex, endIndex) else emptyList()
 
-        // Item slots: rows 1-4, columns 1-7. The End category has exactly 9 items and
-        // is displayed as a centered 3x3 grid instead of the usual top-left flow.
-        val itemSlots = if (categoryId == "end") {
+        // Item slots: rows 1-4, columns 1-7. The End and Nether categories have exactly
+        // 9 items and are displayed as a centered 3x3 grid instead of the usual top-left flow.
+        val itemSlots = if (categoryId == "end" || categoryId == "nether") {
             val centeredRows = listOf(1, 2, 3)
             val centeredCols = listOf(3, 4, 5)
             centeredRows.flatMap { row -> centeredCols.map { col -> row * 9 + col } }
