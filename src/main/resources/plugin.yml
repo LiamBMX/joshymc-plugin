@@ -25,6 +25,10 @@ commands:
   pvp:
     description: Toggle PvP combat or allow elytra/ender pearls in combat (ops only)
     usage: /pvp [on|off] | /pvp <elytra|enderpearl> <on|off>
+  scoreboard:
+    description: Toggle your own sidebar scoreboard
+    usage: /scoreboard [on|off]
+    aliases: [sb]
   sit:
     description: Sit down where you are
     usage: /sit
@@ -551,6 +555,9 @@ permissions:
     default: op
   joshymc.pvp:
     description: Allows toggling PvP
+    default: true
+  joshymc.scoreboard:
+    description: Allows toggling your own sidebar scoreboard
     default: true
   joshymc.sit:
     description: Allows using /sit

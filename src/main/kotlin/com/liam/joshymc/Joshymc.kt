@@ -983,6 +983,18 @@ class Joshymc : JavaPlugin() {
 
         // Active /settings toggles (issue #501)
         settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.ScoreboardManager.SCOREBOARD_SETTING_KEY,
+            displayName = "Scoreboard",
+            description = "Show your sidebar scoreboard",
+            material = org.bukkit.Material.ITEM_FRAME,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = true,
+            permission = "joshymc.scoreboard",
+            onToggle = { player, _ ->
+                scoreboardManager.refreshSidebar(player)
+            }
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
             key = "mob_visibility",
             displayName = "Mob Visibility",
             description = "Hide mobs from your view (mobs ignore you too)",

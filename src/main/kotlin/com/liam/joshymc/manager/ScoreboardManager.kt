@@ -164,9 +164,20 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    /** Public entry point so the /scoreboard toggle can refresh instantly instead of waiting on the 2s tick. */
+    fun refreshSidebar(player: Player) {
+        updateSidebar(player)
+    }
+
     private fun updateSidebar(player: Player) {
         val board = player.scoreboard
         val objective = board.getObjective("joshymc_sidebar") ?: return
+
+        if (!plugin.settingsManager.getSetting(player, SCOREBOARD_SETTING_KEY)) {
+            if (objective.displaySlot != null) objective.displaySlot = null
+            return
+        }
+        if (objective.displaySlot != DisplaySlot.SIDEBAR) objective.displaySlot = DisplaySlot.SIDEBAR
 
         // Clear existing line teams + score entries from the previous tick
         for (entry in board.entries.toSet()) {
@@ -337,6 +348,8 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     }
 
     companion object {
+        const val SCOREBOARD_SETTING_KEY = "scoreboard"
+
         /** e.g. "09/06/26 12:36 PM" — compact so the sidebar stays narrow. */
         private val DATE_TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MM/dd/yy hh:mm a")
     }
