@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gui.combat.KillTopGui
 import com.liam.joshymc.gui.stats.KillTopGui
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
@@ -18,7 +19,7 @@ class KillTopCommand(private val plugin: Joshymc) : CommandExecutor {
             return true
         }
         if (!sender.hasPermission("joshymc.killtop")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.COMBAT)
             return true
         }
 

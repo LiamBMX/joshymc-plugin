@@ -153,6 +153,7 @@ commands:
   killtop:
     description: View top killers
     usage: /killtop
+    aliases: [killerboard, killstop]
     aliases: [killerboard]
   deathstop:
     description: View top deaths
