@@ -179,6 +179,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var serverShopManager: ServerShopManager
         private set
+    lateinit var sellPriceManager: com.liam.joshymc.manager.SellPriceManager
+        private set
     lateinit var creditShopManager: com.liam.joshymc.manager.CreditShopManager
         private set
     lateinit var voucherManager: com.liam.joshymc.manager.VoucherManager
@@ -211,6 +213,7 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var vanishCommand: VanishCommand
     lateinit var rtpCommand: com.liam.joshymc.command.RtpCommand
+    lateinit var sellCommand: com.liam.joshymc.command.SellCommand
     lateinit var questCycleManager: QuestCycleManager
         private set
     lateinit var talismanManager: TalismanManager
@@ -365,6 +368,8 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("mob-stacking")) mobStackManager.start()
         mutationsManager = com.liam.joshymc.manager.MutationsManager(this)
         mutationsManager.start()
+        sellPriceManager = com.liam.joshymc.manager.SellPriceManager(this)
+        sellPriceManager.start()
 
         itemManager.registerAll()
         recipeManager.registerAll()
@@ -462,6 +467,7 @@ class Joshymc : JavaPlugin() {
 
     override fun onDisable() {
         storageManager.saveOpenVaults()
+        if (::sellCommand.isInitialized) sellCommand.resolveAllOpenSessions()
         hologramManager.stop()
         npcManager.stop()
         crateManager.stop()
@@ -518,6 +524,7 @@ class Joshymc : JavaPlugin() {
 
         // 3. Shutdown services
         safe("storageManager.saveOpenVaults") { storageManager.saveOpenVaults() }
+        safe("sellCommand.resolveAllOpenSessions") { if (::sellCommand.isInitialized) sellCommand.resolveAllOpenSessions() }
         safe("hologramManager.stop") { hologramManager.stop() }
         safe("npcManager.stop") { npcManager.stop() }
         safe("crateManager.stop") { crateManager.stop() }
@@ -544,6 +551,7 @@ class Joshymc : JavaPlugin() {
         safe("reloadConfig") { reloadConfig() }
 
         // 6. Re-register everything
+        safe("sellPriceManager.start") { sellPriceManager.start() }
         safe("itemManager.registerAll") { itemManager.registerAll() }
         safe("recipeManager.registerAll") { recipeManager.registerAll() }
         safe("listenerManager.registerAll") { listenerManager.registerAll() }
