@@ -369,7 +369,6 @@ class Joshymc : JavaPlugin() {
         mutationsManager = com.liam.joshymc.manager.MutationsManager(this)
         mutationsManager.start()
         sellPriceManager = com.liam.joshymc.manager.SellPriceManager(this)
-        sellPriceManager.start()
 
         itemManager.registerAll()
         recipeManager.registerAll()
@@ -407,6 +406,9 @@ class Joshymc : JavaPlugin() {
         registerEnchants()
         if (isFeatureEnabled("custom-enchants")) customEnchantManager.start()
         serverShopManager.start()
+        // sellPriceManager reads through to serverShopManager, which just finished loading
+        // sell-prices.yml — refresh the /sell tab-complete cache now that prices exist.
+        if (::sellCommand.isInitialized) sellCommand.refreshSellableCache()
         creditShopManager.start()
         voucherManager.start()
 
@@ -551,7 +553,6 @@ class Joshymc : JavaPlugin() {
         safe("reloadConfig") { reloadConfig() }
 
         // 6. Re-register everything
-        safe("sellPriceManager.start") { sellPriceManager.start() }
         safe("itemManager.registerAll") { itemManager.registerAll() }
         safe("recipeManager.registerAll") { recipeManager.registerAll() }
         safe("listenerManager.registerAll") { listenerManager.registerAll() }

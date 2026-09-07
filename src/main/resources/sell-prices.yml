@@ -1,1078 +1,1911 @@
-# JoshyMC Sell Prices — the ONE central source of truth for /sell.
+# JoshyMC Sell Price Catalog
 #
-# This is completely separate from shop.yml (/shop is a curated buy-only
-# money sink). /sell is the broad outlet for normal survival-obtainable
-# vanilla items: open /sell, drop items into the deposit GUI, close it to
-# sell everything valid.
+# This is the single source of truth for "what is this item worth" across the whole
+# plugin. ServerShopManager.getSellPrice()/getBaseSellPrice() read from this file (in
+# addition to shop.yml) — both /sell (the deposit GUI + /sell hand + /sell all) and
+# /worth use those same methods, so a price changed here updates everywhere automatically.
+# There is no separate config for either command.
 #
-# Only materials listed below can be sold. Armor, tools, weapons, spawners,
-# spawn eggs, and admin/creative/unobtainable blocks are intentionally left
-# out entirely instead of needing a separate blacklist — if it's not listed
-# here, /sell will politely hand it straight back to the player.
+# Unlike shop.yml (a server-controlled money-sink shop for gear/decor/convenience
+# items), this file exists specifically for the bulk-resource sell economy — ores,
+# crops, building blocks, mob drops, etc. — that shop.yml intentionally excludes.
 #
-# Prices are PER SINGLE ITEM (not per stack) and support decimals, e.g.
-# Dirt at 0.25 means a stack of 64 sells for exactly $16.00.
+# Fields per item (same shape as shop.yml, "buy" is simply omitted/left at 0):
+#   sell      - price paid when sold (0 or omitted = cannot sell). Per SINGLE item, not
+#               per stack, and supports decimals, e.g. Dirt at 0.25 means a stack of 64
+#               sells for exactly $16.00.
+#   enabled   - set to false to hide the item entirely (default true)
+#   material  - only needed when the yaml key isn't itself a valid Material name
+#   name      - display name override (defaults to a title-cased material name)
 #
-# JoshyMC custom items (anything tagged with a custom item id) are always
-# rejected regardless of what's configured here for their base material.
-prices:
-  # ══════════════════════════════════════════════════════
-  # ULTRA-COMMON BLOCKS
-  # ══════════════════════════════════════════════════════
-  DIRT: 0.25
-  GRASS_BLOCK: 0.50
-  COARSE_DIRT: 0.50
-  ROOTED_DIRT: 0.75
-  PODZOL: 0.75
-  MYCELIUM: 1.00
-  NETHERRACK: 0.50
-  COBBLESTONE: 0.50
-  STONE: 0.75
-  COBBLED_DEEPSLATE: 0.75
-  DEEPSLATE: 1.00
-  TUFF: 1.00
-  SAND: 1.00
-  RED_SAND: 1.25
-  GRAVEL: 1.00
-  CLAY: 3.00
-  MUD: 0.75
-  PACKED_MUD: 1.50
+# Do NOT add tools/weapons/armor, spawners, spawn eggs, or admin/unobtainable items
+# here — those stay non-sellable by design. JoshyMC custom items are always rejected
+# by the /sell deposit GUI regardless of what's configured here for their base material.
 
-  # ══════════════════════════════════════════════════════
-  # STONE / BUILDING BLOCKS
-  # ══════════════════════════════════════════════════════
-  SMOOTH_STONE: 1.25
-  STONE_BRICKS: 1.25
-  MOSSY_STONE_BRICKS: 2.00
-  CRACKED_STONE_BRICKS: 1.50
-  CHISELED_STONE_BRICKS: 2.00
-  GRANITE: 1.00
-  POLISHED_GRANITE: 1.75
-  DIORITE: 1.00
-  POLISHED_DIORITE: 1.75
-  ANDESITE: 1.00
-  POLISHED_ANDESITE: 1.75
-  POLISHED_DEEPSLATE: 1.50
-  DEEPSLATE_BRICKS: 1.75
-  CRACKED_DEEPSLATE_BRICKS: 1.75
-  DEEPSLATE_TILES: 1.75
-  CRACKED_DEEPSLATE_TILES: 1.75
-  CHISELED_DEEPSLATE: 2.00
-  POLISHED_TUFF: 1.75
-  TUFF_BRICKS: 2.00
-  CHISELED_TUFF: 2.25
-  CALCITE: 2.00
-  DRIPSTONE_BLOCK: 1.50
-  POINTED_DRIPSTONE: 2.00
-  SANDSTONE: 1.50
-  SMOOTH_SANDSTONE: 2.00
-  CUT_SANDSTONE: 2.00
-  CHISELED_SANDSTONE: 2.25
-  RED_SANDSTONE: 1.75
-  SMOOTH_RED_SANDSTONE: 2.25
-  CUT_RED_SANDSTONE: 2.25
-  CHISELED_RED_SANDSTONE: 2.50
-  MUD_BRICKS: 2.00
+categories:
+  blocks:
+    name: "Blocks"
+    icon: STONE
+    enabled: true
+    items:
+      DIRT:
+        sell: 0.25
+      GRASS_BLOCK:
+        sell: 0.50
+      COARSE_DIRT:
+        sell: 0.50
+      ROOTED_DIRT:
+        sell: 0.75
+      PODZOL:
+        sell: 0.75
+      MYCELIUM:
+        sell: 1.00
+      NETHERRACK:
+        sell: 0.50
+      COBBLESTONE:
+        sell: 0.50
+      MOSSY_COBBLESTONE:
+        sell: 1
+      STONE:
+        sell: 0.75
+      COBBLED_DEEPSLATE:
+        sell: 0.75
+      DEEPSLATE:
+        sell: 1.00
+      TUFF:
+        sell: 1.00
+      SAND:
+        sell: 1.00
+      RED_SAND:
+        sell: 1.25
+      GRAVEL:
+        sell: 1.00
+      CLAY:
+        sell: 3.00
+      CLAY_BALL:
+        sell: 5
+      MUD:
+        sell: 0.75
+      PACKED_MUD:
+        sell: 1.50
+      SMOOTH_STONE:
+        sell: 1.25
+      STONE_BRICKS:
+        sell: 1.25
+      MOSSY_STONE_BRICKS:
+        sell: 2.00
+      CRACKED_STONE_BRICKS:
+        sell: 1.50
+      CHISELED_STONE_BRICKS:
+        sell: 2.00
+      GRANITE:
+        sell: 1.00
+      POLISHED_GRANITE:
+        sell: 1.75
+      DIORITE:
+        sell: 1.00
+      POLISHED_DIORITE:
+        sell: 1.75
+      ANDESITE:
+        sell: 1.00
+      POLISHED_ANDESITE:
+        sell: 1.75
+      POLISHED_DEEPSLATE:
+        sell: 1.50
+      DEEPSLATE_BRICKS:
+        sell: 1.75
+      CRACKED_DEEPSLATE_BRICKS:
+        sell: 1.75
+      DEEPSLATE_TILES:
+        sell: 1.75
+      CRACKED_DEEPSLATE_TILES:
+        sell: 1.75
+      CHISELED_DEEPSLATE:
+        sell: 2.00
+      POLISHED_TUFF:
+        sell: 1.75
+      TUFF_BRICKS:
+        sell: 2.00
+      CHISELED_TUFF:
+        sell: 2.25
+      CALCITE:
+        sell: 2.00
+      DRIPSTONE_BLOCK:
+        sell: 1.50
+      POINTED_DRIPSTONE:
+        sell: 2.00
+      SANDSTONE:
+        sell: 1.50
+      SMOOTH_SANDSTONE:
+        sell: 2.00
+      CUT_SANDSTONE:
+        sell: 2.00
+      CHISELED_SANDSTONE:
+        sell: 2.25
+      RED_SANDSTONE:
+        sell: 1.75
+      SMOOTH_RED_SANDSTONE:
+        sell: 2.25
+      CUT_RED_SANDSTONE:
+        sell: 2.25
+      CHISELED_RED_SANDSTONE:
+        sell: 2.50
+      MUD_BRICKS:
+        sell: 2.00
+      GLASS:
+        sell: 5
+      GLASS_PANE:
+        sell: 2
+      GLASS_BOTTLE:
+        sell: 2
+      WHITE_STAINED_GLASS:
+        sell: 7
+      ORANGE_STAINED_GLASS:
+        sell: 7
+      MAGENTA_STAINED_GLASS:
+        sell: 7
+      LIGHT_BLUE_STAINED_GLASS:
+        sell: 7
+      YELLOW_STAINED_GLASS:
+        sell: 7
+      LIME_STAINED_GLASS:
+        sell: 7
+      PINK_STAINED_GLASS:
+        sell: 7
+      GRAY_STAINED_GLASS:
+        sell: 7
+      LIGHT_GRAY_STAINED_GLASS:
+        sell: 7
+      CYAN_STAINED_GLASS:
+        sell: 7
+      PURPLE_STAINED_GLASS:
+        sell: 7
+      BLUE_STAINED_GLASS:
+        sell: 7
+      BROWN_STAINED_GLASS:
+        sell: 7
+      GREEN_STAINED_GLASS:
+        sell: 7
+      RED_STAINED_GLASS:
+        sell: 7
+      BLACK_STAINED_GLASS:
+        sell: 7
+      WHITE_STAINED_GLASS_PANE:
+        sell: 3
+      ORANGE_STAINED_GLASS_PANE:
+        sell: 3
+      MAGENTA_STAINED_GLASS_PANE:
+        sell: 3
+      LIGHT_BLUE_STAINED_GLASS_PANE:
+        sell: 3
+      YELLOW_STAINED_GLASS_PANE:
+        sell: 3
+      LIME_STAINED_GLASS_PANE:
+        sell: 3
+      PINK_STAINED_GLASS_PANE:
+        sell: 3
+      GRAY_STAINED_GLASS_PANE:
+        sell: 3
+      LIGHT_GRAY_STAINED_GLASS_PANE:
+        sell: 3
+      CYAN_STAINED_GLASS_PANE:
+        sell: 3
+      PURPLE_STAINED_GLASS_PANE:
+        sell: 3
+      BLUE_STAINED_GLASS_PANE:
+        sell: 3
+      BROWN_STAINED_GLASS_PANE:
+        sell: 3
+      GREEN_STAINED_GLASS_PANE:
+        sell: 3
+      RED_STAINED_GLASS_PANE:
+        sell: 3
+      BLACK_STAINED_GLASS_PANE:
+        sell: 3
+      WHITE_WOOL:
+        sell: 10
+      ORANGE_WOOL:
+        sell: 10
+      MAGENTA_WOOL:
+        sell: 10
+      LIGHT_BLUE_WOOL:
+        sell: 10
+      YELLOW_WOOL:
+        sell: 10
+      LIME_WOOL:
+        sell: 10
+      PINK_WOOL:
+        sell: 10
+      GRAY_WOOL:
+        sell: 10
+      LIGHT_GRAY_WOOL:
+        sell: 10
+      CYAN_WOOL:
+        sell: 10
+      PURPLE_WOOL:
+        sell: 10
+      BLUE_WOOL:
+        sell: 10
+      BROWN_WOOL:
+        sell: 10
+      GREEN_WOOL:
+        sell: 10
+      RED_WOOL:
+        sell: 10
+      BLACK_WOOL:
+        sell: 10
+      WHITE_CARPET:
+        sell: 4
+      ORANGE_CARPET:
+        sell: 4
+      MAGENTA_CARPET:
+        sell: 4
+      LIGHT_BLUE_CARPET:
+        sell: 4
+      YELLOW_CARPET:
+        sell: 4
+      LIME_CARPET:
+        sell: 4
+      PINK_CARPET:
+        sell: 4
+      GRAY_CARPET:
+        sell: 4
+      LIGHT_GRAY_CARPET:
+        sell: 4
+      CYAN_CARPET:
+        sell: 4
+      PURPLE_CARPET:
+        sell: 4
+      BLUE_CARPET:
+        sell: 4
+      BROWN_CARPET:
+        sell: 4
+      GREEN_CARPET:
+        sell: 4
+      RED_CARPET:
+        sell: 4
+      BLACK_CARPET:
+        sell: 4
+      TERRACOTTA:
+        sell: 5
+      WHITE_TERRACOTTA:
+        sell: 7
+      ORANGE_TERRACOTTA:
+        sell: 7
+      MAGENTA_TERRACOTTA:
+        sell: 7
+      LIGHT_BLUE_TERRACOTTA:
+        sell: 7
+      YELLOW_TERRACOTTA:
+        sell: 7
+      LIME_TERRACOTTA:
+        sell: 7
+      PINK_TERRACOTTA:
+        sell: 7
+      GRAY_TERRACOTTA:
+        sell: 7
+      LIGHT_GRAY_TERRACOTTA:
+        sell: 7
+      CYAN_TERRACOTTA:
+        sell: 7
+      PURPLE_TERRACOTTA:
+        sell: 7
+      BLUE_TERRACOTTA:
+        sell: 7
+      BROWN_TERRACOTTA:
+        sell: 7
+      GREEN_TERRACOTTA:
+        sell: 7
+      RED_TERRACOTTA:
+        sell: 7
+      BLACK_TERRACOTTA:
+        sell: 7
+      WHITE_GLAZED_TERRACOTTA:
+        sell: 10
+      ORANGE_GLAZED_TERRACOTTA:
+        sell: 10
+      MAGENTA_GLAZED_TERRACOTTA:
+        sell: 10
+      LIGHT_BLUE_GLAZED_TERRACOTTA:
+        sell: 10
+      YELLOW_GLAZED_TERRACOTTA:
+        sell: 10
+      LIME_GLAZED_TERRACOTTA:
+        sell: 10
+      PINK_GLAZED_TERRACOTTA:
+        sell: 10
+      GRAY_GLAZED_TERRACOTTA:
+        sell: 10
+      LIGHT_GRAY_GLAZED_TERRACOTTA:
+        sell: 10
+      CYAN_GLAZED_TERRACOTTA:
+        sell: 10
+      PURPLE_GLAZED_TERRACOTTA:
+        sell: 10
+      BLUE_GLAZED_TERRACOTTA:
+        sell: 10
+      BROWN_GLAZED_TERRACOTTA:
+        sell: 10
+      GREEN_GLAZED_TERRACOTTA:
+        sell: 10
+      RED_GLAZED_TERRACOTTA:
+        sell: 10
+      BLACK_GLAZED_TERRACOTTA:
+        sell: 10
+      WHITE_CONCRETE:
+        sell: 8
+      ORANGE_CONCRETE:
+        sell: 8
+      MAGENTA_CONCRETE:
+        sell: 8
+      LIGHT_BLUE_CONCRETE:
+        sell: 8
+      YELLOW_CONCRETE:
+        sell: 8
+      LIME_CONCRETE:
+        sell: 8
+      PINK_CONCRETE:
+        sell: 8
+      GRAY_CONCRETE:
+        sell: 8
+      LIGHT_GRAY_CONCRETE:
+        sell: 8
+      CYAN_CONCRETE:
+        sell: 8
+      PURPLE_CONCRETE:
+        sell: 8
+      BLUE_CONCRETE:
+        sell: 8
+      BROWN_CONCRETE:
+        sell: 8
+      GREEN_CONCRETE:
+        sell: 8
+      RED_CONCRETE:
+        sell: 8
+      BLACK_CONCRETE:
+        sell: 8
+      WHITE_CONCRETE_POWDER:
+        sell: 6
+      ORANGE_CONCRETE_POWDER:
+        sell: 6
+      MAGENTA_CONCRETE_POWDER:
+        sell: 6
+      LIGHT_BLUE_CONCRETE_POWDER:
+        sell: 6
+      YELLOW_CONCRETE_POWDER:
+        sell: 6
+      LIME_CONCRETE_POWDER:
+        sell: 6
+      PINK_CONCRETE_POWDER:
+        sell: 6
+      GRAY_CONCRETE_POWDER:
+        sell: 6
+      LIGHT_GRAY_CONCRETE_POWDER:
+        sell: 6
+      CYAN_CONCRETE_POWDER:
+        sell: 6
+      PURPLE_CONCRETE_POWDER:
+        sell: 6
+      BLUE_CONCRETE_POWDER:
+        sell: 6
+      BROWN_CONCRETE_POWDER:
+        sell: 6
+      GREEN_CONCRETE_POWDER:
+        sell: 6
+      RED_CONCRETE_POWDER:
+        sell: 6
+      BLACK_CONCRETE_POWDER:
+        sell: 6
 
-  # ══════════════════════════════════════════════════════
-  # WOOD / LOGS
-  # ══════════════════════════════════════════════════════
-  OAK_LOG: 20
-  SPRUCE_LOG: 20
-  BIRCH_LOG: 20
-  JUNGLE_LOG: 22
-  ACACIA_LOG: 22
-  DARK_OAK_LOG: 20
-  MANGROVE_LOG: 22
-  CHERRY_LOG: 25
-  PALE_OAK_LOG: 25
-  STRIPPED_OAK_LOG: 20
-  STRIPPED_SPRUCE_LOG: 20
-  STRIPPED_BIRCH_LOG: 20
-  STRIPPED_JUNGLE_LOG: 22
-  STRIPPED_ACACIA_LOG: 22
-  STRIPPED_DARK_OAK_LOG: 20
-  STRIPPED_MANGROVE_LOG: 22
-  STRIPPED_CHERRY_LOG: 25
-  STRIPPED_PALE_OAK_LOG: 25
-  OAK_WOOD: 20
-  SPRUCE_WOOD: 20
-  BIRCH_WOOD: 20
-  JUNGLE_WOOD: 22
-  ACACIA_WOOD: 22
-  DARK_OAK_WOOD: 20
-  MANGROVE_WOOD: 22
-  CHERRY_WOOD: 25
-  PALE_OAK_WOOD: 25
-  STRIPPED_OAK_WOOD: 20
-  STRIPPED_SPRUCE_WOOD: 20
-  STRIPPED_BIRCH_WOOD: 20
-  STRIPPED_JUNGLE_WOOD: 22
-  STRIPPED_ACACIA_WOOD: 22
-  STRIPPED_DARK_OAK_WOOD: 20
-  STRIPPED_MANGROVE_WOOD: 22
-  STRIPPED_CHERRY_WOOD: 25
-  STRIPPED_PALE_OAK_WOOD: 25
-  OAK_PLANKS: 5
-  SPRUCE_PLANKS: 5
-  BIRCH_PLANKS: 5
-  JUNGLE_PLANKS: 5
-  ACACIA_PLANKS: 5
-  DARK_OAK_PLANKS: 5
-  MANGROVE_PLANKS: 5
-  CHERRY_PLANKS: 5
-  PALE_OAK_PLANKS: 5
-  OAK_SLAB: 3
-  SPRUCE_SLAB: 3
-  BIRCH_SLAB: 3
-  JUNGLE_SLAB: 3
-  ACACIA_SLAB: 3
-  DARK_OAK_SLAB: 3
-  MANGROVE_SLAB: 3
-  CHERRY_SLAB: 3
-  PALE_OAK_SLAB: 3
-  OAK_STAIRS: 5
-  SPRUCE_STAIRS: 5
-  BIRCH_STAIRS: 5
-  JUNGLE_STAIRS: 5
-  ACACIA_STAIRS: 5
-  DARK_OAK_STAIRS: 5
-  MANGROVE_STAIRS: 5
-  CHERRY_STAIRS: 5
-  PALE_OAK_STAIRS: 5
-  OAK_FENCE: 6
-  SPRUCE_FENCE: 6
-  BIRCH_FENCE: 6
-  JUNGLE_FENCE: 6
-  ACACIA_FENCE: 6
-  DARK_OAK_FENCE: 6
-  MANGROVE_FENCE: 6
-  CHERRY_FENCE: 6
-  PALE_OAK_FENCE: 6
-  OAK_FENCE_GATE: 10
-  SPRUCE_FENCE_GATE: 10
-  BIRCH_FENCE_GATE: 10
-  JUNGLE_FENCE_GATE: 10
-  ACACIA_FENCE_GATE: 10
-  DARK_OAK_FENCE_GATE: 10
-  MANGROVE_FENCE_GATE: 10
-  CHERRY_FENCE_GATE: 10
-  PALE_OAK_FENCE_GATE: 10
-  OAK_DOOR: 12
-  SPRUCE_DOOR: 12
-  BIRCH_DOOR: 12
-  JUNGLE_DOOR: 12
-  ACACIA_DOOR: 12
-  DARK_OAK_DOOR: 12
-  MANGROVE_DOOR: 12
-  CHERRY_DOOR: 12
-  PALE_OAK_DOOR: 12
-  OAK_TRAPDOOR: 8
-  SPRUCE_TRAPDOOR: 8
-  BIRCH_TRAPDOOR: 8
-  JUNGLE_TRAPDOOR: 8
-  ACACIA_TRAPDOOR: 8
-  DARK_OAK_TRAPDOOR: 8
-  MANGROVE_TRAPDOOR: 8
-  CHERRY_TRAPDOOR: 8
-  PALE_OAK_TRAPDOOR: 8
-  OAK_BUTTON: 2
-  SPRUCE_BUTTON: 2
-  BIRCH_BUTTON: 2
-  JUNGLE_BUTTON: 2
-  ACACIA_BUTTON: 2
-  DARK_OAK_BUTTON: 2
-  MANGROVE_BUTTON: 2
-  CHERRY_BUTTON: 2
-  PALE_OAK_BUTTON: 2
-  OAK_PRESSURE_PLATE: 4
-  SPRUCE_PRESSURE_PLATE: 4
-  BIRCH_PRESSURE_PLATE: 4
-  JUNGLE_PRESSURE_PLATE: 4
-  ACACIA_PRESSURE_PLATE: 4
-  DARK_OAK_PRESSURE_PLATE: 4
-  MANGROVE_PRESSURE_PLATE: 4
-  CHERRY_PRESSURE_PLATE: 4
-  PALE_OAK_PRESSURE_PLATE: 4
-  OAK_SIGN: 6
-  SPRUCE_SIGN: 6
-  BIRCH_SIGN: 6
-  JUNGLE_SIGN: 6
-  ACACIA_SIGN: 6
-  DARK_OAK_SIGN: 6
-  MANGROVE_SIGN: 6
-  CHERRY_SIGN: 6
-  PALE_OAK_SIGN: 6
-  OAK_HANGING_SIGN: 10
-  SPRUCE_HANGING_SIGN: 10
-  BIRCH_HANGING_SIGN: 10
-  JUNGLE_HANGING_SIGN: 10
-  ACACIA_HANGING_SIGN: 10
-  DARK_OAK_HANGING_SIGN: 10
-  MANGROVE_HANGING_SIGN: 10
-  CHERRY_HANGING_SIGN: 10
-  PALE_OAK_HANGING_SIGN: 10
+  wood:
+    name: "Wood"
+    icon: OAK_LOG
+    enabled: true
+    items:
+      OAK_LOG:
+        sell: 20
+      SPRUCE_LOG:
+        sell: 20
+      BIRCH_LOG:
+        sell: 20
+      JUNGLE_LOG:
+        sell: 22
+      ACACIA_LOG:
+        sell: 22
+      DARK_OAK_LOG:
+        sell: 20
+      MANGROVE_LOG:
+        sell: 22
+      CHERRY_LOG:
+        sell: 25
+      PALE_OAK_LOG:
+        sell: 25
+      STRIPPED_OAK_LOG:
+        sell: 20
+      STRIPPED_SPRUCE_LOG:
+        sell: 20
+      STRIPPED_BIRCH_LOG:
+        sell: 20
+      STRIPPED_JUNGLE_LOG:
+        sell: 22
+      STRIPPED_ACACIA_LOG:
+        sell: 22
+      STRIPPED_DARK_OAK_LOG:
+        sell: 20
+      STRIPPED_MANGROVE_LOG:
+        sell: 22
+      STRIPPED_CHERRY_LOG:
+        sell: 25
+      STRIPPED_PALE_OAK_LOG:
+        sell: 25
+      OAK_WOOD:
+        sell: 20
+      SPRUCE_WOOD:
+        sell: 20
+      BIRCH_WOOD:
+        sell: 20
+      JUNGLE_WOOD:
+        sell: 22
+      ACACIA_WOOD:
+        sell: 22
+      DARK_OAK_WOOD:
+        sell: 20
+      MANGROVE_WOOD:
+        sell: 22
+      CHERRY_WOOD:
+        sell: 25
+      PALE_OAK_WOOD:
+        sell: 25
+      STRIPPED_OAK_WOOD:
+        sell: 20
+      STRIPPED_SPRUCE_WOOD:
+        sell: 20
+      STRIPPED_BIRCH_WOOD:
+        sell: 20
+      STRIPPED_JUNGLE_WOOD:
+        sell: 22
+      STRIPPED_ACACIA_WOOD:
+        sell: 22
+      STRIPPED_DARK_OAK_WOOD:
+        sell: 20
+      STRIPPED_MANGROVE_WOOD:
+        sell: 22
+      STRIPPED_CHERRY_WOOD:
+        sell: 25
+      STRIPPED_PALE_OAK_WOOD:
+        sell: 25
+      OAK_PLANKS:
+        sell: 5
+      SPRUCE_PLANKS:
+        sell: 5
+      BIRCH_PLANKS:
+        sell: 5
+      JUNGLE_PLANKS:
+        sell: 5
+      ACACIA_PLANKS:
+        sell: 5
+      DARK_OAK_PLANKS:
+        sell: 5
+      MANGROVE_PLANKS:
+        sell: 5
+      CHERRY_PLANKS:
+        sell: 5
+      PALE_OAK_PLANKS:
+        sell: 5
+      OAK_SLAB:
+        sell: 3
+      SPRUCE_SLAB:
+        sell: 3
+      BIRCH_SLAB:
+        sell: 3
+      JUNGLE_SLAB:
+        sell: 3
+      ACACIA_SLAB:
+        sell: 3
+      DARK_OAK_SLAB:
+        sell: 3
+      MANGROVE_SLAB:
+        sell: 3
+      CHERRY_SLAB:
+        sell: 3
+      PALE_OAK_SLAB:
+        sell: 3
+      OAK_STAIRS:
+        sell: 5
+      SPRUCE_STAIRS:
+        sell: 5
+      BIRCH_STAIRS:
+        sell: 5
+      JUNGLE_STAIRS:
+        sell: 5
+      ACACIA_STAIRS:
+        sell: 5
+      DARK_OAK_STAIRS:
+        sell: 5
+      MANGROVE_STAIRS:
+        sell: 5
+      CHERRY_STAIRS:
+        sell: 5
+      PALE_OAK_STAIRS:
+        sell: 5
+      OAK_FENCE:
+        sell: 6
+      SPRUCE_FENCE:
+        sell: 6
+      BIRCH_FENCE:
+        sell: 6
+      JUNGLE_FENCE:
+        sell: 6
+      ACACIA_FENCE:
+        sell: 6
+      DARK_OAK_FENCE:
+        sell: 6
+      MANGROVE_FENCE:
+        sell: 6
+      CHERRY_FENCE:
+        sell: 6
+      PALE_OAK_FENCE:
+        sell: 6
+      OAK_FENCE_GATE:
+        sell: 10
+      SPRUCE_FENCE_GATE:
+        sell: 10
+      BIRCH_FENCE_GATE:
+        sell: 10
+      JUNGLE_FENCE_GATE:
+        sell: 10
+      ACACIA_FENCE_GATE:
+        sell: 10
+      DARK_OAK_FENCE_GATE:
+        sell: 10
+      MANGROVE_FENCE_GATE:
+        sell: 10
+      CHERRY_FENCE_GATE:
+        sell: 10
+      PALE_OAK_FENCE_GATE:
+        sell: 10
+      OAK_DOOR:
+        sell: 12
+      SPRUCE_DOOR:
+        sell: 12
+      BIRCH_DOOR:
+        sell: 12
+      JUNGLE_DOOR:
+        sell: 12
+      ACACIA_DOOR:
+        sell: 12
+      DARK_OAK_DOOR:
+        sell: 12
+      MANGROVE_DOOR:
+        sell: 12
+      CHERRY_DOOR:
+        sell: 12
+      PALE_OAK_DOOR:
+        sell: 12
+      OAK_TRAPDOOR:
+        sell: 8
+      SPRUCE_TRAPDOOR:
+        sell: 8
+      BIRCH_TRAPDOOR:
+        sell: 8
+      JUNGLE_TRAPDOOR:
+        sell: 8
+      ACACIA_TRAPDOOR:
+        sell: 8
+      DARK_OAK_TRAPDOOR:
+        sell: 8
+      MANGROVE_TRAPDOOR:
+        sell: 8
+      CHERRY_TRAPDOOR:
+        sell: 8
+      PALE_OAK_TRAPDOOR:
+        sell: 8
+      OAK_BUTTON:
+        sell: 2
+      SPRUCE_BUTTON:
+        sell: 2
+      BIRCH_BUTTON:
+        sell: 2
+      JUNGLE_BUTTON:
+        sell: 2
+      ACACIA_BUTTON:
+        sell: 2
+      DARK_OAK_BUTTON:
+        sell: 2
+      MANGROVE_BUTTON:
+        sell: 2
+      CHERRY_BUTTON:
+        sell: 2
+      PALE_OAK_BUTTON:
+        sell: 2
+      OAK_PRESSURE_PLATE:
+        sell: 4
+      SPRUCE_PRESSURE_PLATE:
+        sell: 4
+      BIRCH_PRESSURE_PLATE:
+        sell: 4
+      JUNGLE_PRESSURE_PLATE:
+        sell: 4
+      ACACIA_PRESSURE_PLATE:
+        sell: 4
+      DARK_OAK_PRESSURE_PLATE:
+        sell: 4
+      MANGROVE_PRESSURE_PLATE:
+        sell: 4
+      CHERRY_PRESSURE_PLATE:
+        sell: 4
+      PALE_OAK_PRESSURE_PLATE:
+        sell: 4
+      OAK_SIGN:
+        sell: 6
+      SPRUCE_SIGN:
+        sell: 6
+      BIRCH_SIGN:
+        sell: 6
+      JUNGLE_SIGN:
+        sell: 6
+      ACACIA_SIGN:
+        sell: 6
+      DARK_OAK_SIGN:
+        sell: 6
+      MANGROVE_SIGN:
+        sell: 6
+      CHERRY_SIGN:
+        sell: 6
+      PALE_OAK_SIGN:
+        sell: 6
+      OAK_HANGING_SIGN:
+        sell: 10
+      SPRUCE_HANGING_SIGN:
+        sell: 10
+      BIRCH_HANGING_SIGN:
+        sell: 10
+      JUNGLE_HANGING_SIGN:
+        sell: 10
+      ACACIA_HANGING_SIGN:
+        sell: 10
+      DARK_OAK_HANGING_SIGN:
+        sell: 10
+      MANGROVE_HANGING_SIGN:
+        sell: 10
+      CHERRY_HANGING_SIGN:
+        sell: 10
+      PALE_OAK_HANGING_SIGN:
+        sell: 10
+      BAMBOO:
+        sell: 8
+      BAMBOO_BLOCK:
+        sell: 20
+      STRIPPED_BAMBOO_BLOCK:
+        sell: 20
+      BAMBOO_PLANKS:
+        sell: 5
+      BAMBOO_MOSAIC:
+        sell: 6
+      BAMBOO_SLAB:
+        sell: 3
+      BAMBOO_STAIRS:
+        sell: 5
+      BAMBOO_MOSAIC_SLAB:
+        sell: 3
+      BAMBOO_MOSAIC_STAIRS:
+        sell: 5
+      BAMBOO_FENCE:
+        sell: 6
+      BAMBOO_FENCE_GATE:
+        sell: 10
+      BAMBOO_DOOR:
+        sell: 12
+      BAMBOO_TRAPDOOR:
+        sell: 8
+      BAMBOO_BUTTON:
+        sell: 2
+      BAMBOO_PRESSURE_PLATE:
+        sell: 4
+      BAMBOO_SIGN:
+        sell: 6
+      BAMBOO_HANGING_SIGN:
+        sell: 10
+      CRIMSON_STEM:
+        sell: 25
+      WARPED_STEM:
+        sell: 25
+      CRIMSON_HYPHAE:
+        sell: 25
+      WARPED_HYPHAE:
+        sell: 25
+      STRIPPED_CRIMSON_STEM:
+        sell: 25
+      STRIPPED_WARPED_STEM:
+        sell: 25
+      STRIPPED_CRIMSON_HYPHAE:
+        sell: 25
+      STRIPPED_WARPED_HYPHAE:
+        sell: 25
+      CRIMSON_PLANKS:
+        sell: 6
+      WARPED_PLANKS:
+        sell: 6
+      CRIMSON_SLAB:
+        sell: 3
+      WARPED_SLAB:
+        sell: 3
+      CRIMSON_STAIRS:
+        sell: 6
+      WARPED_STAIRS:
+        sell: 6
+      CRIMSON_FENCE:
+        sell: 7
+      WARPED_FENCE:
+        sell: 7
+      CRIMSON_FENCE_GATE:
+        sell: 11
+      WARPED_FENCE_GATE:
+        sell: 11
+      CRIMSON_DOOR:
+        sell: 13
+      WARPED_DOOR:
+        sell: 13
+      CRIMSON_TRAPDOOR:
+        sell: 9
+      WARPED_TRAPDOOR:
+        sell: 9
+      CRIMSON_BUTTON:
+        sell: 2
+      WARPED_BUTTON:
+        sell: 2
+      CRIMSON_PRESSURE_PLATE:
+        sell: 4
+      WARPED_PRESSURE_PLATE:
+        sell: 4
+      CRIMSON_SIGN:
+        sell: 7
+      WARPED_SIGN:
+        sell: 7
+      CRIMSON_HANGING_SIGN:
+        sell: 11
+      WARPED_HANGING_SIGN:
+        sell: 11
+      OAK_LEAVES:
+        sell: 2
+      SPRUCE_LEAVES:
+        sell: 2
+      BIRCH_LEAVES:
+        sell: 2
+      JUNGLE_LEAVES:
+        sell: 2
+      ACACIA_LEAVES:
+        sell: 2
+      DARK_OAK_LEAVES:
+        sell: 2
+      MANGROVE_LEAVES:
+        sell: 2
+      CHERRY_LEAVES:
+        sell: 3
+      PALE_OAK_LEAVES:
+        sell: 3
+      AZALEA_LEAVES:
+        sell: 3
+      FLOWERING_AZALEA_LEAVES:
+        sell: 4
+      OAK_SAPLING:
+        sell: 5
+      SPRUCE_SAPLING:
+        sell: 5
+      BIRCH_SAPLING:
+        sell: 5
+      JUNGLE_SAPLING:
+        sell: 8
+      ACACIA_SAPLING:
+        sell: 6
+      DARK_OAK_SAPLING:
+        sell: 6
+      CHERRY_SAPLING:
+        sell: 8
+      PALE_OAK_SAPLING:
+        sell: 8
+      MANGROVE_PROPAGULE:
+        sell: 7
+      AZALEA:
+        sell: 8
+      FLOWERING_AZALEA:
+        sell: 10
 
-  # ══════════════════════════════════════════════════════
-  # BAMBOO WOOD FAMILY
-  # ══════════════════════════════════════════════════════
-  BAMBOO: 8
-  BAMBOO_BLOCK: 20
-  STRIPPED_BAMBOO_BLOCK: 20
-  BAMBOO_PLANKS: 5
-  BAMBOO_MOSAIC: 6
-  BAMBOO_SLAB: 3
-  BAMBOO_STAIRS: 5
-  BAMBOO_MOSAIC_SLAB: 3
-  BAMBOO_MOSAIC_STAIRS: 5
-  BAMBOO_FENCE: 6
-  BAMBOO_FENCE_GATE: 10
-  BAMBOO_DOOR: 12
-  BAMBOO_TRAPDOOR: 8
-  BAMBOO_BUTTON: 2
-  BAMBOO_PRESSURE_PLATE: 4
-  BAMBOO_SIGN: 6
-  BAMBOO_HANGING_SIGN: 10
+  farming:
+    name: "Farming"
+    icon: WHEAT
+    enabled: true
+    items:
+      WHEAT:
+        sell: 15
+      WHEAT_SEEDS:
+        sell: 5
+      CARROT:
+        sell: 12
+      POTATO:
+        sell: 12
+      POISONOUS_POTATO:
+        sell: 20
+      BAKED_POTATO:
+        sell: 18
+      BEETROOT:
+        sell: 10
+      BEETROOT_SEEDS:
+        sell: 4
+      PUMPKIN:
+        sell: 20
+      PUMPKIN_SEEDS:
+        sell: 5
+      CARVED_PUMPKIN:
+        sell: 25
+      JACK_O_LANTERN:
+        sell: 35
+      MELON:
+        sell: 20
+      MELON_SLICE:
+        sell: 3
+      MELON_SEEDS:
+        sell: 5
+      SUGAR_CANE:
+        sell: 10
+      CACTUS:
+        sell: 10
+      SWEET_BERRIES:
+        sell: 8
+      GLOW_BERRIES:
+        sell: 12
+      COCOA_BEANS:
+        sell: 10
+      NETHER_WART:
+        sell: 25
+      TORCHFLOWER_SEEDS:
+        sell: 20
+      TORCHFLOWER:
+        sell: 25
+      PITCHER_POD:
+        sell: 20
+      PITCHER_PLANT:
+        sell: 30
+      APPLE:
+        sell: 25
+      DANDELION:
+        sell: 5
+      POPPY:
+        sell: 5
+      BLUE_ORCHID:
+        sell: 7
+      ALLIUM:
+        sell: 7
+      AZURE_BLUET:
+        sell: 5
+      RED_TULIP:
+        sell: 5
+      ORANGE_TULIP:
+        sell: 5
+      WHITE_TULIP:
+        sell: 5
+      PINK_TULIP:
+        sell: 5
+      OXEYE_DAISY:
+        sell: 5
+      CORNFLOWER:
+        sell: 6
+      LILY_OF_THE_VALLEY:
+        sell: 8
+      SUNFLOWER:
+        sell: 10
+      LILAC:
+        sell: 10
+      ROSE_BUSH:
+        sell: 10
+      PEONY:
+        sell: 10
+      WITHER_ROSE:
+        sell: 150
+      PINK_PETALS:
+        sell: 5
+      WILDFLOWERS:
+        sell: 5
+      CACTUS_FLOWER:
+        sell: 12
+      OPEN_EYEBLOSSOM:
+        sell: 15
+      CLOSED_EYEBLOSSOM:
+        sell: 15
+      SHORT_GRASS:
+        sell: 1
+      TALL_GRASS:
+        sell: 2
+      FERN:
+        sell: 2
+      LARGE_FERN:
+        sell: 3
+      DEAD_BUSH:
+        sell: 3
+      BUSH:
+        sell: 3
+      FIREFLY_BUSH:
+        sell: 5
+      LEAF_LITTER:
+        sell: 1
+      VINE:
+        sell: 4
+      GLOW_LICHEN:
+        sell: 4
+      HANGING_ROOTS:
+        sell: 4
+      WEEPING_VINES:
+        sell: 5
+      TWISTING_VINES:
+        sell: 5
+      CRIMSON_ROOTS:
+        sell: 4
+      WARPED_ROOTS:
+        sell: 4
+      NETHER_SPROUTS:
+        sell: 4
+      LILY_PAD:
+        sell: 5
+      SEA_PICKLE:
+        sell: 6
+      MOSS_BLOCK:
+        sell: 2
+      MOSS_CARPET:
+        sell: 1
+      PALE_MOSS_BLOCK:
+        sell: 3
+      PALE_MOSS_CARPET:
+        sell: 2
+      PALE_HANGING_MOSS:
+        sell: 3
+      SPORE_BLOSSOM:
+        sell: 15
+      BIG_DRIPLEAF:
+        sell: 8
+      SMALL_DRIPLEAF:
+        sell: 6
+      CHORUS_PLANT:
+        sell: 15
+      CHORUS_FLOWER:
+        sell: 40
+      HONEYCOMB:
+        sell: 50
+      HONEYCOMB_BLOCK:
+        sell: 150
+      HONEY_BOTTLE:
+        sell: 75
+      HONEY_BLOCK:
+        sell: 250
+      BEE_NEST:
+        sell: 500
+      BEEHIVE:
+        sell: 250
 
-  # ══════════════════════════════════════════════════════
-  # NETHER WOOD
-  # ══════════════════════════════════════════════════════
-  CRIMSON_STEM: 25
-  WARPED_STEM: 25
-  CRIMSON_HYPHAE: 25
-  WARPED_HYPHAE: 25
-  STRIPPED_CRIMSON_STEM: 25
-  STRIPPED_WARPED_STEM: 25
-  STRIPPED_CRIMSON_HYPHAE: 25
-  STRIPPED_WARPED_HYPHAE: 25
-  CRIMSON_PLANKS: 6
-  WARPED_PLANKS: 6
-  CRIMSON_SLAB: 3
-  WARPED_SLAB: 3
-  CRIMSON_STAIRS: 6
-  WARPED_STAIRS: 6
-  CRIMSON_FENCE: 7
-  WARPED_FENCE: 7
-  CRIMSON_FENCE_GATE: 11
-  WARPED_FENCE_GATE: 11
-  CRIMSON_DOOR: 13
-  WARPED_DOOR: 13
-  CRIMSON_TRAPDOOR: 9
-  WARPED_TRAPDOOR: 9
-  CRIMSON_BUTTON: 2
-  WARPED_BUTTON: 2
-  CRIMSON_PRESSURE_PLATE: 4
-  WARPED_PRESSURE_PLATE: 4
-  CRIMSON_SIGN: 7
-  WARPED_SIGN: 7
-  CRIMSON_HANGING_SIGN: 11
-  WARPED_HANGING_SIGN: 11
+  mob_drops:
+    name: "Mob Drops"
+    icon: ROTTEN_FLESH
+    enabled: true
+    items:
+      LEATHER:
+        sell: 150
+      RABBIT_HIDE:
+        sell: 60
+      RABBIT_FOOT:
+        sell: 250
+      FEATHER:
+        sell: 35
+      STRING:
+        sell: 50
+      SPIDER_EYE:
+        sell: 60
+      ROTTEN_FLESH:
+        sell: 25
+      BONE:
+        sell: 40
+      BONE_MEAL:
+        sell: 15
+      GUNPOWDER:
+        sell: 100
+      SLIME_BALL:
+        sell: 125
+      MAGMA_CREAM:
+        sell: 175
+      BLAZE_ROD:
+        sell: 400
+      BLAZE_POWDER:
+        sell: 175
+      GHAST_TEAR:
+        sell: 750
+      ENDER_PEARL:
+        sell: 250
+      SHULKER_SHELL:
+        sell: 1500
+      PHANTOM_MEMBRANE:
+        sell: 500
+      NAUTILUS_SHELL:
+        sell: 750
+      INK_SAC:
+        sell: 40
+      GLOW_INK_SAC:
+        sell: 75
+      ARMADILLO_SCUTE:
+        sell: 125
+      TURTLE_SCUTE:
+        sell: 500
+      BREEZE_ROD:
+        sell: 500
+      WIND_CHARGE:
+        sell: 75
 
-  # ══════════════════════════════════════════════════════
-  # LEAVES / SAPLINGS
-  # ══════════════════════════════════════════════════════
-  OAK_LEAVES: 2
-  SPRUCE_LEAVES: 2
-  BIRCH_LEAVES: 2
-  JUNGLE_LEAVES: 2
-  ACACIA_LEAVES: 2
-  DARK_OAK_LEAVES: 2
-  MANGROVE_LEAVES: 2
-  CHERRY_LEAVES: 3
-  PALE_OAK_LEAVES: 3
-  AZALEA_LEAVES: 3
-  FLOWERING_AZALEA_LEAVES: 4
-  OAK_SAPLING: 5
-  SPRUCE_SAPLING: 5
-  BIRCH_SAPLING: 5
-  JUNGLE_SAPLING: 8
-  ACACIA_SAPLING: 6
-  DARK_OAK_SAPLING: 6
-  CHERRY_SAPLING: 8
-  PALE_OAK_SAPLING: 8
-  MANGROVE_PROPAGULE: 7
-  AZALEA: 8
-  FLOWERING_AZALEA: 10
+  ores:
+    name: "Ores & Minerals"
+    icon: DIAMOND
+    enabled: true
+    items:
+      COAL:
+        sell: 50
+      CHARCOAL:
+        sell: 35
+      RAW_COPPER:
+        sell: 45
+      COPPER_INGOT:
+        sell: 60
+      COPPER_NUGGET:
+        sell: 7
+      RAW_IRON:
+        sell: 125
+      IRON_INGOT:
+        sell: 175
+      IRON_NUGGET:
+        sell: 20
+      RAW_GOLD:
+        sell: 175
+      GOLD_INGOT:
+        sell: 250
+      GOLD_NUGGET:
+        sell: 30
+      DIAMOND:
+        sell: 1000
+      EMERALD:
+        sell: 750
+      LAPIS_LAZULI:
+        sell: 50
+      REDSTONE:
+        sell: 25
+      QUARTZ:
+        sell: 75
+      AMETHYST_SHARD:
+        sell: 100
+      ANCIENT_DEBRIS:
+        sell: 2500
+      NETHERITE_SCRAP:
+        sell: 3500
+      NETHERITE_INGOT:
+        sell: 8000
+      FLINT:
+        sell: 20
+      ECHO_SHARD:
+        sell: 500
+      PRISMARINE_SHARD:
+        sell: 75
+      PRISMARINE_CRYSTALS:
+        sell: 125
+      COAL_BLOCK:
+        sell: 450
+      RAW_COPPER_BLOCK:
+        sell: 400
+      COPPER_BLOCK:
+        sell: 540
+      RAW_IRON_BLOCK:
+        sell: 1100
+      IRON_BLOCK:
+        sell: 1575
+      RAW_GOLD_BLOCK:
+        sell: 1550
+      GOLD_BLOCK:
+        sell: 2250
+      DIAMOND_BLOCK:
+        sell: 9000
+      EMERALD_BLOCK:
+        sell: 6750
+      LAPIS_BLOCK:
+        sell: 450
+      REDSTONE_BLOCK:
+        sell: 225
+      NETHERITE_BLOCK:
+        sell: 72000
+      AMETHYST_BLOCK:
+        sell: 350
 
-  # ══════════════════════════════════════════════════════
-  # NATURE / VEGETATION
-  # ══════════════════════════════════════════════════════
-  SHORT_GRASS: 1
-  TALL_GRASS: 2
-  FERN: 2
-  LARGE_FERN: 3
-  DEAD_BUSH: 3
-  BUSH: 3
-  FIREFLY_BUSH: 5
-  LEAF_LITTER: 1
-  VINE: 4
-  GLOW_LICHEN: 4
-  HANGING_ROOTS: 4
-  WEEPING_VINES: 5
-  TWISTING_VINES: 5
-  CRIMSON_ROOTS: 4
-  WARPED_ROOTS: 4
-  NETHER_SPROUTS: 4
-  LILY_PAD: 5
-  SEA_PICKLE: 6
-  MOSS_BLOCK: 2
-  MOSS_CARPET: 1
-  PALE_MOSS_BLOCK: 3
-  PALE_MOSS_CARPET: 2
-  PALE_HANGING_MOSS: 3
-  SPORE_BLOSSOM: 15
-  BIG_DRIPLEAF: 8
-  SMALL_DRIPLEAF: 6
-  CHORUS_PLANT: 15
-  CHORUS_FLOWER: 40
+  nether:
+    name: "Nether"
+    icon: NETHERRACK
+    enabled: true
+    items:
+      SOUL_SAND:
+        sell: 5
+      SOUL_SOIL:
+        sell: 5
+      BASALT:
+        sell: 2
+      SMOOTH_BASALT:
+        sell: 3
+      POLISHED_BASALT:
+        sell: 3
+      BLACKSTONE:
+        sell: 2
+      POLISHED_BLACKSTONE:
+        sell: 3
+      POLISHED_BLACKSTONE_BRICKS:
+        sell: 4
+      CRACKED_POLISHED_BLACKSTONE_BRICKS:
+        sell: 4
+      CHISELED_POLISHED_BLACKSTONE:
+        sell: 5
+      GILDED_BLACKSTONE:
+        sell: 50
+      NETHER_BRICK:
+        sell: 15
+      NETHER_BRICKS:
+        sell: 20
+      RED_NETHER_BRICKS:
+        sell: 25
+      MAGMA_BLOCK:
+        sell: 15
+      GLOWSTONE_DUST:
+        sell: 30
+      GLOWSTONE:
+        sell: 120
+      SHROOMLIGHT:
+        sell: 75
+      OBSIDIAN:
+        sell: 100
+      CRYING_OBSIDIAN:
+        sell: 200
+      NETHER_WART_BLOCK:
+        sell: 10
+      WARPED_WART_BLOCK:
+        sell: 10
 
-  # ══════════════════════════════════════════════════════
-  # FARMING / CROPS
-  # ══════════════════════════════════════════════════════
-  WHEAT: 15
-  WHEAT_SEEDS: 5
-  CARROT: 12
-  POTATO: 12
-  POISONOUS_POTATO: 20
-  BAKED_POTATO: 18
-  BEETROOT: 10
-  BEETROOT_SEEDS: 4
-  PUMPKIN: 20
-  PUMPKIN_SEEDS: 5
-  CARVED_PUMPKIN: 25
-  JACK_O_LANTERN: 35
-  MELON: 20
-  MELON_SLICE: 3
-  MELON_SEEDS: 5
-  SUGAR_CANE: 10
-  CACTUS: 10
-  SWEET_BERRIES: 8
-  GLOW_BERRIES: 12
-  COCOA_BEANS: 10
-  NETHER_WART: 25
-  TORCHFLOWER_SEEDS: 20
-  TORCHFLOWER: 25
-  PITCHER_POD: 20
-  PITCHER_PLANT: 30
-  APPLE: 25
+  end:
+    name: "End"
+    icon: END_STONE
+    enabled: true
+    items:
+      END_STONE:
+        sell: 5
+      END_STONE_BRICKS:
+        sell: 8
+      PURPUR_BLOCK:
+        sell: 10
+      PURPUR_PILLAR:
+        sell: 12
+      PURPUR_SLAB:
+        sell: 5
+      PURPUR_STAIRS:
+        sell: 8
+      CHORUS_FRUIT:
+        sell: 20
+      POPPED_CHORUS_FRUIT:
+        sell: 30
+      END_ROD:
+        sell: 40
+      SHULKER_BOX:
+        sell: 3500
+      WHITE_SHULKER_BOX:
+        sell: 3500
+      ORANGE_SHULKER_BOX:
+        sell: 3500
+      MAGENTA_SHULKER_BOX:
+        sell: 3500
+      LIGHT_BLUE_SHULKER_BOX:
+        sell: 3500
+      YELLOW_SHULKER_BOX:
+        sell: 3500
+      LIME_SHULKER_BOX:
+        sell: 3500
+      PINK_SHULKER_BOX:
+        sell: 3500
+      GRAY_SHULKER_BOX:
+        sell: 3500
+      LIGHT_GRAY_SHULKER_BOX:
+        sell: 3500
+      CYAN_SHULKER_BOX:
+        sell: 3500
+      PURPLE_SHULKER_BOX:
+        sell: 3500
+      BLUE_SHULKER_BOX:
+        sell: 3500
+      BROWN_SHULKER_BOX:
+        sell: 3500
+      GREEN_SHULKER_BOX:
+        sell: 3500
+      RED_SHULKER_BOX:
+        sell: 3500
+      BLACK_SHULKER_BOX:
+        sell: 3500
+      ENDER_CHEST:
+        sell: 1500
+      END_CRYSTAL:
+        sell: 2500
 
-  # ══════════════════════════════════════════════════════
-  # FLOWERS
-  # ══════════════════════════════════════════════════════
-  DANDELION: 5
-  POPPY: 5
-  BLUE_ORCHID: 7
-  ALLIUM: 7
-  AZURE_BLUET: 5
-  RED_TULIP: 5
-  ORANGE_TULIP: 5
-  WHITE_TULIP: 5
-  PINK_TULIP: 5
-  OXEYE_DAISY: 5
-  CORNFLOWER: 6
-  LILY_OF_THE_VALLEY: 8
-  SUNFLOWER: 10
-  LILAC: 10
-  ROSE_BUSH: 10
-  PEONY: 10
-  WITHER_ROSE: 150
-  PINK_PETALS: 5
-  WILDFLOWERS: 5
-  CACTUS_FLOWER: 12
-  OPEN_EYEBLOSSOM: 15
-  CLOSED_EYEBLOSSOM: 15
+  ocean:
+    name: "Ocean"
+    icon: PRISMARINE_SHARD
+    enabled: true
+    items:
+      KELP:
+        sell: 2
+      PRISMARINE:
+        sell: 10
+      PRISMARINE_BRICKS:
+        sell: 15
+      DARK_PRISMARINE:
+        sell: 20
+      SEA_LANTERN:
+        sell: 100
+      SPONGE:
+        sell: 500
+      WET_SPONGE:
+        sell: 400
+      TUBE_CORAL_BLOCK:
+        sell: 50
+      BRAIN_CORAL_BLOCK:
+        sell: 50
+      BUBBLE_CORAL_BLOCK:
+        sell: 50
+      FIRE_CORAL_BLOCK:
+        sell: 50
+      HORN_CORAL_BLOCK:
+        sell: 50
+      DEAD_TUBE_CORAL_BLOCK:
+        sell: 25
+      DEAD_BRAIN_CORAL_BLOCK:
+        sell: 25
+      DEAD_BUBBLE_CORAL_BLOCK:
+        sell: 25
+      DEAD_FIRE_CORAL_BLOCK:
+        sell: 25
+      DEAD_HORN_CORAL_BLOCK:
+        sell: 25
+      TUBE_CORAL:
+        sell: 20
+      BRAIN_CORAL:
+        sell: 20
+      BUBBLE_CORAL:
+        sell: 20
+      FIRE_CORAL:
+        sell: 20
+      HORN_CORAL:
+        sell: 20
+      TUBE_CORAL_FAN:
+        sell: 20
+      BRAIN_CORAL_FAN:
+        sell: 20
+      BUBBLE_CORAL_FAN:
+        sell: 20
+      FIRE_CORAL_FAN:
+        sell: 20
+      HORN_CORAL_FAN:
+        sell: 20
+      DEAD_TUBE_CORAL:
+        sell: 10
+      DEAD_BRAIN_CORAL:
+        sell: 10
+      DEAD_BUBBLE_CORAL:
+        sell: 10
+      DEAD_FIRE_CORAL:
+        sell: 10
+      DEAD_HORN_CORAL:
+        sell: 10
+      DEAD_TUBE_CORAL_FAN:
+        sell: 10
+      DEAD_BRAIN_CORAL_FAN:
+        sell: 10
+      DEAD_BUBBLE_CORAL_FAN:
+        sell: 10
+      DEAD_FIRE_CORAL_FAN:
+        sell: 10
+      DEAD_HORN_CORAL_FAN:
+        sell: 10
+      CONDUIT:
+        sell: 7500
+      COD:
+        sell: 30
+      COOKED_COD:
+        sell: 50
+      SALMON:
+        sell: 40
+      COOKED_SALMON:
+        sell: 60
+      TROPICAL_FISH:
+        sell: 60
+      PUFFERFISH:
+        sell: 75
 
-  # ══════════════════════════════════════════════════════
-  # ORES / MINERALS
-  # ══════════════════════════════════════════════════════
-  COAL: 50
-  CHARCOAL: 35
-  RAW_COPPER: 45
-  COPPER_INGOT: 60
-  COPPER_NUGGET: 7
-  RAW_IRON: 125
-  IRON_INGOT: 175
-  IRON_NUGGET: 20
-  RAW_GOLD: 175
-  GOLD_INGOT: 250
-  GOLD_NUGGET: 30
-  DIAMOND: 1000
-  EMERALD: 750
-  LAPIS_LAZULI: 50
-  REDSTONE: 25
-  QUARTZ: 75
-  AMETHYST_SHARD: 100
-  ANCIENT_DEBRIS: 2500
-  NETHERITE_SCRAP: 3500
-  NETHERITE_INGOT: 8000
-  FLINT: 20
-  ECHO_SHARD: 500
-  PRISMARINE_SHARD: 75
-  PRISMARINE_CRYSTALS: 125
+  redstone:
+    name: "Redstone"
+    icon: REPEATER
+    enabled: true
+    items:
+      REDSTONE_TORCH:
+        sell: 20
+      REPEATER:
+        sell: 100
+      COMPARATOR:
+        sell: 150
+      OBSERVER:
+        sell: 175
+      PISTON:
+        sell: 150
+      STICKY_PISTON:
+        sell: 225
+      HOPPER:
+        sell: 300
+      DISPENSER:
+        sell: 175
+      DROPPER:
+        sell: 100
+      TARGET:
+        sell: 100
+      REDSTONE_LAMP:
+        sell: 125
+      NOTE_BLOCK:
+        sell: 75
+      JUKEBOX:
+        sell: 250
+      DAYLIGHT_DETECTOR:
+        sell: 125
+      LEVER:
+        sell: 10
+      STONE_BUTTON:
+        sell: 5
+      STONE_PRESSURE_PLATE:
+        sell: 10
+      HEAVY_WEIGHTED_PRESSURE_PLATE:
+        sell: 100
+      LIGHT_WEIGHTED_PRESSURE_PLATE:
+        sell: 125
+      TRIPWIRE_HOOK:
+        sell: 40
+      TNT:
+        sell: 500
+      SLIME_BLOCK:
+        sell: 500
+      CRAFTER:
+        sell: 350
+      RAIL:
+        sell: 20
+      POWERED_RAIL:
+        sell: 50
+      DETECTOR_RAIL:
+        sell: 40
+      ACTIVATOR_RAIL:
+        sell: 40
+      MINECART:
+        sell: 200
+      CHEST_MINECART:
+        sell: 275
+      HOPPER_MINECART:
+        sell: 450
+      TNT_MINECART:
+        sell: 650
+      FURNACE_MINECART:
+        sell: 250
 
-  # ══════════════════════════════════════════════════════
-  # RESOURCE BLOCKS
-  # ══════════════════════════════════════════════════════
-  COAL_BLOCK: 450
-  RAW_COPPER_BLOCK: 400
-  COPPER_BLOCK: 540
-  RAW_IRON_BLOCK: 1100
-  IRON_BLOCK: 1575
-  RAW_GOLD_BLOCK: 1550
-  GOLD_BLOCK: 2250
-  DIAMOND_BLOCK: 9000
-  EMERALD_BLOCK: 6750
-  LAPIS_BLOCK: 450
-  REDSTONE_BLOCK: 225
-  NETHERITE_BLOCK: 72000
-  AMETHYST_BLOCK: 350
+  food:
+    name: "Food"
+    icon: COOKED_BEEF
+    enabled: true
+    items:
+      BREAD:
+        sell: 30
+      COOKIE:
+        sell: 10
+      CAKE:
+        sell: 100
+      PUMPKIN_PIE:
+        sell: 50
+      BEETROOT_SOUP:
+        sell: 40
+      MUSHROOM_STEW:
+        sell: 50
+      RABBIT_STEW:
+        sell: 100
+      SUSPICIOUS_STEW:
+        sell: 75
+      BEEF:
+        sell: 40
+      COOKED_BEEF:
+        sell: 65
+      PORKCHOP:
+        sell: 40
+      COOKED_PORKCHOP:
+        sell: 65
+      CHICKEN:
+        sell: 30
+      COOKED_CHICKEN:
+        sell: 50
+      MUTTON:
+        sell: 35
+      COOKED_MUTTON:
+        sell: 55
+      RABBIT:
+        sell: 40
+      COOKED_RABBIT:
+        sell: 65
+      DRIED_KELP:
+        sell: 6
+      GOLDEN_CARROT:
+        sell: 125
+      GOLDEN_APPLE:
+        sell: 500
+      ENCHANTED_GOLDEN_APPLE:
+        sell: 10000
 
-  # ══════════════════════════════════════════════════════
-  # MOB DROPS
-  # ══════════════════════════════════════════════════════
-  LEATHER: 150
-  RABBIT_HIDE: 60
-  RABBIT_FOOT: 250
-  FEATHER: 35
-  STRING: 50
-  SPIDER_EYE: 60
-  ROTTEN_FLESH: 25
-  BONE: 40
-  BONE_MEAL: 15
-  GUNPOWDER: 100
-  SLIME_BALL: 125
-  MAGMA_CREAM: 175
-  BLAZE_ROD: 400
-  BLAZE_POWDER: 175
-  GHAST_TEAR: 750
-  ENDER_PEARL: 250
-  SHULKER_SHELL: 1500
-  PHANTOM_MEMBRANE: 500
-  NAUTILUS_SHELL: 750
-  INK_SAC: 40
-  GLOW_INK_SAC: 75
-  ARMADILLO_SCUTE: 125
-  TURTLE_SCUTE: 500
-  BREEZE_ROD: 500
-  WIND_CHARGE: 75
+  decoration:
+    name: "Decoration"
+    icon: GLOWSTONE_DUST
+    enabled: true
+    items:
+      TORCH:
+        sell: 5
+      SOUL_TORCH:
+        sell: 10
+      LANTERN:
+        sell: 25
+      SOUL_LANTERN:
+        sell: 35
+      CAMPFIRE:
+        sell: 40
+      SOUL_CAMPFIRE:
+        sell: 50
+      OCHRE_FROGLIGHT:
+        sell: 100
+      VERDANT_FROGLIGHT:
+        sell: 100
+      PEARLESCENT_FROGLIGHT:
+        sell: 100
+      WHITE_BED:
+        sell: 30
+      ORANGE_BED:
+        sell: 30
+      MAGENTA_BED:
+        sell: 30
+      LIGHT_BLUE_BED:
+        sell: 30
+      YELLOW_BED:
+        sell: 30
+      LIME_BED:
+        sell: 30
+      PINK_BED:
+        sell: 30
+      GRAY_BED:
+        sell: 30
+      LIGHT_GRAY_BED:
+        sell: 30
+      CYAN_BED:
+        sell: 30
+      PURPLE_BED:
+        sell: 30
+      BLUE_BED:
+        sell: 30
+      BROWN_BED:
+        sell: 30
+      GREEN_BED:
+        sell: 30
+      RED_BED:
+        sell: 30
+      BLACK_BED:
+        sell: 30
+      # Custom-pattern banners still only sell for the base value below — the sell
+      # system deliberately ignores banner pattern NBT.
+      WHITE_BANNER:
+        sell: 30
+      ORANGE_BANNER:
+        sell: 30
+      MAGENTA_BANNER:
+        sell: 30
+      LIGHT_BLUE_BANNER:
+        sell: 30
+      YELLOW_BANNER:
+        sell: 30
+      LIME_BANNER:
+        sell: 30
+      PINK_BANNER:
+        sell: 30
+      GRAY_BANNER:
+        sell: 30
+      LIGHT_GRAY_BANNER:
+        sell: 30
+      CYAN_BANNER:
+        sell: 30
+      PURPLE_BANNER:
+        sell: 30
+      BLUE_BANNER:
+        sell: 30
+      BROWN_BANNER:
+        sell: 30
+      GREEN_BANNER:
+        sell: 30
+      RED_BANNER:
+        sell: 30
+      BLACK_BANNER:
+        sell: 30
+      CANDLE:
+        sell: 15
+      WHITE_CANDLE:
+        sell: 15
+      ORANGE_CANDLE:
+        sell: 15
+      MAGENTA_CANDLE:
+        sell: 15
+      LIGHT_BLUE_CANDLE:
+        sell: 15
+      YELLOW_CANDLE:
+        sell: 15
+      LIME_CANDLE:
+        sell: 15
+      PINK_CANDLE:
+        sell: 15
+      GRAY_CANDLE:
+        sell: 15
+      LIGHT_GRAY_CANDLE:
+        sell: 15
+      CYAN_CANDLE:
+        sell: 15
+      PURPLE_CANDLE:
+        sell: 15
+      BLUE_CANDLE:
+        sell: 15
+      BROWN_CANDLE:
+        sell: 15
+      GREEN_CANDLE:
+        sell: 15
+      RED_CANDLE:
+        sell: 15
+      BLACK_CANDLE:
+        sell: 15
 
-  # ══════════════════════════════════════════════════════
-  # RARE ITEMS
-  # ══════════════════════════════════════════════════════
-  TOTEM_OF_UNDYING: 250
-  HEART_OF_THE_SEA: 5000
-  GOAT_HORN: 1000
+  utility:
+    name: "Utility"
+    icon: ARROW
+    enabled: true
+    items:
+      CHEST:
+        sell: 25
+      TRAPPED_CHEST:
+        sell: 40
+      BARREL:
+        sell: 25
+      CRAFTING_TABLE:
+        sell: 15
+      FURNACE:
+        sell: 25
+      BLAST_FURNACE:
+        sell: 150
+      SMOKER:
+        sell: 75
+      STONECUTTER:
+        sell: 50
+      GRINDSTONE:
+        sell: 50
+      SMITHING_TABLE:
+        sell: 75
+      FLETCHING_TABLE:
+        sell: 50
+      CARTOGRAPHY_TABLE:
+        sell: 50
+      LOOM:
+        sell: 40
+      LECTERN:
+        sell: 50
+      COMPOSTER:
+        sell: 30
+      CAULDRON:
+        sell: 100
+      BREWING_STAND:
+        sell: 250
+      ENCHANTING_TABLE:
+        sell: 1500
+      ANVIL:
+        sell: 500
+      CHIPPED_ANVIL:
+        sell: 300
+      DAMAGED_ANVIL:
+        sell: 150
+      FLOWER_POT:
+        sell: 20
+      ARMOR_STAND:
+        sell: 75
+      ITEM_FRAME:
+        sell: 35
+      GLOW_ITEM_FRAME:
+        sell: 75
+      PAINTING:
+        sell: 50
+      DECORATED_POT:
+        sell: 100
+      SADDLE:
+        sell: 100
+      WHITE_DYE:
+        sell: 10
+      ORANGE_DYE:
+        sell: 10
+      MAGENTA_DYE:
+        sell: 10
+      LIGHT_BLUE_DYE:
+        sell: 10
+      YELLOW_DYE:
+        sell: 10
+      LIME_DYE:
+        sell: 10
+      PINK_DYE:
+        sell: 10
+      GRAY_DYE:
+        sell: 10
+      LIGHT_GRAY_DYE:
+        sell: 10
+      CYAN_DYE:
+        sell: 10
+      PURPLE_DYE:
+        sell: 10
+      BLUE_DYE:
+        sell: 10
+      BROWN_DYE:
+        sell: 10
+      GREEN_DYE:
+        sell: 10
+      RED_DYE:
+        sell: 10
+      BLACK_DYE:
+        sell: 10
+      # Enchantments/custom text/NBT never add value — base price only.
+      PAPER:
+        sell: 8
+      BOOK:
+        sell: 25
+      BOOKSHELF:
+        sell: 75
+      CHISELED_BOOKSHELF:
+        sell: 100
+      WRITABLE_BOOK:
+        sell: 50
+      WRITTEN_BOOK:
+        sell: 25
+      ENCHANTED_BOOK:
+        sell: 100
+      FILLED_MAP:
+        sell: 50
+      MAP:
+        sell: 50
+      NAME_TAG:
+        sell: 500
+      BUCKET:
+        sell: 100
+      WATER_BUCKET:
+        sell: 100
+      LAVA_BUCKET:
+        sell: 200
+      MILK_BUCKET:
+        sell: 125
+      POWDER_SNOW_BUCKET:
+        sell: 150
+      COD_BUCKET:
+        sell: 150
+      SALMON_BUCKET:
+        sell: 175
+      TROPICAL_FISH_BUCKET:
+        sell: 250
+      PUFFERFISH_BUCKET:
+        sell: 250
+      AXOLOTL_BUCKET:
+        sell: 500
+      TADPOLE_BUCKET:
+        sell: 250
+      # Potions never gain value from their effect/NBT — base price only.
+      DRAGON_BREATH:
+        sell: 500
+      FERMENTED_SPIDER_EYE:
+        sell: 75
+      GLISTERING_MELON_SLICE:
+        sell: 75
+      SUGAR:
+        sell: 10
+      POTION:
+        sell: 50
+      SPLASH_POTION:
+        sell: 75
+      LINGERING_POTION:
+        sell: 100
+      # Tipped arrow value never scales with its potion effect.
+      ARROW:
+        sell: 5
+      SPECTRAL_ARROW:
+        sell: 10
+      TIPPED_ARROW:
+        sell: 10
+      ANGLER_POTTERY_SHERD:
+        sell: 500
+      ARCHER_POTTERY_SHERD:
+        sell: 500
+      ARMS_UP_POTTERY_SHERD:
+        sell: 500
+      BLADE_POTTERY_SHERD:
+        sell: 500
+      BREWER_POTTERY_SHERD:
+        sell: 500
+      BURN_POTTERY_SHERD:
+        sell: 500
+      DANGER_POTTERY_SHERD:
+        sell: 500
+      EXPLORER_POTTERY_SHERD:
+        sell: 500
+      FLOW_POTTERY_SHERD:
+        sell: 500
+      FRIEND_POTTERY_SHERD:
+        sell: 500
+      GUSTER_POTTERY_SHERD:
+        sell: 500
+      HEART_POTTERY_SHERD:
+        sell: 500
+      HEARTBREAK_POTTERY_SHERD:
+        sell: 500
+      HOWL_POTTERY_SHERD:
+        sell: 500
+      MINER_POTTERY_SHERD:
+        sell: 500
+      MOURNER_POTTERY_SHERD:
+        sell: 500
+      PLENTY_POTTERY_SHERD:
+        sell: 500
+      PRIZE_POTTERY_SHERD:
+        sell: 500
+      SCRAPE_POTTERY_SHERD:
+        sell: 500
+      SHEAF_POTTERY_SHERD:
+        sell: 500
+      SHELTER_POTTERY_SHERD:
+        sell: 500
+      SKULL_POTTERY_SHERD:
+        sell: 500
+      SNORT_POTTERY_SHERD:
+        sell: 500
+      NETHERITE_UPGRADE_SMITHING_TEMPLATE:
+        sell: 2500
+      SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 5000
+      BOLT_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 1500
+      FLOW_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 1500
+      COAST_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 1000
+      DUNE_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 1000
+      WILD_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 1000
+      WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 1000
+      RAISER_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 1000
+      SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 1000
+      HOST_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 1000
+      TIDE_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 1000
+      SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 2500
+      VEX_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 2500
+      SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 2500
+      SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 2500
+      RIB_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 2500
+      EYE_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 2500
+      WARD_ARMOR_TRIM_SMITHING_TEMPLATE:
+        sell: 2500
 
-  # ══════════════════════════════════════════════════════
-  # NETHER BLOCKS
-  # ══════════════════════════════════════════════════════
-  SOUL_SAND: 5
-  SOUL_SOIL: 5
-  BASALT: 2
-  SMOOTH_BASALT: 3
-  POLISHED_BASALT: 3
-  BLACKSTONE: 2
-  POLISHED_BLACKSTONE: 3
-  POLISHED_BLACKSTONE_BRICKS: 4
-  CRACKED_POLISHED_BLACKSTONE_BRICKS: 4
-  CHISELED_POLISHED_BLACKSTONE: 5
-  GILDED_BLACKSTONE: 50
-  NETHER_BRICK: 15
-  NETHER_BRICKS: 20
-  RED_NETHER_BRICKS: 25
-  MAGMA_BLOCK: 15
-  GLOWSTONE_DUST: 30
-  GLOWSTONE: 120
-  SHROOMLIGHT: 75
-  OBSIDIAN: 100
-  CRYING_OBSIDIAN: 200
-  NETHER_WART_BLOCK: 10
-  WARPED_WART_BLOCK: 10
+  rare_items:
+    name: "Rare Items"
+    icon: TOTEM_OF_UNDYING
+    enabled: true
+    items:
+      TOTEM_OF_UNDYING:
+        sell: 250
+      HEART_OF_THE_SEA:
+        sell: 5000
+      GOAT_HORN:
+        sell: 1000
+      TRIAL_KEY:
+        sell: 1000
+      OMINOUS_TRIAL_KEY:
+        sell: 2500
+      OMINOUS_BOTTLE:
+        sell: 500
+      FLOW_BANNER_PATTERN:
+        sell: 1000
+      GUSTER_BANNER_PATTERN:
+        sell: 1000
+      # Individually configurable — adjust freely per disc.
+      MUSIC_DISC_13:
+        sell: 1000
+      MUSIC_DISC_CAT:
+        sell: 1000
+      MUSIC_DISC_BLOCKS:
+        sell: 1000
+      MUSIC_DISC_CHIRP:
+        sell: 1000
+      MUSIC_DISC_FAR:
+        sell: 1000
+      MUSIC_DISC_MALL:
+        sell: 1000
+      MUSIC_DISC_MELLOHI:
+        sell: 1000
+      MUSIC_DISC_STAL:
+        sell: 1000
+      MUSIC_DISC_STRAD:
+        sell: 1000
+      MUSIC_DISC_WARD:
+        sell: 1000
+      MUSIC_DISC_WAIT:
+        sell: 1000
+      MUSIC_DISC_11:
+        sell: 2500
+      MUSIC_DISC_5:
+        sell: 2500
+      MUSIC_DISC_PIGSTEP:
+        sell: 2500
+      MUSIC_DISC_OTHERSIDE:
+        sell: 2500
+      MUSIC_DISC_RELIC:
+        sell: 2500
+      MUSIC_DISC_CREATOR:
+        sell: 2500
+      MUSIC_DISC_CREATOR_MUSIC_BOX:
+        sell: 2500
+      MUSIC_DISC_PRECIPICE:
+        sell: 2500
+      # Player heads are excluded — not automatically sellable.
+      SKELETON_SKULL:
+        sell: 2500
+      WITHER_SKELETON_SKULL:
+        sell: 5000
+      ZOMBIE_HEAD:
+        sell: 2500
+      CREEPER_HEAD:
+        sell: 2500
+      PIGLIN_HEAD:
+        sell: 2500
 
-  # ══════════════════════════════════════════════════════
-  # END ITEMS
-  # ══════════════════════════════════════════════════════
-  END_STONE: 5
-  END_STONE_BRICKS: 8
-  PURPUR_BLOCK: 10
-  PURPUR_PILLAR: 12
-  PURPUR_SLAB: 5
-  PURPUR_STAIRS: 8
-  CHORUS_FRUIT: 20
-  POPPED_CHORUS_FRUIT: 30
-  END_ROD: 40
-  SHULKER_BOX: 3500
-  WHITE_SHULKER_BOX: 3500
-  ORANGE_SHULKER_BOX: 3500
-  MAGENTA_SHULKER_BOX: 3500
-  LIGHT_BLUE_SHULKER_BOX: 3500
-  YELLOW_SHULKER_BOX: 3500
-  LIME_SHULKER_BOX: 3500
-  PINK_SHULKER_BOX: 3500
-  GRAY_SHULKER_BOX: 3500
-  LIGHT_GRAY_SHULKER_BOX: 3500
-  CYAN_SHULKER_BOX: 3500
-  PURPLE_SHULKER_BOX: 3500
-  BLUE_SHULKER_BOX: 3500
-  BROWN_SHULKER_BOX: 3500
-  GREEN_SHULKER_BOX: 3500
-  RED_SHULKER_BOX: 3500
-  BLACK_SHULKER_BOX: 3500
-  ENDER_CHEST: 1500
-  END_CRYSTAL: 2500
-
-  # ══════════════════════════════════════════════════════
-  # OCEAN ITEMS
-  # ══════════════════════════════════════════════════════
-  PRISMARINE: 10
-  PRISMARINE_BRICKS: 15
-  DARK_PRISMARINE: 20
-  SEA_LANTERN: 100
-  SPONGE: 500
-  WET_SPONGE: 400
-  TUBE_CORAL_BLOCK: 50
-  BRAIN_CORAL_BLOCK: 50
-  BUBBLE_CORAL_BLOCK: 50
-  FIRE_CORAL_BLOCK: 50
-  HORN_CORAL_BLOCK: 50
-  DEAD_TUBE_CORAL_BLOCK: 25
-  DEAD_BRAIN_CORAL_BLOCK: 25
-  DEAD_BUBBLE_CORAL_BLOCK: 25
-  DEAD_FIRE_CORAL_BLOCK: 25
-  DEAD_HORN_CORAL_BLOCK: 25
-  TUBE_CORAL: 20
-  BRAIN_CORAL: 20
-  BUBBLE_CORAL: 20
-  FIRE_CORAL: 20
-  HORN_CORAL: 20
-  TUBE_CORAL_FAN: 20
-  BRAIN_CORAL_FAN: 20
-  BUBBLE_CORAL_FAN: 20
-  FIRE_CORAL_FAN: 20
-  HORN_CORAL_FAN: 20
-  DEAD_TUBE_CORAL: 10
-  DEAD_BRAIN_CORAL: 10
-  DEAD_BUBBLE_CORAL: 10
-  DEAD_FIRE_CORAL: 10
-  DEAD_HORN_CORAL: 10
-  DEAD_TUBE_CORAL_FAN: 10
-  DEAD_BRAIN_CORAL_FAN: 10
-  DEAD_BUBBLE_CORAL_FAN: 10
-  DEAD_FIRE_CORAL_FAN: 10
-  DEAD_HORN_CORAL_FAN: 10
-  CONDUIT: 7500
-
-  # ══════════════════════════════════════════════════════
-  # HONEY / BEE
-  # ══════════════════════════════════════════════════════
-  HONEYCOMB: 50
-  HONEYCOMB_BLOCK: 150
-  HONEY_BOTTLE: 75
-  HONEY_BLOCK: 250
-  BEE_NEST: 500
-  BEEHIVE: 250
-
-  # ══════════════════════════════════════════════════════
-  # FOOD
-  # ══════════════════════════════════════════════════════
-  BREAD: 30
-  COOKIE: 10
-  CAKE: 100
-  PUMPKIN_PIE: 50
-  BEETROOT_SOUP: 40
-  MUSHROOM_STEW: 50
-  RABBIT_STEW: 100
-  SUSPICIOUS_STEW: 75
-  BEEF: 40
-  COOKED_BEEF: 65
-  PORKCHOP: 40
-  COOKED_PORKCHOP: 65
-  CHICKEN: 30
-  COOKED_CHICKEN: 50
-  MUTTON: 35
-  COOKED_MUTTON: 55
-  RABBIT: 40
-  COOKED_RABBIT: 65
-  COD: 30
-  COOKED_COD: 50
-  SALMON: 40
-  COOKED_SALMON: 60
-  TROPICAL_FISH: 60
-  PUFFERFISH: 75
-  DRIED_KELP: 6
-  GOLDEN_CARROT: 125
-  GOLDEN_APPLE: 500
-  ENCHANTED_GOLDEN_APPLE: 10000
-
-  # ══════════════════════════════════════════════════════
-  # REDSTONE
-  # ══════════════════════════════════════════════════════
-  REDSTONE_TORCH: 20
-  REPEATER: 100
-  COMPARATOR: 150
-  OBSERVER: 175
-  PISTON: 150
-  STICKY_PISTON: 225
-  HOPPER: 300
-  DISPENSER: 175
-  DROPPER: 100
-  TARGET: 100
-  REDSTONE_LAMP: 125
-  NOTE_BLOCK: 75
-  JUKEBOX: 250
-  DAYLIGHT_DETECTOR: 125
-  LEVER: 10
-  STONE_BUTTON: 5
-  STONE_PRESSURE_PLATE: 10
-  HEAVY_WEIGHTED_PRESSURE_PLATE: 100
-  LIGHT_WEIGHTED_PRESSURE_PLATE: 125
-  TRIPWIRE_HOOK: 40
-  TNT: 500
-  SLIME_BLOCK: 500
-  CRAFTER: 350
-
-  # ══════════════════════════════════════════════════════
-  # RAILS / MINECARTS
-  # ══════════════════════════════════════════════════════
-  RAIL: 20
-  POWERED_RAIL: 50
-  DETECTOR_RAIL: 40
-  ACTIVATOR_RAIL: 40
-  MINECART: 200
-  CHEST_MINECART: 275
-  HOPPER_MINECART: 450
-  TNT_MINECART: 650
-  FURNACE_MINECART: 250
-
-  # ══════════════════════════════════════════════════════
-  # UTILITY / STORAGE
-  # ══════════════════════════════════════════════════════
-  CHEST: 25
-  TRAPPED_CHEST: 40
-  BARREL: 25
-  CRAFTING_TABLE: 15
-  FURNACE: 25
-  BLAST_FURNACE: 150
-  SMOKER: 75
-  STONECUTTER: 50
-  GRINDSTONE: 50
-  SMITHING_TABLE: 75
-  FLETCHING_TABLE: 50
-  CARTOGRAPHY_TABLE: 50
-  LOOM: 40
-  LECTERN: 50
-  COMPOSTER: 30
-  CAULDRON: 100
-  BREWING_STAND: 250
-  ENCHANTING_TABLE: 1500
-  ANVIL: 500
-  CHIPPED_ANVIL: 300
-  DAMAGED_ANVIL: 150
-  FLOWER_POT: 20
-  ARMOR_STAND: 75
-  ITEM_FRAME: 35
-  GLOW_ITEM_FRAME: 75
-  PAINTING: 50
-  DECORATED_POT: 100
-
-  # ══════════════════════════════════════════════════════
-  # LIGHTING
-  # ══════════════════════════════════════════════════════
-  TORCH: 5
-  SOUL_TORCH: 10
-  LANTERN: 25
-  SOUL_LANTERN: 35
-  CAMPFIRE: 40
-  SOUL_CAMPFIRE: 50
-  OCHRE_FROGLIGHT: 100
-  VERDANT_FROGLIGHT: 100
-  PEARLESCENT_FROGLIGHT: 100
-
-  # ══════════════════════════════════════════════════════
-  # GLASS
-  # ══════════════════════════════════════════════════════
-  GLASS: 5
-  GLASS_PANE: 2
-  GLASS_BOTTLE: 2
-  WHITE_STAINED_GLASS: 7
-  ORANGE_STAINED_GLASS: 7
-  MAGENTA_STAINED_GLASS: 7
-  LIGHT_BLUE_STAINED_GLASS: 7
-  YELLOW_STAINED_GLASS: 7
-  LIME_STAINED_GLASS: 7
-  PINK_STAINED_GLASS: 7
-  GRAY_STAINED_GLASS: 7
-  LIGHT_GRAY_STAINED_GLASS: 7
-  CYAN_STAINED_GLASS: 7
-  PURPLE_STAINED_GLASS: 7
-  BLUE_STAINED_GLASS: 7
-  BROWN_STAINED_GLASS: 7
-  GREEN_STAINED_GLASS: 7
-  RED_STAINED_GLASS: 7
-  BLACK_STAINED_GLASS: 7
-  WHITE_STAINED_GLASS_PANE: 3
-  ORANGE_STAINED_GLASS_PANE: 3
-  MAGENTA_STAINED_GLASS_PANE: 3
-  LIGHT_BLUE_STAINED_GLASS_PANE: 3
-  YELLOW_STAINED_GLASS_PANE: 3
-  LIME_STAINED_GLASS_PANE: 3
-  PINK_STAINED_GLASS_PANE: 3
-  GRAY_STAINED_GLASS_PANE: 3
-  LIGHT_GRAY_STAINED_GLASS_PANE: 3
-  CYAN_STAINED_GLASS_PANE: 3
-  PURPLE_STAINED_GLASS_PANE: 3
-  BLUE_STAINED_GLASS_PANE: 3
-  BROWN_STAINED_GLASS_PANE: 3
-  GREEN_STAINED_GLASS_PANE: 3
-  RED_STAINED_GLASS_PANE: 3
-  BLACK_STAINED_GLASS_PANE: 3
-
-  # ══════════════════════════════════════════════════════
-  # WOOL / CARPET
-  # ══════════════════════════════════════════════════════
-  WHITE_WOOL: 10
-  ORANGE_WOOL: 10
-  MAGENTA_WOOL: 10
-  LIGHT_BLUE_WOOL: 10
-  YELLOW_WOOL: 10
-  LIME_WOOL: 10
-  PINK_WOOL: 10
-  GRAY_WOOL: 10
-  LIGHT_GRAY_WOOL: 10
-  CYAN_WOOL: 10
-  PURPLE_WOOL: 10
-  BLUE_WOOL: 10
-  BROWN_WOOL: 10
-  GREEN_WOOL: 10
-  RED_WOOL: 10
-  BLACK_WOOL: 10
-  WHITE_CARPET: 4
-  ORANGE_CARPET: 4
-  MAGENTA_CARPET: 4
-  LIGHT_BLUE_CARPET: 4
-  YELLOW_CARPET: 4
-  LIME_CARPET: 4
-  PINK_CARPET: 4
-  GRAY_CARPET: 4
-  LIGHT_GRAY_CARPET: 4
-  CYAN_CARPET: 4
-  PURPLE_CARPET: 4
-  BLUE_CARPET: 4
-  BROWN_CARPET: 4
-  GREEN_CARPET: 4
-  RED_CARPET: 4
-  BLACK_CARPET: 4
-
-  # ══════════════════════════════════════════════════════
-  # TERRACOTTA
-  # ══════════════════════════════════════════════════════
-  TERRACOTTA: 5
-  WHITE_TERRACOTTA: 7
-  ORANGE_TERRACOTTA: 7
-  MAGENTA_TERRACOTTA: 7
-  LIGHT_BLUE_TERRACOTTA: 7
-  YELLOW_TERRACOTTA: 7
-  LIME_TERRACOTTA: 7
-  PINK_TERRACOTTA: 7
-  GRAY_TERRACOTTA: 7
-  LIGHT_GRAY_TERRACOTTA: 7
-  CYAN_TERRACOTTA: 7
-  PURPLE_TERRACOTTA: 7
-  BLUE_TERRACOTTA: 7
-  BROWN_TERRACOTTA: 7
-  GREEN_TERRACOTTA: 7
-  RED_TERRACOTTA: 7
-  BLACK_TERRACOTTA: 7
-  WHITE_GLAZED_TERRACOTTA: 10
-  ORANGE_GLAZED_TERRACOTTA: 10
-  MAGENTA_GLAZED_TERRACOTTA: 10
-  LIGHT_BLUE_GLAZED_TERRACOTTA: 10
-  YELLOW_GLAZED_TERRACOTTA: 10
-  LIME_GLAZED_TERRACOTTA: 10
-  PINK_GLAZED_TERRACOTTA: 10
-  GRAY_GLAZED_TERRACOTTA: 10
-  LIGHT_GRAY_GLAZED_TERRACOTTA: 10
-  CYAN_GLAZED_TERRACOTTA: 10
-  PURPLE_GLAZED_TERRACOTTA: 10
-  BLUE_GLAZED_TERRACOTTA: 10
-  BROWN_GLAZED_TERRACOTTA: 10
-  GREEN_GLAZED_TERRACOTTA: 10
-  RED_GLAZED_TERRACOTTA: 10
-  BLACK_GLAZED_TERRACOTTA: 10
-
-  # ══════════════════════════════════════════════════════
-  # CONCRETE
-  # ══════════════════════════════════════════════════════
-  WHITE_CONCRETE: 8
-  ORANGE_CONCRETE: 8
-  MAGENTA_CONCRETE: 8
-  LIGHT_BLUE_CONCRETE: 8
-  YELLOW_CONCRETE: 8
-  LIME_CONCRETE: 8
-  PINK_CONCRETE: 8
-  GRAY_CONCRETE: 8
-  LIGHT_GRAY_CONCRETE: 8
-  CYAN_CONCRETE: 8
-  PURPLE_CONCRETE: 8
-  BLUE_CONCRETE: 8
-  BROWN_CONCRETE: 8
-  GREEN_CONCRETE: 8
-  RED_CONCRETE: 8
-  BLACK_CONCRETE: 8
-  WHITE_CONCRETE_POWDER: 6
-  ORANGE_CONCRETE_POWDER: 6
-  MAGENTA_CONCRETE_POWDER: 6
-  LIGHT_BLUE_CONCRETE_POWDER: 6
-  YELLOW_CONCRETE_POWDER: 6
-  LIME_CONCRETE_POWDER: 6
-  PINK_CONCRETE_POWDER: 6
-  GRAY_CONCRETE_POWDER: 6
-  LIGHT_GRAY_CONCRETE_POWDER: 6
-  CYAN_CONCRETE_POWDER: 6
-  PURPLE_CONCRETE_POWDER: 6
-  BLUE_CONCRETE_POWDER: 6
-  BROWN_CONCRETE_POWDER: 6
-  GREEN_CONCRETE_POWDER: 6
-  RED_CONCRETE_POWDER: 6
-  BLACK_CONCRETE_POWDER: 6
-
-  # ══════════════════════════════════════════════════════
-  # DYES
-  # ══════════════════════════════════════════════════════
-  WHITE_DYE: 10
-  ORANGE_DYE: 10
-  MAGENTA_DYE: 10
-  LIGHT_BLUE_DYE: 10
-  YELLOW_DYE: 10
-  LIME_DYE: 10
-  PINK_DYE: 10
-  GRAY_DYE: 10
-  LIGHT_GRAY_DYE: 10
-  CYAN_DYE: 10
-  PURPLE_DYE: 10
-  BLUE_DYE: 10
-  BROWN_DYE: 10
-  GREEN_DYE: 10
-  RED_DYE: 10
-  BLACK_DYE: 10
-
-  # ══════════════════════════════════════════════════════
-  # BEDS
-  # ══════════════════════════════════════════════════════
-  WHITE_BED: 30
-  ORANGE_BED: 30
-  MAGENTA_BED: 30
-  LIGHT_BLUE_BED: 30
-  YELLOW_BED: 30
-  LIME_BED: 30
-  PINK_BED: 30
-  GRAY_BED: 30
-  LIGHT_GRAY_BED: 30
-  CYAN_BED: 30
-  PURPLE_BED: 30
-  BLUE_BED: 30
-  BROWN_BED: 30
-  GREEN_BED: 30
-  RED_BED: 30
-  BLACK_BED: 30
-
-  # ══════════════════════════════════════════════════════
-  # BANNERS
-  # (custom-pattern banners still only sell for the base value below —
-  # the sell system deliberately ignores banner pattern NBT)
-  # ══════════════════════════════════════════════════════
-  WHITE_BANNER: 30
-  ORANGE_BANNER: 30
-  MAGENTA_BANNER: 30
-  LIGHT_BLUE_BANNER: 30
-  YELLOW_BANNER: 30
-  LIME_BANNER: 30
-  PINK_BANNER: 30
-  GRAY_BANNER: 30
-  LIGHT_GRAY_BANNER: 30
-  CYAN_BANNER: 30
-  PURPLE_BANNER: 30
-  BLUE_BANNER: 30
-  BROWN_BANNER: 30
-  GREEN_BANNER: 30
-  RED_BANNER: 30
-  BLACK_BANNER: 30
-
-  # ══════════════════════════════════════════════════════
-  # CANDLES
-  # ══════════════════════════════════════════════════════
-  CANDLE: 15
-  WHITE_CANDLE: 15
-  ORANGE_CANDLE: 15
-  MAGENTA_CANDLE: 15
-  LIGHT_BLUE_CANDLE: 15
-  YELLOW_CANDLE: 15
-  LIME_CANDLE: 15
-  PINK_CANDLE: 15
-  GRAY_CANDLE: 15
-  LIGHT_GRAY_CANDLE: 15
-  CYAN_CANDLE: 15
-  PURPLE_CANDLE: 15
-  BLUE_CANDLE: 15
-  BROWN_CANDLE: 15
-  GREEN_CANDLE: 15
-  RED_CANDLE: 15
-  BLACK_CANDLE: 15
-
-  # ══════════════════════════════════════════════════════
-  # BOOKS / PAPER
-  # (enchantments/custom text/NBT never add value — base price only)
-  # ══════════════════════════════════════════════════════
-  PAPER: 8
-  BOOK: 25
-  BOOKSHELF: 75
-  CHISELED_BOOKSHELF: 100
-  WRITABLE_BOOK: 50
-  WRITTEN_BOOK: 25
-  ENCHANTED_BOOK: 100
-  FILLED_MAP: 50
-  MAP: 50
-  NAME_TAG: 500
-
-  # ══════════════════════════════════════════════════════
-  # BUCKETS
-  # ══════════════════════════════════════════════════════
-  BUCKET: 100
-  WATER_BUCKET: 100
-  LAVA_BUCKET: 200
-  MILK_BUCKET: 125
-  POWDER_SNOW_BUCKET: 150
-  COD_BUCKET: 150
-  SALMON_BUCKET: 175
-  TROPICAL_FISH_BUCKET: 250
-  PUFFERFISH_BUCKET: 250
-  AXOLOTL_BUCKET: 500
-  TADPOLE_BUCKET: 250
-
-  # ══════════════════════════════════════════════════════
-  # BREWING MATERIALS
-  # (potions never gain value from their effect/NBT — base price only)
-  # ══════════════════════════════════════════════════════
-  DRAGON_BREATH: 500
-  FERMENTED_SPIDER_EYE: 75
-  GLISTERING_MELON_SLICE: 75
-  SUGAR: 10
-  POTION: 50
-  SPLASH_POTION: 75
-  LINGERING_POTION: 100
-
-  # ══════════════════════════════════════════════════════
-  # ARROWS
-  # (tipped arrow value never scales with its potion effect)
-  # ══════════════════════════════════════════════════════
-  ARROW: 5
-  SPECTRAL_ARROW: 10
-  TIPPED_ARROW: 10
-
-  # ══════════════════════════════════════════════════════
-  # ARCHAEOLOGY — POTTERY SHERDS
-  # ══════════════════════════════════════════════════════
-  ANGLER_POTTERY_SHERD: 500
-  ARCHER_POTTERY_SHERD: 500
-  ARMS_UP_POTTERY_SHERD: 500
-  BLADE_POTTERY_SHERD: 500
-  BREWER_POTTERY_SHERD: 500
-  BURN_POTTERY_SHERD: 500
-  DANGER_POTTERY_SHERD: 500
-  EXPLORER_POTTERY_SHERD: 500
-  FLOW_POTTERY_SHERD: 500
-  FRIEND_POTTERY_SHERD: 500
-  GUSTER_POTTERY_SHERD: 500
-  HEART_POTTERY_SHERD: 500
-  HEARTBREAK_POTTERY_SHERD: 500
-  HOWL_POTTERY_SHERD: 500
-  MINER_POTTERY_SHERD: 500
-  MOURNER_POTTERY_SHERD: 500
-  PLENTY_POTTERY_SHERD: 500
-  PRIZE_POTTERY_SHERD: 500
-  SCRAPE_POTTERY_SHERD: 500
-  SHEAF_POTTERY_SHERD: 500
-  SHELTER_POTTERY_SHERD: 500
-  SKULL_POTTERY_SHERD: 500
-  SNORT_POTTERY_SHERD: 500
-
-  # ══════════════════════════════════════════════════════
-  # SMITHING TEMPLATES
-  # ══════════════════════════════════════════════════════
-  NETHERITE_UPGRADE_SMITHING_TEMPLATE: 2500
-  SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE: 5000
-  BOLT_ARMOR_TRIM_SMITHING_TEMPLATE: 1500
-  FLOW_ARMOR_TRIM_SMITHING_TEMPLATE: 1500
-  COAST_ARMOR_TRIM_SMITHING_TEMPLATE: 1000
-  DUNE_ARMOR_TRIM_SMITHING_TEMPLATE: 1000
-  WILD_ARMOR_TRIM_SMITHING_TEMPLATE: 1000
-  WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE: 1000
-  RAISER_ARMOR_TRIM_SMITHING_TEMPLATE: 1000
-  SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE: 1000
-  HOST_ARMOR_TRIM_SMITHING_TEMPLATE: 1000
-  TIDE_ARMOR_TRIM_SMITHING_TEMPLATE: 1000
-  SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE: 2500
-  VEX_ARMOR_TRIM_SMITHING_TEMPLATE: 2500
-  SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE: 2500
-  SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE: 2500
-  RIB_ARMOR_TRIM_SMITHING_TEMPLATE: 2500
-  EYE_ARMOR_TRIM_SMITHING_TEMPLATE: 2500
-  WARD_ARMOR_TRIM_SMITHING_TEMPLATE: 2500
-
-  # ══════════════════════════════════════════════════════
-  # TRIAL / SPECIAL LOOT
-  # ══════════════════════════════════════════════════════
-  TRIAL_KEY: 1000
-  OMINOUS_TRIAL_KEY: 2500
-  OMINOUS_BOTTLE: 500
-  FLOW_BANNER_PATTERN: 1000
-  GUSTER_BANNER_PATTERN: 1000
-
-  # ══════════════════════════════════════════════════════
-  # MUSIC DISCS
-  # (individually configurable — adjust freely per disc)
-  # ══════════════════════════════════════════════════════
-  MUSIC_DISC_13: 1000
-  MUSIC_DISC_CAT: 1000
-  MUSIC_DISC_BLOCKS: 1000
-  MUSIC_DISC_CHIRP: 1000
-  MUSIC_DISC_FAR: 1000
-  MUSIC_DISC_MALL: 1000
-  MUSIC_DISC_MELLOHI: 1000
-  MUSIC_DISC_STAL: 1000
-  MUSIC_DISC_STRAD: 1000
-  MUSIC_DISC_WARD: 1000
-  MUSIC_DISC_WAIT: 1000
-  MUSIC_DISC_11: 2500
-  MUSIC_DISC_5: 2500
-  MUSIC_DISC_PIGSTEP: 2500
-  MUSIC_DISC_OTHERSIDE: 2500
-  MUSIC_DISC_RELIC: 2500
-  MUSIC_DISC_CREATOR: 2500
-  MUSIC_DISC_CREATOR_MUSIC_BOX: 2500
-  MUSIC_DISC_PRECIPICE: 2500
-
-  # ══════════════════════════════════════════════════════
-  # MOB HEADS
-  # (player heads are excluded — not automatically sellable)
-  # ══════════════════════════════════════════════════════
-  SKELETON_SKULL: 2500
-  WITHER_SKELETON_SKULL: 5000
-  ZOMBIE_HEAD: 2500
-  CREEPER_HEAD: 2500
-  PIGLIN_HEAD: 2500
-
-  # ══════════════════════════════════════════════════════
-  # OTHER ITEMS
-  # ══════════════════════════════════════════════════════
-  RECOVERY_COMPASS: 1500
-  COMPASS: 100
-  CLOCK: 150
-  SPYGLASS: 150
-  BRUSH: 50
-  SHEARS: 75
-  LEAD: 75
-  BUNDLE: 100
-  FIREWORK_ROCKET: 20
-  FIREWORK_STAR: 25
-  EXPERIENCE_BOTTLE: 50
+  other:
+    name: "Other"
+    icon: CHEST
+    enabled: true
+    items:
+      RECOVERY_COMPASS:
+        sell: 1500
+      COMPASS:
+        sell: 100
+      CLOCK:
+        sell: 150
+      SPYGLASS:
+        sell: 150
+      BRUSH:
+        sell: 50
+      SHEARS:
+        sell: 75
+      LEAD:
+        sell: 75
+      BUNDLE:
+        sell: 100
+      FIREWORK_ROCKET:
+        sell: 20
+      FIREWORK_STAR:
+        sell: 25
+      EXPERIENCE_BOTTLE:
+        sell: 50
