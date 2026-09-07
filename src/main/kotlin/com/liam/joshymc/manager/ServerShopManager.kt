@@ -37,42 +37,14 @@ class ServerShopManager(private val plugin: Joshymc) {
     )
     data class ShopCategory(val id: String, val name: String, val icon: Material, val items: List<ShopItem>)
 
-    /** The /worth GUI's Filter button cycles through exactly these six modes, in order. */
+    /** The /worth GUI's Filter button cycles through exactly these three sort modes, in order. */
     enum class WorthFilterMode(val label: String) {
         PRICE_DESC("Price: Highest to Lowest"),
         PRICE_ASC("Price: Lowest to Highest"),
-        ALPHABETICAL("Alphabetical Order"),
-        CATEGORY_RESOURCES("Category: Resources"),
-        CATEGORY_BLOCKS("Category: Blocks"),
-        CATEGORY_UTILITY("Category: Utility");
+        ALPHABETICAL("Alphabetical Order");
 
         fun next(): WorthFilterMode = entries[(ordinal + 1) % entries.size]
     }
-
-    private enum class WorthBroadCategory { RESOURCES, BLOCKS, UTILITY }
-
-    // Every shop.yml/sell-prices.yml category id collapses into exactly one of the three
-    // broad /worth categories — never more than one, so items never appear twice across
-    // Category: Resources / Blocks / Utility. Unlisted ids default to Utility (catch-all).
-    private val worthBroadCategoryById: Map<String, WorthBroadCategory> = mapOf(
-        "wood" to WorthBroadCategory.RESOURCES,
-        "farming" to WorthBroadCategory.RESOURCES,
-        "mob_drops" to WorthBroadCategory.RESOURCES,
-        "ores" to WorthBroadCategory.RESOURCES,
-        "nether" to WorthBroadCategory.RESOURCES,
-        "end" to WorthBroadCategory.RESOURCES,
-        "ocean" to WorthBroadCategory.RESOURCES,
-        "blocks" to WorthBroadCategory.BLOCKS,
-        "decoration" to WorthBroadCategory.BLOCKS,
-        "decor" to WorthBroadCategory.BLOCKS,
-        "redstone" to WorthBroadCategory.UTILITY,
-        "food" to WorthBroadCategory.UTILITY,
-        "utility" to WorthBroadCategory.UTILITY,
-        "rare_items" to WorthBroadCategory.UTILITY,
-        "other" to WorthBroadCategory.UTILITY,
-        "pvp_gear" to WorthBroadCategory.UTILITY,
-        "spawners" to WorthBroadCategory.UTILITY
-    )
 
     // Per-player selected /worth filter mode, so paging and re-opening the GUI keeps
     // whatever mode the player last chose. Defaults to PRICE_DESC (v1.0.49 default).
@@ -82,9 +54,10 @@ class ServerShopManager(private val plugin: Joshymc) {
     // item carries both a "buy" and a "sell" price.
     private val categories = mutableListOf<ShopCategory>()
 
-    // sell-prices.yml holds the bulk-resource sell catalog browsed from the read-only
-    // /worth GUI. It feeds getSellPrice()/getBaseSellPrice() alongside shop.yml so /sell
-    // and /worth always agree on a price without a second, separate config.
+    // sell-prices.yml's legacy `categories:` block. It feeds getSellPrice()/getBaseSellPrice()
+    // alongside shop.yml, which other systems (sell wand, market, spawner drops) still rely
+    // on. The /worth GUI itself no longer reads this — it browses SellPriceManager's
+    // `prices:` catalog directly (the same one /sell uses) so nothing needs a category.
     private val sellCategories = mutableListOf<ShopCategory>()
 
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
@@ -265,40 +238,19 @@ class ServerShopManager(private val plugin: Joshymc) {
     }
 
     /**
-     * All categories with at least one sellable item, from both shop.yml and
-     * sell-prices.yml — the exact set of items the read-only /worth GUI browses.
-     * A shop.yml category only appears here filtered down to its sellable items,
-     * so /worth never shows an item /sell would reject.
-     */
-    fun getSellableCategories(): List<ShopCategory> {
-        val shopSellable = categories.mapNotNull { category ->
-            val sellable = category.items.filter { it.sellPrice > 0 }
-            if (sellable.isEmpty()) null else category.copy(items = sellable)
-        }
-        return shopSellable + sellCategories.filter { it.items.isNotEmpty() }
-    }
-
-    /**
-     * The full, flat pool of sellable items the /worth GUI's Filter modes draw from,
-     * sorted/filtered per [mode]. Sorting/filtering happens once per GUI open rather
-     * than per-category, since the GUI now shows one continuous list instead of a
-     * per-category browse.
+     * The full, flat pool of sellable items the /worth GUI's Filter modes draw from, sorted
+     * per [mode]. Sourced directly from SellPriceManager's central `prices:` catalog — the
+     * exact same data /sell reads — so every configured item shows up with no category
+     * assignment required and no separate /worth price list to fall out of sync.
      */
     private fun getWorthItems(mode: WorthFilterMode): List<ShopItem> {
-        val tagged = getSellableCategories().flatMap { category ->
-            val broad = worthBroadCategoryById[category.id] ?: WorthBroadCategory.UTILITY
-            category.items.map { broad to it }
+        val items = plugin.sellPriceManager.getAllPrices().map { (material, price) ->
+            ShopItem(material, buyPrice = 0.0, sellPrice = price)
         }
         return when (mode) {
-            WorthFilterMode.PRICE_DESC -> tagged.map { it.second }.sortedByDescending { it.sellPrice }
-            WorthFilterMode.PRICE_ASC -> tagged.map { it.second }.sortedBy { it.sellPrice }
-            WorthFilterMode.ALPHABETICAL -> tagged.map { it.second }.sortedBy { displayLabel(it).lowercase() }
-            WorthFilterMode.CATEGORY_RESOURCES -> tagged.filter { it.first == WorthBroadCategory.RESOURCES }
-                .map { it.second }.sortedBy { displayLabel(it).lowercase() }
-            WorthFilterMode.CATEGORY_BLOCKS -> tagged.filter { it.first == WorthBroadCategory.BLOCKS }
-                .map { it.second }.sortedBy { displayLabel(it).lowercase() }
-            WorthFilterMode.CATEGORY_UTILITY -> tagged.filter { it.first == WorthBroadCategory.UTILITY }
-                .map { it.second }.sortedBy { displayLabel(it).lowercase() }
+            WorthFilterMode.PRICE_DESC -> items.sortedByDescending { it.sellPrice }
+            WorthFilterMode.PRICE_ASC -> items.sortedBy { it.sellPrice }
+            WorthFilterMode.ALPHABETICAL -> items.sortedBy { displayLabel(it).lowercase() }
         }
     }
 
@@ -485,10 +437,11 @@ class ServerShopManager(private val plugin: Joshymc) {
     //
     // Browses getWorthItems() purely for information. Item slots are never given a
     // click handler, so GuiManager's "click on top inventory is always cancelled" rule
-    // makes every slot inert — there is no sell/buy logic to trigger. A single Filter
-    // button cycles through 3 sort modes + 3 broad category modes (see WorthFilterMode);
-    // the selected mode is remembered per-player and only resets pagination back to
-    // page 0 when the mode itself changes, not when paging within a mode.
+    // makes every slot inert — there is no sell/buy logic to trigger. There are no
+    // categories: every item from SellPriceManager's central catalog is shown, paginated,
+    // and a single Filter button cycles through 3 sort modes (see WorthFilterMode). The
+    // selected mode is remembered per-player and only resets pagination back to page 0
+    // when the mode itself changes, not when paging within a mode.
 
     fun openWorthMenu(player: Player) {
         val mode = worthFilterModeByPlayer[player.uniqueId] ?: WorthFilterMode.PRICE_DESC

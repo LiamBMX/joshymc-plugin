@@ -9,9 +9,11 @@ import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 
 /**
- * Opens the read-only Worth GUI — a browsable, categorized price guide for the /sell
- * catalog. Players no longer need to hold an item; ServerShopManager owns both the
- * sell-price data and the GUI itself, so /worth always matches /sell exactly.
+ * Opens the read-only Worth GUI — a browsable, sortable price guide for the entire /sell
+ * catalog. No categories: every item configured in sell-prices.yml's central `prices:`
+ * list shows up, sorted by price or alphabetically. Players no longer need to hold an
+ * item; ServerShopManager reads straight from SellPriceManager, so /worth always matches
+ * /sell exactly.
  */
 class WorthCommand(private val plugin: Joshymc) : CommandExecutor {
 

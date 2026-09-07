@@ -74,6 +74,9 @@ class SellPriceManager(private val plugin: Joshymc) {
     /** Base price per single item, or null if the material isn't configured as sellable. */
     fun getPrice(material: Material): Double? = prices[material]
 
+    /** The full central sell-price catalog — the exact set of items /sell (and /worth) accept. */
+    fun getAllPrices(): Map<Material, Double> = prices.toMap()
+
     /**
      * Whether this exact stack can be sold: the material has a configured price, it isn't a
      * JoshyMC custom item (rejected regardless of matching base material), and — for
