@@ -102,6 +102,11 @@ class ServerShopManager(private val plugin: Joshymc) {
         val defaults = YamlConfiguration.loadConfiguration(defaultStream.bufferedReader())
         val userCfg = YamlConfiguration.loadConfiguration(file)
 
+        if (com.liam.joshymc.util.ConfigUtil.looksLikeParseFailure(file, userCfg)) {
+            plugin.logger.severe("[Shop] $fileName failed to load (invalid YAML) — the existing file has been preserved and was NOT overwritten. Fix the syntax error and reload.")
+            return
+        }
+
         val defaultsSection = defaults.getConfigurationSection("categories") ?: return
         val userSection = userCfg.getConfigurationSection("categories") ?: userCfg.createSection("categories")
 
@@ -113,6 +118,7 @@ class ServerShopManager(private val plugin: Joshymc) {
         }
         if (added > 0) {
             try {
+                com.liam.joshymc.util.ConfigUtil.backup(file, plugin.logger, "Shop")
                 userCfg.save(file)
                 plugin.logger.info("[Shop] Merged $added new shop categor${if (added == 1) "y" else "ies"} from bundled defaults.")
             } catch (e: Exception) {

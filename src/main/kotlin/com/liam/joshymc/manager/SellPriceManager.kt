@@ -52,6 +52,11 @@ class SellPriceManager(private val plugin: Joshymc) {
         val defaults = YamlConfiguration.loadConfiguration(defaultStream.bufferedReader())
         val userCfg = YamlConfiguration.loadConfiguration(file)
 
+        if (com.liam.joshymc.util.ConfigUtil.looksLikeParseFailure(file, userCfg)) {
+            plugin.logger.severe("[Sell] sell-prices.yml failed to load (invalid YAML) — the existing file has been preserved and was NOT overwritten. Fix the syntax error and reload.")
+            return
+        }
+
         val defaultsSection = defaults.getConfigurationSection("prices") ?: return
         val userSection = userCfg.getConfigurationSection("prices") ?: userCfg.createSection("prices")
 
@@ -63,6 +68,7 @@ class SellPriceManager(private val plugin: Joshymc) {
         }
         if (added > 0) {
             try {
+                com.liam.joshymc.util.ConfigUtil.backup(file, plugin.logger, "Sell")
                 userCfg.save(file)
                 plugin.logger.info("[Sell] Added $added new sell price(s) from bundled defaults.")
             } catch (e: Exception) {

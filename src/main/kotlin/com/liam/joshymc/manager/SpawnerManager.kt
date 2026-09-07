@@ -337,6 +337,11 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         val defaults = YamlConfiguration.loadConfiguration(defaultStream.bufferedReader())
         val userCfg = YamlConfiguration.loadConfiguration(userFile)
 
+        if (com.liam.joshymc.util.ConfigUtil.looksLikeParseFailure(userFile, userCfg)) {
+            plugin.logger.severe("[Spawners] spawners.yml failed to load (invalid YAML) — the existing file has been preserved and was NOT overwritten. Fix the syntax error and reload.")
+            return
+        }
+
         val defaultsSection = defaults.getConfigurationSection("spawners") ?: return
         val userSection = userCfg.getConfigurationSection("spawners")
             ?: userCfg.createSection("spawners")
@@ -350,6 +355,7 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         }
         if (added > 0) {
             try {
+                com.liam.joshymc.util.ConfigUtil.backup(userFile, plugin.logger, "Spawners")
                 userCfg.save(userFile)
                 plugin.logger.info("[Spawners] Merged $added new spawner type(s) from bundled defaults.")
             } catch (e: Exception) {

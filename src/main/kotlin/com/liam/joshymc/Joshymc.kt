@@ -69,6 +69,7 @@ import com.liam.joshymc.manager.ChatManager
 import com.liam.joshymc.manager.WorldFlagManager
 import com.liam.joshymc.manager.BoosterManager
 import com.liam.joshymc.manager.MobStackManager
+import com.liam.joshymc.util.ConfigUtil
 import org.bukkit.Bukkit
 import org.bukkit.GameRule
 import org.bukkit.Location
@@ -1066,6 +1067,13 @@ class Joshymc : JavaPlugin() {
      * We touch only missing keys, so hand-edited values are left alone.
      */
     private fun migrateConfig() {
+        val configFile = File(dataFolder, "config.yml")
+        val onDisk = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(configFile)
+        if (ConfigUtil.looksLikeParseFailure(configFile, onDisk)) {
+            logger.severe("[ConfigMigrator] config.yml failed to load (invalid YAML) — the existing file has been preserved and was NOT overwritten. Fix the syntax error and restart or /joshymc reload.")
+            return
+        }
+
         val defaultStream = getResource("config.yml") ?: return
         val defaults = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
             defaultStream.bufferedReader()
@@ -1081,6 +1089,7 @@ class Joshymc : JavaPlugin() {
         }
 
         if (changed > 0) {
+            ConfigUtil.backup(configFile, logger, "ConfigMigrator")
             saveConfig()
             logger.info("[ConfigMigrator] Backfilled $changed missing config key(s) from defaults.")
         }
