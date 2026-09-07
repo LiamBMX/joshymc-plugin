@@ -698,6 +698,27 @@ class SmithingCommand(private val plugin: Joshymc) : CommandExecutor {
 }
 
 // ══════════════════════════════════════════════════════════
+//  /stonecutter — open a stonecutter anywhere
+// ══════════════════════════════════════════════════════════
+
+class StonecutterCommand(private val plugin: Joshymc) : CommandExecutor {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (!sender.hasPermission("joshymc.stonecutter")) {
+            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            return true
+        }
+        // Bukkit doesn't expose openStonecutter directly; use the inventory
+        // type. Matches the /smithing and /anvil portable-workstation pattern.
+        @Suppress("DEPRECATION")
+        sender.openInventory(
+            org.bukkit.Bukkit.createInventory(sender, org.bukkit.event.inventory.InventoryType.STONECUTTER)
+        )
+        return true
+    }
+}
+
+// ══════════════════════════════════════════════════════════
 //  /repair — repair the held item, or all worn equipment with `all`
 // ══════════════════════════════════════════════════════════
 

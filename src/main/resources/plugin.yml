@@ -349,6 +349,9 @@ commands:
     description: Open a smithing table anywhere
     usage: /smithing
     aliases: [smith]
+  stonecutter:
+    description: Open a stonecutter anywhere
+    usage: /stonecutter
   repair:
     description: Repair the item in your hand (or all gear with 'all')
     usage: /repair [hand|all]
@@ -903,6 +906,9 @@ permissions:
     default: op
   joshymc.smithing:
     description: Open portable smithing table
+    default: op
+  joshymc.stonecutter:
+    description: Open portable stonecutter
     default: op
   joshymc.repair.hand:
     description: Use /repair hand (costs 50000)
