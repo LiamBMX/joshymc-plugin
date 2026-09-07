@@ -6,6 +6,7 @@ import com.liam.joshymc.command.AnnounceCommand
 import com.liam.joshymc.command.AdminCommand
 import com.liam.joshymc.command.AnvilCommand
 import com.liam.joshymc.command.ChatGameCommand
+import com.liam.joshymc.command.CondenseCommand
 import com.liam.joshymc.command.LeaderboardCommand
 import com.liam.joshymc.command.ModModeCommand
 import com.liam.joshymc.command.RepairCommand
@@ -153,6 +154,12 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("nightvision")?.let {
             val cmd = NightVisionCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("condense")?.let {
+            val cmd = CondenseCommand(plugin)
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }

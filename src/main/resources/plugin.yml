@@ -22,6 +22,9 @@ commands:
     description: Toggle night vision
     usage: /nightvision [on|off]
     aliases: [nv]
+  condense:
+    description: Condense eligible resources in your inventory into storage blocks
+    usage: /condense
   pvp:
     description: Toggle PvP combat or allow elytra/ender pearls in combat (ops only)
     usage: /pvp [on|off] | /pvp <elytra|enderpearl> <on|off>
@@ -546,6 +549,9 @@ permissions:
     default: op
   joshymc.nightvision:
     description: Allows using /nightvision
+    default: true
+  joshymc.condense:
+    description: Allows using /condense
     default: true
   joshymc.gsit:
     description: Allows sitting on blocks
