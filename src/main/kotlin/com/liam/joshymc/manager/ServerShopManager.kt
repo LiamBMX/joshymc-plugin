@@ -649,32 +649,12 @@ class ServerShopManager(private val plugin: Joshymc) {
                     lore.add(Component.text("Not for sale", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
                 }
 
-                // Sell price
-                if (shopItem.sellPrice > 0) {
-                    lore.add(
-                        plugin.commsManager.parseLegacy("&7Sell: &e${plugin.economyManager.format(shopItem.sellPrice)}")
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                } else {
-                    lore.add(Component.text("Cannot sell", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
-                }
-
                 lore.add(Component.empty())
 
                 // Action hints
                 if (shopItem.buyPrice > 0) {
                     lore.add(
                         Component.text("Left-click to choose buy amount", NamedTextColor.GREEN)
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                }
-                if (shopItem.sellPrice > 0) {
-                    lore.add(
-                        Component.text("Right-click to sell 1", NamedTextColor.YELLOW)
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                    lore.add(
-                        Component.text("Shift+right to sell all", NamedTextColor.YELLOW)
                             .decoration(TextDecoration.ITALIC, false)
                     )
                 }
