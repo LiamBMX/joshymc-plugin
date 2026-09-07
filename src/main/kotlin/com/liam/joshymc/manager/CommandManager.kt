@@ -117,6 +117,7 @@ import com.liam.joshymc.command.SignShopCommand
 import com.liam.joshymc.command.SpawnerCommand
 import com.liam.joshymc.command.TeamCommand
 import com.liam.joshymc.command.BalTopCommand
+import com.liam.joshymc.command.DeathTopCommand
 import com.liam.joshymc.command.KillTopCommand
 import com.liam.joshymc.command.BalanceCommand
 import com.liam.joshymc.command.EcoCommand
@@ -326,6 +327,7 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("baltop")?.setExecutor(BalTopCommand(plugin))
         plugin.getCommand("killtop")?.setExecutor(KillTopCommand(plugin))
+        plugin.getCommand("deathstop")?.setExecutor(DeathTopCommand(plugin))
 
         plugin.getCommand("chestshop")?.let {
             val cmd = SignShopCommand(plugin)
