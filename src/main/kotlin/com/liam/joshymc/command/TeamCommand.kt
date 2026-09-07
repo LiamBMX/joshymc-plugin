@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.team.TeamListGui
+import com.liam.joshymc.gui.team.TeamMainGui
 import com.liam.joshymc.gui.team.TeamTopGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.TeamManager
@@ -40,7 +41,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         if (args.isEmpty()) {
-            sendUsage(sender)
+            TeamMainGui.open(plugin, sender)
             return true
         }
 
