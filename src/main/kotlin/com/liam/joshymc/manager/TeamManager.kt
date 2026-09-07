@@ -21,11 +21,16 @@ import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import java.util.Base64
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class TeamManager(private val plugin: Joshymc) : Listener {
 
     companion object {
         const val MAX_TEAM_SIZE = 10
+        const val DEFAULT_BOUNTY_AMOUNT = 10_000.0
+        // Same ceiling OrderManager uses for escrow — keeps GUI increments/custom
+        // input from overflowing into Infinity/NaN territory (issue #556).
+        const val MAX_BOUNTY_AMOUNT = 1.0e15
     }
 
     data class TeamInfo(val name: String, val displayName: String, val ownerUuid: String, val createdAt: Long)
@@ -43,10 +48,26 @@ class TeamManager(private val plugin: Joshymc) : Listener {
 
     enum class TeamSort { KILLS, BALANCE }
 
+    /** In-progress `/bounty` GUI placement flow state (issue #556). */
+    data class BountySession(
+        var targetUuid: UUID? = null,
+        var targetName: String? = null,
+        var amount: Double = DEFAULT_BOUNTY_AMOUNT,
+        var playerSelectPage: Int = 0
+    )
+
     private val openEchests = mutableMapOf<UUID, String>() // player UUID -> team name
     private val teamChatEnabled = mutableSetOf<UUID>()
 
+    // Bounty GUI session state — AsyncChatEvent runs off the main thread, so these
+    // must be thread-safe (issue #556).
+    private val bountySessions = ConcurrentHashMap<UUID, BountySession>()
+    private val awaitingBountyAmountInput = ConcurrentHashMap.newKeySet<UUID>()
+
     fun start() {
+        bountySessions.clear()
+        awaitingBountyAmountInput.clear()
+
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS teams (
                 name TEXT PRIMARY KEY,
@@ -550,6 +571,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     fun onEchestQuit(event: PlayerQuitEvent) {
         val player = event.player
         teamChatEnabled.remove(player.uniqueId)
+        clearBountySession(player.uniqueId)
         val teamName = openEchests.remove(player.uniqueId) ?: return
         val inv = player.openInventory.topInventory
         saveTeamEchest(teamName, inv)
@@ -592,6 +614,99 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             "SELECT * FROM bounties WHERE target_uuid = ? ORDER BY amount DESC, id ASC",
             uuid.toString()
         ) { rs -> mapBountyRow(rs) }
+    }
+
+    /** Bounties the given player has personally placed — backs the "My Bounties" GUI (issue #556). */
+    fun getBountiesPlacedBy(uuid: UUID): List<BountyInfo> {
+        return plugin.databaseManager.query(
+            "SELECT * FROM bounties WHERE placed_by_uuid = ? ORDER BY amount DESC, id ASC",
+            uuid.toString()
+        ) { rs -> mapBountyRow(rs) }
+    }
+
+    /**
+     * Shared success message + server broadcast for a newly placed bounty, used by
+     * both `/bounty set` and the Place Bounty GUI flow (issue #556) so there's a
+     * single place that describes what placing a bounty looks like to everyone.
+     */
+    fun announceBountyPlaced(placer: Player, target: Player, amount: Double) {
+        plugin.commsManager.send(
+            placer,
+            Component.text("Placed a ", NamedTextColor.GRAY)
+                .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GREEN))
+                .append(Component.text(" bounty on ", NamedTextColor.GRAY))
+                .append(Component.text(target.name, NamedTextColor.WHITE)),
+            CommunicationsManager.Category.DEFAULT
+        )
+
+        Bukkit.getOnlinePlayers().forEach { p ->
+            if (p != placer) {
+                plugin.commsManager.send(
+                    p,
+                    Component.text(placer.name, NamedTextColor.WHITE)
+                        .append(Component.text(" placed a ", NamedTextColor.GRAY))
+                        .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GREEN))
+                        .append(Component.text(" bounty on ", NamedTextColor.GRAY))
+                        .append(Component.text(target.name, NamedTextColor.RED)),
+                    CommunicationsManager.Category.DEFAULT
+                )
+            }
+        }
+    }
+
+    // ── Bounty GUI session state (issue #556) ──
+
+    fun getOrCreateBountySession(uuid: UUID): BountySession = bountySessions.getOrPut(uuid) { BountySession() }
+
+    fun getBountySession(uuid: UUID): BountySession? = bountySessions[uuid]
+
+    fun clearBountySession(uuid: UUID) {
+        bountySessions.remove(uuid)
+        awaitingBountyAmountInput.remove(uuid)
+    }
+
+    fun beginAwaitingBountyAmountInput(uuid: UUID) {
+        awaitingBountyAmountInput.add(uuid)
+    }
+
+    fun cancelAwaitingBountyAmountInput(uuid: UUID) {
+        awaitingBountyAmountInput.remove(uuid)
+    }
+
+    fun isAwaitingBountyAmountInput(uuid: UUID): Boolean = uuid in awaitingBountyAmountInput
+
+    private fun handleBountyAmountChatInput(player: Player, raw: String) {
+        if (!awaitingBountyAmountInput.contains(player.uniqueId)) return
+        val session = bountySessions[player.uniqueId]
+        if (session == null) {
+            awaitingBountyAmountInput.remove(player.uniqueId)
+            return
+        }
+
+        if (raw.equals("cancel", ignoreCase = true)) {
+            awaitingBountyAmountInput.remove(player.uniqueId)
+            plugin.commsManager.send(player, Component.text("Cancelled.", NamedTextColor.GRAY), CommunicationsManager.Category.DEFAULT)
+            com.liam.joshymc.gui.bounty.BountyPlaceGui.openAmountSelect(plugin, player)
+            return
+        }
+
+        val amount = plugin.economyManager.parseAmount(raw)
+        if (amount == null || !amount.isFinite() || amount <= 0.0) {
+            plugin.commsManager.send(player, Component.text("Invalid amount. Type a positive number, or 'cancel'.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+        if (amount > MAX_BOUNTY_AMOUNT) {
+            plugin.commsManager.send(player, Component.text("That amount is too large.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+        if (!plugin.economyManager.has(player.uniqueId, amount)) {
+            plugin.commsManager.send(player, Component.text("You don't have enough money for that amount.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        session.amount = amount
+        awaitingBountyAmountInput.remove(player.uniqueId)
+        com.liam.joshymc.gui.bounty.BountyPlaceGui.openAmountSelect(plugin, player)
     }
 
     fun getTotalBounty(uuid: UUID): Double {
@@ -659,6 +774,16 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.LOW)
     fun onChat(event: AsyncChatEvent) {
         val player = event.player
+
+        // Bounty GUI custom-amount capture (issue #556) — takes priority over team
+        // chat so a player mid-flow can't accidentally send it as a team message.
+        if (player.uniqueId in awaitingBountyAmountInput) {
+            event.isCancelled = true
+            val raw = PlainTextComponentSerializer.plainText().serialize(event.message()).trim()
+            plugin.server.scheduler.runTask(plugin, Runnable { handleBountyAmountChatInput(player, raw) })
+            return
+        }
+
         val plainMessage = PlainTextComponentSerializer.plainText().serialize(event.message())
 
         if (plainMessage.startsWith("!")) {
