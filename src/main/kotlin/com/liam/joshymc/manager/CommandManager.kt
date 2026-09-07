@@ -10,6 +10,7 @@ import com.liam.joshymc.command.LeaderboardCommand
 import com.liam.joshymc.command.ModModeCommand
 import com.liam.joshymc.command.RepairCommand
 import com.liam.joshymc.command.SmithingCommand
+import com.liam.joshymc.command.StonecutterCommand
 import com.liam.joshymc.command.ViolationBridgeCommand
 import com.liam.joshymc.command.BanCommand
 import com.liam.joshymc.command.HistoryCommand
@@ -474,6 +475,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("craft")?.setExecutor(CraftCommand(plugin))
         plugin.getCommand("anvil")?.setExecutor(AnvilCommand(plugin))
         plugin.getCommand("smithing")?.setExecutor(SmithingCommand(plugin))
+        plugin.getCommand("stonecutter")?.setExecutor(StonecutterCommand(plugin))
         plugin.getCommand("repair")?.let { val c = RepairCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("jmc-violation")?.setExecutor(ViolationBridgeCommand(plugin))
         plugin.getCommand("chatgame")?.let { val c = ChatGameCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
