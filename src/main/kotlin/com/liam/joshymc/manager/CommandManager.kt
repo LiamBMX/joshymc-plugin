@@ -374,6 +374,7 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("sell")?.let {
             val cmd = SellCommand(plugin)
+            plugin.sellCommand = cmd
             it.setExecutor(cmd)
             it.tabCompleter = cmd
             plugin.server.pluginManager.registerEvents(cmd, plugin)
