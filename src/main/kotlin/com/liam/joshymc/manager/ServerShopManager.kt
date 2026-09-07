@@ -61,6 +61,7 @@ class ServerShopManager(private val plugin: Joshymc) {
         sellCategories.clear()
 
         mergeMissingCategoriesFromDefaults("shop.yml")
+        removeObsoleteCategories("shop.yml", "spawners")
         loadCategoriesInto(categories, "shop.yml")
 
         mergeMissingCategoriesFromDefaults("sell-prices.yml")
@@ -102,6 +103,34 @@ class ServerShopManager(private val plugin: Joshymc) {
                 plugin.logger.info("[Shop] Merged $added new shop categor${if (added == 1) "y" else "ies"} from bundled defaults.")
             } catch (e: Exception) {
                 plugin.logger.warning("[Shop] Failed to save merged shop.yml: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Drops categories that shipped in an older bundled shop.yml but no longer exist in the
+     * current defaults (e.g. "spawners", replaced by "redstone") from the user's saved file,
+     * so upgraded servers stop serving a category that's supposed to be fully retired.
+     */
+    private fun removeObsoleteCategories(fileName: String, vararg categoryIds: String) {
+        val file = plugin.configFile(fileName)
+        if (!file.exists()) return
+
+        val userCfg = YamlConfiguration.loadConfiguration(file)
+        val userSection = userCfg.getConfigurationSection("categories") ?: return
+
+        var removed = 0
+        for (categoryId in categoryIds) {
+            if (!userSection.contains(categoryId)) continue
+            userSection.set(categoryId, null)
+            removed++
+        }
+        if (removed > 0) {
+            try {
+                userCfg.save(file)
+                plugin.logger.info("[Shop] Removed $removed obsolete shop categor${if (removed == 1) "y" else "ies"} from shop.yml.")
+            } catch (e: Exception) {
+                plugin.logger.warning("[Shop] Failed to save shop.yml after removing obsolete categories: ${e.message}")
             }
         }
     }

@@ -152,55 +152,93 @@ categories:
         buy: 7000
         sell: 0
 
-  spawners:
-    name: "Spawners"
-    icon: SPAWNER
+  redstone:
+    name: "Redstone"
+    icon: REDSTONE
     enabled: true
     items:
-      zombie_spawner:
-        spawner: zombie
-        name: "Zombie Spawner"
-        buy: 250000
+      REDSTONE:
+        name: "Redstone Dust"
+        buy: 250
         sell: 0
-      skeleton_spawner:
-        spawner: skeleton
-        name: "Skeleton Spawner"
-        buy: 300000
+      REDSTONE_BLOCK:
+        buy: 2000
         sell: 0
-      spider_spawner:
-        spawner: spider
-        name: "Spider Spawner"
-        buy: 225000
+      REDSTONE_TORCH:
+        buy: 350
         sell: 0
-      cave_spider_spawner:
-        spawner: cave_spider
-        name: "Cave Spider Spawner"
-        buy: 275000
+      REPEATER:
+        buy: 1250
         sell: 0
-      slime_spawner:
-        spawner: slime
-        name: "Slime Spawner"
-        buy: 400000
+      COMPARATOR:
+        buy: 2000
         sell: 0
-      creeper_spawner:
-        spawner: creeper
-        name: "Creeper Spawner"
-        buy: 500000
+      OBSERVER:
+        buy: 2500
         sell: 0
-      blaze_spawner:
-        spawner: blaze
-        name: "Blaze Spawner"
-        buy: 600000
+      PISTON:
+        buy: 2000
         sell: 0
-      ghast_spawner:
-        spawner: ghast
-        name: "Ghast Spawner"
-        buy: 800000
+      STICKY_PISTON:
+        buy: 3500
         sell: 0
-      iron_golem_spawner:
-        spawner: iron_golem
-        name: "Iron Golem Spawner"
-        buy: 1200000
+      HOPPER:
+        buy: 4500
+        sell: 0
+      DISPENSER:
+        buy: 2500
+        sell: 0
+      DROPPER:
+        buy: 1500
+        sell: 0
+      TARGET:
+        name: "Target Block"
+        buy: 1500
+        sell: 0
+      REDSTONE_LAMP:
+        buy: 1750
+        sell: 0
+      NOTE_BLOCK:
+        buy: 1000
+        sell: 0
+      DAYLIGHT_DETECTOR:
+        buy: 2000
+        sell: 0
+      LEVER:
+        buy: 250
+        sell: 0
+      STONE_BUTTON:
+        buy: 150
+        sell: 0
+      STONE_PRESSURE_PLATE:
+        buy: 250
+        sell: 0
+      TRIPWIRE_HOOK:
+        buy: 750
+        sell: 0
+      TNT:
+        buy: 15000
+        sell: 0
+      CHEST:
+        buy: 750
+        sell: 0
+      BARREL:
+        buy: 750
+        sell: 0
+      SLIME_BLOCK:
+        buy: 3500
+        sell: 0
+      HONEY_BLOCK:
+        buy: 3500
+        sell: 0
+      POWERED_RAIL:
+        buy: 1500
+        sell: 0
+      DETECTOR_RAIL:
+        buy: 1250
+        sell: 0
+      SCULK_SENSOR:
+        buy: 5000
         sell: 0
 
   decor:
