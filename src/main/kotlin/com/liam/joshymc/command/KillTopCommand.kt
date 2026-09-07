@@ -1,7 +1,6 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
-import com.liam.joshymc.gui.combat.KillTopGui
 import com.liam.joshymc.gui.stats.KillTopGui
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
