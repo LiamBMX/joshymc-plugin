@@ -1115,3 +1115,6 @@ permissions:
   joshymc.mutations:
     description: Start or stop server mutations events
     default: op
+  joshymc.rename.colors:
+    description: Use &color codes, formatting codes, and &#RRGGBB hex colors when renaming items in an anvil
+    default: op
