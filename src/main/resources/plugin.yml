@@ -153,7 +153,7 @@ commands:
   killtop:
     description: View top killers
     usage: /killtop
-    aliases: [killerboard]
+    aliases: [killerboard, killstop]
   chestshop:
     description: Chest shop (sign-based) help and management
     usage: /chestshop [help|example|info|remove]
