@@ -196,7 +196,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val team = teamName?.let { plugin.teamManager.getTeam(it)?.displayName } ?: "No Team"
         val playerKills = kills.getOrDefault(player.uniqueId, 0)
         val playerDeaths = deaths.getOrDefault(player.uniqueId, 0)
-        val playtime = plugin.playtimeManager.formatPlaytime(plugin.playtimeManager.getPlaytime(player.uniqueId))
+        val playtime = plugin.playtimeManager.formatPlaytimeShort(plugin.playtimeManager.getPlaytime(player.uniqueId))
         val ping = player.ping
         val dateTime = java.time.ZonedDateTime.now(plugin.timezoneManager.zoneFor(player)).format(DATE_TIME_FMT)
 
