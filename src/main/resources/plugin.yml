@@ -236,8 +236,8 @@ commands:
     usage: /cshop [additem|removeitem|category|list] [args...]
     aliases: [creditshop]
   voucher:
-    description: Configure virtual voucher packages redeemable in the Credit Shop
-    usage: /voucher <create|delete|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload> [args...]
+    description: Configure virtual voucher packages redeemable in the Credit Shop, and give physical money vouchers
+    usage: /voucher <create|delete|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload|give> [args...]
     permission: joshymc.vouchers
   welcome:
     description: Welcome a newly joined player for money and a chance at a credit or AFK key
@@ -714,7 +714,7 @@ permissions:
     description: Manage the credits shop (add/remove items, categories)
     default: op
   joshymc.vouchers:
-    description: Configure/manage virtual voucher packages via /voucher (not required to redeem them)
+    description: Configure/manage virtual voucher packages and give physical money vouchers via /voucher (redeeming either kind needs no permission)
     default: op
   joshymc.balance:
     description: Check balance
