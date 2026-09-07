@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.bounty.BountyListGui
+import com.liam.joshymc.gui.bounty.BountyMainGui
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -26,7 +27,7 @@ class BountyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         if (args.isEmpty()) {
-            sendUsage(sender)
+            BountyMainGui.open(plugin, sender)
             return true
         }
 
@@ -83,29 +84,7 @@ class BountyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         if (plugin.teamManager.placeBounty(player.uniqueId, player.name, target.uniqueId, target.name, amount)) {
-            plugin.commsManager.send(
-                player,
-                Component.text("Placed a ", NamedTextColor.GRAY)
-                    .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GREEN))
-                    .append(Component.text(" bounty on ", NamedTextColor.GRAY))
-                    .append(Component.text(target.name, NamedTextColor.WHITE)),
-                CommunicationsManager.Category.DEFAULT
-            )
-
-            // Broadcast to all players
-            Bukkit.getOnlinePlayers().forEach { p ->
-                if (p != player) {
-                    plugin.commsManager.send(
-                        p,
-                        Component.text(player.name, NamedTextColor.WHITE)
-                            .append(Component.text(" placed a ", NamedTextColor.GRAY))
-                            .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GREEN))
-                            .append(Component.text(" bounty on ", NamedTextColor.GRAY))
-                            .append(Component.text(target.name, NamedTextColor.RED)),
-                        CommunicationsManager.Category.DEFAULT
-                    )
-                }
-            }
+            plugin.teamManager.announceBountyPlaced(player, target, amount)
         } else {
             plugin.commsManager.send(player, Component.text("Could not place bounty. Insufficient funds.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
         }

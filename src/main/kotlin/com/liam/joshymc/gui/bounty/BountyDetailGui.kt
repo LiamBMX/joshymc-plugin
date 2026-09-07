@@ -27,13 +27,16 @@ import java.util.UUID
  */
 object BountyDetailGui {
 
+    /** Which menu "Back"/post-cancel navigation should return to (issue #556). */
+    enum class Origin { ACTIVE, MINE }
+
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy")
 
-    fun open(plugin: Joshymc, player: Player, bountyId: Int, backPage: Int) {
+    fun open(plugin: Joshymc, player: Player, bountyId: Int, backPage: Int, origin: Origin = Origin.ACTIVE) {
         val bounty = plugin.teamManager.getBounty(bountyId)
         if (bounty == null) {
             plugin.commsManager.send(player, Component.text("That bounty is no longer active.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
-            BountyListGui.open(plugin, player, backPage)
+            returnToOrigin(plugin, player, backPage, origin)
             return
         }
 
@@ -57,8 +60,9 @@ object BountyDetailGui {
         }
         gui.setItem(13, head)
 
-        gui.setItem(18, BountyGuiUtil.item(Material.ARROW, Component.text("Back to Bounty List", NamedTextColor.YELLOW))) { p, _ ->
-            BountyListGui.open(plugin, p, backPage)
+        val backLabel = if (origin == Origin.MINE) "Back to My Bounties" else "Back to Bounty List"
+        gui.setItem(18, BountyGuiUtil.item(Material.ARROW, Component.text(backLabel, NamedTextColor.YELLOW))) { p, _ ->
+            returnToOrigin(plugin, p, backPage, origin)
         }
 
         if (player.hasPermission("joshymc.bounty.cancel")) {
@@ -69,13 +73,13 @@ object BountyDetailGui {
                     Component.text("Cancel Bounty", NamedTextColor.RED),
                     listOf(Component.empty(), Component.text("Click to cancel and refund this bounty.", NamedTextColor.GRAY))
                 )
-            ) { p, _ -> handleCancelClick(plugin, p, bounty.id, backPage) }
+            ) { p, _ -> handleCancelClick(plugin, p, bounty.id, backPage, origin) }
         }
 
         plugin.guiManager.open(player, gui)
     }
 
-    private fun handleCancelClick(plugin: Joshymc, player: Player, bountyId: Int, backPage: Int) {
+    private fun handleCancelClick(plugin: Joshymc, player: Player, bountyId: Int, backPage: Int, origin: Origin) {
         // Server-side re-check: the button is hidden without this permission,
         // but never trust the client to have actually enforced that.
         if (!player.hasPermission("joshymc.bounty.cancel")) {
@@ -93,6 +97,13 @@ object BountyDetailGui {
             plugin.commsManager.send(player, Component.text("That bounty is no longer active.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
         }
 
-        BountyListGui.open(plugin, player, backPage)
+        returnToOrigin(plugin, player, backPage, origin)
+    }
+
+    private fun returnToOrigin(plugin: Joshymc, player: Player, backPage: Int, origin: Origin) {
+        when (origin) {
+            Origin.ACTIVE -> BountyListGui.open(plugin, player, backPage)
+            Origin.MINE -> BountyMyGui.open(plugin, player, backPage)
+        }
     }
 }
