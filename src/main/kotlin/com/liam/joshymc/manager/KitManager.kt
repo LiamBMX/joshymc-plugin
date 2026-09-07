@@ -311,15 +311,6 @@ class KitManager(private val plugin: Joshymc) {
                     lore.add(Component.text("  Ready", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
                 }
 
-                // Items preview
-                lore.add(Component.empty())
-                lore.add(Component.text("  Contents:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
-                for ((_, kitItem) in kitDef.items) {
-                    val itemName = kitItem.type.name.lowercase().replace("_", " ")
-                    val amount = if (kitItem.amount > 1) " x${kitItem.amount}" else ""
-                    lore.add(Component.text("  - $itemName$amount", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false))
-                }
-
                 lore.add(Component.empty())
                 if (hasPermission && !onCooldown) {
                     lore.add(Component.text("  Click to claim", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
