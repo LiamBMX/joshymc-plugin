@@ -149,6 +149,17 @@ class PlaytimeManager(private val plugin: Joshymc) : Listener {
         }.trim()
     }
 
+    /**
+     * Formats seconds into "<days>d <hours>h" (no minutes), always showing both units.
+     * Used by the sidebar scoreboard only — see formatPlaytime for the full breakdown.
+     */
+    fun formatPlaytimeShort(seconds: Long): String {
+        val days = seconds / 86400
+        val hours = (seconds % 86400) / 3600
+
+        return "${days}d ${hours}h"
+    }
+
     // ── Commands ────────────────────────────────────────
 
     inner class PlaytimeCommand : CommandExecutor, TabCompleter {
