@@ -34,6 +34,7 @@ import com.liam.joshymc.listener.AuctionBidListener
 import com.liam.joshymc.listener.StockTradeChatListener
 import com.liam.joshymc.listener.CustomArmorAnvilListener
 import com.liam.joshymc.listener.SellWandAnvilListener
+import com.liam.joshymc.listener.ItemRenameListener
 import com.liam.joshymc.listener.PhysicalVoucherListener
 import com.liam.joshymc.listener.SellWandListener
 import com.liam.joshymc.listener.VoidBoreListener
@@ -137,6 +138,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(PhysicalVoucherListener(plugin), plugin)
         pm.registerEvents(SellWandAnvilListener(plugin), plugin)
         pm.registerEvents(CustomArmorAnvilListener(plugin), plugin)
+        pm.registerEvents(ItemRenameListener(plugin), plugin)
 
         // Quest events
         pm.registerEvents(plugin.questCycleManager, plugin)
