@@ -20,6 +20,7 @@ import org.bukkit.scheduler.BukkitTask
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.abs
 
 /**
  * Player-driven Buy Orders marketplace ("/orders"). A buyer posts what they want and pays the
@@ -61,6 +62,21 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false)
 
+        private val ITEM_SELECT_TITLE: Component = Component.text("         ")
+            .append(Component.text("Select an Item", NamedTextColor.GOLD))
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+
+        private val QUANTITY_TITLE: Component = Component.text("         ")
+            .append(Component.text("Select Quantity", NamedTextColor.GOLD))
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+
+        private val PRICE_TITLE: Component = Component.text("         ")
+            .append(Component.text("Price Per Item", NamedTextColor.GOLD))
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+
         private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
             editMeta { it.displayName(Component.empty()) }
         }
@@ -70,6 +86,15 @@ class OrderManager(private val plugin: Joshymc) : Listener {
 
         private val QUICK_AMOUNTS = intArrayOf(1, 16, 32, 64)
         private const val MAX_ESCROW = 1.0e15
+
+        /** Creative/admin/debug-only or otherwise non-survival-obtainable materials, excluded from Item Selection. */
+        private val EXCLUDED_ORDER_MATERIAL_NAMES = setOf(
+            "BARRIER", "STRUCTURE_BLOCK", "STRUCTURE_VOID", "JIGSAW", "LIGHT",
+            "DEBUG_STICK", "KNOWLEDGE_BOOK", "END_PORTAL_FRAME", "REINFORCED_DEEPSLATE",
+            "BUDDING_AMETHYST", "TRIAL_SPAWNER", "VAULT", "COMMAND_BLOCK",
+            "CHAIN_COMMAND_BLOCK", "REPEATING_COMMAND_BLOCK", "COMMAND_BLOCK_MINECART",
+            "BEDROCK", "SPAWNER", "PETRIFIED_OAK_SLAB"
+        )
     }
 
     data class BuyOrder(
@@ -102,8 +127,15 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         fun next(): SortMode = entries[(ordinal + 1) % entries.size]
     }
 
-    enum class CreateStage { QUANTITY, PRICE }
-    data class PendingCreation(val item: ItemStack, var stage: CreateStage, var quantity: Int = 0)
+    enum class CustomInputField { QUANTITY, PRICE }
+
+    /** Per-player Create Order GUI-flow session state. */
+    data class CreateOrderSession(
+        var item: ItemStack? = null,
+        var itemPage: Int = 0,
+        var quantity: Int = 1,
+        var pricePerItem: Double = 0.0
+    )
 
     // ---- Config ----
     private var expirationDays: Int = 7
@@ -120,11 +152,25 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     private val playerMyOrdersPages = ConcurrentHashMap<UUID, Int>()
     private val playerSort = ConcurrentHashMap<UUID, SortMode>()
 
-    /** Multi-step chat input for order creation (quantity, then price). Public for the chat listener. */
-    val pendingCreations = ConcurrentHashMap<UUID, PendingCreation>()
+    /** Per-player Create Order GUI-flow session. Public for the chat listener (custom qty/price entry). */
+    val createSessions = ConcurrentHashMap<UUID, CreateOrderSession>()
+
+    /** Player UUID -> which field (quantity/price) they're typing a custom value for. Public for the chat listener. */
+    val awaitingCustomInput = ConcurrentHashMap<UUID, CustomInputField>()
 
     /** Player UUID -> order ID they're typing a custom sell amount for. Public for the chat listener. */
     val pendingCustomSell = ConcurrentHashMap<UUID, Int>()
+
+    /** Every survival-obtainable vanilla material, alphabetically sorted by display name, for Item Selection. */
+    private val orderableMaterials: List<Material> by lazy {
+        Material.entries
+            .filter {
+                it.isItem && !it.isLegacy &&
+                    it.name !in EXCLUDED_ORDER_MATERIAL_NAMES &&
+                    !it.name.endsWith("_SPAWN_EGG")
+            }
+            .sortedBy { plugin.serverShopManager.formatMaterialName(it) }
+    }
 
     private var expiryTask: BukkitTask? = null
 
@@ -177,7 +223,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         playerPages.clear()
         playerMyOrdersPages.clear()
         playerSort.clear()
-        pendingCreations.clear()
+        createSessions.clear()
+        awaitingCustomInput.clear()
         pendingCustomSell.clear()
     }
 
@@ -394,51 +441,48 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         playerPages.remove(uuid)
         playerMyOrdersPages.remove(uuid)
         playerSort.remove(uuid)
-        pendingCreations.remove(uuid)
+        createSessions.remove(uuid)
+        awaitingCustomInput.remove(uuid)
         pendingCustomSell.remove(uuid)
     }
 
     // ---- Order creation ----
 
+    private fun cleanupCreateSession(uuid: UUID) {
+        createSessions.remove(uuid)
+        awaitingCustomInput.remove(uuid)
+    }
+
     fun beginCreateOrder(player: Player) {
-        val held = player.inventory.itemInMainHand
-        if (held.type == Material.AIR) {
-            plugin.commsManager.send(player, Component.text("Hold the item you want to buy in your main hand first.", NamedTextColor.RED))
-            return
-        }
-
-        val customId = plugin.itemManager.getCustomItemId(held)
-        if (customId != null && !customItemsEnabled) {
-            plugin.commsManager.send(player, Component.text("Custom items cannot be requested through Buy Orders yet.", NamedTextColor.RED))
-            return
-        }
-
         if (getPlayerActiveOrderCount(player.uniqueId) >= getOrderLimit(player)) {
             plugin.commsManager.send(player, Component.text("You have reached your active Buy Order limit (${getOrderLimit(player)}).", NamedTextColor.RED))
             return
         }
 
-        val template = held.clone().also { it.amount = 1 }
-        pendingCreations[player.uniqueId] = PendingCreation(template, CreateStage.QUANTITY)
-        player.closeInventory()
-        player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 1.3f)
-        plugin.commsManager.send(
-            player,
-            Component.text("Type the quantity you want to buy in chat (max ${maxQuantity}). Type 'cancel' to abort.", NamedTextColor.YELLOW)
-        )
+        createSessions[player.uniqueId] = CreateOrderSession(pricePerItem = minPrice)
+        openItemSelectGui(player, 0)
     }
 
     fun handleCreateChatInput(player: Player, raw: String) {
-        val pending = pendingCreations[player.uniqueId] ?: return
-
-        if (raw.equals("cancel", ignoreCase = true)) {
-            pendingCreations.remove(player.uniqueId)
-            plugin.commsManager.send(player, Component.text("Order creation cancelled.", NamedTextColor.GRAY))
+        val field = awaitingCustomInput[player.uniqueId] ?: return
+        val session = createSessions[player.uniqueId]
+        if (session == null) {
+            awaitingCustomInput.remove(player.uniqueId)
             return
         }
 
-        when (pending.stage) {
-            CreateStage.QUANTITY -> {
+        if (raw.equals("cancel", ignoreCase = true)) {
+            awaitingCustomInput.remove(player.uniqueId)
+            plugin.commsManager.send(player, Component.text("Cancelled.", NamedTextColor.GRAY))
+            when (field) {
+                CustomInputField.QUANTITY -> openQuantityGui(player)
+                CustomInputField.PRICE -> openPriceGui(player)
+            }
+            return
+        }
+
+        when (field) {
+            CustomInputField.QUANTITY -> {
                 val qty = raw.replace(",", "").trim().toIntOrNull()
                 if (qty == null || qty <= 0) {
                     plugin.commsManager.send(player, Component.text("Invalid quantity. Type a whole number, or 'cancel'.", NamedTextColor.RED))
@@ -448,14 +492,11 @@ class OrderManager(private val plugin: Joshymc) : Listener {
                     plugin.commsManager.send(player, Component.text("Maximum quantity per order is $maxQuantity.", NamedTextColor.RED))
                     return
                 }
-                pending.quantity = qty
-                pending.stage = CreateStage.PRICE
-                plugin.commsManager.send(
-                    player,
-                    Component.text("Now type the price PER ITEM you'll pay (e.g. 100, 10k, 1.5m). Minimum ${plugin.economyManager.format(minPrice)}.", NamedTextColor.YELLOW)
-                )
+                session.quantity = qty
+                awaitingCustomInput.remove(player.uniqueId)
+                openQuantityGui(player)
             }
-            CreateStage.PRICE -> {
+            CustomInputField.PRICE -> {
                 val price = plugin.economyManager.parseAmount(raw)
                 if (price == null || !price.isFinite() || price < minPrice) {
                     plugin.commsManager.send(player, Component.text("Invalid price. Minimum is ${plugin.economyManager.format(minPrice)}.", NamedTextColor.RED))
@@ -465,16 +506,208 @@ class OrderManager(private val plugin: Joshymc) : Listener {
                     plugin.commsManager.send(player, Component.text("Maximum price per item is ${plugin.economyManager.format(maxPrice)}.", NamedTextColor.RED))
                     return
                 }
-                val escrow = pending.quantity.toDouble() * price
+                val escrow = session.quantity.toDouble() * price
                 if (!escrow.isFinite() || escrow > MAX_ESCROW) {
                     plugin.commsManager.send(player, Component.text("That order's total cost is too large.", NamedTextColor.RED))
                     return
                 }
-
-                pendingCreations.remove(player.uniqueId)
-                openCreateConfirmGui(player, pending.item, pending.quantity, price, escrow)
+                session.pricePerItem = price
+                awaitingCustomInput.remove(player.uniqueId)
+                openPriceGui(player)
             }
         }
+    }
+
+    // ---- Create Order GUI flow ----
+
+    private fun openItemSelectGui(player: Player, page: Int) {
+        val gui = borderedGui(ITEM_SELECT_TITLE, 54)
+        val pageSize = 28
+        val totalPages = maxOf(1, (orderableMaterials.size + pageSize - 1) / pageSize)
+        val clampedPage = page.coerceIn(0, totalPages - 1)
+        val pageMaterials = orderableMaterials.drop(clampedPage * pageSize).take(pageSize)
+        val slots = contentSlots(54)
+
+        for ((index, material) in pageMaterials.withIndex()) {
+            if (index >= slots.size) break
+            val icon = ItemStack(material)
+            icon.editMeta { meta ->
+                meta.lore(listOf(Component.text("  Click to create an order for this item.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)))
+            }
+            gui.setItem(slots[index], icon) { p, _ ->
+                val session = createSessions.getOrPut(p.uniqueId) { CreateOrderSession(pricePerItem = minPrice) }
+                session.item = ItemStack(material)
+                session.itemPage = clampedPage
+                session.quantity = 1
+                openQuantityGui(p)
+            }
+        }
+
+        if (clampedPage > 0) {
+            gui.setItem(46, simpleIcon(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ -> openItemSelectGui(p, clampedPage - 1) }
+        }
+        if (clampedPage < totalPages - 1) {
+            gui.setItem(52, simpleIcon(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ -> openItemSelectGui(p, clampedPage + 1) }
+        }
+        gui.inventory.setItem(4, simpleIcon(
+            Material.PAPER,
+            Component.text("Page ${clampedPage + 1}/$totalPages", NamedTextColor.WHITE),
+            listOf(Component.text("  ${orderableMaterials.size} item(s) available", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+        ))
+
+        gui.setItem(48, simpleIcon(Material.BARRIER, Component.text("Back", NamedTextColor.RED).decoration(TextDecoration.BOLD, true))) { p, _ ->
+            cleanupCreateSession(p.uniqueId)
+            openMainGui(p)
+        }
+        gui.setItem(50, simpleIcon(Material.OAK_DOOR, Component.text("Close", NamedTextColor.RED).decoration(TextDecoration.BOLD, true))) { p, _ ->
+            cleanupCreateSession(p.uniqueId)
+            p.closeInventory()
+        }
+
+        gui.onClose = { p -> if (!awaitingCustomInput.containsKey(p.uniqueId)) cleanupCreateSession(p.uniqueId) }
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    private fun openQuantityGui(player: Player) {
+        val session = createSessions[player.uniqueId]
+        val item = session?.item
+        if (session == null || item == null) {
+            plugin.commsManager.send(player, Component.text("Your order session expired — please start again.", NamedTextColor.RED))
+            openMainGui(player)
+            return
+        }
+        session.quantity = session.quantity.coerceIn(1, maxQuantity)
+
+        val gui = CustomGui(QUANTITY_TITLE, 27)
+        for (i in 0 until 27) gui.inventory.setItem(i, FILLER.clone())
+
+        val display = item.clone().also { it.amount = session.quantity.coerceIn(1, it.maxStackSize) }
+        display.editMeta { meta ->
+            meta.lore(listOf(
+                Component.empty(),
+                loreLine("Quantity: ").append(Component.text(session.quantity, NamedTextColor.WHITE)),
+                Component.empty(),
+                Component.text("  Use the buttons below to adjust.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+            ))
+        }
+        gui.setItem(13, display)
+
+        val deltaSlots = mapOf(-64 to 10, -16 to 11, -1 to 12, 1 to 14, 16 to 15, 64 to 16)
+        for ((delta, slot) in deltaSlots) {
+            gui.setItem(slot, simpleIcon(
+                if (delta < 0) Material.RED_DYE else Material.LIME_DYE,
+                Component.text(if (delta > 0) "+$delta" else "$delta", if (delta > 0) NamedTextColor.GREEN else NamedTextColor.RED)
+            )) { p, _ ->
+                val s = createSessions[p.uniqueId]
+                if (s != null) {
+                    s.quantity = (s.quantity + delta).coerceIn(1, maxQuantity)
+                    openQuantityGui(p)
+                }
+            }
+        }
+
+        gui.setItem(19, simpleIcon(
+            Material.PAPER,
+            Component.text("Custom Amount", NamedTextColor.YELLOW),
+            listOf(Component.empty(), Component.text("  Click to type an amount", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+        )) { p, _ ->
+            awaitingCustomInput[p.uniqueId] = CustomInputField.QUANTITY
+            p.closeInventory()
+            plugin.commsManager.send(p, Component.text("Type the quantity you want to buy in chat (max $maxQuantity). Type 'cancel' to abort.", NamedTextColor.YELLOW))
+        }
+
+        gui.setItem(22, simpleIcon(Material.BARRIER, Component.text("Back", NamedTextColor.RED).decoration(TextDecoration.BOLD, true))) { p, _ ->
+            openItemSelectGui(p, session.itemPage)
+        }
+        gui.setItem(25, simpleIcon(
+            Material.LIME_STAINED_GLASS_PANE,
+            Component.text("Continue", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true)
+        )) { p, _ -> openPriceGui(p) }
+
+        gui.onClose = { p -> if (!awaitingCustomInput.containsKey(p.uniqueId)) cleanupCreateSession(p.uniqueId) }
+        plugin.guiManager.open(player, gui)
+    }
+
+    private fun openPriceGui(player: Player) {
+        val session = createSessions[player.uniqueId]
+        val item = session?.item
+        if (session == null || item == null) {
+            plugin.commsManager.send(player, Component.text("Your order session expired — please start again.", NamedTextColor.RED))
+            openMainGui(player)
+            return
+        }
+        session.pricePerItem = session.pricePerItem.coerceIn(minPrice, maxPrice)
+
+        val gui = CustomGui(PRICE_TITLE, 27)
+        for (i in 0 until 27) gui.inventory.setItem(i, FILLER.clone())
+
+        val escrow = session.quantity.toDouble() * session.pricePerItem
+        val display = item.clone().also { it.amount = session.quantity.coerceIn(1, it.maxStackSize) }
+        display.editMeta { meta ->
+            meta.lore(listOf(
+                Component.empty(),
+                loreLine("Quantity: ").append(Component.text(session.quantity, NamedTextColor.WHITE)),
+                loreLine("Price Each: ").append(Component.text(plugin.economyManager.format(session.pricePerItem), NamedTextColor.GOLD)),
+                loreLine("Total Escrow: ").append(Component.text(plugin.economyManager.format(escrow), NamedTextColor.GOLD))
+            ))
+        }
+        gui.setItem(13, display)
+
+        val deltaSlots = mapOf(-100.0 to 10, -10.0 to 11, -1.0 to 12, 1.0 to 14, 10.0 to 15, 100.0 to 16)
+        for ((delta, slot) in deltaSlots) {
+            gui.setItem(slot, simpleIcon(
+                if (delta < 0) Material.RED_DYE else Material.LIME_DYE,
+                Component.text(
+                    (if (delta > 0) "+" else "-") + plugin.economyManager.format(abs(delta)),
+                    if (delta > 0) NamedTextColor.GREEN else NamedTextColor.RED
+                )
+            )) { p, _ ->
+                val s = createSessions[p.uniqueId]
+                if (s != null) {
+                    s.pricePerItem = (s.pricePerItem + delta).coerceIn(minPrice, maxPrice)
+                    openPriceGui(p)
+                }
+            }
+        }
+
+        gui.setItem(19, simpleIcon(
+            Material.PAPER,
+            Component.text("Custom Price", NamedTextColor.YELLOW),
+            listOf(Component.empty(), Component.text("  Click to type a price", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+        )) { p, _ ->
+            awaitingCustomInput[p.uniqueId] = CustomInputField.PRICE
+            p.closeInventory()
+            plugin.commsManager.send(
+                p,
+                Component.text("Type the price PER ITEM in chat (e.g. 100, 10k, 1.5m). Min ${plugin.economyManager.format(minPrice)}, max ${plugin.economyManager.format(maxPrice)}. Type 'cancel' to abort.", NamedTextColor.YELLOW)
+            )
+        }
+
+        gui.setItem(22, simpleIcon(Material.BARRIER, Component.text("Back", NamedTextColor.RED).decoration(TextDecoration.BOLD, true))) { p, _ ->
+            openQuantityGui(p)
+        }
+        gui.setItem(25, simpleIcon(
+            Material.LIME_STAINED_GLASS_PANE,
+            Component.text("Continue", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true)
+        )) { p, _ ->
+            val s = createSessions[p.uniqueId]
+            val currentItem = s?.item
+            if (s == null || currentItem == null) {
+                plugin.commsManager.send(p, Component.text("Your order session expired — please start again.", NamedTextColor.RED))
+                openMainGui(p)
+            } else {
+                val total = s.quantity.toDouble() * s.pricePerItem
+                if (!total.isFinite() || total > MAX_ESCROW) {
+                    plugin.commsManager.send(p, Component.text("That order's total cost is too large.", NamedTextColor.RED))
+                } else {
+                    openCreateConfirmGui(p, currentItem, s.quantity, s.pricePerItem, total)
+                }
+            }
+        }
+
+        gui.onClose = { p -> if (!awaitingCustomInput.containsKey(p.uniqueId)) cleanupCreateSession(p.uniqueId) }
+        plugin.guiManager.open(player, gui)
     }
 
     private fun openCreateConfirmGui(player: Player, item: ItemStack, quantity: Int, pricePerItem: Double, escrow: Double) {
@@ -493,9 +726,10 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         val gui = buildConfirmGui(
             CONFIRM_CREATE_TITLE,
             display,
-            onConfirm = { p -> p.closeInventory(); executeCreateOrder(p, item, quantity, pricePerItem, escrow) },
-            onCancel = { p -> p.closeInventory(); plugin.commsManager.send(p, Component.text("Order creation cancelled.", NamedTextColor.GRAY)); openMainGui(p) }
+            onConfirm = { p -> p.closeInventory(); cleanupCreateSession(p.uniqueId); executeCreateOrder(p, item, quantity, pricePerItem, escrow) },
+            onCancel = { p -> p.closeInventory(); cleanupCreateSession(p.uniqueId); plugin.commsManager.send(p, Component.text("Order creation cancelled.", NamedTextColor.GRAY)); openMainGui(p) }
         )
+        gui.onClose = { p -> if (!awaitingCustomInput.containsKey(p.uniqueId)) cleanupCreateSession(p.uniqueId) }
         plugin.guiManager.open(player, gui)
     }
 
@@ -988,8 +1222,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             Component.text("Create Order", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true),
             listOf(
                 Component.empty(),
-                Component.text("  Hold the item you want to buy", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.text("  and click to start", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+                Component.text("  Click to browse items and", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("  create a new Buy Order", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
             )
         )) { p, _ -> beginCreateOrder(p) }
 

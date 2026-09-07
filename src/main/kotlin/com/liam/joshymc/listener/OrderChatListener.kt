@@ -15,7 +15,7 @@ class OrderChatListener(private val plugin: Joshymc) : Listener {
         val player = event.player
         val uuid = player.uniqueId
 
-        val awaitingCreation = plugin.orderManager.pendingCreations.containsKey(uuid)
+        val awaitingCreation = plugin.orderManager.awaitingCustomInput.containsKey(uuid)
         val awaitingCustomSell = plugin.orderManager.pendingCustomSell.containsKey(uuid)
         if (!awaitingCreation && !awaitingCustomSell) return
 
