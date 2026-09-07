@@ -580,6 +580,38 @@ claims:
 credits:
   per-hour: 1.0  # Credits awarded per hour of playtime
 
+# Physical Money Vouchers — real inventory items (issue #537), separate from the
+# virtual Credit Shop vouchers above. Right-clicking one deposits normal server
+# money ONLY (never credits/ranks/perms/commands/items) and consumes exactly one.
+# Identification is PDC-only, so a renamed item can never be redeemed — the id
+# below is what's stored on the item, and the amount always comes from here.
+# Add as many ids as you want; give them with /voucher give <player> <id> [amount].
+physical-vouchers:
+  money_1000:
+    enabled: true
+    material: PAPER
+    display-name: "&a$1,000 Voucher"
+    amount: 1000
+    lore:
+      - "&7Right-click to redeem"
+      - "&7Reward: &a$1,000"
+  money_5000:
+    enabled: true
+    material: PAPER
+    display-name: "&a$5,000 Voucher"
+    amount: 5000
+    lore:
+      - "&7Right-click to redeem"
+      - "&7Reward: &a$5,000"
+  money_10000:
+    enabled: true
+    material: PAPER
+    display-name: "&a$10,000 Voucher"
+    amount: 10000
+    lore:
+      - "&7Right-click to redeem"
+      - "&7Reward: &a$10,000"
+
 # Ranks — displayed as chat tags before the player's name
 # Tag uses & color codes (e.g., &c = red, &l = bold, &a = green)
 # OR hex colors with &#RRGGBB format (e.g., &#FF5555&lAdmin for hex red bold)

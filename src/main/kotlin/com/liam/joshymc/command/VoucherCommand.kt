@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -13,8 +14,11 @@ import org.bukkit.entity.Player
 /**
  * `/voucher` — configures the virtual voucher packages listed inside the
  * Credit Shop (see [com.liam.joshymc.manager.VoucherManager]). Gated behind
- * `joshymc.vouchers`; redeeming a voucher requires no permission and only
- * ever happens by clicking it in `/cshop` — this command never redeems.
+ * `joshymc.vouchers`; redeeming a virtual voucher requires no permission and
+ * only ever happens by clicking it in `/cshop` — this command never redeems
+ * those. `/voucher give` is the one exception: it hands out physical money
+ * voucher items (see [com.liam.joshymc.manager.PhysicalVoucherManager]),
+ * still gated behind `joshymc.vouchers` so only admins can create them.
  */
 class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
@@ -44,6 +48,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             "list" -> handleList(sender, args)
             "info" -> handleInfo(sender, args)
             "reload" -> handleReload(sender)
+            "give" -> handleGive(sender, args)
             else -> sendUsage(sender)
         }
 
@@ -265,6 +270,53 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         sender.sendMessage(Component.text("  Description: ${voucher.description}", NamedTextColor.GRAY))
     }
 
+    private fun handleGive(sender: CommandSender, args: Array<out String>) {
+        val targetName = args.getOrNull(1)
+        val voucherId = args.getOrNull(2)?.lowercase()
+        if (targetName == null || voucherId == null) {
+            sender.sendMessage(Component.text("Usage: /voucher give <player> <voucher-id> [amount]", NamedTextColor.RED))
+            return
+        }
+
+        val target = Bukkit.getPlayerExact(targetName)
+        if (target == null) {
+            sender.sendMessage(Component.text("Player '$targetName' is not online.", NamedTextColor.RED))
+            return
+        }
+
+        val amount = args.getOrNull(3)?.toIntOrNull() ?: 1
+        if (amount <= 0) {
+            sender.sendMessage(Component.text("Amount must be a positive number.", NamedTextColor.RED))
+            return
+        }
+
+        val voucher = plugin.physicalVoucherManager.getVoucher(voucherId)
+        if (voucher == null) {
+            sender.sendMessage(Component.text("No physical voucher found with id $voucherId.", NamedTextColor.RED))
+            return
+        }
+
+        plugin.physicalVoucherManager.give(target, voucherId, amount)
+        val voucherName = plugin.commsManager.parseLegacy(voucher.displayName)
+        sender.sendMessage(
+            Component.text("Gave ", NamedTextColor.GREEN)
+                .append(Component.text("${target.name} ", NamedTextColor.WHITE))
+                .append(Component.text("${amount}x ", NamedTextColor.AQUA))
+                .append(voucherName)
+                .append(Component.text(".", NamedTextColor.GREEN))
+        )
+        if (sender != target) {
+            plugin.commsManager.send(
+                target,
+                Component.text("You received ", NamedTextColor.GREEN)
+                    .append(Component.text("${amount}x ", NamedTextColor.AQUA))
+                    .append(voucherName)
+                    .append(Component.text(" from an admin.", NamedTextColor.GREEN)),
+                com.liam.joshymc.manager.CommunicationsManager.Category.ECONOMY
+            )
+        }
+    }
+
     private fun handleReload(sender: CommandSender) {
         // Voucher data is read live from the database on every access — there is
         // no in-memory cache to reload, so this just confirms the current state.
@@ -273,7 +325,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     }
 
     private fun sendUsage(sender: CommandSender) {
-        sender.sendMessage(Component.text("Usage: /voucher <create|delete|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload> [args...]", NamedTextColor.RED))
+        sender.sendMessage(Component.text("Usage: /voucher <create|delete|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload|give> [args...]", NamedTextColor.RED))
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
@@ -281,7 +333,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
         val subcommands = listOf(
             "create", "delete", "enable", "disable", "setname", "setcategory", "setprice",
-            "setrank", "setcommand", "setdescription", "seticon", "list", "info", "reload"
+            "setrank", "setcommand", "setdescription", "seticon", "list", "info", "reload", "give"
         )
 
         return when (args.size) {
@@ -291,10 +343,12 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 "setrank", "setcommand", "setdescription", "seticon", "info" ->
                     plugin.voucherManager.getAllVouchers().map { it.id }.filter { it.startsWith(args[1].lowercase()) }
                 "list" -> plugin.creditShopManager.getCategories().map { it.id }.filter { it.startsWith(args[1].lowercase()) }
+                "give" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
                 "setrank" -> (plugin.rankManager.getRankIds() + "none").filter { it.startsWith(args[2].lowercase()) }
+                "give" -> plugin.physicalVoucherManager.getEnabledVoucherIds().filter { it.startsWith(args[2].lowercase()) }
                 else -> emptyList()
             }
             else -> emptyList()

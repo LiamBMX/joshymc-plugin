@@ -185,6 +185,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var voucherManager: com.liam.joshymc.manager.VoucherManager
         private set
+    lateinit var physicalVoucherManager: com.liam.joshymc.manager.PhysicalVoucherManager
+        private set
     lateinit var rankManager: RankManager
         private set
     lateinit var claimManager: ClaimManager
@@ -362,6 +364,7 @@ class Joshymc : JavaPlugin() {
         serverShopManager = ServerShopManager(this)
         creditShopManager = com.liam.joshymc.manager.CreditShopManager(this)
         voucherManager = com.liam.joshymc.manager.VoucherManager(this)
+        physicalVoucherManager = com.liam.joshymc.manager.PhysicalVoucherManager(this)
         eventManager = com.liam.joshymc.manager.EventManager(this)
         resurgeManager = com.liam.joshymc.manager.ResurgeManager(this)
         boosterManager = BoosterManager(this)
@@ -410,6 +413,7 @@ class Joshymc : JavaPlugin() {
         serverShopManager.start()
         creditShopManager.start()
         voucherManager.start()
+        physicalVoucherManager.start()
 
         marketManager = MarketManager(this)
         if (isFeatureEnabled("market")) marketManager.start()
@@ -558,6 +562,7 @@ class Joshymc : JavaPlugin() {
         safe("listenerManager.registerAll") { listenerManager.registerAll() }
         safe("linkManager.load") { linkManager.load() }
         // WarpManager uses DB directly, no reload needed
+        safe("physicalVoucherManager.reload") { physicalVoucherManager.reload() }
         safe("kitManager.start") { kitManager.start() }
         safe("storageManager.start") { storageManager.start() }
         safe("hologramManager.start") { hologramManager.start() }
