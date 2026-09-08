@@ -542,6 +542,9 @@ commands:
     usage: /mutations <catalyst <seconds>|stop|status>
     permission: joshymc.mutations
     aliases: [mutation]
+  mcr:
+    description: Claim the Ranger/Pioneer monthly 500 Credits reward
+    usage: /mcr
 
 permissions:
   joshymc.give:
@@ -1137,4 +1140,10 @@ permissions:
     default: op
   joshymc.rename.colors:
     description: Use &color codes, formatting codes, and &#RRGGBB hex colors when renaming items in an anvil
+    default: op
+  joshymc.mcr:
+    description: Claim the /mcr 500 Credits monthly reward — grant to the Ranger LuckPerms group (Pioneer inherits it automatically)
+    default: false
+  joshymc.mcr.bypass:
+    description: Bypass the /mcr 30-day cooldown
     default: op
