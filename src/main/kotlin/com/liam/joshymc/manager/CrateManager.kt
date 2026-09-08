@@ -989,15 +989,24 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         filler.editMeta { it.displayName(Component.empty()) }
         for (i in 0 until size) inv.setItem(i, filler.clone())
 
-        // Place rewards in the middle area
+        // Place rewards centered inside the inner 7-wide content area, row by row.
         val totalWeight = crate.rewards.sumOf { it.weight }
-        val slots = mutableListOf<Int>()
         val startRow = 1
         val endRow = (size / 9) - 2
-        for (row in startRow..endRow) {
-            for (col in 1..7) {
-                slots.add(row * 9 + col)
-            }
+        val contentRows = (startRow..endRow).map { row -> (1..7).map { col -> row * 9 + col } }
+
+        val rewardCount = crate.rewards.size
+        val rowsNeeded = if (rewardCount == 0) 0 else (rewardCount - 1) / 7 + 1
+        val verticalOffset = (contentRows.size - rowsNeeded).coerceAtLeast(0) / 2
+
+        val slots = mutableListOf<Int>()
+        var remaining = rewardCount
+        for (i in 0 until rowsNeeded) {
+            val rowIndex = verticalOffset + i
+            if (rowIndex >= contentRows.size) break
+            val countInRow = if (i == rowsNeeded - 1) remaining else 7
+            slots.addAll(getCenteredRewardSlots(contentRows[rowIndex], countInRow))
+            remaining -= countInRow
         }
 
         for ((idx, reward) in crate.rewards.withIndex()) {
@@ -1054,6 +1063,26 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val gui = CustomGui(title, size, inv)
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    /**
+     * Maps [count] rewards onto [rowSlots] (the 7 inner, non-glass slots of one content row,
+     * left to right) so the row reads as visually centered/symmetrical.
+     */
+    private fun getCenteredRewardSlots(rowSlots: List<Int>, count: Int): List<Int> {
+        if (count <= 0) return emptyList()
+        if (count >= 7) return rowSlots.take(7)
+        val a = rowSlots[0]; val b = rowSlots[1]; val c = rowSlots[2]; val d = rowSlots[3]
+        val e = rowSlots[4]; val f = rowSlots[5]; val g = rowSlots[6]
+        return when (count) {
+            1 -> listOf(d)
+            2 -> listOf(c, e)
+            3 -> listOf(c, d, e)
+            4 -> listOf(b, c, e, f)
+            5 -> listOf(b, c, d, e, f)
+            6 -> listOf(a, b, c, e, f, g)
+            else -> rowSlots.take(count)
+        }
     }
 
     // --- Mass open ---
