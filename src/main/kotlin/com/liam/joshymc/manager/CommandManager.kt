@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.command.CreateKitCommand
+import com.liam.joshymc.command.EditKitCommand
 import com.liam.joshymc.command.AnnounceCommand
 import com.liam.joshymc.command.AdminCommand
 import com.liam.joshymc.command.AnvilCommand
@@ -247,6 +248,11 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
         plugin.getCommand("createkit")?.setExecutor(CreateKitCommand(plugin))
+        plugin.getCommand("editkit")?.let {
+            val cmd = EditKitCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
         plugin.getCommand("deletekit")?.let {
             val cmd = DeleteKitCommand(plugin)
             it.setExecutor(cmd)

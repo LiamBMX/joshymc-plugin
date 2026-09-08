@@ -93,6 +93,9 @@ commands:
   createkit:
     description: Create a new kit
     usage: /createkit <name>
+  editkit:
+    description: Edit an existing kit's contents
+    usage: /editkit <name>
   deletekit:
     description: Delete a kit
     usage: /deletekit <name>
@@ -660,6 +663,9 @@ permissions:
     default: op
   joshymc.createkit:
     description: Allows creating kits
+    default: op
+  joshymc.editkit:
+    description: Allows editing an existing kit's contents
     default: op
   joshymc.deletekit:
     description: Allows deleting kits

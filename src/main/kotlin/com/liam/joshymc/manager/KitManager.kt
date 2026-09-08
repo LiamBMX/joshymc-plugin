@@ -12,9 +12,11 @@ import org.bukkit.Sound
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.enchantments.Enchantment
 import org.bukkit.entity.Player
+import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemFlag
 import org.bukkit.inventory.ItemStack
 import java.io.File
+import java.util.UUID
 
 class KitManager(private val plugin: Joshymc) {
 
@@ -25,6 +27,7 @@ class KitManager(private val plugin: Joshymc) {
             .decoration(TextDecoration.ITALIC, false)
 
         private const val CREATE_KIT_TITLE_PREFIX = "Creating Kit: "
+        private const val EDIT_KIT_TITLE_PREFIX = "Editing Kit: "
 
         private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
             editMeta { it.displayName(Component.empty()) }
@@ -32,6 +35,16 @@ class KitManager(private val plugin: Joshymc) {
         private val BORDER = ItemStack(Material.CYAN_STAINED_GLASS_PANE).apply {
             editMeta { it.displayName(Component.empty()) }
         }
+
+        // /editkit GUI layout: content area mirrors the 36-slot /createkit inventory
+        // (so slot keys stay identical), plus a bottom control row.
+        const val EDIT_GUI_SIZE = 45
+        val EDIT_CONTENT_SLOTS = 0..35
+        val EDIT_CONTROL_SLOTS = 36..44
+        const val EDIT_INFO_SLOT = 36
+        const val EDIT_RELOAD_SLOT = 40
+        const val EDIT_SAVE_SLOT = 42
+        const val EDIT_CANCEL_SLOT = 44
     }
 
     data class KitDef(
@@ -41,6 +54,17 @@ class KitManager(private val plugin: Joshymc) {
         val permission: String,
         val items: Map<Int, ItemStack>
     )
+
+    data class EditSession(
+        val kitName: String,
+        val editorId: UUID,
+        val inventory: Inventory,
+        val originalItems: Map<Int, ItemStack>,
+        val overflowItems: Map<Int, ItemStack>
+    )
+
+    private val editSessions = mutableMapOf<UUID, EditSession>()
+    private val editLocks = mutableMapOf<String, UUID>()
 
     private var kitsFile: File = plugin.configFile("kits.yml")
     private var kitsConfig: YamlConfiguration = YamlConfiguration()
@@ -61,6 +85,19 @@ class KitManager(private val plugin: Joshymc) {
         loadKits()
 
         plugin.logger.info("[KitManager] Started with ${kits.size} kit(s).")
+    }
+
+    /** Force-closes any open /editkit sessions and releases their locks. Called on disable/reload. */
+    fun stop() {
+        for (session in editSessions.values.toList()) {
+            val editor = Bukkit.getPlayer(session.editorId) ?: continue
+            if (editor.openInventory.topInventory == session.inventory) {
+                plugin.commsManager.send(editor, Component.text("Kit editor closed (server reloading). No changes were saved.", NamedTextColor.YELLOW))
+                editor.closeInventory()
+            }
+        }
+        editSessions.clear()
+        editLocks.clear()
     }
 
     private fun loadKits() {
@@ -396,6 +433,128 @@ class KitManager(private val plugin: Joshymc) {
             }
         }, 5L, 5L)
     }
+
+    fun getEditSession(player: Player): EditSession? = editSessions[player.uniqueId]
+
+    /** Opens (or re-opens) the /editkit GUI for `name`. Handles the "already being edited" lock. */
+    fun openEditKitGui(player: Player, name: String) {
+        val kit = kits[name]
+        if (kit == null) {
+            plugin.commsManager.send(player, Component.text("Kit '$name' does not exist.", NamedTextColor.RED))
+            return
+        }
+
+        val lockHolder = editLocks[name]
+        if (lockHolder != null && lockHolder != player.uniqueId) {
+            val holder = Bukkit.getPlayer(lockHolder)
+            if (holder != null && holder.isOnline) {
+                plugin.commsManager.send(
+                    player,
+                    Component.text("That kit is currently being edited by ${holder.name}.", NamedTextColor.RED)
+                )
+                return
+            }
+            // Holder went offline without their session getting cleaned up — release the stale lock.
+            editLocks.remove(name)
+            editSessions.remove(lockHolder)
+        }
+
+        // Editing a second kit replaces any edit session this player already had open (discarded, not saved).
+        editSessions[player.uniqueId]?.let { discardEditSession(player, closeInventory = true) }
+
+        val inv = Bukkit.createInventory(null, EDIT_GUI_SIZE, editGuiTitle(name))
+        for ((slot, item) in kit.items) {
+            if (slot in EDIT_CONTENT_SLOTS) inv.setItem(slot, item.clone())
+        }
+        renderEditControlRow(inv, name)
+
+        val overflow = kit.items.filterKeys { it !in EDIT_CONTENT_SLOTS }
+        editSessions[player.uniqueId] = EditSession(name, player.uniqueId, inv, kit.items, overflow)
+        editLocks[name] = player.uniqueId
+
+        player.openInventory(inv)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    fun handleEditSave(player: Player) {
+        val session = editSessions[player.uniqueId] ?: return
+        val kit = kits[session.kitName]
+        if (kit == null) {
+            plugin.commsManager.send(player, Component.text("Kit '${session.kitName}' no longer exists.", NamedTextColor.RED))
+            discardEditSession(player, closeInventory = true)
+            return
+        }
+
+        val items = mutableMapOf<Int, ItemStack>()
+        for (slot in EDIT_CONTENT_SLOTS) {
+            val item = session.inventory.getItem(slot)
+            if (item != null && item.type != Material.AIR) items[slot] = item.clone()
+        }
+        // Slots outside the editable area (shouldn't normally exist) are preserved untouched.
+        items.putAll(session.overflowItems)
+
+        saveKit(session.kitName, kit.icon, kit.cooldownHours, kit.permission, items)
+
+        editSessions.remove(player.uniqueId)
+        editLocks.remove(session.kitName)
+
+        plugin.commsManager.send(player, Component.text("Kit '${session.kitName}' has been updated.", NamedTextColor.GREEN))
+        player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.2f)
+        player.closeInventory()
+    }
+
+    fun handleEditCancel(player: Player) {
+        if (!editSessions.containsKey(player.uniqueId)) return
+        plugin.commsManager.send(player, Component.text("Kit edit cancelled.", NamedTextColor.YELLOW))
+        discardEditSession(player, closeInventory = true)
+    }
+
+    fun handleEditReload(player: Player) {
+        val session = editSessions[player.uniqueId] ?: return
+        for (slot in EDIT_CONTENT_SLOTS) session.inventory.setItem(slot, null)
+        for ((slot, item) in session.originalItems) {
+            if (slot in EDIT_CONTENT_SLOTS) session.inventory.setItem(slot, item.clone())
+        }
+        plugin.commsManager.send(player, Component.text("Reloaded original kit contents.", NamedTextColor.YELLOW))
+        player.playSound(player.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+    }
+
+    /** Ends a player's edit session without saving. Used for close-without-save, quit, cancel, and reload/shutdown. */
+    fun discardEditSession(player: Player, closeInventory: Boolean) {
+        val session = editSessions.remove(player.uniqueId) ?: return
+        if (editLocks[session.kitName] == player.uniqueId) editLocks.remove(session.kitName)
+        if (closeInventory && player.isOnline && player.openInventory.topInventory == session.inventory) {
+            player.closeInventory()
+        }
+    }
+
+    private fun renderEditControlRow(inv: Inventory, kitName: String) {
+        for (slot in EDIT_CONTROL_SLOTS) inv.setItem(slot, FILLER.clone())
+
+        val info = ItemStack(Material.PAPER)
+        info.editMeta { meta ->
+            meta.displayName(Component.text("Editing: $kitName", NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false))
+            meta.lore(listOf(Component.text("Move items to edit this kit's contents.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)))
+        }
+        inv.setItem(EDIT_INFO_SLOT, info)
+
+        val reload = ItemStack(Material.ORANGE_DYE)
+        reload.editMeta { it.displayName(Component.text("Reload Original", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false)) }
+        inv.setItem(EDIT_RELOAD_SLOT, reload)
+
+        val save = ItemStack(Material.LIME_DYE)
+        save.editMeta { it.displayName(Component.text("Save Changes", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false)) }
+        inv.setItem(EDIT_SAVE_SLOT, save)
+
+        val cancel = ItemStack(Material.RED_DYE)
+        cancel.editMeta { it.displayName(Component.text("Cancel", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false)) }
+        inv.setItem(EDIT_CANCEL_SLOT, cancel)
+    }
+
+    private fun editGuiTitle(name: String): Component =
+        Component.text(EDIT_KIT_TITLE_PREFIX)
+            .append(Component.text(name, NamedTextColor.AQUA))
+            .decoration(TextDecoration.ITALIC, false)
 
     private fun formatCooldown(millis: Long): String {
         if (millis <= 0) return "Ready"

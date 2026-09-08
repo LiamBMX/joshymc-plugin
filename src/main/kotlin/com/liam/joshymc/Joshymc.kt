@@ -482,6 +482,7 @@ class Joshymc : JavaPlugin() {
         orderManager.stop()
         hopperPlusManager.stop()
         spawnerManager.stop()
+        kitManager.stop()
         afkManager.stop()
         antiCheatManager.stop()
         portalManager.stop()
@@ -540,6 +541,7 @@ class Joshymc : JavaPlugin() {
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
         safe("questCycleManager.stop") { questCycleManager.stop() }
         safe("spawnerManager.stop") { spawnerManager.stop() }
+        safe("kitManager.stop") { kitManager.stop() }
         safe("afkManager.stop") { afkManager.stop() }
         safe("killStreakManager.stop") { killStreakManager.stop() }
         safe("loginStreakManager.stop") { loginStreakManager.stop() }
