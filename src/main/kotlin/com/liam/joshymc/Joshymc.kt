@@ -273,6 +273,8 @@ class Joshymc : JavaPlugin() {
     override fun onEnable() {
         instance = this
 
+        ConfigUtil.backupsDir(dataFolder)
+
         saveDefaultConfig()
         migrateConfig()
 

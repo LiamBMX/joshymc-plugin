@@ -21,14 +21,25 @@ object ConfigUtil {
     fun looksLikeParseFailure(file: File, loaded: YamlConfiguration): Boolean =
         file.exists() && file.length() > 0 && loaded.getKeys(false).isEmpty()
 
-    /** Copies [file] to a timestamped `.bak-yyyy-MM-dd-HHmm` sibling before a merge/migration rewrite. */
+    /** Ensures `<pluginDataFolder>/backups/` exists and returns it. */
+    fun backupsDir(pluginDataFolder: File): File =
+        File(pluginDataFolder, "backups").apply { if (!exists()) mkdirs() }
+
+    /**
+     * Copies [file] into `backups/` (a sibling of [file]'s parent folder) as a timestamped
+     * `<name>.bak-yyyy-MM-dd-HHmmss` before a merge/migration rewrite. Never touches the
+     * original file — on failure it just logs and leaves [file] untouched.
+     */
     fun backup(file: File, logger: Logger, tag: String) {
         if (!file.exists()) return
         try {
-            val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm").format(LocalDateTime.now())
-            file.copyTo(File(file.parentFile, "${file.name}.bak-$stamp"), overwrite = true)
+            val dir = backupsDir(file.parentFile)
+            val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss").format(LocalDateTime.now())
+            val backupFile = File(dir, "${file.name}.bak-$stamp")
+            file.copyTo(backupFile, overwrite = true)
+            logger.info("[$tag] Backup created: backups/${backupFile.name}")
         } catch (e: Exception) {
-            logger.warning("[$tag] Failed to back up ${file.name} before rewrite: ${e.message}")
+            logger.warning("[$tag] Failed to create backup for ${file.name}. Original file was NOT modified: ${e.message}")
         }
     }
 }
