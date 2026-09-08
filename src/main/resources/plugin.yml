@@ -1153,3 +1153,24 @@ permissions:
   joshymc.mcr.bypass:
     description: Bypass the /mcr 30-day cooldown
     default: op
+  joshymc.rankperk.scout:
+    description: Grants the Scout rank-perk bonus (extra Auction House listings + Buy Orders) — grant to the Scout LuckPerms group
+    default: false
+  joshymc.rankperk.pathfinder:
+    description: Grants the Pathfinder rank-perk bonus (extra Auction House listings + Buy Orders) — grant to the Pathfinder LuckPerms group
+    default: false
+  joshymc.rankperk.lumberjack:
+    description: Grants the Lumberjack rank-perk bonus (extra Auction House listings + Buy Orders) — grant to the Lumberjack LuckPerms group
+    default: false
+  joshymc.rankperk.trailblazer:
+    description: Grants the Trailblazer rank-perk bonus (extra Auction House listings + Buy Orders) — grant to the Trailblazer LuckPerms group
+    default: false
+  joshymc.rankperk.voyager:
+    description: Grants the Voyager rank-perk bonus (extra Auction House listings + Buy Orders) — grant to the Voyager LuckPerms group
+    default: false
+  joshymc.rankperk.ranger:
+    description: Grants the Ranger rank-perk bonus (extra Auction House listings + Buy Orders) — grant to the Ranger LuckPerms group
+    default: false
+  joshymc.rankperk.pioneer:
+    description: Grants the Pioneer rank-perk bonus (extra Auction House listings + Buy Orders) — grant to the Pioneer LuckPerms group
+    default: false

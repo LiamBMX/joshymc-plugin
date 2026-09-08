@@ -88,7 +88,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
     // Config
     private var listingDurationHours: Int = 48
     private var bidDurationHours: Int = 2
-    private var maxListings: Int = 10
+    private var baseMaxListings: Int = 5
     private var minPrice: Double = 1.0
     private var maxPrice: Double = 1_000_000_000.0
     private var taxPercent: Double = 5.0
@@ -106,7 +106,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         val cfg = plugin.config
         listingDurationHours = cfg.getInt("auction.listing-duration-hours", 48)
         bidDurationHours = cfg.getInt("auction.bid-duration-hours", 2)
-        maxListings = cfg.getInt("auction.max-listings-per-player", 10)
+        baseMaxListings = cfg.getInt("auction.max-listings-per-player", 5)
         minPrice = cfg.getDouble("auction.min-price", 1.0)
         maxPrice = cfg.getDouble("auction.max-price", 1_000_000_000.0)
         taxPercent = cfg.getDouble("auction.tax-percent", 5.0)
@@ -268,6 +268,18 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         )
     }
 
+    // ---- Limits ----
+
+    /**
+     * The final Auction House active-listing cap for this player: the base
+     * (auction.max-listings-per-player) plus the extra slots from the single highest
+     * purchasable rank-perk they're eligible for (see RankManager.getRankPerkBonus).
+     */
+    fun getAuctionListingLimit(player: Player): Int {
+        val bonus = plugin.rankManager.getRankPerkBonus(player)?.auctionExtraListings ?: 0
+        return baseMaxListings + bonus
+    }
+
     // ---- Core methods ----
 
     fun listItem(player: Player, price: Double) {
@@ -282,9 +294,10 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             return
         }
 
+        val limit = getAuctionListingLimit(player)
         val currentListings = getPlayerListings(player.uniqueId)
-        if (currentListings.size >= maxListings) {
-            plugin.commsManager.send(player, Component.text("You have reached the maximum of $maxListings listings.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+        if (currentListings.size >= limit) {
+            plugin.commsManager.send(player, Component.text("You have reached the maximum of $limit listings.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
 
@@ -488,9 +501,10 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             return
         }
 
+        val limit = getAuctionListingLimit(player)
         val totalListings = getPlayerListings(player.uniqueId).size + getPlayerBidListings(player.uniqueId).size
-        if (totalListings >= maxListings) {
-            plugin.commsManager.send(player, Component.text("You have reached the maximum of $maxListings listings.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+        if (totalListings >= limit) {
+            plugin.commsManager.send(player, Component.text("You have reached the maximum of $limit listings.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
 
@@ -856,6 +870,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         gui.setItem(47, bidsBtn) { p, _ -> openBidsGui(p) }
 
         // Your Listings (slot 49)
+        val yourListingLimit = getAuctionListingLimit(player)
+        val yourListingCount = getPlayerListings(player.uniqueId).size + getPlayerBidListings(player.uniqueId).size
         val yourListings = ItemStack(Material.BOOK)
         yourListings.editMeta { meta ->
             meta.displayName(
@@ -864,6 +880,10 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
                     .decoration(TextDecoration.BOLD, true)
             )
             meta.lore(listOf(
+                Component.empty(),
+                Component.text("  Active Listings: ", NamedTextColor.GRAY)
+                    .decoration(TextDecoration.ITALIC, false)
+                    .append(Component.text("$yourListingCount/$yourListingLimit", NamedTextColor.WHITE)),
                 Component.empty(),
                 Component.text("  Click to manage your listings", NamedTextColor.GRAY)
                     .decoration(TextDecoration.ITALIC, false)

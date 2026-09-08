@@ -281,8 +281,16 @@ class OrderManager(private val plugin: Joshymc) : Listener {
 
     // ---- Limits / matching ----
 
-    fun getOrderLimit(player: Player): Int {
-        var limit = defaultLimit
+    /**
+     * The final active Buy Order cap for this player: the base (orders.default-active-order-limit)
+     * plus the extra slots from the single highest purchasable rank-perk they're eligible for
+     * (see RankManager.getRankPerkBonus), further raised by any staff/VIP TOTAL override the
+     * player has permission for (orders.limits — a separate, non-purchasable-rank system) if
+     * that override is larger than the base+bonus total.
+     */
+    fun getActiveOrderLimit(player: Player): Int {
+        val bonus = plugin.rankManager.getRankPerkBonus(player)?.ordersExtraOrders ?: 0
+        var limit = defaultLimit + bonus
         for ((key, value) in limitPermissions) {
             if (value > limit && player.hasPermission("joshymc.orders.limit.$key")) limit = value
         }
@@ -454,8 +462,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     }
 
     fun beginCreateOrder(player: Player) {
-        if (getPlayerActiveOrderCount(player.uniqueId) >= getOrderLimit(player)) {
-            plugin.commsManager.send(player, Component.text("You have reached your active Buy Order limit (${getOrderLimit(player)}).", NamedTextColor.RED))
+        if (getPlayerActiveOrderCount(player.uniqueId) >= getActiveOrderLimit(player)) {
+            plugin.commsManager.send(player, Component.text("You have reached your active Buy Order limit (${getActiveOrderLimit(player)}).", NamedTextColor.RED))
             return
         }
 
@@ -734,7 +742,7 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun executeCreateOrder(player: Player, item: ItemStack, quantity: Int, pricePerItem: Double, escrow: Double) {
-        if (getPlayerActiveOrderCount(player.uniqueId) >= getOrderLimit(player)) {
+        if (getPlayerActiveOrderCount(player.uniqueId) >= getActiveOrderLimit(player)) {
             plugin.commsManager.send(player, Component.text("You have reached your active Buy Order limit.", NamedTextColor.RED))
             return
         }
@@ -1211,10 +1219,17 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             gui.setItem(46, simpleIcon(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ -> openMainGui(p, page - 1) }
         }
 
+        val myOrderCount = getPlayerActiveOrderCount(player.uniqueId)
+        val myOrderLimit = getActiveOrderLimit(player)
         gui.setItem(47, simpleIcon(
             Material.BOOK,
             Component.text("My Orders", NamedTextColor.AQUA).decoration(TextDecoration.BOLD, true),
-            listOf(Component.empty(), Component.text("  View and manage your orders", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+            listOf(
+                Component.empty(),
+                loreLine("Active Orders: ").append(Component.text("$myOrderCount/$myOrderLimit", NamedTextColor.WHITE)),
+                Component.empty(),
+                Component.text("  View and manage your orders", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+            )
         )) { p, _ -> openMyOrdersGui(p) }
 
         gui.setItem(49, simpleIcon(
