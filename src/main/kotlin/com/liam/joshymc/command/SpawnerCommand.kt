@@ -48,7 +48,9 @@ class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         // Other subcommands require admin permission
-        if (!sender.hasPermission("joshymc.spawner.admin")) {
+        // (joshymc.spawner.admin is the legacy singular form, kept for backward compatibility —
+        // SpawnerManager's ownership-bypass checks use the plural joshymc.spawners.admin)
+        if (!sender.hasPermission("joshymc.spawner.admin") && !sender.hasPermission("joshymc.spawners.admin")) {
             sendMsg(sender, Component.text("No permission.", NamedTextColor.RED))
             return true
         }
@@ -254,7 +256,7 @@ class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        val isAdmin = sender.hasPermission("joshymc.spawner.admin")
+        val isAdmin = sender.hasPermission("joshymc.spawner.admin") || sender.hasPermission("joshymc.spawners.admin")
         val allSubs = if (isAdmin) playerSubcommands + adminSubcommands else playerSubcommands
 
         return when (args.size) {
