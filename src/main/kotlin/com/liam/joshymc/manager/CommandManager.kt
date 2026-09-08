@@ -89,7 +89,7 @@ import com.liam.joshymc.command.DelWarpCommand
 import com.liam.joshymc.command.PlayerHomeCommand
 import com.liam.joshymc.command.EditWarpCommand
 import com.liam.joshymc.command.HomeCommand
-import com.liam.joshymc.command.EndCommand
+import com.liam.joshymc.command.DimensionCommand
 import com.liam.joshymc.command.ChatCommand
 import com.liam.joshymc.command.JoshyCommand
 import com.liam.joshymc.command.LinkCommand
@@ -180,8 +180,8 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("sit")?.setExecutor(SitCommand(plugin))
 
-        plugin.getCommand("end")?.let {
-            val cmd = EndCommand(plugin)
+        plugin.getCommand("dimension")?.let {
+            val cmd = DimensionCommand(plugin)
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }

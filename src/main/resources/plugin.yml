@@ -35,9 +35,9 @@ commands:
   sit:
     description: Sit down where you are
     usage: /sit
-  end:
-    description: Open or close the End dimension (ops only)
-    usage: /end <open|close>
+  dimension:
+    description: Open or close a dimension, e.g. the End (ops only)
+    usage: /dimension end <open|close>
   chat:
     description: Mute, unmute, or clear global chat (ops only)
     usage: /chat <mute|unmute|clear>
@@ -994,7 +994,7 @@ permissions:
     description: Bypass world flag restrictions
     default: op
   joshymc.end.admin:
-    description: Open or close the End dimension
+    description: Open or close the End dimension via /dimension end
     default: op
   joshymc.end.bypass:
     description: Bypass the End dimension being closed
