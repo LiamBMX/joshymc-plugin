@@ -160,7 +160,6 @@ commands:
     description: View top killers
     usage: /killtop
     aliases: [killerboard, killstop]
-    aliases: [killerboard]
   deathstop:
     description: View top deaths
     usage: /deathstop
@@ -595,6 +594,18 @@ permissions:
   joshymc.treefeller:
     description: Allows using tree feller
     default: op
+  joshymc.hopper:
+    description: Allows viewing hopper info via /hopper info
+    default: true
+  joshymc.hopper.upgrade:
+    description: Allows upgrading hopper speed and setting item filters via /hopper filter (right-click a hopper with a diamond)
+    default: true
+  joshymc.hopper.admin:
+    description: Allows resetting any hopper's upgrades via /hopper reset
+    default: op
+  joshymc.spawners.admin:
+    description: Bypass spawner ownership checks — manage, view, and filter any player's spawner via /spawner and its storage GUI (the legacy joshymc.spawner.admin node is also still accepted for backward compatibility)
+    default: op
   joshymc.mobvisibility:
     description: Allows toggling per-player mob visibility in /settings
     default: true
@@ -757,6 +768,9 @@ permissions:
   joshymc.deathstop:
     description: View death leaderboard
     default: true
+  joshymc.bounty:
+    description: Allows using /bounty to place and manage bounties
+    default: true
   joshymc.bounty.cancel:
     description: Cancel active bounties from /bounty cancel or the bounty list GUI
     default: true
@@ -773,8 +787,14 @@ permissions:
     description: Set, reset, or complete a player's Login Streak
     default: op
   joshymc.shop:
-    description: Access the server shop
+    description: Allows using /chestshop (help, example, info, remove) for sign-based chest shops
     default: true
+  joshymc.shop.create:
+    description: Allows creating a sign-based chest shop by writing "[Shop]" on a sign
+    default: true
+  joshymc.shop.admin:
+    description: Allows managing or removing any player's sign shop, not just your own
+    default: op
   joshymc.worth:
     description: Browse the Worth GUI
     default: true
@@ -805,6 +825,9 @@ permissions:
   joshymc.trail:
     description: Use trail commands
     default: true
+  joshymc.trail.*:
+    description: Bypass per-trail unlock requirements (wildcard access to all trails)
+    default: op
   joshymc.killeffect:
     description: Use kill effect commands
     default: true
@@ -820,6 +843,9 @@ permissions:
   joshymc.gadget:
     description: Use gadget commands
     default: true
+  joshymc.gadget.nocooldown:
+    description: Bypass gadget cooldowns
+    default: op
   joshymc.fish:
     description: Use fishing collection
     default: true
@@ -840,6 +866,12 @@ permissions:
     default: op
   joshymc.nick.others:
     description: Set other players' nicknames
+    default: op
+  joshymc.nick.noprefix:
+    description: Hide the "~" fake-name prefix shown in front of nicknamed non-op players' names
+    default: op
+  joshymc.nick.bypassfilter:
+    description: Bypass the profanity filter when setting a nickname
     default: op
   joshymc.announce:
     description: Send custom announcements
@@ -973,6 +1005,9 @@ permissions:
   joshymc.chat.mod.bypass:
     description: Bypass a global chat mute
     default: op
+  joshymc.chat.profanity.bypass:
+    description: Bypass the chat profanity filter (for staff who need to discuss reports, etc.)
+    default: op
   joshymc.admin:
     description: Full admin panel access (Owner/Admin)
     default: op
@@ -1072,6 +1107,12 @@ permissions:
   joshymc.claim.bypass:
     description: Bypass claim protection
     default: op
+  joshymc.team:
+    description: Allows using /team to create and manage a team
+    default: true
+  joshymc.team.admin:
+    description: Bypass team rename cooldown and delete any team via /team delete
+    default: op
   joshymc.rank:
     description: Use rank commands
     default: op
@@ -1104,6 +1145,9 @@ permissions:
     default: op
   joshymc.anticheat.alerts:
     description: Receive anticheat violation alerts
+    default: op
+  joshymc.anticheat.fly.bypass:
+    description: Bypass the anticheat fly check (also granted implicitly by joshymc.fly)
     default: op
   joshymc.violation.bridge:
     description: Allow forwarding external AC violations into the admin panel (intended for console only)
