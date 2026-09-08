@@ -736,6 +736,9 @@ permissions:
   joshymc.cshop.admin:
     description: Manage the credits shop (add/remove items, categories)
     default: op
+  joshymc.cshop.category.remove:
+    description: Remove Credit Shop categories via /cshop category remove
+    default: op
   joshymc.vouchers:
     description: Configure/manage virtual voucher packages and give physical money vouchers via /voucher (redeeming either kind needs no permission)
     default: op

@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gui.team.TeamConfirmGui
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -18,6 +19,7 @@ import org.bukkit.entity.Player
  * Admins:  /cshop additem hand <price> <category>         list the held item
  *          /cshop removeitem <id>                         delist an item
  *          /cshop category create <name>                  create a new category
+ *          /cshop category remove <category>              remove a category (needs joshymc.cshop.category.remove)
  *          /cshop list [category]                         show listing ids
  */
 class CreditShopCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
@@ -114,11 +116,24 @@ class CreditShopCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
     }
 
     private fun handleCategory(sender: Player, args: Array<out String>) {
+        if (args.size < 2) {
+            plugin.commsManager.send(sender, Component.text("Usage: /cshop category <create|remove> ...", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            return
+        }
+
+        when (args[1].lowercase()) {
+            "create" -> handleCategoryCreate(sender, args)
+            "remove" -> handleCategoryRemove(sender, args)
+            else -> plugin.commsManager.send(sender, Component.text("Usage: /cshop category <create|remove> ...", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+        }
+    }
+
+    private fun handleCategoryCreate(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.cshop.admin")) {
             plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
             return
         }
-        if (args.size < 3 || args[1].lowercase() != "create") {
+        if (args.size < 3) {
             plugin.commsManager.send(sender, Component.text("Usage: /cshop category create <name>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
             return
         }
@@ -141,6 +156,52 @@ class CreditShopCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 .append(Component.text(category.name, NamedTextColor.WHITE))
                 .append(Component.text(" (id ${category.id}).", NamedTextColor.GREEN)),
             CommunicationsManager.Category.ADMIN
+        )
+    }
+
+    private fun handleCategoryRemove(sender: Player, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.cshop.category.remove")) {
+            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            return
+        }
+        if (args.size != 3) {
+            plugin.commsManager.send(sender, Component.text("Usage: /cshop category remove <category>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            return
+        }
+
+        val categoryId = plugin.creditShopManager.slugify(args[2])
+        val category = plugin.creditShopManager.getCategory(categoryId)
+        if (category == null) {
+            plugin.commsManager.send(sender,
+                Component.text("Credit Shop category '${args[2]}' does not exist.", NamedTextColor.RED),
+                CommunicationsManager.Category.ADMIN
+            )
+            return
+        }
+
+        val listingCount = plugin.creditShopManager.getItemsForCategory(category.id).size +
+            plugin.voucherManager.countVouchersByCategory(category.id)
+
+        TeamConfirmGui.open(
+            plugin,
+            sender,
+            Component.text("Remove category '${category.name}'?", NamedTextColor.WHITE),
+            listOf(Component.text("This will delete $listingCount listing(s).", NamedTextColor.GRAY)),
+            onConfirm = { plg, player ->
+                if (plg.creditShopManager.removeCategory(category.id)) {
+                    plg.commsManager.send(player,
+                        Component.text("Removed Credit Shop category '${category.name}'.", NamedTextColor.GREEN),
+                        CommunicationsManager.Category.ADMIN
+                    )
+                } else {
+                    plg.commsManager.send(player,
+                        Component.text("Credit Shop category '${category.name}' does not exist.", NamedTextColor.RED),
+                        CommunicationsManager.Category.ADMIN
+                    )
+                }
+                player.closeInventory()
+            },
+            onCancel = { _, player -> player.closeInventory() }
         )
     }
 
@@ -185,17 +246,26 @@ class CreditShopCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         val isAdmin = sender.hasPermission("joshymc.cshop.admin")
+        val canRemoveCategory = sender.hasPermission("joshymc.cshop.category.remove")
 
         return when (args.size) {
-            1 -> if (isAdmin) {
+            1 -> if (isAdmin || canRemoveCategory) {
                 listOf("additem", "removeitem", "category", "list").filter { it.startsWith(args[0].lowercase()) }
             } else emptyList()
             2 -> when (args[0].lowercase()) {
                 "additem" -> listOf("hand").filter { it.startsWith(args[1].lowercase()) }
-                "category" -> listOf("create").filter { it.startsWith(args[1].lowercase()) }
+                "category" -> {
+                    val options = mutableListOf<String>()
+                    if (isAdmin) options.add("create")
+                    if (canRemoveCategory) options.add("remove")
+                    options.filter { it.startsWith(args[1].lowercase()) }
+                }
                 "list" -> plugin.creditShopManager.getCategories().map { it.id }.filter { it.startsWith(args[1].lowercase()) }
                 else -> emptyList()
             }
+            3 -> if (args[0].lowercase() == "category" && args[1].lowercase() == "remove" && canRemoveCategory) {
+                plugin.creditShopManager.getCategories().map { it.id }.filter { it.startsWith(args[2].lowercase()) }
+            } else emptyList()
             4 -> if (args[0].lowercase() == "additem") {
                 plugin.creditShopManager.getCategories().map { it.id }.filter { it.startsWith(args[3].lowercase()) }
             } else emptyList()

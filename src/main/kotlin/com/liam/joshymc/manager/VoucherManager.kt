@@ -86,6 +86,17 @@ class VoucherManager(private val plugin: Joshymc) {
         return plugin.databaseManager.executeUpdate("DELETE FROM vouchers WHERE id = ?", id) > 0
     }
 
+    /** Called when a Credit Shop category is removed so its vouchers aren't left orphaned. */
+    fun deleteVouchersByCategory(categoryId: String) {
+        plugin.databaseManager.execute("DELETE FROM vouchers WHERE category_id = ?", categoryId)
+    }
+
+    fun countVouchersByCategory(categoryId: String): Int {
+        return plugin.databaseManager.queryFirst(
+            "SELECT COUNT(*) AS count FROM vouchers WHERE category_id = ?", categoryId
+        ) { it.getInt("count") } ?: 0
+    }
+
     fun setEnabled(id: String, enabled: Boolean): Boolean {
         return plugin.databaseManager.executeUpdate("UPDATE vouchers SET enabled = ? WHERE id = ?", if (enabled) 1 else 0, id) > 0
     }

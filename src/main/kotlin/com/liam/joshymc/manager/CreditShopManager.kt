@@ -77,6 +77,21 @@ class CreditShopManager(private val plugin: Joshymc) {
         return plugin.databaseManager.executeUpdate("DELETE FROM credit_shop_items WHERE id = ?", id) > 0
     }
 
+    /**
+     * Removes a category and every listing under it (both physical items and
+     * vouchers, see [VoucherManager.deleteVouchersByCategory]) so no listing
+     * is ever left pointing at a category that no longer exists.
+     */
+    fun removeCategory(id: String): Boolean {
+        if (getCategory(id) == null) return false
+        plugin.databaseManager.transaction {
+            plugin.databaseManager.execute("DELETE FROM credit_shop_items WHERE category_id = ?", id)
+            plugin.voucherManager.deleteVouchersByCategory(id)
+            plugin.databaseManager.execute("DELETE FROM credit_shop_categories WHERE id = ?", id)
+        }
+        return true
+    }
+
     fun getCategories(): List<CreditShopCategory> {
         return plugin.databaseManager.query("SELECT * FROM credit_shop_categories ORDER BY name") { mapCategory(it) }
     }
