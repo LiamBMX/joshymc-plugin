@@ -338,7 +338,7 @@ rtp:
 # Auction House
 auction:
   listing-duration-hours: 48
-  max-listings-per-player: 10
+  max-listings-per-player: 5
   min-price: 1
   max-price: 1000000000
   tax-percent: 5
@@ -348,7 +348,7 @@ auction:
 # buy orders are always fully escrowed and only ever filled by real players.
 orders:
   expiration-days: 7
-  default-active-order-limit: 10
+  default-active-order-limit: 5
   minimum-price-per-item: 1
   maximum-price-per-item: 1000000000
   maximum-quantity-per-order: 100000
@@ -357,11 +357,43 @@ orders:
     enabled: false
   notifications:
     enabled: true
-  # Permission-based active-order limits. Highest limit the player has permission
-  # for wins. Permission node is "joshymc.orders.limit.<key>".
+  # Staff/VIP TOTAL active-order overrides (separate from rank-perks below — these are
+  # not purchasable ranks). Highest limit the player has permission for wins, and is used
+  # only if it's greater than the base+rank-perk total. Permission node is "joshymc.orders.limit.<key>".
   limits:
     vip: 15
     admin: 50
+
+# Rank Perks — configurable EXTRA Auction House listing slots and Buy Order slots granted
+# to purchasable ranks, on top of the base limits above (auction.max-listings-per-player /
+# orders.default-active-order-limit). Formula: final limit = base limit + rank bonus.
+#
+# Eligibility is permission-based ("joshymc.rankperk.<key>"), granted to each rank's LuckPerms
+# group externally — same pattern as /mcr. If a player is eligible for multiple rank perks
+# (e.g. via LuckPerms inheritance), bonuses are NOT stacked: only the single highest-applicable
+# rank's bonus is applied, and both fields always come from that same rank.
+rank-perks:
+  scout:
+    auction-extra-listings: 2
+    orders-extra-orders: 2
+  pathfinder:
+    auction-extra-listings: 5
+    orders-extra-orders: 5
+  lumberjack:
+    auction-extra-listings: 8
+    orders-extra-orders: 8
+  trailblazer:
+    auction-extra-listings: 12
+    orders-extra-orders: 12
+  voyager:
+    auction-extra-listings: 16
+    orders-extra-orders: 16
+  ranger:
+    auction-extra-listings: 20
+    orders-extra-orders: 20
+  pioneer:
+    auction-extra-listings: 25
+    orders-extra-orders: 25
 
 # Stock Market — /invest, a player-driven stock market (progressive percentage-based pricing)
 stock-market:

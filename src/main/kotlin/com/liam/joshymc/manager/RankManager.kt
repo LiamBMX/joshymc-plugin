@@ -26,8 +26,20 @@ class RankManager(private val plugin: Joshymc) : Listener {
         val category: String = "Ranks"  // Grouping shown by /rank list, e.g. "Staff Ranks"
     )
 
+    /**
+     * A configurable EXTRA-slot perk for a purchasable rank (Scout, Pathfinder, ...).
+     * These ranks live entirely in LuckPerms/permissions — not in [ranks] — so eligibility
+     * is resolved via the "joshymc.rankperk.<key>" permission node, same pattern as /mcr.
+     */
+    data class RankPerk(
+        val key: String,
+        val auctionExtraListings: Int,
+        val ordersExtraOrders: Int
+    )
+
     private val ranks = mutableMapOf<String, Rank>()
     private val playerRanks = mutableMapOf<UUID, MutableSet<String>>() // UUID -> set of rank IDs
+    private val rankPerks = mutableListOf<RankPerk>()
 
     private val legacy = LegacyComponentSerializer.legacyAmpersand()
 
@@ -45,6 +57,9 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
         // Load ranks from config
         loadRanks()
+
+        // Load rank-perk EXTRA-slot bonuses (Auction House / Buy Orders) from config
+        loadRankPerks()
 
         // Load player ranks from DB
         loadPlayerRanks()
@@ -261,6 +276,18 @@ class RankManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    private fun loadRankPerks() {
+        rankPerks.clear()
+        val section = plugin.config.getConfigurationSection("rank-perks") ?: return
+        for (key in section.getKeys(false)) {
+            val perkSection = section.getConfigurationSection(key) ?: continue
+            // getInt() already falls back to 0 on missing/non-numeric YAML values; clamp negatives too.
+            val auctionExtra = perkSection.getInt("auction-extra-listings", 0).coerceAtLeast(0)
+            val ordersExtra = perkSection.getInt("orders-extra-orders", 0).coerceAtLeast(0)
+            rankPerks.add(RankPerk(key, auctionExtra, ordersExtra))
+        }
+    }
+
     private fun loadPlayerRanks() {
         playerRanks.clear()
         val rows = plugin.databaseManager.query(
@@ -305,6 +332,20 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     /** All rank IDs explicitly assigned to this player, empty if none. */
     fun getPlayerRankIds(uuid: UUID): Set<String> = playerRanks[uuid] ?: emptySet()
+
+    /**
+     * Resolves the single highest-applicable purchasable rank-perk for this player, based on
+     * the "joshymc.rankperk.<key>" permission node (granted per LuckPerms group externally).
+     * Bonuses are NOT stacked across inherited groups — only the perk with the largest
+     * auction-extra-listings (Buy Order extra as tiebreaker) among the player's granted
+     * perks is used, so both fields always come from the same rank. Returns null if the
+     * player has no rank-perk permission.
+     */
+    fun getRankPerkBonus(player: Player): RankPerk? {
+        return rankPerks
+            .filter { player.hasPermission("joshymc.rankperk.${it.key}") }
+            .maxWithOrNull(compareBy({ it.auctionExtraListings }, { it.ordersExtraOrders }))
+    }
 
     /**
      * Set a player's rank. Pass null to remove their rank.
