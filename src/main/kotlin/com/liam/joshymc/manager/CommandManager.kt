@@ -657,6 +657,10 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Mutations ─────────────────────────────────────
         plugin.getCommand("mutations")?.let { val c = com.liam.joshymc.command.MutationsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
+        // ── MCR (Ranger/Pioneer monthly Credits reward) ────
+        com.liam.joshymc.command.McrCommand.createTable(plugin)
+        plugin.getCommand("mcr")?.setExecutor(com.liam.joshymc.command.McrCommand(plugin))
+
         plugin.logger.info("Commands registered.")
     }
 
