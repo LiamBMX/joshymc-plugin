@@ -161,7 +161,7 @@ login-streaks:
     # Grace after it's consumed.
     recharge-completed-days: 7
 
-# The End — toggle via /end <open|close> (ops only)
+# The End — toggle via /dimension end <open|close> (ops only)
 end:
   # Whether players can teleport into the End through end portals.
   # When false, players walking into an end portal simply phase through it

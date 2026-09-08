@@ -700,7 +700,7 @@ Bypasses world flag restrictions.
 Default: OP
 
 joshymc.end.admin
-Allows opening or closing the End dimension with `/end <open|close>`.
+Allows opening or closing the End dimension with `/dimension end <open|close>`.
 Default: OP
 
 joshymc.end.bypass
