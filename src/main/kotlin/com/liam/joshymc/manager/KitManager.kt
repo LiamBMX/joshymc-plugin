@@ -21,8 +21,7 @@ import java.util.UUID
 class KitManager(private val plugin: Joshymc) {
 
     companion object {
-        val KIT_GUI_TITLE: Component = Component.text("         ")
-            .append(Component.text("Kits", TextColor.color(0x55FFFF)))
+        val KIT_GUI_TITLE: Component = Component.text("KITS", TextColor.color(0x55FFFF))
             .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false)
 
@@ -45,6 +44,59 @@ class KitManager(private val plugin: Joshymc) {
         const val EDIT_RELOAD_SLOT = 40
         const val EDIT_SAVE_SLOT = 42
         const val EDIT_CANCEL_SLOT = 44
+
+        /**
+         * Shape-based centering for the /kit content area (rows 1-3, cols 1-7 of the
+         * 45-slot GUI), mirroring the compact-formation approach used by the crate
+         * preview/pick-a-reward GUIs (see CrateManager.CrateLayout).
+         */
+        private object KitLayout {
+            const val CONTENT_ROWS = 3
+            const val CONTENT_COLS = 7
+            const val CAPACITY = CONTENT_ROWS * CONTENT_COLS
+
+            /** Column indices (0..6) that symmetrically center [rowLen] items within a 7-wide row. */
+            private fun columnIndices(rowLen: Int): List<Int> = when (rowLen) {
+                0 -> emptyList()
+                1 -> listOf(3)
+                2 -> listOf(2, 4)
+                3 -> listOf(2, 3, 4)
+                4 -> listOf(1, 2, 4, 5)
+                5 -> listOf(1, 2, 3, 4, 5)
+                6 -> listOf(0, 1, 2, 4, 5, 6)
+                else -> (0 until CONTENT_COLS).toList()
+            }
+
+            /** Per-row item counts (top to bottom), balanced across as few rows as needed. */
+            private fun rowCounts(count: Int): List<Int> {
+                if (count <= 0) return emptyList()
+                if (count <= CONTENT_COLS) return listOf(count)
+                val capped = count.coerceAtMost(CAPACITY)
+                val rows = ((capped - 1) / CONTENT_COLS + 1).coerceAtMost(CONTENT_ROWS)
+                val base = capped / rows
+                val remainder = capped % rows
+                return (0 until rows).map { r -> if (r < remainder) base + 1 else base }
+            }
+
+            /** Absolute GUI slots (within the 45-slot inventory) for [count] kit icons, centered. */
+            fun slots(count: Int): List<Int> {
+                val rows = rowCounts(count)
+                val verticalOffset = (CONTENT_ROWS - rows.size).coerceAtLeast(0) / 2
+                val result = mutableListOf<Int>()
+                for ((i, rowLen) in rows.withIndex()) {
+                    val physicalRow = 1 + verticalOffset + i
+                    for (col in columnIndices(rowLen)) {
+                        result.add(physicalRow * 9 + (1 + col))
+                    }
+                }
+                return result
+            }
+        }
+
+        /** Capitalizes each word of a kit's internal id for display only (e.g. "trail_blazer" -> "Trail Blazer"). */
+        fun displayName(kitName: String): String =
+            kitName.split('_', ' ').filter { it.isNotEmpty() }
+                .joinToString(" ") { it.lowercase().replaceFirstChar(Char::uppercase) }
     }
 
     data class KitDef(
@@ -289,10 +341,14 @@ class KitManager(private val plugin: Joshymc) {
         // Side borders (rows 1-3)
         for (row in 1..3) { gui.inventory.setItem(row * 9, BORDER.clone()); gui.inventory.setItem(row * 9 + 8, BORDER.clone()) }
 
-        // Place kits in a centered 3x3 area (rows 1-3, cols 3-5) instead of spanning
-        // the full row, so the kit order (rank progression) reads top-to-bottom, left-to-right.
-        val slots = mutableListOf<Int>()
-        for (row in 1..3) for (col in 3..5) slots.add(row * 9 + col)
+        // Close button, centered on the bottom control row.
+        val close = ItemStack(Material.BARRIER)
+        close.editMeta { it.displayName(Component.text("Close", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false)) }
+        gui.setItem(40, close) { p, _ -> p.closeInventory() }
+
+        // Centered, shape-based icon placement (see KitLayout) so the layout stays
+        // balanced whether there are 1 or 21 kits, instead of a fixed grid with gaps.
+        val slots = KitLayout.slots(kits.size)
 
         var rendered = 0
         for ((idx, kitDef) in kits.values.withIndex()) {
@@ -318,14 +374,19 @@ class KitManager(private val plugin: Joshymc) {
     private fun renderKitIcon(gui: CustomGui, slot: Int, player: Player, kitDef: KitDef) {
         val onCooldown = !canClaim(player, kitDef.name)
         val hasPermission = player.hasPermission(kitDef.permission)
+        val ready = hasPermission && !onCooldown
+        val locked = !hasPermission
 
-        val displayMat = if (onCooldown) Material.RED_STAINED_GLASS_PANE else kitDef.icon
-        val item = ItemStack(displayMat)
+        val item = ItemStack(kitDef.icon)
 
         item.editMeta { meta ->
-                val nameColor = if (onCooldown) NamedTextColor.RED else NamedTextColor.AQUA
+                val nameColor = when {
+                    locked -> NamedTextColor.GRAY
+                    onCooldown -> NamedTextColor.GOLD
+                    else -> NamedTextColor.AQUA
+                }
                 meta.displayName(
-                    Component.text(kitDef.name, nameColor)
+                    Component.text(displayName(kitDef.name), nameColor)
                         .decoration(TextDecoration.ITALIC, false)
                         .decoration(TextDecoration.BOLD, true)
                 )
@@ -333,30 +394,33 @@ class KitManager(private val plugin: Joshymc) {
                 val lore = mutableListOf<Component>()
                 lore.add(Component.empty())
 
-                // Cooldown info
-                val cooldownText = "${kitDef.cooldownHours}h cooldown"
-                lore.add(Component.text("  $cooldownText", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+                lore.add(
+                    Component.text("Cooldown: ", NamedTextColor.GRAY)
+                        .decoration(TextDecoration.ITALIC, false)
+                        .append(Component.text("${kitDef.cooldownHours}h", NamedTextColor.WHITE))
+                )
 
-                // Status
-                if (!hasPermission) {
-                    lore.add(Component.text("  No Permission", NamedTextColor.DARK_RED).decoration(TextDecoration.ITALIC, false))
-                } else if (onCooldown) {
-                    val remaining = getCooldownRemaining(player, kitDef.name)
-                    val formatted = formatCooldown(remaining)
-                    lore.add(Component.text("  $formatted remaining", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
-                } else {
-                    lore.add(Component.text("  Ready", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                val statusValue = when {
+                    locked -> Component.text("Locked", NamedTextColor.RED)
+                    onCooldown -> Component.text("${formatCooldown(getCooldownRemaining(player, kitDef.name))} remaining", NamedTextColor.GOLD)
+                    else -> Component.text("Ready", NamedTextColor.GREEN)
                 }
+                lore.add(
+                    Component.text("Status: ", NamedTextColor.GRAY)
+                        .decoration(TextDecoration.ITALIC, false)
+                        .append(statusValue.decoration(TextDecoration.ITALIC, false))
+                )
 
                 lore.add(Component.empty())
-                if (hasPermission && !onCooldown) {
-                    lore.add(Component.text("  Click to claim", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+                if (ready) {
+                    lore.add(Component.text("Left-Click to claim", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
                 }
-                lore.add(Component.text("  Right-click to preview", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+                lore.add(Component.text("Right-Click to preview", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
 
                 meta.lore(lore)
 
-                if (onCooldown) {
+                // Subtle glint on ready kits only — no glint while on cooldown or locked.
+                if (ready) {
                     meta.addEnchant(Enchantment.UNBREAKING, 1, true)
                     meta.addItemFlags(ItemFlag.HIDE_ENCHANTS)
                 }
@@ -380,7 +444,7 @@ class KitManager(private val plugin: Joshymc) {
         val size = rows * 9
 
         val title = Component.text("Preview: ")
-            .append(Component.text(kitDef.name, TextColor.color(0x55FFFF)))
+            .append(Component.text(displayName(kitDef.name), TextColor.color(0x55FFFF)))
             .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false)
         val gui = CustomGui(title, size)
