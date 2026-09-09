@@ -220,22 +220,31 @@ class CreditShopManager(private val plugin: Joshymc) {
             .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false)
 
-        val gui = CustomGui(title, 54)
-        gui.fill(FILLER.clone())
-
-        for (i in 0..8) gui.inventory.setItem(i, BORDER.clone())
-        for (i in 45..53) gui.inventory.setItem(i, BORDER.clone())
-
         val totalPages = ((listings.size - 1) / ITEMS_PER_PAGE).coerceAtLeast(0)
         val startIndex = page * ITEMS_PER_PAGE
         val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(listings.size)
         val pageListings = if (startIndex < listings.size) listings.subList(startIndex, endIndex) else emptyList()
 
+        // Size the chest to the number of items on this page instead of always opening
+        // 6 rows: 1 content row per 7 items (up to the 4-row/28-item page cap), plus the
+        // top glass border row and bottom control row.
+        val contentRows = if (pageListings.isEmpty()) 1 else ((pageListings.size - 1) / 7 + 1).coerceIn(1, 4)
+        val size = (contentRows + 2) * 9
+        val bottomRowStart = size - 9
+
+        val gui = CustomGui(title, size)
+        gui.fill(FILLER.clone())
+
+        for (i in 0..8) gui.inventory.setItem(i, BORDER.clone())
+        for (i in bottomRowStart until size) gui.inventory.setItem(i, BORDER.clone())
+
+        val contentRowSlots = (1..contentRows).map { row -> (1..7).map { col -> row * 9 + col } }
         val itemSlots = mutableListOf<Int>()
-        for (row in 1..4) {
-            for (col in 1..7) {
-                itemSlots.add(row * 9 + col)
-            }
+        var remaining = pageListings.size
+        for (i in 0 until contentRows) {
+            val countInRow = if (i == contentRows - 1) remaining else 7
+            itemSlots.addAll(centerRowSlots(contentRowSlots[i], countInRow))
+            remaining -= countInRow
         }
 
         for ((index, listing) in pageListings.withIndex()) {
@@ -268,7 +277,7 @@ class CreditShopManager(private val plugin: Joshymc) {
                 )
             }
         }
-        gui.setItem(49, backItem) { p, _ ->
+        gui.setItem(bottomRowStart + 4, backItem) { p, _ ->
             p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
             openMainMenu(p)
         }
@@ -283,7 +292,7 @@ class CreditShopManager(private val plugin: Joshymc) {
                     )
                 }
             }
-            gui.setItem(46, prevItem) { p, _ ->
+            gui.setItem(bottomRowStart + 1, prevItem) { p, _ ->
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
                 openCategory(p, categoryId, page - 1)
             }
@@ -299,7 +308,7 @@ class CreditShopManager(private val plugin: Joshymc) {
                     )
                 }
             }
-            gui.setItem(52, nextItem) { p, _ ->
+            gui.setItem(bottomRowStart + 7, nextItem) { p, _ ->
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
                 openCategory(p, categoryId, page + 1)
             }
@@ -395,5 +404,26 @@ class CreditShopManager(private val plugin: Joshymc) {
         if (count >= rowSlots.size) return rowSlots.take(count)
         val offset = (rowSlots.size - count) / 2
         return rowSlots.subList(offset, offset + count)
+    }
+
+    /**
+     * Maps [count] items onto [rowSlots] (the 7 inner, non-glass slots of one content row,
+     * left to right) so the row reads as visually centered/symmetrical, matching the crate
+     * reward preview layout.
+     */
+    private fun centerRowSlots(rowSlots: List<Int>, count: Int): List<Int> {
+        if (count <= 0) return emptyList()
+        if (count >= 7) return rowSlots.take(7)
+        val a = rowSlots[0]; val b = rowSlots[1]; val c = rowSlots[2]; val d = rowSlots[3]
+        val e = rowSlots[4]; val f = rowSlots[5]; val g = rowSlots[6]
+        return when (count) {
+            1 -> listOf(d)
+            2 -> listOf(c, e)
+            3 -> listOf(c, d, e)
+            4 -> listOf(b, c, e, f)
+            5 -> listOf(b, c, d, e, f)
+            6 -> listOf(a, b, c, e, f, g)
+            else -> rowSlots.take(count)
+        }
     }
 }
