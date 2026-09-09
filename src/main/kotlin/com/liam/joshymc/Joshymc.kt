@@ -188,6 +188,10 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var physicalVoucherManager: com.liam.joshymc.manager.PhysicalVoucherManager
         private set
+    lateinit var creditVoucherManager: com.liam.joshymc.manager.CreditVoucherManager
+        private set
+    lateinit var rankVoucherManager: com.liam.joshymc.manager.RankVoucherManager
+        private set
     lateinit var rankManager: RankManager
         private set
     lateinit var claimManager: ClaimManager
@@ -369,6 +373,8 @@ class Joshymc : JavaPlugin() {
         creditShopManager = com.liam.joshymc.manager.CreditShopManager(this)
         voucherManager = com.liam.joshymc.manager.VoucherManager(this)
         physicalVoucherManager = com.liam.joshymc.manager.PhysicalVoucherManager(this)
+        creditVoucherManager = com.liam.joshymc.manager.CreditVoucherManager(this)
+        rankVoucherManager = com.liam.joshymc.manager.RankVoucherManager(this)
         eventManager = com.liam.joshymc.manager.EventManager(this)
         resurgeManager = com.liam.joshymc.manager.ResurgeManager(this)
         boosterManager = BoosterManager(this)
@@ -418,6 +424,8 @@ class Joshymc : JavaPlugin() {
         creditShopManager.start()
         voucherManager.start()
         physicalVoucherManager.start()
+        creditVoucherManager.start()
+        rankVoucherManager.start()
 
         marketManager = MarketManager(this)
         if (isFeatureEnabled("market")) marketManager.start()
