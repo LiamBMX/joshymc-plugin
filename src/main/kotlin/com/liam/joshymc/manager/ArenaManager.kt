@@ -56,29 +56,31 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
     private lateinit var pvpTask: BukkitTask
     private lateinit var particleTask: BukkitTask
 
-    private lateinit var arenasFile: File
-    private lateinit var arenasConfig: YamlConfiguration
+    // Initialized eagerly at construction time (not in start()) so that
+    // arenasConfig is guaranteed to exist even if the "arenas" feature flag
+    // is off and start() is never called, but the /arena command is still
+    // registered and reachable. See issue #590.
+    private val arenasFile: File = plugin.configFile("arenas.yml").also { file ->
+        if (!file.exists()) {
+            file.parentFile?.mkdirs()
+            file.createNewFile()
+        }
+    }
+    private var arenasConfig: YamlConfiguration = YamlConfiguration.loadConfiguration(arenasFile)
     private var nextId: Int = 1
 
     private val comms get() = plugin.commsManager
     private val db get() = plugin.databaseManager
 
+    init {
+        // One-time migration from the old SQLite arenas table to arenas.yml
+        migrateFromDatabaseIfNeeded()
+        loadArenas()
+    }
+
     // ── Lifecycle ────────────────────────────────────────
 
     fun start() {
-        // Initialize YAML storage (supports plugins/joshymc/config/arenas.yml or plugins/joshymc/arenas.yml)
-        arenasFile = plugin.configFile("arenas.yml")
-        if (!arenasFile.exists()) {
-            arenasFile.parentFile?.mkdirs()
-            arenasFile.createNewFile()
-        }
-        arenasConfig = YamlConfiguration.loadConfiguration(arenasFile)
-
-        // One-time migration from the old SQLite arenas table to arenas.yml
-        migrateFromDatabaseIfNeeded()
-
-        loadArenas()
-
         pvpTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickPvpZones() }, 20L, 10L)
         particleTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickBorderParticles() }, 40L, 30L)
 
