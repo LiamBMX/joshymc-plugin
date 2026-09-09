@@ -543,14 +543,21 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         filler.editMeta { it.displayName(Component.empty()) }
         gui.border(filler)
 
-        // Place rewards in the center area
-        val slots = mutableListOf<Int>()
+        // Place rewards centered inside the inner 7-wide content area, balanced across rows.
         val startRow = 1
         val endRow = (size / 9) - 2
-        for (row in startRow..endRow) {
-            for (col in 1..7) {
-                slots.add(row * 9 + col)
-            }
+        val contentRows = (startRow..endRow).map { row -> (1..7).map { col -> row * 9 + col } }
+
+        val rewardCount = crate.rewards.size
+        val rowsNeeded = if (rewardCount == 0) 0 else (rewardCount + 6) / 7
+        val verticalOffset = (contentRows.size - rowsNeeded).coerceAtLeast(0) / 2
+        val rowSizes = getBalancedRowSizes(rewardCount, rowsNeeded)
+
+        val slots = mutableListOf<Int>()
+        for (i in 0 until rowsNeeded) {
+            val rowIndex = verticalOffset + i
+            if (rowIndex >= contentRows.size) break
+            slots.addAll(getCenteredRewardSlots(contentRows[rowIndex], rowSizes[i]))
         }
 
         for ((idx, reward) in crate.rewards.withIndex()) {
@@ -1083,6 +1090,18 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             6 -> listOf(a, b, c, e, f, g)
             else -> rowSlots.take(count)
         }
+    }
+
+    /**
+     * Splits [count] items across [rows] rows as evenly as possible, front-loading the
+     * remainder onto the earlier rows (e.g. 9 across 2 rows -> [5, 4]) instead of always
+     * filling each row to its 7-item max before spilling into the next.
+     */
+    private fun getBalancedRowSizes(count: Int, rows: Int): List<Int> {
+        if (rows <= 0) return emptyList()
+        val base = count / rows
+        val extra = count % rows
+        return (0 until rows).map { i -> if (i < extra) base + 1 else base }
     }
 
     // --- Mass open ---
