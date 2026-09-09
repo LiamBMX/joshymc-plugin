@@ -302,7 +302,7 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
         val idleParticles = listOf(
             org.bukkit.Particle.END_ROD, org.bukkit.Particle.FLAME, org.bukkit.Particle.SOUL_FIRE_FLAME,
             org.bukkit.Particle.CHERRY_LEAVES, org.bukkit.Particle.HEART, org.bukkit.Particle.HAPPY_VILLAGER,
-            org.bukkit.Particle.ENCHANT, org.bukkit.Particle.WITCH
+            org.bukkit.Particle.ENCHANT, org.bukkit.Particle.WITCH, org.bukkit.Particle.DUST
         )
         gui.setItem(46, idleParticleBtn) { p, _ ->
             val curIdx = idleParticles.indexOf(crate.idleParticle).coerceAtLeast(0)
@@ -456,6 +456,7 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
         }
 
         // Win Particle (slot 52)
+        val colorEntry = com.liam.joshymc.util.MinecraftColors.ALL.firstOrNull { it.color == crate.particleColor }
         val winParticleBtn = ItemStack(Material.FIREWORK_ROCKET)
         winParticleBtn.editMeta { meta ->
             meta.displayName(
@@ -467,7 +468,13 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
                 Component.empty(),
                 Component.text("  Particle burst on reward", NamedTextColor.GRAY)
                     .decoration(TextDecoration.ITALIC, false),
-                Component.text("  Click to cycle", NamedTextColor.YELLOW)
+                Component.text("  Color: ", NamedTextColor.GRAY)
+                    .append(Component.text(colorEntry?.label ?: "Default", colorEntry?.textColor ?: NamedTextColor.WHITE))
+                    .decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("  Left-click: cycle particle", NamedTextColor.YELLOW)
+                    .decoration(TextDecoration.ITALIC, false),
+                Component.text("  Right-click: pick color", NamedTextColor.YELLOW)
                     .decoration(TextDecoration.ITALIC, false),
                 Component.empty()
             ))
@@ -475,9 +482,14 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
         val winParticles = listOf(
             org.bukkit.Particle.FIREWORK, org.bukkit.Particle.TOTEM_OF_UNDYING,
             org.bukkit.Particle.EXPLOSION, org.bukkit.Particle.HEART,
-            org.bukkit.Particle.HAPPY_VILLAGER, org.bukkit.Particle.FLAME
+            org.bukkit.Particle.HAPPY_VILLAGER, org.bukkit.Particle.FLAME,
+            org.bukkit.Particle.DUST
         )
-        gui.setItem(52, winParticleBtn) { p, _ ->
+        gui.setItem(52, winParticleBtn) { p, event ->
+            if (event.isRightClick) {
+                openParticleColorGui(p, crateId)
+                return@setItem
+            }
             val curIdx = winParticles.indexOf(crate.winParticle).coerceAtLeast(0)
             val next = winParticles[(curIdx + 1) % winParticles.size]
             plugin.crateManager.setCrateWinParticle(crateId, next)
@@ -512,6 +524,73 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
             }
             openMainMenu(p)
+        }
+
+        plugin.guiManager.open(player, gui)
+    }
+
+    // --- Particle Color Picker ---
+
+    private fun openParticleColorGui(player: Player, crateId: String) {
+        val crate = plugin.crateManager.getCrate(crateId) ?: run {
+            plugin.commsManager.send(player, Component.text("Crate not found.", NamedTextColor.RED))
+            return
+        }
+
+        val gui = CustomGui(
+            Component.text("Particle Color: ", NamedTextColor.WHITE)
+                .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
+                .decoration(TextDecoration.ITALIC, false),
+            27
+        )
+
+        val filler = ItemStack(Material.GRAY_STAINED_GLASS_PANE)
+        filler.editMeta { it.displayName(Component.empty()) }
+        gui.fill(filler)
+
+        for ((idx, entry) in com.liam.joshymc.util.MinecraftColors.ALL.withIndex()) {
+            val isCurrent = crate.particleColor == entry.color
+            val item = ItemStack(entry.icon)
+            item.editMeta { meta ->
+                meta.displayName(
+                    Component.text(entry.label, entry.textColor)
+                        .decoration(TextDecoration.ITALIC, false)
+                        .decoration(TextDecoration.BOLD, true)
+                )
+                val lore = mutableListOf(Component.empty())
+                if (isCurrent) {
+                    lore.add(Component.text("  Currently selected", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                } else {
+                    lore.add(Component.text("  Click to select", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+                }
+                lore.add(Component.empty())
+                meta.lore(lore)
+            }
+            gui.setItem(idx, item) { p, _ ->
+                plugin.crateManager.setCrateParticleColor(crateId, entry.id)
+                p.playSound(p.location, Sound.BLOCK_ANVIL_USE, 0.5f, 1.0f)
+                plugin.commsManager.send(p, Component.text("Particle color set to ", NamedTextColor.GREEN).append(Component.text(entry.label, entry.textColor)).append(Component.text(".", NamedTextColor.GREEN)))
+                openEditMenu(p, crateId)
+            }
+        }
+
+        val backBtn = ItemStack(Material.ARROW)
+        backBtn.editMeta { meta ->
+            meta.displayName(
+                Component.text("Back", NamedTextColor.WHITE)
+                    .decoration(TextDecoration.ITALIC, false)
+                    .decoration(TextDecoration.BOLD, true)
+            )
+            meta.lore(listOf(
+                Component.empty(),
+                Component.text("  Click: back without changes", NamedTextColor.GRAY)
+                    .decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+            ))
+        }
+        gui.setItem(26, backBtn) { p, _ ->
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            openEditMenu(p, crateId)
         }
 
         plugin.guiManager.open(player, gui)

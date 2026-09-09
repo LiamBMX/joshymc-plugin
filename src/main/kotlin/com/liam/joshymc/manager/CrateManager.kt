@@ -2,11 +2,13 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.MinecraftColors
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
+import org.bukkit.Color
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
@@ -142,7 +144,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val mode: CrateMode = CrateMode.RANDOM,
         val animationType: AnimationType = AnimationType.SPIN,
         val idleParticle: Particle = Particle.END_ROD,
-        val winParticle: Particle = Particle.FIREWORK
+        val winParticle: Particle = Particle.FIREWORK,
+        /**
+         * Color applied to colorable particle types (currently only Particle.DUST).
+         * Null means "no color configured" — colorable particles fall back to a
+         * default color and non-colorable particles are unaffected either way.
+         */
+        val particleColor: Color? = null
     )
 
     data class CrateLocation(
@@ -233,6 +241,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val winParticleStr = crateSection.getString("win-particle", "FIREWORK") ?: "FIREWORK"
             val winParticle = try { Particle.valueOf(winParticleStr.uppercase()) } catch (_: Exception) { Particle.FIREWORK }
 
+            val particleColor = MinecraftColors.byId(crateSection.getString("particle-color"))?.color
+
             val rewards = mutableListOf<CrateReward>()
             val rewardsSection = crateSection.getConfigurationSection("rewards")
             if (rewardsSection != null) {
@@ -260,7 +270,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 }
             }
 
-            crates[id] = CrateDef(id, displayName, keyMaterial, keyName, animationGlass, rewards, mode, animationType, idleParticle, winParticle)
+            crates[id] = CrateDef(id, displayName, keyMaterial, keyName, animationGlass, rewards, mode, animationType, idleParticle, winParticle, particleColor)
         }
     }
 
@@ -390,6 +400,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    fun setCrateParticleColor(crateId: String, colorId: String): Boolean {
+        val crate = crates[crateId] ?: return false
+        val entry = MinecraftColors.byId(colorId) ?: return false
+        crates[crateId] = crate.copy(particleColor = entry.color)
+        saveCrates()
+        return true
+    }
+
     private fun saveCrates() {
         cratesConfig.set("crates", null)
         for ((id, crate) in crates) {
@@ -402,6 +420,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             cratesConfig.set("$path.animation-type", crate.animationType.name.lowercase())
             cratesConfig.set("$path.idle-particle", crate.idleParticle.name)
             cratesConfig.set("$path.win-particle", crate.winParticle.name)
+            val colorId = MinecraftColors.ALL.firstOrNull { it.color == crate.particleColor }?.id
+            cratesConfig.set("$path.particle-color", colorId)
 
             for ((idx, reward) in crate.rewards.withIndex()) {
                 val rewardPath = "$path.rewards.reward_$idx"
@@ -621,6 +641,24 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         for (i in 0 until size) gui.inventory.setItem(i, filler.clone())
 
         val positions = CrateLayout.positions(pageRewards.size)
+        gui.border(filler)
+
+        // Place rewards centered inside the inner 7-wide content area, balanced across rows.
+        val startRow = 1
+        val endRow = (size / 9) - 2
+        val contentRows = (startRow..endRow).map { row -> (1..7).map { col -> row * 9 + col } }
+
+        val rewardCount = crate.rewards.size
+        val rowsNeeded = if (rewardCount == 0) 0 else (rewardCount + 6) / 7
+        val verticalOffset = (contentRows.size - rowsNeeded).coerceAtLeast(0) / 2
+        val rowSizes = getBalancedRowSizes(rewardCount, rowsNeeded)
+
+        val slots = mutableListOf<Int>()
+        for (i in 0 until rowsNeeded) {
+            val rowIndex = verticalOffset + i
+            if (rowIndex >= contentRows.size) break
+            slots.addAll(getCenteredRewardSlots(contentRows[rowIndex], rowSizes[i]))
+        }
 
         for ((idx, reward) in pageRewards.withIndex()) {
             if (idx >= positions.size) break
@@ -1044,7 +1082,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 player.world.spawnParticle(Particle.EXPLOSION, loc, 5, 0.3, 0.3, 0.3, 0.0)
             }
             else -> {
-                player.world.spawnParticle(crate.winParticle, loc, 30, 0.5, 0.5, 0.5, 0.1)
+                spawnCrateParticle(player.world, loc, crate.winParticle, crate.particleColor, 30, 0.5, 0.5, 0.5, 0.1)
             }
         }
     }
@@ -1137,6 +1175,38 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    /**
+     * Maps [count] rewards onto [rowSlots] (the 7 inner, non-glass slots of one content row,
+     * left to right) so the row reads as visually centered/symmetrical.
+     */
+    private fun getCenteredRewardSlots(rowSlots: List<Int>, count: Int): List<Int> {
+        if (count <= 0) return emptyList()
+        if (count >= 7) return rowSlots.take(7)
+        val a = rowSlots[0]; val b = rowSlots[1]; val c = rowSlots[2]; val d = rowSlots[3]
+        val e = rowSlots[4]; val f = rowSlots[5]; val g = rowSlots[6]
+        return when (count) {
+            1 -> listOf(d)
+            2 -> listOf(c, e)
+            3 -> listOf(c, d, e)
+            4 -> listOf(b, c, e, f)
+            5 -> listOf(b, c, d, e, f)
+            6 -> listOf(a, b, c, e, f, g)
+            else -> rowSlots.take(count)
+        }
+    }
+
+    /**
+     * Splits [count] items across [rows] rows as evenly as possible, front-loading the
+     * remainder onto the earlier rows (e.g. 9 across 2 rows -> [5, 4]) instead of always
+     * filling each row to its 7-item max before spilling into the next.
+     */
+    private fun getBalancedRowSizes(count: Int, rows: Int): List<Int> {
+        if (rows <= 0) return emptyList()
+        val base = count / rows
+        val extra = count % rows
+        return (0 until rows).map { i -> if (i < extra) base + 1 else base }
     }
 
     // --- Mass open ---
@@ -1249,9 +1319,33 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
                 val crate = crates[loc.crateType]
                 val particle = crate?.idleParticle ?: Particle.END_ROD
-                world.spawnParticle(particle, particleLoc, 3, 0.3, 0.5, 0.3, 0.02)
+                spawnCrateParticle(world, particleLoc, particle, crate?.particleColor, 3, 0.3, 0.5, 0.3, 0.02)
             }
         }, 10L, 10L)
+    }
+
+    /**
+     * Spawns a crate particle, supplying DustOptions when the particle type
+     * requires color data (currently only Particle.DUST). Non-colorable
+     * particles are unaffected — this just avoids duplicating the DUST check
+     * everywhere a crate particle is spawned.
+     */
+    private fun spawnCrateParticle(
+        world: org.bukkit.World,
+        loc: Location,
+        particle: Particle,
+        color: Color?,
+        count: Int,
+        offsetX: Double,
+        offsetY: Double,
+        offsetZ: Double,
+        speed: Double
+    ) {
+        if (particle == Particle.DUST) {
+            world.spawnParticle(particle, loc, count, offsetX, offsetY, offsetZ, speed, Particle.DustOptions(color ?: Color.RED, 1.2f))
+        } else {
+            world.spawnParticle(particle, loc, count, offsetX, offsetY, offsetZ, speed)
+        }
     }
 
     // --- Event handlers ---
