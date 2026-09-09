@@ -2,11 +2,13 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.MinecraftColors
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
+import org.bukkit.Color
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
@@ -65,7 +67,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val mode: CrateMode = CrateMode.RANDOM,
         val animationType: AnimationType = AnimationType.SPIN,
         val idleParticle: Particle = Particle.END_ROD,
-        val winParticle: Particle = Particle.FIREWORK
+        val winParticle: Particle = Particle.FIREWORK,
+        /**
+         * Color applied to colorable particle types (currently only Particle.DUST).
+         * Null means "no color configured" — colorable particles fall back to a
+         * default color and non-colorable particles are unaffected either way.
+         */
+        val particleColor: Color? = null
     )
 
     data class CrateLocation(
@@ -156,6 +164,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val winParticleStr = crateSection.getString("win-particle", "FIREWORK") ?: "FIREWORK"
             val winParticle = try { Particle.valueOf(winParticleStr.uppercase()) } catch (_: Exception) { Particle.FIREWORK }
 
+            val particleColor = MinecraftColors.byId(crateSection.getString("particle-color"))?.color
+
             val rewards = mutableListOf<CrateReward>()
             val rewardsSection = crateSection.getConfigurationSection("rewards")
             if (rewardsSection != null) {
@@ -183,7 +193,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 }
             }
 
-            crates[id] = CrateDef(id, displayName, keyMaterial, keyName, animationGlass, rewards, mode, animationType, idleParticle, winParticle)
+            crates[id] = CrateDef(id, displayName, keyMaterial, keyName, animationGlass, rewards, mode, animationType, idleParticle, winParticle, particleColor)
         }
     }
 
@@ -313,6 +323,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    fun setCrateParticleColor(crateId: String, colorId: String): Boolean {
+        val crate = crates[crateId] ?: return false
+        val entry = MinecraftColors.byId(colorId) ?: return false
+        crates[crateId] = crate.copy(particleColor = entry.color)
+        saveCrates()
+        return true
+    }
+
     private fun saveCrates() {
         cratesConfig.set("crates", null)
         for ((id, crate) in crates) {
@@ -325,6 +343,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             cratesConfig.set("$path.animation-type", crate.animationType.name.lowercase())
             cratesConfig.set("$path.idle-particle", crate.idleParticle.name)
             cratesConfig.set("$path.win-particle", crate.winParticle.name)
+            val colorId = MinecraftColors.ALL.firstOrNull { it.color == crate.particleColor }?.id
+            cratesConfig.set("$path.particle-color", colorId)
 
             for ((idx, reward) in crate.rewards.withIndex()) {
                 val rewardPath = "$path.rewards.reward_$idx"
@@ -971,7 +991,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 player.world.spawnParticle(Particle.EXPLOSION, loc, 5, 0.3, 0.3, 0.3, 0.0)
             }
             else -> {
-                player.world.spawnParticle(crate.winParticle, loc, 30, 0.5, 0.5, 0.5, 0.1)
+                spawnCrateParticle(player.world, loc, crate.winParticle, crate.particleColor, 30, 0.5, 0.5, 0.5, 0.1)
             }
         }
     }
@@ -1214,9 +1234,33 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
                 val crate = crates[loc.crateType]
                 val particle = crate?.idleParticle ?: Particle.END_ROD
-                world.spawnParticle(particle, particleLoc, 3, 0.3, 0.5, 0.3, 0.02)
+                spawnCrateParticle(world, particleLoc, particle, crate?.particleColor, 3, 0.3, 0.5, 0.3, 0.02)
             }
         }, 10L, 10L)
+    }
+
+    /**
+     * Spawns a crate particle, supplying DustOptions when the particle type
+     * requires color data (currently only Particle.DUST). Non-colorable
+     * particles are unaffected — this just avoids duplicating the DUST check
+     * everywhere a crate particle is spawned.
+     */
+    private fun spawnCrateParticle(
+        world: org.bukkit.World,
+        loc: Location,
+        particle: Particle,
+        color: Color?,
+        count: Int,
+        offsetX: Double,
+        offsetY: Double,
+        offsetZ: Double,
+        speed: Double
+    ) {
+        if (particle == Particle.DUST) {
+            world.spawnParticle(particle, loc, count, offsetX, offsetY, offsetZ, speed, Particle.DustOptions(color ?: Color.RED, 1.2f))
+        } else {
+            world.spawnParticle(particle, loc, count, offsetX, offsetY, offsetZ, speed)
+        }
     }
 
     // --- Event handlers ---
