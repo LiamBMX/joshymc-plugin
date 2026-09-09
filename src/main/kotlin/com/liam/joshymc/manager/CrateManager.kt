@@ -35,6 +35,83 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         private val PREVIEW_GUI_TITLE_PREFIX = "Preview: "
     }
 
+    /**
+     * Shared shape-based reward layout used by BOTH the Preview and Pick-a-Reward
+     * GUIs, so the same crate always renders as the same compact formation in both
+     * places instead of a plain row-by-row fill.
+     */
+    private object CrateLayout {
+        const val USABLE_ROWS = 3
+        const val USABLE_COLUMNS = 7
+        const val PAGE_CAPACITY = USABLE_ROWS * USABLE_COLUMNS // 21
+
+        // Predefined compact formations (row-by-row item counts, top to bottom).
+        // Above this, rows are distributed as evenly as possible (see rowCounts).
+        private val FIXED_SHAPES = mapOf(
+            1 to listOf(1), 2 to listOf(2), 3 to listOf(3),
+            4 to listOf(2, 2), 5 to listOf(3, 2), 6 to listOf(3, 3),
+            7 to listOf(7),
+            8 to listOf(4, 4), 9 to listOf(3, 3, 3), 10 to listOf(5, 5),
+            11 to listOf(7, 4), 12 to listOf(6, 6), 13 to listOf(7, 6), 14 to listOf(7, 7)
+        )
+
+        /** Column indices (0..6) that symmetrically center [rowLen] items within a 7-wide row. */
+        private fun columnIndices(rowLen: Int): List<Int> = when (rowLen) {
+            0 -> emptyList()
+            1 -> listOf(3)
+            2 -> listOf(2, 4)
+            3 -> listOf(2, 3, 4)
+            4 -> listOf(1, 2, 4, 5)
+            5 -> listOf(1, 2, 3, 4, 5)
+            6 -> listOf(0, 1, 2, 4, 5, 6)
+            else -> (0 until USABLE_COLUMNS).toList()
+        }
+
+        /** Per-row item counts (top to bottom) forming a compact formation for [count] items. */
+        private fun rowCounts(count: Int): List<Int> {
+            if (count <= 0) return emptyList()
+            FIXED_SHAPES[count]?.let { return it }
+            val capped = count.coerceAtMost(PAGE_CAPACITY)
+            val base = capped / USABLE_ROWS
+            val remainder = capped % USABLE_ROWS
+            return (0 until USABLE_ROWS).map { row -> if (row < remainder) base + 1 else base }
+        }
+
+        /**
+         * (row, col) grid positions, 0-indexed within a [USABLE_ROWS] x [USABLE_COLUMNS]
+         * box, for [count] rewards (capped to one page) — horizontally and vertically centered.
+         */
+        fun positions(count: Int): List<Pair<Int, Int>> {
+            val rows = rowCounts(count)
+            val verticalOffset = (USABLE_ROWS - rows.size).coerceAtLeast(0) / 2
+            val result = mutableListOf<Pair<Int, Int>>()
+            for ((i, rowLen) in rows.withIndex()) {
+                for (col in columnIndices(rowLen)) {
+                    result.add((verticalOffset + i) to col)
+                }
+            }
+            return result
+        }
+
+        fun pageCount(total: Int): Int = if (total <= 0) 1 else (total - 1) / PAGE_CAPACITY + 1
+    }
+
+    private fun navButton(label: String): ItemStack {
+        val item = ItemStack(Material.ARROW)
+        item.editMeta { meta ->
+            meta.displayName(Component.text(label, NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+        }
+        return item
+    }
+
+    private fun pageIndicator(current: Int, total: Int): ItemStack {
+        val item = ItemStack(Material.PAPER)
+        item.editMeta { meta ->
+            meta.displayName(Component.text("Page $current / $total", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+        }
+        return item
+    }
+
     // --- Data classes ---
 
     data class CrateReward(
@@ -525,37 +602,30 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     // --- SELECT mode GUI ---
 
-    private fun openSelectGui(player: Player, crate: CrateDef) {
+    private fun openSelectGui(player: Player, crate: CrateDef, page: Int = 0) {
         val title = Component.text("Pick a Reward: ")
             .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
             .decoration(TextDecoration.ITALIC, false)
 
-        val size = when {
-            crate.rewards.size <= 7 -> 27
-            crate.rewards.size <= 21 -> 45
-            else -> 54
-        }
+        val totalPages = CrateLayout.pageCount(crate.rewards.size)
+        val safePage = page.coerceIn(0, totalPages - 1)
+        val pageStart = safePage * CrateLayout.PAGE_CAPACITY
+        val pageRewards = crate.rewards.drop(pageStart).take(CrateLayout.PAGE_CAPACITY)
 
+        val size = 45
         val gui = CustomGui(title, size)
 
-        // Fill with glass border
+        // Fill everything with glass so the formation's empty gaps look intentional.
         val filler = ItemStack(crate.animationGlass)
         filler.editMeta { it.displayName(Component.empty()) }
-        gui.border(filler)
+        for (i in 0 until size) gui.inventory.setItem(i, filler.clone())
 
-        // Place rewards in the center area
-        val slots = mutableListOf<Int>()
-        val startRow = 1
-        val endRow = (size / 9) - 2
-        for (row in startRow..endRow) {
-            for (col in 1..7) {
-                slots.add(row * 9 + col)
-            }
-        }
+        val positions = CrateLayout.positions(pageRewards.size)
 
-        for ((idx, reward) in crate.rewards.withIndex()) {
-            if (idx >= slots.size) break
-            val slot = slots[idx]
+        for ((idx, reward) in pageRewards.withIndex()) {
+            if (idx >= positions.size) break
+            val (row, col) = positions[idx]
+            val slot = (row + 1) * 9 + (col + 1)
 
             // Use the actual stored item (preserves trims, custom items)
             val item = deserializeItem(reward.itemBase64)
@@ -637,6 +707,16 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                         .append(Component.text(" x${rewardRef.amount}", NamedTextColor.GREEN))
                         .append(Component.text("!", NamedTextColor.GREEN))
                 )
+            }
+        }
+
+        if (totalPages > 1) {
+            if (safePage > 0) {
+                gui.setItem(39, navButton("« Previous Page")) { p, _ -> openSelectGui(p, crate, safePage - 1) }
+            }
+            gui.setItem(40, pageIndicator(safePage + 1, totalPages))
+            if (safePage < totalPages - 1) {
+                gui.setItem(41, navButton("Next Page »")) { p, _ -> openSelectGui(p, crate, safePage + 1) }
             }
         }
 
@@ -969,49 +1049,34 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    fun openPreview(player: Player, crateType: String) {
+    fun openPreview(player: Player, crateType: String, page: Int = 0) {
         val crate = crates[crateType] ?: return
 
         val title = Component.text(PREVIEW_GUI_TITLE_PREFIX)
             .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
             .decoration(TextDecoration.ITALIC, false)
 
-        val size = when {
-            crate.rewards.size <= 7 -> 27
-            crate.rewards.size <= 21 -> 45
-            else -> 54
-        }
+        val totalPages = CrateLayout.pageCount(crate.rewards.size)
+        val safePage = page.coerceIn(0, totalPages - 1)
+        val pageStart = safePage * CrateLayout.PAGE_CAPACITY
+        val pageRewards = crate.rewards.drop(pageStart).take(CrateLayout.PAGE_CAPACITY)
 
-        val inv = Bukkit.createInventory(null, size, title)
+        val size = 45
+        val gui = CustomGui(title, size)
 
         // Fill with black glass
         val filler = ItemStack(Material.BLACK_STAINED_GLASS_PANE)
         filler.editMeta { it.displayName(Component.empty()) }
-        for (i in 0 until size) inv.setItem(i, filler.clone())
+        for (i in 0 until size) gui.inventory.setItem(i, filler.clone())
 
-        // Place rewards centered inside the inner 7-wide content area, row by row.
+        // Place rewards in a compact, centered shape-based formation.
         val totalWeight = crate.rewards.sumOf { it.weight }
-        val startRow = 1
-        val endRow = (size / 9) - 2
-        val contentRows = (startRow..endRow).map { row -> (1..7).map { col -> row * 9 + col } }
+        val positions = CrateLayout.positions(pageRewards.size)
 
-        val rewardCount = crate.rewards.size
-        val rowsNeeded = if (rewardCount == 0) 0 else (rewardCount - 1) / 7 + 1
-        val verticalOffset = (contentRows.size - rowsNeeded).coerceAtLeast(0) / 2
-
-        val slots = mutableListOf<Int>()
-        var remaining = rewardCount
-        for (i in 0 until rowsNeeded) {
-            val rowIndex = verticalOffset + i
-            if (rowIndex >= contentRows.size) break
-            val countInRow = if (i == rowsNeeded - 1) remaining else 7
-            slots.addAll(getCenteredRewardSlots(contentRows[rowIndex], countInRow))
-            remaining -= countInRow
-        }
-
-        for ((idx, reward) in crate.rewards.withIndex()) {
-            if (idx >= slots.size) break
-            val slot = slots[idx]
+        for ((idx, reward) in pageRewards.withIndex()) {
+            if (idx >= positions.size) break
+            val (row, col) = positions[idx]
+            val slot = (row + 1) * 9 + (col + 1)
             val percentage = (reward.weight.toDouble() / totalWeight * 100).let { "%.1f".format(it) }
 
             // Use serialized item if present (preserves trims, custom items)
@@ -1057,32 +1122,21 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 meta.lore(lore)
             }
 
-            inv.setItem(slot, item)
+            gui.inventory.setItem(slot, item)
         }
 
-        val gui = CustomGui(title, size, inv)
+        if (totalPages > 1) {
+            if (safePage > 0) {
+                gui.setItem(39, navButton("« Previous Page")) { p, _ -> openPreview(p, crateType, safePage - 1) }
+            }
+            gui.setItem(40, pageIndicator(safePage + 1, totalPages))
+            if (safePage < totalPages - 1) {
+                gui.setItem(41, navButton("Next Page »")) { p, _ -> openPreview(p, crateType, safePage + 1) }
+            }
+        }
+
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
-    }
-
-    /**
-     * Maps [count] rewards onto [rowSlots] (the 7 inner, non-glass slots of one content row,
-     * left to right) so the row reads as visually centered/symmetrical.
-     */
-    private fun getCenteredRewardSlots(rowSlots: List<Int>, count: Int): List<Int> {
-        if (count <= 0) return emptyList()
-        if (count >= 7) return rowSlots.take(7)
-        val a = rowSlots[0]; val b = rowSlots[1]; val c = rowSlots[2]; val d = rowSlots[3]
-        val e = rowSlots[4]; val f = rowSlots[5]; val g = rowSlots[6]
-        return when (count) {
-            1 -> listOf(d)
-            2 -> listOf(c, e)
-            3 -> listOf(c, d, e)
-            4 -> listOf(b, c, e, f)
-            5 -> listOf(b, c, d, e, f)
-            6 -> listOf(a, b, c, e, f, g)
-            else -> rowSlots.take(count)
-        }
     }
 
     // --- Mass open ---
