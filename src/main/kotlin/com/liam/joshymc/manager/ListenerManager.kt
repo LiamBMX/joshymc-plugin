@@ -37,6 +37,8 @@ import com.liam.joshymc.listener.CustomArmorAnvilListener
 import com.liam.joshymc.listener.SellWandAnvilListener
 import com.liam.joshymc.listener.ItemRenameListener
 import com.liam.joshymc.listener.PhysicalVoucherListener
+import com.liam.joshymc.listener.CreditVoucherListener
+import com.liam.joshymc.listener.RankVoucherListener
 import com.liam.joshymc.listener.SellWandListener
 import com.liam.joshymc.listener.VoidBoreListener
 import com.liam.joshymc.listener.enchant.CombatEnchantListener
@@ -138,6 +140,8 @@ class ListenerManager(private val plugin: Joshymc) {
         // Sell Wand
         pm.registerEvents(SellWandListener(plugin), plugin)
         pm.registerEvents(PhysicalVoucherListener(plugin), plugin)
+        pm.registerEvents(CreditVoucherListener(plugin), plugin)
+        pm.registerEvents(RankVoucherListener(plugin), plugin)
         pm.registerEvents(SellWandAnvilListener(plugin), plugin)
         pm.registerEvents(CustomArmorAnvilListener(plugin), plugin)
         pm.registerEvents(ItemRenameListener(plugin), plugin)

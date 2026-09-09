@@ -249,6 +249,14 @@ commands:
     description: Configure virtual voucher packages redeemable in the Credit Shop, and give physical money vouchers
     usage: /voucher <create|delete|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload|give> [args...]
     permission: joshymc.vouchers
+  creditvoucher:
+    description: Give physical, non-stackable Credit Voucher items that redeem for JoshyMC Credits
+    usage: /creditvoucher give <player> <amount> [quantity]
+    permission: joshymc.creditvoucher.admin
+  rankvoucher:
+    description: Give physical, non-stackable Rank Voucher items that redeem for a purchasable rank tier
+    usage: /rankvoucher give <player> <rank> [quantity]
+    permission: joshymc.rankvoucher.admin
   welcome:
     description: Welcome a newly joined player for money and a chance at a credit or AFK key
     usage: /welcome
@@ -756,6 +764,12 @@ permissions:
     default: op
   joshymc.vouchers:
     description: Configure/manage virtual voucher packages and give physical money vouchers via /voucher (redeeming either kind needs no permission)
+    default: op
+  joshymc.creditvoucher.admin:
+    description: Give physical Credit Vouchers via /creditvoucher give (redeeming one needs no permission)
+    default: op
+  joshymc.rankvoucher.admin:
+    description: Give physical Rank Vouchers via /rankvoucher give (redeeming one needs no permission)
     default: op
   joshymc.balance:
     description: Check balance
