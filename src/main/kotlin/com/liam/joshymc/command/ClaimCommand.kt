@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gui.claim.ClaimMainGui
 import com.liam.joshymc.manager.ClaimManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -40,6 +41,11 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
         if (label.equals("unclaim", ignoreCase = true)) {
             handleUnclaim(sender); return true
+        }
+
+        if (args.isEmpty()) {
+            ClaimMainGui.open(plugin, sender)
+            return true
         }
 
         when (sub) {
