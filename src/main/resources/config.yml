@@ -17,12 +17,8 @@ features:
   custom-fishing: true
   quests: true
   market: true
-  trails: true
   kill-effects: true
   join-effects: true
-  emotes: true
-  glow: true
-  gadgets: true
   custom-enchants: true
   anticheat: true
   combat-log-npc: true

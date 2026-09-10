@@ -186,11 +186,8 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(BubbleButtListener(plugin), plugin)
 
         // Cosmetics
-        pm.registerEvents(plugin.trailManager, plugin)
         pm.registerEvents(plugin.killEffectManager, plugin)
         pm.registerEvents(plugin.joinEffectManager, plugin)
-        pm.registerEvents(plugin.glowManager, plugin)
-        pm.registerEvents(plugin.gadgetManager, plugin)
 
         // Back location tracking
         pm.registerEvents(BackLocationListener(plugin), plugin)

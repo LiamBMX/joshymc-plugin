@@ -28,13 +28,9 @@ import com.liam.joshymc.manager.ScoreboardManager
 import com.liam.joshymc.manager.ChatTagManager
 import com.liam.joshymc.manager.MarketManager
 import com.liam.joshymc.manager.QuestCycleManager
-import com.liam.joshymc.manager.EmoteManager
 import com.liam.joshymc.manager.FishingManager
-import com.liam.joshymc.manager.GadgetManager
-import com.liam.joshymc.manager.GlowManager
 import com.liam.joshymc.manager.JoinEffectManager
 import com.liam.joshymc.manager.KillEffectManager
-import com.liam.joshymc.manager.TrailManager
 import com.liam.joshymc.manager.SpawnWorldManager
 import com.liam.joshymc.manager.TalismanManager
 import com.liam.joshymc.manager.ClaimManager
@@ -229,17 +225,9 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var fishingManager: FishingManager
         private set
-    lateinit var trailManager: TrailManager
-        private set
     lateinit var killEffectManager: KillEffectManager
         private set
     lateinit var joinEffectManager: JoinEffectManager
-        private set
-    lateinit var emoteManager: EmoteManager
-        private set
-    lateinit var glowManager: GlowManager
-        private set
-    lateinit var gadgetManager: GadgetManager
         private set
     lateinit var adminManager: AdminManager
         private set
@@ -352,13 +340,8 @@ class Joshymc : JavaPlugin() {
         questCycleManager.createTables()
         talismanManager = TalismanManager(this)
         fishingManager = FishingManager(this)
-        trailManager = TrailManager(this)
         killEffectManager = KillEffectManager(this)
         joinEffectManager = JoinEffectManager(this)
-        emoteManager = EmoteManager(this)
-        glowManager = GlowManager(this)
-        glowManager.createTables()
-        gadgetManager = GadgetManager(this)
         adminManager = AdminManager(this)
         modModeManager = com.liam.joshymc.manager.ModModeManager(this)
         worldFlagManager = WorldFlagManager(this)
@@ -441,12 +424,8 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("quests")) questCycleManager.start()
         if (isFeatureEnabled("talismans")) talismanManager.start()
         if (isFeatureEnabled("custom-fishing")) fishingManager.start()
-        if (isFeatureEnabled("trails")) trailManager.start()
         if (isFeatureEnabled("kill-effects")) killEffectManager.start()
         if (isFeatureEnabled("join-effects")) joinEffectManager.start()
-        if (isFeatureEnabled("emotes")) emoteManager.start()
-        if (isFeatureEnabled("gadgets")) gadgetManager.start()
-        if (isFeatureEnabled("glow")) glowManager.start()
         adminManager.start()
         modModeManager.start()
         worldFlagManager.start()

@@ -49,6 +49,11 @@ class ChatTagManager(private val plugin: Joshymc) {
             return
         }
         for (categoryId in tagsSection.getKeys(false)) {
+            // Only the approved normal categories (plus the dynamic voucher-only
+            // "Special Chat Tags" category) may load — issue #602 trimmed the
+            // category list, and this also prunes any leftover unapproved
+            // categories still sitting in an admin's on-disk tags.yml.
+            if (categoryId != VOUCHER_CATEGORY && categoryId !in APPROVED_CATEGORIES) continue
             categories.add(categoryId)
             val catSection = tagsSection.getConfigurationSection(categoryId) ?: continue
             for (tagId in catSection.getKeys(false)) {
@@ -196,6 +201,10 @@ class ChatTagManager(private val plugin: Joshymc) {
 
     // ── GUI ──────────────────────────────────────────
 
+    /** "Vibe" for a normal category, "Special Chat Tags" for the voucher-only category (issue #602). */
+    private fun categoryDisplayName(category: String): String =
+        if (category == VOUCHER_CATEGORY) "Special Chat Tags" else category.replaceFirstChar { it.uppercase() }
+
     fun openCategoryMenu(player: Player) {
         val size = 54
         val gui = CustomGui(
@@ -211,20 +220,18 @@ class ChatTagManager(private val plugin: Joshymc) {
 
         // Category icons
         val catMaterials = mapOf(
-            "prestige" to Material.GOLD_INGOT,
-            "og" to Material.CLOCK,
             "skill" to Material.DIAMOND_SWORD,
             "vibe" to Material.NOTE_BLOCK,
             "nature" to Material.OAK_SAPLING,
             "cosmic" to Material.END_STONE,
-            "gem" to Material.DIAMOND,
             "animal" to Material.BONE,
-            "food" to Material.COOKIE,
             "meme" to Material.PAPER,
-            "color" to Material.WHITE_WOOL,
-            "role" to Material.IRON_PICKAXE,
-            "season" to Material.SUNFLOWER,
-            "rare" to Material.NETHER_STAR
+            "music" to Material.JUKEBOX,
+            "pirate" to Material.TRIDENT,
+            "military" to Material.IRON_CHESTPLATE,
+            "mythical" to Material.DRAGON_EGG,
+            "cyberpunk" to Material.REDSTONE,
+            VOUCHER_CATEGORY to Material.NAME_TAG
         )
 
         val slots = mutableListOf<Int>()
@@ -239,7 +246,7 @@ class ChatTagManager(private val plugin: Joshymc) {
             val item = ItemStack(mat)
             item.editMeta { meta ->
                 meta.displayName(
-                    Component.text(category.replaceFirstChar { it.uppercase() }, NamedTextColor.GOLD)
+                    Component.text(categoryDisplayName(category), NamedTextColor.GOLD)
                         .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
                 )
                 meta.lore(listOf(
@@ -280,7 +287,7 @@ class ChatTagManager(private val plugin: Joshymc) {
         val currentTag = getPlayerTag(player)?.id
         val size = 54
         val gui = CustomGui(
-            Component.text("${category.replaceFirstChar { it.uppercase() }} Tags", NamedTextColor.GOLD)
+            Component.text(categoryDisplayName(category), NamedTextColor.GOLD)
                 .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
             size
         )
@@ -311,10 +318,20 @@ class ChatTagManager(private val plugin: Joshymc) {
                     .decoration(TextDecoration.ITALIC, false))
                 val lore = mutableListOf<Component>()
                 lore.add(Component.empty())
+                val isSpecial = category == VOUCHER_CATEGORY
                 when {
-                    isEquipped -> lore.add(Component.text("  Equipped!", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
-                    canUse -> lore.add(Component.text("  Click to equip", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
-                    else -> lore.add(Component.text("  Locked", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+                    isEquipped -> {
+                        if (isSpecial) lore.add(Component.text("  Owned", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                        lore.add(Component.text("  Equipped!", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                    }
+                    canUse -> {
+                        if (isSpecial) lore.add(Component.text("  Owned", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                        lore.add(Component.text("  Click to equip", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+                    }
+                    else -> {
+                        lore.add(Component.text("  Locked", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+                        if (isSpecial) lore.add(Component.text("  Redeem the corresponding voucher to unlock", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+                    }
                 }
                 meta.lore(lore)
             }
@@ -408,5 +425,11 @@ class ChatTagManager(private val plugin: Joshymc) {
     companion object {
         private const val VOUCHER_CATEGORY = "voucher"
         private const val VOUCHER_PERMISSION_PREFIX = "joshymc.tag.voucher."
+
+        // Normal (non-Special) Chat Tag categories approved for the shop — issue #602.
+        private val APPROVED_CATEGORIES = setOf(
+            "vibe", "nature", "animal", "music", "pirate",
+            "skill", "military", "meme", "mythical", "cyberpunk", "cosmic"
+        )
     }
 }

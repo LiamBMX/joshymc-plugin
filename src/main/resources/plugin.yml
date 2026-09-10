@@ -200,10 +200,6 @@ commands:
   cosmetics:
     description: Open the cosmetics hub
     usage: /cosmetics
-  trail:
-    description: Manage particle trails
-    usage: /trail [remove]
-    aliases: [trails]
   killeffect:
     description: Manage kill effects
     usage: /killeffect [remove]
@@ -212,17 +208,6 @@ commands:
     description: Manage join effects
     usage: /joineffect
     aliases: [je]
-  emote:
-    description: Play an emote
-    usage: /emote <name>
-    aliases: [emotes]
-  glow:
-    description: Manage glow outline
-    usage: /glow [remove]
-  gadget:
-    description: Manage gadgets
-    usage: /gadget
-    aliases: [gadgets]
   fish:
     description: View your fish collection
     usage: /fish [stats|leaderboard]
@@ -840,30 +825,12 @@ permissions:
   joshymc.cosmetics:
     description: Open cosmetics hub
     default: true
-  joshymc.trail:
-    description: Use trail commands
-    default: true
-  joshymc.trail.*:
-    description: Bypass per-trail unlock requirements (wildcard access to all trails)
-    default: op
   joshymc.killeffect:
     description: Use kill effect commands
     default: true
   joshymc.joineffect:
     description: Use join effect commands
     default: true
-  joshymc.emote:
-    description: Use emote commands
-    default: true
-  joshymc.glow:
-    description: Use glow commands
-    default: true
-  joshymc.gadget:
-    description: Use gadget commands
-    default: true
-  joshymc.gadget.nocooldown:
-    description: Bypass gadget cooldowns
-    default: op
   joshymc.fish:
     description: Use fishing collection
     default: true
