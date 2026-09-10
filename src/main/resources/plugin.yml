@@ -246,7 +246,7 @@ commands:
     usage: /cshop [additem|removeitem|category|list] [args...]
     aliases: [creditshop]
   voucher:
-    description: Configure virtual voucher packages redeemable in the Credit Shop, and give physical money vouchers
+    description: Configure virtual voucher packages redeemable in the Credit Shop, and give physical money/Chat Tag vouchers
     usage: /voucher <create|delete|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload|give> [args...]
     permission: joshymc.vouchers
   creditvoucher:

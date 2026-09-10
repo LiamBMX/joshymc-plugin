@@ -25,6 +25,7 @@ class ChatTagManager(private val plugin: Joshymc) {
     private val tags = mutableMapOf<String, ChatTag>()
     private val categories = mutableListOf<String>()
     private val playerTags = mutableMapOf<UUID, String>() // UUID -> tag ID
+    private val unlockedTags = mutableMapOf<UUID, MutableSet<String>>() // UUID -> unlocked tag IDs (issue #597)
 
     fun start() {
         // Save default tags.yml if missing; otherwise merge in any new
@@ -76,6 +77,24 @@ class ChatTagManager(private val plugin: Joshymc) {
             }
         }
 
+        // Chat Tag voucher unlocks (issue #597) — per-player ownership of tags that
+        // were redeemed from a physical voucher rather than granted via permission.
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS chat_tag_unlocks (
+                uuid TEXT NOT NULL,
+                tag_id TEXT NOT NULL,
+                PRIMARY KEY (uuid, tag_id)
+            )
+        """.trimIndent())
+
+        unlockedTags.clear()
+        val unlockRows = plugin.databaseManager.query("SELECT uuid, tag_id FROM chat_tag_unlocks") { rs ->
+            UUID.fromString(rs.getString("uuid")) to rs.getString("tag_id")
+        }
+        for ((uuid, tagId) in unlockRows) {
+            unlockedTags.getOrPut(uuid) { mutableSetOf() }.add(tagId)
+        }
+
         plugin.logger.info("[ChatTags] Loaded ${tags.size} tags in ${categories.size} categories, ${playerTags.size} player selections.")
     }
 
@@ -111,7 +130,68 @@ class ChatTagManager(private val plugin: Joshymc) {
 
     fun canUse(player: Player, tag: ChatTag): Boolean {
         if (tag.permission == null) return true
-        return player.hasPermission(tag.permission)
+        if (player.hasPermission(tag.permission)) return true
+        return hasUnlocked(player.uniqueId, tag.id)
+    }
+
+    // ── Voucher unlocks (issue #597) ──────────────────
+
+    fun hasUnlocked(uuid: UUID, tagId: String): Boolean = unlockedTags[uuid]?.contains(tagId) == true
+
+    /** Permanently grants [tagId] to [uuid]. Returns true if this is a new unlock, false if already owned. */
+    fun unlockTag(uuid: UUID, tagId: String): Boolean {
+        if (hasUnlocked(uuid, tagId)) return false
+        val rows = plugin.databaseManager.executeUpdate(
+            "INSERT OR IGNORE INTO chat_tag_unlocks (uuid, tag_id) VALUES (?, ?)",
+            uuid.toString(), tagId
+        )
+        if (rows <= 0) return false
+        unlockedTags.getOrPut(uuid) { mutableSetOf() }.add(tagId)
+        return true
+    }
+
+    /** True for tags created through `/voucher create` (issue #597) — the only tags physical Chat Tag vouchers may target. */
+    fun isVoucherTag(tag: ChatTag): Boolean = tag.category == VOUCHER_CATEGORY
+
+    fun getVoucherTagIds(): List<String> = tags.values.filter { isVoucherTag(it) }.map { it.id }
+
+    fun getVoucherTag(id: String): ChatTag? = tags[id]?.takeIf { isVoucherTag(it) }
+
+    /**
+     * Creates a brand-new, voucher-only Chat Tag. It's locked behind a unique
+     * per-tag permission node that nobody holds by default, so the only way to
+     * obtain it is redeeming the matching physical voucher via
+     * [ChatTagVoucherManager] (which calls [unlockTag]). Returns null if
+     * [rawId] normalizes to nothing, the display is blank, or the id already
+     * exists in any category.
+     */
+    fun createVoucherTag(rawId: String, rawDisplay: String): ChatTag? {
+        val id = rawId.lowercase().replace(Regex("[^a-z0-9_]"), "")
+        if (id.isBlank() || tags.containsKey(id)) return null
+
+        val trimmedDisplay = rawDisplay.trim()
+        if (trimmedDisplay.isBlank()) return null
+        val display = "$trimmedDisplay "
+
+        val permission = "$VOUCHER_PERMISSION_PREFIX$id"
+        val tag = ChatTag(id, VOUCHER_CATEGORY, display, permission)
+
+        tags[id] = tag
+        if (VOUCHER_CATEGORY !in categories) categories.add(VOUCHER_CATEGORY)
+        persistVoucherTag(id, display, permission)
+        return tag
+    }
+
+    private fun persistVoucherTag(id: String, display: String, permission: String) {
+        val file = plugin.configFile("tags.yml")
+        val config = YamlConfiguration.loadConfiguration(file)
+        config.set("tags.$VOUCHER_CATEGORY.$id.display", display)
+        config.set("tags.$VOUCHER_CATEGORY.$id.permission", permission)
+        try {
+            config.save(file)
+        } catch (e: Exception) {
+            plugin.logger.warning("[ChatTags] Failed to persist voucher tag '$id': ${e.message}")
+        }
     }
 
     // ── GUI ──────────────────────────────────────────
@@ -323,5 +403,10 @@ class ChatTagManager(private val plugin: Joshymc) {
                 plugin.logger.warning("[ChatTags] Failed to save merged tags.yml: ${e.message}")
             }
         }
+    }
+
+    companion object {
+        private const val VOUCHER_CATEGORY = "voucher"
+        private const val VOUCHER_PERMISSION_PREFIX = "joshymc.tag.voucher."
     }
 }

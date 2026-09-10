@@ -56,15 +56,27 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     }
 
     private fun handleCreate(sender: CommandSender, args: Array<out String>) {
-        if (args.size < 5) {
-            sender.sendMessage(Component.text("Usage: /voucher create <id> <price> <category> <rewardCommand...>", NamedTextColor.RED))
+        if (args.size < 3) {
+            sendCreateUsage(sender)
             return
         }
 
         val id = args[1].lowercase()
         val price = args[2].toDoubleOrNull()
-        if (price == null || price <= 0) {
+
+        // `/voucher create <id> <chat tag display...>` — args[2] isn't a price, so
+        // this is a physical Chat Tag voucher definition instead (issue #597).
+        if (price == null) {
+            handleCreateChatTagVoucher(sender, id, args.drop(2).joinToString(" "))
+            return
+        }
+
+        if (price <= 0) {
             sender.sendMessage(Component.text("Invalid price.", NamedTextColor.RED))
+            return
+        }
+        if (args.size < 5) {
+            sendCreateUsage(sender)
             return
         }
         val category = args[3]
@@ -84,6 +96,33 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 .append(Component.text(" for ${plugin.creditsManager.format(price)} credits.", NamedTextColor.GREEN))
         )
         sender.sendMessage(Component.text("Optionally set a display name, rank link, description, or icon with /voucher setname|setrank|setdescription|seticon.", NamedTextColor.GRAY))
+    }
+
+    private fun handleCreateChatTagVoucher(sender: CommandSender, id: String, display: String) {
+        if (display.isBlank()) {
+            sendCreateUsage(sender)
+            return
+        }
+
+        val tag = plugin.chatTagManager.createVoucherTag(id, display)
+        if (tag == null) {
+            sender.sendMessage(Component.text("Could not create Chat Tag voucher '$id' — the id is invalid or already in use.", NamedTextColor.RED))
+            return
+        }
+
+        val tagDisplay = plugin.commsManager.parseLegacy(tag.display.trim())
+        sender.sendMessage(
+            Component.text("Created Chat Tag voucher ", NamedTextColor.GREEN)
+                .append(Component.text("$CHAT_TAG_VOUCHER_PREFIX${tag.id} ", NamedTextColor.WHITE))
+                .append(Component.text("for tag ", NamedTextColor.GREEN))
+                .append(tagDisplay)
+        )
+        sender.sendMessage(Component.text("Give it with /voucher give <player> $CHAT_TAG_VOUCHER_PREFIX${tag.id} <amount>", NamedTextColor.GRAY))
+    }
+
+    private fun sendCreateUsage(sender: CommandSender) {
+        sender.sendMessage(Component.text("Usage: /voucher create <id> <price> <category> <rewardCommand...>", NamedTextColor.RED))
+        sender.sendMessage(Component.text("   or: /voucher create <id> <chat tag display...> (e.g. &5[Haunted])", NamedTextColor.RED))
     }
 
     private fun handleDelete(sender: CommandSender, args: Array<out String>) {
@@ -290,6 +329,11 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return
         }
 
+        if (voucherId.startsWith(CHAT_TAG_VOUCHER_PREFIX)) {
+            handleGiveChatTagVoucher(sender, target, voucherId.removePrefix(CHAT_TAG_VOUCHER_PREFIX), amount)
+            return
+        }
+
         val voucher = plugin.physicalVoucherManager.getVoucher(voucherId)
         if (voucher == null) {
             sender.sendMessage(Component.text("No physical voucher found with id $voucherId.", NamedTextColor.RED))
@@ -312,6 +356,34 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                     .append(Component.text("${amount}x ", NamedTextColor.AQUA))
                     .append(voucherName)
                     .append(Component.text(" from an admin.", NamedTextColor.GREEN)),
+                com.liam.joshymc.manager.CommunicationsManager.Category.ECONOMY
+            )
+        }
+    }
+
+    private fun handleGiveChatTagVoucher(sender: CommandSender, target: Player, tagId: String, amount: Int) {
+        val tag = plugin.chatTagManager.getVoucherTag(tagId)
+        if (tag == null) {
+            sender.sendMessage(Component.text("No Chat Tag voucher found with id $CHAT_TAG_VOUCHER_PREFIX$tagId.", NamedTextColor.RED))
+            return
+        }
+
+        plugin.chatTagVoucherManager.give(target, tag.id, amount)
+        val tagDisplay = plugin.commsManager.parseLegacy(tag.display.trim())
+        sender.sendMessage(
+            Component.text("Gave ", NamedTextColor.GREEN)
+                .append(Component.text("${target.name} ", NamedTextColor.WHITE))
+                .append(Component.text("${amount}x ", NamedTextColor.AQUA))
+                .append(tagDisplay)
+                .append(Component.text(" Chat Tag Voucher(s).", NamedTextColor.GREEN))
+        )
+        if (sender != target) {
+            plugin.commsManager.send(
+                target,
+                Component.text("You received ", NamedTextColor.GREEN)
+                    .append(Component.text("${amount}x ", NamedTextColor.AQUA))
+                    .append(tagDisplay)
+                    .append(Component.text(" Chat Tag Voucher(s) from an admin.", NamedTextColor.GREEN)),
                 com.liam.joshymc.manager.CommunicationsManager.Category.ECONOMY
             )
         }
@@ -348,10 +420,16 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             }
             3 -> when (args[0].lowercase()) {
                 "setrank" -> (plugin.rankManager.getRankIds() + "none").filter { it.startsWith(args[2].lowercase()) }
-                "give" -> plugin.physicalVoucherManager.getEnabledVoucherIds().filter { it.startsWith(args[2].lowercase()) }
+                "give" -> (plugin.physicalVoucherManager.getEnabledVoucherIds() +
+                        plugin.chatTagManager.getVoucherTagIds().map { "$CHAT_TAG_VOUCHER_PREFIX$it" })
+                    .filter { it.startsWith(args[2].lowercase()) }
                 else -> emptyList()
             }
             else -> emptyList()
         }
+    }
+
+    companion object {
+        private const val CHAT_TAG_VOUCHER_PREFIX = "chattag_"
     }
 }
