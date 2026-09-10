@@ -226,68 +226,16 @@ class PlaytimeManager(private val plugin: Joshymc) : Listener {
     inner class PlaytimeTopCommand : CommandExecutor {
 
         override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+            if (sender !is Player) {
+                sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+                return true
+            }
             if (!sender.hasPermission("joshymc.playtime")) {
-                if (sender is Player) {
-                    plugin.commsManager.send(sender,
-                        Component.text("No permission.", NamedTextColor.RED))
-                } else {
-                    sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
-                }
+                plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
                 return true
             }
 
-            // Flush online players so the leaderboard is accurate
-            saveAllOnline()
-
-            val topPlayers = plugin.databaseManager.query(
-                "SELECT uuid, total_seconds FROM playtime ORDER BY total_seconds DESC LIMIT 10"
-            ) { rs ->
-                UUID.fromString(rs.getString("uuid")) to rs.getLong("total_seconds")
-            }
-
-            if (topPlayers.isEmpty()) {
-                if (sender is Player) {
-                    plugin.commsManager.send(sender,
-                        Component.text("No playtime data yet.", NamedTextColor.GRAY))
-                } else {
-                    sender.sendMessage(Component.text("No playtime data yet.", NamedTextColor.GRAY))
-                }
-                return true
-            }
-
-            val header = Component.text("--- ", NamedTextColor.DARK_GRAY)
-                .append(Component.text("Top Playtimes", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true))
-                .append(Component.text(" ---", NamedTextColor.DARK_GRAY))
-
-            if (sender is Player) {
-                plugin.commsManager.send(sender, header)
-            } else {
-                sender.sendMessage(header)
-            }
-
-            topPlayers.forEachIndexed { index, (uuid, seconds) ->
-                // Add current session time for online players
-                val totalSeconds = seconds + run {
-                    val joinTime = joinTimes[uuid]
-                    if (joinTime != null) (System.currentTimeMillis() - joinTime) / 1000 else 0L
-                }
-
-                val name = Bukkit.getOfflinePlayer(uuid).name ?: "Unknown"
-                val rank = index + 1
-                val formatted = formatPlaytime(totalSeconds)
-
-                val line = Component.text("#$rank ", NamedTextColor.GOLD)
-                    .append(Component.text(name, NamedTextColor.WHITE))
-                    .append(Component.text(" - ", NamedTextColor.DARK_GRAY))
-                    .append(Component.text(formatted, NamedTextColor.GREEN))
-
-                if (sender is Player) {
-                    plugin.commsManager.sendRaw(sender, line)
-                } else {
-                    sender.sendMessage(line)
-                }
-            }
-
+            com.liam.joshymc.gui.stats.PlaytimeTopGui.open(plugin, sender)
             return true
         }
     }
