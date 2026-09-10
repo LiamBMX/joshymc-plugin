@@ -87,13 +87,17 @@ class TutorialCommand(private val plugin: Joshymc) : CommandExecutor {
             plugin.commsManager.send(sender, Component.text("Tutorial reloaded.", NamedTextColor.GREEN))
             return true
         }
-        openTutorialGui(sender)
+        openTutorialGui(sender, 0)
         return true
     }
 
-    private fun openTutorialGui(player: Player) {
+    private fun openTutorialGui(player: Player, page: Int) {
+        val totalPages = maxOf(1, (steps.size + STEPS_PER_PAGE - 1) / STEPS_PER_PAGE)
+        val clampedPage = page.coerceIn(0, totalPages - 1)
+
+        val titleText = if (totalPages > 1) "Getting Started (Page ${clampedPage + 1}/$totalPages)" else "Getting Started"
         val gui = CustomGui(
-            title = Component.text("Getting Started", NamedTextColor.GREEN)
+            title = Component.text(titleText, NamedTextColor.GREEN)
                 .decoration(TextDecoration.BOLD, true)
                 .decoration(TextDecoration.ITALIC, false),
             size = 27
@@ -110,11 +114,11 @@ class TutorialCommand(private val plugin: Joshymc) : CommandExecutor {
             gui.setItem(18 + i, border)
         }
 
-        val slots = listOf(10, 11, 12, 13, 14)
+        val pageSteps = steps.drop(clampedPage * STEPS_PER_PAGE).take(STEPS_PER_PAGE)
+        val startCol = (STEPS_PER_PAGE - pageSteps.size) / 2
 
-        for ((idx, step) in steps.withIndex()) {
-            if (idx >= slots.size) break
-            val slot = slots[idx]
+        for ((idx, step) in pageSteps.withIndex()) {
+            val slot = 10 + startCol + idx
 
             val item = ItemStack(step.icon)
             item.editMeta { meta ->
@@ -139,7 +143,22 @@ class TutorialCommand(private val plugin: Joshymc) : CommandExecutor {
             gui.setItem(slot, item)
         }
 
+        if (clampedPage > 0) {
+            val prev = ItemStack(Material.ARROW)
+            prev.editMeta { it.displayName(Component.text("Previous Page", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)) }
+            gui.setItem(18, prev) { p, _ -> openTutorialGui(p, clampedPage - 1) }
+        }
+        if (clampedPage < totalPages - 1) {
+            val next = ItemStack(Material.ARROW)
+            next.editMeta { it.displayName(Component.text("Next Page", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)) }
+            gui.setItem(26, next) { p, _ -> openTutorialGui(p, clampedPage + 1) }
+        }
+
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_ENCHANTMENT_TABLE_USE, 0.5f, 1.2f)
+    }
+
+    companion object {
+        private const val STEPS_PER_PAGE = 7
     }
 }
