@@ -78,13 +78,17 @@ class RulesCommand(private val plugin: Joshymc) : CommandExecutor {
             sender.sendMessage("Players only.")
             return true
         }
-        openRulesGui(sender)
+        openRulesGui(sender, 0)
         return true
     }
 
-    private fun openRulesGui(player: Player) {
+    private fun openRulesGui(player: Player, page: Int) {
+        val totalPages = maxOf(1, (rules.size + RULES_PER_PAGE - 1) / RULES_PER_PAGE)
+        val clampedPage = page.coerceIn(0, totalPages - 1)
+
+        val titleText = if (totalPages > 1) "Server Rules (Page ${clampedPage + 1}/$totalPages)" else "Server Rules"
         val gui = CustomGui(
-            title = Component.text("Server Rules", NamedTextColor.RED)
+            title = Component.text(titleText, NamedTextColor.RED)
                 .decoration(TextDecoration.BOLD, true)
                 .decoration(TextDecoration.ITALIC, false),
             size = 54
@@ -95,25 +99,36 @@ class RulesCommand(private val plugin: Joshymc) : CommandExecutor {
         filler.editMeta { it.displayName(Component.empty()) }
         gui.fill(filler)
 
-        // Red glass border on top and bottom rows
+        // Red glass border on the top and bottom rows, and on the left/right
+        // columns of every content row.
         val border = ItemStack(Material.RED_STAINED_GLASS_PANE)
         border.editMeta { it.displayName(Component.empty()) }
         for (i in 0 until 9) {
             gui.setItem(i, border)
             gui.setItem(45 + i, border)
         }
+        for (rowBase in CONTENT_ROW_BASES) {
+            gui.setItem(rowBase, border)
+            gui.setItem(rowBase + 8, border)
+        }
 
-        // Place rules in the center area (row 1: 7 rules, row 2: 6 rules centered)
-        val slots = listOf(10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25)
-
-        for ((idx, rule) in rules.withIndex()) {
-            if (idx >= slots.size) break
-            val slot = slots[idx]
+        // Fill every usable inner slot of the content rows (7 per row) before
+        // paginating. Full rows fill left-to-right; only the final, partial
+        // row on a page is centered.
+        val pageRules = rules.drop(clampedPage * RULES_PER_PAGE).take(RULES_PER_PAGE)
+        val globalOffset = clampedPage * RULES_PER_PAGE
+        for ((idx, rule) in pageRules.withIndex()) {
+            val rowIndex = idx / RULES_PER_ROW
+            val rowBase = CONTENT_ROW_BASES[rowIndex]
+            val rowCount = minOf(RULES_PER_ROW, pageRules.size - rowIndex * RULES_PER_ROW)
+            val posInRow = idx % RULES_PER_ROW
+            val startCol = (RULES_PER_ROW - rowCount) / 2
+            val slot = rowBase + 1 + startCol + posInRow
 
             val item = ItemStack(rule.icon)
             item.editMeta { meta ->
                 meta.displayName(
-                    Component.text("${idx + 1}. ", NamedTextColor.DARK_RED)
+                    Component.text("${globalOffset + idx + 1}. ", NamedTextColor.DARK_RED)
                         .append(Component.text(rule.title, rule.color))
                         .decoration(TextDecoration.ITALIC, false)
                         .decoration(TextDecoration.BOLD, true)
@@ -154,7 +169,24 @@ class RulesCommand(private val plugin: Joshymc) : CommandExecutor {
         }
         gui.setItem(49, info)
 
+        if (clampedPage > 0) {
+            val prev = ItemStack(Material.ARROW)
+            prev.editMeta { it.displayName(Component.text("Previous Page", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)) }
+            gui.setItem(46, prev) { p, _ -> openRulesGui(p, clampedPage - 1) }
+        }
+        if (clampedPage < totalPages - 1) {
+            val next = ItemStack(Material.ARROW)
+            next.editMeta { it.displayName(Component.text("Next Page", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)) }
+            gui.setItem(52, next) { p, _ -> openRulesGui(p, clampedPage + 1) }
+        }
+
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_ENCHANTMENT_TABLE_USE, 0.5f, 1.2f)
+    }
+
+    companion object {
+        private val CONTENT_ROW_BASES = listOf(9, 18, 27, 36)
+        private const val RULES_PER_ROW = 7
+        private val RULES_PER_PAGE = CONTENT_ROW_BASES.size * RULES_PER_ROW
     }
 }
