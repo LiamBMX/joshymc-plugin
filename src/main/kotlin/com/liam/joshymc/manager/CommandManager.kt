@@ -52,12 +52,8 @@ import com.liam.joshymc.command.SudoCommand
 import com.liam.joshymc.command.TopCommand
 import com.liam.joshymc.command.ChatColorCommand
 import com.liam.joshymc.command.CosmeticsCommand
-import com.liam.joshymc.command.EmoteCommand
-import com.liam.joshymc.command.GadgetCommand
-import com.liam.joshymc.command.GlowCommand
 import com.liam.joshymc.command.JoinEffectCommand
 import com.liam.joshymc.command.KillEffectCommand
-import com.liam.joshymc.command.TrailCommand
 import com.liam.joshymc.command.FishCommand
 import com.liam.joshymc.command.MarketCommand
 import com.liam.joshymc.command.DailyCommand
@@ -418,12 +414,8 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("daily")?.setExecutor(DailyCommand(plugin))
 
         // ── Cosmetics ─────────────────────────────────
-        plugin.getCommand("trail")?.let { val c = TrailCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("killeffect")?.let { val c = KillEffectCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("joineffect")?.let { val c = JoinEffectCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("emote")?.let { val c = EmoteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("glow")?.let { val c = GlowCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("gadget")?.let { val c = GadgetCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("cosmetics")?.let { val c = CosmeticsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Fishing ───────────────────────────────────
