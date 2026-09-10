@@ -59,25 +59,36 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         /**
-         * Auto-imports the "pvp" world on startup if the folder exists on disk.
-         * Called from Joshymc.onEnable().
+         * Ensures the "pvp" world exists and is loaded on startup: imports the
+         * existing folder from disk if present, otherwise creates a fresh one.
+         * Never recreates/resets a world that already exists. Called from
+         * Joshymc.onEnable(), before arena initialization.
          */
         fun ensurePvpWorld(plugin: Joshymc) {
             val name = "pvp"
             if (Bukkit.getWorld(name) != null) return
 
             val worldFolder = File(Bukkit.getWorldContainer(), name)
-            if (!worldFolder.exists() || !File(worldFolder, "level.dat").exists()) {
-                plugin.logger.info("[PvP World] No 'pvp' world folder found on disk — skipping auto-import.")
-                return
+            val exists = worldFolder.exists() && File(worldFolder, "level.dat").exists()
+
+            val world = if (exists) {
+                plugin.logger.info("[PvP World] Auto-importing existing 'pvp' world...")
+                WorldCreator(name).createWorld()
+            } else {
+                plugin.logger.info("[PvP World] No 'pvp' world found on disk — creating a new one...")
+                WorldCreator(name)
+                    .type(WorldType.NORMAL)
+                    .environment(World.Environment.NORMAL)
+                    .createWorld()
             }
 
-            plugin.logger.info("[PvP World] Auto-importing 'pvp' world...")
-            val world = WorldCreator(name).createWorld()
             if (world == null) {
-                plugin.logger.warning("[PvP World] Failed to auto-import 'pvp' world!")
+                plugin.logger.severe(
+                    "[PvP World] Failed to ${if (exists) "import" else "create"} the 'pvp' world! " +
+                        "Arena features that depend on it will be unavailable until this is resolved."
+                )
             } else {
-                plugin.logger.info("[PvP World] 'pvp' world loaded successfully.")
+                plugin.logger.info("[PvP World] 'pvp' world ${if (exists) "loaded" else "created"} successfully.")
             }
         }
     }
