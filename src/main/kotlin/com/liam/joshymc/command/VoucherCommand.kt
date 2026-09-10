@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.manager.ChatTagManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -36,6 +37,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         when (args[0].lowercase()) {
             "create" -> handleCreate(sender, args)
             "delete" -> handleDelete(sender, args)
+            "tag" -> handleTag(sender, args)
             "enable" -> handleSetEnabled(sender, args, true)
             "disable" -> handleSetEnabled(sender, args, false)
             "setname" -> handleSetName(sender, args)
@@ -135,6 +137,54 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             sender.sendMessage(Component.text("Deleted voucher $id.", NamedTextColor.GREEN))
         } else {
             sender.sendMessage(Component.text("No voucher found with id $id.", NamedTextColor.RED))
+        }
+    }
+
+    private fun handleTag(sender: CommandSender, args: Array<out String>) {
+        if (args.getOrNull(1)?.lowercase() != "delete") {
+            sender.sendMessage(Component.text("Usage: /voucher tag delete <name>", NamedTextColor.RED))
+            return
+        }
+        handleTagDelete(sender, args)
+    }
+
+    private fun handleTagDelete(sender: CommandSender, args: Array<out String>) {
+        val id = args.getOrNull(2)?.lowercase()
+        if (id == null) {
+            sender.sendMessage(Component.text("Usage: /voucher tag delete <name>", NamedTextColor.RED))
+            return
+        }
+
+        val tag = plugin.chatTagManager.getTag(id)
+        if (tag == null) {
+            sender.sendMessage(Component.text("Custom Chat Tag '$id' does not exist.", NamedTextColor.RED))
+            return
+        }
+        if (!plugin.chatTagManager.isVoucherTag(tag)) {
+            sender.sendMessage(Component.text("That Chat Tag cannot be deleted with this command.", NamedTextColor.RED))
+            return
+        }
+
+        val confirmed = args.getOrNull(3)?.equals("confirm", ignoreCase = true) == true
+        if (!confirmed) {
+            val tagDisplay = plugin.commsManager.parseLegacy(tag.display.trim())
+            sender.sendMessage(
+                Component.text("Are you sure you want to delete ", NamedTextColor.YELLOW)
+                    .append(tagDisplay)
+                    .append(Component.text("? Run ", NamedTextColor.YELLOW))
+                    .append(Component.text("/voucher tag delete $id confirm", NamedTextColor.WHITE))
+                    .append(Component.text(" to confirm.", NamedTextColor.YELLOW))
+            )
+            return
+        }
+
+        when (plugin.chatTagManager.deleteVoucherTag(id)) {
+            ChatTagManager.DeleteVoucherTagResult.DELETED ->
+                sender.sendMessage(Component.text("Deleted custom Chat Tag '$id' and its voucher.", NamedTextColor.GREEN))
+            ChatTagManager.DeleteVoucherTagResult.NOT_VOUCHER_TAG ->
+                sender.sendMessage(Component.text("That Chat Tag cannot be deleted with this command.", NamedTextColor.RED))
+            ChatTagManager.DeleteVoucherTagResult.NOT_FOUND ->
+                sender.sendMessage(Component.text("Custom Chat Tag '$id' does not exist.", NamedTextColor.RED))
         }
     }
 
@@ -397,14 +447,14 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     }
 
     private fun sendUsage(sender: CommandSender) {
-        sender.sendMessage(Component.text("Usage: /voucher <create|delete|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload|give> [args...]", NamedTextColor.RED))
+        sender.sendMessage(Component.text("Usage: /voucher <create|delete|tag|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload|give> [args...]", NamedTextColor.RED))
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (!sender.hasPermission("joshymc.vouchers")) return emptyList()
 
         val subcommands = listOf(
-            "create", "delete", "enable", "disable", "setname", "setcategory", "setprice",
+            "create", "delete", "tag", "enable", "disable", "setname", "setcategory", "setprice",
             "setrank", "setcommand", "setdescription", "seticon", "list", "info", "reload", "give"
         )
 
@@ -416,6 +466,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                     plugin.voucherManager.getAllVouchers().map { it.id }.filter { it.startsWith(args[1].lowercase()) }
                 "list" -> plugin.creditShopManager.getCategories().map { it.id }.filter { it.startsWith(args[1].lowercase()) }
                 "give" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                "tag" -> listOf("delete").filter { it.startsWith(args[1].lowercase()) }
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
@@ -423,6 +474,13 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 "give" -> (plugin.physicalVoucherManager.getEnabledVoucherIds() +
                         plugin.chatTagManager.getVoucherTagIds().map { "$CHAT_TAG_VOUCHER_PREFIX$it" })
                     .filter { it.startsWith(args[2].lowercase()) }
+                "tag" -> if (args[1].lowercase() == "delete")
+                    plugin.chatTagManager.getVoucherTagIds().filter { it.startsWith(args[2].lowercase()) }
+                    else emptyList()
+                else -> emptyList()
+            }
+            4 -> when (args[0].lowercase()) {
+                "tag" -> if (args[1].lowercase() == "delete") listOf("confirm").filter { it.startsWith(args[3].lowercase()) } else emptyList()
                 else -> emptyList()
             }
             else -> emptyList()

@@ -5,6 +5,7 @@ import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
+import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.Sound
 import org.bukkit.configuration.file.YamlConfiguration
@@ -196,6 +197,51 @@ class ChatTagManager(private val plugin: Joshymc) {
             config.save(file)
         } catch (e: Exception) {
             plugin.logger.warning("[ChatTags] Failed to persist voucher tag '$id': ${e.message}")
+        }
+    }
+
+    enum class DeleteVoucherTagResult { NOT_FOUND, NOT_VOUCHER_TAG, DELETED }
+
+    /**
+     * Deletes a Chat Tag created via [createVoucherTag] (`/voucher tag delete`, issue #606).
+     * Refuses to touch normal built-in tags — only [isVoucherTag] tags qualify. Any player
+     * with the tag equipped is safely unequipped, and voucher ownership is revoked so
+     * un-redeemed physical vouchers for this id fail safely (see [ChatTagVoucherManager.redeem],
+     * which already treats an unknown [getTag] as an invalid voucher).
+     */
+    fun deleteVoucherTag(id: String): DeleteVoucherTagResult {
+        val tag = tags[id] ?: return DeleteVoucherTagResult.NOT_FOUND
+        if (!isVoucherTag(tag)) return DeleteVoucherTagResult.NOT_VOUCHER_TAG
+
+        tags.remove(id)
+
+        val equippedBy = playerTags.filterValues { it == id }.keys.toList()
+        for (uuid in equippedBy) playerTags.remove(uuid)
+        if (equippedBy.isNotEmpty()) {
+            plugin.databaseManager.execute("DELETE FROM player_tags WHERE tag_id = ?", id)
+        }
+
+        for (unlocked in unlockedTags.values) unlocked.remove(id)
+        plugin.databaseManager.execute("DELETE FROM chat_tag_unlocks WHERE tag_id = ?", id)
+
+        removeVoucherTagFromFile(id)
+
+        for (uuid in equippedBy) {
+            val online = Bukkit.getPlayer(uuid) ?: continue
+            plugin.commsManager.send(online, Component.text("Your equipped Chat Tag was removed by an admin.", NamedTextColor.YELLOW))
+        }
+
+        return DeleteVoucherTagResult.DELETED
+    }
+
+    private fun removeVoucherTagFromFile(id: String) {
+        val file = plugin.configFile("tags.yml")
+        val config = YamlConfiguration.loadConfiguration(file)
+        config.set("tags.$VOUCHER_CATEGORY.$id", null)
+        try {
+            config.save(file)
+        } catch (e: Exception) {
+            plugin.logger.warning("[ChatTags] Failed to remove voucher tag '$id' from tags.yml: ${e.message}")
         }
     }
 
