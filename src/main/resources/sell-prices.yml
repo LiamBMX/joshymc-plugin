@@ -501,23 +501,9 @@ prices:
   CHORUS_FRUIT: 20
   POPPED_CHORUS_FRUIT: 30
   END_ROD: 40
-  SHULKER_BOX: 3500
-  WHITE_SHULKER_BOX: 3500
-  ORANGE_SHULKER_BOX: 3500
-  MAGENTA_SHULKER_BOX: 3500
-  LIGHT_BLUE_SHULKER_BOX: 3500
-  YELLOW_SHULKER_BOX: 3500
-  LIME_SHULKER_BOX: 3500
-  PINK_SHULKER_BOX: 3500
-  GRAY_SHULKER_BOX: 3500
-  LIGHT_GRAY_SHULKER_BOX: 3500
-  CYAN_SHULKER_BOX: 3500
-  PURPLE_SHULKER_BOX: 3500
-  BLUE_SHULKER_BOX: 3500
-  BROWN_SHULKER_BOX: 3500
-  GREEN_SHULKER_BOX: 3500
-  RED_SHULKER_BOX: 3500
-  BLACK_SHULKER_BOX: 3500
+  # Shulker boxes are intentionally NOT priced here — they are hard-blocked as unsellable
+  # in SellPriceManager regardless of any price set here, so a filled box can never be sold
+  # for its container price while its contents are destroyed (see issue #610).
   ENDER_CHEST: 1500
   END_CRYSTAL: 2500
 
