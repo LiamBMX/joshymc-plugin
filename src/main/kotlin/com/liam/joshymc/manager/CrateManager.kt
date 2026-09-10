@@ -130,7 +130,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val itemBase64: String? = null
     )
 
-    enum class CrateMode { RANDOM, SELECT }
+    enum class CrateMode { RANDOM, SELECT, SELECT_3 }
 
     enum class AnimationType { SPIN, PULSE, INSTANT }
 
@@ -161,12 +161,19 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val crateType: String
     )
 
+    /** In-progress "Select 3" pick state for one player. Lives only as long as the picker/confirm GUI is open. */
+    private data class Select3Session(val crateId: String, val selectedIndices: MutableSet<Int> = mutableSetOf())
+
+    /** True for modes where the player manually picks reward(s) instead of an animated random draw — key consumption is deferred until the pick is finalized. */
+    private fun isManualPickMode(mode: CrateMode) = mode == CrateMode.SELECT || mode == CrateMode.SELECT_3
+
     // --- State ---
 
     val crateKeyKey = NamespacedKey(plugin, "crate_key")
     private val crates = mutableMapOf<String, CrateDef>()
     private val crateLocations = mutableListOf<CrateLocation>()
     private val activeAnimations = mutableSetOf<UUID>()
+    private val select3Sessions = mutableMapOf<UUID, Select3Session>()
     private var particleTask: BukkitTask? = null
     private lateinit var cratesFile: File
     private lateinit var cratesConfig: YamlConfiguration
@@ -212,6 +219,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         particleTask?.cancel()
         particleTask = null
         activeAnimations.clear()
+        select3Sessions.clear()
     }
 
     // --- Config loading ---
@@ -365,8 +373,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    /** Returns false (and leaves the mode unchanged) if switching to SELECT_3 without at least 3 rewards configured. */
     fun setCrateMode(crateId: String, mode: CrateMode): Boolean {
         val crate = crates[crateId] ?: return false
+        if (mode == CrateMode.SELECT_3 && crate.rewards.size < 3) return false
         crates[crateId] = crate.copy(mode = mode)
         saveCrates()
         return true
@@ -578,7 +588,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * reward, so calling this for them would double-charge.
      */
     fun consumeOneKeyIfAuto(player: Player, crateType: String) {
-        if (crates[crateType]?.mode != CrateMode.SELECT) {
+        if (!isManualPickMode(crates[crateType]?.mode ?: CrateMode.RANDOM)) {
             consumeOneKey(player)
         }
     }
@@ -608,6 +618,17 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // SELECT mode: open a pick GUI instead of animating
         if (crate.mode == CrateMode.SELECT) {
             openSelectGui(player, crate)
+            return
+        }
+
+        // SELECT_3 mode: open the multi-pick GUI instead of animating
+        if (crate.mode == CrateMode.SELECT_3) {
+            if (crate.rewards.size < 3) {
+                plugin.commsManager.send(player, Component.text("This crate is misconfigured for Select 3 (needs at least 3 rewards) — contact an admin.", NamedTextColor.RED))
+                return
+            }
+            select3Sessions[player.uniqueId] = Select3Session(crate.id)
+            openSelect3Gui(player, crate)
             return
         }
 
@@ -756,6 +777,273 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             if (safePage < totalPages - 1) {
                 gui.setItem(41, navButton("Next Page »")) { p, _ -> openSelectGui(p, crate, safePage + 1) }
             }
+        }
+
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    // --- SELECT_3 mode GUI ---
+
+    /**
+     * "Select 3" pick GUI — same shape-based layout as [openSelectGui], but tracks up to
+     * 3 picks in [select3Sessions] before handing off to [openSelect3Confirm]. Clicking an
+     * already-picked reward deselects it. No key is consumed here — only at confirmation,
+     * so closing this GUI without finishing never costs a key.
+     */
+    private fun openSelect3Gui(player: Player, crate: CrateDef, page: Int = 0) {
+        val session = select3Sessions[player.uniqueId]
+        if (session == null || session.crateId != crate.id) {
+            player.closeInventory()
+            plugin.commsManager.send(player, Component.text("Your selection session expired — try opening the crate again.", NamedTextColor.RED))
+            return
+        }
+
+        val title = Component.text("Select 3: ")
+            .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
+            .decoration(TextDecoration.ITALIC, false)
+
+        val totalPages = CrateLayout.pageCount(crate.rewards.size)
+        val safePage = page.coerceIn(0, totalPages - 1)
+        val pageStart = safePage * CrateLayout.PAGE_CAPACITY
+        val pageRewards = crate.rewards.drop(pageStart).take(CrateLayout.PAGE_CAPACITY)
+
+        val size = 45
+        val gui = CustomGui(title, size)
+        gui.onClose = { p -> select3Sessions.remove(p.uniqueId) }
+
+        val filler = ItemStack(crate.animationGlass)
+        filler.editMeta { it.displayName(Component.empty()) }
+        for (i in 0 until size) gui.inventory.setItem(i, filler.clone())
+        gui.border(filler)
+
+        val progress = ItemStack(Material.NAME_TAG)
+        progress.editMeta { meta ->
+            meta.displayName(
+                Component.text("Selected: ${session.selectedIndices.size}/3", NamedTextColor.YELLOW)
+                    .decoration(TextDecoration.ITALIC, false)
+            )
+            meta.lore(listOf(
+                Component.empty(),
+                Component.text("  Pick 3 different rewards.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("  Click a selected reward again to deselect.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+            ))
+        }
+        gui.setItem(4, progress)
+
+        val positions = CrateLayout.positions(pageRewards.size)
+
+        for ((idxOnPage, reward) in pageRewards.withIndex()) {
+            if (idxOnPage >= positions.size) break
+            val globalIndex = pageStart + idxOnPage
+            val (row, col) = positions[idxOnPage]
+            val slot = (row + 1) * 9 + (col + 1)
+            val isSelected = session.selectedIndices.contains(globalIndex)
+
+            val item = deserializeItem(reward.itemBase64)
+                ?: ItemStack(reward.material, reward.amount.coerceIn(1, 64))
+            item.amount = reward.amount.coerceIn(1, 64)
+            val existingLore = item.itemMeta?.lore() ?: emptyList()
+            item.editMeta { meta ->
+                meta.displayName(
+                    Component.text(reward.displayName, TextColor.color(0xFFAA00))
+                        .decoration(TextDecoration.ITALIC, false)
+                        .decoration(TextDecoration.BOLD, true)
+                )
+                val lore = mutableListOf<Component>()
+                lore.add(Component.empty())
+                lore.add(
+                    Component.text("  Amount: ", NamedTextColor.GRAY)
+                        .append(Component.text("${reward.amount}", NamedTextColor.WHITE))
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                if (existingLore.isNotEmpty()) {
+                    lore.add(Component.empty())
+                    lore.addAll(existingLore)
+                } else if (reward.enchantments.isNotEmpty()) {
+                    lore.add(Component.empty())
+                    lore.add(Component.text("  Enchantments:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+                    for ((ench, level) in reward.enchantments) {
+                        lore.add(
+                            Component.text("  - ${ench.key.key.replace("_", " ")} $level", NamedTextColor.DARK_GRAY)
+                                .decoration(TextDecoration.ITALIC, false)
+                        )
+                    }
+                }
+                lore.add(Component.empty())
+                if (isSelected) {
+                    lore.add(Component.text("  Selected", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                    lore.add(Component.text("  Click to deselect", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+                } else {
+                    lore.add(Component.text("  Click to select!", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                }
+                lore.add(Component.empty())
+                meta.lore(lore)
+                if (isSelected) meta.setEnchantmentGlintOverride(true)
+            }
+
+            gui.setItem(slot, item) { p, _ ->
+                val sess = select3Sessions[p.uniqueId]
+                if (sess == null || sess.crateId != crate.id) {
+                    p.closeInventory()
+                    plugin.commsManager.send(p, Component.text("Your selection session expired — try opening the crate again.", NamedTextColor.RED))
+                    return@setItem
+                }
+                if (sess.selectedIndices.contains(globalIndex)) {
+                    sess.selectedIndices.remove(globalIndex)
+                    p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.6f, 1.0f)
+                    openSelect3Gui(p, crate, safePage)
+                    return@setItem
+                }
+                if (sess.selectedIndices.size >= 3) return@setItem
+                sess.selectedIndices.add(globalIndex)
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.6f, 1.3f)
+                if (sess.selectedIndices.size >= 3) {
+                    openSelect3Confirm(p, crate)
+                } else {
+                    openSelect3Gui(p, crate, safePage)
+                }
+            }
+        }
+
+        if (totalPages > 1) {
+            if (safePage > 0) {
+                gui.setItem(39, navButton("« Previous Page")) { p, _ -> openSelect3Gui(p, crate, safePage - 1) }
+            }
+            gui.setItem(40, pageIndicator(safePage + 1, totalPages))
+            if (safePage < totalPages - 1) {
+                gui.setItem(41, navButton("Next Page »")) { p, _ -> openSelect3Gui(p, crate, safePage + 1) }
+            }
+        }
+
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    /** Final review step for Select 3 — shows the 3 chosen rewards and requires Confirm before payout. */
+    private fun openSelect3Confirm(player: Player, crate: CrateDef) {
+        val session = select3Sessions[player.uniqueId]
+        if (session == null || session.crateId != crate.id || session.selectedIndices.size != 3) {
+            select3Sessions.remove(player.uniqueId)
+            player.closeInventory()
+            plugin.commsManager.send(player, Component.text("Your selection session expired — try opening the crate again.", NamedTextColor.RED))
+            return
+        }
+        val chosen = session.selectedIndices.mapNotNull { crate.rewards.getOrNull(it) }
+        if (chosen.size != 3) {
+            select3Sessions.remove(player.uniqueId)
+            player.closeInventory()
+            plugin.commsManager.send(player, Component.text("This crate's rewards changed — please reopen and try again.", NamedTextColor.RED))
+            return
+        }
+
+        val title = Component.text("Confirm Selection: ")
+            .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
+            .decoration(TextDecoration.ITALIC, false)
+        val gui = CustomGui(title, 27)
+        gui.onClose = { p -> select3Sessions.remove(p.uniqueId) }
+
+        val filler = ItemStack(Material.BLACK_STAINED_GLASS_PANE)
+        filler.editMeta { it.displayName(Component.empty()) }
+        for (i in 0 until 27) gui.inventory.setItem(i, filler.clone())
+
+        val displaySlots = listOf(11, 13, 15)
+        for ((i, reward) in chosen.withIndex()) {
+            gui.inventory.setItem(displaySlots[i], buildRewardDisplay(reward))
+        }
+
+        val confirmItem = ItemStack(Material.EMERALD_BLOCK)
+        confirmItem.editMeta { meta ->
+            meta.displayName(
+                Component.text("Confirm", NamedTextColor.GREEN)
+                    .decoration(TextDecoration.ITALIC, false)
+                    .decoration(TextDecoration.BOLD, true)
+            )
+            meta.lore(listOf(
+                Component.empty(),
+                Component.text("  Consume 1 key and claim these 3 rewards.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+            ))
+        }
+        gui.setItem(20, confirmItem) { p, _ ->
+            val currentSession = select3Sessions[p.uniqueId]
+            if (currentSession == null || currentSession.crateId != crate.id || currentSession.selectedIndices.size != 3) {
+                select3Sessions.remove(p.uniqueId)
+                p.closeInventory()
+                plugin.commsManager.send(p, Component.text("Your selection session expired — try opening the crate again.", NamedTextColor.RED))
+                return@setItem
+            }
+            val rewardsToGrant = currentSession.selectedIndices.mapNotNull { crate.rewards.getOrNull(it) }
+            if (rewardsToGrant.size != 3) {
+                select3Sessions.remove(p.uniqueId)
+                p.closeInventory()
+                plugin.commsManager.send(p, Component.text("This crate's rewards changed — please reopen and try again.", NamedTextColor.RED))
+                return@setItem
+            }
+
+            val keyInHand = p.inventory.itemInMainHand
+            if (!isKey(keyInHand, crate.id)) {
+                select3Sessions.remove(p.uniqueId)
+                p.closeInventory()
+                plugin.commsManager.send(
+                    p,
+                    Component.text("You no longer have a ", NamedTextColor.RED)
+                        .append(Component.text(crate.keyName, TextColor.color(0xFFAA00)))
+                        .append(Component.text(".", NamedTextColor.RED))
+                )
+                return@setItem
+            }
+            val hasFreeSlot = p.inventory.firstEmpty() != -1 || keyInHand.amount == 1
+            if (!hasFreeSlot) {
+                p.closeInventory()
+                plugin.commsManager.send(
+                    p,
+                    Component.text("Your inventory is full — clear some space and try again.", NamedTextColor.RED)
+                )
+                p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                return@setItem
+            }
+
+            consumeOneKey(p)
+            select3Sessions.remove(p.uniqueId)
+            p.closeInventory()
+
+            for (reward in rewardsToGrant) {
+                val rewardItem = buildRewardItem(reward)
+                val leftover = p.inventory.addItem(rewardItem)
+                for ((_, drop) in leftover) p.world.dropItemNaturally(p.location, drop)
+            }
+            spawnWinParticles(p, crate)
+            p.playSound(p.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
+            plugin.commsManager.send(p, Component.text("You selected:", NamedTextColor.GREEN))
+            for (reward in rewardsToGrant) {
+                plugin.commsManager.send(
+                    p,
+                    Component.text("  - ", NamedTextColor.DARK_GRAY)
+                        .append(Component.text(reward.displayName, TextColor.color(0xFFAA00)))
+                        .append(Component.text(" x${reward.amount}", NamedTextColor.GREEN))
+                )
+            }
+        }
+
+        val cancelItem = ItemStack(Material.BARRIER)
+        cancelItem.editMeta { meta ->
+            meta.displayName(
+                Component.text("Cancel", NamedTextColor.RED)
+                    .decoration(TextDecoration.ITALIC, false)
+                    .decoration(TextDecoration.BOLD, true)
+            )
+            meta.lore(listOf(
+                Component.empty(),
+                Component.text("  Discard this selection — no key used.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+            ))
+        }
+        gui.setItem(24, cancelItem) { p, _ ->
+            select3Sessions.remove(p.uniqueId)
+            p.closeInventory()
+            plugin.commsManager.send(p, Component.text("Selection cancelled — no key was used.", NamedTextColor.YELLOW))
         }
 
         plugin.guiManager.open(player, gui)
@@ -1230,8 +1518,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         val keyCount = itemInHand.amount
 
-        // SELECT crates normally require the player to pick — mass open falls back to weighted random.
-        if (crate.mode == CrateMode.SELECT) {
+        // SELECT / SELECT_3 crates normally require the player to pick — mass open falls back to weighted random.
+        if (isManualPickMode(crate.mode)) {
             plugin.commsManager.send(
                 player,
                 Component.text("Mass-opening a ", NamedTextColor.GRAY)
@@ -1467,7 +1755,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        if (crates[crateType]?.mode != CrateMode.SELECT) {
+        if (!isManualPickMode(crates[crateType]?.mode ?: CrateMode.RANDOM)) {
             consumeOneKey(player)
         }
         openCrate(player, crateType, block)
@@ -1592,9 +1880,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        // SELECT mode defers key consumption until the player actually picks a reward,
+        // SELECT / SELECT_3 defer key consumption until the player actually finalizes a pick,
         // so closing the GUI without choosing does not cost a key.
-        if (crates[crateType]?.mode != CrateMode.SELECT) {
+        if (!isManualPickMode(crates[crateType]?.mode ?: CrateMode.RANDOM)) {
             consumeOneKey(player)
         }
 
@@ -1607,5 +1895,11 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         if (crateType != null) {
             event.isCancelled = true
         }
+    }
+
+    /** Belt-and-suspenders: an in-progress Select 3 pick never survives a disconnect. */
+    @EventHandler
+    fun onPlayerQuit(event: org.bukkit.event.player.PlayerQuitEvent) {
+        select3Sessions.remove(event.player.uniqueId)
     }
 }
