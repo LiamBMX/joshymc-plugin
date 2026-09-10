@@ -400,9 +400,17 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
         }
 
         // Mode Toggle (slot 51)
-        val modeBtn = ItemStack(if (crate.mode == CrateManager.CrateMode.RANDOM) Material.HOPPER else Material.CHEST)
+        val modeBtn = ItemStack(when (crate.mode) {
+            CrateManager.CrateMode.RANDOM -> Material.HOPPER
+            CrateManager.CrateMode.SELECT -> Material.CHEST
+            CrateManager.CrateMode.SELECT_3 -> Material.ENDER_CHEST
+        })
         modeBtn.editMeta { meta ->
-            val modeLabel = if (crate.mode == CrateManager.CrateMode.RANDOM) "Random" else "Select"
+            val modeLabel = when (crate.mode) {
+                CrateManager.CrateMode.RANDOM -> "Random"
+                CrateManager.CrateMode.SELECT -> "Select"
+                CrateManager.CrateMode.SELECT_3 -> "Select 3"
+            }
             meta.displayName(
                 Component.text("Mode: $modeLabel", NamedTextColor.LIGHT_PURPLE)
                     .decoration(TextDecoration.ITALIC, false)
@@ -414,15 +422,25 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
                     .decoration(TextDecoration.ITALIC, false),
                 Component.text("  Select: player chooses one reward", NamedTextColor.GRAY)
                     .decoration(TextDecoration.ITALIC, false),
+                Component.text("  Select 3: player chooses three rewards", NamedTextColor.GRAY)
+                    .decoration(TextDecoration.ITALIC, false),
                 Component.empty(),
-                Component.text("  Click to toggle", NamedTextColor.YELLOW)
+                Component.text("  Click to cycle", NamedTextColor.YELLOW)
                     .decoration(TextDecoration.ITALIC, false),
                 Component.empty()
             ))
         }
         gui.setItem(51, modeBtn) { p, _ ->
-            val newMode = if (crate.mode == CrateManager.CrateMode.RANDOM) CrateManager.CrateMode.SELECT else CrateManager.CrateMode.RANDOM
-            plugin.crateManager.setCrateMode(crateId, newMode)
+            val newMode = when (crate.mode) {
+                CrateManager.CrateMode.RANDOM -> CrateManager.CrateMode.SELECT
+                CrateManager.CrateMode.SELECT -> CrateManager.CrateMode.SELECT_3
+                CrateManager.CrateMode.SELECT_3 -> CrateManager.CrateMode.RANDOM
+            }
+            if (!plugin.crateManager.setCrateMode(crateId, newMode)) {
+                p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                plugin.commsManager.send(p, Component.text("Select 3 requires at least 3 rewards.", NamedTextColor.RED))
+                return@setItem
+            }
             p.playSound(p.location, Sound.BLOCK_ANVIL_USE, 0.5f, 1.0f)
             plugin.commsManager.send(p, Component.text("Mode set to ${newMode.name.lowercase()}.", NamedTextColor.GREEN))
             openEditMenu(p, crateId)
