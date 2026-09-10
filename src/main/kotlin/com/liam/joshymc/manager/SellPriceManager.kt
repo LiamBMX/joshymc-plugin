@@ -17,6 +17,16 @@ class SellPriceManager(private val plugin: Joshymc) {
 
     private val prices = HashMap<Material, Double>()
 
+    companion object {
+        /**
+         * Materials that must never be sellable regardless of sell-prices.yml — a hard block
+         * so a config mistake (or future merge from defaults) can't reintroduce them. Shulker
+         * boxes are excluded because a filled one would otherwise sell its container price
+         * while silently destroying its contents; see issue #610.
+         */
+        private fun isHardBlocked(material: Material): Boolean = material.name.endsWith("SHULKER_BOX")
+    }
+
     fun start() {
         val fileName = "sell-prices.yml"
         val file = plugin.configFile(fileName)
@@ -40,6 +50,7 @@ class SellPriceManager(private val plugin: Joshymc) {
                 plugin.logger.warning("[Sell] Unknown material in sell-prices.yml: $key")
                 continue
             }
+            if (isHardBlocked(material)) continue
             val price = section.getDouble(key)
             if (price > 0.0) prices[material] = price
         }
