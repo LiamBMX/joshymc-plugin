@@ -454,6 +454,8 @@ class Joshymc : JavaPlugin() {
         chatManager.start()
         // Start spawn world BEFORE arenas so the world exists when arena ticks begin
         spawnWorldManager.start()
+        // Auto-import the pvp world BEFORE arenas so it's loaded when arena ticks begin
+        WorldCommand.ensurePvpWorld(this)
 
         if (isFeatureEnabled("arenas")) arenaManager.start()
         buildPvpManager.start()
@@ -466,8 +468,6 @@ class Joshymc : JavaPlugin() {
 
         // Ensure dungeon void world exists
         WorldCommand.ensureDungeonWorld(this)
-        // Auto-import the pvp world if the folder exists on disk
-        WorldCommand.ensurePvpWorld(this)
 
         // Ensure default overworld has structures disabled (only resource world has structures)
         enforceServerStructures()
