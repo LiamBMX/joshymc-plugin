@@ -33,8 +33,6 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
         private const val OVERWORLD_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzQ3ZjIwMTgxNWMyYWI1Y2RmZWUwZmEyOTIyNTJlOGE5YmU2YWM2Y2FmMmIyODRiNDlkODc2ZGVjMDlmZWYxMSJ9fX0="
         // Netherrack head
         private const val NETHER_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvN2FiNGY2NzA4OWQ4YTZmNTdmMTkxNzI2YmI5ZGU5MTMyMGY0MGFmMDlkYzMwYjIyNmJhYzdlNDIwNzVhNmRiYSJ9fX0="
-        // End stone head
-        private const val END_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjJmODRmMWZjNTMzN2IwMDIyODFlNDQ1MDQ2Yjg0MjU3OWYwOTAyMDY0MDZlZmFmNjhjYjE4OGU3Mzg0YTdjNyJ9fX0="
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
@@ -44,6 +42,11 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
         }
 
         if (TeleportChecks.checkAndApply(sender, plugin)) return true
+
+        if (sender.world.environment == World.Environment.THE_END) {
+            plugin.commsManager.send(sender, Component.text("You cannot use /rtp in the End.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
+            return true
+        }
 
         val cooldownSeconds = plugin.config.getInt("rtp.cooldown-seconds", 60)
         val now = System.currentTimeMillis()
@@ -135,36 +138,16 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
             startRtp(p, world)
         }
 
-        // The End (slot 15)
-        val endHead = createCustomHead(
-            END_TEXTURE,
-            Component.text("The End", TextColor.color(0xAA55FF))
-                .decoration(TextDecoration.BOLD, true)
-                .decoration(TextDecoration.ITALIC, false),
-            listOf(
-                Component.empty(),
-                Component.text("  Teleport to a random location", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.text("  in the End.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.empty(),
-                Component.text("  Click to teleport!", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.ITALIC, false),
-                Component.empty()
-            )
-        )
-        gui.setItem(15, endHead) { p, _ ->
-            p.closeInventory()
-            val world = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.THE_END }
-            if (world == null) {
-                plugin.commsManager.send(p, Component.text("No end world found.", NamedTextColor.RED))
-                return@setItem
-            }
-            startRtp(p, world)
-        }
-
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
     private fun startRtp(player: Player, world: World, skipWarmup: Boolean = false) {
+        if (world.environment == World.Environment.THE_END) {
+            plugin.commsManager.send(player, Component.text("You cannot use /rtp in the End.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
+            return
+        }
+
         val minRange = plugin.config.getInt("rtp.min-range", 500)
         val maxRange = plugin.config.getInt("rtp.max-range", 5000)
 
