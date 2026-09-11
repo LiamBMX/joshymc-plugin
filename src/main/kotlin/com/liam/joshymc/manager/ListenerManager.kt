@@ -30,7 +30,6 @@ import com.liam.joshymc.listener.ClaimProtectionListener
 import com.liam.joshymc.listener.ConsumableListener
 import com.liam.joshymc.listener.BubbleButtListener
 import com.liam.joshymc.listener.CustomArmorListener
-import com.liam.joshymc.listener.CustomDropListener
 import com.liam.joshymc.listener.AuctionBidListener
 import com.liam.joshymc.listener.StockTradeChatListener
 import com.liam.joshymc.listener.CustomArmorAnvilListener
@@ -179,7 +178,6 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.mobStackManager, plugin)
 
         // Custom items
-        pm.registerEvents(CustomDropListener(plugin), plugin)
         pm.registerEvents(ConsumableListener(plugin), plugin)
         val armorListener = CustomArmorListener(plugin)
         armorListener.start()
