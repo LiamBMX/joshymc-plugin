@@ -806,9 +806,13 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         // unreachable for everyone without bypass.
         if (plugin.crateManager.getCrateTypeAt(block) != null) return
 
-        // Container flag — blocks chest/barrel/ender-chest/shulker access
-        // independently of the broader INTERACT flag.
-        if (isContainer(block.type) && !isAllowed(event.player, WorldFlag.CONTAINER)) {
+        // Container flag — blocks chest/barrel/shulker access independently
+        // of the broader INTERACT flag. Ender Chests are exempt: their
+        // contents are personal to the player, not a shared/world inventory,
+        // so they stay usable even when Containers = DENY.
+        if (isContainer(block.type) && block.type != Material.ENDER_CHEST &&
+            !isAllowed(event.player, WorldFlag.CONTAINER)
+        ) {
             event.isCancelled = true
             denyMessage(event.player, WorldFlag.CONTAINER, isRegionDefined(block.location, WorldFlag.CONTAINER))
             return
