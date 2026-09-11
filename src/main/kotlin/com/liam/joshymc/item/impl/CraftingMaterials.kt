@@ -7,6 +7,18 @@ import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
 
+// Custom crafting materials are admin-granted only (via /joshymc give) — they must
+// never enter the economy through /sell or the Sell Wand just because they share a
+// vanilla Material with a sellable item (e.g. Void Shard = PRISMARINE_SHARD).
+val CRAFTING_MATERIAL_IDS = setOf(
+    "void_shard",
+    "soul_fragment",
+    "inferno_core",
+    "crystal_essence",
+    "ancient_rune",
+    "enchanted_dust",
+)
+
 class VoidShard : CustomItem() {
 
     override val id = "void_shard"

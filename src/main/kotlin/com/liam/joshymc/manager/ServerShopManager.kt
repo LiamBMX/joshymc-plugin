@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.item.impl.CRAFTING_MATERIAL_IDS
 import com.liam.joshymc.listener.CustomArmorListener
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -898,6 +899,11 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     // ── Sell Logic ──────────────────────────────────────────────────────
 
+    // Custom crafting materials (Void Shard, etc.) share a vanilla Material with sellable
+    // items — never let them sell for that material's price. They're admin-granted only.
+    private fun isCraftingMaterial(stack: ItemStack): Boolean =
+        plugin.itemManager.getCustomItemId(stack) in CRAFTING_MATERIAL_IDS
+
     fun sellItem(player: Player, material: Material, sellPrice: Double, amount: Int) {
         val inventory = player.inventory
 
@@ -908,6 +914,7 @@ class ServerShopManager(private val plugin: Joshymc) {
             for (slot in 0 until inventory.size) {
                 val stack = inventory.getItem(slot) ?: continue
                 if (stack.type != material) continue
+                if (isCraftingMaterial(stack)) continue
                 val mutMult = plugin.mutationsManager.getMutationMultiplier(stack)
                 totalEarned += sellPrice * mutMult * stack.amount
                 totalCount += stack.amount
@@ -939,7 +946,11 @@ class ServerShopManager(private val plugin: Joshymc) {
             player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.0f)
         } else {
             // Sell specific amount — drain slots in order and apply per-slot mutation multipliers
-            if (!inventory.contains(material, amount)) {
+            val sellableAvailable = (0 until inventory.size).sumOf { slot ->
+                val stack = inventory.getItem(slot)
+                if (stack == null || stack.type != material || isCraftingMaterial(stack)) 0 else stack.amount
+            }
+            if (sellableAvailable < amount) {
                 plugin.commsManager.send(player,
                     Component.text("You don't have enough ", NamedTextColor.RED)
                         .append(Component.text(formatMaterialName(material), NamedTextColor.WHITE))
@@ -956,6 +967,7 @@ class ServerShopManager(private val plugin: Joshymc) {
                 if (remaining <= 0) break
                 val stack = inventory.getItem(slot) ?: continue
                 if (stack.type != material) continue
+                if (isCraftingMaterial(stack)) continue
                 val take = remaining.coerceAtMost(stack.amount)
                 val mutMult = plugin.mutationsManager.getMutationMultiplier(stack)
                 totalEarned += sellPrice * mutMult * take
