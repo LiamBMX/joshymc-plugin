@@ -89,6 +89,7 @@ class ListenerManager(private val plugin: Joshymc) {
         // Phase 5 — Chat & AFK
         pm.registerEvents(ChatFormatListener(plugin), plugin)
         pm.registerEvents(AFKListener(plugin), plugin)
+        pm.registerEvents(com.liam.joshymc.listener.StaffChatListener(plugin), plugin)
 
         // Trading
         pm.registerEvents(plugin.tradeManager, plugin)

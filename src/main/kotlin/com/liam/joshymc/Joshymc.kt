@@ -263,6 +263,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var modModeManager: com.liam.joshymc.manager.ModModeManager
         private set
+    lateinit var staffChatManager: com.liam.joshymc.manager.StaffChatManager
+        private set
 
     override fun onEnable() {
         instance = this
@@ -344,6 +346,7 @@ class Joshymc : JavaPlugin() {
         joinEffectManager = JoinEffectManager(this)
         adminManager = AdminManager(this)
         modModeManager = com.liam.joshymc.manager.ModModeManager(this)
+        staffChatManager = com.liam.joshymc.manager.StaffChatManager(this)
         worldFlagManager = WorldFlagManager(this)
         endManager = EndManager(this)
         chatManager = ChatManager(this)

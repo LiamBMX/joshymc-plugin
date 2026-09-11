@@ -455,6 +455,10 @@ commands:
     description: Toggle Moderator Mode
     usage: /modmode [on|off]
     aliases: [mmode]
+  staffchat:
+    description: Toggle Staff Chat — redirects your chat messages to staff only
+    usage: /staffchat
+    aliases: [sc]
   report:
     description: Report a player
     usage: /report <player> <reason>
@@ -1067,6 +1071,9 @@ permissions:
     default: op
   joshymc.modmode:
     description: Use Moderator Mode (Moderator and higher)
+    default: op
+  joshymc.staffchat:
+    description: Toggle, send, and receive Staff Chat via /staffchat or /sc
     default: op
   joshymc.modmode.edit:
     description: Edit inventories/Ender Chests/vaults viewed via Moderator Mode (Lead Moderator+)

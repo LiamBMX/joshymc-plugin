@@ -274,6 +274,8 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("staffchat")?.setExecutor(com.liam.joshymc.command.StaffChatCommand(plugin))
+
         plugin.getCommand("holo")?.let {
             val cmd = HologramCommand(plugin)
             it.setExecutor(cmd)

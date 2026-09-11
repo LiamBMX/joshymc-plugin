@@ -62,6 +62,9 @@ chat:
   # Message sent after /chat clear. Placeholders: {player}
   clear-message: "&7Chat has been cleared by &f{player}&7."
 
+  # Format for Staff Chat messages (/staffchat, /sc). Placeholders: {player}, {message}
+  staffchat-format: "&8[&cStaff Chat&8] &f{player}&7: &f{message}"
+
 discord:
   # Bot token from https://discord.com/developers/applications
   token: "YOUR_BOT_TOKEN_HERE"
