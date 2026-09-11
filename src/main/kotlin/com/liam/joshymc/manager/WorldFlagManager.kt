@@ -142,12 +142,37 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         val maxX: Int, val maxY: Int, val maxZ: Int,
         var priority: Int,
         val flags: MutableMap<WorldFlag, Boolean> = mutableMapOf(),
+        /** Name of the WorldFlag region this is a Subflag of, or null for a top-level region. */
+        val parent: String? = null,
     ) {
         fun contains(x: Int, y: Int, z: Int): Boolean =
             x in minX..maxX && y in minY..maxY && z in minZ..maxZ
 
         fun contains(loc: Location): Boolean =
             loc.world?.name == world && contains(loc.blockX, loc.blockY, loc.blockZ)
+
+        fun containsRegion(other: WorldFlagRegion): Boolean =
+            world == other.world &&
+                other.minX >= minX && other.maxX <= maxX &&
+                other.minY >= minY && other.maxY <= maxY &&
+                other.minZ >= minZ && other.maxZ <= maxZ
+    }
+
+    /** Result of attempting to create a Subflag under a parent WorldFlag. */
+    sealed class SubflagCreateResult {
+        object ParentNotFound : SubflagCreateResult()
+        object ParentIsSubflag : SubflagCreateResult()
+        object NameTaken : SubflagCreateResult()
+        object WrongWorld : SubflagCreateResult()
+        object OutsideParent : SubflagCreateResult()
+        data class Created(val region: WorldFlagRegion) : SubflagCreateResult()
+    }
+
+    /** Result of attempting to delete a region that may have Subflags depending on it. */
+    sealed class DeleteResult {
+        object NotFound : DeleteResult()
+        data class HasSubflags(val names: List<String>) : DeleteResult()
+        data class Deleted(val cascaded: List<String>) : DeleteResult()
     }
 
     private data class BlockPos(val x: Int, val y: Int, val z: Int)
@@ -198,6 +223,12 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
             )
             """.trimIndent()
         )
+
+        try {
+            plugin.databaseManager.execute("ALTER TABLE world_flag_regions ADD COLUMN parent TEXT")
+        } catch (_: Exception) {
+            // Column already exists.
+        }
 
         plugin.databaseManager.execute(
             """
@@ -254,6 +285,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
                 minX = rs.getInt("min_x"), minY = rs.getInt("min_y"), minZ = rs.getInt("min_z"),
                 maxX = rs.getInt("max_x"), maxY = rs.getInt("max_y"), maxZ = rs.getInt("max_z"),
                 priority = rs.getInt("priority"),
+                parent = rs.getString("parent"),
             )
         }.forEach { regions[it.name.lowercase()] = it }
 
@@ -360,12 +392,19 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
     private fun hasBypass(player: Player) =
         player.hasPermission("joshymc.worldflag.bypass") || player.hasPermission(BYPASS_PERMISSION)
 
-    /** Regions containing [loc], highest priority first. */
+    /**
+     * Regions containing [loc], Subflags first (highest priority first
+     * within each tier), then top-level regions (highest priority first).
+     * A Subflag always takes precedence over its own parent — and any other
+     * top-level region — regardless of numeric priority; priority only
+     * breaks ties between regions of the same tier (e.g. two overlapping
+     * Subflags, or two overlapping top-level regions).
+     */
     fun regionsAt(loc: Location): List<WorldFlagRegion> {
         val worldName = loc.world?.name ?: return emptyList()
-        return regions.values
-            .filter { it.world == worldName && it.contains(loc) }
-            .sortedByDescending { it.priority }
+        val matching = regions.values.filter { it.world == worldName && it.contains(loc) }
+        val (subflags, parents) = matching.partition { it.parent != null }
+        return subflags.sortedByDescending { it.priority } + parents.sortedByDescending { it.priority }
     }
 
     /**
@@ -407,6 +446,15 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
     fun regionsInWorld(world: String): List<WorldFlagRegion> =
         regions.values.filter { it.world == world }.sortedByDescending { it.priority }
 
+    /** Top-level regions only (excludes Subflags), for parent-argument tab completion and listings. */
+    fun topLevelRegions(): List<WorldFlagRegion> =
+        regions.values.filter { it.parent == null }.sortedWith(compareBy({ it.world }, { -it.priority }))
+
+    /** Subflags belonging to [parentName], highest priority first. */
+    fun subflagsOf(parentName: String): List<WorldFlagRegion> =
+        regions.values.filter { it.parent?.equals(parentName, ignoreCase = true) == true }
+            .sortedByDescending { it.priority }
+
     fun createRegion(name: String, world: String, min: Triple<Int, Int, Int>, max: Triple<Int, Int, Int>): Boolean {
         val key = name.lowercase()
         if (regions.containsKey(key)) return false
@@ -418,16 +466,58 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
             priority = 0,
         )
         regions[key] = region
-        plugin.databaseManager.execute(
-            """
-            INSERT INTO world_flag_regions (name, world, min_x, min_y, min_z, max_x, max_y, max_z, priority)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """.trimIndent(),
-            name, world, min.first, min.second, min.third, max.first, max.second, max.third, 0
-        )
+        persistRegion(region)
         return true
     }
 
+    /**
+     * Create a Subflag inside [parentName] — a region whose bounds must be
+     * fully contained within the parent's bounds. A parent may not itself be
+     * a Subflag (one level of nesting only).
+     */
+    fun createSubflag(
+        parentName: String,
+        name: String,
+        world: String,
+        min: Triple<Int, Int, Int>,
+        max: Triple<Int, Int, Int>,
+    ): SubflagCreateResult {
+        val parent = regions[parentName.lowercase()] ?: return SubflagCreateResult.ParentNotFound
+        if (parent.parent != null) return SubflagCreateResult.ParentIsSubflag
+        if (world != parent.world) return SubflagCreateResult.WrongWorld
+
+        val fullName = "${parent.name}.$name"
+        if (regions.containsKey(fullName.lowercase())) return SubflagCreateResult.NameTaken
+
+        val candidate = WorldFlagRegion(
+            fullName, world,
+            min.first, min.second, min.third,
+            max.first, max.second, max.third,
+            priority = 0,
+        )
+        if (!parent.containsRegion(candidate)) return SubflagCreateResult.OutsideParent
+
+        val region = candidate.copy(parent = parent.name)
+        regions[fullName.lowercase()] = region
+        persistRegion(region)
+        return SubflagCreateResult.Created(region)
+    }
+
+    private fun persistRegion(region: WorldFlagRegion) {
+        plugin.databaseManager.execute(
+            """
+            INSERT INTO world_flag_regions (name, world, min_x, min_y, min_z, max_x, max_y, max_z, priority, parent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            region.name, region.world, region.minX, region.minY, region.minZ,
+            region.maxX, region.maxY, region.maxZ, region.priority, region.parent
+        )
+    }
+
+    /**
+     * Redefine a region's bounds. For a Subflag, the new bounds must remain
+     * fully inside its parent's bounds — returns null if they don't.
+     */
     fun redefineRegion(name: String, min: Triple<Int, Int, Int>, max: Triple<Int, Int, Int>): WorldFlagRegion? {
         val key = name.lowercase()
         val existing = regions[key] ?: return null
@@ -435,6 +525,10 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
             minX = min.first, minY = min.second, minZ = min.third,
             maxX = max.first, maxY = max.second, maxZ = max.third,
         )
+        if (existing.parent != null) {
+            val parent = regions[existing.parent.lowercase()] ?: return null
+            if (!parent.containsRegion(updated)) return null
+        }
         regions[key] = updated
         plugin.databaseManager.execute(
             "UPDATE world_flag_regions SET min_x = ?, min_y = ?, min_z = ?, max_x = ?, max_y = ?, max_z = ? WHERE name = ?",
@@ -443,12 +537,26 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         return updated
     }
 
-    fun deleteRegion(name: String): Boolean {
-        val key = name.lowercase()
-        val region = regions.remove(key) ?: return false
+    /**
+     * Delete a region. Deleting a top-level region that still has Subflags
+     * is refused unless [cascade] is set, in which case its Subflags are
+     * deleted along with it.
+     */
+    fun deleteRegion(name: String, cascade: Boolean = false): DeleteResult {
+        val region = regions[name.lowercase()] ?: return DeleteResult.NotFound
+        val children = subflagsOf(region.name)
+        if (children.isNotEmpty() && !cascade) {
+            return DeleteResult.HasSubflags(children.map { it.name })
+        }
+        children.forEach { deleteRegionRaw(it.name) }
+        deleteRegionRaw(region.name)
+        return DeleteResult.Deleted(children.map { it.name })
+    }
+
+    private fun deleteRegionRaw(name: String) {
+        val region = regions.remove(name.lowercase()) ?: return
         plugin.databaseManager.execute("DELETE FROM world_flag_regions WHERE name = ?", region.name)
         plugin.databaseManager.execute("DELETE FROM world_flag_region_flags WHERE region_name = ?", region.name)
-        return true
     }
 
     fun setPriority(name: String, priority: Int): Boolean {
