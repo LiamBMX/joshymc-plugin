@@ -151,10 +151,15 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         fun contains(loc: Location): Boolean =
             loc.world?.name == world && contains(loc.blockX, loc.blockY, loc.blockZ)
 
+        /**
+         * WorldFlag regions protect a horizontal area, not a specific
+         * vertical slice — a Subflag's Y range commonly differs from the
+         * parent's original wand selection (build height, cave depth, etc).
+         * Containment for Subflags is therefore X/Z (+ same world) only.
+         */
         fun containsRegion(other: WorldFlagRegion): Boolean =
             world == other.world &&
                 other.minX >= minX && other.maxX <= maxX &&
-                other.minY >= minY && other.maxY <= maxY &&
                 other.minZ >= minZ && other.maxZ <= maxZ
     }
 

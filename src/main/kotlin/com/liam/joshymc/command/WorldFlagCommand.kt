@@ -102,7 +102,7 @@ class WorldFlagCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
             is WorldFlagManager.SubflagCreateResult.WrongWorld ->
                 player.sendMessage(Component.text("Your selection must be in the same world as '$parentName'.", NamedTextColor.RED))
             is WorldFlagManager.SubflagCreateResult.OutsideParent ->
-                player.sendMessage(Component.text("Your selection must be fully inside '$parentName'.", NamedTextColor.RED))
+                player.sendMessage(Component.text("Your selection extends outside '$parentName' on the X/Z boundary.", NamedTextColor.RED))
             is WorldFlagManager.SubflagCreateResult.Created -> {
                 manager.clearSelection(player)
                 player.sendMessage(Component.text("Subflag '${result.region.name}' created inside '$parentName'.", NamedTextColor.GREEN))
