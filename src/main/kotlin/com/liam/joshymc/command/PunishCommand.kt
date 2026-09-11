@@ -87,8 +87,10 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return true
         }
 
-        plugin.punishmentManager.ban(targetUuid, targetName, punisherName, punisherUuid, reason)
-        Bukkit.getPlayer(targetUuid)?.kick(buildBanKickMessage(reason, null))
+        val inserted = plugin.punishmentManager.ban(targetUuid, targetName, punisherName, punisherUuid, reason)
+        Bukkit.getPlayer(targetUuid)?.kick(
+            plugin.punishmentManager.buildBanMessage(inserted.id, targetUuid, reason, punisherName, null, null)
+        )
 
         val msg = Component.text("$targetName has been permanently banned - $reason", NamedTextColor.RED)
         sender.sendMessage(msg)
@@ -112,8 +114,10 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return true
         }
 
-        plugin.punishmentManager.tempban(targetUuid, targetName, punisherName, punisherUuid, reason, durationMs)
-        Bukkit.getPlayer(targetUuid)?.kick(buildBanKickMessage(reason, durationMs))
+        val inserted = plugin.punishmentManager.tempban(targetUuid, targetName, punisherName, punisherUuid, reason, durationMs)
+        Bukkit.getPlayer(targetUuid)?.kick(
+            plugin.punishmentManager.buildBanMessage(inserted.id, targetUuid, reason, punisherName, durationMs, inserted.expiresAt)
+        )
 
         val durationStr = PunishmentManager.formatDuration(durationMs)
         val msg = Component.text("$targetName has been banned for $durationStr - $reason", NamedTextColor.RED)

@@ -40,11 +40,11 @@ class BanCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         val punisherUuid = (sender as? Player)?.uniqueId
         val punisherName = sender.name
 
-        plugin.punishmentManager.ban(target.first, target.second, punisherName, punisherUuid, reason)
+        val inserted = plugin.punishmentManager.ban(target.first, target.second, punisherName, punisherUuid, reason)
 
         // Kick if online
         val online = Bukkit.getPlayer(target.first)
-        online?.kick(buildBanKickMessage(reason, null))
+        online?.kick(plugin.punishmentManager.buildBanMessage(inserted.id, target.first, reason, punisherName, null, null))
 
         val msg = Component.text("${target.second} has been permanently banned", NamedTextColor.RED)
             .let { if (reason != null) it.append(Component.text(" - $reason", NamedTextColor.GRAY)) else it }
@@ -89,10 +89,10 @@ class TempbanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val punisherUuid = (sender as? Player)?.uniqueId
         val punisherName = sender.name
 
-        plugin.punishmentManager.tempban(target.first, target.second, punisherName, punisherUuid, reason, durationMs)
+        val inserted = plugin.punishmentManager.tempban(target.first, target.second, punisherName, punisherUuid, reason, durationMs)
 
         val online = Bukkit.getPlayer(target.first)
-        online?.kick(buildBanKickMessage(reason, durationMs))
+        online?.kick(plugin.punishmentManager.buildBanMessage(inserted.id, target.first, reason, punisherName, durationMs, inserted.expiresAt))
 
         val durationStr = PunishmentManager.formatDuration(durationMs)
         val msg = Component.text("${target.second} has been banned for $durationStr", NamedTextColor.RED)
@@ -561,27 +561,4 @@ internal fun notifyStaff(sender: CommandSender, message: Component) {
             player.sendMessage(full)
         }
     }
-}
-
-internal fun buildBanKickMessage(reason: String?, durationMs: Long?): Component {
-    val msg = Component.text()
-        .append(Component.text("You have been banned!", NamedTextColor.RED).decoration(TextDecoration.BOLD, true))
-        .append(Component.newline())
-
-    if (reason != null) {
-        msg.append(Component.newline())
-            .append(Component.text("Reason: ", NamedTextColor.GRAY))
-            .append(Component.text(reason, NamedTextColor.WHITE))
-    }
-
-    msg.append(Component.newline())
-    if (durationMs != null) {
-        msg.append(Component.text("Duration: ", NamedTextColor.GRAY))
-            .append(Component.text(PunishmentManager.formatDuration(durationMs), NamedTextColor.WHITE))
-    } else {
-        msg.append(Component.text("Duration: ", NamedTextColor.GRAY))
-            .append(Component.text("Permanent", NamedTextColor.RED))
-    }
-
-    return msg.build()
 }

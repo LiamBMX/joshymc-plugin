@@ -767,3 +767,56 @@ quests:
       commands:
         - "credits give {player} 100"
     inventory: true      # Detects inventory hacks (>25 clicks/sec)
+
+# Custom branded ban/tempban disconnect + rejoin screens for /punish (and /ban, /tempban).
+# Each list entry is one line of the screen, parsed with the same &/&#RRGGBB color codes
+# used everywhere else in this config. If a template is missing or fails to format, a
+# safe built-in fallback message is shown instead - a banned player never slips through.
+#
+# Placeholders: %player% %reason% %staff% %duration% %remaining% %expires% %punishment_id%
+# - ban-message is shown for permanent bans issued through /punish, /ban, or the admin panel.
+# - tempban-message is shown for temporary bans and always reflects the CURRENT remaining
+#   time, even on rejoin - never the original duration from when the ban was issued.
+punishments:
+  ban-message:
+    - "&#D96320&l✦ JOSHYMC ✦"
+    - ""
+    - "&#C9442A&lYOU HAVE BEEN PERMANENTLY BANNED"
+    - ""
+    - "&#E8BF73Reason"
+    - "&f%reason%"
+    - ""
+    - "&#E8BF73Banned By"
+    - "&f%staff%"
+    - ""
+    - "&#E8BF73Punishment ID"
+    - "&f#%punishment_id%"
+    - ""
+    - "&#6B3E26&m-----------------------------"
+    - ""
+    - "&#EBA338Think this was a mistake?"
+    - "&#EBA338Appeal at &#D96320discord.gg/joshymc"
+  tempban-message:
+    - "&#D96320&l✦ JOSHYMC ✦"
+    - ""
+    - "&#C9442A&lYOU HAVE BEEN TEMPORARILY BANNED"
+    - ""
+    - "&#E8BF73Reason"
+    - "&f%reason%"
+    - ""
+    - "&#E8BF73Banned By"
+    - "&f%staff%"
+    - ""
+    - "&#E8BF73Remaining"
+    - "&f%remaining%"
+    - ""
+    - "&#E8BF73Expires"
+    - "&f%expires%"
+    - ""
+    - "&#E8BF73Punishment ID"
+    - "&f#%punishment_id%"
+    - ""
+    - "&#6B3E26&m-----------------------------"
+    - ""
+    - "&#EBA338Think this was a mistake?"
+    - "&#EBA338Appeal at &#D96320discord.gg/joshymc"
