@@ -564,16 +564,21 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             when (pending.type) {
                 "ban" -> {
                     if (pending.duration != null) {
-                        plugin.punishmentManager.tempban(targetUuid, targetName, admin.name, admin.uniqueId, reason, pending.duration)
+                        val inserted = plugin.punishmentManager.tempban(targetUuid, targetName, admin.name, admin.uniqueId, reason, pending.duration)
                         val durationStr = PunishmentManager.formatDuration(pending.duration)
                         logAction(admin, "BAN", Bukkit.getOfflinePlayer(targetUuid), "$durationStr - $reason")
                         plugin.commsManager.send(admin, Component.text("Banned $targetName for $durationStr - $reason", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+                        Bukkit.getPlayer(targetUuid)?.kick(
+                            plugin.punishmentManager.buildBanMessage(inserted.id, targetUuid, reason, admin.name, pending.duration, inserted.expiresAt)
+                        )
                     } else {
-                        plugin.punishmentManager.ban(targetUuid, targetName, admin.name, admin.uniqueId, reason)
+                        val inserted = plugin.punishmentManager.ban(targetUuid, targetName, admin.name, admin.uniqueId, reason)
                         logAction(admin, "BAN", Bukkit.getOfflinePlayer(targetUuid), "Permanent - $reason")
                         plugin.commsManager.send(admin, Component.text("Permanently banned $targetName - $reason", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+                        Bukkit.getPlayer(targetUuid)?.kick(
+                            plugin.punishmentManager.buildBanMessage(inserted.id, targetUuid, reason, admin.name, null, null)
+                        )
                     }
-                    Bukkit.getPlayer(targetUuid)?.kick(Component.text("You have been banned! Reason: $reason", NamedTextColor.RED))
                 }
                 "mute" -> {
                     if (pending.duration != null) {
