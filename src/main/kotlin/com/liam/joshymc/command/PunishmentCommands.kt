@@ -532,7 +532,7 @@ class HistoryCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
  * Resolve a player name to UUID + last known name.
  * Tries online first, then falls back to Bukkit's offline player cache.
  */
-private fun resolveOfflinePlayer(name: String): Pair<UUID, String>? {
+internal fun resolveOfflinePlayer(name: String): Pair<UUID, String>? {
     // Try online first
     val online = Bukkit.getPlayer(name)
     if (online != null) return online.uniqueId to online.name
@@ -547,13 +547,13 @@ private fun resolveOfflinePlayer(name: String): Pair<UUID, String>? {
     return null
 }
 
-private fun onlinePlayerNames(prefix: String): List<String> {
+internal fun onlinePlayerNames(prefix: String): List<String> {
     return Bukkit.getOnlinePlayers()
         .map { it.name }
         .filter { it.startsWith(prefix, ignoreCase = true) }
 }
 
-private fun notifyStaff(sender: CommandSender, message: Component) {
+internal fun notifyStaff(sender: CommandSender, message: Component) {
     val prefix = Component.text("[Staff] ", NamedTextColor.DARK_GRAY)
     val full = prefix.append(message)
     for (player in Bukkit.getOnlinePlayers()) {
@@ -563,7 +563,7 @@ private fun notifyStaff(sender: CommandSender, message: Component) {
     }
 }
 
-private fun buildBanKickMessage(reason: String?, durationMs: Long?): Component {
+internal fun buildBanKickMessage(reason: String?, durationMs: Long?): Component {
     val msg = Component.text()
         .append(Component.text("You have been banned!", NamedTextColor.RED).decoration(TextDecoration.BOLD, true))
         .append(Component.newline())

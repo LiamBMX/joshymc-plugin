@@ -447,6 +447,9 @@ commands:
   history:
     description: View punishment history
     usage: /history <player>
+  punish:
+    description: Unified moderation command (ban/tempban/tempmute/unban/unmute/warn/unwarn)
+    usage: /punish <player> <ban|tempban|tempmute|unban|unmute|warn|unwarn> [duration] <reason>
   vanish:
     description: Toggle vanish mode
     usage: /vanish [player]
@@ -1068,6 +1071,30 @@ permissions:
     default: op
   joshymc.punishment.notify:
     description: Receive punishment notifications
+    default: op
+  joshymc.punish:
+    description: Base access to the unified /punish command (each joshymc.punish.<type> permission is still checked independently)
+    default: true
+  joshymc.punish.ban:
+    description: Permanently ban players via /punish
+    default: op
+  joshymc.punish.tempban:
+    description: Temporarily ban players via /punish
+    default: op
+  joshymc.punish.tempmute:
+    description: Temporarily mute players via /punish
+    default: op
+  joshymc.punish.unban:
+    description: Unban players via /punish
+    default: op
+  joshymc.punish.unmute:
+    description: Unmute players via /punish
+    default: op
+  joshymc.punish.warn:
+    description: Warn players via /punish
+    default: op
+  joshymc.punish.unwarn:
+    description: Remove warnings from players via /punish
     default: op
   joshymc.modmode:
     description: Use Moderator Mode (Moderator and higher)
