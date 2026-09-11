@@ -504,7 +504,7 @@ commands:
     usage: /subclaim <wand|create|add|remove|delete|list|show>
   rank:
     description: Manage player ranks
-    usage: /rank <add|remove|list|check>
+    usage: /rank <add|remove|list|check|promote|demote>
     aliases: [ranks]
   hopper:
     description: View and manage upgraded hoppers
@@ -1152,6 +1152,9 @@ permissions:
     default: op
   joshymc.rank.remove:
     description: Remove a rank from a player
+    default: op
+  joshymc.rank.staff:
+    description: Promote/demote players on the Trainee-Lead Mod staff ladder via /rank promote and /rank demote
     default: op
   joshymc.sellwand.give:
     description: Give sell wands to players
