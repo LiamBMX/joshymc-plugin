@@ -19,6 +19,7 @@ import com.liam.joshymc.command.HistoryCommand
 import com.liam.joshymc.command.KickCommand
 import com.liam.joshymc.command.MuteCommand
 import com.liam.joshymc.command.NickCommand
+import com.liam.joshymc.command.PunishCommand
 import com.liam.joshymc.command.ReportCommand
 import com.liam.joshymc.command.RulesCommand
 import com.liam.joshymc.command.TutorialCommand
@@ -523,6 +524,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("unwarn")?.let { val c = UnwarnCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("pkick")?.let { val c = KickCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("history")?.let { val c = HistoryCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("punish")?.let { val c = PunishCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Vanish ──────────────────────────────────────
         val vanishCmd = VanishCommand(plugin)
