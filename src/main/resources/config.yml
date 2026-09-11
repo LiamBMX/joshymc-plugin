@@ -29,6 +29,7 @@ features:
   npcs: false
   chat-games: true
   lottery: true
+  coinflip: true
   mob-stacking: false
   kill-streaks: true
   login-streaks: true
@@ -53,6 +54,19 @@ lottery:
   draw-interval-minutes: 60
   # Maximum tickets one player can hold in a single round (0 = unlimited)
   max-tickets-per-player: 0
+
+# Coinflip — 1v1 Player-vs-Player betting. No house cut: the winner takes the full pot.
+coinflip:
+  # Minimum bet amount
+  min-bet: 1.0
+  # Maximum bet amount (-1 = unlimited)
+  max-bet: -1.0
+  # Max WAITING (unmatched) Coinflips a single player can have listed at once
+  max-waiting-per-player: 1
+  # How long the flip animation runs for, in ticks (20 ticks = 1 second)
+  animation-duration-ticks: 80
+  # How long the result stays on screen before the GUI closes, in ticks
+  result-display-ticks: 50
 
 # Chat formatting
 chat:

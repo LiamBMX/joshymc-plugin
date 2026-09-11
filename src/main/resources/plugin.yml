@@ -131,6 +131,10 @@ commands:
     description: Open the auction house
     usage: /ah [sell <price>] [bid <starting price>] [notify <on|off>]
     aliases: [auction, auctionhouse]
+  coinflip:
+    description: Open the Player-vs-Player Coinflip GUI, or create/manage a Coinflip
+    usage: /coinflip [create <amount>] [admin cancel <id>]
+    aliases: [cf]
   orders:
     description: Open the Buy Orders marketplace
     usage: /orders [admin <view|info|cancel|remove> ...]
@@ -714,6 +718,15 @@ permissions:
   joshymc.ah.sell:
     description: List items on the auction house
     default: true
+  joshymc.coinflip:
+    description: Access the Coinflip GUI and browse active Coinflips
+    default: true
+  joshymc.coinflip.create:
+    description: Create a Player-vs-Player Coinflip
+    default: true
+  joshymc.coinflip.admin:
+    description: Cancel any waiting Coinflip and refund the creator
+    default: op
   joshymc.orders:
     description: Browse the Buy Orders marketplace
     default: true
