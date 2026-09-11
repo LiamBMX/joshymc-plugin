@@ -379,13 +379,9 @@ commands:
     description: Manage spawn decorations
     usage: /spawndecor <hologram|particle|beacon> <add|remove|list>
   worldflag:
-    description: Manage world protection flags
-    usage: /worldflag <flag|list|reset> [value] [world]
+    description: Manage world protection flags, regions and nested subflags
+    usage: /worldflag <flag|list|reset|region|subflag> [args]
     aliases: [wf, flags]
-  worldflags:
-    description: Manage region-based WorldFlags (PvP zones, player-placed block protection)
-    usage: /worldflags <wand|create|edit|delete|redefine|priority|info|list|reload|clearplaced>
-    aliases: [wfr, regionflags]
   admin:
     description: Open the admin panel
     usage: /admin [player|logs|freeze|snapshot|rollback|banlist|mutelist]
@@ -986,10 +982,10 @@ permissions:
     description: Bypass world flag restrictions
     default: op
   joshymc.worldflags.admin:
-    description: Manage region-based WorldFlags (regions, wand, editor)
+    description: Manage WorldFlag regions and subflags (wand, editor, priority)
     default: op
   joshymc.worldflags.bypass:
-    description: Bypass region-based WorldFlags restrictions
+    description: Bypass region/subflag WorldFlags restrictions
     default: op
   joshymc.end.admin:
     description: Open or close the End dimension via /dimension end
