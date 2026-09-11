@@ -379,8 +379,8 @@ commands:
     description: Manage spawn decorations
     usage: /spawndecor <hologram|particle|beacon> <add|remove|list>
   worldflag:
-    description: Manage world protection flags
-    usage: /worldflag <flag|list|reset> [value] [world]
+    description: Manage world protection flags and nested Subflags
+    usage: /worldflag <flag|list|reset|subflag> [value] [world]
     aliases: [wf, flags]
   worldflags:
     description: Manage region-based WorldFlags (PvP zones, player-placed block protection)
