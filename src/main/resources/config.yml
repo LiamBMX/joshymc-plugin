@@ -659,13 +659,25 @@ ranks:
       tag: "&c&lAdmin"
       weight: 90
       category: "Staff Ranks"
+    lead_mod:
+      tag: "&1&lLead Mod"
+      weight: 85
+      category: "Staff Ranks"
     mod:
       tag: "&9&lMod"
       weight: 80
       category: "Staff Ranks"
+    jr_mod:
+      tag: "&3&lJr Mod"
+      weight: 75
+      category: "Staff Ranks"
     helper:
       tag: "&a&lHelper"
       weight: 70
+      category: "Staff Ranks"
+    trainee:
+      tag: "&2&lTrainee"
+      weight: 60
       category: "Staff Ranks"
     vip:
       tag: "&6&lVIP"

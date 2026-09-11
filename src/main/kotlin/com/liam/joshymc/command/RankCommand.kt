@@ -12,16 +12,27 @@ import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
+import java.util.UUID
 
 /**
  * `/rank` manages exact rank membership: `add`/`remove` only ever touch the
  * one rank named on the command line, so a player can hold any combination
  * of ranks (e.g. a purchasable rank + a staff rank) without one clobbering
- * the other. There is intentionally no `set`/`promote` — those implied a
+ * the other. There is intentionally no generic `set` — that implied a
  * single "current rank" model that doesn't hold once multiple rank
  * categories can coexist.
+ *
+ * `promote`/`demote` are a special case layered on top: they only ever
+ * touch the Trainee → Lead Mod staff ladder ([STAFF_LADDER]), stepping the
+ * player one rung at a time while leaving every other rank (paid ranks,
+ * Media, unrelated groups) completely untouched.
  */
 class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
+
+    companion object {
+        /** Managed staff ladder, lowest to highest. Only these ranks are touched by promote/demote. */
+        private val STAFF_LADDER = listOf("trainee", "helper", "jr_mod", "mod", "lead_mod")
+    }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.rank")) {
@@ -34,10 +45,153 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "list" -> handleList(sender)
             "add" -> handleAdd(sender, args)
             "remove" -> handleRemove(sender, args)
+            "promote" -> handlePromote(sender, args)
+            "demote" -> handleDemote(sender, args)
             else -> showHelp(sender)
         }
 
         return true
+    }
+
+    /**
+     * Current managed staff rank held by [uuid], normalized to the single
+     * highest rung on [STAFF_LADDER] if the player somehow holds more than
+     * one (e.g. leftover from manual `/rank add`).
+     */
+    private fun currentStaffRank(uuid: UUID): String? {
+        val held = plugin.rankManager.getPlayerRankIds(uuid)
+        return STAFF_LADDER.lastOrNull { it in held }
+    }
+
+    /** Remove every managed staff rank [uuid] currently holds, then add [newRankId] if not null. */
+    private fun applyStaffRank(uuid: UUID, newRankId: String?) {
+        val held = plugin.rankManager.getPlayerRankIds(uuid)
+        for (rankId in STAFF_LADDER) {
+            if (rankId in held) plugin.rankManager.removeRank(uuid, rankId)
+        }
+        if (newRankId != null) plugin.rankManager.addRank(uuid, newRankId)
+    }
+
+    private fun handlePromote(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.rank.staff")) {
+            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+
+        val playerName = args.getOrNull(1)
+        if (playerName == null) {
+            sender.sendMessage(Component.text("Usage: /rank promote <player>", NamedTextColor.RED))
+            return
+        }
+
+        val target = resolveTarget(playerName)
+        val displayName = target.name ?: playerName
+        val current = currentStaffRank(target.uniqueId)
+        val currentIndex = current?.let { STAFF_LADDER.indexOf(it) } ?: -1
+
+        if (currentIndex == STAFF_LADDER.lastIndex) {
+            reply(
+                sender,
+                Component.text("$displayName is already the highest staff rank managed by this command.", NamedTextColor.RED)
+            )
+            return
+        }
+
+        val newRankId = STAFF_LADDER[currentIndex + 1]
+        val newRank = plugin.rankManager.getRank(newRankId)
+        if (newRank == null) {
+            sender.sendMessage(Component.text("Staff rank '$newRankId' is not configured. Check config.yml ranks.list.", NamedTextColor.RED))
+            return
+        }
+
+        applyStaffRank(target.uniqueId, newRankId)
+
+        if (sender is Player) {
+            plugin.adminManager.logAction(sender, "RANK_PROMOTE", target, "${current ?: "none"} -> $newRankId")
+        }
+
+        val tagDisplay = plugin.commsManager.parseLegacy(newRank.displayTag)
+        reply(
+            sender,
+            Component.text("$displayName has been promoted to ", NamedTextColor.GREEN)
+                .append(tagDisplay)
+                .append(Component.text(".", NamedTextColor.GREEN))
+        )
+
+        val onlineTarget = Bukkit.getPlayer(playerName)
+        if (onlineTarget != null && onlineTarget != sender) {
+            plugin.commsManager.send(
+                onlineTarget,
+                Component.text("You have been promoted to ", NamedTextColor.GREEN)
+                    .append(tagDisplay)
+                    .append(Component.text(".", NamedTextColor.GREEN))
+            )
+        }
+    }
+
+    private fun handleDemote(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.rank.staff")) {
+            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            return
+        }
+
+        val playerName = args.getOrNull(1)
+        val reason = args.drop(2).joinToString(" ").trim()
+        if (playerName == null || reason.isEmpty()) {
+            sender.sendMessage(Component.text("Usage: /rank demote <player> <reason>", NamedTextColor.RED))
+            return
+        }
+
+        val target = resolveTarget(playerName)
+        val displayName = target.name ?: playerName
+        val current = currentStaffRank(target.uniqueId)
+
+        if (current == null) {
+            reply(
+                sender,
+                Component.text("$displayName does not currently hold a staff rank managed by this command.", NamedTextColor.RED)
+            )
+            return
+        }
+
+        val currentIndex = STAFF_LADDER.indexOf(current)
+        val newRankId = if (currentIndex == 0) null else STAFF_LADDER[currentIndex - 1]
+
+        applyStaffRank(target.uniqueId, newRankId)
+
+        if (sender is Player) {
+            plugin.adminManager.logAction(sender, "RANK_DEMOTE", target, "$current -> ${newRankId ?: "removed"} | Reason: $reason")
+        }
+
+        val onlineTarget = Bukkit.getPlayer(playerName)
+
+        if (newRankId == null) {
+            reply(sender, Component.text("$displayName has been removed from staff. Reason: $reason", NamedTextColor.YELLOW))
+            if (onlineTarget != null && onlineTarget != sender) {
+                plugin.commsManager.send(
+                    onlineTarget,
+                    Component.text("You have been removed from staff. Reason: $reason", NamedTextColor.YELLOW)
+                )
+            }
+            return
+        }
+
+        val newRank = plugin.rankManager.getRank(newRankId)
+        val tagDisplay = newRank?.let { plugin.commsManager.parseLegacy(it.displayTag) } ?: Component.text(newRankId)
+        reply(
+            sender,
+            Component.text("$displayName has been demoted to ", NamedTextColor.YELLOW)
+                .append(tagDisplay)
+                .append(Component.text(". Reason: $reason", NamedTextColor.YELLOW))
+        )
+        if (onlineTarget != null && onlineTarget != sender) {
+            plugin.commsManager.send(
+                onlineTarget,
+                Component.text("You have been demoted to ", NamedTextColor.YELLOW)
+                    .append(tagDisplay)
+                    .append(Component.text(". Reason: $reason", NamedTextColor.YELLOW))
+            )
+        }
     }
 
     private fun handleAdd(sender: CommandSender, args: Array<out String>) {
@@ -240,15 +394,21 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             .append(Component.newline())
             .append(Component.text("/rank check [player]", NamedTextColor.YELLOW))
             .append(Component.text(" — Check a player's ranks", NamedTextColor.GRAY))
+            .append(Component.newline())
+            .append(Component.text("/rank promote <player>", NamedTextColor.YELLOW))
+            .append(Component.text(" — Advance a player one rung on the staff ladder", NamedTextColor.GRAY))
+            .append(Component.newline())
+            .append(Component.text("/rank demote <player> <reason>", NamedTextColor.YELLOW))
+            .append(Component.text(" — Step a player down the staff ladder", NamedTextColor.GRAY))
 
         sender.sendMessage(msg.build())
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
-            1 -> listOf("check", "list", "add", "remove").filter { it.startsWith(args[0].lowercase()) }
+            1 -> listOf("check", "list", "add", "remove", "promote", "demote").filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
-                "check", "add", "remove" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                "check", "add", "remove", "promote", "demote" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
