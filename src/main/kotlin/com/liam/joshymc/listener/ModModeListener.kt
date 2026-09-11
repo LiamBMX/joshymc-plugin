@@ -14,6 +14,7 @@ import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.inventory.ClickType
 import org.bukkit.event.inventory.InventoryAction
 import org.bukkit.event.inventory.InventoryClickEvent
+import org.bukkit.event.inventory.InventoryCreativeEvent
 import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerInteractAtEntityEvent
@@ -145,6 +146,22 @@ class ModModeListener(private val plugin: Joshymc) : Listener {
      * tools into armor/offhand — while still allowing edit-permission staff to click
      * around freely inside a *target's* inventory (the top inventory in that case).
      */
+    /**
+     * Moderator Mode runs staff in Creative purely for flight/noclip convenience — the
+     * Creative menu must never hand out items. [InventoryCreativeEvent] is Bukkit's dedicated
+     * event for every Creative-only inventory action (taking an item from the creative tabs,
+     * middle-click pick-block/clone of world blocks or entities, and dropping a creative-menu
+     * item to trash it), and it has its own HandlerList — a generic [InventoryClickEvent]
+     * listener does NOT receive it, so it must be handled separately.
+     */
+    @EventHandler(priority = EventPriority.LOWEST)
+    fun onCreativeInventory(event: InventoryCreativeEvent) {
+        val player = event.whoClicked as? Player ?: return
+        if (plugin.modModeManager.isModMode(player)) {
+            event.isCancelled = true
+        }
+    }
+
     @EventHandler(priority = EventPriority.LOWEST)
     fun onInventoryClick(event: InventoryClickEvent) {
         val player = event.whoClicked as? Player ?: return

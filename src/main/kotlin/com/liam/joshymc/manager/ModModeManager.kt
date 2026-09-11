@@ -126,6 +126,11 @@ class ModModeManager(private val plugin: Joshymc) {
 
         giveHotbar(player)
 
+        // Creative Mode gives staff flight/noclip-style movement for moderation — the
+        // Creative menu itself must not become a source of free items, which is enforced
+        // in ModModeListener by cancelling InventoryCreativeEvent while Moderator Mode is active.
+        player.gameMode = GameMode.CREATIVE
+
         active.add(player.uniqueId)
 
         if (plugin.config.getBoolean("modmode.auto-vanish", true) && !plugin.vanishCommand.isVanished(player)) {
