@@ -188,7 +188,6 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
     private val pos2 = ConcurrentHashMap<UUID, Location>()
 
     companion object {
-        const val ADMIN_PERMISSION = "joshymc.worldflags.admin"
         const val BYPASS_PERMISSION = "joshymc.worldflags.bypass"
     }
 
@@ -311,7 +310,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    /** Reload regions + placed-block tracking from the database (`/worldflags reload`). */
+    /** Reload regions + placed-block tracking from the database. */
     fun reloadRegions() {
         loadRegions()
         loadPlacedBlocks()
@@ -667,7 +666,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
                 .decoration(TextDecoration.ITALIC, false),
             Component.text("Right-click a block to set Position 2.", NamedTextColor.GRAY)
                 .decoration(TextDecoration.ITALIC, false),
-            Component.text("Then: /worldflags create <name>", NamedTextColor.GRAY)
+            Component.text("Then: /worldflag subflag create <parent> <name>", NamedTextColor.GRAY)
                 .decoration(TextDecoration.ITALIC, false),
         ))
         meta.persistentDataContainer.set(wandKey, PersistentDataType.INTEGER, 1)
@@ -711,7 +710,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
             pos2[player.uniqueId] = block.location
             plugin.commsManager.send(
                 player,
-                Component.text("Position 2 set at (${block.x}, ${block.y}, ${block.z}). Use /worldflags create <name>.", NamedTextColor.GREEN)
+                Component.text("Position 2 set at (${block.x}, ${block.y}, ${block.z}). Use /worldflag subflag create <parent> <name>.", NamedTextColor.GREEN)
             )
         }
         player.playSound(player.location, Sound.UI_BUTTON_CLICK, 0.7f, 1.0f)

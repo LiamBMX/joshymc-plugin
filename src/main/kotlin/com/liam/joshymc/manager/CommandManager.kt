@@ -126,7 +126,6 @@ import com.liam.joshymc.command.PortalCommand
 import com.liam.joshymc.command.VoteCommand
 import com.liam.joshymc.command.WorldCommand
 import com.liam.joshymc.command.WorldFlagCommand
-import com.liam.joshymc.command.WorldFlagsCommand
 import com.liam.joshymc.command.RestartCommand
 import com.liam.joshymc.command.InvestCommand
 import com.liam.joshymc.command.LotteryCommand
@@ -631,7 +630,6 @@ class CommandManager(private val plugin: Joshymc) {
 
         // ── World Flags ──────────────────────────────────
         plugin.getCommand("worldflag")?.let { val c = WorldFlagCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("worldflags")?.let { val c = WorldFlagsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── World Management ────────────────────────────
         plugin.getCommand("world")?.let {
