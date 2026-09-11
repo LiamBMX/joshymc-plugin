@@ -141,11 +141,55 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     }
 
     private fun handleTag(sender: CommandSender, args: Array<out String>) {
-        if (args.getOrNull(1)?.lowercase() != "delete") {
-            sender.sendMessage(Component.text("Usage: /voucher tag delete <name>", NamedTextColor.RED))
+        when (args.getOrNull(1)?.lowercase()) {
+            "delete" -> handleTagDelete(sender, args)
+            "debug" -> handleTagDebug(sender, args)
+            else -> sender.sendMessage(Component.text("Usage: /voucher tag <delete|debug> <name>", NamedTextColor.RED))
+        }
+    }
+
+    /**
+     * Diagnostic for issue #624 — prints every value [ChatTagManager.canUse] consults for
+     * a Special Chat Tag so a live "owned but can't equip" report can be root-caused from
+     * a single command instead of re-reading source. Optional [player] arg lets staff check
+     * someone else (or an offline UUID isn't needed here since the target must be online to
+     * read live permission state).
+     */
+    private fun handleTagDebug(sender: CommandSender, args: Array<out String>) {
+        val id = args.getOrNull(2)?.lowercase()
+        if (id == null) {
+            sender.sendMessage(Component.text("Usage: /voucher tag debug <name> [player]", NamedTextColor.RED))
             return
         }
-        handleTagDelete(sender, args)
+
+        val target: Player? = args.getOrNull(3)?.let { Bukkit.getPlayerExact(it) } ?: (sender as? Player)
+        if (target == null) {
+            sender.sendMessage(Component.text("Usage: /voucher tag debug <name> <player> (console must specify a player).", NamedTextColor.RED))
+            return
+        }
+
+        val tag = plugin.chatTagManager.getTag(id)
+        if (tag == null) {
+            sender.sendMessage(Component.text("No Chat Tag with id '$id' is currently loaded.", NamedTextColor.RED))
+            return
+        }
+
+        val hasPerm = tag.permission?.let { target.hasPermission(it) } ?: false
+        val hasUnlocked = plugin.chatTagManager.hasUnlocked(target.uniqueId, tag.id)
+        val canUse = plugin.chatTagManager.canUse(target, tag)
+
+        sender.sendMessage(Component.text("── Chat Tag debug: $id ──", NamedTextColor.LIGHT_PURPLE))
+        sender.sendMessage(Component.text("  player: ${target.name} (${target.uniqueId})", NamedTextColor.GRAY))
+        sender.sendMessage(Component.text("  tag.id: ${tag.id}", NamedTextColor.GRAY))
+        sender.sendMessage(Component.text("  tag.category: ${tag.category} (isVoucherTag=${plugin.chatTagManager.isVoucherTag(tag)})", NamedTextColor.GRAY))
+        sender.sendMessage(Component.text("  tag.permission: ${tag.permission ?: "none"}", NamedTextColor.GRAY))
+        sender.sendMessage(Component.text("  hasPermission(tag.permission): $hasPerm", NamedTextColor.GRAY))
+        sender.sendMessage(Component.text("  hasUnlocked (chat_tag_unlocks row): $hasUnlocked", NamedTextColor.GRAY))
+        sender.sendMessage(
+            Component.text("  canUse() result: ", NamedTextColor.GRAY)
+                .append(Component.text(canUse, if (canUse) NamedTextColor.GREEN else NamedTextColor.RED))
+        )
+        plugin.logger.info("[ChatTags] /voucher tag debug $id for ${target.name}: tag.permission=${tag.permission}, hasPermission=$hasPerm, hasUnlocked=$hasUnlocked, canUse=$canUse")
     }
 
     private fun handleTagDelete(sender: CommandSender, args: Array<out String>) {
@@ -448,6 +492,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     private fun sendUsage(sender: CommandSender) {
         sender.sendMessage(Component.text("Usage: /voucher <create|delete|tag|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload|give> [args...]", NamedTextColor.RED))
+        sender.sendMessage(Component.text("  /voucher tag <delete|debug> <name> [player]", NamedTextColor.RED))
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
@@ -466,7 +511,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                     plugin.voucherManager.getAllVouchers().map { it.id }.filter { it.startsWith(args[1].lowercase()) }
                 "list" -> plugin.creditShopManager.getCategories().map { it.id }.filter { it.startsWith(args[1].lowercase()) }
                 "give" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
-                "tag" -> listOf("delete").filter { it.startsWith(args[1].lowercase()) }
+                "tag" -> listOf("delete", "debug").filter { it.startsWith(args[1].lowercase()) }
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
@@ -474,13 +519,19 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 "give" -> (plugin.physicalVoucherManager.getEnabledVoucherIds() +
                         plugin.chatTagManager.getVoucherTagIds().map { "$CHAT_TAG_VOUCHER_PREFIX$it" })
                     .filter { it.startsWith(args[2].lowercase()) }
-                "tag" -> if (args[1].lowercase() == "delete")
-                    plugin.chatTagManager.getVoucherTagIds().filter { it.startsWith(args[2].lowercase()) }
-                    else emptyList()
+                "tag" -> when (args[1].lowercase()) {
+                    "delete" -> plugin.chatTagManager.getVoucherTagIds().filter { it.startsWith(args[2].lowercase()) }
+                    "debug" -> plugin.chatTagManager.getAllTags().map { it.id }.filter { it.startsWith(args[2].lowercase()) }
+                    else -> emptyList()
+                }
                 else -> emptyList()
             }
             4 -> when (args[0].lowercase()) {
-                "tag" -> if (args[1].lowercase() == "delete") listOf("confirm").filter { it.startsWith(args[3].lowercase()) } else emptyList()
+                "tag" -> when (args[1].lowercase()) {
+                    "delete" -> listOf("confirm").filter { it.startsWith(args[3].lowercase()) }
+                    "debug" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[3], ignoreCase = true) }
+                    else -> emptyList()
+                }
                 else -> emptyList()
             }
             else -> emptyList()
