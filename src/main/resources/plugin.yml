@@ -382,10 +382,6 @@ commands:
     description: Manage world protection flags and nested Subflags
     usage: /worldflag <flag|list|reset|subflag> [value] [world]
     aliases: [wf, flags]
-  worldflags:
-    description: Manage region-based WorldFlags (PvP zones, player-placed block protection)
-    usage: /worldflags <wand|create|edit|delete|redefine|priority|info|list|reload|clearplaced>
-    aliases: [wfr, regionflags]
   admin:
     description: Open the admin panel
     usage: /admin [player|logs|freeze|snapshot|rollback|banlist|mutelist]
@@ -984,9 +980,6 @@ permissions:
     default: op
   joshymc.worldflag.bypass:
     description: Bypass world flag restrictions
-    default: op
-  joshymc.worldflags.admin:
-    description: Manage region-based WorldFlags (regions, wand, editor)
     default: op
   joshymc.worldflags.bypass:
     description: Bypass region-based WorldFlags restrictions
