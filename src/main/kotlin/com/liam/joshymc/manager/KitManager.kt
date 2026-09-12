@@ -55,16 +55,17 @@ class KitManager(private val plugin: Joshymc) {
             const val CONTENT_COLS = 7
             const val CAPACITY = CONTENT_ROWS * CONTENT_COLS
 
-            /** Column indices (0..6) that symmetrically center [rowLen] items within a 7-wide row. */
-            private fun columnIndices(rowLen: Int): List<Int> = when (rowLen) {
-                0 -> emptyList()
-                1 -> listOf(3)
-                2 -> listOf(2, 4)
-                3 -> listOf(2, 3, 4)
-                4 -> listOf(1, 2, 4, 5)
-                5 -> listOf(1, 2, 3, 4, 5)
-                6 -> listOf(0, 1, 2, 4, 5, 6)
-                else -> (0 until CONTENT_COLS).toList()
+            /**
+             * Column indices (0..6) that evenly spread [rowLen] items across a 7-wide row,
+             * bucketing the row into [rowLen] equal-width slices and taking each slice's
+             * center. This keeps a gap between neighboring icons whenever the row isn't
+             * completely full, instead of clustering items into tight adjacent pairs.
+             */
+            private fun columnIndices(rowLen: Int): List<Int> {
+                if (rowLen <= 0) return emptyList()
+                if (rowLen >= CONTENT_COLS) return (0 until CONTENT_COLS).toList()
+                val binWidth = CONTENT_COLS.toDouble() / rowLen
+                return (0 until rowLen).map { i -> (i * binWidth + binWidth / 2).toInt() }
             }
 
             /** Per-row item counts (top to bottom), balanced across as few rows as needed. */
