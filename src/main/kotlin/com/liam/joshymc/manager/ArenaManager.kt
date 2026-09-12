@@ -48,6 +48,10 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
 
     private val arenas = mutableListOf<Arena>()
     private val arenaSelections = mutableMapOf<UUID, MutableList<Pair<Int, Int>>>()
+    /** World each player's in-progress wand selection was started in — points
+     *  added in a different world would silently corrupt the saved arena's
+     *  bounds, so new points are rejected unless the world matches. */
+    private val arenaSelectionWorlds = mutableMapOf<UUID, String>()
     val playersInArena = mutableMapOf<UUID, Int>()
     private val hadFlightInArena = java.util.concurrent.ConcurrentHashMap.newKeySet<UUID>()
 
@@ -321,6 +325,8 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                     Title.Times.times(Duration.ofMillis(200), Duration.ofSeconds(2), Duration.ofMillis(500))
                 ))
                 player.playSound(player.location, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.3f, 1.2f)
+                comms.send(player, Component.text("Entered arena: ", NamedTextColor.RED)
+                    .append(Component.text(arena.name, NamedTextColor.GOLD)))
             } else if (arena == null && wasIn != null) {
                 // Leaving arena — remove barrier if they had one
                 val oldArena = arenas.find { it.id == wasIn }
@@ -333,9 +339,22 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                     Title.Times.times(Duration.ofMillis(200), Duration.ofSeconds(1), Duration.ofMillis(500))
                 ))
                 player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_CHIME, 0.5f, 1.5f)
+                if (oldArena != null) {
+                    comms.send(player, Component.text("Left arena: ", NamedTextColor.GREEN)
+                        .append(Component.text(oldArena.name, NamedTextColor.GOLD)))
+                }
             } else if (arena != null && wasIn != null && arena.id != wasIn) {
-                // Moved to a different arena
+                // Moved directly from one arena into another — announce both
+                // the leave and the enter so messaging stays consistent with
+                // the null <-> arena transitions above.
+                val oldArena = arenas.find { it.id == wasIn }
                 playersInArena[player.uniqueId] = arena.id
+                if (oldArena != null) {
+                    comms.send(player, Component.text("Left arena: ", NamedTextColor.GREEN)
+                        .append(Component.text(oldArena.name, NamedTextColor.GOLD)))
+                }
+                comms.send(player, Component.text("Entered arena: ", NamedTextColor.RED)
+                    .append(Component.text(arena.name, NamedTextColor.GOLD)))
             }
         }
 
@@ -426,6 +445,13 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
         val block = event.clickedBlock ?: return
         val x = block.x
         val z = block.z
+
+        val selectionWorld = arenaSelectionWorlds[player.uniqueId]
+        if (selectionWorld != null && selectionWorld != block.world.name) {
+            comms.send(player, Component.text("Your selection points must all be in the same world. Use /arena clear to start over.", NamedTextColor.RED))
+            return
+        }
+        arenaSelectionWorlds[player.uniqueId] = block.world.name
 
         val selection = arenaSelections.getOrPut(player.uniqueId) { mutableListOf() }
         selection.add(x to z)
@@ -755,6 +781,8 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
         barrierPlayers.remove(uuid)
         lastPlayerHitMs.remove(uuid)
         hadFlightInArena.remove(uuid)
+        arenaSelections.remove(uuid)
+        arenaSelectionWorlds.remove(uuid)
     }
 
     private fun getDamager(event: EntityDamageByEntityEvent): Player? {
@@ -903,8 +931,13 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 return
             }
 
-            createArena(name, player.world.name, minY, selection.toList())
+            // Use the world the points were actually collected in, not
+            // wherever the player happens to be standing now — they may
+            // have walked/teleported away since finishing their selection.
+            val world = arenaSelectionWorlds[player.uniqueId] ?: player.world.name
+            createArena(name, world, minY, selection.toList())
             arenaSelections.remove(player.uniqueId)
+            arenaSelectionWorlds.remove(player.uniqueId)
 
             comms.send(player, Component.text("Arena ", NamedTextColor.GREEN)
                 .append(Component.text(name, NamedTextColor.GOLD))
@@ -999,11 +1032,13 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 return
             }
             val removed = selection.removeAt(selection.size - 1)
+            if (selection.isEmpty()) arenaSelectionWorlds.remove(player.uniqueId)
             comms.send(player, Component.text("Removed point (${removed.first}, ${removed.second}). Remaining: ${selection.size}", NamedTextColor.YELLOW))
         }
 
         private fun handleClear(player: Player) {
             arenaSelections.remove(player.uniqueId)
+            arenaSelectionWorlds.remove(player.uniqueId)
             comms.send(player, Component.text("Selection cleared.", NamedTextColor.YELLOW))
         }
 
