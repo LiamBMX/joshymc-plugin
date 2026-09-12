@@ -103,11 +103,6 @@ Allows teleporting to spawn with `/spawn`.
 Default: true
 NOTE: not currently enforced in code — see AUDIT NOTES.
 
-joshymc.spawn.admin
-Allows managing spawn world settings (drops/containers) via `/spawn drops`
-and `/spawn containers`.
-Default: false
-
 joshymc.setspawn
 Allows setting the server spawn with `/setspawn`.
 Default: false
@@ -691,14 +686,6 @@ joshymc.spawndecor
 Allows managing spawn decorations with `/spawndecor`.
 Default: OP
 
-joshymc.worldflag
-Allows managing per-world protection flags with `/worldflag`.
-Default: OP
-
-joshymc.worldflag.bypass
-Bypasses world flag restrictions.
-Default: OP
-
 joshymc.end.admin
 Allows opening or closing the End dimension with `/dimension end <open|close>`.
 Default: OP
@@ -1087,9 +1074,8 @@ here rather than guessed at):
 
 - The following permissions are declared in plugin.yml but are not checked
   anywhere in the current code, so granting or denying them currently has
-  no effect: joshymc.spawn (the base `/spawn` teleport itself is open to
-  everyone; only the `drops`/`containers` admin subcommands are gated, by
-  joshymc.spawn.admin), joshymc.vote, joshymc.rank.list, joshymc.market.
+  no effect: joshymc.spawn (the `/spawn` teleport itself is open to
+  everyone), joshymc.vote, joshymc.rank.list, joshymc.market.
   Left in plugin.yml rather than removed, in case they're intentionally
   reserved for a future enforcement pass — verify with Joshy before
   deleting, since removing a declared node can affect existing LuckPerms

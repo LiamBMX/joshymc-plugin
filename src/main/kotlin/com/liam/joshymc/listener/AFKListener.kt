@@ -84,7 +84,7 @@ class AFKListener(private val plugin: Joshymc) : Listener {
 
     /**
      * AFK damage immunity runs at HIGHEST + ignoreCancelled=false so it has
-     * the final say after ArenaManager / WorldFlag etc. have finished
+     * the final say after ArenaManager etc. have finished
      * deciding. Without this, an attacker could shove an AFK player into
      * an arena polygon and the arena handler would un-cancel the hit.
      */
