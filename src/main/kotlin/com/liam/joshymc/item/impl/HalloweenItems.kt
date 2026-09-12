@@ -8,6 +8,7 @@ import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
+import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.inventory.meta.ItemMeta
 
 // ── October Halloween Collection ────────────────────────────────────────────
@@ -76,6 +77,10 @@ class JackOLanternMask : CustomItem() {
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
         meta.setItemModel(NamespacedKey(Joshymc.instance, "jack_o_lantern_mask"))
+        val equippable = meta.equippable
+        equippable.slot = EquipmentSlot.HEAD
+        equippable.model = NamespacedKey(Joshymc.instance, "jack_o_lantern_mask")
+        meta.setEquippable(equippable)
     }
 }
 
