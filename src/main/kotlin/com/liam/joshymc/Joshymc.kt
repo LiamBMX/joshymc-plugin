@@ -48,6 +48,7 @@ import com.liam.joshymc.manager.HopperPlusManager
 import com.liam.joshymc.manager.SignShopManager
 import com.liam.joshymc.manager.SpawnerManager
 import com.liam.joshymc.manager.StorageManager
+import com.liam.joshymc.manager.EnderChestManager
 import com.liam.joshymc.manager.TeamManager
 import com.liam.joshymc.manager.TimezoneManager
 import com.liam.joshymc.manager.TradeManager
@@ -139,6 +140,8 @@ class Joshymc : JavaPlugin() {
     lateinit var tradeManager: TradeManager
         private set
     lateinit var storageManager: StorageManager
+        private set
+    lateinit var enderChestManager: EnderChestManager
         private set
     lateinit var hologramManager: HologramManager
         private set
@@ -312,6 +315,7 @@ class Joshymc : JavaPlugin() {
         warpManager = WarpManager(this)
         kitManager = KitManager(this)
         storageManager = StorageManager(this)
+        enderChestManager = EnderChestManager(this)
         tradeManager = TradeManager(this)
         hologramManager = HologramManager(this)
         leaderboardManager = com.liam.joshymc.manager.LeaderboardManager(this)
@@ -385,6 +389,7 @@ class Joshymc : JavaPlugin() {
         warpManager.start()
         kitManager.start()
         storageManager.start()
+        enderChestManager.start()
         hologramManager.start()
         leaderboardManager.start()
         if (isFeatureEnabled("npcs")) npcManager.start()
@@ -474,6 +479,7 @@ class Joshymc : JavaPlugin() {
 
     override fun onDisable() {
         storageManager.saveOpenVaults()
+        enderChestManager.saveOpenSessions()
         if (::sellCommand.isInitialized) sellCommand.resolveAllOpenSessions()
         hologramManager.stop()
         npcManager.stop()
@@ -533,6 +539,7 @@ class Joshymc : JavaPlugin() {
 
         // 3. Shutdown services
         safe("storageManager.saveOpenVaults") { storageManager.saveOpenVaults() }
+        safe("enderChestManager.saveOpenSessions") { enderChestManager.saveOpenSessions() }
         safe("sellCommand.resolveAllOpenSessions") { if (::sellCommand.isInitialized) sellCommand.resolveAllOpenSessions() }
         safe("hologramManager.stop") { hologramManager.stop() }
         safe("npcManager.stop") { npcManager.stop() }
@@ -571,6 +578,7 @@ class Joshymc : JavaPlugin() {
         safe("physicalVoucherManager.reload") { physicalVoucherManager.reload() }
         safe("kitManager.start") { kitManager.start() }
         safe("storageManager.start") { storageManager.start() }
+        safe("enderChestManager.start") { enderChestManager.start() }
         safe("hologramManager.start") { hologramManager.start() }
         if (isFeatureEnabled("npcs")) safe("npcManager.start") { npcManager.start() }
         if (isFeatureEnabled("quests")) safe("questCycleManager.start") { questCycleManager.start() }
