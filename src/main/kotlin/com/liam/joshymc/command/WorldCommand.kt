@@ -66,7 +66,17 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
          */
         fun ensurePvpWorld(plugin: Joshymc) {
             val name = "pvp"
-            if (Bukkit.getWorld(name) != null) return
+
+            val alreadyLoaded = Bukkit.getWorld(name)
+            if (alreadyLoaded != null) {
+                // Engine-level PvP (World#setPVP, backed by bukkit.yml) is a
+                // separate switch from our own WorldFlag/Claim systems — if it's
+                // off, melee damage between players never even reaches our
+                // listeners. This world exists specifically for PvP, so force it
+                // on every enable; finer-grained allow/deny is JoshyMC's job.
+                alreadyLoaded.setPVP(true)
+                return
+            }
 
             val worldFolder = File(Bukkit.getWorldContainer(), name)
             val exists = worldFolder.exists() && File(worldFolder, "level.dat").exists()
@@ -88,6 +98,7 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                         "Arena features that depend on it will be unavailable until this is resolved."
                 )
             } else {
+                world.setPVP(true)
                 plugin.logger.info("[PvP World] 'pvp' world ${if (exists) "loaded" else "created"} successfully.")
             }
         }
