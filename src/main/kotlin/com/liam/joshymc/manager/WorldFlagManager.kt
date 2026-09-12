@@ -14,8 +14,10 @@ import org.bukkit.block.BlockFace
 import org.bukkit.block.data.Bisected
 import org.bukkit.block.data.type.Bed
 import org.bukkit.entity.Enderman
+import org.bukkit.entity.Entity
 import org.bukkit.entity.Monster
 import org.bukkit.entity.Player
+import org.bukkit.entity.Projectile
 import org.bukkit.event.Cancellable
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
@@ -29,6 +31,7 @@ import org.bukkit.event.block.BlockPistonRetractEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.block.BlockSpreadEvent
 import org.bukkit.event.block.LeavesDecayEvent
+import org.bukkit.event.entity.AreaEffectCloudApplyEvent
 import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityChangeBlockEvent
 import org.bukkit.event.entity.EntityPortalEvent
@@ -39,6 +42,8 @@ import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.entity.EntityToggleGlideEvent
 import org.bukkit.event.block.SignChangeEvent
 import org.bukkit.event.entity.FoodLevelChangeEvent
+import org.bukkit.event.entity.LingeringPotionSplashEvent
+import org.bukkit.event.entity.PotionSplashEvent
 import org.bukkit.event.entity.ProjectileLaunchEvent
 import org.bukkit.event.player.PlayerBucketEmptyEvent
 import org.bukkit.event.player.PlayerDropItemEvent
@@ -76,6 +81,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         ENDER_PEARL("Ender Pearls", "Allow ender pearl teleportation"),
         ELYTRA("Elytra", "Allow elytra gliding"),
         COMMAND_USE("Command Use", "Allow command usage (non-staff)"),
+        SPLASH_POTIONS("Splash Potions", "Allow splash & lingering potion effects"),
     }
 
     /**
@@ -100,6 +106,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         WorldFlag.ITEM_DROP,
         WorldFlag.ITEM_PICKUP,
         WorldFlag.INTERACT,
+        WorldFlag.SPLASH_POTIONS,
     )
 
     // ──────────────────────────────────────────────
@@ -764,13 +771,20 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         val victim = event.entity
         val attacker = event.damager
 
-        // PvP check — skip world flag when either player is in an arena;
-        // ArenaManager handles allow/deny at HIGHEST priority for arena fights.
-        if (victim is Player && attacker is Player) {
-            if (!isAllowed(attacker, WorldFlag.PVP)) {
-                if (plugin.arenaManager.isInArena(attacker) || plugin.arenaManager.isInArena(victim)) return
+        // PvP check — covers melee (damager is the attacking Player directly)
+        // and indirect damage (arrows, tridents, thrown potions — damager is a
+        // Projectile whose shooter is a Player). The victim's own location is
+        // the authoritative one to resolve: a Subflag override only applies
+        // to players actually standing inside it, regardless of where the
+        // attacker/shooter was standing. Skip world flag entirely when either
+        // player is in an arena; ArenaManager handles allow/deny at HIGHEST
+        // priority for arena fights.
+        val shooter = resolvePlayerSource(attacker)
+        if (victim is Player && shooter != null && shooter != victim) {
+            if (!hasBypass(shooter) && !isAllowedAt(victim.location, WorldFlag.PVP)) {
+                if (plugin.arenaManager.isInArena(shooter) || plugin.arenaManager.isInArena(victim)) return
                 event.isCancelled = true
-                denyMessage(attacker, WorldFlag.PVP, isRegionDefined(attacker.location, WorldFlag.PVP))
+                denyMessage(shooter, WorldFlag.PVP, isRegionDefined(victim.location, WorldFlag.PVP))
                 return
             }
         }
@@ -781,6 +795,40 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
                 event.isCancelled = true
             }
         }
+    }
+
+    /** Resolves the Player responsible for [damager] — itself, or the shooter of a projectile. */
+    private fun resolvePlayerSource(damager: Entity): Player? {
+        if (damager is Player) return damager
+        if (damager is Projectile) return damager.shooter as? Player
+        return null
+    }
+
+    // — Splash / Lingering Potions —
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onPotionSplash(event: PotionSplashEvent) {
+        if (!isAllowedAt(event.entity.location, WorldFlag.SPLASH_POTIONS)) {
+            event.isCancelled = true
+            return
+        }
+        event.affectedEntities.forEach { affected ->
+            if (!isAllowedAt(affected.location, WorldFlag.SPLASH_POTIONS)) {
+                event.setIntensity(affected, 0.0)
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onLingeringPotionSplash(event: LingeringPotionSplashEvent) {
+        if (!isAllowedAt(event.entity.location, WorldFlag.SPLASH_POTIONS)) {
+            event.isCancelled = true
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onAreaEffectCloudApply(event: AreaEffectCloudApplyEvent) {
+        event.affectedEntities.removeIf { !isAllowedAt(it.location, WorldFlag.SPLASH_POTIONS) }
     }
 
     // — Block Break —
