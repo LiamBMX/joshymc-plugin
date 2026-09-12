@@ -89,6 +89,13 @@ class ItemManager(private val plugin: Joshymc) {
         register(ClaimBlockToken())
         register(Token())
 
+        // September Autumn Collection
+        register(AutumnsEdge())
+        register(HarvestScythe())
+        register(OrchardPickaxe())
+        register(GoldenCrest())
+        register(FallingLeaf())
+
         // Moderator Mode hotbar tools
         register(ModModePunish(plugin))
         register(ModModeRandomTp(plugin))
