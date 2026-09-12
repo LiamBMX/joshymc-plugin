@@ -2,7 +2,6 @@ package com.liam.joshymc.item.impl
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.item.CustomItem
-import com.liam.joshymc.util.LoreBuilder
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -24,11 +23,7 @@ class PhantomsGrasp : CustomItem() {
         .decoration(TextDecoration.ITALIC, false)
         .decoration(TextDecoration.BOLD, true)
 
-    override val lore = LoreBuilder.build(
-        type = "Bow",
-        description = listOf("Limited Edition Bow."),
-        usage = "Draw and release to fire.",
-    )
+    override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
@@ -46,11 +41,7 @@ class Gravedigger : CustomItem() {
         .decoration(TextDecoration.ITALIC, false)
         .decoration(TextDecoration.BOLD, true)
 
-    override val lore = LoreBuilder.build(
-        type = "Shovel",
-        description = listOf("Limited Edition Shovel."),
-        usage = "Dig or melee.",
-    )
+    override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
@@ -68,11 +59,7 @@ class JackOLanternMask : CustomItem() {
         .decoration(TextDecoration.ITALIC, false)
         .decoration(TextDecoration.BOLD, true)
 
-    override val lore = LoreBuilder.build(
-        type = "Helmet",
-        description = listOf("Limited Edition Helmet."),
-        usage = "Equip to wear.",
-    )
+    override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
@@ -94,11 +81,7 @@ class BoneRattler : CustomItem() {
         .decoration(TextDecoration.ITALIC, false)
         .decoration(TextDecoration.BOLD, true)
 
-    override val lore = LoreBuilder.build(
-        type = "Mace",
-        description = listOf("Limited Edition Mace."),
-        usage = "Melee.",
-    )
+    override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
