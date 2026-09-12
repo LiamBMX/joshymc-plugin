@@ -61,7 +61,7 @@ class TraineeHistory : CustomItem() {
 
 class TraineeStaffChat : CustomItem() {
     override val id = "trainee_staffchat"
-    override val material = Material.WRITABLE_BOOK
+    override val material = Material.WRITTEN_BOOK
     override val displayName = toolName("Staff Chat", TextColor.color(0x55FF55))
     override val lore = LoreBuilder.build(
         type = "Trainee Mode Tool",
