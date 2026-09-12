@@ -94,6 +94,12 @@ class ItemManager(private val plugin: Joshymc) {
         register(Gravedigger())
         register(JackOLanternMask())
         register(BoneRattler())
+        // September Autumn Collection
+        register(AutumnsEdge())
+        register(HarvestScythe())
+        register(OrchardPickaxe())
+        register(GoldenCrest())
+        register(FallingLeaf())
 
         // Moderator Mode hotbar tools
         register(ModModePunish(plugin))
