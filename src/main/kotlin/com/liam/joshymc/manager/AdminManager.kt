@@ -425,14 +425,37 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         plugin.guiManager.open(admin, gui)
     }
 
-    fun openOfflineEnderchest(admin: Player, uuid: java.util.UUID, name: String) {
-        data class CacheRow(val ec: String, val ts: Long)
-        val row = plugin.databaseManager.queryFirst(
-            "SELECT enderchest_data, timestamp FROM player_invsee_cache WHERE uuid = ?",
+    /**
+     * Loads a player's ender chest contents from the disconnect-time cache
+     * (populated for every player in [savePlayerCache]). Returns null if no
+     * cache row exists yet (e.g. player has never disconnected since this
+     * cache existed) so callers can show a clean "not available" message
+     * instead of an empty chest.
+     */
+    fun getCachedEnderchestItems(uuid: UUID): Array<ItemStack?>? {
+        val ec = plugin.databaseManager.queryFirst(
+            "SELECT enderchest_data FROM player_invsee_cache WHERE uuid = ?",
             uuid.toString()
-        ) { rs -> CacheRow(rs.getString("enderchest_data"), rs.getLong("timestamp")) }
+        ) { rs -> rs.getString("enderchest_data") } ?: return null
 
-        if (row == null) {
+        val items = arrayOfNulls<ItemStack>(27)
+        if (ec.isNotBlank()) {
+            for (entry in ec.split(";")) {
+                val colonIdx = entry.indexOf(':')
+                if (colonIdx < 0) continue
+                val slot = entry.substring(0, colonIdx).toIntOrNull() ?: continue
+                try {
+                    val item = ItemStack.deserializeBytes(Base64.getDecoder().decode(entry.substring(colonIdx + 1)))
+                    if (slot in 0 until 27) items[slot] = item
+                } catch (_: Exception) {}
+            }
+        }
+        return items
+    }
+
+    fun openOfflineEnderchest(admin: Player, uuid: java.util.UUID, name: String) {
+        val items = getCachedEnderchestItems(uuid)
+        if (items == null) {
             plugin.commsManager.send(admin, Component.text("No cached ender chest for $name — data is saved when they disconnect.", NamedTextColor.RED))
             return
         }
@@ -442,16 +465,8 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             Component.text(title, NamedTextColor.DARK_PURPLE).decoration(TextDecoration.ITALIC, false),
             54
         )
-        if (row.ec.isNotBlank()) {
-            for (entry in row.ec.split(";")) {
-                val colonIdx = entry.indexOf(':')
-                if (colonIdx < 0) continue
-                val slot = entry.substring(0, colonIdx).toIntOrNull() ?: continue
-                try {
-                    val item = ItemStack.deserializeBytes(Base64.getDecoder().decode(entry.substring(colonIdx + 1)))
-                    if (slot in 0 until 27) gui.inventory.setItem(slot, item)
-                } catch (_: Exception) {}
-            }
+        for (i in items.indices) {
+            items[i]?.let { gui.inventory.setItem(i, it) }
         }
         for ((slot, item) in plugin.enderChestManager.snapshotExtra(uuid)) {
             gui.inventory.setItem(27 + slot, item)

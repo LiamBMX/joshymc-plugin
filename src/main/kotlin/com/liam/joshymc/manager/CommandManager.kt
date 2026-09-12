@@ -36,6 +36,7 @@ import com.liam.joshymc.command.ClaimCommand
 import com.liam.joshymc.command.CraftCommand
 import com.liam.joshymc.command.EnchantCommand
 import com.liam.joshymc.command.EnderchestCommand
+import com.liam.joshymc.command.EnderchestPreviewCommand
 import com.liam.joshymc.command.FeedCommand
 import com.liam.joshymc.command.FlyCommand
 import com.liam.joshymc.command.GamemodeCommand
@@ -494,6 +495,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("stonecutter")?.setExecutor(StonecutterCommand(plugin))
         plugin.getCommand("repair")?.let { val c = RepairCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("jmc-violation")?.setExecutor(ViolationBridgeCommand(plugin))
+        plugin.getCommand("jmc-ecview")?.setExecutor(EnderchestPreviewCommand(plugin))
         plugin.getCommand("chatgame")?.let { val c = ChatGameCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("leaderboard")?.let { val c = LeaderboardCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("gencave")?.let { val c = GenCaveCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
