@@ -112,6 +112,14 @@ class ItemManager(private val plugin: Joshymc) {
         register(ModModeEcsee(plugin))
         register(ModModeVault(plugin))
 
+        // Trainee Mode hotbar tools
+        register(TraineeInspector())
+        register(TraineeInvsee())
+        register(TraineeTeleport())
+        register(TraineeHistory())
+        register(TraineeStaffChat())
+        register(TraineeReports())
+
         plugin.logger.info("Registered ${items.size} custom item(s).")
         validateModelIds()
     }

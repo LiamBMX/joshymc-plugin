@@ -465,6 +465,10 @@ commands:
     description: Toggle Staff Chat — redirects your chat messages to staff only
     usage: /staffchat
     aliases: [sc]
+  traineemode:
+    description: Toggle Trainee Mode — a limited, read-only investigation mode
+    usage: /traineemode [on|off]
+    aliases: [tmode]
   report:
     description: Report a player
     usage: /report <player> <reason>
@@ -1113,6 +1117,9 @@ permissions:
     default: op
   joshymc.modmode.edit:
     description: Edit inventories/Ender Chests/vaults viewed via Moderator Mode (Lead Moderator+)
+    default: op
+  joshymc.traineemode:
+    description: Use Trainee Mode (Trainee and higher)
     default: op
   joshymc.vanish:
     description: Toggle vanish mode
