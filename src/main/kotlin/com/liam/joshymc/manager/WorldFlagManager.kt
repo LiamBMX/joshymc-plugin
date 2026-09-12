@@ -671,7 +671,9 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
                 .decoration(TextDecoration.ITALIC, false),
             Component.text("Right-click a block to set Position 2.", NamedTextColor.GRAY)
                 .decoration(TextDecoration.ITALIC, false),
-            Component.text("Then: /worldflag subflag create <parent> <name>", NamedTextColor.GRAY)
+            Component.text("Then: /worldflag create <name>", NamedTextColor.GRAY)
+                .decoration(TextDecoration.ITALIC, false),
+            Component.text("Or: /worldflag subflag create <parent> <name>", NamedTextColor.GRAY)
                 .decoration(TextDecoration.ITALIC, false),
         ))
         meta.persistentDataContainer.set(wandKey, PersistentDataType.INTEGER, 1)

@@ -30,13 +30,205 @@ class WorldFlagCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
         val sub = args[0].lowercase()
 
         when (sub) {
-            "list" -> handleList(sender, args)
-            "reset" -> handleReset(sender, args)
+            "world" -> handleWorld(sender, args)
+            "wand" -> handleWand(sender)
+            "create" -> handleCreate(sender, args)
+            "edit" -> handleEdit(sender, args)
+            "delete" -> handleDelete(sender, args)
+            "redefine" -> handleRedefine(sender, args)
+            "priority" -> handlePriority(sender, args)
+            "info" -> handleInfo(sender, args)
+            "list" -> handleRegionList(sender, args)
             "subflag" -> handleSubflag(sender, args)
-            else -> handleSet(sender, args)
+            else -> sendUsage(sender)
         }
 
         return true
+    }
+
+    // ──────────────────────────────────────────────
+    //  /worldflag world ... — whole-world flags (explicit full-world scope)
+    // ──────────────────────────────────────────────
+
+    private fun handleWorld(sender: CommandSender, args: Array<out String>) {
+        val rest = args.copyOfRange(1, args.size)
+        if (rest.isEmpty()) {
+            sendWorldUsage(sender)
+            return
+        }
+        when (rest[0].lowercase()) {
+            "list" -> handleList(sender, rest)
+            "reset" -> handleReset(sender, rest)
+            else -> handleSet(sender, rest)
+        }
+    }
+
+    // ──────────────────────────────────────────────
+    //  /worldflag wand|create|edit|delete|redefine|priority|info|list —
+    //  region-based WorldFlags (default scope, no parent)
+    // ──────────────────────────────────────────────
+
+    private fun handleWand(sender: CommandSender) {
+        val player = playerOnly(sender) ?: return
+        player.inventory.addItem(manager.createWand())
+        player.sendMessage(
+            Component.text("WorldFlags wand added. Left-click sets Position 1, right-click sets Position 2.", NamedTextColor.GREEN)
+        )
+    }
+
+    private fun handleCreate(sender: CommandSender, args: Array<out String>) {
+        val player = playerOnly(sender) ?: return
+        val name = args.getOrNull(1)
+        if (name == null) {
+            player.sendMessage(Component.text("Usage: /worldflag create <name>", NamedTextColor.RED))
+            return
+        }
+        val selection = manager.getSelection(player)
+        if (selection == null) {
+            player.sendMessage(Component.text("Select both corners with the wand first (/worldflag wand).", NamedTextColor.RED))
+            return
+        }
+        val (min, max) = boundsOf(selection)
+        val world = selection.first.world!!.name
+        if (!manager.createRegion(name, world, min, max)) {
+            player.sendMessage(Component.text("A WorldFlag region named '$name' already exists.", NamedTextColor.RED))
+            return
+        }
+        manager.clearSelection(player)
+        player.sendMessage(Component.text("WorldFlag region '$name' created in '$world'.", NamedTextColor.GREEN))
+    }
+
+    private fun handleEdit(sender: CommandSender, args: Array<out String>) {
+        val player = playerOnly(sender) ?: return
+        val name = args.getOrNull(1)
+        if (name == null) {
+            player.sendMessage(Component.text("Usage: /worldflag edit <name>", NamedTextColor.RED))
+            return
+        }
+        if (manager.getRegion(name) == null) {
+            player.sendMessage(Component.text("No WorldFlag region named '$name'.", NamedTextColor.RED))
+            return
+        }
+        guiDelegate.openEditorGui(player, name)
+    }
+
+    private fun handleDelete(sender: CommandSender, args: Array<out String>) {
+        val name = args.getOrNull(1)
+        if (name == null) {
+            sender.sendMessage(Component.text("Usage: /worldflag delete <name>", NamedTextColor.RED))
+            return
+        }
+        when (val result = manager.deleteRegion(name, cascade = true)) {
+            is WorldFlagManager.DeleteResult.NotFound ->
+                sender.sendMessage(Component.text("No WorldFlag region named '$name'.", NamedTextColor.RED))
+            is WorldFlagManager.DeleteResult.HasSubflags -> Unit // unreachable with cascade = true
+            is WorldFlagManager.DeleteResult.Deleted -> {
+                val extra = if (result.cascaded.isNotEmpty()) " (and ${result.cascaded.size} Subflag(s))" else ""
+                sender.sendMessage(Component.text("WorldFlag region '$name' deleted$extra.", NamedTextColor.GREEN))
+            }
+        }
+    }
+
+    private fun handleRedefine(sender: CommandSender, args: Array<out String>) {
+        val player = playerOnly(sender) ?: return
+        val name = args.getOrNull(1)
+        if (name == null) {
+            player.sendMessage(Component.text("Usage: /worldflag redefine <name>", NamedTextColor.RED))
+            return
+        }
+        if (manager.getRegion(name) == null) {
+            player.sendMessage(Component.text("No WorldFlag region named '$name'.", NamedTextColor.RED))
+            return
+        }
+        val selection = manager.getSelection(player)
+        if (selection == null) {
+            player.sendMessage(Component.text("Select both corners with the wand first (/worldflag wand).", NamedTextColor.RED))
+            return
+        }
+        val (min, max) = boundsOf(selection)
+        val updated = manager.redefineRegion(name, min, max)
+        if (updated == null) {
+            player.sendMessage(Component.text("Redefine failed — selection must stay inside the parent region.", NamedTextColor.RED))
+            return
+        }
+        manager.clearSelection(player)
+        player.sendMessage(Component.text("WorldFlag region '$name' redefined.", NamedTextColor.GREEN))
+    }
+
+    private fun handlePriority(sender: CommandSender, args: Array<out String>) {
+        val name = args.getOrNull(1)
+        val priority = args.getOrNull(2)?.toIntOrNull()
+        if (name == null || priority == null) {
+            sender.sendMessage(Component.text("Usage: /worldflag priority <name> <number>", NamedTextColor.RED))
+            return
+        }
+        if (!manager.setPriority(name, priority)) {
+            sender.sendMessage(Component.text("No WorldFlag region named '$name'.", NamedTextColor.RED))
+            return
+        }
+        sender.sendMessage(Component.text("Priority of '$name' set to $priority.", NamedTextColor.GREEN))
+    }
+
+    private fun handleInfo(sender: CommandSender, args: Array<out String>) {
+        val name = args.getOrNull(1)
+        if (name == null) {
+            sender.sendMessage(Component.text("Usage: /worldflag info <name>", NamedTextColor.RED))
+            return
+        }
+        val region = manager.getRegion(name)
+        if (region == null) {
+            sender.sendMessage(Component.text("No WorldFlag region named '$name'.", NamedTextColor.RED))
+            return
+        }
+        sender.sendMessage(Component.text(region.name, NamedTextColor.GOLD, TextDecoration.BOLD))
+        sender.sendMessage(Component.text(" World: ${region.world}", NamedTextColor.GRAY))
+        if (region.parent != null) {
+            sender.sendMessage(Component.text(" Parent: ${region.parent}", NamedTextColor.GRAY))
+        }
+        sender.sendMessage(
+            Component.text(
+                " Bounds: (${region.minX}, ${region.minY}, ${region.minZ}) -> (${region.maxX}, ${region.maxY}, ${region.maxZ})",
+                NamedTextColor.GRAY
+            )
+        )
+        sender.sendMessage(Component.text(" Priority: ${region.priority}", NamedTextColor.GRAY))
+        if (region.flags.isEmpty()) {
+            sender.sendMessage(Component.text(" Flags: none set", NamedTextColor.DARK_GRAY))
+        } else {
+            sender.sendMessage(Component.text(" Flags:", NamedTextColor.GRAY))
+            region.flags.forEach { (flag, value) ->
+                val color = if (value) NamedTextColor.GREEN else NamedTextColor.RED
+                sender.sendMessage(
+                    Component.text("  ${flag.displayName}: ", NamedTextColor.GRAY)
+                        .append(Component.text(if (value) "ALLOW" else "DENY", color))
+                )
+            }
+        }
+        val subflags = manager.subflagsOf(region.name)
+        if (subflags.isNotEmpty()) {
+            sender.sendMessage(Component.text(" Subflags: ${subflags.joinToString(", ") { it.name }}", NamedTextColor.GRAY))
+        }
+    }
+
+    private fun handleRegionList(sender: CommandSender, args: Array<out String>) {
+        val worldFilter = args.getOrNull(1)
+        val list = manager.topLevelRegions()
+            .filter { worldFilter == null || it.world.equals(worldFilter, ignoreCase = true) }
+        if (list.isEmpty()) {
+            sender.sendMessage(
+                Component.text("No WorldFlag regions${if (worldFilter != null) " in '$worldFilter'" else ""}.", NamedTextColor.GRAY)
+            )
+            return
+        }
+        sender.sendMessage(
+            Component.text("WorldFlag regions${if (worldFilter != null) " in '$worldFilter'" else ""}:", NamedTextColor.GOLD)
+        )
+        list.forEach { region ->
+            sender.sendMessage(
+                Component.text(" ${region.name} ", NamedTextColor.WHITE)
+                    .append(Component.text("(${region.world}, priority ${region.priority})", NamedTextColor.GRAY))
+            )
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -379,10 +571,32 @@ class WorldFlagCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
     }
 
     private fun sendUsage(sender: CommandSender) {
-        sender.sendMessage(Component.text("Usage:", NamedTextColor.GOLD))
-        sender.sendMessage(Component.text(" /worldflag <flag> <true|false> [world]", NamedTextColor.GRAY))
-        sender.sendMessage(Component.text(" /worldflag list [world]", NamedTextColor.GRAY))
-        sender.sendMessage(Component.text(" /worldflag reset [world]", NamedTextColor.GRAY))
+        sender.sendMessage(Component.text("WorldFlag regions (default scope):", NamedTextColor.GOLD))
+        listOf(
+            "/worldflag wand" to "Get the region selection wand",
+            "/worldflag create <name>" to "Create a region from your wand selection",
+            "/worldflag edit <name>" to "Open the region flag editor",
+            "/worldflag redefine <name>" to "Redefine a region's bounds from your selection",
+            "/worldflag delete <name>" to "Delete a region",
+            "/worldflag priority <name> <n>" to "Set a region's priority (higher wins among overlapping regions)",
+            "/worldflag info <name>" to "Show a region's details",
+            "/worldflag list [world]" to "List regions",
+            "/worldflag subflag ..." to "Manage Subflags nested inside a region",
+            "/worldflag world ..." to "Manage whole-world flags — see /worldflag world",
+        ).forEach { (usage, desc) ->
+            sender.sendMessage(Component.text(" $usage ", NamedTextColor.YELLOW).append(Component.text("- $desc", NamedTextColor.GRAY)))
+        }
+    }
+
+    private fun sendWorldUsage(sender: CommandSender) {
+        sender.sendMessage(Component.text("Whole-world flags (explicit full-world scope):", NamedTextColor.GOLD))
+        listOf(
+            "/worldflag world <flag> <true|false> [world]" to "Set a whole-world flag",
+            "/worldflag world list [world]" to "List whole-world flags",
+            "/worldflag world reset [world]" to "Reset whole-world flags to defaults",
+        ).forEach { (usage, desc) ->
+            sender.sendMessage(Component.text(" $usage ", NamedTextColor.YELLOW).append(Component.text("- $desc", NamedTextColor.GRAY)))
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -391,27 +605,44 @@ class WorldFlagCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (!sender.hasPermission("joshymc.worldflag")) return emptyList()
+        if (args.isEmpty()) return emptyList()
 
-        if (args.isNotEmpty() && args[0].equals("subflag", ignoreCase = true)) {
-            return subflagTabComplete(args)
+        when (args[0].lowercase()) {
+            "subflag" -> return subflagTabComplete(args)
+            "world" -> return worldTabComplete(args)
         }
 
         return when (args.size) {
             1 -> {
-                val options = WorldFlag.entries.map { it.name.lowercase() } + listOf("list", "reset", "subflag")
+                val options = listOf("wand", "create", "edit", "delete", "redefine", "priority", "info", "list", "subflag", "world")
                 options.filter { it.startsWith(args[0].lowercase()) }
             }
-            2 -> {
-                val sub = args[0].lowercase()
+            2 -> when (args[0].lowercase()) {
+                "edit", "delete", "redefine", "priority", "info" ->
+                    manager.topLevelRegions().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                "list" -> worldNames(args[1])
+                else -> emptyList()
+            }
+            else -> emptyList()
+        }
+    }
+
+    /** Tab completion for `/worldflag world ...` — shifted by one from the old top-level completion. */
+    private fun worldTabComplete(args: Array<out String>): List<String> {
+        return when (args.size) {
+            2 -> (WorldFlag.entries.map { it.name.lowercase() } + listOf("list", "reset"))
+                .filter { it.startsWith(args[1].lowercase()) }
+            3 -> {
+                val sub = args[1].lowercase()
                 if (sub == "list" || sub == "reset") {
-                    worldNames(args[1])
+                    worldNames(args[2])
                 } else {
-                    listOf("true", "false").filter { it.startsWith(args[1].lowercase()) }
+                    listOf("true", "false").filter { it.startsWith(args[2].lowercase()) }
                 }
             }
-            3 -> {
-                val sub = args[0].lowercase()
-                if (sub != "list" && sub != "reset") worldNames(args[2]) else emptyList()
+            4 -> {
+                val sub = args[1].lowercase()
+                if (sub != "list" && sub != "reset") worldNames(args[3]) else emptyList()
             }
             else -> emptyList()
         }

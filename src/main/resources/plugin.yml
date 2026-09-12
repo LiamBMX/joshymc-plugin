@@ -383,8 +383,8 @@ commands:
     description: Manage spawn decorations
     usage: /spawndecor <hologram|particle|beacon> <add|remove|list>
   worldflag:
-    description: Manage world protection flags and nested Subflags
-    usage: /worldflag <flag|list|reset|subflag> [value] [world]
+    description: Manage region-based WorldFlags (use "world" for whole-world flags)
+    usage: /worldflag <wand|create|edit|delete|redefine|priority|info|list|subflag|world> [args]
     aliases: [wf, flags]
   admin:
     description: Open the admin panel
