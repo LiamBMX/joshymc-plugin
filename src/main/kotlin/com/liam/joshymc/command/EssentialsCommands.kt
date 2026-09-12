@@ -598,7 +598,7 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         if (args.isNotEmpty() && sender.hasPermission("joshymc.enderchest.others")) {
             val online = Bukkit.getPlayer(args[0])
             if (online != null) {
-                sender.openInventory(online.enderChest)
+                plugin.enderChestManager.open(sender, online)
                 return true
             }
             val offline = Bukkit.getOfflinePlayer(args[0])
@@ -610,7 +610,7 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             return true
         }
 
-        sender.openInventory(sender.enderChest)
+        plugin.enderChestManager.open(sender, sender)
         return true
     }
 

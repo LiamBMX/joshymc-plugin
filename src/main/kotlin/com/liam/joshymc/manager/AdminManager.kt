@@ -440,7 +440,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         val title = "EC: $name"
         val gui = CustomGui(
             Component.text(title, NamedTextColor.DARK_PURPLE).decoration(TextDecoration.ITALIC, false),
-            27
+            54
         )
         if (row.ec.isNotBlank()) {
             for (entry in row.ec.split(";")) {
@@ -452,6 +452,9 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                     if (slot in 0 until 27) gui.inventory.setItem(slot, item)
                 } catch (_: Exception) {}
             }
+        }
+        for ((slot, item) in plugin.enderChestManager.snapshotExtra(uuid)) {
+            gui.inventory.setItem(27 + slot, item)
         }
         plugin.guiManager.open(admin, gui)
     }

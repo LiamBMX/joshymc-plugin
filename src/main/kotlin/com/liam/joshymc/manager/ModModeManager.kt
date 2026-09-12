@@ -460,19 +460,22 @@ class ModModeManager(private val plugin: Joshymc) {
 
     fun openEnderChest(moderator: Player, target: Player) {
         if (canEdit(moderator)) {
-            moderator.openInventory(target.enderChest)
+            plugin.enderChestManager.open(moderator, target)
             plugin.adminManager.logAction(moderator, "MODMODE_ECSEE_EDIT", target)
             return
         }
 
         val gui = CustomGui(
             Component.text("EnderChest: ${target.name}", NamedTextColor.DARK_PURPLE).decoration(TextDecoration.ITALIC, false),
-            27
+            54
         )
         val contents = target.enderChest.contents
         for (i in contents.indices) {
             val item = contents[i] ?: continue
             if (i < 27) gui.inventory.setItem(i, item.clone())
+        }
+        for ((slot, item) in plugin.enderChestManager.snapshotExtra(target.uniqueId)) {
+            gui.inventory.setItem(27 + slot, item.clone())
         }
         plugin.guiManager.open(moderator, gui)
         plugin.adminManager.logAction(moderator, "MODMODE_ECSEE_VIEW", target)

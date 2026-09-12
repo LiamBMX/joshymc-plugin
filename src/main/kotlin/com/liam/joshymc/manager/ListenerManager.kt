@@ -97,6 +97,9 @@ class ListenerManager(private val plugin: Joshymc) {
         // Player Vaults
         pm.registerEvents(plugin.storageManager, plugin)
 
+        // Ender Chests (expanded to 54 slots)
+        pm.registerEvents(plugin.enderChestManager, plugin)
+
         // Holograms, NPCs, Crates
         pm.registerEvents(plugin.npcManager, plugin)
         pm.registerEvents(plugin.crateManager, plugin)
