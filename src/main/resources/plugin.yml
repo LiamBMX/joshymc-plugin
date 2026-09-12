@@ -538,6 +538,9 @@ commands:
   jmc-violation:
     description: External anti-cheat bridge — records violations into JoshyMC admin panel
     usage: /jmc-violation log <player> <check> [vl] [source]
+  jmc-ecview:
+    description: Internal bridge run by clicking an [enderchest]/[ec] chat preview
+    usage: /jmc-ecview <uuid>
   chatgame:
     description: Start a chat game on demand
     usage: /chatgame [math|unscramble|type|reverse|status]
@@ -579,6 +582,9 @@ permissions:
     default: true
   joshymc.chatitem:
     description: Allows using [i] to show items in chat
+    default: true
+  joshymc.enderchestpreview:
+    description: Allows using [enderchest]/[ec] to share a read-only ender chest preview in chat
     default: true
   joshymc.recipeblocker.bypass:
     description: Bypass blocked recipes

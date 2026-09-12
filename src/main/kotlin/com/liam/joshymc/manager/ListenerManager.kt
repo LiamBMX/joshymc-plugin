@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.listener.ChatItemListener
+import com.liam.joshymc.listener.EnderchestPreviewListener
 import com.liam.joshymc.listener.CombatListener
 import com.liam.joshymc.listener.DeathCoordsListener
 import com.liam.joshymc.listener.DrillMiningListener
@@ -75,6 +76,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(RecipeBlockerListener(plugin), plugin)
         pm.registerEvents(CustomCraftingListener(plugin), plugin)
         pm.registerEvents(ChatItemListener(plugin), plugin)
+        pm.registerEvents(EnderchestPreviewListener(plugin), plugin)
 
         // Phase 2 — Combat
         pm.registerEvents(CombatListener(plugin), plugin)
