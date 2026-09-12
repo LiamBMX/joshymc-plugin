@@ -89,6 +89,11 @@ class ItemManager(private val plugin: Joshymc) {
         register(ClaimBlockToken())
         register(Token())
 
+        // October Halloween Collection
+        register(PhantomsGrasp())
+        register(Gravedigger())
+        register(JackOLanternMask())
+        register(BoneRattler())
         // September Autumn Collection
         register(AutumnsEdge())
         register(HarvestScythe())
