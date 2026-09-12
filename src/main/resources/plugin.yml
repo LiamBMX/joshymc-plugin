@@ -282,6 +282,9 @@ commands:
   tutorial:
     description: View the getting-started tutorial GUI
     usage: /tutorial [reload]
+  media:
+    description: View the Media rank requirements
+    usage: /media
   discord:
     description: Get the Discord invite link
     usage: /discord
