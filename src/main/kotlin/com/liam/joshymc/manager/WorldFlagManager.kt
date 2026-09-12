@@ -440,6 +440,18 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         return isAllowedAt(player.location, flag)
     }
 
+    /**
+     * Like [isAllowed], but resolves [flag] at [location] — the actual
+     * block/target being acted on — rather than the player's own position.
+     * Required for reach-based actions (placing/breaking a block, opening a
+     * container, editing a sign): standing inside an ALLOW Subflag must not
+     * grant permission to act on a block outside its bounds.
+     */
+    fun isAllowedForPlayerAt(player: Player, location: Location, flag: WorldFlag): Boolean {
+        if (hasBypass(player)) return true
+        return isAllowedAt(location, flag)
+    }
+
     fun isAllowedAt(location: Location, flag: WorldFlag): Boolean {
         val worldName = location.world?.name ?: return true
         return resolveFlag(location, flag) ?: getFlag(worldName, flag)
@@ -838,7 +850,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         val player = event.player
         val loc = event.block.location
 
-        if (!isAllowed(player, WorldFlag.BLOCK_BREAK)) {
+        if (!isAllowedForPlayerAt(player, loc, WorldFlag.BLOCK_BREAK)) {
             event.isCancelled = true
             denyMessage(player, WorldFlag.BLOCK_BREAK, isRegionDefined(loc, WorldFlag.BLOCK_BREAK))
             return
@@ -865,7 +877,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         val block = event.blockPlaced
         val loc = block.location
 
-        if (!isAllowed(player, WorldFlag.BLOCK_PLACE)) {
+        if (!isAllowedForPlayerAt(player, loc, WorldFlag.BLOCK_PLACE)) {
             event.isCancelled = true
             denyMessage(player, WorldFlag.BLOCK_PLACE, isRegionDefined(loc, WorldFlag.BLOCK_PLACE))
             return
@@ -884,9 +896,10 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
      */
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     fun onBucketEmpty(event: PlayerBucketEmptyEvent) {
-        if (!isAllowed(event.player, WorldFlag.BLOCK_PLACE)) {
+        val loc = event.block.location
+        if (!isAllowedForPlayerAt(event.player, loc, WorldFlag.BLOCK_PLACE)) {
             event.isCancelled = true
-            denyMessage(event.player, WorldFlag.BLOCK_PLACE, isRegionDefined(event.player.location, WorldFlag.BLOCK_PLACE))
+            denyMessage(event.player, WorldFlag.BLOCK_PLACE, isRegionDefined(loc, WorldFlag.BLOCK_PLACE))
         }
     }
 
@@ -897,9 +910,10 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
      */
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     fun onSignChange(event: SignChangeEvent) {
-        if (!isAllowed(event.player, WorldFlag.BLOCK_BREAK)) {
+        val loc = event.block.location
+        if (!isAllowedForPlayerAt(event.player, loc, WorldFlag.BLOCK_BREAK)) {
             event.isCancelled = true
-            denyMessage(event.player, WorldFlag.BLOCK_BREAK, isRegionDefined(event.player.location, WorldFlag.BLOCK_BREAK))
+            denyMessage(event.player, WorldFlag.BLOCK_BREAK, isRegionDefined(loc, WorldFlag.BLOCK_BREAK))
         }
     }
 
@@ -935,7 +949,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         // any interact with a dragon egg should be cancelled outright so
         // players can't snag it from spawn decor.
         if (block.type == Material.DRAGON_EGG &&
-            !isAllowed(event.player, WorldFlag.BLOCK_BREAK)
+            !isAllowedForPlayerAt(event.player, block.location, WorldFlag.BLOCK_BREAK)
         ) {
             event.isCancelled = true
             denyMessage(event.player, WorldFlag.BLOCK_BREAK, isRegionDefined(block.location, WorldFlag.BLOCK_BREAK))
@@ -957,7 +971,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
             typeName.endsWith("_HANGING_SIGN") ||
             typeName.endsWith("_WALL_SIGN") ||
             typeName.endsWith("_WALL_HANGING_SIGN")
-        if ((isDoorLike || isSign) && !isAllowed(event.player, WorldFlag.BLOCK_BREAK)) {
+        if ((isDoorLike || isSign) && !isAllowedForPlayerAt(event.player, block.location, WorldFlag.BLOCK_BREAK)) {
             event.isCancelled = true
             denyMessage(event.player, WorldFlag.BLOCK_BREAK, isRegionDefined(block.location, WorldFlag.BLOCK_BREAK))
             return
@@ -973,14 +987,14 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         // contents are personal to the player, not a shared/world inventory,
         // so they stay usable even when Containers = DENY.
         if (isContainer(block.type) && block.type != Material.ENDER_CHEST &&
-            !isAllowed(event.player, WorldFlag.CONTAINER)
+            !isAllowedForPlayerAt(event.player, block.location, WorldFlag.CONTAINER)
         ) {
             event.isCancelled = true
             denyMessage(event.player, WorldFlag.CONTAINER, isRegionDefined(block.location, WorldFlag.CONTAINER))
             return
         }
 
-        if (!isAllowed(event.player, WorldFlag.INTERACT)) {
+        if (!isAllowedForPlayerAt(event.player, block.location, WorldFlag.INTERACT)) {
             event.isCancelled = true
             denyMessage(event.player, WorldFlag.INTERACT, isRegionDefined(block.location, WorldFlag.INTERACT))
         }
@@ -1194,7 +1208,7 @@ class WorldFlagManager(private val plugin: Joshymc) : Listener {
         // FARMLAND block. Block it in worlds where BLOCK_BREAK is disabled
         // so crops at spawn can't be destroyed by jumping.
         if (event.entity is Player && event.block.type == Material.FARMLAND) {
-            if (!isAllowed(event.entity as Player, WorldFlag.BLOCK_BREAK)) {
+            if (!isAllowedForPlayerAt(event.entity as Player, event.block.location, WorldFlag.BLOCK_BREAK)) {
                 event.isCancelled = true
             }
         }
