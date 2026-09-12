@@ -1,6 +1,7 @@
 package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.manager.WorldFlagManager
 import com.liam.joshymc.util.BlockUtil
 import org.bukkit.Particle
 import org.bukkit.Sound
@@ -34,9 +35,7 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
         val origin = event.block
         val face = getTargetBlockFace(player)
 
-        val blocksToBreak = getGridBlocks(origin, face, radius).filter {
-            it != origin && BlockUtil.isMineable(it.type) && plugin.claimManager.canAccess(player, it.location)
-        }
+        val blocksToBreak = getGridBlocks(origin, face, radius).filter { it != origin && canDrillBreak(player, it) }
 
         if (blocksToBreak.isEmpty()) return
 
@@ -56,6 +55,10 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
                         block.blockData
                     )
                     block.breakNaturally(item)
+
+                    if (plugin.worldFlagManager.resolveFlag(block.location, WorldFlagManager.WorldFlag.BLOCK_BREAK_PLAYER_PLACED_ONLY) == true) {
+                        plugin.worldFlagManager.unmarkPlaced(block.location)
+                    }
                 }
 
                 if (index == chunks.size / 2) {
@@ -72,6 +75,25 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
         plugin.server.scheduler.runTaskLater(plugin, Runnable {
             processingPlayers.remove(playerId)
         }, ((chunks.size * 2) + 5).toLong())
+    }
+
+    /**
+     * Every block the drill reaches into must independently pass the same
+     * protection checks a normal single-block break would — claims, and
+     * WorldFlag/Subflag resolution (incl. player-placed-only) at THAT
+     * block's own location. Standing inside an ALLOW region must never
+     * let the drill reach across a boundary into a DENY region.
+     */
+    private fun canDrillBreak(player: org.bukkit.entity.Player, block: Block): Boolean {
+        if (!BlockUtil.isMineable(block.type)) return false
+        if (!plugin.claimManager.canAccess(player, block.location)) return false
+        if (!plugin.worldFlagManager.isAllowedForPlayerAt(player, block.location, WorldFlagManager.WorldFlag.BLOCK_BREAK)) return false
+
+        if (plugin.worldFlagManager.resolveFlag(block.location, WorldFlagManager.WorldFlag.BLOCK_BREAK_PLAYER_PLACED_ONLY) == true) {
+            return plugin.worldFlagManager.isPlayerPlaced(block.location)
+        }
+
+        return true
     }
 
     private fun getTargetBlockFace(player: org.bukkit.entity.Player): BlockFace {
