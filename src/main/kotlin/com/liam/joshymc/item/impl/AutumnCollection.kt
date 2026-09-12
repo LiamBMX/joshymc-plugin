@@ -8,6 +8,7 @@ import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
+import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.inventory.meta.ItemMeta
 
 // ── September Autumn Collection ──────────────────────────────────────────────
@@ -99,6 +100,10 @@ class GoldenCrest : CustomItem() {
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
         meta.setItemModel(NamespacedKey(Joshymc.instance, "golden_crest"))
+        val equippable = meta.equippable
+        equippable.slot = EquipmentSlot.HEAD
+        equippable.model = NamespacedKey(Joshymc.instance, "golden_crest")
+        meta.setEquippable(equippable)
     }
 }
 
