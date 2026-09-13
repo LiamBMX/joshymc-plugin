@@ -1,7 +1,8 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
-import com.liam.joshymc.gui.casino.CasinoMainGui
+import com.liam.joshymc.gui.casino.towers.TowersSetupGui
+import com.liam.joshymc.manager.CasinoManager
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -11,11 +12,11 @@ import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 
 /**
- * `/casino` (issue #727) — the main Casino hub GUI. `/mines`, `/roulette`, `/crash`,
- * and `/towers` (issue #743) are direct entry points into the same games via
- * [MinesCommand], [RouletteCommand], [CrashCommand], and [TowersCommand].
+ * `/towers` (issue #743) — direct entry point into the same Towers GUI/session offered
+ * from the `/casino` hub. Routes through [TowersSetupGui], so active sessions, bet
+ * rules, and stats all stay backed by [CasinoManager] with no duplicated state.
  */
-class CasinoCommand(private val plugin: Joshymc) : CommandExecutor {
+class TowersCommand(private val plugin: Joshymc) : CommandExecutor {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
@@ -30,8 +31,12 @@ class CasinoCommand(private val plugin: Joshymc) : CommandExecutor {
             plugin.commsManager.send(sender, Component.text("Casino is currently disabled.", NamedTextColor.RED), CommunicationsManager.Category.CASINO)
             return true
         }
+        if (!plugin.casinoManager.isGameEnabled(CasinoManager.Game.TOWERS)) {
+            plugin.commsManager.send(sender, Component.text("Towers is currently disabled.", NamedTextColor.RED), CommunicationsManager.Category.CASINO)
+            return true
+        }
 
-        CasinoMainGui.open(plugin, sender)
+        TowersSetupGui.open(plugin, sender)
         return true
     }
 }
