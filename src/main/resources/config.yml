@@ -34,6 +34,7 @@ features:
   kill-streaks: true
   login-streaks: true
   orders: true
+  giveaways: true
 
 # Mob Stacking — merges nearby mobs of the same type into a single entity
 mob-stacking:
@@ -355,6 +356,22 @@ auction:
   min-price: 1
   max-price: 1000000000
   tax-percent: 5
+
+# Player-created Giveaways — /giveaway (alias /gwy)
+giveaways:
+  # Every giveaway lasts exactly this long. Normal players cannot override it.
+  duration-hours: 24
+  # Max ACTIVE giveaways a single player may host at once. 0 = unlimited.
+  max-active-per-player: 1
+  # Max ACTIVE giveaways server-wide. -1 = unlimited.
+  max-active-total: -1
+  allow-coins: true
+  allow-items: true
+  allow-description: true
+  max-description-length: 120
+  max-title-length: 32
+  # Max prize item stacks a single giveaway can hold.
+  max-prize-items: 27
 
 # Buy Orders — /orders, a player-driven "I want this item" marketplace.
 # Complements /ah (players sell what they have) without duplicating it —

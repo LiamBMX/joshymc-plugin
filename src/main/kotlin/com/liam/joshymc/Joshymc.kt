@@ -170,6 +170,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var lotteryManager: LotteryManager
         private set
+    lateinit var giveawayManager: com.liam.joshymc.manager.GiveawayManager
+        private set
     lateinit var coinflipManager: com.liam.joshymc.manager.CoinflipManager
         private set
     lateinit var guiManager: GuiManager
@@ -322,6 +324,7 @@ class Joshymc : JavaPlugin() {
         crateManager = CrateManager(this)
         coinflipManager = com.liam.joshymc.manager.CoinflipManager(this)
         auctionManager = AuctionManager(this)
+        giveawayManager = com.liam.joshymc.manager.GiveawayManager(this)
         orderManager = com.liam.joshymc.manager.OrderManager(this)
         signShopManager = SignShopManager(this)
         hopperPlusManager = HopperPlusManager(this)
@@ -395,6 +398,7 @@ class Joshymc : JavaPlugin() {
         crateManager.start()
         if (isFeatureEnabled("coinflip")) coinflipManager.start()
         auctionManager.start()
+        if (isFeatureEnabled("giveaways")) giveawayManager.start()
         if (isFeatureEnabled("orders")) orderManager.start()
         signShopManager.start()
         hopperPlusManager.start()
@@ -484,6 +488,7 @@ class Joshymc : JavaPlugin() {
         npcManager.stop()
         crateManager.stop()
         auctionManager.stop()
+        giveawayManager.stop()
         coinflipManager.stop()
         orderManager.stop()
         hopperPlusManager.stop()
@@ -545,6 +550,7 @@ class Joshymc : JavaPlugin() {
         safe("npcManager.stop") { npcManager.stop() }
         safe("crateManager.stop") { crateManager.stop() }
         safe("auctionManager.stop") { auctionManager.stop() }
+        safe("giveawayManager.stop") { giveawayManager.stop() }
         safe("coinflipManager.stop") { coinflipManager.stop() }
         safe("orderManager.stop") { orderManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
@@ -584,6 +590,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("quests")) safe("questCycleManager.start") { questCycleManager.start() }
         safe("crateManager.start") { crateManager.start() }
         safe("auctionManager.start") { auctionManager.start() }
+        if (isFeatureEnabled("giveaways")) safe("giveawayManager.start") { giveawayManager.start() }
         if (isFeatureEnabled("coinflip")) safe("coinflipManager.start") { coinflipManager.start() }
         if (isFeatureEnabled("orders")) safe("orderManager.start") { orderManager.start() }
         safe("signShopManager.start") { signShopManager.start() }
