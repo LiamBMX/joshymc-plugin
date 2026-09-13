@@ -629,12 +629,12 @@ voting:
     14: 250000
     30: 1000000
 
-# Claims — block-based land protection with golden shovel
+# Claims — block-based land protection with golden shovel. Overworld-only:
+# claims can only be created/managed/enforced in Environment.NORMAL worlds.
 claims:
   starting-blocks: 500     # Claim blocks each player starts with
   blocks-per-hour: 100     # Blocks earned per hour of playtime
   max-blocks: 50000        # Maximum total claim blocks a player can have
-  end-island-radius: 1000  # Blocks from 0,0 in The End that cannot be claimed (covers main island + buffer)
 
 # Credits — secondary currency, passively earned from playtime
 credits:
