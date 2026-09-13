@@ -12,9 +12,10 @@ import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 
 /**
- * `/roulette` (issue #743) — direct entry point into the same Roulette GUI offered
- * from the `/casino` hub. Routes through [RouletteGui], so bets, results, and stats
- * all stay backed by [CasinoManager] with no duplicated state.
+ * `/roulette [bet]` (issue #743, optional bet arg added in #746) — direct entry point
+ * into the same Roulette GUI offered from the `/casino` hub. Routes through
+ * [RouletteGui], so bets, results, and stats all stay backed by [CasinoManager] with
+ * no duplicated state. A bet already resolving always wins over the argument.
  */
 class RouletteCommand(private val plugin: Joshymc) : CommandExecutor {
 
@@ -36,7 +37,21 @@ class RouletteCommand(private val plugin: Joshymc) : CommandExecutor {
             return true
         }
 
-        RouletteGui.open(plugin, sender)
+        var presetBet: Double? = null
+        if (args.isNotEmpty()) {
+            val result = plugin.casinoManager.parseCommandBet(sender, CasinoManager.Game.ROULETTE, args[0])
+            if (result.error != null) {
+                plugin.commsManager.send(sender, Component.text(result.error, NamedTextColor.RED), CommunicationsManager.Category.CASINO)
+                return true
+            }
+            presetBet = result.amount
+        }
+
+        if (presetBet != null && !plugin.casinoRouletteManager.hasPendingBet(sender.uniqueId)) {
+            RouletteGui.openWithBet(plugin, sender, presetBet)
+        } else {
+            RouletteGui.open(plugin, sender)
+        }
         return true
     }
 }

@@ -147,16 +147,16 @@ commands:
     usage: /casino
   mines:
     description: Jump straight into the Casino's Mines game
-    usage: /mines
+    usage: /mines [bet]
   roulette:
     description: Jump straight into the Casino's Roulette game
-    usage: /roulette
+    usage: /roulette [bet]
   crash:
     description: Jump straight into the Casino's Crash game
-    usage: /crash
+    usage: /crash [bet]
   towers:
     description: Jump straight into the Casino's Towers game
-    usage: /towers
+    usage: /towers [bet]
   orders:
     description: Open the Buy Orders marketplace
     usage: /orders [admin <view|info|cancel|remove> ...]

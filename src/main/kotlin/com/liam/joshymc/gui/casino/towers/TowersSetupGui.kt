@@ -20,6 +20,17 @@ object TowersSetupGui {
 
     private val pending = ConcurrentHashMap<UUID, Setup>()
 
+    /**
+     * Entry point for `/towers <bet>` (issue #746) — preselects [bet] in the setup GUI
+     * without starting a game. Callers must already have confirmed there's no active
+     * session; an existing difficulty selection (if the player was already mid-setup)
+     * is preserved, only the bet is overwritten.
+     */
+    fun openWithBet(plugin: Joshymc, player: Player, bet: Double) {
+        pending.getOrPut(player.uniqueId) { Setup(bet, CasinoTowersManager.Difficulty.EASY) }.bet = bet
+        open(plugin, player)
+    }
+
     fun open(plugin: Joshymc, player: Player) {
         val setup = pending.getOrPut(player.uniqueId) {
             Setup(plugin.casinoManager.minBet, CasinoTowersManager.Difficulty.EASY)

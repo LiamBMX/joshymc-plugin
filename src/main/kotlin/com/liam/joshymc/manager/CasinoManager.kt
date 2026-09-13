@@ -97,15 +97,34 @@ class CasinoManager(private val plugin: Joshymc) {
 
     /**
      * Validates a wager amount against the global Casino rules (enabled, min/max, balance).
-     * Returns a player-facing error message, or null if the bet is valid.
+     * Returns a player-facing error message, or null if the bet is valid. [checkBalance] is
+     * skippable so a command-supplied bet (issue #746) can be preselected in a game's GUI
+     * even if it currently exceeds the player's balance — [placeBet] always re-checks the
+     * balance itself before any money moves, so this is never a bypass.
      */
-    fun validateBet(player: Player, game: Game, amount: Double): String? {
+    fun validateBet(player: Player, game: Game, amount: Double, checkBalance: Boolean = true): String? {
         if (!isGameEnabled(game)) return "That Casino game is currently disabled."
         if (amount.isNaN() || !amount.isFinite() || amount <= 0.0) return "Invalid bet amount."
         if (amount < minBet) return "Minimum Casino bet is ${plugin.economyManager.format(minBet)}."
         if (maxBet > 0 && amount > maxBet) return "Maximum Casino bet is ${plugin.economyManager.format(maxBet)}."
-        if (plugin.economyManager.getBalance(player) < amount) return "You do not have enough money to place this bet."
+        if (checkBalance && plugin.economyManager.getBalance(player) < amount) return "You do not have enough money to place this bet."
         return null
+    }
+
+    /** Result of [parseCommandBet] — either a validated [amount] ready to preselect, or an [error] to show the player. */
+    data class CommandBetResult(val amount: Double?, val error: String?)
+
+    /**
+     * Shared parser for the optional `<bet>` argument on `/mines`, `/roulette`, `/crash`
+     * and `/towers` (issue #746) — reuses [EconomyManager.parseAmount] (no Casino-only
+     * money format) and [validateBet] (without the balance check, see there) so every
+     * direct command applies identical rules with no duplicated parsing logic.
+     */
+    fun parseCommandBet(player: Player, game: Game, input: String): CommandBetResult {
+        val amount = plugin.economyManager.parseAmount(input)
+        if (amount == null) return CommandBetResult(null, "Invalid bet amount.")
+        val error = validateBet(player, game, amount, checkBalance = false)
+        return if (error != null) CommandBetResult(null, error) else CommandBetResult(amount, null)
     }
 
     /**
