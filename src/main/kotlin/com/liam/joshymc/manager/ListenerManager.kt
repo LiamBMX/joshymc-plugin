@@ -30,7 +30,6 @@ import com.liam.joshymc.listener.WelcomeListener
 import com.liam.joshymc.listener.WorthListener
 import com.liam.joshymc.listener.WrittenBookListener
 import com.liam.joshymc.listener.ClaimProtectionListener
-import com.liam.joshymc.listener.ConsumableListener
 import com.liam.joshymc.listener.BubbleButtListener
 import com.liam.joshymc.listener.CustomArmorListener
 import com.liam.joshymc.listener.AuctionBidListener
@@ -43,7 +42,6 @@ import com.liam.joshymc.listener.CreditVoucherListener
 import com.liam.joshymc.listener.RankVoucherListener
 import com.liam.joshymc.listener.ChatTagVoucherListener
 import com.liam.joshymc.listener.SellWandListener
-import com.liam.joshymc.listener.VoidBoreListener
 import com.liam.joshymc.listener.enchant.CombatEnchantListener
 import com.liam.joshymc.listener.enchant.PassiveEnchantListener
 import com.liam.joshymc.listener.enchant.ToolEnchantListener
@@ -66,7 +64,6 @@ class ListenerManager(private val plugin: Joshymc) {
         // Existing
         pm.registerEvents(DrillMiningListener(plugin), plugin)
         pm.registerEvents(EditKitListener(plugin), plugin)
-        pm.registerEvents(VoidBoreListener(plugin), plugin)
         pm.registerEvents(EasterEggListener(plugin), plugin)
         pm.registerEvents(MinecraftChatListener(plugin), plugin)
         pm.registerEvents(LinkGuiListener(plugin), plugin)
@@ -201,7 +198,6 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.mobStackManager, plugin)
 
         // Custom items
-        pm.registerEvents(ConsumableListener(plugin), plugin)
         val armorListener = CustomArmorListener(plugin)
         armorListener.start()
         pm.registerEvents(armorListener, plugin)

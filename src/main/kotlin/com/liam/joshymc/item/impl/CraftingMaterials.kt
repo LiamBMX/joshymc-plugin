@@ -11,33 +11,10 @@ import org.bukkit.Material
 // never enter the economy through /sell or the Sell Wand just because they share a
 // vanilla Material with a sellable item (e.g. Void Shard = PRISMARINE_SHARD).
 val CRAFTING_MATERIAL_IDS = setOf(
-    "void_shard",
     "soul_fragment",
-    "inferno_core",
-    "crystal_essence",
     "ancient_rune",
     "enchanted_dust",
 )
-
-class VoidShard : CustomItem() {
-
-    override val id = "void_shard"
-    override val material = Material.PRISMARINE_SHARD
-    override val hasGlint = true
-
-    override val displayName: Component = Component.text("Void Shard", NamedTextColor.DARK_PURPLE)
-        .decoration(TextDecoration.ITALIC, false)
-        .decoration(TextDecoration.BOLD, true)
-
-    override val lore = LoreBuilder.build(
-        type = "Crafting Material",
-        description = listOf(
-            "A shard infused with void energy.",
-            "Drops from Endermen, Shulkers, and the Ender Dragon.",
-        ),
-        usage = "Used in crafting recipes.",
-    )
-}
 
 class SoulFragment : CustomItem() {
 
@@ -54,46 +31,6 @@ class SoulFragment : CustomItem() {
         description = listOf(
             "A fragment of a trapped soul.",
             "Drops from Wither Skeletons, Ghasts, and the Wither.",
-        ),
-        usage = "Used in crafting recipes.",
-    )
-}
-
-class InfernoCore : CustomItem() {
-
-    override val id = "inferno_core"
-    override val material = Material.MAGMA_CREAM
-    override val hasGlint = true
-
-    override val displayName: Component = Component.text("Inferno Core", NamedTextColor.GOLD)
-        .decoration(TextDecoration.ITALIC, false)
-        .decoration(TextDecoration.BOLD, true)
-
-    override val lore = LoreBuilder.build(
-        type = "Crafting Material",
-        description = listOf(
-            "The burning heart of a nether creature.",
-            "Drops from Blazes and Magma Cubes.",
-        ),
-        usage = "Used in crafting recipes.",
-    )
-}
-
-class CrystalEssence : CustomItem() {
-
-    override val id = "crystal_essence"
-    override val material = Material.AMETHYST_SHARD
-    override val hasGlint = true
-
-    override val displayName: Component = Component.text("Crystal Essence", NamedTextColor.AQUA)
-        .decoration(TextDecoration.ITALIC, false)
-        .decoration(TextDecoration.BOLD, true)
-
-    override val lore = LoreBuilder.build(
-        type = "Crafting Material",
-        description = listOf(
-            "Pure crystallized essence.",
-            "Drops from mining Diamond and Emerald ore.",
         ),
         usage = "Used in crafting recipes.",
     )

@@ -25,7 +25,6 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
         val radius = when {
             plugin.itemManager.isCustomItem(item, "void_drill") -> 1
             plugin.itemManager.isCustomItem(item, "void_drill_5x5") -> 2
-            plugin.itemManager.isCustomItem(item, "excavator") -> 1  // 3x3 shovel
             else -> return
         }
 
