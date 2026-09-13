@@ -23,6 +23,7 @@ import com.liam.joshymc.listener.MobVisibilityListener
 import com.liam.joshymc.listener.TreeFellerListener
 import com.liam.joshymc.listener.VeinminerListener
 import com.liam.joshymc.listener.UnknownCommandListener
+import com.liam.joshymc.listener.PvpWorldFlightListener
 import com.liam.joshymc.listener.TradeInteractListener
 import com.liam.joshymc.command.BackLocationListener
 import com.liam.joshymc.listener.WelcomeListener
@@ -183,6 +184,9 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.eventManager, plugin)
         pm.registerEvents(plugin.portalManager, plugin)
         pm.registerEvents(plugin.voteManager, plugin)
+
+        // PvP world flight restriction (joshymc.fly.pvp)
+        pm.registerEvents(PvpWorldFlightListener(plugin), plugin)
 
         // Admin panel
         pm.registerEvents(plugin.adminManager, plugin)

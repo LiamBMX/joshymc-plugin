@@ -205,6 +205,16 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
+        // Flight in the "pvp" world is gated purely on joshymc.fly.pvp — no rank
+        // or staff-mode exemptions. Spectators are left alone (see PvpWorldFlightListener).
+        if (target.world.name == "pvp" && target.gameMode != GameMode.SPECTATOR && !target.hasPermission("joshymc.fly.pvp")) {
+            plugin.commsManager.send(
+                if (sender is Player) sender else target,
+                Component.text("You cannot use /fly in the PvP world.", NamedTextColor.RED)
+            )
+            return true
+        }
+
         target.allowFlight = !target.allowFlight
         target.isFlying = target.allowFlight
 
