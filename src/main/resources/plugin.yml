@@ -145,6 +145,18 @@ commands:
   casino:
     description: Open the Casino GUI (Mines, Roulette, Crash, Towers, Statistics)
     usage: /casino
+  mines:
+    description: Jump straight into the Casino's Mines game
+    usage: /mines
+  roulette:
+    description: Jump straight into the Casino's Roulette game
+    usage: /roulette
+  crash:
+    description: Jump straight into the Casino's Crash game
+    usage: /crash
+  towers:
+    description: Jump straight into the Casino's Towers game
+    usage: /towers
   orders:
     description: Open the Buy Orders marketplace
     usage: /orders [admin <view|info|cancel|remove> ...]

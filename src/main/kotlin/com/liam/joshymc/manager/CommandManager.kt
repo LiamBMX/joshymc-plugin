@@ -345,6 +345,22 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(com.liam.joshymc.command.CasinoCommand(plugin))
         }
 
+        plugin.getCommand("mines")?.let {
+            it.setExecutor(com.liam.joshymc.command.MinesCommand(plugin))
+        }
+
+        plugin.getCommand("roulette")?.let {
+            it.setExecutor(com.liam.joshymc.command.RouletteCommand(plugin))
+        }
+
+        plugin.getCommand("crash")?.let {
+            it.setExecutor(com.liam.joshymc.command.CrashCommand(plugin))
+        }
+
+        plugin.getCommand("towers")?.let {
+            it.setExecutor(com.liam.joshymc.command.TowersCommand(plugin))
+        }
+
         plugin.getCommand("orders")?.let {
             val cmd = com.liam.joshymc.command.OrdersCommand(plugin)
             it.setExecutor(cmd)
