@@ -12,9 +12,11 @@ import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 
 /**
- * `/crash` (issue #743) — direct entry point into the same Crash GUI offered from the
- * `/casino` hub. Routes through [CrashGui], a live view into the single shared round
- * tracked by [CasinoManager]'s Crash backend, so no duplicate round state is created.
+ * `/crash [bet]` (issue #743, optional bet arg added in #746) — direct entry point
+ * into the same Crash GUI offered from the `/casino` hub. Routes through [CrashGui],
+ * a live view into the single shared round tracked by [CasinoManager]'s Crash
+ * backend, so no duplicate round state is created. A live bet in the current round
+ * always wins over the argument.
  */
 class CrashCommand(private val plugin: Joshymc) : CommandExecutor {
 
@@ -36,7 +38,21 @@ class CrashCommand(private val plugin: Joshymc) : CommandExecutor {
             return true
         }
 
-        CrashGui.open(plugin, sender)
+        var presetBet: Double? = null
+        if (args.isNotEmpty()) {
+            val result = plugin.casinoManager.parseCommandBet(sender, CasinoManager.Game.CRASH, args[0])
+            if (result.error != null) {
+                plugin.commsManager.send(sender, Component.text(result.error, NamedTextColor.RED), CommunicationsManager.Category.CASINO)
+                return true
+            }
+            presetBet = result.amount
+        }
+
+        if (presetBet != null && plugin.casinoCrashManager.getLiveBet(sender.uniqueId) == null) {
+            CrashGui.openWithBet(plugin, sender, presetBet)
+        } else {
+            CrashGui.open(plugin, sender)
+        }
         return true
     }
 }

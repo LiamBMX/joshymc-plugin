@@ -23,6 +23,17 @@ import java.util.concurrent.ConcurrentHashMap
 object CrashGui {
 
     private val openGuis = ConcurrentHashMap<UUID, CustomGui>()
+    private val selectedAmount = ConcurrentHashMap<UUID, Double>()
+
+    /**
+     * Entry point for `/crash <bet>` (issue #746) — preselects [bet] so the "Place Bet"
+     * button places it immediately, no chat prompt needed. Callers must already have
+     * confirmed the player has no live bet in the current round.
+     */
+    fun openWithBet(plugin: Joshymc, player: Player, bet: Double) {
+        selectedAmount[player.uniqueId] = bet
+        open(plugin, player)
+    }
 
     fun open(plugin: Joshymc, player: Player) {
         val gui = CustomGui(Component.text("Crash", NamedTextColor.GOLD), 36)
@@ -125,18 +136,35 @@ object CrashGui {
                 CasinoGuiUtil.item(Material.GOLD_INGOT, Component.text("Your Bet", NamedTextColor.GOLD), listOf(Component.text(plugin.economyManager.format(liveBet.bet), NamedTextColor.WHITE)))
             )
         } else {
+            val preset = selectedAmount[player.uniqueId]
             gui.setItem(
                 11,
-                if (status == CasinoCrashManager.RoundStatus.BETTING) {
-                    CasinoGuiUtil.item(Material.EMERALD, Component.text("Place Bet", NamedTextColor.GREEN), listOf(Component.text("Click to bet this round.", NamedTextColor.GRAY)))
-                } else {
-                    CasinoGuiUtil.item(Material.GRAY_DYE, Component.text("Place Bet", NamedTextColor.GRAY), listOf(Component.text("Wait for the next round.", NamedTextColor.DARK_GRAY)))
+                when {
+                    status != CasinoCrashManager.RoundStatus.BETTING ->
+                        CasinoGuiUtil.item(Material.GRAY_DYE, Component.text("Place Bet", NamedTextColor.GRAY), listOf(Component.text("Wait for the next round.", NamedTextColor.DARK_GRAY)))
+                    preset != null ->
+                        CasinoGuiUtil.item(
+                            Material.EMERALD,
+                            Component.text("Place Bet", NamedTextColor.GREEN),
+                            listOf(
+                                Component.text("Bet: ${plugin.economyManager.format(preset)}", NamedTextColor.GRAY),
+                                Component.text("Click to place this bet.", NamedTextColor.GRAY)
+                            )
+                        )
+                    else ->
+                        CasinoGuiUtil.item(Material.EMERALD, Component.text("Place Bet", NamedTextColor.GREEN), listOf(Component.text("Click to bet this round.", NamedTextColor.GRAY)))
                 }
             ) { p, _ ->
                 if (manager.getRoundStatus() != CasinoCrashManager.RoundStatus.BETTING) return@setItem
-                plugin.casinoManager.promptAmount(p, onCancel = { p2 -> open(plugin, p2) }) { player2, amount ->
-                    manager.placeBet(player2, amount)
-                    open(plugin, player2)
+                val presetAmount = selectedAmount.remove(p.uniqueId)
+                if (presetAmount != null) {
+                    manager.placeBet(p, presetAmount)
+                    open(plugin, p)
+                } else {
+                    plugin.casinoManager.promptAmount(p, onCancel = { p2 -> open(plugin, p2) }) { player2, amount ->
+                        manager.placeBet(player2, amount)
+                        open(plugin, player2)
+                    }
                 }
             }
         }

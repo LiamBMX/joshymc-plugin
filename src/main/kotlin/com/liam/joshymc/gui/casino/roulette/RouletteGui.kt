@@ -26,7 +26,18 @@ import java.util.concurrent.ConcurrentHashMap
 object RouletteGui {
 
     private val selectedNumber = ConcurrentHashMap<UUID, Int>()
+    private val selectedAmount = ConcurrentHashMap<UUID, Double>()
     private val animRandom = SecureRandom()
+
+    /**
+     * Entry point for `/roulette <bet>` (issue #746) — preselects [bet] so the next
+     * bet-type click places it immediately, no chat prompt needed. Callers must
+     * already have confirmed there's no pending bet resolving.
+     */
+    fun openWithBet(plugin: Joshymc, player: Player, bet: Double) {
+        selectedAmount[player.uniqueId] = bet
+        open(plugin, player)
+    }
 
     fun open(plugin: Joshymc, player: Player) {
         if (plugin.casinoRouletteManager.hasPendingBet(player.uniqueId)) {
@@ -34,6 +45,7 @@ object RouletteGui {
         }
 
         val number = selectedNumber.getOrDefault(player.uniqueId, 0)
+        val presetBet = selectedAmount[player.uniqueId]
 
         val gui = CustomGui(Component.text("Roulette", NamedTextColor.DARK_RED), 54)
         gui.border(CasinoGuiUtil.filler())
@@ -94,6 +106,25 @@ object RouletteGui {
             )
         )
 
+        if (presetBet != null) {
+            gui.setItem(
+                47,
+                CasinoGuiUtil.item(
+                    Material.GOLD_INGOT,
+                    Component.text("Bet: ${plugin.economyManager.format(presetBet)}", NamedTextColor.GOLD),
+                    listOf(
+                        Component.text("Used automatically on your next bet.", NamedTextColor.GRAY),
+                        Component.text("Click to change it.", NamedTextColor.GRAY)
+                    )
+                )
+            ) { p, _ ->
+                plugin.casinoManager.promptAmount(p, onCancel = { p2 -> open(plugin, p2) }) { player2, amount ->
+                    selectedAmount[player2.uniqueId] = amount
+                    open(plugin, player2)
+                }
+            }
+        }
+
         gui.setItem(45, CasinoGuiUtil.backButton()) { p, _ -> CasinoMainGui.open(plugin, p) }
         gui.setItem(49, CasinoGuiUtil.closeButton()) { p, _ -> p.closeInventory() }
 
@@ -113,6 +144,17 @@ object RouletteGui {
     }
 
     private fun promptAndPlace(plugin: Joshymc, player: Player, betType: CasinoRouletteManager.BetType, betValue: Int?) {
+        val preset = selectedAmount.remove(player.uniqueId)
+        if (preset != null) {
+            val bet = plugin.casinoRouletteManager.placeBet(player, betType, betValue, preset)
+            if (bet == null) {
+                open(plugin, player)
+                return
+            }
+            playSpinAnimation(plugin, player, bet)
+            return
+        }
+
         plugin.casinoManager.promptAmount(player, onCancel = { p -> open(plugin, p) }) { p, amount ->
             val bet = plugin.casinoRouletteManager.placeBet(p, betType, betValue, amount)
             if (bet == null) {
