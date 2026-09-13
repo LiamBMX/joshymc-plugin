@@ -36,6 +36,7 @@ features:
   orders: true
   giveaways: true
   gift: true
+  casino: true
 
 # Mob Stacking — merges nearby mobs of the same type into a single entity
 mob-stacking:
@@ -69,6 +70,38 @@ coinflip:
   animation-duration-ticks: 80
   # How long the result stays on screen before the GUI closes, in ticks
   result-display-ticks: 50
+
+# Casino — Coins-only Mines/Roulette/Crash/Towers behind /casino. Never uses Credits.
+casino:
+  enabled: true
+  # Minimum bet amount
+  min-bet: 1000.0
+  # Maximum bet amount (-1 = unlimited)
+  max-bet: -1.0
+
+  mines:
+    enabled: true
+    house-edge-percent: 3.0
+    min-mines: 1
+    max-mines: 10
+
+  roulette:
+    enabled: true
+    house-edge-percent: 3.0
+
+  crash:
+    enabled: true
+    house-edge-percent: 3.0
+    betting-seconds: 10
+
+  towers:
+    enabled: true
+    house-edge-percent: 3.0
+    # Number of levels to climb before the tower auto-cashes-out
+    levels: 8
+
+  statistics:
+    enabled: true
 
 # Chat formatting
 chat:
