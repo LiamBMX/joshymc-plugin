@@ -838,13 +838,6 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             lore.add(Component.text("Claims: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
                 .append(Component.text("${claims.size} ($usedBlocks/$totalBlocks blocks)", NamedTextColor.WHITE)))
 
-            // IP if online
-            if (onlinePlayer != null) {
-                val ip = onlinePlayer.address?.address?.hostAddress ?: "Unknown"
-                lore.add(Component.text("IP: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
-                    .append(Component.text(ip, NamedTextColor.WHITE)))
-            }
-
             // Frozen status
             if (isFrozen(target.uniqueId)) {
                 lore.add(Component.empty())
