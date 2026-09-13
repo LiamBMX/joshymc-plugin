@@ -15,6 +15,7 @@ import org.bukkit.World
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
+import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
@@ -23,7 +24,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
-class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
+class RtpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private val cooldowns = ConcurrentHashMap<UUID, Long>()
 
@@ -48,19 +49,48 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
             return true
         }
 
-        val cooldownSeconds = plugin.config.getInt("rtp.cooldown-seconds", 60)
-        val now = System.currentTimeMillis()
-        val lastUse = cooldowns[sender.uniqueId]
-        if (lastUse != null) {
-            val remaining = cooldownSeconds - ((now - lastUse) / 1000)
+        if (args.isNotEmpty() && args[0].equals("end", ignoreCase = true)) {
+            if (!sender.hasPermission("joshymc.rtp.end")) {
+                plugin.commsManager.send(sender, Component.text("You do not have permission to RTP to the End.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
+                return true
+            }
+
+            val remaining = cooldownRemaining(sender)
             if (remaining > 0) {
                 plugin.commsManager.send(sender, Component.text("RTP is on cooldown. Wait ${remaining}s.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
                 return true
             }
+
+            val endWorld = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.THE_END }
+            if (endWorld == null) {
+                plugin.commsManager.send(sender, Component.text("No End world found.", NamedTextColor.RED))
+                return true
+            }
+            startRtp(sender, endWorld, allowEnd = true)
+            return true
+        }
+
+        val remaining = cooldownRemaining(sender)
+        if (remaining > 0) {
+            plugin.commsManager.send(sender, Component.text("RTP is on cooldown. Wait ${remaining}s.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
+            return true
         }
 
         openWorldSelector(sender)
         return true
+    }
+
+    override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
+        if (args.size == 1 && sender.hasPermission("joshymc.rtp.end")) {
+            return listOf("end").filter { it.startsWith(args[0], ignoreCase = true) }
+        }
+        return emptyList()
+    }
+
+    private fun cooldownRemaining(player: Player): Long {
+        val cooldownSeconds = plugin.config.getInt("rtp.cooldown-seconds", 60)
+        val lastUse = cooldowns[player.uniqueId] ?: return 0
+        return cooldownSeconds - ((System.currentTimeMillis() - lastUse) / 1000)
     }
 
     private fun openWorldSelector(player: Player) {
@@ -113,7 +143,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
             startRtp(p, world)
         }
 
-        // Nether (slot 13)
+        // Nether (slot 15)
         val netherHead = createCustomHead(
             NETHER_TEXTURE,
             Component.text("The Nether", TextColor.color(0xFF5555))
@@ -128,7 +158,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
                 Component.empty()
             )
         )
-        gui.setItem(13, netherHead) { p, _ ->
+        gui.setItem(15, netherHead) { p, _ ->
             p.closeInventory()
             val world = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.NETHER }
             if (world == null) {
@@ -142,8 +172,8 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
-    private fun startRtp(player: Player, world: World, skipWarmup: Boolean = false) {
-        if (world.environment == World.Environment.THE_END) {
+    private fun startRtp(player: Player, world: World, skipWarmup: Boolean = false, allowEnd: Boolean = false) {
+        if (world.environment == World.Environment.THE_END && !allowEnd) {
             plugin.commsManager.send(player, Component.text("You cannot use /rtp in the End.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
             return
         }
