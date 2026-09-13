@@ -176,6 +176,16 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var coinflipManager: com.liam.joshymc.manager.CoinflipManager
         private set
+    lateinit var casinoManager: com.liam.joshymc.manager.CasinoManager
+        private set
+    lateinit var casinoMinesManager: com.liam.joshymc.manager.CasinoMinesManager
+        private set
+    lateinit var casinoRouletteManager: com.liam.joshymc.manager.CasinoRouletteManager
+        private set
+    lateinit var casinoCrashManager: com.liam.joshymc.manager.CasinoCrashManager
+        private set
+    lateinit var casinoTowersManager: com.liam.joshymc.manager.CasinoTowersManager
+        private set
     lateinit var guiManager: GuiManager
         private set
     lateinit var antiCheatManager: AntiCheatManager
@@ -327,6 +337,11 @@ class Joshymc : JavaPlugin() {
         npcManager = NPCManager(this)
         crateManager = CrateManager(this)
         coinflipManager = com.liam.joshymc.manager.CoinflipManager(this)
+        casinoManager = com.liam.joshymc.manager.CasinoManager(this)
+        casinoMinesManager = com.liam.joshymc.manager.CasinoMinesManager(this)
+        casinoRouletteManager = com.liam.joshymc.manager.CasinoRouletteManager(this)
+        casinoCrashManager = com.liam.joshymc.manager.CasinoCrashManager(this)
+        casinoTowersManager = com.liam.joshymc.manager.CasinoTowersManager(this)
         auctionManager = AuctionManager(this)
         giveawayManager = com.liam.joshymc.manager.GiveawayManager(this)
         giftManager = com.liam.joshymc.manager.GiftManager(this)
@@ -403,6 +418,13 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("npcs")) npcManager.start()
         crateManager.start()
         if (isFeatureEnabled("coinflip")) coinflipManager.start()
+        if (isFeatureEnabled("casino")) {
+            casinoManager.start()
+            casinoMinesManager.start()
+            casinoRouletteManager.start()
+            casinoCrashManager.start()
+            casinoTowersManager.start()
+        }
         auctionManager.start()
         if (isFeatureEnabled("giveaways")) giveawayManager.start()
         if (isFeatureEnabled("gift")) giftManager.start()
@@ -499,6 +521,11 @@ class Joshymc : JavaPlugin() {
         giveawayManager.stop()
         giftManager.stop()
         coinflipManager.stop()
+        casinoMinesManager.stop()
+        casinoRouletteManager.stop()
+        casinoCrashManager.stop()
+        casinoTowersManager.stop()
+        casinoManager.stop()
         orderManager.stop()
         hopperPlusManager.stop()
         spawnerManager.stop()
@@ -563,6 +590,11 @@ class Joshymc : JavaPlugin() {
         safe("giveawayManager.stop") { giveawayManager.stop() }
         safe("giftManager.stop") { giftManager.stop() }
         safe("coinflipManager.stop") { coinflipManager.stop() }
+        safe("casinoMinesManager.stop") { casinoMinesManager.stop() }
+        safe("casinoRouletteManager.stop") { casinoRouletteManager.stop() }
+        safe("casinoCrashManager.stop") { casinoCrashManager.stop() }
+        safe("casinoTowersManager.stop") { casinoTowersManager.stop() }
+        safe("casinoManager.stop") { casinoManager.stop() }
         safe("orderManager.stop") { orderManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
         safe("questCycleManager.stop") { questCycleManager.stop() }
@@ -604,6 +636,13 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("giveaways")) safe("giveawayManager.start") { giveawayManager.start() }
         if (isFeatureEnabled("gift")) safe("giftManager.start") { giftManager.start() }
         if (isFeatureEnabled("coinflip")) safe("coinflipManager.start") { coinflipManager.start() }
+        if (isFeatureEnabled("casino")) {
+            safe("casinoManager.start") { casinoManager.start() }
+            safe("casinoMinesManager.start") { casinoMinesManager.start() }
+            safe("casinoRouletteManager.start") { casinoRouletteManager.start() }
+            safe("casinoCrashManager.start") { casinoCrashManager.start() }
+            safe("casinoTowersManager.start") { casinoTowersManager.start() }
+        }
         if (isFeatureEnabled("orders")) safe("orderManager.start") { orderManager.start() }
         safe("signShopManager.start") { signShopManager.start() }
         safe("hopperPlusManager.start") { hopperPlusManager.start() }

@@ -341,6 +341,10 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("casino")?.let {
+            it.setExecutor(com.liam.joshymc.command.CasinoCommand(plugin))
+        }
+
         plugin.getCommand("orders")?.let {
             val cmd = com.liam.joshymc.command.OrdersCommand(plugin)
             it.setExecutor(cmd)
