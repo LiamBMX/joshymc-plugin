@@ -428,39 +428,78 @@ class TraineeModeManager(private val plugin: Joshymc) {
         plugin.guiManager.open(trainee, gui)
     }
 
-    // ---- Tool 3: Teleport to Player (self only) ----
+    // ---- Tool 3: Teleport to Staff (self only, Mod Mode staff only) ----
 
-    fun openTeleportMenu(trainee: Player) {
-        val online = Bukkit.getOnlinePlayers().filter {
-            it.uniqueId != trainee.uniqueId && !plugin.vanishCommand.isVanished(it)
-        }
+    /** Staff currently eligible for shadowing: online, in Mod Mode, and not vanished from the Trainee. */
+    private fun eligibleStaff(trainee: Player): List<Player> = Bukkit.getOnlinePlayers().filter {
+        it.uniqueId != trainee.uniqueId && plugin.modModeManager.isModMode(it) && !plugin.vanishCommand.isVanished(it)
+    }
+
+    fun openTeleportMenu(trainee: Player, page: Int = 0) {
+        val staff = eligibleStaff(trainee)
 
         val gui = CustomGui(
-            Component.text("Teleport to Player", NamedTextColor.AQUA).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
+            Component.text("Teleport to Staff", NamedTextColor.AQUA).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
             54
         )
         gui.fill(filler)
 
-        for ((index, target) in online.withIndex()) {
-            if (index >= 45) break
+        if (staff.isEmpty()) {
+            gui.setItem(22, simpleItem(Material.BARRIER, "No staff are currently in Mod Mode.", NamedTextColor.GRAY))
+            gui.setItem(49, closeItem()) { p, _ -> p.closeInventory() }
+            plugin.guiManager.open(trainee, gui)
+            return
+        }
+
+        val itemsPerPage = 45
+        val totalPages = ((staff.size - 1) / itemsPerPage).coerceAtLeast(0)
+        val currentPage = page.coerceIn(0, totalPages)
+        val start = currentPage * itemsPerPage
+        val pageStaff = staff.drop(start).take(itemsPerPage)
+
+        for ((index, target) in pageStaff.withIndex()) {
             val head = ItemStack(Material.PLAYER_HEAD)
             head.editMeta(SkullMeta::class.java) { meta ->
                 meta.owningPlayer = target
-                meta.displayName(Component.text(target.name, NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false))
-                meta.lore(listOf(Component.text("Click to teleport yourself here.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)))
+                meta.displayName(Component.text(target.name, NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false))
+
+                val rank = plugin.rankManager.getPlayerRank(target)
+                val lore = mutableListOf<Component>()
+                lore.add(Component.empty())
+                if (rank != null) {
+                    lore.add(plugin.commsManager.parseLegacy(rank.displayTag).decoration(TextDecoration.ITALIC, false))
+                }
+                lore.add(infoLine("World", target.world.name))
+                lore.add(Component.empty())
+                lore.add(Component.text("Click to teleport yourself here.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+                meta.lore(lore)
             }
             val targetUuid = target.uniqueId
             gui.setItem(index, head) { p, _ ->
-                p.closeInventory()
                 val current = Bukkit.getPlayer(targetUuid)
-                if (current == null) {
-                    plugin.commsManager.send(p, Component.text("That player is no longer online.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+                if (current == null || !plugin.modModeManager.isModMode(current)) {
+                    plugin.commsManager.send(p, Component.text("That staff member is no longer in Mod Mode.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+                    openTeleportMenu(p, currentPage)
                     return@setItem
                 }
+                p.closeInventory()
                 // Trainees may only move themselves — this never touches the target's location/state.
                 p.teleport(current.location)
+                // Re-apply the pvp-world flight restriction for the trainee's new world.
+                applyFlightForWorld(p)
                 plugin.commsManager.send(p, Component.text("Teleported to ${current.name}.", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 p.playSound(p.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.6f, 1.2f)
+            }
+        }
+
+        if (currentPage > 0) {
+            gui.setItem(48, simpleItem(Material.ARROW, "Previous Page", NamedTextColor.GRAY)) { p, _ ->
+                openTeleportMenu(p, currentPage - 1)
+            }
+        }
+        if (currentPage < totalPages) {
+            gui.setItem(50, simpleItem(Material.ARROW, "Next Page", NamedTextColor.GRAY)) { p, _ ->
+                openTeleportMenu(p, currentPage + 1)
             }
         }
 
