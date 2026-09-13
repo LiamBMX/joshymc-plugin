@@ -13,7 +13,6 @@ import org.bukkit.event.player.PlayerRespawnEvent
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.random.Random
 
 class WelcomeListener(private val plugin: Joshymc) : Listener {
 
@@ -248,16 +247,9 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         val msg = "&6&l★ &e${welcomer.name} &awelcomed &f$newcomerName &ato the server! &6&l★"
         plugin.server.broadcast(plugin.commsManager.parseLegacy(msg))
 
-        // Flat money reward
+        // Flat reward: $10,000 Money + 1 Credit, every time.
         plugin.economyManager.deposit(welcomer.uniqueId, 10000.0)
-
-        // 10% chance of 1 credit, otherwise an AFK crate key
-        if (Random.nextDouble() < 0.1) {
-            plugin.creditsManager.deposit(welcomer.uniqueId, 1.0)
-            plugin.commsManager.send(welcomer, plugin.commsManager.parseLegacy("&aYou received &f${plugin.economyManager.format(10000.0)} &aand &b1 Credit &afor welcoming $newcomerName!"))
-        } else {
-            plugin.crateManager.giveKey(welcomer, "afk", 1)
-            plugin.commsManager.send(welcomer, plugin.commsManager.parseLegacy("&aYou received &f${plugin.economyManager.format(10000.0)} &aand an &bAFK Key &afor welcoming $newcomerName!"))
-        }
+        plugin.creditsManager.deposit(welcomer.uniqueId, 1.0)
+        plugin.commsManager.send(welcomer, plugin.commsManager.parseLegacy("&aYou received &f${plugin.economyManager.format(10000.0)} &aand &b1 Credit &afor welcoming $newcomerName!"))
     }
 }
