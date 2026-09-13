@@ -39,6 +39,8 @@ object RouletteGui {
         gui.border(CasinoGuiUtil.filler())
         for (slot in 10..16) gui.setItem(slot, CasinoGuiUtil.filler())
         for (slot in 19..25) gui.setItem(slot, CasinoGuiUtil.filler())
+        for (slot in 28..34) gui.setItem(slot, CasinoGuiUtil.filler())
+        for (slot in 37..43) gui.setItem(slot, CasinoGuiUtil.filler())
 
         gui.setItem(
             4,
@@ -49,25 +51,29 @@ object RouletteGui {
             )
         )
 
+        // Main betting row — Red / Black / Green, spread evenly across the row.
         betTypeButton(gui, plugin, 10, Material.RED_WOOL, "Red", NamedTextColor.RED, CasinoRouletteManager.BetType.RED)
-        betTypeButton(gui, plugin, 11, Material.BLACK_WOOL, "Black", NamedTextColor.DARK_GRAY, CasinoRouletteManager.BetType.BLACK)
-        betTypeButton(gui, plugin, 12, Material.LIME_WOOL, "Green (0)", NamedTextColor.GREEN, CasinoRouletteManager.BetType.GREEN)
-        betTypeButton(gui, plugin, 13, Material.PAPER, "Odd", NamedTextColor.YELLOW, CasinoRouletteManager.BetType.ODD)
-        betTypeButton(gui, plugin, 14, Material.PAPER, "Even", NamedTextColor.YELLOW, CasinoRouletteManager.BetType.EVEN)
-        betTypeButton(gui, plugin, 15, Material.IRON_INGOT, "Low (1-18)", NamedTextColor.AQUA, CasinoRouletteManager.BetType.LOW)
-        betTypeButton(gui, plugin, 16, Material.GOLD_INGOT, "High (19-36)", NamedTextColor.AQUA, CasinoRouletteManager.BetType.HIGH)
+        betTypeButton(gui, plugin, 13, Material.BLACK_WOOL, "Black", NamedTextColor.DARK_GRAY, CasinoRouletteManager.BetType.BLACK)
+        betTypeButton(gui, plugin, 16, Material.LIME_WOOL, "Green (0)", NamedTextColor.GREEN, CasinoRouletteManager.BetType.GREEN)
 
-        gui.setItem(19, CasinoGuiUtil.item(Material.RED_DYE, Component.text("-1", NamedTextColor.RED))) { p, _ ->
+        // Second betting row — Odd / Even / Low / High, spread evenly across the row.
+        betTypeButton(gui, plugin, 19, Material.PAPER, "Odd", NamedTextColor.YELLOW, CasinoRouletteManager.BetType.ODD)
+        betTypeButton(gui, plugin, 21, Material.PAPER, "Even", NamedTextColor.YELLOW, CasinoRouletteManager.BetType.EVEN)
+        betTypeButton(gui, plugin, 23, Material.IRON_INGOT, "Low (1-18)", NamedTextColor.AQUA, CasinoRouletteManager.BetType.LOW)
+        betTypeButton(gui, plugin, 25, Material.GOLD_INGOT, "High (19-36)", NamedTextColor.AQUA, CasinoRouletteManager.BetType.HIGH)
+
+        // Third row — exact-number picker, spread evenly across the row.
+        gui.setItem(28, CasinoGuiUtil.item(Material.RED_DYE, Component.text("-1", NamedTextColor.RED))) { p, _ ->
             selectedNumber[p.uniqueId] = ((number - 1) % 37 + 37) % 37
             open(plugin, p)
         }
-        gui.setItem(20, CasinoGuiUtil.item(Material.NAME_TAG, Component.text("Number: $number", NamedTextColor.WHITE)))
-        gui.setItem(21, CasinoGuiUtil.item(Material.LIME_DYE, Component.text("+1", NamedTextColor.GREEN))) { p, _ ->
+        gui.setItem(30, CasinoGuiUtil.item(Material.NAME_TAG, Component.text("Number: $number", NamedTextColor.WHITE)))
+        gui.setItem(32, CasinoGuiUtil.item(Material.LIME_DYE, Component.text("+1", NamedTextColor.GREEN))) { p, _ ->
             selectedNumber[p.uniqueId] = (number + 1) % 37
             open(plugin, p)
         }
         gui.setItem(
-            23,
+            34,
             CasinoGuiUtil.item(
                 Material.EMERALD,
                 Component.text("Bet on Exact Number", NamedTextColor.GREEN),
@@ -75,8 +81,9 @@ object RouletteGui {
             )
         ) { p, _ -> promptAndPlace(plugin, p, CasinoRouletteManager.BetType.NUMBER, number) }
 
+        // Fourth row — payout reference, centered.
         gui.setItem(
-            31,
+            40,
             CasinoGuiUtil.item(
                 Material.BOOK,
                 Component.text("Payouts", NamedTextColor.AQUA),
