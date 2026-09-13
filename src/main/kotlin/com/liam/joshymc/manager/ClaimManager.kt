@@ -118,7 +118,6 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         startingBlocks = plugin.config.getInt("claims.starting-blocks", 500)
         blocksPerHour = plugin.config.getInt("claims.blocks-per-hour", 100)
         maxTotalBlocks = plugin.config.getInt("claims.max-blocks", 50000)
-        endIslandRadius = plugin.config.getInt("claims.end-island-radius", 1000)
 
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS claims_v2 (
@@ -204,6 +203,15 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         startClaimExpiryTask()
 
         plugin.logger.info("[Claims] Started with ${claims.size} claim(s) and ${subclaims.size} subclaim(s).")
+
+        val legacyClaims = claims.filter { Bukkit.getWorld(it.world)?.environment?.let { env -> env != org.bukkit.World.Environment.NORMAL } == true }
+        if (legacyClaims.isNotEmpty()) {
+            plugin.logger.warning(
+                "[Claims] ${legacyClaims.size} legacy claim(s) exist outside the Overworld " +
+                    "(ids: ${legacyClaims.joinToString(", ") { it.id.toString() }}) — claims are now Overworld-only, " +
+                    "so these are no longer enforced or editable. They are kept for reference; clean them up manually if desired."
+            )
+        }
     }
 
     fun stop() {
@@ -356,7 +364,14 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     //  CLAIM OPERATIONS
     // ══════════════════════════════════════════════════════════
 
+    /**
+     * Claims only exist and are enforced in the Overworld. A location in the
+     * Nether/End never resolves to a claim here, even if a legacy claim's
+     * stored bounds technically overlap it — this is the single choke point
+     * that keeps protection, trust, and management commands Overworld-only.
+     */
     fun getClaimAt(location: Location): Claim? {
+        if (location.world?.environment != org.bukkit.World.Environment.NORMAL) return null
         return claims.firstOrNull { it.contains(location) }
     }
 
@@ -370,26 +385,14 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
      * Create a claim between two corners. Returns the new claim or null on failure.
      */
     private val blockedWorlds = setOf("resource", "spawn", "afk")
-    private var endIslandRadius = 1000
-
-    private fun isOnMainEndIsland(minX: Int, minZ: Int, maxX: Int, maxZ: Int): Boolean {
-        return maxX >= -endIslandRadius && minX <= endIslandRadius &&
-                maxZ >= -endIslandRadius && minZ <= endIslandRadius
-    }
 
     fun createClaim(player: Player, pos1: Location, pos2: Location): ClaimCreateResult {
-        val worldName = pos1.world?.name ?: return ClaimCreateResult.Failure("Invalid world.")
-        if (worldName in blockedWorlds) return ClaimCreateResult.Failure("You cannot claim land in this world.")
-
-        if (pos1.world?.environment == org.bukkit.World.Environment.THE_END) {
-            val minX = min(pos1.blockX, pos2.blockX)
-            val maxX = max(pos1.blockX, pos2.blockX)
-            val minZ = min(pos1.blockZ, pos2.blockZ)
-            val maxZ = max(pos1.blockZ, pos2.blockZ)
-            if (isOnMainEndIsland(minX, minZ, maxX, maxZ)) {
-                return ClaimCreateResult.Failure("You cannot claim land on the main End island.")
-            }
+        val world = pos1.world ?: return ClaimCreateResult.Failure("Invalid world.")
+        if (world.environment != org.bukkit.World.Environment.NORMAL) {
+            return ClaimCreateResult.Failure("Claims can only be created in the Overworld.")
         }
+        val worldName = world.name
+        if (worldName in blockedWorlds) return ClaimCreateResult.Failure("You cannot claim land in this world.")
         if (pos1.world?.name != pos2.world?.name) return ClaimCreateResult.Failure("Corners must be in the same world.")
 
         val minX = min(pos1.blockX, pos2.blockX)
@@ -864,19 +867,14 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         if (!isClaimWand(player)) return
         if (!player.hasPermission("joshymc.claim")) return
 
-        if (player.world.name in blockedWorlds) {
-            plugin.commsManager.send(player, Component.text("You cannot claim land in this world.", NamedTextColor.RED))
+        if (player.world.environment != org.bukkit.World.Environment.NORMAL) {
+            plugin.commsManager.send(player, Component.text("Claims can only be created in the Overworld.", NamedTextColor.RED))
             return
         }
 
-        val clickedBlock = event.clickedBlock
-        if (player.world.environment == org.bukkit.World.Environment.THE_END && clickedBlock != null) {
-            val bx = clickedBlock.x
-            val bz = clickedBlock.z
-            if (bx >= -endIslandRadius && bx <= endIslandRadius && bz >= -endIslandRadius && bz <= endIslandRadius) {
-                plugin.commsManager.send(player, Component.text("You cannot claim land on the main End island.", NamedTextColor.RED))
-                return
-            }
+        if (player.world.name in blockedWorlds) {
+            plugin.commsManager.send(player, Component.text("You cannot claim land in this world.", NamedTextColor.RED))
+            return
         }
 
         event.isCancelled = true
@@ -959,6 +957,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         particleTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
             for (uuid in showingParticles.toSet()) {
                 val player = Bukkit.getPlayer(uuid) ?: continue
+                if (player.world.environment != org.bukkit.World.Environment.NORMAL) continue
                 val playerTeam = plugin.teamManager.getPlayerTeam(player.uniqueId)
 
                 for (claim in claims) {
