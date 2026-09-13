@@ -40,10 +40,10 @@ class TraineeInvsee : CustomItem() {
 class TraineeTeleport : CustomItem() {
     override val id = "trainee_tp"
     override val material = Material.COMPASS
-    override val displayName = toolName("Teleport to Player", TextColor.color(0xDD55FF))
+    override val displayName = toolName("Teleport to Staff", TextColor.color(0xDD55FF))
     override val lore = LoreBuilder.build(
         type = "Trainee Mode Tool",
-        description = listOf("Right-click to open a list of", "online players."),
+        description = listOf("Right-click to open a list of", "staff currently in Mod Mode."),
         usage = "Teleports only you — never another player."
     )
 }
