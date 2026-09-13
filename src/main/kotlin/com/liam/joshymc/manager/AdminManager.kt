@@ -806,6 +806,13 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             lore.add(Component.text("Status: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
                 .append(if (online) Component.text("Online", NamedTextColor.GREEN) else Component.text("Offline", NamedTextColor.RED)))
 
+            // Gamemode — read-only display, always shown regardless of restricted;
+            // the only way to change it from this panel is the Set Gamemode button below.
+            if (onlinePlayer != null) {
+                lore.add(Component.text("Gamemode: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+                    .append(Component.text(onlinePlayer.gameMode.name, NamedTextColor.WHITE)))
+            }
+
             // Rank
             val rank = if (onlinePlayer != null) plugin.rankManager.getPlayerRank(onlinePlayer) else plugin.rankManager.getPlayerRankById(target.uniqueId)
             if (rank != null) {
@@ -924,8 +931,8 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // ── Row 3: More actions (permission-gated) ─────
 
-        // Set Gamemode (slot 19) — admin only
-        if (admin.hasPermission(PERM_ADMIN)) {
+        // Set Gamemode (slot 19) — admin only, never in a restricted (Mod Mode) panel
+        if (!restricted && admin.hasPermission(PERM_ADMIN)) {
             val currentGm = target.player?.gameMode ?: GameMode.SURVIVAL
             gui.setItem(19, buildItem(Material.DIAMOND_SWORD, "Set Gamemode", NamedTextColor.AQUA,
                 "Current: ${currentGm.name}", "Click to cycle gamemodes")) { p, _ ->
