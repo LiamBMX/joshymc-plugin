@@ -132,6 +132,13 @@ discord:
   # Placeholders: {name}, {message}
   minecraft-format: "&9[Discord] &f{name} &7» &f{message}"
 
+  punishments:
+    # Post every issued punishment (ban/tempban/mute/tempmute/warn) as its own
+    # Discord Forum post. Requires the bot to have View Channel, Create Posts,
+    # Send Messages and Embed Links on the forum channel below.
+    enabled: true
+    forum-channel-id: "1548796268099272864"
+
 # Recipe Blocker — block players from crafting specific items
 # Use material names from: https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Material.html
 recipe-blocker:

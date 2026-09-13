@@ -60,6 +60,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_by_uuid TEXT") } catch (_: Exception) {}
         try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_reason TEXT") } catch (_: Exception) {}
         try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_at INTEGER") } catch (_: Exception) {}
+        try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN discord_thread_id TEXT") } catch (_: Exception) {}
 
         plugin.server.pluginManager.registerEvents(this, plugin)
 
@@ -80,10 +81,17 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
     }
 
     fun unban(targetUuid: UUID, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null) {
+        val revokedIds = plugin.databaseManager.query(
+            "SELECT id FROM punishments WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1",
+            targetUuid.toString()
+        ) { rs -> rs.getInt("id") }
+
         plugin.databaseManager.execute(
             "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1",
             revokerName, revokerUuid?.toString(), revokeReason, System.currentTimeMillis(), targetUuid.toString()
         )
+
+        revokedIds.forEach { syncDiscordRevocation(it, revokerName, revokeReason) }
     }
 
     fun isBanned(targetUuid: UUID): ActivePunishment? {
@@ -116,10 +124,17 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
     }
 
     fun unmute(targetUuid: UUID, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null) {
+        val revokedIds = plugin.databaseManager.query(
+            "SELECT id FROM punishments WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1",
+            targetUuid.toString()
+        ) { rs -> rs.getInt("id") }
+
         plugin.databaseManager.execute(
             "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1",
             revokerName, revokerUuid?.toString(), revokeReason, System.currentTimeMillis(), targetUuid.toString()
         )
+
+        revokedIds.forEach { syncDiscordRevocation(it, revokerName, revokeReason) }
     }
 
     fun isMuted(targetUuid: UUID): ActivePunishment? {
@@ -157,10 +172,12 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
     fun unwarn(targetUuid: UUID, warnId: Int? = null, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null): Boolean {
         val now = System.currentTimeMillis()
         return if (warnId != null) {
-            plugin.databaseManager.executeUpdate(
+            val updated = plugin.databaseManager.executeUpdate(
                 "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE id = ? AND target_uuid = ? AND type = 'WARN' AND active = 1",
                 revokerName, revokerUuid?.toString(), revokeReason, now, warnId, targetUuid.toString()
             ) > 0
+            if (updated) syncDiscordRevocation(warnId, revokerName, revokeReason)
+            updated
         } else {
             val record = plugin.databaseManager.queryFirst(
                 "SELECT id FROM punishments WHERE target_uuid = ? AND type = 'WARN' AND active = 1 ORDER BY created_at DESC LIMIT 1",
@@ -170,6 +187,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
                 "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE id = ?",
                 revokerName, revokerUuid?.toString(), revokeReason, now, record
             )
+            syncDiscordRevocation(record, revokerName, revokeReason)
             true
         }
     }
@@ -263,7 +281,20 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         )
 
         val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { rs -> rs.getInt("id") } ?: -1
+
+        // Kicks are momentary, not a standing punishment - only real punishments get a forum post.
+        if (id != -1 && type != "KICK") {
+            plugin.discordManager.syncPunishmentCreated(id, type, targetUuid, targetName, punisherName, reason, durationMs, expiresAt, now)
+        }
+
         return InsertedPunishment(id, expiresAt)
+    }
+
+    private fun syncDiscordRevocation(punishmentId: Int, revokerName: String?, revokeReason: String?) {
+        val threadId = plugin.databaseManager.queryFirst(
+            "SELECT discord_thread_id FROM punishments WHERE id = ?", punishmentId
+        ) { rs -> rs.getString("discord_thread_id") } ?: return
+        plugin.discordManager.syncPunishmentRevoked(threadId, revokerName?.takeIf { it.isNotBlank() } ?: "Console", revokeReason)
     }
 
     /**
