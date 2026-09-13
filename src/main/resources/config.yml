@@ -570,7 +570,9 @@ announcements:
 
 # Welcome / MOTD — join/leave messages
 welcome:
-  first-join-message: "&6&l★ &eWelcome &f{player} &eto JoshyMC! &6&l★"
+  # Type "welcome" in chat within 30 seconds of a new player's first join to
+  # reward them (see WelcomeListener) — no command involved anymore.
+  first-join-message: "&6&l★ &eWelcome &f{player} &eto JoshyMC! Type &f\"welcome\" &ein chat within 30 seconds to welcome them! &6&l★"
   first-join-broadcast: true
   join-format: "&8[&a+&8] &7{player}"
   leave-format: "&8[&c-&8] &7{player}"
