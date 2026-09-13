@@ -40,6 +40,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         }
         private const val PAGE_SIZE = 28
         private val CONTENT_SLOTS: List<Int> = (1..4).flatMap { row -> (1..7).map { col -> row * 9 + col } }
+        private const val CANCEL_WINDOW_MS = 30 * 60 * 1000L
 
         private fun title(text: String, color: TextColor = TextColor.color(0x55FFFF)): Component =
             Component.text("         ")
@@ -265,10 +266,17 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
 
     // ---- Cancellation ----
 
+    /** Creators may only cancel within [CANCEL_WINDOW_MS] of creation, checked against the persisted `createdAt`. */
+    fun canCancel(giveaway: Giveaway): Boolean = System.currentTimeMillis() - giveaway.createdAt < CANCEL_WINDOW_MS
+
     fun cancelGiveaway(player: Player, id: Int) {
         val giveaway = getGiveaway(id)
         if (giveaway == null || giveaway.creatorUuid != player.uniqueId) {
             plugin.commsManager.send(player, Component.text("Giveaway not found.", NamedTextColor.RED))
+            return
+        }
+        if (!canCancel(giveaway)) {
+            plugin.commsManager.send(player, Component.text("This giveaway can no longer be cancelled — the 30-minute window has passed.", NamedTextColor.RED))
             return
         }
 
@@ -850,14 +858,24 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         val slots = (9..35).toList()
         for ((idx, giveaway) in mine.withIndex()) {
             if (idx >= slots.size) break
+            val cancellable = canCancel(giveaway)
             val icon = buildListingIcon(player, giveaway)
             icon.editMeta { meta ->
                 val lore = (meta.lore() ?: mutableListOf()).toMutableList()
                 lore.add(Component.empty())
-                lore.add(Component.text("  Click to cancel & refund", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+                if (cancellable) {
+                    lore.add(Component.text("  Click to cancel & refund", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+                } else {
+                    lore.add(Component.text("  Cancellation Locked", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+                    lore.add(Component.text("  Giveaways can only be cancelled", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+                    lore.add(Component.text("  within 30 minutes of creation.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+                }
                 meta.lore(lore)
             }
-            gui.setItem(slots[idx], icon) { p, _ -> cancelGiveaway(p, giveaway.id); openMyGiveawaysGui(p) }
+            gui.setItem(slots[idx], icon) { p, _ ->
+                if (cancellable) cancelGiveaway(p, giveaway.id)
+                openMyGiveawaysGui(p)
+            }
         }
 
         gui.setItem(40, simpleItem(Material.ARROW, "Back", NamedTextColor.WHITE)) { p, _ -> openMainGui(p) }
