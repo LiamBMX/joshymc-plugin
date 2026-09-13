@@ -2,12 +2,12 @@ package com.liam.joshymc.item.impl
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.item.CustomItem
-import com.liam.joshymc.util.LoreBuilder
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
+import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.inventory.meta.ItemMeta
 
 // ── September Autumn Collection ──────────────────────────────────────────────
@@ -24,11 +24,7 @@ class AutumnsEdge : CustomItem() {
         .decoration(TextDecoration.ITALIC, false)
         .decoration(TextDecoration.BOLD, true)
 
-    override val lore = LoreBuilder.build(
-        type = "Sword",
-        description = listOf("Exclusive September custom sword."),
-        usage = "Behaves like a normal Netherite Sword.",
-    )
+    override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
@@ -46,11 +42,7 @@ class HarvestScythe : CustomItem() {
         .decoration(TextDecoration.ITALIC, false)
         .decoration(TextDecoration.BOLD, true)
 
-    override val lore = LoreBuilder.build(
-        type = "Hoe",
-        description = listOf("Exclusive harvest-themed custom weapon/tool."),
-        usage = "Behaves like a normal Netherite Hoe.",
-    )
+    override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
@@ -68,11 +60,7 @@ class OrchardPickaxe : CustomItem() {
         .decoration(TextDecoration.ITALIC, false)
         .decoration(TextDecoration.BOLD, true)
 
-    override val lore = LoreBuilder.build(
-        type = "Pickaxe",
-        description = listOf("Exclusive September custom pickaxe."),
-        usage = "Behaves like a normal Netherite Pickaxe.",
-    )
+    override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
@@ -90,15 +78,15 @@ class GoldenCrest : CustomItem() {
         .decoration(TextDecoration.ITALIC, false)
         .decoration(TextDecoration.BOLD, true)
 
-    override val lore = LoreBuilder.build(
-        type = "Helmet",
-        description = listOf("Exclusive seasonal wearable helmet."),
-        usage = "Behaves like a normal Netherite Helmet.",
-    )
+    override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
         meta.setItemModel(NamespacedKey(Joshymc.instance, "golden_crest"))
+        val equippable = meta.equippable
+        equippable.slot = EquipmentSlot.HEAD
+        equippable.model = NamespacedKey(Joshymc.instance, "golden_crest")
+        meta.setEquippable(equippable)
     }
 }
 
@@ -112,11 +100,7 @@ class FallingLeaf : CustomItem() {
         .decoration(TextDecoration.ITALIC, false)
         .decoration(TextDecoration.BOLD, true)
 
-    override val lore = LoreBuilder.build(
-        type = "Elytra",
-        description = listOf("Exclusive autumn-themed Elytra."),
-        usage = "Behaves like a normal Elytra.",
-    )
+    override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true

@@ -31,6 +31,9 @@ class ModModeManager(private val plugin: Joshymc) {
         const val PERM_BASE = "joshymc.modmode"
         const val PERM_EDIT = "joshymc.modmode.edit"
 
+        /** Max gap between two sneak-presses, in ms, to count as a double-shift. */
+        private const val SPECTATOR_DOUBLE_SNEAK_MS = 600L
+
         val HOTBAR_ITEM_IDS = listOf(
             "modmode_punish",
             "modmode_rtp",
@@ -49,6 +52,9 @@ class ModModeManager(private val plugin: Joshymc) {
 
     /** Players currently "peeking" spectator mode within Moderator Mode -> the gamemode to restore to. */
     private val spectating = mutableMapOf<UUID, GameMode>()
+
+    /** Timestamp (ms) of the last sneak-press seen while a player was Spectating in Moderator Mode. */
+    private val lastSpectatorSneak = mutableMapOf<UUID, Long>()
 
     fun start() {
         plugin.databaseManager.createTable(
@@ -76,6 +82,7 @@ class ModModeManager(private val plugin: Joshymc) {
     fun stop() {
         active.clear()
         spectating.clear()
+        lastSpectatorSneak.clear()
     }
 
     // ---- State checks ----
@@ -148,6 +155,7 @@ class ModModeManager(private val plugin: Joshymc) {
         }
 
         spectating.remove(player.uniqueId)
+        lastSpectatorSneak.remove(player.uniqueId)
         active.remove(player.uniqueId)
         restoreFromBackup(player, silent = false)
     }
@@ -453,6 +461,40 @@ class ModModeManager(private val plugin: Joshymc) {
             plugin.commsManager.send(player, Component.text("Spectator mode enabled.", NamedTextColor.AQUA), CommunicationsManager.Category.ADMIN)
         }
         refreshTool(player, "modmode_spectator")
+        player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.5f)
+    }
+
+    /**
+     * Double-shift (sneak-press twice within [SPECTATOR_DOUBLE_SNEAK_MS]) while
+     * Spectating in Moderator Mode returns to the restricted Mod Mode Creative
+     * state — a quick way back that doesn't require re-clicking the Spectator
+     * tool. Armed only while Moderator Mode is active and the player is
+     * currently in Spectator; a single press, holding shift, or sneaking
+     * outside Spectator/Moderator Mode is ignored.
+     */
+    fun handleSpectatorSneak(player: Player) {
+        if (!isModMode(player)) return
+        if (player.gameMode != GameMode.SPECTATOR) return
+
+        val uuid = player.uniqueId
+        val now = System.currentTimeMillis()
+        val last = lastSpectatorSneak.remove(uuid)
+        if (last != null && now - last <= SPECTATOR_DOUBLE_SNEAK_MS) {
+            returnToModeCreative(player)
+        } else {
+            lastSpectatorSneak[uuid] = now
+        }
+    }
+
+    /** Spectator -> Mod Mode Creative. Never touches the pre-Mod-Mode backup —
+     *  that's only restored via [disable]/[restoreFromBackup]. */
+    private fun returnToModeCreative(player: Player) {
+        val uuid = player.uniqueId
+        spectating.remove(uuid)
+        lastSpectatorSneak.remove(uuid)
+        player.gameMode = GameMode.CREATIVE
+        refreshTool(player, "modmode_spectator")
+        plugin.commsManager.send(player, Component.text("Returned to Moderator Mode.", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
         player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.5f)
     }
 
