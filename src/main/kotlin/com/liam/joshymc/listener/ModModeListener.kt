@@ -3,11 +3,13 @@ package com.liam.joshymc.listener
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.ModModeManager
 import org.bukkit.entity.Player
+import org.bukkit.entity.Projectile
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockPlaceEvent
+import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.entity.EntityResurrectEvent
 import org.bukkit.event.entity.PlayerDeathEvent
@@ -21,6 +23,7 @@ import org.bukkit.event.player.PlayerInteractAtEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerSwapHandItemsEvent
+import org.bukkit.event.player.PlayerToggleSneakEvent
 import org.bukkit.inventory.EquipmentSlot
 
 /**
@@ -117,6 +120,29 @@ class ModModeListener(private val plugin: Joshymc) : Listener {
     fun onSwapHands(event: PlayerSwapHandItemsEvent) {
         if (!plugin.modModeManager.isModMode(event.player)) return
         if (plugin.modModeManager.isModTool(event.mainHandItem) || plugin.modModeManager.isModTool(event.offHandItem)) {
+            event.isCancelled = true
+        }
+    }
+
+    @EventHandler
+    fun onSneak(event: PlayerToggleSneakEvent) {
+        if (!event.isSneaking) return
+        plugin.modModeManager.handleSpectatorSneak(event.player)
+    }
+
+    /**
+     * Moderator Mode staff must never be able to damage other players — melee,
+     * fists, bows/crossbows/tridents, or any other thrown/shot projectile —
+     * even inside a PvP-enabled world or an Arena. Runs at MONITOR so it has
+     * the final say after ArenaManager's HIGHEST-priority same-arena PvP
+     * override (which un-cancels the event for two players sharing an arena).
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    fun onDamage(event: EntityDamageByEntityEvent) {
+        val victim = event.entity as? Player ?: return
+        val source = event.damager
+        val attacker = source as? Player ?: (source as? Projectile)?.shooter as? Player ?: return
+        if (plugin.modModeManager.isModMode(attacker)) {
             event.isCancelled = true
         }
     }
