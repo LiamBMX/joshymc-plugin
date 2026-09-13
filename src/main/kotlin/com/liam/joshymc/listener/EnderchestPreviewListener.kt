@@ -27,7 +27,6 @@ class EnderchestPreviewListener(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onChat(event: AsyncChatEvent) {
         val player = event.player
-        if (!player.hasPermission("joshymc.enderchestpreview")) return
 
         val plain = PlainTextComponentSerializer.plainText().serialize(event.message())
         if (!pattern.matcher(plain).find()) return

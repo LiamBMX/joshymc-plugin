@@ -24,10 +24,6 @@ class EnderchestPreviewCommand(private val plugin: Joshymc) : CommandExecutor {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) return true
-        if (!sender.hasPermission("joshymc.enderchestpreview")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
-            return true
-        }
 
         val uuid = args.getOrNull(0)?.let { runCatching { UUID.fromString(it) }.getOrNull() }
         if (uuid == null) return true
