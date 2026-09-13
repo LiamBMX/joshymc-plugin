@@ -253,10 +253,6 @@ commands:
     description: Give physical, non-stackable Rank Voucher items that redeem for a purchasable rank tier
     usage: /rankvoucher give <player> <rank> [quantity]
     permission: joshymc.rankvoucher.admin
-  welcome:
-    description: Welcome a newly joined player for money and a chance at a credit or AFK key
-    usage: /welcome
-    permission: joshymc.welcome
   talisman:
     description: Equip talismans and relics
     usage: /talisman [equip|unequip|info|list]
@@ -1235,9 +1231,6 @@ permissions:
   joshymc.booster:
     description: Activate server boosters via /booster
     default: op
-  joshymc.welcome:
-    description: Welcome a new player and earn money plus a chance at a credit or AFK key
-    default: true
   joshymc.tokens.give:
     description: Give tokens to players via /tokens give
     default: op

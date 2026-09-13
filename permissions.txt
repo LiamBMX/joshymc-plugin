@@ -308,11 +308,6 @@ joshymc.tokens.buy
 Allows buying tokens via `/tokens buy`.
 Default: true
 
-joshymc.welcome
-Allows welcoming a newly-joined player for money and a chance at a credit
-or AFK key, via `/welcome`.
-Default: true
-
 joshymc.booster
 Allows activating server boosters via `/booster`.
 Default: OP
