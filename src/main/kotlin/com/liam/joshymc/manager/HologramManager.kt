@@ -279,7 +279,46 @@ class HologramManager(private val plugin: Joshymc) : Listener {
         } ?: HoloStyle(1f, 0f, false)
     }
 
+    private data class HoloRow(
+        val id: String,
+        val worldName: String,
+        val x: Double,
+        val y: Double,
+        val z: Double,
+        val lines: List<String>,
+        val style: HoloStyle
+    )
+
     private fun loadAll() {
+        val rows = plugin.databaseManager.query(
+            "SELECT id, world, x, y, z, lines, scale, yaw, locked FROM holograms"
+        ) { rs ->
+            HoloRow(
+                id = rs.getString("id"),
+                worldName = rs.getString("world"),
+                x = rs.getDouble("x"),
+                y = rs.getDouble("y"),
+                z = rs.getDouble("z"),
+                lines = rs.getString("lines").let { if (it.isEmpty()) emptyList() else it.split("\n") },
+                style = HoloStyle(
+                    scale = rs.getFloat("scale").let { if (it <= 0f) 1f else it },
+                    yaw = rs.getFloat("yaw"),
+                    locked = rs.getInt("locked") == 1
+                )
+            )
+        }
+
+        // Force-load each hologram's chunk before scanning for stale entities below.
+        // world.entities only sees entities in already-loaded chunks, so a hologram
+        // whose chunk hadn't loaded yet at this tick would be invisible to the scan —
+        // its persisted (isPersistent = true) TextDisplay from the previous run would
+        // survive untouched, and a second copy would spawn on top of it once a player
+        // later loaded that chunk. That's the restart-duplication bug.
+        for (row in rows) {
+            val world = Bukkit.getWorld(row.worldName) ?: continue
+            world.getChunkAt(Location(world, row.x, row.y, row.z))
+        }
+
         // Remove any hologram entities that survived from a prior run (persistent=true
         // before this fix, or a crash before despawn). Without this, loadAll spawns
         // duplicates on top of the still-loaded entities.
@@ -294,26 +333,19 @@ class HologramManager(private val plugin: Joshymc) : Listener {
 
         var spawned = 0
         var skipped = 0
-        plugin.databaseManager.query(
-            "SELECT id, world, x, y, z, lines, scale, yaw, locked FROM holograms"
-        ) { rs ->
-            val worldName = rs.getString("world")
-            val world = Bukkit.getWorld(worldName)
+        for (row in rows) {
+            val world = Bukkit.getWorld(row.worldName)
             if (world == null) {
                 // World not loaded yet — WorldLoadEvent handler will pick it up later.
-                plugin.logger.warning("[Holograms] Skipping hologram '${rs.getString("id")}' — world '$worldName' is not loaded.")
+                plugin.logger.warning("[Holograms] Skipping hologram '${row.id}' — world '${row.worldName}' is not loaded.")
                 skipped++
-                return@query
+                continue
             }
             spawnEntities(
-                id = rs.getString("id"),
-                origin = Location(world, rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z")),
-                lines = rs.getString("lines").let { if (it.isEmpty()) emptyList() else it.split("\n") },
-                style = HoloStyle(
-                    scale = rs.getFloat("scale").let { if (it <= 0f) 1f else it },
-                    yaw = rs.getFloat("yaw"),
-                    locked = rs.getInt("locked") == 1
-                )
+                id = row.id,
+                origin = Location(world, row.x, row.y, row.z),
+                lines = row.lines,
+                style = row.style
             )
             spawned++
         }
