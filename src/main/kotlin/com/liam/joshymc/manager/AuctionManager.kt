@@ -229,6 +229,55 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         return ItemStack.deserializeBytes(Base64.getDecoder().decode(base64))
     }
 
+    // ---- Delivery ----
+
+    /**
+     * Delivers an already-committed item (paid for / already removed from its listing) to
+     * [uuid]. Tries their inventory first, then the 9-slot AH Overflow, then falls back to the
+     * existing unbounded "expired items" queue — never dropping, deleting, or duplicating it.
+     */
+    private fun deliverOrHold(uuid: UUID, item: ItemStack) {
+        if (item.amount <= 0) return
+
+        val player = Bukkit.getPlayer(uuid)
+        val remaining = if (player != null) {
+            val leftover = player.inventory.addItem(item)
+            if (leftover.isEmpty()) return
+            leftover.values.first()
+        } else {
+            item
+        }
+
+        if (plugin.overflowManager.depositItem(uuid, OverflowManager.OverflowType.AUCTION_HOUSE, remaining)) {
+            if (player != null) {
+                plugin.commsManager.send(
+                    player,
+                    Component.text("Your inventory was full, so your Auction House purchase was sent to ", NamedTextColor.YELLOW)
+                        .append(Component.text("/overflow", NamedTextColor.GOLD))
+                        .append(Component.text(".", NamedTextColor.YELLOW)),
+                    CommunicationsManager.Category.DEFAULT
+                )
+            }
+            return
+        }
+
+        plugin.databaseManager.execute(
+            "INSERT INTO auction_expired (owner_uuid, item, expired_at) VALUES (?, ?, ?)",
+            uuid.toString(), serializeItem(remaining), System.currentTimeMillis()
+        )
+        if (player != null) {
+            plugin.commsManager.send(
+                player,
+                Component.text("Your inventory and ", NamedTextColor.YELLOW)
+                    .append(Component.text("/overflow", NamedTextColor.GOLD))
+                    .append(Component.text(" were both full — use ", NamedTextColor.YELLOW))
+                    .append(Component.text("/ah", NamedTextColor.GOLD))
+                    .append(Component.text(" to claim it once you have space.", NamedTextColor.YELLOW)),
+                CommunicationsManager.Category.DEFAULT
+            )
+        }
+    }
+
     // ---- Row mapper ----
 
     private fun mapListing(rs: java.sql.ResultSet): AuctionListing {
@@ -383,12 +432,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         val sellerPayout = listing.price - tax
         plugin.economyManager.deposit(listing.sellerUuid, sellerPayout)
 
-        // Give item to buyer
-        val leftover = player.inventory.addItem(listing.item)
-        if (leftover.isNotEmpty()) {
-            leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
-            plugin.commsManager.send(player, Component.text("Inventory full - item dropped at your feet.", NamedTextColor.YELLOW), CommunicationsManager.Category.DEFAULT)
-        }
+        // Give item to buyer, routing to /overflow (then the expired-items queue) if full
+        deliverOrHold(player.uniqueId, listing.item)
 
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.5f, 1.5f)
         plugin.commsManager.send(
@@ -435,11 +480,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        val leftover = player.inventory.addItem(listing.item)
-        if (leftover.isNotEmpty()) {
-            leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
-            plugin.commsManager.send(player, Component.text("Inventory full - item dropped at your feet.", NamedTextColor.YELLOW), CommunicationsManager.Category.DEFAULT)
-        }
+        deliverOrHold(player.uniqueId, listing.item)
 
         player.playSound(player.location, Sound.ENTITY_ITEM_PICKUP, 0.5f, 1f)
         plugin.commsManager.send(player, Component.text("Listing cancelled. Item returned.", NamedTextColor.GREEN), CommunicationsManager.Category.DEFAULT)
@@ -488,11 +529,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        val leftover = player.inventory.addItem(expired.item)
-        if (leftover.isNotEmpty()) {
-            leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
-            plugin.commsManager.send(player, Component.text("Inventory full - item dropped at your feet.", NamedTextColor.YELLOW), CommunicationsManager.Category.DEFAULT)
-        }
+        deliverOrHold(player.uniqueId, expired.item)
 
         player.playSound(player.location, Sound.ENTITY_ITEM_PICKUP, 0.5f, 1f)
         plugin.commsManager.send(player, Component.text("Expired item claimed.", NamedTextColor.GREEN), CommunicationsManager.Category.DEFAULT)
@@ -659,11 +696,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        val leftover = player.inventory.addItem(listing.item)
-        if (leftover.isNotEmpty()) {
-            leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
-            plugin.commsManager.send(player, Component.text("Inventory full - item dropped at your feet.", NamedTextColor.YELLOW), CommunicationsManager.Category.DEFAULT)
-        }
+        deliverOrHold(player.uniqueId, listing.item)
 
         player.playSound(player.location, Sound.ENTITY_ITEM_PICKUP, 0.5f, 1f)
         plugin.commsManager.send(player, Component.text("Bid listing cancelled. Item returned.", NamedTextColor.GREEN), CommunicationsManager.Category.DEFAULT)
@@ -710,13 +743,10 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
                     val sellerPayout = listing.currentBid - tax
                     plugin.economyManager.deposit(listing.sellerUuid, sellerPayout)
 
-                    // Give item to winner
+                    // Give item to winner, falling back to /overflow (then expired items) if full/offline
+                    deliverOrHold(listing.currentBidderUuid, listing.item)
                     val winner = Bukkit.getPlayer(listing.currentBidderUuid)
                     if (winner != null) {
-                        val leftover = winner.inventory.addItem(listing.item)
-                        if (leftover.isNotEmpty()) {
-                            leftover.values.forEach { winner.world.dropItemNaturally(winner.location, it) }
-                        }
                         plugin.commsManager.send(
                             winner,
                             Component.text("You won the bid on ", NamedTextColor.GREEN)
@@ -725,12 +755,6 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
                                 .append(Component.text(plugin.economyManager.format(listing.currentBid), NamedTextColor.GOLD))
                                 .append(Component.text("!", NamedTextColor.GREEN)),
                             CommunicationsManager.Category.DEFAULT
-                        )
-                    } else {
-                        // Winner offline — move item to their expired items
-                        plugin.databaseManager.execute(
-                            "INSERT INTO auction_expired (owner_uuid, item, expired_at) VALUES (?, ?, ?)",
-                            listing.currentBidderUuid.toString(), serializeItem(listing.item), now
                         )
                     }
 

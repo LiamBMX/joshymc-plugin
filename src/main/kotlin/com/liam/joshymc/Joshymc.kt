@@ -140,6 +140,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var storageManager: StorageManager
         private set
+    lateinit var overflowManager: com.liam.joshymc.manager.OverflowManager
+        private set
     lateinit var enderChestManager: EnderChestManager
         private set
     lateinit var hologramManager: HologramManager
@@ -336,6 +338,7 @@ class Joshymc : JavaPlugin() {
         warpManager = WarpManager(this)
         kitManager = KitManager(this)
         storageManager = StorageManager(this)
+        overflowManager = com.liam.joshymc.manager.OverflowManager(this)
         enderChestManager = EnderChestManager(this)
         tradeManager = TradeManager(this)
         hologramManager = HologramManager(this)
@@ -418,6 +421,7 @@ class Joshymc : JavaPlugin() {
         warpManager.start()
         kitManager.start()
         storageManager.start()
+        overflowManager.start()
         enderChestManager.start()
         hologramManager.start()
         leaderboardManager.start()
@@ -518,6 +522,7 @@ class Joshymc : JavaPlugin() {
 
     override fun onDisable() {
         storageManager.saveOpenVaults()
+        overflowManager.saveOpenOverflows()
         enderChestManager.saveOpenSessions()
         if (::sellCommand.isInitialized) sellCommand.resolveAllOpenSessions()
         hologramManager.stop()
@@ -587,6 +592,7 @@ class Joshymc : JavaPlugin() {
 
         // 3. Shutdown services
         safe("storageManager.saveOpenVaults") { storageManager.saveOpenVaults() }
+        safe("overflowManager.saveOpenOverflows") { overflowManager.saveOpenOverflows() }
         safe("enderChestManager.saveOpenSessions") { enderChestManager.saveOpenSessions() }
         safe("sellCommand.resolveAllOpenSessions") { if (::sellCommand.isInitialized) sellCommand.resolveAllOpenSessions() }
         safe("hologramManager.stop") { hologramManager.stop() }
@@ -633,6 +639,7 @@ class Joshymc : JavaPlugin() {
         safe("physicalVoucherManager.reload") { physicalVoucherManager.reload() }
         safe("kitManager.start") { kitManager.start() }
         safe("storageManager.start") { storageManager.start() }
+        safe("overflowManager.start") { overflowManager.start() }
         safe("enderChestManager.start") { enderChestManager.start() }
         safe("hologramManager.start") { hologramManager.start() }
         if (isFeatureEnabled("npcs")) safe("npcManager.start") { npcManager.start() }
