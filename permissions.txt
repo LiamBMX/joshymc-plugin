@@ -946,6 +946,10 @@ joshymc.fly.others
 Allows toggling flight for another player.
 Default: OP
 
+joshymc.fly.pvp
+Allows flight in the PvP world.
+Default: OP
+
 joshymc.heal
 Allows healing a player with `/heal [player]`.
 Default: OP
