@@ -46,8 +46,12 @@ class CasinoCrashManager(private val plugin: Joshymc) {
 
     var bettingSeconds = 10; private set
 
+    /** Gates routine per-round/per-bet console logging (issue #739) — off by default to stop console spam. */
+    private var debug = false
+
     fun start() {
         bettingSeconds = plugin.config.getInt("casino.crash.betting-seconds", 10).coerceAtLeast(3)
+        debug = plugin.config.getBoolean("casino.crash.debug", false)
 
         plugin.databaseManager.createTable(
             """
@@ -93,6 +97,11 @@ class CasinoCrashManager(private val plugin: Joshymc) {
 
     private fun send(player: Player, text: String, color: NamedTextColor) {
         plugin.commsManager.send(player, Component.text(text, color), CommunicationsManager.Category.CASINO)
+    }
+
+    /** Routine round/bet activity — only logged when `casino.crash.debug` is enabled. */
+    private fun debugLog(message: String) {
+        if (debug) plugin.casinoManager.log(message)
     }
 
     /**
@@ -146,7 +155,7 @@ class CasinoCrashManager(private val plugin: Joshymc) {
 
         liveBets.clear()
         round = RoundState(id, RoundStatus.BETTING, crashPoint.coerceAtLeast(1.0), now)
-        plugin.casinoManager.log("Crash round #$id started BETTING (crash point hidden server-side).")
+        debugLog("Crash round #$id started BETTING (crash point hidden server-side).")
     }
 
     private fun tick() {
@@ -206,7 +215,7 @@ class CasinoCrashManager(private val plugin: Joshymc) {
                 send(it, "Crash hit ${"%.2f".format(state.crashPoint)}x — you lost ${plugin.economyManager.formatShort(bet.bet)}.", NamedTextColor.RED)
             }
         }
-        plugin.casinoManager.log("Crash round #${state.id} crashed at ${state.crashPoint}x.")
+        debugLog("Crash round #${state.id} crashed at ${state.crashPoint}x.")
     }
 
     private fun refreshViewers() {
@@ -261,7 +270,7 @@ class CasinoCrashManager(private val plugin: Joshymc) {
         )
         val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { it.getInt("id") } ?: -1
         liveBets[player.uniqueId] = LiveBet(id, player.uniqueId, player.name, amount, BetStatus.PENDING)
-        plugin.casinoManager.log("Crash round #${state.id} bet placed — player=${player.name} amount=$amount")
+        debugLog("Crash round #${state.id} bet placed — player=${player.name} amount=$amount")
         return true
     }
 
@@ -285,7 +294,7 @@ class CasinoCrashManager(private val plugin: Joshymc) {
         bet.status = BetStatus.CASHED_OUT
         bet.cashoutMultiplier = multiplier
         plugin.casinoManager.payout(player.uniqueId, CasinoManager.Game.CRASH, payout)
-        plugin.casinoManager.log("Crash round #${state.id} cashout — player=${player.name} multiplier=$multiplier payout=$payout")
+        debugLog("Crash round #${state.id} cashout — player=${player.name} multiplier=$multiplier payout=$payout")
         return payout
     }
 }
