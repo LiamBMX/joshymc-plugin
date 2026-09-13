@@ -9,8 +9,7 @@ import org.bukkit.entity.Player
 
 /**
  * Per-claim settings sub-GUI (issue #612) — PvP, TNT, and team/personal
- * sharing toggles. Only exposes settings ClaimManager already supports; does
- * not duplicate the separate WorldFlags system.
+ * sharing toggles. Only exposes settings ClaimManager already supports.
  */
 object ClaimSettingsGui {
 

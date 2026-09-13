@@ -385,10 +385,6 @@ commands:
   spawndecor:
     description: Manage spawn decorations
     usage: /spawndecor <hologram|particle|beacon> <add|remove|list>
-  worldflag:
-    description: Manage region-based WorldFlags (use "world" for whole-world flags)
-    usage: /worldflag <wand|create|edit|delete|redefine|priority|info|list|subflag|world> [args]
-    aliases: [wf, flags]
   admin:
     description: Open the admin panel
     usage: /admin [player|logs|freeze|snapshot|rollback|banlist|mutelist]
@@ -629,9 +625,6 @@ permissions:
   joshymc.spawn:
     description: Allows teleporting to spawn
     default: true
-  joshymc.spawn.admin:
-    description: Allows managing spawn world settings (drops, containers)
-    default: false
   joshymc.setspawn:
     description: Allows setting the server spawn
     default: false
@@ -1000,15 +993,6 @@ permissions:
     default: true
   joshymc.spawndecor:
     description: Manage spawn decorations
-    default: op
-  joshymc.worldflag:
-    description: Manage world flags
-    default: op
-  joshymc.worldflag.bypass:
-    description: Bypass world flag restrictions
-    default: op
-  joshymc.worldflags.bypass:
-    description: Bypass region-based WorldFlags restrictions
     default: op
   joshymc.end.admin:
     description: Open or close the End dimension via /dimension end

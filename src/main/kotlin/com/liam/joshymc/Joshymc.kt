@@ -63,7 +63,6 @@ import com.liam.joshymc.manager.VoteManager
 import com.liam.joshymc.manager.LotteryManager
 import com.liam.joshymc.manager.EndManager
 import com.liam.joshymc.manager.ChatManager
-import com.liam.joshymc.manager.WorldFlagManager
 import com.liam.joshymc.manager.BoosterManager
 import com.liam.joshymc.manager.MobStackManager
 import com.liam.joshymc.util.ConfigUtil
@@ -235,8 +234,6 @@ class Joshymc : JavaPlugin() {
     lateinit var joinEffectManager: JoinEffectManager
         private set
     lateinit var adminManager: AdminManager
-        private set
-    lateinit var worldFlagManager: WorldFlagManager
         private set
     lateinit var endManager: EndManager
         private set

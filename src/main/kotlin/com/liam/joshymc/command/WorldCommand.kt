@@ -70,8 +70,8 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             val alreadyLoaded = Bukkit.getWorld(name)
             if (alreadyLoaded != null) {
                 // Engine-level PvP (World#setPVP, backed by bukkit.yml) is a
-                // separate switch from our own WorldFlag/Claim systems — if it's
-                // off, melee damage between players never even reaches our
+                // separate switch from our own Claim system — if it's off,
+                // melee damage between players never even reaches our
                 // listeners. This world exists specifically for PvP, so force it
                 // on every enable; finer-grained allow/deny is JoshyMC's job.
                 alreadyLoaded.setPVP(true)

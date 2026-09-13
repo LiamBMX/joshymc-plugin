@@ -170,9 +170,8 @@ class ListenerManager(private val plugin: Joshymc) {
         // Spawn fly
         pm.registerEvents(plugin.spawnWorldManager, plugin)
 
-        // Arena + World flags + portals + voting
+        // Arena + portals + voting
         pm.registerEvents(plugin.arenaManager, plugin)
-        pm.registerEvents(plugin.worldFlagManager, plugin)
         pm.registerEvents(plugin.eventManager, plugin)
         pm.registerEvents(plugin.portalManager, plugin)
         pm.registerEvents(plugin.voteManager, plugin)

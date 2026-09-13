@@ -1,7 +1,7 @@
 # JoshyMC Plugin — Claude Code Guide
 
 ## What is this?
-A Paper MC plugin (Kotlin) for Joshy's Minecraft server. It replaces a stack of Spring/3rd-party plugins with a single custom plugin. As of v1.0.48 it owns: claims, combat, economy, market, auctions, sign shops, custom enchants, custom items, custom spawners, kits, warps/homes/RTP, TPA, vaults/storage, leaderboard holograms, NPCs, crates, arenas, portals, voting, ranks, teams, quests, talismans, fishing, skills, all cosmetics (trails/kill effects/join effects/glow/emote/gadget/chat tags/chat colors/nicks), AFK, anticheat (with Grim bridge), playtime, scoreboard sidebar, MOTD/welcome, announcements, world-flags + multi-world, resource world, spawn world, settings GUI, lag cleaner, recipe blocker, and a 2-way Discord bridge.
+A Paper MC plugin (Kotlin) for Joshy's Minecraft server. It replaces a stack of Spring/3rd-party plugins with a single custom plugin. As of v1.0.48 it owns: claims, combat, economy, market, auctions, sign shops, custom enchants, custom items, custom spawners, kits, warps/homes/RTP, TPA, vaults/storage, leaderboard holograms, NPCs, crates, arenas, portals, voting, ranks, teams, quests, talismans, fishing, skills, all cosmetics (trails/kill effects/join effects/glow/emote/gadget/chat tags/chat colors/nicks), AFK, anticheat (with Grim bridge), playtime, scoreboard sidebar, MOTD/welcome, announcements, multi-world, resource world, spawn world, settings GUI, lag cleaner, recipe blocker, and a 2-way Discord bridge. World/region protection flags (pvp, block break, potions, ender pearls, etc.) are no longer a custom JoshyMC system — that's WorldGuard's job now (see issue #673).
 
 ## Target Server
 - **Paper MC 1.21.11** — newer than the model's training cutoff. **Trust the user about API surface**; don't reach for `BlockFromToEvent` workarounds you remember from 1.16.
@@ -80,7 +80,6 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 | **PunishmentManager** | Bans / mutes / kicks / warns + history. |
 | **AntiCheatManager** + **GrimIntegration** | Internal AC checks + auto-installer for Grim's `punishments.yml` bridge that calls `/jmc-violation` so Grim flags surface in `/admin`. |
 | **AdminManager** | `/admin` GUI panel — player info, freeze, snapshot, rollback, ban/mute lists. |
-| **WorldFlagManager** | Per-world flags (pvp, mob spawning, explosions, etc.). |
 | **ResourceWorldManager** | Auto-regenerating resource world. |
 | **SpawnWorldManager** | The `spawn` world (separate from main overworld). |
 | **PortalManager** | Custom portals (region wand → action). |
