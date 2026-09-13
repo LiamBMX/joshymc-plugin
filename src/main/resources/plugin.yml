@@ -135,6 +135,9 @@ commands:
     description: Browse, enter, and create player giveaways
     usage: /giveaway [create|mine]
     aliases: [gwy]
+  gift:
+    description: Send gifts to other players and manage your gift mailbox
+    usage: /gift [mailbox|send <player>|sent]
   coinflip:
     description: Open the Player-vs-Player Coinflip GUI, or create/manage a Coinflip
     usage: /coinflip [create <amount>] [admin cancel <id>]
@@ -733,6 +736,15 @@ permissions:
     default: true
   joshymc.giveaway.create:
     description: Create player giveaways
+    default: true
+  joshymc.gift:
+    description: Access the /gift GUI and mailbox
+    default: true
+  joshymc.gift.send:
+    description: Send gifts to other players
+    default: true
+  joshymc.gift.mailbox:
+    description: Open and claim from your gift mailbox
     default: true
   joshymc.coinflip:
     description: Access the Coinflip GUI and browse active Coinflips

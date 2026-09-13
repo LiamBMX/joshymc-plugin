@@ -35,6 +35,7 @@ features:
   login-streaks: true
   orders: true
   giveaways: true
+  gift: true
 
 # Mob Stacking — merges nearby mobs of the same type into a single entity
 mob-stacking:
@@ -372,6 +373,20 @@ giveaways:
   max-title-length: 32
   # Max prize item stacks a single giveaway can hold.
   max-prize-items: 27
+
+# Player-to-player gifting — /gift, /gift mailbox
+gift:
+  # Max unclaimed gifts a single player may have outstanding as a sender. 0 = unlimited.
+  max-pending-per-sender: 20
+  # Max unclaimed gifts a single player's mailbox may hold as a recipient. 0 = unlimited.
+  max-mailbox-size: 100
+  # Cooldown between a player sending gifts. 0 = no cooldown.
+  send-cooldown-seconds: 5
+  allow-coins: true
+  allow-message: true
+  max-message-length: 120
+  # Max item stacks a single gift can hold.
+  max-gift-items: 27
 
 # Buy Orders — /orders, a player-driven "I want this item" marketplace.
 # Complements /ah (players sell what they have) without duplicating it —

@@ -141,6 +141,10 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.giveawayManager, plugin)
         pm.registerEvents(com.liam.joshymc.listener.GiveawayChatListener(plugin), plugin)
 
+        // Gift coins/message/offline-name chat input + join notification + quit cleanup
+        pm.registerEvents(plugin.giftManager, plugin)
+        pm.registerEvents(com.liam.joshymc.listener.GiftChatListener(plugin), plugin)
+
         // Coinflip create-amount chat input + quit cleanup
         pm.registerEvents(com.liam.joshymc.listener.CoinflipChatListener(plugin), plugin)
 

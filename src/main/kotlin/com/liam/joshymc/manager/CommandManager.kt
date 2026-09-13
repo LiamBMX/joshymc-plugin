@@ -327,6 +327,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("gift")?.let {
+            val cmd = com.liam.joshymc.command.GiftCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
         plugin.getCommand("coinflip")?.let {
             val cmd = com.liam.joshymc.command.CoinflipCommand(plugin)
             it.setExecutor(cmd)
