@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.command.notifyStaff
 import com.liam.joshymc.gui.CustomGui
 import io.papermc.paper.event.player.AsyncChatEvent
 import net.kyori.adventure.text.Component
@@ -881,6 +882,9 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                 p.teleport(tp.location)
                 plugin.commsManager.send(p, Component.text("Teleported to ${tp.name}", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 logAction(p, "TELEPORT_TO", target)
+                if (restricted) {
+                    notifyStaff(p, Component.text("${p.name} teleported to ${tp.name}", NamedTextColor.YELLOW))
+                }
                 p.closeInventory()
             }
         }
