@@ -98,7 +98,10 @@ object CrashGui {
                 }
             ) { p, _ ->
                 if (manager.getRoundStatus() != CasinoCrashManager.RoundStatus.BETTING) return@setItem
-                plugin.casinoManager.promptAmount(p) { player2, amount -> manager.placeBet(player2, amount) }
+                plugin.casinoManager.promptAmount(p, onCancel = { p2 -> open(plugin, p2) }) { player2, amount ->
+                    manager.placeBet(player2, amount)
+                    open(plugin, player2)
+                }
             }
             gui.setItem(15, CasinoGuiUtil.item(Material.GRAY_DYE, Component.text("Cash Out", NamedTextColor.GRAY), listOf(Component.text("No active bet.", NamedTextColor.DARK_GRAY))))
         }
