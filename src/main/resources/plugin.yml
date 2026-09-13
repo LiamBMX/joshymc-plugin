@@ -131,6 +131,10 @@ commands:
     description: Open the auction house
     usage: /ah [sell <price>] [bid <starting price>] [notify <on|off>]
     aliases: [auction, auctionhouse]
+  giveaway:
+    description: Browse, enter, and create player giveaways
+    usage: /giveaway [create|mine]
+    aliases: [gwy]
   coinflip:
     description: Open the Player-vs-Player Coinflip GUI, or create/manage a Coinflip
     usage: /coinflip [create <amount>] [admin cancel <id>]
@@ -723,6 +727,12 @@ permissions:
     default: true
   joshymc.ah.sell:
     description: List items on the auction house
+    default: true
+  joshymc.giveaway:
+    description: Browse and enter player giveaways
+    default: true
+  joshymc.giveaway.create:
+    description: Create player giveaways
     default: true
   joshymc.coinflip:
     description: Access the Coinflip GUI and browse active Coinflips
