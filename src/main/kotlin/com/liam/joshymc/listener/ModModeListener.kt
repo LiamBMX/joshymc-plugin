@@ -60,6 +60,13 @@ class ModModeListener(private val plugin: Joshymc) : Listener {
         if (!plugin.modModeManager.isModMode(player)) return
         if (id !in SELF_TOOL_IDS) return
 
+        // The Vanish tool must only toggle on a right-click — left-click (and other
+        // non-right-click actions already excluded above via Action.PHYSICAL) should
+        // do nothing rather than flipping vanish state.
+        if (id == "modmode_vanish" && event.action != Action.RIGHT_CLICK_AIR && event.action != Action.RIGHT_CLICK_BLOCK) {
+            return
+        }
+
         when (id) {
             "modmode_rtp" -> plugin.modModeManager.randomTeleport(player)
             "modmode_vanish" -> plugin.modModeManager.toggleVanish(player)
