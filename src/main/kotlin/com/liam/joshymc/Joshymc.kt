@@ -354,7 +354,6 @@ class Joshymc : JavaPlugin() {
         modModeManager = com.liam.joshymc.manager.ModModeManager(this)
         staffChatManager = com.liam.joshymc.manager.StaffChatManager(this)
         traineeModeManager = com.liam.joshymc.manager.TraineeModeManager(this)
-        worldFlagManager = WorldFlagManager(this)
         endManager = EndManager(this)
         chatManager = ChatManager(this)
         arenaManager = ArenaManager(this)
@@ -441,7 +440,6 @@ class Joshymc : JavaPlugin() {
         adminManager.start()
         modModeManager.start()
         traineeModeManager.start()
-        worldFlagManager.start()
         endManager.start()
         chatManager.start()
         // Start spawn world BEFORE arenas so the world exists when arena ticks begin
