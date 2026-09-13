@@ -51,10 +51,13 @@ class EnderchestPreviewCommand(private val plugin: Joshymc) : CommandExecutor {
 
         val gui = CustomGui(
             Component.text("$ownerName's Ender Chest", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.ITALIC, false),
-            27
+            54
         )
         for (i in items.indices) {
-            items[i]?.let { gui.inventory.setItem(i, it) }
+            if (i < 27) items[i]?.let { gui.inventory.setItem(i, it) }
+        }
+        for ((slot, item) in plugin.enderChestManager.snapshotExtra(uuid)) {
+            gui.inventory.setItem(27 + slot, item.clone())
         }
         plugin.guiManager.open(sender, gui)
         return true
