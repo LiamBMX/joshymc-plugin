@@ -54,40 +54,76 @@ object CrashGui {
         refreshInto(plugin, player, gui)
     }
 
+    /**
+     * The multiplier CLOCK (slot 13) doubles as the Cash Out button (issue #734) so
+     * the player can watch and click without moving their mouse. The click handler
+     * always just calls [CasinoCrashManager.cashOut] and lets it be the sole source
+     * of truth — it already re-validates round/bet state atomically, so a click that
+     * lands the instant the round crashes can't race into a payout.
+     */
     private fun refreshInto(plugin: Joshymc, player: Player, gui: CustomGui) {
         val manager = plugin.casinoCrashManager
         val status = manager.getRoundStatus()
         val multiplier = manager.currentMultiplier()
         val liveBet = manager.getLiveBet(player.uniqueId)
 
-        val statusLore = when (status) {
-            CasinoCrashManager.RoundStatus.BETTING -> listOf(Component.text("Betting closes in ${manager.bettingSecondsRemaining()}s", NamedTextColor.YELLOW))
-            CasinoCrashManager.RoundStatus.RUNNING -> listOf(Component.text("Round is running!", NamedTextColor.GREEN))
-            CasinoCrashManager.RoundStatus.CRASHED -> listOf(Component.text("Crashed at %.2fx".format(multiplier), NamedTextColor.RED))
-            CasinoCrashManager.RoundStatus.RESETTING -> listOf(Component.text("Starting next round...", NamedTextColor.GRAY))
+        val clockName: Component
+        val lore = mutableListOf<Component>()
+
+        when (status) {
+            CasinoCrashManager.RoundStatus.BETTING -> {
+                clockName = Component.text("Crash — Betting", NamedTextColor.YELLOW)
+                lore.add(Component.text("Round starts in ${manager.bettingSecondsRemaining()}s", NamedTextColor.YELLOW))
+                lore.add(
+                    if (liveBet != null) Component.text("Bet: ${plugin.economyManager.format(liveBet.bet)}", NamedTextColor.GRAY)
+                    else Component.text("No active bet", NamedTextColor.DARK_GRAY)
+                )
+            }
+            CasinoCrashManager.RoundStatus.RUNNING -> {
+                clockName = Component.text("Crash — %.2fx".format(multiplier), NamedTextColor.WHITE)
+                when {
+                    liveBet != null && liveBet.status == CasinoCrashManager.BetStatus.PENDING -> {
+                        val potential = liveBet.bet * multiplier
+                        lore.add(Component.text("Bet: ${plugin.economyManager.format(liveBet.bet)}", NamedTextColor.GRAY))
+                        lore.add(Component.text("Potential Payout: ${plugin.economyManager.format(potential)}", NamedTextColor.GREEN))
+                        lore.add(Component.empty())
+                        lore.add(Component.text("Click to Cash Out", NamedTextColor.YELLOW))
+                    }
+                    liveBet != null && liveBet.status == CasinoCrashManager.BetStatus.CASHED_OUT -> {
+                        lore.add(Component.text("Payout: ${plugin.economyManager.format(liveBet.bet * (liveBet.cashoutMultiplier ?: multiplier))}", NamedTextColor.GREEN))
+                        lore.add(Component.text("Waiting for next round...", NamedTextColor.DARK_GRAY))
+                    }
+                    else -> lore.add(Component.text("No active bet", NamedTextColor.DARK_GRAY))
+                }
+            }
+            CasinoCrashManager.RoundStatus.CRASHED -> {
+                clockName = Component.text("Crash — Crashed", NamedTextColor.RED)
+                lore.add(Component.text("Crashed at %.2fx".format(multiplier), NamedTextColor.RED))
+                when (liveBet?.status) {
+                    CasinoCrashManager.BetStatus.CASHED_OUT -> lore.add(Component.text("Payout: ${plugin.economyManager.format(liveBet.bet * (liveBet.cashoutMultiplier ?: 0.0))}", NamedTextColor.GREEN))
+                    CasinoCrashManager.BetStatus.LOST -> lore.add(Component.text("You lost ${plugin.economyManager.format(liveBet.bet)}", NamedTextColor.RED))
+                    else -> {}
+                }
+            }
+            CasinoCrashManager.RoundStatus.RESETTING -> {
+                clockName = Component.text("Crash — Resetting", NamedTextColor.GRAY)
+                lore.add(Component.text("Starting next round...", NamedTextColor.GRAY))
+            }
         }
-        gui.setItem(13, CasinoGuiUtil.item(Material.CLOCK, Component.text("%.2fx".format(multiplier), NamedTextColor.WHITE), statusLore))
+
+        gui.setItem(13, CasinoGuiUtil.item(Material.CLOCK, clockName, lore)) { p, _ ->
+            val payout = manager.cashOut(p)
+            if (payout != null) {
+                plugin.commsManager.send(p, Component.text("Cashed out for ${plugin.economyManager.formatShort(payout)}!", NamedTextColor.GREEN), CommunicationsManager.Category.CASINO)
+                p.playSound(p.location, Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.2f)
+            }
+        }
 
         if (liveBet != null) {
-            val potential = liveBet.bet * multiplier
             gui.setItem(
                 11,
                 CasinoGuiUtil.item(Material.GOLD_INGOT, Component.text("Your Bet", NamedTextColor.GOLD), listOf(Component.text(plugin.economyManager.format(liveBet.bet), NamedTextColor.WHITE)))
             )
-            gui.setItem(
-                15,
-                if (status == CasinoCrashManager.RoundStatus.RUNNING && liveBet.status == CasinoCrashManager.BetStatus.PENDING) {
-                    CasinoGuiUtil.item(Material.EMERALD_BLOCK, Component.text("Cash Out", NamedTextColor.GREEN), listOf(Component.text("Secure ${plugin.economyManager.format(potential)} now.", NamedTextColor.GRAY)))
-                } else {
-                    CasinoGuiUtil.item(Material.GRAY_DYE, Component.text("Cash Out", NamedTextColor.GRAY), listOf(Component.text(liveBet.status.name, NamedTextColor.DARK_GRAY)))
-                }
-            ) { p, _ ->
-                val payout = manager.cashOut(p)
-                if (payout != null) {
-                    plugin.commsManager.send(p, Component.text("Cashed out for ${plugin.economyManager.formatShort(payout)}!", NamedTextColor.GREEN), CommunicationsManager.Category.CASINO)
-                    p.playSound(p.location, Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.2f)
-                }
-            }
         } else {
             gui.setItem(
                 11,
@@ -100,7 +136,6 @@ object CrashGui {
                 if (manager.getRoundStatus() != CasinoCrashManager.RoundStatus.BETTING) return@setItem
                 plugin.casinoManager.promptAmount(p) { player2, amount -> manager.placeBet(player2, amount) }
             }
-            gui.setItem(15, CasinoGuiUtil.item(Material.GRAY_DYE, Component.text("Cash Out", NamedTextColor.GRAY), listOf(Component.text("No active bet.", NamedTextColor.DARK_GRAY))))
         }
     }
 }
