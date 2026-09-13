@@ -123,10 +123,16 @@ class TraineeModeManager(private val plugin: Joshymc) {
 
         // Adventure (not Creative) — no block break/place, no creative menu, no free items.
         player.gameMode = GameMode.ADVENTURE
-        player.allowFlight = false
-        player.isFlying = false
 
         active.add(player.uniqueId)
+
+        // Vanish and flight are TMode-only abilities — never standing Trainee
+        // permissions. Both are stripped again in restoreFromBackup() so a
+        // Trainee never keeps either once Trainee Mode ends.
+        if (!plugin.vanishCommand.isVanished(player)) {
+            plugin.vanishCommand.vanish(player)
+        }
+        applyFlightForWorld(player)
 
         plugin.commsManager.send(player, Component.text("Trainee Mode enabled.", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
         player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.6f, 1.4f)
@@ -155,6 +161,22 @@ class TraineeModeManager(private val plugin: Joshymc) {
                 CommunicationsManager.Category.ADMIN
             )
         }, 5L)
+    }
+
+    /**
+     * Re-evaluates TMode flight for the world the Trainee is currently in — the
+     * `pvp` world never allows flight even while Trainee Mode is active, but
+     * flight becomes available again as soon as they leave it. No-op outside
+     * Trainee Mode.
+     */
+    fun applyFlightForWorld(player: Player) {
+        if (!isTraineeMode(player)) return
+        if (player.world.name == "pvp") {
+            player.isFlying = false
+            player.allowFlight = false
+        } else {
+            player.allowFlight = true
+        }
     }
 
     fun handleDeath(event: PlayerDeathEvent) {
@@ -193,6 +215,12 @@ class TraineeModeManager(private val plugin: Joshymc) {
         for (i in 0 until player.inventory.size) {
             val item = player.inventory.getItem(i) ?: continue
             if (isTraineeTool(item)) player.inventory.setItem(i, null)
+        }
+
+        // Vanish is never a standing Trainee ability — force it off on every exit
+        // path (manual disable, disconnect recovery, restart recovery).
+        if (plugin.vanishCommand.isVanished(player)) {
+            plugin.vanishCommand.unvanish(player)
         }
 
         if (backup == null) {

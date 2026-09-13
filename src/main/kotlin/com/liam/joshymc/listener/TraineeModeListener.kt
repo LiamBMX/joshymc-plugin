@@ -16,6 +16,7 @@ import org.bukkit.event.inventory.ClickType
 import org.bukkit.event.inventory.InventoryAction
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryDragEvent
+import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerInteractAtEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
@@ -132,6 +133,12 @@ class TraineeModeListener(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onJoin(event: PlayerJoinEvent) {
         plugin.traineeModeManager.handleJoin(event.player)
+    }
+
+    /** The `pvp` world never allows TMode flight — re-evaluate on every world change. */
+    @EventHandler
+    fun onWorldChange(event: PlayerChangedWorldEvent) {
+        plugin.traineeModeManager.applyFlightForWorld(event.player)
     }
 
     /**
