@@ -444,7 +444,9 @@ class ModModeManager(private val plugin: Joshymc) {
         } else {
             // AdminManager.openInvsee clones items into a CustomGui with no click
             // handlers — GuiManager cancels every click on it, so this is read-only.
-            plugin.adminManager.openInvsee(moderator, target)
+            // restricted=true keeps its "Back" button from reopening the full
+            // (rank/balance-editable) player panel — see issue #725.
+            plugin.adminManager.openInvsee(moderator, target, restricted = true)
         }
         plugin.adminManager.logAction(moderator, "MODMODE_INVSEE", target)
     }
@@ -574,6 +576,10 @@ class ModModeManager(private val plugin: Joshymc) {
         // (kick/ban/mute/warn/freeze) is already permission-gated there by
         // PERM_ADMIN/PERM_MODERATE/PERM_HELPER, so Moderator Mode never grants
         // any authority beyond what the staff member's existing rank permissions allow.
-        plugin.adminManager.openPlayerPanel(moderator, target)
+        // restricted=true additionally strips Set Rank / Set Balance from this panel
+        // (and every panel reachable from it) — Mod Mode must not edit persistent
+        // account data, even for staff who could do so via the separate /admin
+        // command. See issue #725.
+        plugin.adminManager.openPlayerPanel(moderator, target, restricted = true)
     }
 }
