@@ -139,6 +139,7 @@ class ModModeManager(private val plugin: Joshymc) {
         player.gameMode = GameMode.CREATIVE
 
         active.add(player.uniqueId)
+        plugin.hideStaffManager.onModModeChanged(player)
 
         if (plugin.config.getBoolean("modmode.auto-vanish", true) && !plugin.vanishCommand.isVanished(player)) {
             plugin.vanishCommand.vanish(player)
@@ -157,6 +158,7 @@ class ModModeManager(private val plugin: Joshymc) {
         spectating.remove(player.uniqueId)
         lastSpectatorSneak.remove(player.uniqueId)
         active.remove(player.uniqueId)
+        plugin.hideStaffManager.onModModeChanged(player)
         restoreFromBackup(player, silent = false)
     }
 
