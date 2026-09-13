@@ -776,7 +776,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         plugin.guiManager.open(admin, gui)
     }
 
-    fun openPlayerPanel(admin: Player, target: OfflinePlayer) {
+    fun openPlayerPanel(admin: Player, target: OfflinePlayer, restricted: Boolean = false) {
         val targetName = target.name ?: "Unknown"
         val gui = CustomGui(
             Component.text("Admin: $targetName", TextColor.color(0xFF5555))
@@ -902,7 +902,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         // Ban (slot 14) — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
             gui.setItem(14, buildItem(Material.RED_CONCRETE, "Ban", NamedTextColor.DARK_RED, "Ban this player")) { p, _ ->
-                openDurationSelector(p, target.uniqueId, targetName, "ban")
+                openDurationSelector(p, target.uniqueId, targetName, "ban", restricted)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
             }
         }
@@ -910,7 +910,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         // Mute (slot 15) — helper+ (helpers limited to tempmute; permanent mute requires moderate+)
         if (admin.hasPermission(PERM_HELPER) || admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
             gui.setItem(15, buildItem(Material.PURPLE_WOOL, "Mute", NamedTextColor.LIGHT_PURPLE, "Mute this player")) { p, _ ->
-                openDurationSelector(p, target.uniqueId, targetName, "mute")
+                openDurationSelector(p, target.uniqueId, targetName, "mute", restricted)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
             }
         }
@@ -941,12 +941,12 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                 logAction(p, "GAMEMODE", target, next.name)
                 plugin.commsManager.send(p, Component.text("Set ${tp.name}'s gamemode to ${next.name}", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
-                openPlayerPanel(p, target)
+                openPlayerPanel(p, target, restricted)
             }
         }
 
-        // Set Rank (slot 20) — admin only
-        if (admin.hasPermission(PERM_ADMIN)) {
+        // Set Rank (slot 20) — admin only, never in a restricted (Mod Mode) panel
+        if (!restricted && admin.hasPermission(PERM_ADMIN)) {
             gui.setItem(20, buildItem(Material.GOLD_INGOT, "Set Rank", NamedTextColor.GOLD, "Change this player's rank")) { p, _ ->
                 openRankSelector(p, target.uniqueId, targetName)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
@@ -958,13 +958,13 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             gui.setItem(21, buildItem(Material.ENDER_CHEST, "View Inventory", NamedTextColor.DARK_PURPLE, "View this player's inventory")) { p, _ ->
                 val tp = target.player
                 if (tp == null) { notOnline(p); return@setItem }
-                openInvsee(p, tp)
+                openInvsee(p, tp, restricted)
                 logAction(p, "INVSEE", target)
             }
         }
 
-        // Set Balance (slot 22) — admin only
-        if (admin.hasPermission(PERM_ADMIN)) {
+        // Set Balance (slot 22) — admin only, never in a restricted (Mod Mode) panel
+        if (!restricted && admin.hasPermission(PERM_ADMIN)) {
             gui.setItem(22, buildItem(Material.EXPERIENCE_BOTTLE, "Set Balance", NamedTextColor.GOLD,
                 "Set preset balance amounts")) { p, _ ->
                 openBalanceSelector(p, target.uniqueId, targetName)
@@ -976,7 +976,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         if (admin.hasPermission(PERM_HELPER) || admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
             gui.setItem(23, buildItem(Material.CLOCK, "Punishment History", NamedTextColor.YELLOW,
                 "View punishment history")) { p, _ ->
-                openPunishmentHistory(p, target.uniqueId, targetName, 0)
+                openPunishmentHistory(p, target.uniqueId, targetName, 0, restricted)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
             }
         }
@@ -1004,7 +1004,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             val color = if (openCount > 0) NamedTextColor.RED else NamedTextColor.GOLD
             gui.setItem(16, buildItem(Material.WRITABLE_BOOK, title, color,
                 "Reports filed against ${targetName}")) { p, _ ->
-                openReportsList(p, 0, target.uniqueId)
+                openReportsList(p, 0, target.uniqueId, restricted)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
             }
         }
@@ -1028,13 +1028,17 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                     plugin.commsManager.send(tp, Component.text("You have been unfrozen.", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 }
                 p.playSound(p.location, Sound.BLOCK_GLASS_BREAK, 0.5f, 1.5f)
-                openPlayerPanel(p, target)
+                openPlayerPanel(p, target, restricted)
             }
         }
 
         // Back button (slot 49)
         gui.setItem(49, buildItem(Material.ARROW, "Back", NamedTextColor.GRAY, "Return to player list")) { p, _ ->
-            openPlayerList(p)
+            if (restricted) {
+                p.closeInventory()
+            } else {
+                openPlayerList(p)
+            }
             p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
         }
 
@@ -1218,7 +1222,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
      * age in the lore. Left-click toggles resolved state. The remove
      * button on the right of every line deletes the report (admin-only).
      */
-    fun openReportsList(admin: Player, page: Int, filterTargetUuid: UUID?) {
+    fun openReportsList(admin: Player, page: Int, filterTargetUuid: UUID?, restricted: Boolean = false) {
         val title = if (filterTargetUuid == null) {
             Component.text("Reports", NamedTextColor.GOLD)
         } else {
@@ -1260,7 +1264,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                     // Shift-click = delete
                     plugin.databaseManager.execute("DELETE FROM reports WHERE id = ?", report.id)
                     p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.4f, 0.7f)
-                    openReportsList(p, currentPage, filterTargetUuid)
+                    openReportsList(p, currentPage, filterTargetUuid, restricted)
                 } else {
                     // Click = toggle resolved
                     val newResolved = if (report.resolved) 0 else 1
@@ -1269,19 +1273,19 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                         newResolved, report.id
                     )
                     p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.2f)
-                    openReportsList(p, currentPage, filterTargetUuid)
+                    openReportsList(p, currentPage, filterTargetUuid, restricted)
                 }
             }
         }
 
         if (currentPage > 0) {
             gui.setItem(48, buildItem(Material.ARROW, "Previous Page", NamedTextColor.GRAY, "Page $currentPage")) { p, _ ->
-                openReportsList(p, currentPage - 1, filterTargetUuid)
+                openReportsList(p, currentPage - 1, filterTargetUuid, restricted)
             }
         }
         if (currentPage < totalPages) {
             gui.setItem(50, buildItem(Material.ARROW, "Next Page", NamedTextColor.GRAY, "Page ${currentPage + 2}")) { p, _ ->
-                openReportsList(p, currentPage + 1, filterTargetUuid)
+                openReportsList(p, currentPage + 1, filterTargetUuid, restricted)
             }
         }
 
@@ -1289,9 +1293,9 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             if (filterTargetUuid == null) "Return to admin panel" else "Return to player panel")
         ) { p, _ ->
             if (filterTargetUuid == null) {
-                openMainPanel(p)
+                if (!restricted) openMainPanel(p) else p.closeInventory()
             } else {
-                openPlayerPanel(p, Bukkit.getOfflinePlayer(filterTargetUuid))
+                openPlayerPanel(p, Bukkit.getOfflinePlayer(filterTargetUuid), restricted)
             }
             p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
         }
@@ -1439,7 +1443,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         plugin.guiManager.open(admin, gui)
     }
 
-    fun openDurationSelector(admin: Player, targetUuid: UUID, targetName: String, type: String) {
+    fun openDurationSelector(admin: Player, targetUuid: UUID, targetName: String, type: String, restricted: Boolean = false) {
         val title = if (type == "ban") "Ban Duration" else "Mute Duration"
         val titleColor = if (type == "ban") NamedTextColor.RED else NamedTextColor.LIGHT_PURPLE
         val gui = CustomGui(
@@ -1475,7 +1479,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Back button
         gui.setItem(22, buildItem(Material.ARROW, "Back", NamedTextColor.GRAY, "Return to player panel")) { p, _ ->
-            openPlayerPanel(p, Bukkit.getOfflinePlayer(targetUuid))
+            openPlayerPanel(p, Bukkit.getOfflinePlayer(targetUuid), restricted)
             p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
         }
 
@@ -1589,7 +1593,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         plugin.guiManager.open(admin, gui)
     }
 
-    private fun openPunishmentHistory(admin: Player, targetUuid: UUID, targetName: String, page: Int) {
+    private fun openPunishmentHistory(admin: Player, targetUuid: UUID, targetName: String, page: Int, restricted: Boolean = false) {
         val gui = CustomGui(
             Component.text("History: $targetName", NamedTextColor.YELLOW)
                 .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
@@ -1656,24 +1660,24 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         // Pagination
         if (currentPage > 0) {
             gui.setItem(48, buildItem(Material.ARROW, "Previous Page", NamedTextColor.GRAY, "Page $currentPage")) { p, _ ->
-                openPunishmentHistory(p, targetUuid, targetName, currentPage - 1)
+                openPunishmentHistory(p, targetUuid, targetName, currentPage - 1, restricted)
             }
         }
         if (currentPage < totalPages) {
             gui.setItem(50, buildItem(Material.ARROW, "Next Page", NamedTextColor.GRAY, "Page ${currentPage + 2}")) { p, _ ->
-                openPunishmentHistory(p, targetUuid, targetName, currentPage + 1)
+                openPunishmentHistory(p, targetUuid, targetName, currentPage + 1, restricted)
             }
         }
 
         gui.setItem(49, buildItem(Material.BARRIER, "Back", NamedTextColor.GRAY, "Return to player panel")) { p, _ ->
-            openPlayerPanel(p, Bukkit.getOfflinePlayer(targetUuid))
+            openPlayerPanel(p, Bukkit.getOfflinePlayer(targetUuid), restricted)
             p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
         }
 
         plugin.guiManager.open(admin, gui)
     }
 
-    fun openInvsee(admin: Player, target: Player) {
+    fun openInvsee(admin: Player, target: Player, restricted: Boolean = false) {
         val invGui = CustomGui(
             Component.text("Inventory: ${target.name}", NamedTextColor.GOLD)
                 .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
@@ -1706,7 +1710,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Back button
         invGui.setItem(49, buildItem(Material.ARROW, "Back", NamedTextColor.WHITE, "Return to player panel")) { p, _ ->
-            openPlayerPanel(p, target)
+            openPlayerPanel(p, target, restricted)
         }
 
         plugin.guiManager.open(admin, invGui)
