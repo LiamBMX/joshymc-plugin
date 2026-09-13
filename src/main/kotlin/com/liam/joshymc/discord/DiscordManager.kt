@@ -23,7 +23,7 @@ class DiscordManager(private val plugin: Joshymc) {
 
     private sealed class QueuedAction {
         data class Text(val content: String) : QueuedAction()
-        data class Embed(val embed: MessageEmbed) : QueuedAction()
+        data class Embed(val embed: MessageEmbed, val channelId: String? = null) : QueuedAction()
     }
 
     private val messageQueue = ConcurrentLinkedQueue<QueuedAction>()
@@ -113,6 +113,16 @@ class DiscordManager(private val plugin: Joshymc) {
     fun sendEmbed(embed: MessageEmbed) {
         if (jda == null || channelId.isEmpty()) return
         messageQueue.add(QueuedAction.Embed(embed))
+    }
+
+    /**
+     * Same as [sendEmbed] but targets an arbitrary channel instead of the default
+     * chat-bridge channel (e.g. a dedicated anti-dupe alert channel). Queued and
+     * flushed the same way, so a bad channel id can never block the main thread.
+     */
+    fun sendEmbedToChannel(targetChannelId: String, embed: MessageEmbed) {
+        if (jda == null || targetChannelId.isEmpty()) return
+        messageQueue.add(QueuedAction.Embed(embed, targetChannelId))
     }
 
     fun sendChat(playerName: String, message: String) {
@@ -294,10 +304,15 @@ class DiscordManager(private val plugin: Joshymc) {
                     is QueuedAction.Embed -> {
                         // Flush any pending text first
                         flushText(channel, textBatch)
-                        channel.sendMessageEmbeds(action.embed).queue(
-                            null,
-                            { err -> plugin.logger.warning("[Discord] Failed to send embed: ${err.message}") }
-                        )
+                        val target = if (action.channelId != null) jda?.getTextChannelById(action.channelId) else channel
+                        if (target == null) {
+                            plugin.logger.warning("[Discord] Target channel not found for embed (${action.channelId ?: "default"}).")
+                        } else {
+                            target.sendMessageEmbeds(action.embed).queue(
+                                null,
+                                { err -> plugin.logger.warning("[Discord] Failed to send embed: ${err.message}") }
+                            )
+                        }
                     }
                 }
             }

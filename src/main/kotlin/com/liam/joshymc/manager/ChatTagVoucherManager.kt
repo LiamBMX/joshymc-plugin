@@ -145,6 +145,14 @@ class ChatTagVoucherManager(private val plugin: Joshymc) {
             // CreditVoucherManager/RankVoucherManager — stops a duplicated physical item
             // (same PDC uuid copied via an external exploit) from ever redeeming twice.
             if (!reserveVoucherId(voucherUuid, player, tag.id)) {
+                plugin.antiDupeManager.record(
+                    player,
+                    "Duplicate Voucher ID Redemption",
+                    AntiDupeManager.RiskLevel.CRITICAL,
+                    item = "Chat Tag Voucher (${tag.id})",
+                    source = "Chat Tag Voucher",
+                    transactionId = voucherUuid
+                )
                 plugin.commsManager.send(
                     player,
                     Component.text("This voucher has already been redeemed.", NamedTextColor.RED),

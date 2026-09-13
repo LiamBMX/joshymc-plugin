@@ -164,6 +164,9 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var economyManager: EconomyManager
 
+    lateinit var antiDupeManager: com.liam.joshymc.manager.AntiDupeManager
+        private set
+
     lateinit var creditsManager: com.liam.joshymc.manager.CreditsManager
         private set
     lateinit var stockMarketManager: StockMarketManager
@@ -312,6 +315,9 @@ class Joshymc : JavaPlugin() {
 
         economyManager = EconomyManager(this)
         economyManager.start()
+
+        antiDupeManager = com.liam.joshymc.manager.AntiDupeManager(this)
+        antiDupeManager.start()
 
         stockMarketManager = StockMarketManager(this)
         stockMarketManager.start()

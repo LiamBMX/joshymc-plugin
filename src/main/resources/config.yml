@@ -139,6 +139,29 @@ discord:
     enabled: true
     forum-channel-id: "1548796268099272864"
 
+# Anti-Dupe — audit log + Discord alerts when a system catches a duplicate/replay
+# attempt (e.g. an auction bought twice, a voucher redeemed twice). Detection only —
+# never auto-bans, mutes, or reverses anything. Reuses the Discord bot above; set
+# discord.channel-id below to a channel the bot can post embeds in.
+anti-dupe:
+  enabled: true
+
+  discord:
+    enabled: true
+    channel-id: "1548819333394862151"
+
+  # Which risk levels post a Discord embed. Everything is always written to the
+  # audit log (anti_dupe_detections table) regardless of these toggles.
+  alerts:
+    low: false
+    medium: true
+    high: true
+    critical: true
+
+  # Repeats of the exact same detection type for the same player within this many
+  # seconds are grouped into a single follow-up embed instead of spamming the channel.
+  rate-limit-seconds: 10
+
 # Recipe Blocker — block players from crafting specific items
 # Use material names from: https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Material.html
 recipe-blocker:

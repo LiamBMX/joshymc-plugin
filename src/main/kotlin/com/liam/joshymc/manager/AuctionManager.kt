@@ -353,6 +353,15 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             "DELETE FROM auction_listings WHERE id = ?", listingId
         )
         if (rowsDeleted == 0) {
+            plugin.antiDupeManager.record(
+                player,
+                "Duplicate Auction Purchase Attempt",
+                AntiDupeManager.RiskLevel.MEDIUM,
+                item = listing.item.type.name,
+                amount = listing.item.amount.toString(),
+                source = "Auction House",
+                transactionId = "auction-listing-$listingId"
+            )
             plugin.commsManager.send(player, Component.text("That listing no longer exists.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
