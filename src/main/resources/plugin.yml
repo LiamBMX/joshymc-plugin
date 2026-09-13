@@ -161,6 +161,9 @@ commands:
     description: Open the Buy Orders marketplace
     usage: /orders [admin <view|info|cancel|remove> ...]
     aliases: [buyorders, order]
+  overflow:
+    description: View items held in your persistent Overflow storage
+    usage: /overflow
   invest:
     description: Open the player-driven stock market (trade, create, and track stocks)
     usage: /invest [admin <reset|delete|confirm|cancel> <stock>]
@@ -793,6 +796,9 @@ permissions:
   joshymc.orders.limit.admin:
     description: Grants the admin active Buy Order limit
     default: op
+  joshymc.overflow:
+    description: View your persistent Overflow storage
+    default: true
   joshymc.eco:
     description: Manage economy (admin)
     default: op

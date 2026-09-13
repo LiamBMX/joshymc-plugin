@@ -98,6 +98,9 @@ class ListenerManager(private val plugin: Joshymc) {
         // Player Vaults
         pm.registerEvents(plugin.storageManager, plugin)
 
+        // Overflow Storage (Orders / Auction House delivery fallback)
+        pm.registerEvents(plugin.overflowManager, plugin)
+
         // Ender Chests (expanded to 54 slots)
         pm.registerEvents(plugin.enderChestManager, plugin)
 

@@ -367,6 +367,10 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("overflow")?.let {
+            it.setExecutor(com.liam.joshymc.command.OverflowCommand(plugin))
+        }
+
         plugin.getCommand("eco")?.let {
             val cmd = EcoCommand(plugin)
             it.setExecutor(cmd)

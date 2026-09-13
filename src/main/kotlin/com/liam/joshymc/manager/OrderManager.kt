@@ -354,18 +354,37 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         if (items.isEmpty()) return
         val buyer = Bukkit.getPlayer(buyerUuid)
         if (buyer == null) {
-            storePendingDeliveries(buyerUuid, items)
+            depositToOverflowOrQueue(buyerUuid, items)
+            markNotifyPending(buyerUuid)
             return
         }
         val leftover = buyer.inventory.addItem(*items.toTypedArray())
         if (leftover.isNotEmpty()) {
-            storePendingDeliveries(buyerUuid, leftover.values.toList())
+            depositToOverflowOrQueue(buyerUuid, leftover.values.toList())
             plugin.commsManager.send(
                 buyer,
-                Component.text("Your inventory was full — some purchased items were held safely. Use ", NamedTextColor.YELLOW)
-                    .append(Component.text("/orders", NamedTextColor.GOLD))
-                    .append(Component.text(" to claim them.", NamedTextColor.YELLOW))
+                Component.text("Your inventory was full, so your Orders delivery was sent to ", NamedTextColor.YELLOW)
+                    .append(Component.text("/overflow", NamedTextColor.GOLD))
+                    .append(Component.text(".", NamedTextColor.YELLOW))
             )
+        }
+    }
+
+    /**
+     * Routes items that didn't fit in the buyer's inventory into their 54-slot Orders Overflow.
+     * If that's also full, falls back to the existing unbounded pending-deliveries queue so the
+     * item is never dropped, deleted, or duplicated.
+     */
+    private fun depositToOverflowOrQueue(uuid: UUID, items: List<ItemStack>) {
+        val stillPending = mutableListOf<ItemStack>()
+        for (item in items) {
+            if (item.amount <= 0) continue
+            if (!plugin.overflowManager.depositItem(uuid, OverflowManager.OverflowType.ORDERS, item)) {
+                stillPending.add(item)
+            }
+        }
+        if (stillPending.isNotEmpty()) {
+            storePendingDeliveries(uuid, stillPending)
         }
     }
 
