@@ -163,50 +163,9 @@ def gen_paper(fid, color):
     img.save(f'{tex_dir}/{fid}.png')
 
 # Generate all textures
-# Crafting materials
-gen_gem('void_shard', (120, 0, 180), (80, 0, 140))
+# Crafting materials (kept only as enchant-scroll crafting ingredients)
 gen_gem('soul_fragment', (0, 170, 170), (0, 120, 140))
-gen_gem('inferno_core', (255, 140, 0), (200, 80, 0))
-gen_gem('crystal_essence', (80, 220, 255), (40, 180, 220))
 gen_gem('ancient_rune', (255, 200, 50), (200, 160, 30))
 gen_gem('enchanted_dust', (220, 120, 255), (180, 80, 220))
-
-# Weapons
-gen_sword('void_blade', (120, 0, 180), (80, 60, 40))
-gen_sword('soul_scythe', (0, 170, 170), (80, 60, 40))
-gen_sword('inferno_axe', (255, 140, 0), (80, 60, 40))
-gen_sword('crystal_mace', (80, 220, 255), (120, 100, 80))
-gen_paper('carrot_launcher', (255, 160, 40))
-
-# Tools
-gen_tool('auto_miner', (80, 220, 255), (140, 100, 60))
-gen_tool('farmers_sickle', (80, 220, 80), (140, 100, 60))
-gen_tool('lumberjacks_axe', (255, 180, 60), (140, 100, 60))
-gen_tool('excavator', (255, 240, 80), (140, 100, 60))
-gen_sword('magnet_wand', (220, 60, 60), (100, 100, 100))
-
-# Armor sets
-for piece in ['helmet', 'chestplate', 'leggings', 'boots']:
-    gen_armor(f'void_{piece}', (120, 0, 180))
-    gen_armor(f'inferno_{piece}', (255, 140, 0))
-    gen_armor(f'crystal_{piece}', (80, 220, 255))
-    gen_armor(f'soul_{piece}', (0, 170, 170))
-
-# Consumables
-gen_paper('money_pouch_small', (120, 200, 120))
-gen_paper('money_pouch_medium', (255, 240, 120))
-gen_paper('money_pouch_large', (255, 180, 50))
-gen_paper('xp_tome', (120, 255, 120))
-gen_gem('speed_apple', (80, 220, 255), (60, 180, 220))
-gen_gem('strength_apple', (255, 80, 80), (200, 40, 40))
-gen_potion('giants_brew', (255, 180, 50))
-gen_potion('miners_brew', (80, 200, 255))
-gen_gem('wardens_heart', (20, 40, 50), (10, 60, 70))
-
-# Legendary
-gen_armor('blaze_kings_crown', (255, 200, 50))
-gen_armor('phantom_cloak', (40, 40, 50))
-gen_sword('poseidons_trident', (40, 120, 200), (40, 80, 140))
-gen_paper('claim_block_token', (120, 200, 120))
 
 print('Generated 45 custom item textures')

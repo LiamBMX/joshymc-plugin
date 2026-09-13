@@ -35,8 +35,7 @@ class TreeFellerListener(private val plugin: Joshymc) : Listener {
         val player = event.player
         val block = event.block
 
-        val isLumberjackAxe = plugin.itemManager.isCustomItem(player.inventory.itemInMainHand, "lumberjacks_axe")
-        if (!player.isSneaking && !isLumberjackAxe) return
+        if (!player.isSneaking) return
         if (block.type !in LOG_BLOCKS) return
         if (!player.hasPermission("joshymc.treefeller")) return
         if (!plugin.settingsManager.getSetting(player, "treefeller")) return

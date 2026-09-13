@@ -77,31 +77,6 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
 
-        // Armor set keywords — give full set at once
-        val setMap = mapOf(
-            "void_set" to listOf("void_helmet", "void_chestplate", "void_leggings", "void_boots"),
-            "inferno_set" to listOf("inferno_helmet", "inferno_chestplate", "inferno_leggings", "inferno_boots"),
-            "crystal_set" to listOf("crystal_helmet", "crystal_chestplate", "crystal_leggings", "crystal_boots"),
-            "soul_set" to listOf("soul_helmet", "soul_chestplate", "soul_leggings", "soul_boots"),
-            "bunny_set" to listOf("bunny_helmet", "bunny_chestplate", "bunny_leggings", "bunny_boots"),
-        )
-        if (itemId.lowercase() in setMap) {
-            val target: Player = if (args.size >= 4) {
-                plugin.server.getPlayer(args[3]) ?: run {
-                    sender.sendMessage(Component.text("Player not found: ${args[3]}", NamedTextColor.RED))
-                    return
-                }
-            } else if (sender is Player) sender else {
-                sender.sendMessage(Component.text("Specify a player.", NamedTextColor.RED)); return
-            }
-            val ids = setMap[itemId.lowercase()]!!
-            for (id in ids) {
-                plugin.itemManager.getItem(id)?.let { target.inventory.addItem(it.createItemStack(amount)) }
-            }
-            sender.sendMessage(Component.text("Gave $itemId (x$amount) to ${target.name}", NamedTextColor.GREEN))
-            return
-        }
-
         val customItem = plugin.itemManager.getItem(itemId)
         if (customItem == null) {
             sender.sendMessage(Component.text("Unknown item: $itemId", NamedTextColor.RED))
@@ -182,7 +157,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             1 -> listOf("give", "reload").filter { it.startsWith(args[0], ignoreCase = true) }
             2 -> when {
                 args[0].equals("give", ignoreCase = true) ->
-                    (plugin.itemManager.getAllItems().map { it.id } + listOf("eggs", "void_set", "inferno_set", "crystal_set", "soul_set", "bunny_set")).filter { it.startsWith(args[1], ignoreCase = true) }
+                    (plugin.itemManager.getAllItems().map { it.id } + listOf("eggs")).filter { it.startsWith(args[1], ignoreCase = true) }
                 args[0].equals("reload", ignoreCase = true) ->
                     listOf("hard").filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()

@@ -246,64 +246,9 @@ fun drawBoots(img: BufferedImage) {
 data class Item(val file: String, val theme: Theme, val draw: (BufferedImage) -> Unit)
 
 val items = listOf(
-    // Swords
-    Item("carrot_sword", theme(0.10f, 0.75f, 0.95f), ::drawSword),
-    Item("void_blade", theme(0.78f, 0.65f, 0.55f), ::drawSword),
-    // Axes
-    Item("inferno_axe", theme(0.03f, 0.9f, 0.95f), ::drawAxe),
-    Item("lumberjacks_axe", theme(0.09f, 0.55f, 0.65f), ::drawAxe),
-    // Hoe/Scythe family
-    Item("soul_scythe", theme(0.50f, 0.55f, 0.55f), ::drawScythe),
-    Item("farmers_sickle", theme(0.22f, 0.7f, 0.75f), ::drawScythe),
-    // Shovel
-    Item("flower_spade", theme(0.33f, 0.55f, 0.85f), ::drawShovel),
-    // Mace
-    Item("crystal_mace", theme(0.58f, 0.35f, 0.95f), ::drawMace),
-    // Trident
-    Item("poseidons_trident", theme(0.55f, 0.7f, 0.85f), ::drawTrident),
-    // Drill / bore / mining family
+    // Drill family
     Item("void_drill", theme(0.78f, 0.65f, 0.55f), ::drawDrill),
     Item("void_drill_5x5", theme(0.76f, 0.7f, 0.5f), ::drawDrill),
-    Item("void_bore", theme(0.80f, 0.6f, 0.6f), ::drawDrill),
-    Item("void_bore_5x5", theme(0.82f, 0.65f, 0.5f), ::drawDrill),
-    Item("void_bore_chunk", theme(0.74f, 0.55f, 0.65f), ::drawDrill),
-    Item("excavator", theme(0.11f, 0.5f, 0.7f), ::drawDrill),
-    Item("auto_miner", theme(0.14f, 0.4f, 0.75f), ::drawDrill),
-    // Bow/launcher
-    Item("carrot_launcher", theme(0.09f, 0.7f, 0.9f), ::drawBow),
-    // Wand
-    Item("magnet_wand", theme(0.0f, 0.0f, 0.75f, accentHue = 0.6f), ::drawWand),
-
-    // Armor sets: bunny, crystal, flower, inferno, soul, void
-    Item("bunny_helmet", theme(0.92f, 0.4f, 0.95f), ::drawHelmet),
-    Item("bunny_chestplate", theme(0.92f, 0.4f, 0.95f), ::drawChestplate),
-    Item("bunny_leggings", theme(0.92f, 0.4f, 0.95f), ::drawLeggings),
-    Item("bunny_boots", theme(0.92f, 0.4f, 0.95f), ::drawBoots),
-
-    Item("crystal_helmet", theme(0.58f, 0.35f, 0.95f), ::drawHelmet),
-    Item("crystal_chestplate", theme(0.58f, 0.35f, 0.95f), ::drawChestplate),
-    Item("crystal_leggings", theme(0.58f, 0.35f, 0.95f), ::drawLeggings),
-    Item("crystal_boots", theme(0.58f, 0.35f, 0.95f), ::drawBoots),
-
-    Item("flower_helmet", theme(0.33f, 0.55f, 0.85f), ::drawHelmet),
-    Item("flower_chestplate", theme(0.33f, 0.55f, 0.85f), ::drawChestplate),
-    Item("flower_leggings", theme(0.33f, 0.55f, 0.85f), ::drawLeggings),
-    Item("flower_boots", theme(0.33f, 0.55f, 0.85f), ::drawBoots),
-
-    Item("inferno_helmet", theme(0.03f, 0.9f, 0.95f), ::drawHelmet),
-    Item("inferno_chestplate", theme(0.03f, 0.9f, 0.95f), ::drawChestplate),
-    Item("inferno_leggings", theme(0.03f, 0.9f, 0.95f), ::drawLeggings),
-    Item("inferno_boots", theme(0.03f, 0.9f, 0.95f), ::drawBoots),
-
-    Item("soul_helmet", theme(0.50f, 0.55f, 0.55f), ::drawHelmet),
-    Item("soul_chestplate", theme(0.50f, 0.55f, 0.55f), ::drawChestplate),
-    Item("soul_leggings", theme(0.50f, 0.55f, 0.55f), ::drawLeggings),
-    Item("soul_boots", theme(0.50f, 0.55f, 0.55f), ::drawBoots),
-
-    Item("void_helmet", theme(0.78f, 0.65f, 0.55f), ::drawHelmet),
-    Item("void_chestplate", theme(0.78f, 0.65f, 0.55f), ::drawChestplate),
-    Item("void_leggings", theme(0.78f, 0.65f, 0.55f), ::drawLeggings),
-    Item("void_boots", theme(0.78f, 0.65f, 0.55f), ::drawBoots),
 )
 
 fun upscale(img: BufferedImage, factor: Int): BufferedImage {

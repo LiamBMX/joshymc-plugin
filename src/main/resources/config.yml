@@ -286,7 +286,7 @@ afk:
     #
     # `material` accepts three formats:
     #   1. Bukkit material  — DIRT, IRON_INGOT, DIAMOND, etc.
-    #   2. Custom item id   — easter_egg, void_drill, money_pouch_small, etc.
+    #   2. Custom item id   — easter_egg, void_drill, bubble_butt_leggings, etc.
     #   3. Crate key        — crate:vote, key:afk  (must match a crate type)
     items:
       - material: DIRT
@@ -622,8 +622,6 @@ voting:
   rewards:
     money: 25000
     claim-blocks: 50
-    items:
-      - "money_pouch_small:1"
   streak-bonuses:
     7: 100000
     14: 250000

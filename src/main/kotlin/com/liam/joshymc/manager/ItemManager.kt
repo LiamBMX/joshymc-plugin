@@ -12,9 +12,6 @@ class ItemManager(private val plugin: Joshymc) {
     fun registerAll() {
         register(VoidDrill())
         register(VoidDrill5x5())
-        register(VoidBore())
-        register(VoidBore5x5())
-        register(VoidBoreChunk())
         register(AfkKey())
         register(EasterEgg())
         register(ExplosiveEgg())
@@ -28,53 +25,12 @@ class ItemManager(private val plugin: Joshymc) {
         register(CobwebEgg())
         register(ConfusionEgg())
         register(EnderEgg())
-        register(CarrotSword())
-        register(BunnyHelmet())
-        register(BunnyChestplate())
-        register(BunnyLeggings())
-        register(BunnyBoots())
         register(BubbleButtLeggings())
 
-        // Crafting materials
-        register(VoidShard())
+        // Crafting materials (kept only as enchant-scroll crafting ingredients)
         register(SoulFragment())
-        register(InfernoCore())
-        register(CrystalEssence())
         register(AncientRune())
         register(EnchantedDust())
-
-        // Custom weapons
-        register(VoidBlade())
-        register(SoulScythe())
-        register(InfernoAxe())
-        register(CrystalMace())
-        register(CarrotLauncher())
-        register(FlowerSpade())
-
-        // Custom tools
-        register(AutoMiner())
-        register(FarmersSickle())
-        register(LumberjacksAxe())
-        register(Excavator())
-        register(MagnetWand())
-
-        // Armor sets
-        register(VoidHelmet()); register(VoidChestplate()); register(VoidLeggings()); register(VoidBoots())
-        register(InfernoHelmet()); register(InfernoChestplate()); register(InfernoLeggings()); register(InfernoBoots())
-        register(CrystalHelmet()); register(CrystalChestplate()); register(CrystalLeggings()); register(CrystalBoots())
-        register(SoulHelmet()); register(SoulChestplate()); register(SoulLeggings()); register(SoulBoots())
-        register(FlowerHelmet()); register(FlowerChestplate()); register(FlowerLeggings()); register(FlowerBoots())
-
-        // Consumables
-        register(MoneyPouchSmall())
-        register(MoneyPouchMedium())
-        register(MoneyPouchLarge())
-        register(XpTome())
-        register(SpeedApple())
-        register(StrengthApple())
-        register(GiantsBrew())
-        register(MinersBrew())
-        register(WardensHeart())
 
         // Utility blocks
         register(FastHopper())
@@ -82,11 +38,7 @@ class ItemManager(private val plugin: Joshymc) {
         // Wands
         register(SellWand())
 
-        // Legendary items
-        register(BlazeKingsCrown())
-        register(PhantomCloak())
-        register(PoseidonsTrident())
-        register(ClaimBlockToken())
+        // Currency
         register(Token())
 
         // October Halloween Collection
