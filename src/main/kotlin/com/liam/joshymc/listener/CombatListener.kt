@@ -102,12 +102,19 @@ class CombatListener(private val plugin: Joshymc) : Listener {
      *
      * This is the canonical place that mutually applies combat tags + drops
      * both players out of flight.
+     *
+     * Mod Mode / Trainee Mode are explicitly exempted here rather than relying
+     * on ModModeListener/TraineeModeListener cancelling the event first — both
+     * of those also run at MONITOR, so same-tier ordering between listeners is
+     * registration-order dependent and not something to depend on for combat
+     * tagging correctness.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onDamageTag(event: EntityDamageByEntityEvent) {
         val victim = event.entity as? Player ?: return
         val attacker = resolvePlayerSource(event) ?: return
         if (attacker == victim) return
+        if (plugin.modModeManager.isModMode(attacker) || plugin.traineeModeManager.isTraineeMode(attacker)) return
         val combat = plugin.combatManager
         combat.tag(attacker)
         combat.tag(victim)
