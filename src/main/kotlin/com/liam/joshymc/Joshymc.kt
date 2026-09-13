@@ -269,6 +269,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var modModeManager: com.liam.joshymc.manager.ModModeManager
         private set
+    lateinit var hideStaffManager: com.liam.joshymc.manager.HideStaffManager
+        private set
     lateinit var staffChatManager: com.liam.joshymc.manager.StaffChatManager
         private set
     lateinit var traineeModeManager: com.liam.joshymc.manager.TraineeModeManager
@@ -358,6 +360,7 @@ class Joshymc : JavaPlugin() {
         joinEffectManager = JoinEffectManager(this)
         adminManager = AdminManager(this)
         modModeManager = com.liam.joshymc.manager.ModModeManager(this)
+        hideStaffManager = com.liam.joshymc.manager.HideStaffManager(this)
         staffChatManager = com.liam.joshymc.manager.StaffChatManager(this)
         traineeModeManager = com.liam.joshymc.manager.TraineeModeManager(this)
         endManager = EndManager(this)
@@ -447,6 +450,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("join-effects")) joinEffectManager.start()
         adminManager.start()
         modModeManager.start()
+        hideStaffManager.start()
         traineeModeManager.start()
         endManager.start()
         chatManager.start()
@@ -522,6 +526,7 @@ class Joshymc : JavaPlugin() {
         mobStackManager.stop()
         mutationsManager.stop()
         modModeManager.stop()
+        hideStaffManager.stop()
         traineeModeManager.stop()
         eventManager.shutdown()
         resourcePackManager.shutdown()

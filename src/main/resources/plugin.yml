@@ -460,6 +460,9 @@ commands:
     description: Toggle Moderator Mode
     usage: /modmode [on|off]
     aliases: [mmode]
+  hidestaff:
+    description: Toggle hiding staff currently in active Moderator Mode from yourself
+    usage: /hidestaff
   staffchat:
     description: Toggle Staff Chat — redirects your chat messages to staff only
     usage: /staffchat
@@ -1137,6 +1140,9 @@ permissions:
     default: op
   joshymc.vanish:
     description: Toggle vanish mode
+    default: op
+  joshymc.hidestaff:
+    description: Hide staff currently in active Moderator Mode from yourself (Admin+)
     default: op
   joshymc.report:
     description: Report players

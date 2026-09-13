@@ -275,6 +275,8 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("hidestaff")?.setExecutor(com.liam.joshymc.command.HideStaffCommand(plugin))
+
         plugin.getCommand("staffchat")?.setExecutor(com.liam.joshymc.command.StaffChatCommand(plugin))
 
         plugin.getCommand("traineemode")?.let {
