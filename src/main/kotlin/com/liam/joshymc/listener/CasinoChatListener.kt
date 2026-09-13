@@ -28,16 +28,20 @@ class CasinoChatListener(private val plugin: Joshymc) : Listener {
 
         if (raw.equals("cancel", ignoreCase = true)) {
             plugin.commsManager.send(player, Component.text("Casino bet cancelled.", NamedTextColor.GRAY), CommunicationsManager.Category.CASINO)
+            plugin.server.scheduler.runTask(plugin, Runnable { pending.onCancel(player) })
             return
         }
         if (plugin.casinoManager.isExpired(pending.expiresAt)) {
             plugin.commsManager.send(player, Component.text("Your request timed out. Please try again.", NamedTextColor.RED), CommunicationsManager.Category.CASINO)
+            plugin.server.scheduler.runTask(plugin, Runnable { pending.onCancel(player) })
             return
         }
 
         val amount = plugin.economyManager.parseAmount(raw)
         if (amount == null || amount <= 0.0) {
             plugin.commsManager.send(player, Component.text("Invalid amount. Use numbers like 100000, 100k, 1m", NamedTextColor.RED), CommunicationsManager.Category.CASINO)
+            // Keep them in input mode so they can just retype — don't burn their pending prompt on a typo.
+            plugin.casinoManager.pendingBetInputs[player.uniqueId] = pending
             return
         }
 

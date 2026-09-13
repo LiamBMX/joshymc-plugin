@@ -38,7 +38,7 @@ class CasinoManager(private val plugin: Joshymc) {
     )
 
     /** A pending "type an amount in chat" prompt shared by every Casino game. */
-    data class PendingBetInput(val expiresAt: Long, val onAmount: (Player, Double) -> Unit)
+    data class PendingBetInput(val expiresAt: Long, val onCancel: (Player) -> Unit, val onAmount: (Player, Double) -> Unit)
 
     var enabled = true; private set
     var minBet = 1000.0; private set
@@ -185,9 +185,12 @@ class CasinoManager(private val plugin: Joshymc) {
     /**
      * Shared bet-amount chat prompt used by every Casino game (Mines, Roulette, Crash,
      * Towers) so there's one input/parsing path — reuses [EconomyManager.parseAmount].
+     * [onCancel] is the caller's "return to the game GUI I was on" hook — it fires on
+     * `cancel` and on timeout so a chat prompt never strands the player outside every
+     * Casino GUI (issue #733).
      */
-    fun promptAmount(player: Player, onAmount: (Player, Double) -> Unit) {
-        pendingBetInputs[player.uniqueId] = PendingBetInput(System.currentTimeMillis() + 60_000L, onAmount)
+    fun promptAmount(player: Player, onCancel: (Player) -> Unit, onAmount: (Player, Double) -> Unit) {
+        pendingBetInputs[player.uniqueId] = PendingBetInput(System.currentTimeMillis() + 60_000L, onCancel, onAmount)
         player.closeInventory()
         send(player, "Enter your Casino bet amount in chat (e.g. 10k, 1.5m). Type cancel to cancel.", NamedTextColor.YELLOW)
     }

@@ -106,8 +106,12 @@ object RouletteGui {
     }
 
     private fun promptAndPlace(plugin: Joshymc, player: Player, betType: CasinoRouletteManager.BetType, betValue: Int?) {
-        plugin.casinoManager.promptAmount(player) { p, amount ->
-            val bet = plugin.casinoRouletteManager.placeBet(p, betType, betValue, amount) ?: return@promptAmount
+        plugin.casinoManager.promptAmount(player, onCancel = { p -> open(plugin, p) }) { p, amount ->
+            val bet = plugin.casinoRouletteManager.placeBet(p, betType, betValue, amount)
+            if (bet == null) {
+                open(plugin, p)
+                return@promptAmount
+            }
             playSpinAnimation(plugin, p, bet)
         }
     }

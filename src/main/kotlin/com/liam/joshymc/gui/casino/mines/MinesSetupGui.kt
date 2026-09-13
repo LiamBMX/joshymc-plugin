@@ -37,7 +37,7 @@ object MinesSetupGui {
                 listOf(Component.text("Click to change your bet.", NamedTextColor.GRAY))
             )
         ) { p, _ ->
-            plugin.casinoManager.promptAmount(p) { player2, amount ->
+            plugin.casinoManager.promptAmount(p, onCancel = { p2 -> open(plugin, p2) }) { player2, amount ->
                 pending.getOrPut(player2.uniqueId) { Setup(plugin.casinoManager.minBet, plugin.casinoMinesManager.minMines) }.bet = amount
                 open(plugin, player2)
             }
