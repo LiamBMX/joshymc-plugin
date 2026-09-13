@@ -93,6 +93,9 @@ casino:
     enabled: true
     house-edge-percent: 3.0
     betting-seconds: 10
+    # Log routine round/bet activity (round started, bets, cashouts, crashes) to console.
+    # Leave off in normal operation — errors/failures are always logged regardless of this.
+    debug: false
 
   towers:
     enabled: true
