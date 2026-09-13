@@ -129,6 +129,15 @@ class CreditVoucherManager(private val plugin: Joshymc) {
             // physical item (same PDC uuid copied via an external exploit) from ever
             // redeeming twice, on top of the per-player lock above.
             if (!reserveVoucherId(voucherUuid, player, amount.toDouble())) {
+                plugin.antiDupeManager.record(
+                    player,
+                    "Duplicate Voucher ID Redemption",
+                    AntiDupeManager.RiskLevel.CRITICAL,
+                    item = "Credit Voucher",
+                    amount = amount.toString(),
+                    source = "Credit Voucher",
+                    transactionId = voucherUuid
+                )
                 plugin.commsManager.send(
                     player,
                     Component.text("This voucher has already been redeemed.", NamedTextColor.RED),

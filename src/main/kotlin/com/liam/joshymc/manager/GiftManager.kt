@@ -510,6 +510,15 @@ class GiftManager(private val plugin: Joshymc) : Listener {
             System.currentTimeMillis(), id, player.uniqueId.toString()
         )
         if (rows == 0) {
+            plugin.antiDupeManager.record(
+                player,
+                "Duplicate Gift Claim Attempt",
+                AntiDupeManager.RiskLevel.MEDIUM,
+                item = if (items.isEmpty()) null else "${items.size} item stack(s)",
+                amount = if (gift.coins > 0) plugin.economyManager.format(gift.coins) else null,
+                source = "Gift #$id",
+                transactionId = "gift-$id"
+            )
             plugin.commsManager.send(player, Component.text("That gift has already been claimed.", NamedTextColor.YELLOW))
             return
         }

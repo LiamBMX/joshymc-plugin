@@ -153,6 +153,14 @@ class RankVoucherManager(private val plugin: Joshymc) {
             // CreditVoucherManager — stops a duplicated physical item (same PDC uuid) from
             // ever redeeming twice.
             if (!reserveVoucherId(voucherUuid, player, rankId)) {
+                plugin.antiDupeManager.record(
+                    player,
+                    "Duplicate Voucher ID Redemption",
+                    AntiDupeManager.RiskLevel.CRITICAL,
+                    item = "Rank Voucher (${displayName(rankId)})",
+                    source = "Rank Voucher",
+                    transactionId = voucherUuid
+                )
                 plugin.commsManager.send(
                     player,
                     Component.text("This voucher has already been redeemed.", NamedTextColor.RED),

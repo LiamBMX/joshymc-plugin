@@ -922,6 +922,16 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             sellQty, payout, orderId, sellQty, now
         )
         if (rowsUpdated == 0) {
+            plugin.antiDupeManager.record(
+                seller,
+                "Duplicate Order Fulfillment Attempt",
+                AntiDupeManager.RiskLevel.MEDIUM,
+                item = order.item.type.name,
+                amount = sellQty.toString(),
+                source = "Buy Orders",
+                destination = order.buyerName,
+                transactionId = "order-$orderId"
+            )
             plugin.commsManager.send(seller, Component.text("Someone beat you to it — try again.", NamedTextColor.RED))
             return
         }
