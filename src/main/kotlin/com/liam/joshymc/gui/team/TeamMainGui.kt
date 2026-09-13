@@ -75,43 +75,43 @@ object TeamMainGui {
             TeamInfoGui.open(plugin, p, teamName, Component.text("Back to Team Panel", NamedTextColor.YELLOW)) { pl, viewer -> open(pl, viewer) }
         }
 
-        gui.setItem(11, TeamGuiUtil.item(
+        gui.setItem(12, TeamGuiUtil.item(
             Material.PLAYER_HEAD, Component.text("Members & Management", NamedTextColor.AQUA),
             listOf(Component.empty(), Component.text("Invite, kick, promote, and more.", NamedTextColor.GRAY))
         )) { p, _ -> TeamManagementGui.open(plugin, p) }
 
-        gui.setItem(12, TeamGuiUtil.item(
+        gui.setItem(14, TeamGuiUtil.item(
             Material.GOLD_INGOT, Component.text("Team Bank", NamedTextColor.GREEN),
             listOf(Component.empty(), Component.text("Deposit or withdraw team funds.", NamedTextColor.GRAY))
         )) { p, _ -> TeamBankGui.open(plugin, p) }
 
-        gui.setItem(13, TeamGuiUtil.item(
+        gui.setItem(16, TeamGuiUtil.item(
             Material.RED_BED, Component.text("Team Home", NamedTextColor.LIGHT_PURPLE),
             listOf(Component.empty(), Component.text("Teleport to or set the team home.", NamedTextColor.GRAY))
         )) { p, _ -> TeamHomeGui.open(plugin, p) }
 
-        gui.setItem(14, TeamGuiUtil.item(
+        gui.setItem(19, TeamGuiUtil.item(
             Material.COMPARATOR, Component.text("Team Settings", NamedTextColor.YELLOW),
             listOf(Component.empty(), Component.text("Friendly fire, access, rename, chat.", NamedTextColor.GRAY))
         )) { p, _ -> TeamSettingsGui.open(plugin, p) }
 
         if (canManageBank) {
-            gui.setItem(15, TeamGuiUtil.item(
+            gui.setItem(21, TeamGuiUtil.item(
                 Material.ENDER_CHEST, Component.text("Team Ender Chest", NamedTextColor.DARK_PURPLE),
                 listOf(Component.empty(), Component.text("Click to open the shared team chest.", NamedTextColor.GRAY))
             )) { p, _ -> Bukkit.dispatchCommand(p, "team echest") }
         } else {
-            gui.setItem(15, TeamGuiUtil.item(
+            gui.setItem(21, TeamGuiUtil.item(
                 Material.GRAY_DYE, Component.text("Team Ender Chest", NamedTextColor.DARK_GRAY),
                 listOf(Component.empty(), Component.text("You do not have permission to use this.", NamedTextColor.RED))
             ))
         }
 
-        gui.setItem(16, TeamGuiUtil.item(Material.COMPASS, Component.text("Browse Teams", NamedTextColor.WHITE))) { p, _ ->
+        gui.setItem(23, TeamGuiUtil.item(Material.COMPASS, Component.text("Browse Teams", NamedTextColor.WHITE))) { p, _ ->
             TeamListGui.open(plugin, p)
         }
 
-        gui.setItem(20, TeamGuiUtil.item(Material.NETHER_STAR, Component.text("Team Leaderboard", NamedTextColor.GOLD))) { p, _ ->
+        gui.setItem(25, TeamGuiUtil.item(Material.NETHER_STAR, Component.text("Team Leaderboard", NamedTextColor.GOLD))) { p, _ ->
             TeamTopGui.open(plugin, p)
         }
 
