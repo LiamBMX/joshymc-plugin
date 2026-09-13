@@ -677,6 +677,9 @@ permissions:
   joshymc.rtp:
     description: Allows random teleport
     default: true
+  joshymc.rtp.end:
+    description: Allows teleporting to the End using /rtp end.
+    default: false
   joshymc.afk:
     description: Allows toggling AFK
     default: true
