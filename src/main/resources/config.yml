@@ -640,6 +640,11 @@ welcome:
   # reward them (see WelcomeListener) — no command involved anymore.
   first-join-message: "&6&l★ &eWelcome &f{player} &eto JoshyMC! Type &f\"welcome\" &ein chat within 30 seconds to welcome them! &6&l★"
   first-join-broadcast: true
+  # The numbered "Welcome <player> to JoshyMC! [#<join number>]" announcement.
+  # <join number> is the player's permanent, UUID-based historical join
+  # sequence number (e.g. #1 for the first ever player, restart-safe).
+  join-number-broadcast: true
+  join-number-message: "&#ff9d2eWelcome &#ffd84d{player} &fto &#ff9d2eJoshyMC&f! &#ffd84d[#{join_number}]"
   join-format: "&8[&a+&8] &7{player}"
   leave-format: "&8[&c-&8] &7{player}"
   motd:

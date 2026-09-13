@@ -10,6 +10,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerRespawnEvent
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
@@ -18,6 +19,8 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
 
     private var firstJoinMessage: String = "&6&l\u2605 &eWelcome &f{player} &eto JoshyMC! Type &f\"welcome\" &ein chat within 30 seconds to welcome them! &6&l\u2605"
     private var firstJoinBroadcast: Boolean = true
+    private var joinNumberBroadcast: Boolean = true
+    private var joinNumberMessage: String = "&#ff9d2eWelcome &#ffd84d{player} &fto &#ff9d2eJoshyMC&f! &#ffd84d[#{join_number}]"
     private var joinFormat: String = "&8[&a+&8] &7{player}"
     private var leaveFormat: String = "&8[&c-&8] &7{player}"
     private var motdLines: List<String> = listOf(
@@ -57,8 +60,44 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
+        // Migration: adds the historical unique-player sequence number to
+        // players who already have a first_joins row from before this
+        // column existed. Throws (harmlessly) if the column is already there.
+        try {
+            plugin.databaseManager.execute("ALTER TABLE first_joins ADD COLUMN join_number INTEGER")
+        } catch (_: Exception) {
+            // Column already exists.
+        }
+        backfillJoinNumbers()
+
         loadConfig()
         plugin.logger.info("[Welcome] Listener started.")
+    }
+
+    /**
+     * Assigns join numbers (in join order) to any existing first_joins rows
+     * that predate the numbering feature, so the sequence for genuinely new
+     * players continues from the current known population instead of
+     * restarting at #1.
+     */
+    private fun backfillJoinNumbers() {
+        val unnumbered = plugin.databaseManager.query(
+            "SELECT uuid FROM first_joins WHERE join_number IS NULL ORDER BY joined_at ASC, uuid ASC"
+        ) { rs -> rs.getString(1) }
+        if (unnumbered.isEmpty()) return
+
+        plugin.databaseManager.transaction {
+            var next = plugin.databaseManager.queryFirst(
+                "SELECT COALESCE(MAX(join_number), 0) FROM first_joins"
+            ) { rs -> rs.getInt(1) } ?: 0
+
+            for (uuid in unnumbered) {
+                next++
+                plugin.databaseManager.execute(
+                    "UPDATE first_joins SET join_number = ? WHERE uuid = ?", next, uuid
+                )
+            }
+        }
     }
 
     private fun loadConfig() {
@@ -66,6 +105,8 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
 
         firstJoinMessage = config.getString("welcome.first-join-message", firstJoinMessage) ?: firstJoinMessage
         firstJoinBroadcast = config.getBoolean("welcome.first-join-broadcast", firstJoinBroadcast)
+        joinNumberBroadcast = config.getBoolean("welcome.join-number-broadcast", joinNumberBroadcast)
+        joinNumberMessage = config.getString("welcome.join-number-message", joinNumberMessage) ?: joinNumberMessage
         joinFormat = config.getString("welcome.join-format", joinFormat) ?: joinFormat
         leaveFormat = config.getString("welcome.leave-format", leaveFormat) ?: leaveFormat
         motdLines = config.getStringList("welcome.motd").ifEmpty { motdLines }
@@ -88,12 +129,20 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         val isFirstJoin = !player.hasPlayedBefore()
 
         if (isFirstJoin) {
-            // Record first join in DB
+            // Record first join in DB, assigning the next historical
+            // unique-player number atomically alongside the insert so two
+            // brand-new joins can never be handed the same number.
             val now = System.currentTimeMillis()
-            plugin.databaseManager.execute(
-                "INSERT OR IGNORE INTO first_joins (uuid, joined_at) VALUES (?, ?)",
-                player.uniqueId.toString(), now
-            )
+            var joinNumber = 0
+            plugin.databaseManager.transaction {
+                joinNumber = plugin.databaseManager.queryFirst(
+                    "SELECT COALESCE(MAX(join_number), 0) + 1 FROM first_joins"
+                ) { rs -> rs.getInt(1) } ?: 1
+                plugin.databaseManager.execute(
+                    "INSERT OR IGNORE INTO first_joins (uuid, joined_at, join_number) VALUES (?, ?, ?)",
+                    player.uniqueId.toString(), now, joinNumber
+                )
+            }
 
             // Open a 30-second window during which other players can type
             // "welcome" in chat to claim the reward. Reconnecting during (or
@@ -103,7 +152,16 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
                 recentNewPlayers.remove(player.uniqueId)
             }, WELCOME_WINDOW_TICKS)
 
-            // Broadcast first-join welcome
+            // Broadcast the numbered first-join welcome
+            if (joinNumberBroadcast) {
+                val formattedNumber = String.format(Locale.US, "%,d", joinNumber)
+                val numberedText = joinNumberMessage
+                    .replace("{player}", name)
+                    .replace("{join_number}", formattedNumber)
+                plugin.server.broadcast(plugin.commsManager.parseLegacy(numberedText))
+            }
+
+            // Broadcast the welcome-reward call-to-action
             if (firstJoinBroadcast) {
                 val welcomeText = firstJoinMessage.replace("{player}", name)
                 plugin.server.broadcast(plugin.commsManager.parseLegacy(welcomeText))
