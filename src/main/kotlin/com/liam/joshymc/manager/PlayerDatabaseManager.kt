@@ -4,13 +4,20 @@ import com.liam.joshymc.Joshymc
 import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
+import java.sql.ResultSet
 
-class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
+/**
+ * Separate SQLite database (playerdata.db) for clearly player-owned data,
+ * kept apart from the server-wide data.db (DatabaseManager). Systems migrate
+ * over one at a time; each migration is recorded in playerdata_migrations so
+ * it only runs once.
+ */
+class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
 
     private lateinit var connection: Connection
 
     fun start() {
-        val dbFile = File(plugin.dataFolder, "data.db")
+        val dbFile = File(plugin.dataFolder, "playerdata.db")
         plugin.dataFolder.mkdirs()
 
         connection = DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}")
@@ -18,19 +25,39 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
         // Enable WAL mode for better concurrent read performance
         connection.createStatement().use { it.execute("PRAGMA journal_mode=WAL") }
 
-        plugin.logger.info("[Database] Loaded server database: ${dbFile.name}")
+        createTable("""
+            CREATE TABLE IF NOT EXISTS playerdata_migrations (
+                name TEXT PRIMARY KEY,
+                migrated_at INTEGER NOT NULL
+            )
+        """.trimIndent())
+
+        plugin.logger.info("[Database] Loaded player database: ${dbFile.name}")
     }
 
     fun shutdown() {
         if (::connection.isInitialized && !connection.isClosed) {
             connection.close()
-            plugin.logger.info("[Database] Connection closed.")
         }
     }
 
     /**
-     * Execute a statement that doesn't return results (CREATE, INSERT, UPDATE, DELETE).
+     * Whether a one-time migration (identified by name, e.g. "player_settings_v1")
+     * has already completed. Callers should skip re-migrating if this is true.
      */
+    fun hasMigrated(name: String): Boolean {
+        return queryFirst(
+            "SELECT 1 FROM playerdata_migrations WHERE name = ?", name
+        ) { it.getInt(1) } != null
+    }
+
+    fun markMigrated(name: String) {
+        execute(
+            "INSERT OR REPLACE INTO playerdata_migrations (name, migrated_at) VALUES (?, ?)",
+            name, System.currentTimeMillis()
+        )
+    }
+
     override fun execute(sql: String, vararg params: Any?) {
         connection.prepareStatement(sql).use { stmt ->
             params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
@@ -38,10 +65,6 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
         }
     }
 
-    /**
-     * Execute a statement and return the number of affected rows.
-     * Used for atomic check-and-delete to prevent race condition dupes.
-     */
     override fun executeUpdate(sql: String, vararg params: Any?): Int {
         return connection.prepareStatement(sql).use { stmt ->
             params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
@@ -49,10 +72,7 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
         }
     }
 
-    /**
-     * Execute a query and map each row to a result using the provided mapper.
-     */
-    override fun <T> query(sql: String, vararg params: Any?, mapper: (java.sql.ResultSet) -> T): List<T> {
+    override fun <T> query(sql: String, vararg params: Any?, mapper: (ResultSet) -> T): List<T> {
         val results = mutableListOf<T>()
         connection.prepareStatement(sql).use { stmt ->
             params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
@@ -65,16 +85,10 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
         return results
     }
 
-    /**
-     * Execute a query and return the first result, or null.
-     */
-    override fun <T> queryFirst(sql: String, vararg params: Any?, mapper: (java.sql.ResultSet) -> T): T? {
+    override fun <T> queryFirst(sql: String, vararg params: Any?, mapper: (ResultSet) -> T): T? {
         return query(sql, *params, mapper = mapper).firstOrNull()
     }
 
-    /**
-     * Run multiple statements in a single transaction for better performance.
-     */
     override fun transaction(block: () -> Unit) {
         connection.autoCommit = false
         try {
@@ -88,9 +102,6 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
         }
     }
 
-    /**
-     * Create a table if it doesn't exist. Called by individual managers during init.
-     */
     override fun createTable(sql: String) {
         connection.createStatement().use { it.execute(sql) }
     }

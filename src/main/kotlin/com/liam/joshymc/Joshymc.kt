@@ -6,6 +6,7 @@ import com.liam.joshymc.link.LinkManager
 import com.liam.joshymc.manager.CombatManager
 import com.liam.joshymc.manager.CommandManager
 import com.liam.joshymc.manager.DatabaseManager
+import com.liam.joshymc.manager.PlayerDatabaseManager
 import com.liam.joshymc.manager.ItemManager
 import com.liam.joshymc.manager.KillStreakManager
 import com.liam.joshymc.manager.LagCleanerManager
@@ -121,6 +122,8 @@ class Joshymc : JavaPlugin() {
     lateinit var resourcePackManager: ResourcePackManager
         private set
     lateinit var databaseManager: DatabaseManager
+        private set
+    lateinit var playerDatabaseManager: PlayerDatabaseManager
         private set
     lateinit var settingsManager: SettingsManager
         private set
@@ -301,6 +304,9 @@ class Joshymc : JavaPlugin() {
 
         databaseManager = DatabaseManager(this)
         databaseManager.start()
+
+        playerDatabaseManager = PlayerDatabaseManager(this)
+        playerDatabaseManager.start()
 
         settingsManager = SettingsManager(this)
         settingsManager.start()
@@ -569,6 +575,7 @@ class Joshymc : JavaPlugin() {
         eventManager.shutdown()
         resourcePackManager.shutdown()
         discordManager.shutdown()
+        playerDatabaseManager.shutdown()
         databaseManager.shutdown()
         logger.info("JoshyMC has been disabled!")
     }
