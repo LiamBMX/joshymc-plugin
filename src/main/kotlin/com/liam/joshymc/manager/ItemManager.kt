@@ -12,7 +12,6 @@ class ItemManager(private val plugin: Joshymc) {
     fun registerAll() {
         register(VoidDrill())
         register(VoidDrill5x5())
-        register(AfkKey())
         register(EasterEgg())
         register(ExplosiveEgg())
         register(FreezeEgg())
