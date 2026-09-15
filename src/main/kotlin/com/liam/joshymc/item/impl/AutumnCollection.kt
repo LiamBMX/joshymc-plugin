@@ -105,5 +105,9 @@ class FallingLeaf : CustomItem() {
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
         meta.setItemModel(NamespacedKey(Joshymc.instance, "falling_leaf"))
+        val equippable = meta.equippable
+        equippable.slot = EquipmentSlot.CHEST
+        equippable.model = NamespacedKey(Joshymc.instance, "falling_leaf")
+        meta.setEquippable(equippable)
     }
 }
