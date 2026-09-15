@@ -14,7 +14,6 @@ import com.liam.joshymc.listener.MinecraftChatListener
 import com.liam.joshymc.listener.ModModeListener
 import com.liam.joshymc.listener.TraineeModeListener
 import com.liam.joshymc.listener.NightVisionListener
-import com.liam.joshymc.listener.CustomCraftingListener
 import com.liam.joshymc.listener.RecipeBlockerListener
 import com.liam.joshymc.listener.AFKListener
 import com.liam.joshymc.listener.AutoSmeltListener
@@ -73,7 +72,6 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(GSitListener(plugin), plugin)
         pm.registerEvents(DeathCoordsListener(plugin), plugin)
         pm.registerEvents(RecipeBlockerListener(plugin), plugin)
-        pm.registerEvents(CustomCraftingListener(plugin), plugin)
         pm.registerEvents(ChatItemListener(plugin), plugin)
         pm.registerEvents(EnderchestPreviewListener(plugin), plugin)
 
