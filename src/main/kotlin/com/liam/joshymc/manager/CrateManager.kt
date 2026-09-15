@@ -384,9 +384,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
-    fun setCrateKeyMaterial(crateId: String, material: Material, keyName: String): Boolean {
+    fun setCrateKeyMaterial(crateId: String, material: Material, keyName: String, keyItemModel: NamespacedKey? = null): Boolean {
         val crate = crates[crateId] ?: return false
-        crates[crateId] = crate.copy(keyMaterial = material, keyName = keyName)
+        crates[crateId] = crate.copy(keyMaterial = material, keyName = keyName, keyItemModel = keyItemModel)
         saveCrates()
         return true
     }
