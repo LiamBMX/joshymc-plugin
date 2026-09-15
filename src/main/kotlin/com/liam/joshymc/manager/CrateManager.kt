@@ -139,6 +139,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val displayName: String,
         val keyMaterial: Material,
         val keyName: String,
+        /**
+         * Optional custom ItemModel key applied to physical keys for this crate
+         * (e.g. a retextured TRIAL_KEY). Purely cosmetic — key identity is always
+         * determined by the [crateKeyKey] PDC tag, never by this model.
+         */
+        val keyItemModel: NamespacedKey? = null,
         val animationGlass: Material,
         val rewards: List<CrateReward>,
         val mode: CrateMode = CrateMode.RANDOM,
@@ -234,6 +240,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val keyMaterialStr = crateSection.getString("key-material", "TRIPWIRE_HOOK") ?: "TRIPWIRE_HOOK"
             val keyMaterial = try { Material.valueOf(keyMaterialStr) } catch (_: Exception) { Material.TRIPWIRE_HOOK }
             val keyName = crateSection.getString("key-name", "$displayName Key") ?: "$displayName Key"
+            val keyItemModel = crateSection.getString("key-item-model")?.takeIf { it.isNotBlank() }?.let { modelStr ->
+                val parsed = NamespacedKey.fromString(modelStr)
+                if (parsed == null) {
+                    plugin.logger.warning("[Crates] Invalid key-item-model '$modelStr' for crate '$id' — falling back to default key appearance.")
+                }
+                parsed
+            }
             val glassStr = crateSection.getString("animation-glass", "WHITE_STAINED_GLASS_PANE") ?: "WHITE_STAINED_GLASS_PANE"
             val animationGlass = try { Material.valueOf(glassStr) } catch (_: Exception) { Material.WHITE_STAINED_GLASS_PANE }
 
@@ -278,7 +291,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 }
             }
 
-            crates[id] = CrateDef(id, displayName, keyMaterial, keyName, animationGlass, rewards, mode, animationType, idleParticle, winParticle, particleColor)
+            crates[id] = CrateDef(
+                id, displayName, keyMaterial, keyName, keyItemModel, animationGlass, rewards,
+                mode, animationType, idleParticle, winParticle, particleColor
+            )
         }
     }
 
@@ -310,8 +326,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     fun createCrate(id: String, displayName: String): Boolean {
         if (crates.containsKey(id)) return false
-        crates[id] = CrateDef(id, displayName, Material.TRIPWIRE_HOOK, "$displayName Key", Material.WHITE_STAINED_GLASS_PANE, emptyList(),
-            CrateMode.RANDOM, AnimationType.SPIN, Particle.END_ROD, Particle.FIREWORK)
+        crates[id] = CrateDef(
+            id, displayName, Material.TRIPWIRE_HOOK, "$displayName Key", null, Material.WHITE_STAINED_GLASS_PANE, emptyList(),
+            CrateMode.RANDOM, AnimationType.SPIN, Particle.END_ROD, Particle.FIREWORK
+        )
         saveCrates()
         return true
     }
@@ -425,6 +443,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             cratesConfig.set("$path.display-name", crate.displayName)
             cratesConfig.set("$path.key-material", crate.keyMaterial.name)
             cratesConfig.set("$path.key-name", crate.keyName)
+            cratesConfig.set("$path.key-item-model", crate.keyItemModel?.asString())
             cratesConfig.set("$path.animation-glass", crate.animationGlass.name)
             cratesConfig.set("$path.mode", crate.mode.name.lowercase())
             cratesConfig.set("$path.animation-type", crate.animationType.name.lowercase())
@@ -556,6 +575,11 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
             meta.persistentDataContainer.set(crateKeyKey, PersistentDataType.STRING, crateType)
             meta.setEnchantmentGlintOverride(true)
+
+            // Cosmetic only — key identity always comes from the crateKeyKey PDC tag above.
+            if (crate.keyItemModel != null) {
+                meta.setItemModel(crate.keyItemModel)
+            }
         }
         return key
     }

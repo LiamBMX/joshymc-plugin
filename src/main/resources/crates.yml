@@ -7,6 +7,9 @@
 # animation-type: "spin" (scrolling slots), "pulse" (items vanish until winner remains), "instant" (no animation)
 # idle-particle: particle shown above crate block (e.g. END_ROD, FLAME, SOUL_FIRE_FLAME, CHERRY_LEAVES, HEART)
 # win-particle: particle burst on reward (e.g. FIREWORK, TOTEM_OF_UNDYING, EXPLOSION, HEART)
+# key-item-model: optional resource-pack model key applied to the key item (e.g. "joshymc:cabin_key").
+#   Purely cosmetic — the key is still identified by its internal crate ID. Omit to keep the
+#   default vanilla appearance for key-material. Falls back safely if the model key is invalid.
 
 crates:
   common:
