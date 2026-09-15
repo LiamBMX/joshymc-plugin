@@ -1,8 +1,6 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
-import org.bukkit.Material
-import org.bukkit.NamespacedKey
 
 class RecipeManager(private val plugin: Joshymc) {
 
@@ -16,7 +14,4 @@ class RecipeManager(private val plugin: Joshymc) {
     fun clear() {
         customRecipes.clear()
     }
-
-    fun getCustomIngredients(key: NamespacedKey): Map<Material, String>? =
-        customRecipes.getCustomIngredients(key)
 }

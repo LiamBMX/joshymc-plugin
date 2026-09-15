@@ -27,11 +27,6 @@ class ItemManager(private val plugin: Joshymc) {
         register(EnderEgg())
         register(BubbleButtLeggings())
 
-        // Crafting materials (kept only as enchant-scroll crafting ingredients)
-        register(SoulFragment())
-        register(AncientRune())
-        register(EnchantedDust())
-
         // Utility blocks
         register(FastHopper())
 
