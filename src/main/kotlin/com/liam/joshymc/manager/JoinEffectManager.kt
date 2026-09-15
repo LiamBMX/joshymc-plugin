@@ -79,22 +79,74 @@ class JoinEffectManager(private val plugin: Joshymc) : Listener {
         editMeta { it.displayName(Component.empty()) }
     }
 
+    // Join effects are player-owned data, migrated to playerdata.db (issue #777).
+    // Falls back to data.db if playerdata.db init/migration fails, so a bad
+    // migration never leaves join effects unreadable.
+    private var store: SqliteDatabase = plugin.databaseManager
+
+    private val JOIN_EFFECTS_TABLE_SQL = """
+        CREATE TABLE IF NOT EXISTS player_join_effects (
+            uuid TEXT PRIMARY KEY,
+            effect_id TEXT,
+            message_id TEXT
+        )
+    """.trimIndent()
+
     // ── Lifecycle ───────────────────────────────────────────────────
 
     fun start() {
-        plugin.databaseManager.createTable("""
-            CREATE TABLE IF NOT EXISTS player_join_effects (
-                uuid TEXT PRIMARY KEY,
-                effect_id TEXT,
-                message_id TEXT
-            )
-        """.trimIndent())
+        // Old table stays in data.db as rollback safety; never dropped here.
+        plugin.databaseManager.createTable(JOIN_EFFECTS_TABLE_SQL)
+
+        try {
+            plugin.playerDatabaseManager.createTable(JOIN_EFFECTS_TABLE_SQL)
+            migrateToPlayerDatabase()
+            store = plugin.playerDatabaseManager
+        } catch (e: Exception) {
+            plugin.logger.severe("[JoinEffect] Failed to migrate to playerdata.db, staying on data.db: ${e.message}")
+            store = plugin.databaseManager
+        }
 
         registerEffects()
         registerMessages()
 
         plugin.server.pluginManager.registerEvents(this, plugin)
         plugin.logger.info("[JoinEffect] Registered ${effects.size} effects and ${messages.size} messages.")
+    }
+
+    /**
+     * One-time copy of player_join_effects from data.db into playerdata.db.
+     * Source rows are left untouched. Only marks migrated once the row
+     * count in playerdata.db matches the source, so a partial failure
+     * retries on next startup instead of silently switching over.
+     */
+    private fun migrateToPlayerDatabase() {
+        val migrationName = "player_join_effects_v1"
+        if (plugin.playerDatabaseManager.hasMigrated(migrationName)) return
+
+        val rows = plugin.databaseManager.query(
+            "SELECT uuid, effect_id, message_id FROM player_join_effects"
+        ) { rs -> Triple(rs.getString("uuid"), rs.getString("effect_id"), rs.getString("message_id")) }
+
+        plugin.playerDatabaseManager.transaction {
+            for ((uuid, effectId, messageId) in rows) {
+                plugin.playerDatabaseManager.execute(
+                    "INSERT OR REPLACE INTO player_join_effects (uuid, effect_id, message_id) VALUES (?, ?, ?)",
+                    uuid, effectId, messageId
+                )
+            }
+        }
+
+        val migratedCount = plugin.playerDatabaseManager.queryFirst(
+            "SELECT COUNT(*) AS c FROM player_join_effects"
+        ) { it.getInt("c") } ?: 0
+
+        if (migratedCount < rows.size) {
+            throw IllegalStateException("expected ${rows.size} rows, playerdata.db has $migratedCount")
+        }
+
+        plugin.playerDatabaseManager.markMigrated(migrationName)
+        plugin.logger.info("[JoinEffect] Migrated ${rows.size} player_join_effects row(s) to playerdata.db")
     }
 
     // ── Event ───────────────────────────────────────────────────────
@@ -331,7 +383,7 @@ class JoinEffectManager(private val plugin: Joshymc) : Listener {
     // ── Database ────────────────────────────────────────────────────
 
     private fun loadPlayer(uuid: UUID) {
-        plugin.databaseManager.queryFirst(
+        store.queryFirst(
             "SELECT effect_id, message_id FROM player_join_effects WHERE uuid = ?",
             uuid.toString()
         ) { rs ->
@@ -345,12 +397,12 @@ class JoinEffectManager(private val plugin: Joshymc) : Listener {
         val messageId = equippedMessages[uuid]
 
         if (effectId == null && messageId == null) {
-            plugin.databaseManager.execute(
+            store.execute(
                 "DELETE FROM player_join_effects WHERE uuid = ?",
                 uuid.toString()
             )
         } else {
-            plugin.databaseManager.execute(
+            store.execute(
                 "INSERT OR REPLACE INTO player_join_effects (uuid, effect_id, message_id) VALUES (?, ?, ?)",
                 uuid.toString(), effectId, messageId
             )
