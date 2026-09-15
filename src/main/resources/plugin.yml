@@ -537,8 +537,8 @@ commands:
     description: View and manage upgraded hoppers
     usage: /hopper <info|reset|filter [hand|<material>|clear]>
   spawner:
-    description: Open the spawner shop, manage trust, or run admin spawner commands
-    usage: /spawner [shop|trust|untrust|trustedlist|give|list]
+    description: Open the spawner shop or run admin spawner commands
+    usage: /spawner [shop|give|list]
     aliases: [spawners]
   team:
     description: Team management
@@ -641,7 +641,7 @@ permissions:
     description: Allows resetting any hopper's upgrades via /hopper reset
     default: op
   joshymc.spawners.admin:
-    description: Bypass spawner ownership checks — manage, view, and filter any player's spawner via /spawner and its storage GUI (the legacy joshymc.spawner.admin node is also still accepted for backward compatibility)
+    description: Run admin /spawner commands (give, list) — the legacy joshymc.spawner.admin node is also still accepted for backward compatibility
     default: op
   joshymc.mobvisibility:
     description: Allows toggling per-player mob visibility in /settings
