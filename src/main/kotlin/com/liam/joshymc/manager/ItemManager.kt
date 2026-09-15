@@ -53,6 +53,27 @@ class ItemManager(private val plugin: Joshymc) {
         register(GoldenCrest())
         register(FallingLeaf())
 
+        // Retextured Trial Keys
+        register(JanuaryKey())
+        register(FebruaryKey())
+        register(MarchKey())
+        register(AprilKey())
+        register(MayKey())
+        register(JuneKey())
+        register(JulyKey())
+        register(AugustKey())
+        register(SeptemberKey())
+        register(OctoberKey())
+        register(NovemberKey())
+        register(DecemberKey())
+        register(MoneyKey())
+        register(HarvestKey())
+        register(StockpileKey())
+        register(HomesteadKey())
+        register(CampfireKey())
+        register(CabinKey())
+        register(CreditKey())
+
         // Moderator Mode hotbar tools
         register(ModModePunish(plugin))
         register(ModModeRandomTp(plugin))
