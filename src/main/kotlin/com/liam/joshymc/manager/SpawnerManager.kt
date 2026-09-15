@@ -29,6 +29,7 @@ import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.meta.BlockStateMeta
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitTask
 import java.util.Base64
@@ -85,6 +86,10 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
     private val blocks = ConcurrentHashMap<BlockKey, SpawnerBlock>()
     private val pdcSpawnerId = NamespacedKey(plugin, "custom_spawner_id")
     private val pdcSpawnerOwner = NamespacedKey(plugin, "custom_spawner_owner")
+    /** Tags a Silk Touch–harvested spawner item with the entity type it was spawning
+     *  when picked up. Independent of the JoshyMC economy spawner system above —
+     *  used for plain vanilla/natural spawners so their mob type survives pickup. */
+    private val pdcSilkMobType = NamespacedKey(plugin, "silk_spawner_mob")
     private val legacy = LegacyComponentSerializer.legacyAmpersand()
 
     private var tickTask: BukkitTask? = null
@@ -414,11 +419,66 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
 
     fun getSpawnerAt(block: Block): SpawnerBlock? = blocks[block.toKey()]
 
+    /**
+     * Build a plain (non-economy) spawner item that remembers the entity type
+     * it was harvested with Silk Touch from. Uses the real Bukkit/Paper spawner
+     * block-state component as the source of truth, with a PDC tag as a
+     * fallback so the type survives even if the block-state isn't preserved.
+     */
+    private fun createSilkTouchSpawnerItem(mobType: EntityType): ItemStack {
+        val item = ItemStack(Material.SPAWNER)
+        item.editMeta { meta ->
+            meta.displayName(Component.text("${formatMobName(mobType)} Spawner", NamedTextColor.WHITE)
+                .decoration(TextDecoration.ITALIC, false))
+            meta.lore(listOf(
+                Component.empty(),
+                Component.text("  Mob: ", NamedTextColor.GRAY)
+                    .append(Component.text(formatMobName(mobType), NamedTextColor.WHITE))
+                    .decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+            ))
+            meta.persistentDataContainer.set(pdcSilkMobType, PersistentDataType.STRING, mobType.name)
+            if (meta is BlockStateMeta) {
+                val state = meta.blockState as? CreatureSpawner
+                if (state != null) {
+                    state.spawnedType = mobType
+                    meta.blockState = state
+                }
+            }
+        }
+        return item
+    }
+
+    /** Reads the entity type stashed on a Silk Touch spawner item, if any. */
+    private fun getSilkMobType(item: ItemStack): EntityType? {
+        val meta = item.itemMeta ?: return null
+        val stored = meta.persistentDataContainer.get(pdcSilkMobType, PersistentDataType.STRING)
+        if (stored != null) {
+            runCatching { EntityType.valueOf(stored) }.getOrNull()?.let { return it }
+        }
+        val stateMeta = meta as? BlockStateMeta ?: return null
+        return (stateMeta.blockState as? CreatureSpawner)?.spawnedType
+    }
+
     // ── Events ──────────────────────────────────────────────
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onPlace(event: BlockPlaceEvent) {
         val item = event.itemInHand
+
+        // Plain Silk Touch spawner (not a JoshyMC economy item) — restore its
+        // stored entity type and let vanilla/Paper handle spawning from there.
+        if (item.type == Material.SPAWNER && !isCustomSpawnerItem(item)) {
+            val mobType = getSilkMobType(item)
+            if (mobType != null) {
+                val state = event.blockPlaced.state as? CreatureSpawner
+                if (state != null) {
+                    state.spawnedType = mobType
+                    state.update(true, false)
+                }
+            }
+        }
+
         if (!isCustomSpawnerItem(item)) return
 
         val block = event.blockPlaced
@@ -501,12 +561,21 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         val key = block.toKey()
         val spawnerBlock = blocks[key]
 
-        // VANILLA spawner: do NOT allow pickup (even with silk touch). Players
-        // were silk-touching dungeon-loot spawners (blaze, zombie, spider) for
-        // free farms — only JoshyMC-owned custom spawners are pickable.
-        // Players still get standard XP/dropless behaviour from breaking it.
+        // Plain spawner (natural dungeon spawner, vanilla /give spawner, or a
+        // previously-placed Silk Touch spawner) — not one of the JoshyMC
+        // economy spawners tracked below. Silk Touch preserves the mob type
+        // as exactly one item; without it, the block just breaks (no drop),
+        // matching vanilla's normal XP-only behaviour.
         if (spawnerBlock == null) {
             event.isDropItems = false
+            val mainHand = event.player.inventory.itemInMainHand
+            if (mainHand.containsEnchantment(Enchantment.SILK_TOUCH)) {
+                val currentType = (block.state as? CreatureSpawner)?.spawnedType
+                if (currentType != null) {
+                    val item = createSilkTouchSpawnerItem(currentType)
+                    block.world.dropItemNaturally(block.location.add(0.5, 0.5, 0.5), item)
+                }
+            }
             return
         }
 
