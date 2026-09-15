@@ -105,6 +105,9 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
 
             val icon = ItemStack(crate.keyMaterial)
             icon.editMeta { meta ->
+                if (crate.keyItemModel != null) {
+                    meta.setItemModel(crate.keyItemModel)
+                }
                 meta.displayName(
                     Component.text(crate.displayName, TextColor.color(0xFFAA00))
                         .decoration(TextDecoration.ITALIC, false)
@@ -362,7 +365,8 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
                 p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
                 return@setItem
             }
-            plugin.crateManager.setCrateKeyMaterial(crateId, held.type, "${crate.displayName} Key")
+            val heldItemModel = held.itemMeta?.itemModel
+            plugin.crateManager.setCrateKeyMaterial(crateId, held.type, "${crate.displayName} Key", heldItemModel)
             p.playSound(p.location, Sound.BLOCK_ANVIL_USE, 0.5f, 1.0f)
             plugin.commsManager.send(p, Component.text("Key material set to ${held.type.name}.", NamedTextColor.GREEN))
             openEditMenu(p, crateId)
