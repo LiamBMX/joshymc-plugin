@@ -74,12 +74,10 @@ class ResourcePackManager(private val plugin: Joshymc) : Listener {
 
     private fun extractPack(): File {
         val outFile = File(plugin.dataFolder, "resourcepack.zip")
-        if (!outFile.exists()) {
-            plugin.dataFolder.mkdirs()
-            plugin.getResource("resourcepack.zip")?.use { input ->
-                outFile.outputStream().use { output -> input.copyTo(output) }
-            } ?: error("resourcepack.zip not found in plugin JAR")
-        }
+        plugin.dataFolder.mkdirs()
+        plugin.getResource("resourcepack.zip")?.use { input ->
+            outFile.outputStream().use { output -> input.copyTo(output) }
+        } ?: error("resourcepack.zip not found in plugin JAR")
         return outFile
     }
 
