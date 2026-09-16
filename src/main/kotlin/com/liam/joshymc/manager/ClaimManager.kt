@@ -108,7 +108,14 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     private var blocksPerHour = 100
     private var maxTotalBlocks = 50000
 
+    /** Worlds (lowercase) where claims can't be created, managed, or enforced. Configurable via claims.blocked-worlds. */
+    private var blockedWorlds: Set<String> = DEFAULT_BLOCKED_WORLDS
+
     private val claimWandKey = NamespacedKey(plugin, "claim_wand")
+
+    companion object {
+        private val DEFAULT_BLOCKED_WORLDS = setOf("resource", "spawn", "pvp", "event", "world_end", "afk", "dungeon")
+    }
 
     // ══════════════════════════════════════════════════════════
     //  LIFECYCLE
@@ -118,6 +125,11 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         startingBlocks = plugin.config.getInt("claims.starting-blocks", 500)
         blocksPerHour = plugin.config.getInt("claims.blocks-per-hour", 100)
         maxTotalBlocks = plugin.config.getInt("claims.max-blocks", 50000)
+
+        val configuredBlockedWorlds = plugin.config.getStringList("claims.blocked-worlds")
+        blockedWorlds = (if (configuredBlockedWorlds.isNotEmpty()) configuredBlockedWorlds else DEFAULT_BLOCKED_WORLDS.toList())
+            .map { it.lowercase() }
+            .toSet()
 
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS claims_v2 (
@@ -365,13 +377,19 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     // ══════════════════════════════════════════════════════════
 
     /**
-     * Claims only exist and are enforced in the Overworld. A location in the
-     * Nether/End never resolves to a claim here, even if a legacy claim's
-     * stored bounds technically overlap it — this is the single choke point
-     * that keeps protection, trust, and management commands Overworld-only.
+     * Claims only exist and are enforced in the Overworld, and never in a
+     * configured blocked world — even if a legacy claim's stored bounds
+     * technically overlap one (e.g. a world that was blocked after claims
+     * were already made in it). This is the single choke point that keeps
+     * protection, trust, and management commands scoped to allowed worlds:
+     * every listener and command resolves "the claim here" through this
+     * method, so a blocked world's legacy claims become non-enforcing and
+     * un-editable without deleting their database rows.
      */
     fun getClaimAt(location: Location): Claim? {
-        if (location.world?.environment != org.bukkit.World.Environment.NORMAL) return null
+        val world = location.world ?: return null
+        if (world.environment != org.bukkit.World.Environment.NORMAL) return null
+        if (world.name.lowercase() in blockedWorlds) return null
         return claims.firstOrNull { it.contains(location) }
     }
 
@@ -384,15 +402,13 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     /**
      * Create a claim between two corners. Returns the new claim or null on failure.
      */
-    private val blockedWorlds = setOf("resource", "spawn", "afk")
-
     fun createClaim(player: Player, pos1: Location, pos2: Location): ClaimCreateResult {
         val world = pos1.world ?: return ClaimCreateResult.Failure("Invalid world.")
         if (world.environment != org.bukkit.World.Environment.NORMAL) {
             return ClaimCreateResult.Failure("Claims can only be created in the Overworld.")
         }
         val worldName = world.name
-        if (worldName in blockedWorlds) return ClaimCreateResult.Failure("You cannot claim land in this world.")
+        if (worldName.lowercase() in blockedWorlds) return ClaimCreateResult.Failure("Claims are disabled in this world.")
         if (pos1.world?.name != pos2.world?.name) return ClaimCreateResult.Failure("Corners must be in the same world.")
 
         val minX = min(pos1.blockX, pos2.blockX)
@@ -835,6 +851,10 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
     fun canManageClaim(player: Player, claim: Claim): Boolean {
         if (player.hasPermission("joshymc.claim.admin")) return true
+        // Legacy claims sitting in a now-blocked world are inactive/non-editable —
+        // this closes GUI paths (ClaimManagementGui etc.) that look claims up by id
+        // instead of by location, so they can't bypass the getClaimAt() choke point.
+        if (claim.world.lowercase() in blockedWorlds) return false
         if (claim.ownerUuid == player.uniqueId) return true
         if (claim.teamName != null) {
             val playerTeam = plugin.teamManager.getPlayerTeam(player.uniqueId)
@@ -872,8 +892,8 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        if (player.world.name in blockedWorlds) {
-            plugin.commsManager.send(player, Component.text("You cannot claim land in this world.", NamedTextColor.RED))
+        if (player.world.name.lowercase() in blockedWorlds) {
+            plugin.commsManager.send(player, Component.text("Claims are disabled in this world.", NamedTextColor.RED))
             return
         }
 
