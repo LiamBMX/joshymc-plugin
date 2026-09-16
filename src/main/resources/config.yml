@@ -704,6 +704,18 @@ claims:
   starting-blocks: 500     # Claim blocks each player starts with
   blocks-per-hour: 100     # Blocks earned per hour of playtime
   max-blocks: 50000        # Maximum total claim blocks a player can have
+  # Worlds where claims cannot be created, resized, or managed, and where
+  # existing (legacy) claims stop enforcing protection entirely. Matching is
+  # case-insensitive against the world's actual Bukkit name. Legacy claim
+  # records in these worlds are kept in the database but are inert.
+  blocked-worlds:
+    - resource
+    - spawn
+    - pvp
+    - event
+    - world_end
+    - afk
+    - dungeon
 
 # Credits — secondary currency, passively earned from playtime
 credits:
