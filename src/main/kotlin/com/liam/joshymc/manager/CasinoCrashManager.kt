@@ -44,13 +44,13 @@ class CasinoCrashManager(private val plugin: Joshymc) {
     /** Players with the Crash GUI currently open, refreshed every tick. */
     val viewers: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
 
-    var bettingSeconds = 15; private set
+    var bettingSeconds = 20; private set
 
     /** Gates routine per-round/per-bet console logging (issue #739) — off by default to stop console spam. */
     private var debug = false
 
     fun start() {
-        bettingSeconds = plugin.config.getInt("casino.crash.betting-seconds", 15).coerceAtLeast(3)
+        bettingSeconds = plugin.config.getInt("casino.crash.betting-seconds", 20).coerceAtLeast(3)
         debug = plugin.config.getBoolean("casino.crash.debug", false)
 
         plugin.databaseManager.createTable(
