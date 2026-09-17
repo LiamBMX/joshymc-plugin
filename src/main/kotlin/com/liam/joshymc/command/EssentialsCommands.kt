@@ -215,6 +215,18 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
+        // Flight in the "spawn" world is gated purely on joshymc.spawn.fly — no
+        // rank or staff-mode exemptions. Creative/Spectator are left alone.
+        if (target.world.name == "spawn" && target.gameMode != GameMode.SPECTATOR && target.gameMode != GameMode.CREATIVE &&
+            !target.hasPermission("joshymc.spawn.fly")
+        ) {
+            plugin.commsManager.send(
+                if (sender is Player) sender else target,
+                Component.text("You cannot use /fly in spawn.", NamedTextColor.RED)
+            )
+            return true
+        }
+
         target.allowFlight = !target.allowFlight
         target.isFlying = target.allowFlight
 
