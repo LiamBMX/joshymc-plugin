@@ -74,7 +74,6 @@ import org.bukkit.World
 import org.bukkit.event.HandlerList
 import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
-import java.util.Properties
 
 class Joshymc : JavaPlugin() {
 
@@ -509,9 +508,6 @@ class Joshymc : JavaPlugin() {
         // Ensure dungeon void world exists
         WorldCommand.ensureDungeonWorld(this)
 
-        // Ensure default overworld has structures disabled (only resource world has structures)
-        enforceServerStructures()
-
         // Apply world borders and game rules on a 1-tick delay (after all worlds are loaded)
         server.scheduler.runTaskLater(this, Runnable { applyWorldSettings() }, 1L)
 
@@ -847,34 +843,10 @@ class Joshymc : JavaPlugin() {
     }
 
     /**
-     * Ensures server.properties has generate-structures=false so the main
-     * overworld doesn't generate structures. The resource world (created via
-     * WorldCreator) will still have structures since it uses its own settings.
-     * Requires a server restart to take effect on new chunks.
-     */
-    private fun enforceServerStructures() {
-        val propsFile = File(server.worldContainer.parentFile, "server.properties")
-        if (!propsFile.exists()) return
-
-        try {
-            val props = Properties()
-            propsFile.inputStream().use { props.load(it) }
-
-            val current = props.getProperty("generate-structures", "true")
-            if (current == "true") {
-                props.setProperty("generate-structures", "false")
-                propsFile.outputStream().use { props.store(it, null) }
-                logger.info("[WorldSetup] Set generate-structures=false in server.properties. Restart for full effect on new chunks.")
-            }
-        } catch (e: Exception) {
-            logger.warning("[WorldSetup] Could not update server.properties: ${e.message}")
-        }
-    }
-
-    /**
      * Apply world borders and structure settings to Nether, End, and Overworld.
-     * - Nether and End get a 10k x 10k border
-     * - Default overworld has structures disabled (resource world keeps them)
+     * - Nether and End get a 10k x 10k border; vanilla structures stay enabled
+     *   there (and in the main overworld) — only custom/server worlds have
+     *   structures disabled.
      */
     fun applyWorldSettings() {
         val resourceWorldName = config.getString("resource-world.world-name", "resource") ?: "resource"
@@ -910,7 +882,12 @@ class Joshymc : JavaPlugin() {
                         world.worldBorder.size = overworldSize
                         logger.info("[WorldSetup] Overworld '${world.name}' border set to ${overworldSize.toInt()}x${overworldSize.toInt()}.")
                         world.setGameRule(GameRule.DO_TRADER_SPAWNING, false)
-                        disableStructureGeneration(world)
+                        // The main survival overworld keeps vanilla structure
+                        // generation — only custom/server worlds (pvp, afk,
+                        // dungeon, event, etc.) get structures disabled.
+                        if (world.name != "world") {
+                            disableStructureGeneration(world)
+                        }
                     }
                 }
                 else -> {}
