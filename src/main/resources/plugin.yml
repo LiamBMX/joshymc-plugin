@@ -483,7 +483,7 @@ commands:
     usage: /hidestaff
   staffchat:
     description: Toggle Staff Chat — redirects your chat messages to staff only
-    usage: /staffchat
+    usage: /staffchat [view <on|off>]
     aliases: [sc]
   traineemode:
     description: Toggle Trainee Mode — a limited, read-only investigation mode
@@ -1162,6 +1162,9 @@ permissions:
     default: op
   joshymc.staffchat:
     description: Toggle, send, and receive Staff Chat via /staffchat or /sc
+    default: op
+  joshymc.staffchat.view:
+    description: Control whether you receive Staff Chat messages via /staffchat view <on/off>
     default: op
   joshymc.modmode.edit:
     description: Edit inventories/Ender Chests/vaults viewed via Moderator Mode (Lead Moderator+)

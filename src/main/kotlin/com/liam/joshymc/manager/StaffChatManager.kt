@@ -9,13 +9,17 @@ import java.util.Collections
 import java.util.UUID
 
 /**
- * Per-player Staff Chat toggle. State is in-memory only — resets to OFF on
- * rejoin/restart by design, no table needed.
+ * Per-player Staff Chat toggle (redirects the player's own chat into Staff Chat).
+ * That mode is in-memory only — resets to OFF on rejoin/restart by design, no
+ * table needed. The separate "view" toggle (whether incoming Staff Chat messages
+ * are shown at all) is persisted via SettingsManager instead — see [isViewEnabled].
  */
 class StaffChatManager(private val plugin: Joshymc) {
 
     companion object {
         const val PERM = "joshymc.staffchat"
+        const val PERM_VIEW = "joshymc.staffchat.view"
+        const val VIEW_SETTING_KEY = "staffchat_view"
     }
 
     // AsyncChatEvent runs off the main thread, so this set needs to be thread-safe.
@@ -43,13 +47,20 @@ class StaffChatManager(private val plugin: Joshymc) {
         enabled.remove(uuid)
     }
 
+    /** Whether this staff member currently receives Staff Chat messages. Persisted via SettingsManager, defaults to ON. */
+    fun isViewEnabled(player: Player): Boolean = plugin.settingsManager.getSetting(player, VIEW_SETTING_KEY)
+
+    fun setViewEnabled(player: Player, value: Boolean) {
+        plugin.settingsManager.setSetting(player, VIEW_SETTING_KEY, value)
+    }
+
     fun sendMessage(sender: Player, plainMessage: String) {
         val format = plugin.config.getString("chat.staffchat-format")
             ?: "&8[&cStaff Chat&8] &f{player}&7: &f{message}"
         val filled = format.replace("{player}", sender.name).replace("{message}", plainMessage)
         val component = plugin.commsManager.parseLegacy(filled)
         for (viewer in Bukkit.getOnlinePlayers()) {
-            if (viewer.hasPermission(PERM)) viewer.sendMessage(component)
+            if (viewer.hasPermission(PERM) && isViewEnabled(viewer)) viewer.sendMessage(component)
         }
     }
 }
