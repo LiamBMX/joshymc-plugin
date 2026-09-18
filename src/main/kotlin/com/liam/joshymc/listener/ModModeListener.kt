@@ -27,7 +27,7 @@ import org.bukkit.event.player.PlayerToggleSneakEvent
 import org.bukkit.inventory.EquipmentSlot
 
 /**
- * Protects the 9 Moderator Mode tools from being dropped, stored, traded,
+ * Protects the 8 Moderator Mode tools from being dropped, stored, traded,
  * crafted with, or otherwise leaked into normal survival gameplay, and wires
  * each tool's right-click behavior to [com.liam.joshymc.manager.ModModeManager].
  */
@@ -36,7 +36,7 @@ class ModModeListener(private val plugin: Joshymc) : Listener {
     companion object {
         private val SELF_TOOL_IDS = setOf("modmode_rtp", "modmode_vanish", "modmode_spectator")
         private val TARGET_TOOL_IDS = setOf(
-            "modmode_punish", "modmode_freeze", "modmode_totemguard",
+            "modmode_punish", "modmode_freeze",
             "modmode_invsee", "modmode_ecsee", "modmode_vault"
         )
     }
@@ -88,7 +88,6 @@ class ModModeListener(private val plugin: Joshymc) : Listener {
         when (id) {
             "modmode_punish" -> plugin.modModeManager.openPunish(player, target)
             "modmode_freeze" -> plugin.modModeManager.toggleFreeze(player, target)
-            "modmode_totemguard" -> plugin.modModeManager.showTotemGuard(player, target)
             "modmode_invsee" -> plugin.modModeManager.openInvsee(player, target)
             "modmode_ecsee" -> plugin.modModeManager.openEnderChest(player, target)
             "modmode_vault" -> plugin.modModeManager.openVault(player, target)
