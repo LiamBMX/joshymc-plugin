@@ -967,6 +967,9 @@ permissions:
   joshymc.fly.pvp:
     description: Allows flight in the PvP world
     default: op
+  joshymc.spawn.fly:
+    description: Allows flight in the spawn world
+    default: op
   joshymc.heal:
     description: Heal players
     default: op

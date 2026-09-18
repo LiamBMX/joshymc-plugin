@@ -14,6 +14,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerMoveEvent
+import org.bukkit.event.player.PlayerRespawnEvent
 import java.io.File
 import java.util.UUID
 
@@ -213,18 +214,36 @@ class SpawnWorldManager(private val plugin: Joshymc) : Listener {
 
     // ── Spawn fly ──────────────────────────────────────────
 
+    companion object {
+        const val FLY_PERMISSION = "joshymc.spawn.fly"
+    }
+
     private fun enableSpawnFly(player: Player) {
         if (player.gameMode == GameMode.CREATIVE || player.gameMode == GameMode.SPECTATOR) return
-        if (player.allowFlight) hadFlyBefore.add(player.uniqueId)
-        player.allowFlight = true
+
+        // Remember whatever flight state they walked in with so it can be
+        // restored as-is when they leave, regardless of permission.
+        if (player.allowFlight) hadFlyBefore.add(player.uniqueId) else hadFlyBefore.remove(player.uniqueId)
+
+        if (player.hasPermission(FLY_PERMISSION)) {
+            player.allowFlight = true
+        } else if (player.allowFlight || player.isFlying) {
+            // No spawn-fly permission — flight isn't allowed here even if they
+            // legitimately have it elsewhere (e.g. joshymc.fly in another world).
+            player.allowFlight = false
+            player.isFlying = false
+        }
     }
 
     private fun disableSpawnFly(player: Player) {
         if (player.gameMode == GameMode.CREATIVE || player.gameMode == GameMode.SPECTATOR) return
-        // Only remove fly if they didn't have it before (e.g. from /fly command)
-        if (hadFlyBefore.remove(player.uniqueId)) return
-        player.allowFlight = false
-        player.isFlying = false
+        if (hadFlyBefore.remove(player.uniqueId)) {
+            // They had flight before entering spawn — give it back.
+            player.allowFlight = true
+        } else {
+            player.allowFlight = false
+            player.isFlying = false
+        }
     }
 
     @EventHandler
@@ -247,6 +266,16 @@ class SpawnWorldManager(private val plugin: Joshymc) : Listener {
                 }
             }, 5L)
         }
+    }
+
+    // Respawning into spawn (e.g. a bed/anchor spawn point set there).
+    @EventHandler
+    fun onRespawnInSpawn(event: PlayerRespawnEvent) {
+        val player = event.player
+        if (event.respawnLocation.world?.name != worldName) return
+        Bukkit.getScheduler().runTask(plugin, Runnable {
+            if (player.isOnline && player.world.name == worldName) enableSpawnFly(player)
+        })
     }
 
     @EventHandler
