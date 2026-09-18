@@ -23,9 +23,12 @@ import org.bukkit.event.player.PlayerTeleportEvent
  * Per-player mob visibility toggle. The mob is still ONE server-side entity
  * — players sharing the world all see the same mob if their setting is on.
  * Players with the setting off use Paper's [Player.hideEntity] so the mob
- * is never sent to their client, AND we cancel mob targeting + damage in
- * both directions so the mob and the player are functionally invisible to
- * each other.
+ * is never sent to their client, and we cancel mob targeting + mob-dealt
+ * damage against them so a mob they can't see can never harm them.
+ *
+ * The setting is visual-only in the other direction: a player with mobs
+ * hidden can still damage any mob normally (melee, projectiles, passive
+ * mobs included) — see issue #815.
  *
  * Two players with the setting ON both see the same mob and can both hit
  * it / be targeted by it as normal.
@@ -155,39 +158,34 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
     }
 
     /**
-     * Mutual damage immunity. Covers:
+     * Hidden mobs can't hurt a player who can't see them. Covers:
      *   - direct mob hit (creeper explosion, zombie melee, …) → player
      *   - projectile fired by mob (skeleton arrow, ghast fireball, …) → player
-     *   - player → mob (so a hidden mob can't be hit either)
+     *
+     * Deliberately one-directional: the setting is visual-only, so a player
+     * with mobs hidden must still be able to damage mobs normally (melee,
+     * projectiles, passive mobs included) — see issue #815.
      */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onDamage(event: EntityDamageByEntityEvent) {
         val damager = event.damager
         val victim = event.entity
+        if (victim !is Player || visible(victim)) return
 
-        if (victim is Player && !visible(victim)) {
-            // Resolve the actual mob source — direct mob, or the mob shooter
-            // behind a projectile / TNT. If there's a non-player living
-            // source, this is a mob hit and we cancel.
-            val mobSource: LivingEntity? = when {
-                damager is Player -> null
-                damager is LivingEntity -> damager
-                damager is Projectile -> {
-                    val shooter = damager.shooter
-                    if (shooter is LivingEntity && shooter !is Player) shooter else null
-                }
-                else -> null
+        // Resolve the actual mob source — direct mob, or the mob shooter
+        // behind a projectile / TNT. If there's a non-player living
+        // source, this is a mob hit and we cancel.
+        val mobSource: LivingEntity? = when {
+            damager is Player -> null
+            damager is LivingEntity -> damager
+            damager is Projectile -> {
+                val shooter = damager.shooter
+                if (shooter is LivingEntity && shooter !is Player) shooter else null
             }
-            if (mobSource != null) {
-                event.isCancelled = true
-                return
-            }
+            else -> null
         }
-
-        // Player hits Mob: skip if attacker has setting off.
-        // Exclude armor stands and other non-mob entities from the cancel.
-        if (damager is Player && victim is LivingEntity && victim !is Player && shouldHide(victim)) {
-            if (!visible(damager)) event.isCancelled = true
+        if (mobSource != null) {
+            event.isCancelled = true
         }
     }
 
