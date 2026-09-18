@@ -44,13 +44,14 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
     private val messageCooldowns = ConcurrentHashMap<UUID, Long>()
 
     private val denyMessage = Component.text("You cannot do that in this claim.", NamedTextColor.RED)
+    private val pvpDenyMessage = Component.text("PvP is disabled in this claim.", NamedTextColor.RED)
 
-    private fun denyWithMessage(player: Player) {
+    private fun denyWithMessage(player: Player, message: Component = denyMessage) {
         val now = System.currentTimeMillis()
         val last = messageCooldowns[player.uniqueId] ?: 0L
         if (now - last >= 1000L) {
             messageCooldowns[player.uniqueId] = now
-            plugin.commsManager.send(player, denyMessage)
+            plugin.commsManager.send(player, message)
         }
     }
 
@@ -105,11 +106,10 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
             val claim = plugin.claimManager.getClaimAt(victim.location) ?: return
             // Owner opted in to PvP — allow it
             if (claim.pvpEnabled) return
-            val attackerClaim = plugin.claimManager.getClaimAt(attacker.location)
-            // Allow PvP if both are in the same claim
-            if (attackerClaim != null && attackerClaim == claim) return
+            // Victim's claim has PvP disabled — block all PvP damage to them,
+            // regardless of where the attacker is standing.
             event.isCancelled = true
-            denyWithMessage(attacker)
+            denyWithMessage(attacker, pvpDenyMessage)
         } else {
             // Non-player entities (animals, villagers, etc.)
             if (!plugin.claimManager.canAccess(attacker, victim.location)) {
