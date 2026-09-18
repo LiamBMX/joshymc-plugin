@@ -1055,6 +1055,16 @@ class Joshymc : JavaPlugin() {
             permission = "joshymc.treefeller",
             hidden = true
         ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.StaffChatManager.VIEW_SETTING_KEY,
+            displayName = "Staff Chat Viewing",
+            description = "Receive Staff Chat messages from other staff",
+            material = org.bukkit.Material.WRITABLE_BOOK,
+            disabledMaterial = org.bukkit.Material.BARRIER,
+            default = true,
+            permission = com.liam.joshymc.manager.StaffChatManager.PERM_VIEW,
+            hidden = true
+        ))
 
         // Active /settings toggles (issue #501)
         settingsManager.register(SettingsManager.SettingDef(
