@@ -251,10 +251,12 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
                 "\n\n" +
                 "&7\u028F\u1D0F\u1D1C\u0280 \u1D18\u026A\u0274\u0262&6: $ping\n" +
                 "&7\u1D0F\u0274\u029F\u026A\u0274\u1D07 \u1D18\u029F\u1D00\u028F\u1D07\u0280\uA731&6: $online\n" +
+                "\n" +
                 "&r"
             ))
 
         val footer = plugin.commsManager.parseLegacy(
+            "\n" +
             "\n" +
             "&6&m                                   &r\n" +
             "&7\u1D21\u1D07\u0299\uA731\u1D1B\u1D0F\u0280\u1D07&6: \uA731\u1D1B\u1D0F\u0280\u1D07.\u1D0A\u1D0F\uA731\u029C\u028F\u1D0D\u1D04.\u0274\u1D07\u1D1B\n" +  // ᴡᴇʙsᴛᴏʀᴇ: sᴛᴏʀᴇ.ᴊᴏsʜʏᴍᴄ.ɴᴇᴛ
