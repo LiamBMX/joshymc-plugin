@@ -581,6 +581,10 @@ commands:
   mcr:
     description: Claim the Ranger/Pioneer monthly 500 Credits reward
     usage: /mcr
+  skull:
+    description: Give yourself a player head using a player's skin
+    usage: /skull <player>
+    permission: joshymc.skull
 
 permissions:
   joshymc.give:
@@ -1278,6 +1282,9 @@ permissions:
     default: true
   joshymc.mutations:
     description: Start or stop server mutations events
+    default: op
+  joshymc.skull:
+    description: Allows using /skull <player> to get a copy of a player's head
     default: op
   joshymc.rename.colors:
     description: Use &color codes, formatting codes, and &#RRGGBB hex colors when renaming items in an anvil
