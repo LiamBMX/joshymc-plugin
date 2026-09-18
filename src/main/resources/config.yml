@@ -391,9 +391,6 @@ modmode:
     freeze:
       material: PACKED_ICE
       name: "&bFreeze / Unfreeze"
-    totemguard:
-      material: TOTEM_OF_UNDYING
-      name: "&6Totem Guard"
     vanish:
       material: SLIME_BALL
       name: "&aVanish"

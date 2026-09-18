@@ -20,7 +20,7 @@ import java.util.UUID
 
 /**
  * Centralized "moderation loadout" — saves/restores a staff member's normal
- * state and swaps in the Moderator Mode hotbar. All 9 tools delegate to the
+ * state and swaps in the Moderator Mode hotbar. All 8 tools delegate to the
  * plugin's existing moderation systems (AdminManager, PunishmentManager,
  * VanishCommand, StorageManager, AntiCheatManager) rather than re-implementing
  * them.
@@ -38,7 +38,6 @@ class ModModeManager(private val plugin: Joshymc) {
             "modmode_punish",
             "modmode_rtp",
             "modmode_freeze",
-            "modmode_totemguard",
             "modmode_vanish",
             "modmode_invsee",
             "modmode_spectator",
@@ -388,41 +387,7 @@ class ModModeManager(private val plugin: Joshymc) {
         moderator.playSound(moderator.location, Sound.BLOCK_GLASS_BREAK, 0.5f, 1.5f)
     }
 
-    // ---- Tool 4: Totem Guard ----
-    // No dedicated "Totem Guard" anti-cheat check exists in the codebase yet, so this
-    // integrates with the closest existing reusable system — AntiCheatManager's
-    // per-player violation data — surfacing anything relevant (illegal items,
-    // inventory manipulation, kill aura, etc.) plus what the target is currently holding.
-
-    fun showTotemGuard(moderator: Player, target: Player) {
-        plugin.commsManager.send(moderator, Component.text("── Totem Guard: ${target.name} ──", NamedTextColor.GOLD), CommunicationsManager.Category.ADMIN)
-
-        val violations = plugin.antiCheatManager.getPlayerViolations(target.uniqueId)
-        if (violations.isEmpty()) {
-            plugin.commsManager.send(moderator, Component.text("No active anticheat flags.", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
-        } else {
-            for ((check, vl) in violations) {
-                plugin.commsManager.send(
-                    moderator,
-                    Component.text("${check.displayName}: ", NamedTextColor.GRAY).append(Component.text("%.1f".format(vl), NamedTextColor.RED)),
-                    CommunicationsManager.Category.ADMIN
-                )
-            }
-        }
-
-        plugin.commsManager.send(
-            moderator,
-            Component.text("Main hand: ", NamedTextColor.GRAY).append(Component.text(target.inventory.itemInMainHand.type.name, NamedTextColor.WHITE)),
-            CommunicationsManager.Category.ADMIN
-        )
-        plugin.commsManager.send(
-            moderator,
-            Component.text("Off hand: ", NamedTextColor.GRAY).append(Component.text(target.inventory.itemInOffHand.type.name, NamedTextColor.WHITE)),
-            CommunicationsManager.Category.ADMIN
-        )
-    }
-
-    // ---- Tool 5: Vanish ----
+    // ---- Tool 4: Vanish ----
 
     fun toggleVanish(player: Player) {
         if (plugin.vanishCommand.isVanished(player)) {
@@ -436,7 +401,7 @@ class ModModeManager(private val plugin: Joshymc) {
         player.playSound(player.location, Sound.ITEM_ARMOR_EQUIP_LEATHER, 0.6f, 1.2f)
     }
 
-    // ---- Tool 6: Invsee ----
+    // ---- Tool 5: Invsee ----
 
     fun openInvsee(moderator: Player, target: Player) {
         if (canEdit(moderator)) {
@@ -451,7 +416,7 @@ class ModModeManager(private val plugin: Joshymc) {
         plugin.adminManager.logAction(moderator, "MODMODE_INVSEE", target)
     }
 
-    // ---- Tool 7: Spectator ----
+    // ---- Tool 6: Spectator ----
 
     fun toggleSpectator(player: Player) {
         val uuid = player.uniqueId
@@ -502,7 +467,7 @@ class ModModeManager(private val plugin: Joshymc) {
         player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.5f)
     }
 
-    // ---- Tool 8: ECSee ----
+    // ---- Tool 7: ECSee ----
 
     fun openEnderChest(moderator: Player, target: Player) {
         if (canEdit(moderator)) {
@@ -527,7 +492,7 @@ class ModModeManager(private val plugin: Joshymc) {
         plugin.adminManager.logAction(moderator, "MODMODE_ECSEE_VIEW", target)
     }
 
-    // ---- Tool 9: Player Vault ----
+    // ---- Tool 8: Player Vault ----
 
     fun openVault(moderator: Player, target: Player) {
         val maxVaults = plugin.storageManager.getMaxVaults(target)

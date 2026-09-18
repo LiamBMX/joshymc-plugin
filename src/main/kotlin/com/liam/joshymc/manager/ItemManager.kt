@@ -72,7 +72,6 @@ class ItemManager(private val plugin: Joshymc) {
         register(ModModePunish(plugin))
         register(ModModeRandomTp(plugin))
         register(ModModeFreeze(plugin))
-        register(ModModeTotemGuard(plugin))
         register(ModModeVanish(plugin))
         register(ModModeInvsee(plugin))
         register(ModModeSpectator(plugin))

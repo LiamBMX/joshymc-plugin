@@ -10,7 +10,7 @@ import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
 
 /**
- * The 9 Moderator Mode hotbar tools. Materials/names are configurable via
+ * The 8 Moderator Mode hotbar tools. Materials/names are configurable via
  * `config.yml > modmode.tools.<key>` so the server owner can re-skin the
  * loadout without touching code; behavior always lives in ModModeManager.
  */
@@ -84,18 +84,6 @@ class ModModeFreeze(plugin: Joshymc) : CustomItem() {
         type = "Moderator Mode Tool",
         description = listOf("Right-click a player to toggle", "their frozen state."),
         usage = "Requires moderation permission."
-    )
-}
-
-class ModModeTotemGuard(plugin: Joshymc) : CustomItem() {
-    override val id = "modmode_totemguard"
-    override val material = toolMaterial(plugin, "totemguard", Material.TOTEM_OF_UNDYING)
-    override val displayName = toolName(plugin, "totemguard", "Totem Guard", TextColor.color(0xFFAA00))
-    override val hasGlint = true
-    override val lore = LoreBuilder.build(
-        type = "Moderator Mode Tool",
-        description = listOf("Right-click a player to view their", "anticheat flags and held items."),
-        usage = "Never triggers real totem-save effects."
     )
 }
 
