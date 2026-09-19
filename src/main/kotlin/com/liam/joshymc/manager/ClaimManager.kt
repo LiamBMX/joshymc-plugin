@@ -1071,17 +1071,21 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
     fun buildClaimMap(player: Player): List<String> {
         val loc = player.location
-        val worldName = loc.world.name
         val playerTeam = plugin.teamManager.getPlayerTeam(player.uniqueId)
-        val radius = 40 // blocks
+        val chunkRadius = 5 // 11x11 chunk grid
+        val centerChunkX = loc.blockX shr 4
+        val centerChunkZ = loc.blockZ shr 4
         val lines = mutableListOf<String>()
 
-        lines.add("&7--- Claim Map (40 block radius) ---")
-        for (dz in -4..4) {
+        lines.add("&7--- Claim Map ($chunkRadius chunk radius) ---")
+        for (dz in -chunkRadius..chunkRadius) {
             val sb = StringBuilder("  ")
-            for (dx in -8..8) {
-                val checkX = loc.blockX + dx * 5
-                val checkZ = loc.blockZ + dz * 5
+            for (dx in -chunkRadius..chunkRadius) {
+                // Sample the chunk's center block — claims aren't required to align
+                // to chunk boundaries, so this mirrors the point-sample approach the
+                // old block-radius map used, just anchored to real chunk coordinates.
+                val checkX = ((centerChunkX + dx) shl 4) + 8
+                val checkZ = ((centerChunkZ + dz) shl 4) + 8
                 val checkLoc = Location(loc.world, checkX.toDouble(), 0.0, checkZ.toDouble())
                 val claim = getClaimAt(checkLoc)
                 val char = when {
