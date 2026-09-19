@@ -61,8 +61,13 @@ class GiftCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
-            1 -> listOf("mailbox", "send", "sent").filter { it.startsWith(args[0].lowercase()) }
-            2 -> if (args[0].equals("send", ignoreCase = true)) {
+            1 -> {
+                val subs = mutableListOf("sent")
+                if (sender.hasPermission("joshymc.gift.mailbox")) subs.add("mailbox")
+                if (sender.hasPermission("joshymc.gift.send")) subs.add("send")
+                subs.filter { it.startsWith(args[0].lowercase()) }
+            }
+            2 -> if (args[0].equals("send", ignoreCase = true) && sender.hasPermission("joshymc.gift.send")) {
                 Bukkit.getOnlinePlayers().map { it.name }
                     .filter { it.lowercase().startsWith(args[1].lowercase()) }
                     .filter { it != sender.name }

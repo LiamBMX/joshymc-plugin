@@ -95,8 +95,13 @@ class ChatCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
-            1 -> listOf("mute", "unmute", "clear", "clearing").filter { it.startsWith(args[0], ignoreCase = true) }
-            2 -> if (args[0].equals("clearing", ignoreCase = true)) {
+            1 -> {
+                val subs = mutableListOf<String>()
+                if (sender.hasPermission("joshymc.chat.admin")) subs.addAll(listOf("mute", "unmute", "clear"))
+                if (sender.hasPermission(ChatManager.PERM_CLEARING)) subs.add("clearing")
+                subs.filter { it.startsWith(args[0], ignoreCase = true) }
+            }
+            2 -> if (args[0].equals("clearing", ignoreCase = true) && sender.hasPermission(ChatManager.PERM_CLEARING)) {
                 listOf("on", "off").filter { it.startsWith(args[1], ignoreCase = true) }
             } else emptyList()
             else -> emptyList()

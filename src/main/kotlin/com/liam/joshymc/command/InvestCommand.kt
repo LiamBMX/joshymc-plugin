@@ -139,12 +139,12 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) {
-            return listOf("admin").filter { it.startsWith(args[0], ignoreCase = true) }
+            return if (hasAnyAdminPerm(sender)) listOf("admin").filter { it.startsWith(args[0], ignoreCase = true) } else emptyList()
         }
-        if (args.size == 2 && args[0].equals("admin", ignoreCase = true)) {
+        if (args.size == 2 && args[0].equals("admin", ignoreCase = true) && hasAnyAdminPerm(sender)) {
             return listOf("reset", "delete", "confirm", "cancel").filter { it.startsWith(args[1], ignoreCase = true) }
         }
-        if (args.size == 3 && args[0].equals("admin", ignoreCase = true) &&
+        if (args.size == 3 && args[0].equals("admin", ignoreCase = true) && hasAnyAdminPerm(sender) &&
             (args[1].equals("reset", ignoreCase = true) || args[1].equals("delete", ignoreCase = true))
         ) {
             return plugin.stockMarketManager.getAllStocks().map { it.name }.filter { it.startsWith(args[2], ignoreCase = true) }

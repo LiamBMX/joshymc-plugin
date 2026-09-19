@@ -115,12 +115,12 @@ class OrdersCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) {
-            return listOf("admin").filter { it.startsWith(args[0].lowercase()) }
+            return if (sender.hasPermission("joshymc.orders.admin")) listOf("admin").filter { it.startsWith(args[0].lowercase()) } else emptyList()
         }
-        if (args.size == 2 && args[0].equals("admin", ignoreCase = true)) {
+        if (args.size == 2 && args[0].equals("admin", ignoreCase = true) && sender.hasPermission("joshymc.orders.admin")) {
             return listOf("view", "info", "cancel", "remove", "reload").filter { it.startsWith(args[1].lowercase()) }
         }
-        if (args.size == 3 && args[0].equals("admin", ignoreCase = true) && args[1].equals("view", ignoreCase = true)) {
+        if (args.size == 3 && args[0].equals("admin", ignoreCase = true) && args[1].equals("view", ignoreCase = true) && sender.hasPermission("joshymc.orders.admin")) {
             return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[2], ignoreCase = true) }
         }
         return emptyList()

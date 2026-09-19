@@ -723,7 +723,155 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Skull ─────────────────────────────────────────
         plugin.getCommand("skull")?.let { val c = com.liam.joshymc.command.SkullCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
+        applyBasePermissions()
+
         plugin.logger.info("Commands registered.")
+    }
+
+    /**
+     * Base permission node required to use each command at all (issue #841). Bukkit's own
+     * command tab-completion (and vanilla /help) already hides a registered command from a
+     * sender who fails [org.bukkit.command.Command.testPermissionSilent] — setting this
+     * field is enough to make those commands disappear from suggestions with no further
+     * plumbing, and it's re-evaluated live so LuckPerms changes apply on the player's next
+     * tab-press without a restart.
+     *
+     * Only commands whose ENTIRE functionality is gated behind one fixed node are listed
+     * here. Commands that mix free-to-use and permission-gated subcommands (e.g. `/chat`,
+     * `/crate`, `/hopper`, `/cshop`) are intentionally left unset so the base command stays
+     * visible — those filter their gated subcommands directly in their own onTabComplete.
+     */
+    private val basePermissions: Map<String, String> = mapOf(
+        "nightvision" to "joshymc.nightvision",
+        "condense" to "joshymc.condense",
+        "pvp" to "joshymc.pvp",
+        "sit" to "joshymc.sit",
+        "dimension" to "joshymc.end.admin",
+        "setspawn" to "joshymc.setspawn",
+        "warp" to "joshymc.warp",
+        "setwarp" to "joshymc.setwarp",
+        "delwarp" to "joshymc.delwarp",
+        "editwarp" to "joshymc.editwarp",
+        "pwarp" to "joshymc.pwarp",
+        "phome" to "joshymc.phome",
+        "afk" to "joshymc.afk",
+        "kit" to "joshymc.kit",
+        "createkit" to "joshymc.createkit",
+        "editkit" to "joshymc.editkit",
+        "deletekit" to "joshymc.deletekit",
+        "trade" to "joshymc.trade",
+        "pv" to "joshymc.pv",
+        "modmode" to "joshymc.modmode",
+        "hidestaff" to "joshymc.hidestaff",
+        "staffchat" to "joshymc.staffchat",
+        "traineemode" to "joshymc.traineemode",
+        "holo" to "joshymc.holo",
+        "npc" to "joshymc.npc",
+        "crateeditor" to "joshymc.crateeditor",
+        "trash" to "joshymc.trash",
+        "ah" to "joshymc.ah",
+        "giveaway" to "joshymc.giveaway",
+        "gift" to "joshymc.gift",
+        "coinflip" to "joshymc.coinflip",
+        "casino" to "joshymc.casino",
+        "mines" to "joshymc.casino",
+        "roulette" to "joshymc.casino",
+        "crash" to "joshymc.casino",
+        "towers" to "joshymc.casino",
+        "orders" to "joshymc.orders",
+        "overflow" to "joshymc.overflow",
+        "eco" to "joshymc.eco",
+        "balance" to "joshymc.balance",
+        "pay" to "joshymc.pay",
+        "baltop" to "joshymc.baltop",
+        "killtop" to "joshymc.killtop",
+        "deathstop" to "joshymc.deathstop",
+        "chestshop" to "joshymc.shop",
+        "team" to "joshymc.team",
+        "bounty" to "joshymc.bounty",
+        "killstreak" to "joshymc.killstreak",
+        "loginstreak" to "joshymc.loginstreak",
+        "sell" to "joshymc.sell",
+        "chatcolor" to "joshymc.chatcolor",
+        "quests" to "joshymc.quests",
+        "daily" to "joshymc.quests",
+        "killeffect" to "joshymc.killeffect",
+        "joineffect" to "joshymc.joineffect",
+        "cosmetics" to "joshymc.cosmetics",
+        "resurge" to "joshymc.resurge",
+        "talisman" to "joshymc.talisman",
+        "tag" to "joshymc.tag",
+        "nick" to "joshymc.nick",
+        "announce" to "joshymc.announce",
+        "back" to "joshymc.back",
+        "gmc" to "joshymc.gamemode.creative",
+        "gms" to "joshymc.gamemode.survival",
+        "gma" to "joshymc.gamemode.adventure",
+        "gmsp" to "joshymc.gamemode.spectator",
+        "fly" to "joshymc.fly",
+        "heal" to "joshymc.heal",
+        "feed" to "joshymc.feed",
+        "god" to "joshymc.god",
+        "speed" to "joshymc.speed",
+        "tp" to "joshymc.tp",
+        "tphere" to "joshymc.tphere",
+        "invsee" to "joshymc.invsee",
+        "enderchest" to "joshymc.enderchest",
+        "hat" to "joshymc.hat",
+        "craft" to "joshymc.craft",
+        "anvil" to "joshymc.anvil",
+        "smithing" to "joshymc.smithing",
+        "stonecutter" to "joshymc.stonecutter",
+        "jmc-violation" to "joshymc.violation.bridge",
+        "chatgame" to "joshymc.chatgame",
+        "leaderboard" to "joshymc.leaderboard",
+        "gencave" to "joshymc.gencave",
+        "admin" to "joshymc.admin",
+        "enchant" to "joshymc.enchant",
+        "smite" to "joshymc.smite",
+        "top" to "joshymc.top",
+        "sudo" to "joshymc.sudo",
+        "restart" to "joshymc.restart",
+        "tpa" to "joshymc.tpa",
+        "ban" to "joshymc.ban",
+        "tempban" to "joshymc.tempban",
+        "unban" to "joshymc.unban",
+        "mute" to "joshymc.mute",
+        "tempmute" to "joshymc.tempmute",
+        "unmute" to "joshymc.unmute",
+        "warn" to "joshymc.warn",
+        "unwarn" to "joshymc.unwarn",
+        "pkick" to "joshymc.kick",
+        "history" to "joshymc.history",
+        "vanish" to "joshymc.vanish",
+        "report" to "joshymc.report",
+        "reports" to "joshymc.reports.view",
+        "resource" to "joshymc.resource",
+        "claim" to "joshymc.claim",
+        "subclaim" to "joshymc.claim",
+        "unclaim" to "joshymc.claim",
+        "rank" to "joshymc.rank",
+        "sellwand" to "joshymc.sellwand.give",
+        "customenchant" to "joshymc.customenchant",
+        "portal" to "joshymc.portal",
+        "fakebase" to "joshymc.fakebase.create",
+        "spawnstash" to "joshymc.spawnstash",
+        "invest" to "joshymc.invest",
+        "world" to "joshymc.world",
+        "booster" to "joshymc.booster",
+        "credits" to "joshymc.credits",
+        "voucher" to "joshymc.vouchers",
+        "creditvoucher" to "joshymc.creditvoucher.admin",
+        "rankvoucher" to "joshymc.rankvoucher.admin",
+        "mutations" to "joshymc.mutations",
+        "mcr" to "joshymc.mcr",
+        "skull" to "joshymc.skull"
+    )
+
+    private fun applyBasePermissions() {
+        for ((name, node) in basePermissions) {
+            plugin.getCommand(name)?.permission = node
+        }
     }
 
     /**
