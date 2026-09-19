@@ -95,12 +95,14 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) {
-            return listOf("sell", "bid", "notify").filter { it.startsWith(args[0].lowercase()) }
+            val subs = mutableListOf("notify")
+            if (sender.hasPermission("joshymc.ah.sell")) subs.addAll(listOf("sell", "bid"))
+            return subs.filter { it.startsWith(args[0].lowercase()) }
         }
         if (args.size == 2 && args[0].equals("notify", ignoreCase = true)) {
             return listOf("on", "off").filter { it.startsWith(args[1].lowercase()) }
         }
-        if (args.size == 3 && args[0].equals("bid", ignoreCase = true)) {
+        if (args.size == 3 && args[0].equals("bid", ignoreCase = true) && sender.hasPermission("joshymc.ah.sell")) {
             return listOf("5m", "15m", "30m", "1h", "2h").filter { it.startsWith(args[2].lowercase()) }
         }
         return emptyList()

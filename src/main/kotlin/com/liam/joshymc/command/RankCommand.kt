@@ -406,9 +406,23 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
-            1 -> listOf("check", "list", "add", "remove", "promote", "demote").filter { it.startsWith(args[0].lowercase()) }
+            1 -> {
+                val subs = mutableListOf("list")
+                if (sender.hasPermission("joshymc.rank.staff")) subs.addAll(listOf("check", "promote", "demote"))
+                if (sender.hasPermission("joshymc.rank.add")) subs.add("add")
+                if (sender.hasPermission("joshymc.rank.remove")) subs.add("remove")
+                subs.filter { it.startsWith(args[0].lowercase()) }
+            }
             2 -> when (args[0].lowercase()) {
-                "check", "add", "remove", "promote", "demote" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                "check", "promote", "demote" -> if (sender.hasPermission("joshymc.rank.staff")) {
+                    Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                } else emptyList()
+                "add" -> if (sender.hasPermission("joshymc.rank.add")) {
+                    Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                } else emptyList()
+                "remove" -> if (sender.hasPermission("joshymc.rank.remove")) {
+                    Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                } else emptyList()
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {

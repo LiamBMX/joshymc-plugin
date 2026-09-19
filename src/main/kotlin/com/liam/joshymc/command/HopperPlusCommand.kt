@@ -156,9 +156,13 @@ class HopperPlusCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) {
             val prefix = args[0].lowercase()
-            return listOf("info", "reset", "filter").filter { it.startsWith(prefix) }
+            val subs = mutableListOf<String>()
+            if (sender.hasPermission("joshymc.hopper")) subs.add("info")
+            if (sender.hasPermission("joshymc.hopper.upgrade")) subs.add("filter")
+            if (sender.hasPermission("joshymc.hopper.admin")) subs.add("reset")
+            return subs.filter { it.startsWith(prefix) }
         }
-        if (args.size == 2 && args[0].equals("filter", ignoreCase = true)) {
+        if (args.size == 2 && args[0].equals("filter", ignoreCase = true) && sender.hasPermission("joshymc.hopper.upgrade")) {
             val prefix = args[1].lowercase()
             return (listOf("hand", "clear", "none") + Material.entries.map { it.name.lowercase() })
                 .filter { it.startsWith(prefix) }

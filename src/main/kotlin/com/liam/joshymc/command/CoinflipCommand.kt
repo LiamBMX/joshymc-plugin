@@ -76,9 +76,11 @@ class CoinflipCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) {
-            return listOf("create", "notify", "admin").filter { it.startsWith(args[0].lowercase()) }
+            val subs = mutableListOf("create", "notify")
+            if (sender.hasPermission("joshymc.coinflip.admin")) subs.add("admin")
+            return subs.filter { it.startsWith(args[0].lowercase()) }
         }
-        if (args.size == 2 && args[0].equals("admin", ignoreCase = true)) {
+        if (args.size == 2 && args[0].equals("admin", ignoreCase = true) && sender.hasPermission("joshymc.coinflip.admin")) {
             return listOf("cancel").filter { it.startsWith(args[1].lowercase()) }
         }
         if (args.size == 2 && args[0].equals("notify", ignoreCase = true)) {
