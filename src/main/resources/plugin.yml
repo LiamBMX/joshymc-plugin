@@ -40,7 +40,7 @@ commands:
     usage: /dimension end <open|close>
   chat:
     description: Mute, unmute, or clear global chat (ops only)
-    usage: /chat <mute|unmute|clear>
+    usage: /chat <mute|unmute|clear|clearing <on|off>>
   spawn:
     description: Teleport to spawn, or manage spawn settings (ops)
     usage: /spawn [drops|containers] [on|off]
@@ -1061,8 +1061,11 @@ permissions:
   joshymc.chat.admin:
     description: Mute or unmute global chat
     default: op
-  joshymc.chat.mod.bypass:
+  joshymc.chat.mute.bypass:
     description: Bypass a global chat mute
+    default: op
+  joshymc.chat.clearing:
+    description: Toggle whether /chat clear affects your own screen via /chat clearing <on/off>
     default: op
   joshymc.chat.profanity.bypass:
     description: Bypass the chat profanity filter (for staff who need to discuss reports, etc.)
