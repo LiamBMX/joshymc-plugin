@@ -35,6 +35,9 @@ class EndManager(private val plugin: Joshymc) : Listener {
     fun onPortal(event: PlayerPortalEvent) {
         if (isOpen) return
         if (event.cause != PlayerTeleportEvent.TeleportCause.END_PORTAL) return
+        // joshymc.end.bypass defaults to false (unlike joshymc.end.admin) so that
+        // ops testing /dimension end close are actually blocked like everyone else;
+        // it must be granted explicitly to staff who need to enter while closed.
         if (event.player.hasPermission("joshymc.end.bypass")) return
 
         // Only block entering the End — players already inside must always
