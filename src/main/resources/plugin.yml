@@ -1020,6 +1020,9 @@ permissions:
   joshymc.enderchest.others:
     description: Open others' ender chests
     default: op
+  joshymc.enderchest.clear:
+    description: Clear another player's ender chest
+    default: op
   joshymc.hat:
     description: Wear items as hats
     default: op

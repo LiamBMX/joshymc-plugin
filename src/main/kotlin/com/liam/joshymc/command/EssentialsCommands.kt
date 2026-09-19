@@ -617,6 +617,28 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
             return true
         }
+
+        if (args.size >= 2 && args[1].equals("clear", ignoreCase = true)) {
+            if (!sender.hasPermission("joshymc.enderchest.clear")) {
+                plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                return true
+            }
+            val online = Bukkit.getPlayer(args[0])
+            val offline = online ?: Bukkit.getOfflinePlayer(args[0]).takeIf { it.hasPlayedBefore() }
+            val targetUuid = online?.uniqueId ?: offline?.uniqueId
+            val targetName = online?.name ?: offline?.name
+            if (targetUuid == null || targetName == null) {
+                plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+                return true
+            }
+
+            plugin.enderChestManager.clear(targetUuid)
+            plugin.adminManager.clearCachedEnderchest(targetUuid)
+            plugin.adminManager.logAction(sender, "ENDERCHEST_CLEAR", Bukkit.getOfflinePlayer(targetUuid))
+            plugin.commsManager.send(sender, Component.text("Cleared $targetName's Ender Chest.", NamedTextColor.GREEN))
+            return true
+        }
+
         if (args.isNotEmpty() && sender.hasPermission("joshymc.enderchest.others")) {
             val online = Bukkit.getPlayer(args[0])
             if (online != null) {
@@ -638,6 +660,9 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
+        if (args.size == 2 && sender.hasPermission("joshymc.enderchest.clear")) {
+            return listOf("clear").filter { it.startsWith(args[1], ignoreCase = true) }
+        }
         return emptyList()
     }
 }

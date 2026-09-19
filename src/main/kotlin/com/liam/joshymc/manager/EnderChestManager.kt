@@ -67,6 +67,18 @@ class EnderChestManager(private val plugin: Joshymc) : Listener {
     /** Read-only snapshot of a player's extra (slots 27-53) storage, for staff view GUIs. */
     fun snapshotExtra(uuid: UUID): List<Pair<Int, ItemStack>> = loadExtra(uuid)
 
+    /**
+     * Clears [targetUuid]'s entire Ender Chest — vanilla slots and JoshyMC's
+     * extra storage. If a live session (a GUI opened via [open]) is currently
+     * up for this target, it's cleared in place too so [onClose]'s [persist]
+     * can't resurrect the old contents from a stale open inventory.
+     */
+    fun clear(targetUuid: UUID) {
+        sessions[targetUuid]?.clear()
+        Bukkit.getPlayer(targetUuid)?.enderChest?.clear()
+        saveExtra(targetUuid, emptyList())
+    }
+
     private fun buildSession(target: Player): Inventory {
         val holder = Holder(target.uniqueId)
         val inv = Bukkit.createInventory(holder, 54, TITLE)
