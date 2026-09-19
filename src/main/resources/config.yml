@@ -434,7 +434,8 @@ giveaways:
   allow-description: true
   max-description-length: 120
   max-title-length: 32
-  # Max prize item stacks a single giveaway can hold.
+  # Max prize item stacks a single giveaway can hold (1-45; the item rewards editor GUI has
+  # 45 reward slots).
   max-prize-items: 27
 
 # Player-to-player gifting — /gift, /gift mailbox

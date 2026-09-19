@@ -13,8 +13,12 @@ import org.bukkit.Sound
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
+import org.bukkit.event.inventory.InventoryClickEvent
+import org.bukkit.event.inventory.InventoryCloseEvent
+import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
 import org.bukkit.scheduler.BukkitTask
@@ -41,6 +45,12 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         private const val PAGE_SIZE = 28
         private val CONTENT_SLOTS: List<Int> = (1..4).flatMap { row -> (1..7).map { col -> row * 9 + col } }
         private const val CANCEL_WINDOW_MS = 30 * 60 * 1000L
+
+        // Item Rewards editor GUI (drag-and-drop multi-item staging)
+        private const val ITEM_EDITOR_SIZE = 54
+        private const val ITEM_EDITOR_MAX_REWARD_SLOTS = 45 // rows 1-5; row 6 is reserved for controls
+        private const val ITEM_EDITOR_CLEAR_SLOT = 45
+        private const val ITEM_EDITOR_SAVE_SLOT = 53
 
         private fun title(text: String, color: TextColor = TextColor.color(0x55FFFF)): Component =
             Component.text("         ")
@@ -88,7 +98,11 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
 
     private val pendingCreations = ConcurrentHashMap<UUID, PendingCreation>()
     val pendingChatPrompts = ConcurrentHashMap<UUID, ChatPromptType>()
-    private val awaitingChatInput = ConcurrentHashMap.newKeySet<UUID>()
+    // Guards the Create Giveaway GUI's onClose "abandonment" cleanup: set right before we
+    // intentionally close it to swap to a chat prompt or the item editor, so that transition
+    // isn't mistaken for the player walking away and refunded/wiped.
+    private val transitioningAway = ConcurrentHashMap.newKeySet<UUID>()
+    private val itemEditorInventories = ConcurrentHashMap<UUID, Inventory>()
     private var tickTask: BukkitTask? = null
 
     fun start() {
@@ -101,7 +115,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         allowDescription = cfg.getBoolean("giveaways.allow-description", true)
         maxDescriptionLength = cfg.getInt("giveaways.max-description-length", 120).coerceAtLeast(1)
         maxTitleLength = cfg.getInt("giveaways.max-title-length", 32).coerceAtLeast(1)
-        maxPrizeItems = cfg.getInt("giveaways.max-prize-items", 27).coerceIn(1, 27)
+        maxPrizeItems = cfg.getInt("giveaways.max-prize-items", 27).coerceIn(1, ITEM_EDITOR_MAX_REWARD_SLOTS)
 
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS giveaways (
@@ -147,15 +161,21 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
     fun stop() {
         tickTask?.cancel()
         tickTask = null
-        // Clean shutdown/reload safety net: return any in-progress creation drafts for
-        // players who are still online rather than silently losing staged prizes.
+        // Clean shutdown/reload safety net: fold any open item editors back into their
+        // creation draft, then return any in-progress creation drafts for players who are
+        // still online rather than silently losing staged prizes.
+        for ((uuid, inv) in itemEditorInventories) {
+            val player = Bukkit.getPlayer(uuid)
+            if (player != null) commitItemEditorToPending(player, inv, itemEditorRewardSlotCount())
+        }
+        itemEditorInventories.clear()
         for ((uuid, pending) in pendingCreations) {
             val player = Bukkit.getPlayer(uuid)
             if (player != null) returnPending(player, pending)
         }
         pendingCreations.clear()
         pendingChatPrompts.clear()
-        awaitingChatInput.clear()
+        transitioningAway.clear()
     }
 
     // ---- Item serialization ----
@@ -431,7 +451,9 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
     fun onQuit(event: PlayerQuitEvent) {
         val player = event.player
         pendingChatPrompts.remove(player.uniqueId)
-        awaitingChatInput.remove(player.uniqueId)
+        transitioningAway.remove(player.uniqueId)
+        val editorInv = itemEditorInventories.remove(player.uniqueId)
+        if (editorInv != null) commitItemEditorToPending(player, editorInv, itemEditorRewardSlotCount())
         val pending = pendingCreations.remove(player.uniqueId) ?: return
         returnPending(player, pending)
     }
@@ -467,26 +489,6 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         openCreateGui(player)
     }
 
-    private fun addHeldItemToPending(player: Player) {
-        val pending = pendingCreations[player.uniqueId] ?: return
-        if (!allowItems) {
-            plugin.commsManager.send(player, Component.text("Item prizes are disabled.", NamedTextColor.RED))
-            return
-        }
-        if (pending.items.size >= maxPrizeItems) {
-            plugin.commsManager.send(player, Component.text("You can add at most $maxPrizeItems prize item stack(s).", NamedTextColor.RED))
-            return
-        }
-        val held = player.inventory.itemInMainHand
-        if (held.type == Material.AIR) {
-            plugin.commsManager.send(player, Component.text("Hold the item you want to add as a prize.", NamedTextColor.RED))
-            return
-        }
-        pending.items.add(held.clone())
-        player.inventory.setItemInMainHand(null)
-        player.playSound(player.location, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.2f)
-    }
-
     private fun removePendingItem(player: Player, index: Int) {
         val pending = pendingCreations[player.uniqueId] ?: return
         if (index < 0 || index >= pending.items.size) return
@@ -497,21 +499,21 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
 
     fun promptCoins(player: Player) {
         pendingChatPrompts[player.uniqueId] = ChatPromptType.COINS
-        awaitingChatInput.add(player.uniqueId)
+        transitioningAway.add(player.uniqueId)
         player.closeInventory()
         plugin.commsManager.send(player, Component.text("Type the amount of Coins to add to the prize (or 'cancel'):", NamedTextColor.YELLOW))
     }
 
     fun promptTitle(player: Player) {
         pendingChatPrompts[player.uniqueId] = ChatPromptType.TITLE
-        awaitingChatInput.add(player.uniqueId)
+        transitioningAway.add(player.uniqueId)
         player.closeInventory()
         plugin.commsManager.send(player, Component.text("Type a title for your giveaway, up to $maxTitleLength characters (or 'cancel'):", NamedTextColor.YELLOW))
     }
 
     fun promptDescription(player: Player) {
         pendingChatPrompts[player.uniqueId] = ChatPromptType.DESCRIPTION
-        awaitingChatInput.add(player.uniqueId)
+        transitioningAway.add(player.uniqueId)
         player.closeInventory()
         plugin.commsManager.send(player, Component.text("Type a description for your giveaway, up to $maxDescriptionLength characters (or 'cancel'):", NamedTextColor.YELLOW))
     }
@@ -909,13 +911,13 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
             gui.setItem(
                 36,
                 simpleItem(
-                    Material.EMERALD, "Add Prize Item", NamedTextColor.GREEN,
+                    Material.EMERALD, "Manage Prize Items", NamedTextColor.GREEN,
                     listOf(
-                        Component.text("  Hold an item, then click", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                        Component.text("  Click to open the item editor", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
                         Component.text("  Staged: ${pending.items.size}/$maxPrizeItems", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
                     )
                 )
-            ) { p, _ -> addHeldItemToPending(p); openCreateGui(p) }
+            ) { p, _ -> openItemRewardsGui(p) }
         }
 
         if (allowCoins) {
@@ -983,7 +985,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         // staged prize — page navigation and chat prompts swap/close without triggering
         // this because GuiManager only fires onClose for the still-tracked GUI.
         gui.onClose = { p ->
-            if (!awaitingChatInput.remove(p.uniqueId)) {
+            if (!transitioningAway.remove(p.uniqueId)) {
                 val stillPending = pendingCreations.remove(p.uniqueId)
                 if (stillPending != null) {
                     returnPending(p, stillPending)
@@ -993,6 +995,131 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         }
 
         plugin.guiManager.open(player, gui)
+    }
+
+    // ---- Item Rewards editor GUI ----
+    //
+    // Unlike every other Giveaway GUI, this one is opened as a raw Bukkit inventory (not
+    // through GuiManager/CustomGui) because it needs genuine drag-and-drop item placement —
+    // CustomGui locks every top-inventory slot down to click-handler-only. It's tracked in
+    // its own [itemEditorInventories] map with its own click/drag/close listeners, matching
+    // the pattern StorageManager and TradeManager use for the same reason.
+
+    private fun itemEditorRewardSlotCount(): Int = minOf(maxPrizeItems, ITEM_EDITOR_MAX_REWARD_SLOTS)
+
+    fun openItemRewardsGui(player: Player) {
+        if (!allowItems) {
+            plugin.commsManager.send(player, Component.text("Item prizes are disabled.", NamedTextColor.RED))
+            return
+        }
+        val pending = pendingCreations[player.uniqueId] ?: return
+        val rewardSlotCount = itemEditorRewardSlotCount()
+
+        val inv = Bukkit.createInventory(null, ITEM_EDITOR_SIZE, title("Prize Items", TextColor.color(0x55FF55)))
+
+        // Move (not clone) the staged items into the editor so nothing can be duplicated —
+        // pending.items only holds whatever doesn't fit (should never happen in practice)
+        // while the editor is open, and is rebuilt from the editor's contents on commit.
+        val moveCount = minOf(pending.items.size, rewardSlotCount)
+        for (idx in 0 until moveCount) inv.setItem(idx, pending.items[idx])
+        repeat(moveCount) { pending.items.removeAt(0) }
+
+        for (slot in rewardSlotCount until 45) inv.setItem(slot, FILLER.clone())
+        for (slot in 45..53) inv.setItem(slot, FILLER.clone())
+
+        inv.setItem(
+            ITEM_EDITOR_CLEAR_SLOT,
+            simpleItem(
+                Material.TNT, "Clear Rewards", NamedTextColor.RED,
+                listOf(Component.text("  Empties every reward slot", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+            )
+        )
+        inv.setItem(
+            ITEM_EDITOR_SAVE_SLOT,
+            simpleItem(
+                Material.LIME_WOOL, "Save & Return", NamedTextColor.GREEN,
+                listOf(Component.text("  Saves these items to the giveaway", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+            )
+        )
+
+        itemEditorInventories[player.uniqueId] = inv
+        transitioningAway.add(player.uniqueId)
+        player.openInventory(inv)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    /** Reads whatever is currently staged in the reward slots back into the creation draft. */
+    private fun commitItemEditorToPending(player: Player, inv: Inventory, rewardSlotCount: Int) {
+        val pending = pendingCreations[player.uniqueId]
+        for (slot in 0 until rewardSlotCount) {
+            val item = inv.getItem(slot) ?: continue
+            if (item.type == Material.AIR) continue
+            if (pending != null) {
+                pending.items.add(item.clone())
+            } else {
+                // No active creation draft (e.g. it was already confirmed/cancelled elsewhere)
+                // — return the item instead of losing it.
+                val leftover = player.inventory.addItem(item)
+                leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+            }
+        }
+    }
+
+    private fun clearItemEditorSlots(player: Player, inv: Inventory, rewardSlotCount: Int) {
+        for (slot in 0 until rewardSlotCount) {
+            val item = inv.getItem(slot) ?: continue
+            if (item.type == Material.AIR) continue
+            val leftover = player.inventory.addItem(item)
+            leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+            inv.setItem(slot, null)
+        }
+        player.playSound(player.location, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.2f)
+    }
+
+    @EventHandler
+    fun onItemEditorClick(event: InventoryClickEvent) {
+        val player = event.whoClicked as? Player ?: return
+        val inv = itemEditorInventories[player.uniqueId] ?: return
+        if (event.inventory != inv) return
+
+        val clickedInventory = event.clickedInventory ?: return
+        if (clickedInventory != inv) return // click landed in the player's own inventory — allow it
+
+        val slot = event.rawSlot
+        if (slot < 0 || slot >= inv.size) return
+        val rewardSlotCount = itemEditorRewardSlotCount()
+
+        if (slot >= rewardSlotCount) {
+            event.isCancelled = true
+            when (slot) {
+                ITEM_EDITOR_CLEAR_SLOT -> clearItemEditorSlots(player, inv, rewardSlotCount)
+                ITEM_EDITOR_SAVE_SLOT -> {
+                    itemEditorInventories.remove(player.uniqueId)
+                    commitItemEditorToPending(player, inv, rewardSlotCount)
+                    openCreateGui(player)
+                }
+            }
+        }
+        // slot < rewardSlotCount: a reward slot — leave default placement/removal behavior alone.
+    }
+
+    @EventHandler
+    fun onItemEditorDrag(event: InventoryDragEvent) {
+        val player = event.whoClicked as? Player ?: return
+        val inv = itemEditorInventories[player.uniqueId] ?: return
+        if (event.inventory != inv) return
+        val rewardSlotCount = itemEditorRewardSlotCount()
+        if (event.rawSlots.any { it < inv.size && it >= rewardSlotCount }) {
+            event.isCancelled = true
+        }
+    }
+
+    @EventHandler
+    fun onItemEditorClose(event: InventoryCloseEvent) {
+        val player = event.player as? Player ?: return
+        val inv = itemEditorInventories.remove(player.uniqueId) ?: return
+        if (event.inventory != inv) return
+        commitItemEditorToPending(player, inv, itemEditorRewardSlotCount())
     }
 
     private fun openConfirmGui(player: Player) {
