@@ -20,6 +20,7 @@ import org.bukkit.event.inventory.InventoryCreativeEvent
 import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerInteractAtEntityEvent
+import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerSwapHandItemsEvent
@@ -66,6 +67,30 @@ class ModModeListener(private val plugin: Joshymc) : Listener {
         if (id == "modmode_vanish" && event.action != Action.RIGHT_CLICK_AIR && event.action != Action.RIGHT_CLICK_BLOCK) {
             return
         }
+
+        when (id) {
+            "modmode_rtp" -> plugin.modModeManager.randomTeleport(player)
+            "modmode_vanish" -> plugin.modModeManager.toggleVanish(player)
+            "modmode_spectator" -> plugin.modModeManager.toggleSpectator(player)
+        }
+    }
+
+    /**
+     * Right-clicking any entity (player or mob) never reaches [onInteract] — Bukkit routes
+     * it through here instead, before falling through to [PlayerInteractAtEntityEvent]. The
+     * self tools (RTP/Vanish/Spectator) need to fire on entity clicks too, not just air/block,
+     * so they're handled here and cancelled up front to stop that fallthrough from also firing
+     * a second toggle via [onInteractEntity].
+     */
+    @EventHandler
+    fun onInteractEntitySelf(event: PlayerInteractEntityEvent) {
+        if (event.hand != EquipmentSlot.HAND) return
+        val player = event.player
+        val id = plugin.itemManager.getCustomItemId(player.inventory.itemInMainHand) ?: return
+        if (id !in SELF_TOOL_IDS) return
+
+        event.isCancelled = true
+        if (!plugin.modModeManager.isModMode(player)) return
 
         when (id) {
             "modmode_rtp" -> plugin.modModeManager.randomTeleport(player)
