@@ -5,7 +5,9 @@ import com.liam.joshymc.manager.CombatManager
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.GameMode
+import org.bukkit.Material
 import org.bukkit.entity.AreaEffectCloud
 import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Player
@@ -26,7 +28,10 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerToggleFlightEvent
+import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.meta.SkullMeta
 import org.bukkit.potion.PotionEffectType
+import java.util.concurrent.ThreadLocalRandom
 
 class CombatListener(private val plugin: Joshymc) : Listener {
 
@@ -49,6 +54,9 @@ class CombatListener(private val plugin: Joshymc) : Listener {
         private val BLOCKED_COMBAT_PREFIXED = BLOCKED_COMBAT_COMMANDS.flatMap {
             listOf("joshymc:$it", "minecraft:$it", "essentials:$it", "bukkit:$it")
         }.toSet()
+
+        // 1% chance for a victim's player head to drop on a PvP kill (issue #829).
+        private const val HEAD_DROP_CHANCE = 0.01
 
         private val NEGATIVE_POTION_EFFECTS = setOf(
             PotionEffectType.INSTANT_DAMAGE,
@@ -206,6 +214,31 @@ class CombatListener(private val plugin: Joshymc) : Listener {
         if (plugin.combatManager.isCombatLogged(player)) {
             event.drops.clear()
         }
+        maybeDropPlayerHead(event)
+    }
+
+    /**
+     * 1% chance for the victim's player head (with their actual skin) to
+     * drop when killed by another player — melee or player-fired projectile.
+     * `LivingEntity.killer` already resolves the shooter for projectile
+     * kills, same as [com.liam.joshymc.manager.KillStreakManager] relies on.
+     * Only adds to the existing drops; never touches anything else.
+     */
+    private fun maybeDropPlayerHead(event: PlayerDeathEvent) {
+        val victim = event.player
+        val killer = victim.killer ?: return
+        if (killer.uniqueId == victim.uniqueId) return
+        if (ThreadLocalRandom.current().nextDouble() >= HEAD_DROP_CHANCE) return
+
+        val head = ItemStack(Material.PLAYER_HEAD)
+        head.editMeta { meta ->
+            if (meta is SkullMeta) meta.owningPlayer = victim
+            meta.displayName(
+                Component.text("${victim.name}'s Head", NamedTextColor.YELLOW)
+                    .decoration(TextDecoration.ITALIC, false)
+            )
+        }
+        event.drops.add(head)
     }
 
     /**
