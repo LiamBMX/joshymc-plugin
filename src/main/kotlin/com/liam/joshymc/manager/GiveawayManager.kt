@@ -51,6 +51,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         private const val ITEM_EDITOR_SIZE = 54
         private const val ITEM_EDITOR_MAX_REWARD_SLOTS = 45 // rows 1-5; row 6 is reserved for controls
         private const val ITEM_EDITOR_CLEAR_SLOT = 45
+        private const val ITEM_EDITOR_BACK_SLOT = 49
         private const val ITEM_EDITOR_SAVE_SLOT = 53
 
         private fun title(text: String, color: TextColor = TextColor.color(0x55FFFF)): Component =
@@ -1036,6 +1037,16 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
             )
         )
         inv.setItem(
+            ITEM_EDITOR_BACK_SLOT,
+            simpleItem(
+                Material.ARROW, "Back (Discard Changes)", NamedTextColor.YELLOW,
+                listOf(
+                    Component.text("  Returns these items to you", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.text("  without saving them as prizes", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+                )
+            )
+        )
+        inv.setItem(
             ITEM_EDITOR_SAVE_SLOT,
             simpleItem(
                 Material.LIME_WOOL, "Save & Return", NamedTextColor.GREEN,
@@ -1103,9 +1114,20 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
             event.isCancelled = true
             when (slot) {
                 ITEM_EDITOR_CLEAR_SLOT -> clearItemEditorSlots(player, inv, rewardSlotCount)
+                ITEM_EDITOR_BACK_SLOT -> {
+                    // True discard: hand back whatever is currently staged instead of
+                    // committing it, so nothing gets folded into the giveaway's prize list.
+                    itemEditorInventories.remove(player.uniqueId)
+                    clearItemEditorSlots(player, inv, rewardSlotCount)
+                    plugin.commsManager.send(player, Component.text("Discarded — no changes were saved to the giveaway.", NamedTextColor.YELLOW))
+                    openCreateGui(player)
+                }
                 ITEM_EDITOR_SAVE_SLOT -> {
                     itemEditorInventories.remove(player.uniqueId)
                     commitItemEditorToPending(player, inv, rewardSlotCount)
+                    val staged = pendingCreations[player.uniqueId]?.items?.size ?: 0
+                    plugin.commsManager.send(player, Component.text("Prize items saved ($staged staged).", NamedTextColor.GREEN))
+                    player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.2f)
                     openCreateGui(player)
                 }
             }
