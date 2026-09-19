@@ -1214,6 +1214,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             gui.inventory.setItem(slot, buildRewardDisplay(selectWeightedReward(crate)))
         }
 
+        // Point arrows at the winning slot (13) from top-middle (4) and bottom-middle (22)
+        gui.inventory.setItem(4, winningSlotIndicator(pointingDown = true))
+        gui.inventory.setItem(22, winningSlotIndicator(pointingDown = false))
+
         plugin.guiManager.open(player, gui)
 
         scheduleAnimationStep(player, gui.inventory, crate, 2L, 0, 40)
@@ -1303,6 +1307,19 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             if (random < 0) return reward
         }
         return crate.rewards.last()
+    }
+
+    /** Static arrow marker pointing toward the winning center slot (13) from the given side. */
+    private fun winningSlotIndicator(pointingDown: Boolean): ItemStack {
+        val arrow = ItemStack(Material.ARROW)
+        arrow.editMeta { meta ->
+            meta.displayName(
+                Component.text(if (pointingDown) "▼ Winning Slot ▼" else "▲ Winning Slot ▲", NamedTextColor.YELLOW)
+                    .decoration(TextDecoration.ITALIC, false)
+                    .decoration(TextDecoration.BOLD, true)
+            )
+        }
+        return arrow
     }
 
     private fun buildRewardDisplay(reward: CrateReward): ItemStack {
