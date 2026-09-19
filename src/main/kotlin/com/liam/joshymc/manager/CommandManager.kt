@@ -56,7 +56,6 @@ import com.liam.joshymc.command.SudoCommand
 import com.liam.joshymc.command.TopCommand
 import com.liam.joshymc.command.ChatColorCommand
 import com.liam.joshymc.command.CosmeticsCommand
-import com.liam.joshymc.command.JoinEffectCommand
 import com.liam.joshymc.command.KillEffectCommand
 import com.liam.joshymc.command.FishCommand
 import com.liam.joshymc.command.MarketCommand
@@ -472,7 +471,6 @@ class CommandManager(private val plugin: Joshymc) {
 
         // ── Cosmetics ─────────────────────────────────
         plugin.getCommand("killeffect")?.let { val c = KillEffectCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("joineffect")?.let { val c = JoinEffectCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("cosmetics")?.let { val c = CosmeticsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Fishing ───────────────────────────────────
@@ -799,7 +797,6 @@ class CommandManager(private val plugin: Joshymc) {
         "quests" to "joshymc.quests",
         "daily" to "joshymc.quests",
         "killeffect" to "joshymc.killeffect",
-        "joineffect" to "joshymc.joineffect",
         "cosmetics" to "joshymc.cosmetics",
         "resurge" to "joshymc.resurge",
         "talisman" to "joshymc.talisman",

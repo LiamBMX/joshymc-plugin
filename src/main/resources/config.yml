@@ -18,7 +18,6 @@ features:
   quests: true
   market: true
   kill-effects: true
-  join-effects: true
   custom-enchants: true
   anticheat: true
   combat-log-npc: true

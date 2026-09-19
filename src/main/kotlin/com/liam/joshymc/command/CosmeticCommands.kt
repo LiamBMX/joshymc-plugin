@@ -45,30 +45,6 @@ class KillEffectCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 }
 
 // ──────────────────────────────────────────────
-// /joineffect  (alias: /je)
-// ──────────────────────────────────────────────
-class JoinEffectCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
-
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
-            return true
-        }
-        if (!sender.hasPermission("joshymc.joineffect")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
-            return true
-        }
-
-        plugin.joinEffectManager.openGui(sender)
-        return true
-    }
-
-    override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        return emptyList()
-    }
-}
-
-// ──────────────────────────────────────────────
 // /cosmetics — hub GUI
 // ──────────────────────────────────────────────
 class CosmeticsCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
@@ -96,24 +72,19 @@ class CosmeticsCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
         }
         gui.fill(filler)
 
-        // Centered row (slots 19-25): Kill Effects, Join Effects, Chat Colors, Chat Tags
-        gui.setItem(19, buildIcon(Material.DIAMOND_SWORD, "Kill Effects", NamedTextColor.RED,
+        // Centered row (slots 20-24): Kill Effects, Chat Colors, Chat Tags
+        gui.setItem(20, buildIcon(Material.DIAMOND_SWORD, "Kill Effects", NamedTextColor.RED,
             "30 kill effects")) { p, _ ->
             plugin.killEffectManager.openEffectMenu(p)
         }
 
-        gui.setItem(21, buildIcon(Material.FIREWORK_ROCKET, "Join Effects", NamedTextColor.YELLOW,
-            "20 join effects + messages")) { p, _ ->
-            plugin.joinEffectManager.openGui(p)
-        }
-
-        gui.setItem(23, buildIcon(Material.PINK_DYE, "Chat Colors", NamedTextColor.LIGHT_PURPLE,
+        gui.setItem(22, buildIcon(Material.PINK_DYE, "Chat Colors", NamedTextColor.LIGHT_PURPLE,
             "22 chat message colors")) { p, _ ->
             p.closeInventory()
             p.performCommand("chatcolor")
         }
 
-        gui.setItem(25, buildIcon(Material.NAME_TAG, "Chat Tags", NamedTextColor.GOLD,
+        gui.setItem(24, buildIcon(Material.NAME_TAG, "Chat Tags", NamedTextColor.GOLD,
             "Browse Chat Tag categories")) { p, _ ->
             p.closeInventory()
             plugin.chatTagManager.openCategoryMenu(p)
