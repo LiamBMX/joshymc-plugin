@@ -245,6 +245,31 @@ class ServerShopManager(private val plugin: Joshymc) {
     }
 
     /**
+     * The exact buy/sell prices `/shop` shows for [material], read straight from the same
+     * `shop.yml` categories `/shop` itself browses (not the `/sell`-only sell-prices.yml
+     * catalog `getBaseSellPrice` also falls back to). Returns null if the item has no
+     * shop.yml entry at all; a non-null side is null if that side isn't configured
+     * (e.g. a sell-only item has a null buy price).
+     */
+    fun getShopPricing(material: Material): Pair<Double?, Double?>? {
+        for (category in categories) {
+            val item = category.items.find { it.material == material && (it.buyPrice > 0 || it.sellPrice > 0) }
+            if (item != null) {
+                return (item.buyPrice.takeIf { it > 0 }) to (item.sellPrice.takeIf { it > 0 })
+            }
+        }
+        return null
+    }
+
+    /** Distinct materials that have a `/shop` entry — used to prioritize `/worth` tab completion. */
+    fun getAllShopMaterials(): List<Material> {
+        return categories.flatMap { it.items }
+            .filter { it.buyPrice > 0 || it.sellPrice > 0 }
+            .map { it.material }
+            .distinct()
+    }
+
+    /**
      * The full, flat pool of sellable items the /worth GUI's Filter modes draw from, sorted
      * per [mode]. Sourced directly from SellPriceManager's central `prices:` catalog — the
      * exact same data /sell reads — so every configured item shows up with no category

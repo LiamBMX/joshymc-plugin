@@ -439,7 +439,7 @@ class CommandManager(private val plugin: Joshymc) {
         }
 
         plugin.getCommand("shop")?.setExecutor(ShopCommand(plugin))
-        plugin.getCommand("worth")?.setExecutor(WorthCommand(plugin))
+        plugin.getCommand("worth")?.let { val c = WorthCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         plugin.getCommand("sell")?.let {
             val cmd = SellCommand(plugin)
