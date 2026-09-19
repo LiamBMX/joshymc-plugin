@@ -103,6 +103,10 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         val victim = event.entity
 
         if (victim is Player) {
+            // Self-inflicted (e.g. a player's own thrown wind charge knocking
+            // them back) isn't PvP — don't let claim PvP-toggle protection
+            // cancel the vanilla knockback/damage a player deals to themselves.
+            if (attacker == victim) return
             val claim = plugin.claimManager.getClaimAt(victim.location) ?: return
             // Owner opted in to PvP — allow it
             if (claim.pvpEnabled) return
