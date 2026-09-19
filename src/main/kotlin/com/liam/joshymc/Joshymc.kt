@@ -61,7 +61,6 @@ import com.liam.joshymc.manager.BuildPvpManager
 import com.liam.joshymc.manager.PortalManager
 import com.liam.joshymc.manager.SpawnDecorationManager
 import com.liam.joshymc.manager.VoteManager
-import com.liam.joshymc.manager.LotteryManager
 import com.liam.joshymc.manager.EndManager
 import com.liam.joshymc.manager.ChatManager
 import com.liam.joshymc.manager.BoosterManager
@@ -174,8 +173,6 @@ class Joshymc : JavaPlugin() {
     lateinit var creditsManager: com.liam.joshymc.manager.CreditsManager
         private set
     lateinit var stockMarketManager: StockMarketManager
-        private set
-    lateinit var lotteryManager: LotteryManager
         private set
     lateinit var giveawayManager: com.liam.joshymc.manager.GiveawayManager
         private set
@@ -330,9 +327,6 @@ class Joshymc : JavaPlugin() {
 
         stockMarketManager = StockMarketManager(this)
         stockMarketManager.start()
-
-        lotteryManager = LotteryManager(this)
-        if (isFeatureEnabled("lottery")) lotteryManager.start()
 
         guiManager = GuiManager()
 
@@ -551,7 +545,6 @@ class Joshymc : JavaPlugin() {
         antiCheatManager.stop()
         portalManager.stop()
         voteManager.stop()
-        lotteryManager.stop()
         spawnDecorationManager.stop()
         listenerManager.passiveEnchantListener?.stop()
         claimManager.stop()
@@ -688,7 +681,6 @@ class Joshymc : JavaPlugin() {
         safe("antiCheatManager.start") { antiCheatManager.start() }
         safe("registerEnchants") { registerEnchants() }
         safe("customEnchantManager.start") { customEnchantManager.start() }
-        safe("lotteryManager") { lotteryManager.stop(); if (isFeatureEnabled("lottery")) lotteryManager.start() }
 
         logger.info("JoshyMC has been fully reloaded!")
     }
