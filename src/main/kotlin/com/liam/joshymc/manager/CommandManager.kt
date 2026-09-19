@@ -21,6 +21,7 @@ import com.liam.joshymc.command.MuteCommand
 import com.liam.joshymc.command.NickCommand
 import com.liam.joshymc.command.PunishCommand
 import com.liam.joshymc.command.ReportCommand
+import com.liam.joshymc.command.LiveCommand
 import com.liam.joshymc.command.MediaCommand
 import com.liam.joshymc.command.RulesCommand
 import com.liam.joshymc.command.TutorialCommand
@@ -502,6 +503,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("tutorial")?.setExecutor(TutorialCommand(plugin))
         plugin.getCommand("media")?.setExecutor(MediaCommand(plugin))
         plugin.getCommand("discord")?.setExecutor(DiscordCommand(plugin))
+        plugin.getCommand("live")?.let { val c = LiveCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Essentials-style commands ────────────────
         plugin.getCommand("back")?.setExecutor(BackCommand(plugin))
@@ -865,7 +867,8 @@ class CommandManager(private val plugin: Joshymc) {
         "rankvoucher" to "joshymc.rankvoucher.admin",
         "mutations" to "joshymc.mutations",
         "mcr" to "joshymc.mcr",
-        "skull" to "joshymc.skull"
+        "skull" to "joshymc.skull",
+        "live" to "joshymc.live"
     )
 
     private fun applyBasePermissions() {
