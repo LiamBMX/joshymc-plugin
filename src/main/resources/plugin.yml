@@ -1069,7 +1069,7 @@ permissions:
     default: op
   joshymc.end.bypass:
     description: Bypass the End dimension being closed
-    default: op
+    default: false
   joshymc.chat.admin:
     description: Mute or unmute global chat
     default: op
