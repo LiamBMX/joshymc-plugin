@@ -218,6 +218,9 @@ class ListenerManager(private val plugin: Joshymc) {
         // Punishment (login/chat checks)
         pm.registerEvents(plugin.punishmentManager, plugin)
 
+        // Alts (hashed connection tracking on join)
+        pm.registerEvents(plugin.altManager, plugin)
+
         // Resource world (boss bar join/quit)
         pm.registerEvents(plugin.resourceWorldManager, plugin)
 
