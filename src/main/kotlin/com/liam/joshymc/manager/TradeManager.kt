@@ -10,6 +10,7 @@ import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
+import org.bukkit.event.inventory.InventoryAction
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryCloseEvent
 import org.bukkit.event.inventory.InventoryDragEvent
@@ -424,6 +425,15 @@ class TradeManager(private val plugin: Joshymc) : Listener {
     fun onInventoryClick(event: InventoryClickEvent) {
         val player = event.whoClicked as? Player ?: return
         val trade = getTradeByInventory(event.inventory) ?: return
+
+        // COLLECT_TO_CURSOR (double-click) gathers every matching-material stack from
+        // BOTH the trade inventory and the clicker's own inventory, regardless of which
+        // slot was actually clicked — that would reach straight across the divider into
+        // the other player's placed items. Block it outright.
+        if (event.action == InventoryAction.COLLECT_TO_CURSOR) {
+            event.isCancelled = true
+            return
+        }
 
         val clickedInventory = event.clickedInventory ?: return
 
