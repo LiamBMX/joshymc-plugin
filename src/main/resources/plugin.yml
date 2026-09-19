@@ -306,6 +306,10 @@ commands:
   discord:
     description: Get the Discord invite link
     usage: /discord
+  live:
+    description: Announce a clickable stream link in chat
+    usage: /live <tiktok/twitch>
+    permission: joshymc.live
   back:
     description: Teleport to your last location
     usage: /back
@@ -1341,3 +1345,6 @@ permissions:
   joshymc.rankperk.pioneer:
     description: Grants the Pioneer rank-perk bonus (extra Auction House listings + Buy Orders) — grant to the Pioneer LuckPerms group
     default: false
+  joshymc.live:
+    description: Announce a clickable TikTok/Twitch live stream link via /live
+    default: op
