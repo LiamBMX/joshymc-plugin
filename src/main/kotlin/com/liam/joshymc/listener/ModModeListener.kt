@@ -2,6 +2,9 @@ package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.ModModeManager
+import io.papermc.paper.event.player.PlayerPickBlockEvent
+import io.papermc.paper.event.player.PlayerPickEntityEvent
+import io.papermc.paper.event.player.PlayerPickItemEvent
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
 import org.bukkit.event.EventHandler
@@ -151,6 +154,32 @@ class ModModeListener(private val plugin: Joshymc) : Listener {
     fun onSwapHands(event: PlayerSwapHandItemsEvent) {
         if (!plugin.modModeManager.isModMode(event.player)) return
         if (plugin.modModeManager.isModTool(event.mainHandItem) || plugin.modModeManager.isModTool(event.offHandItem)) {
+            event.isCancelled = true
+        }
+    }
+
+    /**
+     * Pick Block must not let Moderator Mode staff copy/select a block, entity, or item
+     * into their hotbar — staff only carry the fixed Mod Mode toolbar. Paper splits pick
+     * block into three dedicated events depending on what's targeted.
+     */
+    @EventHandler
+    fun onPickBlock(event: PlayerPickBlockEvent) {
+        if (plugin.modModeManager.isModMode(event.player)) {
+            event.isCancelled = true
+        }
+    }
+
+    @EventHandler
+    fun onPickEntity(event: PlayerPickEntityEvent) {
+        if (plugin.modModeManager.isModMode(event.player)) {
+            event.isCancelled = true
+        }
+    }
+
+    @EventHandler
+    fun onPickItem(event: PlayerPickItemEvent) {
+        if (plugin.modModeManager.isModMode(event.player)) {
             event.isCancelled = true
         }
     }
