@@ -410,6 +410,7 @@ commands:
     description: Open the admin panel
     usage: /admin [player|logs|freeze|snapshot|rollback|banlist|mutelist]
     aliases: [staffpanel, modpanel]
+    permission: joshymc.admin;joshymc.admin.moderate;joshymc.admin.helper
   enchant:
     description: Enchant held item (no limits)
     usage: /enchant <enchantment> [level]
