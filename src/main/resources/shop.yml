@@ -344,6 +344,55 @@ categories:
       BLACK_CONCRETE:
         buy: 350
         sell: 0
+      # === Stained Glass ===
+      WHITE_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      ORANGE_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      MAGENTA_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      LIGHT_BLUE_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      YELLOW_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      LIME_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      PINK_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      GRAY_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      LIGHT_GRAY_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      CYAN_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      PURPLE_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      BLUE_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      BROWN_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      GREEN_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      RED_STAINED_GLASS:
+        buy: 300
+        sell: 0
+      BLACK_STAINED_GLASS:
+        buy: 300
+        sell: 0
       # === Flowers ===
       DANDELION:
         buy: 200
