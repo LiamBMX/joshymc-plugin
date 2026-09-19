@@ -16,6 +16,7 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.inventory.InventoryAction
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryCloseEvent
 import org.bukkit.event.inventory.InventoryDragEvent
@@ -187,6 +188,15 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         val player = event.whoClicked as? Player ?: return
         val session = openSellSessions[player.uniqueId] ?: return
         if (event.view.topInventory !== session.inventory) return
+
+        // COLLECT_TO_CURSOR (double-click) gathers every matching-material stack from
+        // BOTH inventories regardless of which slot was actually clicked — that would
+        // scoop the control-row items (e.g. the "Estimated Value" gold ingot) off the
+        // GUI if the player happens to be holding a matching material. Block it outright.
+        if (event.action == InventoryAction.COLLECT_TO_CURSOR) {
+            event.isCancelled = true
+            return
+        }
 
         // Block placing/taking/swapping in the control row — it's info-only.
         if (event.clickedInventory === session.inventory && event.slot >= DEPOSIT_SLOTS) {

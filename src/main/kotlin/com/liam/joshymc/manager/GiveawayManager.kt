@@ -13,6 +13,7 @@ import org.bukkit.Sound
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
+import org.bukkit.event.inventory.InventoryAction
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryCloseEvent
 import org.bukkit.event.inventory.InventoryDragEvent
@@ -1081,6 +1082,15 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         val player = event.whoClicked as? Player ?: return
         val inv = itemEditorInventories[player.uniqueId] ?: return
         if (event.inventory != inv) return
+
+        // COLLECT_TO_CURSOR (double-click) gathers every matching-material stack from
+        // BOTH inventories regardless of which slot was actually clicked — that would
+        // scoop the Clear/Save buttons or filler glass off the control row if the
+        // player happens to be holding a matching material. Block it outright.
+        if (event.action == InventoryAction.COLLECT_TO_CURSOR) {
+            event.isCancelled = true
+            return
+        }
 
         val clickedInventory = event.clickedInventory ?: return
         if (clickedInventory != inv) return // click landed in the player's own inventory — allow it
