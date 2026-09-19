@@ -185,6 +185,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.eventManager, plugin)
         pm.registerEvents(plugin.portalManager, plugin)
         pm.registerEvents(plugin.voteManager, plugin)
+        pm.registerEvents(plugin.fakeBaseManager, plugin)
 
         // PvP world flight restriction (joshymc.fly.pvp)
         pm.registerEvents(PvpWorldFlightListener(plugin), plugin)

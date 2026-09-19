@@ -585,6 +585,14 @@ commands:
     description: Give yourself a player head using a player's skin
     usage: /skull <player>
     permission: joshymc.skull
+  fakebase:
+    description: Select a cuboid and save it as the fake base template
+    usage: /fakebase create
+    permission: joshymc.fakebase.create
+  spawnstash:
+    description: Paste the saved fake base template at your location
+    usage: /spawnstash
+    permission: joshymc.spawnstash
 
 permissions:
   joshymc.give:
@@ -1045,6 +1053,12 @@ permissions:
     default: op
   joshymc.portal:
     description: Manage portals
+    default: op
+  joshymc.fakebase.create:
+    description: Allows selecting and saving the fake base template
+    default: op
+  joshymc.spawnstash:
+    description: Allows pasting the saved fake base template
     default: op
   joshymc.vote:
     description: Vote commands
