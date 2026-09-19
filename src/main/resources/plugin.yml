@@ -579,6 +579,10 @@ commands:
   mcr:
     description: Claim the Ranger/Pioneer monthly 500 Credits reward
     usage: /mcr
+  signitem:
+    description: Autograph the item in your hand (once per week)
+    usage: /signitem
+    permission: joshymc.sign.item
   skull:
     description: Give yourself a player head using a player's skin
     usage: /skull <player>
@@ -1309,6 +1313,12 @@ permissions:
     default: false
   joshymc.mcr.bypass:
     description: Bypass the /mcr 30-day cooldown
+    default: op
+  joshymc.sign.item:
+    description: Autograph the item in your hand via /signitem (once per week)
+    default: false
+  joshymc.sign.item.bypass:
+    description: Bypass the /signitem 7-day cooldown
     default: op
   joshymc.rankperk.scout:
     description: Grants the Scout rank-perk bonus (extra Auction House listings + Buy Orders) — grant to the Scout LuckPerms group

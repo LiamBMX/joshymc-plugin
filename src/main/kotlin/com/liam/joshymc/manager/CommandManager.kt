@@ -716,6 +716,10 @@ class CommandManager(private val plugin: Joshymc) {
         com.liam.joshymc.command.McrCommand.createTable(plugin)
         plugin.getCommand("mcr")?.setExecutor(com.liam.joshymc.command.McrCommand(plugin))
 
+        // ── Sign Item (weekly autograph) ────────────────────
+        com.liam.joshymc.command.SignItemCommand.createTable(plugin)
+        plugin.getCommand("signitem")?.setExecutor(com.liam.joshymc.command.SignItemCommand(plugin))
+
         // ── Skull ─────────────────────────────────────────
         plugin.getCommand("skull")?.let { val c = com.liam.joshymc.command.SkullCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
