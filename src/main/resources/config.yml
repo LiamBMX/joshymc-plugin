@@ -148,6 +148,22 @@ anti-dupe:
   # seconds are grouped into a single follow-up embed instead of spamming the channel.
   rate-limit-seconds: 10
 
+# PvP Cheat Detection Alerts — Discord embeds when AntiCheatManager (or GrimAC, via the
+# /jmc-violation bridge) flags combat-relevant cheating (KillAura, Reach, AutoClick/CPS,
+# AntiKB/Velocity, AimSnap). Detection + staff alerting only — never auto-bans, kicks,
+# mutes, or freezes anyone. Reuses the Discord bot above; set discord.channel-id below to
+# a channel the bot can post embeds in.
+combat-alerts:
+  enabled: true
+
+  discord:
+    enabled: true
+    channel-id: "1550719798760177734"
+
+  # Repeats of the exact same check for the same player within this many seconds are
+  # grouped into a single follow-up embed instead of spamming the channel.
+  rate-limit-seconds: 30
+
 # Recipe Blocker — block players from crafting specific items
 # Use material names from: https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Material.html
 recipe-blocker:
@@ -816,6 +832,7 @@ anticheat:
     nuker: true          # Detects nuker (breaking >80 blocks/sec)
     badpackets: true     # Detects invalid packets (impossible pitch, actions while dead)
     illegitems: true     # Detects illegal items (over-enchanted, stacked unstackables)
+    aimsnap: true        # Detects aim-lock/kill-aura snaps (extreme rotation + immediate precise hit)
 
 # Daily / Weekly / Quest Master quest system — /quests
 # Quest definitions themselves (names, objectives, amounts, per-quest rewards,

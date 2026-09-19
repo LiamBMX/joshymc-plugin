@@ -12,6 +12,7 @@ import org.bukkit.Tag
 import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.enchantments.Enchantment
+import org.bukkit.entity.Entity
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
@@ -53,8 +54,18 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
         NUKER("Nuker", "nuker"),
         BAD_PACKETS("BadPackets", "badpackets"),
         ILLEGAL_ITEMS("IllegalItems", "illegitems"),
-        INVENTORY("Inventory", "inventory")
+        INVENTORY("Inventory", "inventory"),
+        AIM_SNAP("AimSnap", "aimsnap")
     }
+
+    /**
+     * Check types that feed [Joshymc.combatAlertManager] (issue #852). Anything routed here —
+     * native checks AND anything Grim reports via the `/jmc-violation` bridge, since both paths
+     * flow through [flag] — gets a staff-facing Discord embed. Movement-only checks (Flight,
+     * Speed, Scaffold, etc.) are intentionally excluded; this is PvP-alerting, not a general
+     * anti-cheat log.
+     */
+    private val combatAlertChecks = setOf(CheckType.KILL_AURA, CheckType.REACH, CheckType.AUTO_CLICK, CheckType.VELOCITY, CheckType.AIM_SNAP)
 
     data class PlayerData(
         val uuid: UUID,
@@ -94,7 +105,10 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
         var lastInvClickResetTime: Long = 0L,
         // Scaffold
         var blocksPlacedBelowFeet: Int = 0,
-        var lastScaffoldResetTime: Long = 0L
+        var lastScaffoldResetTime: Long = 0L,
+        // Aim Snap
+        var lastSnapTime: Long = 0L,
+        var lastSnapMagnitude: Double = 0.0
     )
 
     // ══════════════════════════════════════════════════════════
@@ -105,6 +119,15 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
     private val enabledChecks = mutableSetOf<CheckType>()
     private var enabled = true
     private var alertVL = 20.0
+
+    companion object {
+        // Combined yaw/pitch delta (degrees) in a single move packet to count as a "snap".
+        private const val AIM_SNAP_DEGREES = 60.0
+        // How long after a snap an attack still counts as correlated (5 ticks).
+        private const val AIM_SNAP_WINDOW_MS = 250L
+        // Dot product between eye direction and vector-to-target required to call it "locked on".
+        private const val AIM_SNAP_ALIGNMENT = 0.97
+    }
     private var kickVL = 150.0
     private var alertCooldownMs = 3000L
     private var decayTask: BukkitTask? = null
@@ -203,7 +226,8 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
      */
     fun recordExternalViolation(player: Player, externalCheckName: String, vl: Double, source: String) {
         val mapped = resolveCheckType(externalCheckName)
-        flag(player, mapped, vl, "[$source: $externalCheckName]")
+        flag(player, mapped, vl, "$source reported $externalCheckName with VL ${"%.0f".format(vl)}",
+            detectedValue = "VL ${"%.0f".format(vl)}")
     }
 
     /**
@@ -214,6 +238,7 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
     private fun resolveCheckType(name: String): CheckType {
         val n = name.lowercase().filter { it.isLetterOrDigit() }
         return when {
+            "aimassist" in n || "aimlock" in n || "targetlock" in n || "multiaura" in n -> CheckType.AIM_SNAP
             "killaura" in n || "aura" in n -> CheckType.KILL_AURA
             "reach" in n -> CheckType.REACH
             "fly" in n || "flight" in n || "boatfly" in n || "highjump" in n -> CheckType.FLIGHT
@@ -238,7 +263,7 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
     //  VIOLATION SYSTEM
     // ══════════════════════════════════════════════════════════
 
-    private fun flag(player: Player, check: CheckType, vlAdd: Double, detail: String = "") {
+    private fun flag(player: Player, check: CheckType, vlAdd: Double, detail: String = "", target: Entity? = null, detectedValue: String = "") {
         if (isExempt(player)) return
         val data = getData(player)
         val newVL = (data.violations[check] ?: 0.0) + vlAdd
@@ -262,6 +287,24 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
                 }
             }
             plugin.logger.info("[AntiCheat] ${player.name} failed ${check.displayName} VL=${"%.0f".format(newVL)} $detail")
+
+            // PvP cheat-detection Discord alert (issue #852) — same threshold/cooldown gate as
+            // the staff chat alert above, restricted to combat-relevant checks only.
+            if (check in combatAlertChecks) {
+                val severity = when {
+                    newVL >= kickVL * 0.5 -> CombatAlertManager.Severity.HIGH
+                    newVL >= alertVL * 1.5 -> CombatAlertManager.Severity.MEDIUM
+                    else -> CombatAlertManager.Severity.LOW
+                }
+                plugin.combatAlertManager.record(
+                    player,
+                    check.displayName,
+                    severity,
+                    detectedValue.ifBlank { detail },
+                    detail.ifBlank { "Suspicious combat behavior detected." },
+                    target
+                )
+            }
         }
 
         // Kick at threshold
@@ -332,6 +375,13 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             data.lastLocation = to
             data.lastMoveTime = now
             return
+        }
+
+        // ── Aim Snap Check ──────────────────────────────
+        // Runs for every move event (including rotation-only ones) so a snap that isn't
+        // paired with a position change — e.g. turning in place onto a target — is caught too.
+        if (isCheckEnabled(CheckType.AIM_SNAP)) {
+            checkAimSnap(data, from, to, now)
         }
 
         // Skip if only head rotation (no position change)
@@ -586,6 +636,29 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    // ── Aim Snap (target-lock suspicion) ────────────────
+    // Only records that a large single-tick rotation happened — it does NOT flag on its own.
+    // onEntityDamage below correlates it with an immediate, precisely-aligned attack, which is
+    // the actual kill-aura/aim-assist signature. A player quickly spinning the camera without
+    // attacking, or panning smoothly across several ticks, never reaches this threshold per-tick.
+    private fun checkAimSnap(data: PlayerData, from: Location, to: Location, now: Long) {
+        val yawDelta = angleDiff(from.yaw, to.yaw)
+        val pitchDelta = abs(to.pitch - from.pitch)
+        val combined = sqrt(yawDelta * yawDelta + pitchDelta * pitchDelta)
+
+        if (combined >= AIM_SNAP_DEGREES) {
+            data.lastSnapTime = now
+            data.lastSnapMagnitude = combined
+        }
+    }
+
+    private fun angleDiff(a: Float, b: Float): Double {
+        var diff = ((b - a) % 360f).toDouble()
+        if (diff < -180.0) diff += 360.0
+        if (diff > 180.0) diff -= 360.0
+        return abs(diff)
+    }
+
     // ══════════════════════════════════════════════════════════
     //  COMBAT CHECKS
     // ══════════════════════════════════════════════════════════
@@ -605,7 +678,8 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             val maxReach = if (attacker.gameMode == GameMode.CREATIVE) 6.5 else 4.5
 
             if (distance > maxReach) {
-                flag(attacker, CheckType.REACH, 2.0, "dist=${"%.2f".format(distance)} max=${"%.1f".format(maxReach)}")
+                flag(attacker, CheckType.REACH, 2.0, "dist=${"%.2f".format(distance)} max=${"%.1f".format(maxReach)}",
+                    victim, "${"%.2f".format(distance)} blocks")
             }
         }
 
@@ -624,7 +698,8 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
                 data.attackCountInSecond++
 
                 if (data.attackCountInSecond > 25) {
-                    flag(attacker, CheckType.KILL_AURA, 2.0, "rate=${data.attackCountInSecond}/s")
+                    flag(attacker, CheckType.KILL_AURA, 2.0, "rate=${data.attackCountInSecond}/s",
+                        victim, "${data.attackCountInSecond}/s")
                 }
 
                 data.lastAttackTime = now
@@ -638,7 +713,28 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
 
             // dot < 0 means target is behind the player (>90 degrees)
             if (dot < -0.3) {
-                flag(attacker, CheckType.KILL_AURA, 5.0, "angle=behind dot=${"%.2f".format(dot)}")
+                flag(attacker, CheckType.KILL_AURA, 5.0, "angle=behind dot=${"%.2f".format(dot)}",
+                    victim, "dot=${"%.2f".format(dot)}")
+            }
+        }
+
+        // ── Aim Snap Check ───────────────────────────────
+        // Correlates the rotation-snap recorded in checkAimSnap with an attack that lands
+        // immediately after, with the crosshair now precisely locked onto the victim. Either
+        // signal alone is common in normal play; both together within a few ticks is not.
+        if (isCheckEnabled(CheckType.AIM_SNAP) && data.lastSnapTime != 0L) {
+            val sinceSnap = now - data.lastSnapTime
+            if (sinceSnap in 0..AIM_SNAP_WINDOW_MS) {
+                val eyeDir = attacker.eyeLocation.direction.normalize()
+                val toTarget = victim.location.toVector().subtract(attacker.eyeLocation.toVector()).normalize()
+                val alignment = eyeDir.dot(toTarget)
+
+                if (alignment > AIM_SNAP_ALIGNMENT) {
+                    flag(attacker, CheckType.AIM_SNAP, 4.0,
+                        "snapped ${"%.0f".format(data.lastSnapMagnitude)}° and attacked within ${sinceSnap}ms, alignment=${"%.2f".format(alignment)}",
+                        victim, "${"%.0f".format(data.lastSnapMagnitude)}° snap")
+                }
+                data.lastSnapTime = 0L // consumed — don't let one snap trigger on multiple later hits
             }
         }
     }
@@ -671,7 +767,9 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
 
                 // Only flag if they literally didn't move at all (walls can stop knockback)
                 if (movedDist < 0.01 && !player.isBlocking && !player.isDead && !isNearSolid(postLoc, 1)) {
-                    flag(player, CheckType.VELOCITY, 1.0, "moved=${"%.3f".format(movedDist)}")
+                    val attacker = (event as? EntityDamageByEntityEvent)?.damager
+                    flag(player, CheckType.VELOCITY, 1.0, "moved=${"%.3f".format(movedDist)}",
+                        attacker, "moved=${"%.3f".format(movedDist)}")
                 }
             }, 5L)
         }
@@ -696,7 +794,7 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
 
             val cps = data.clickTimes.size
             if (cps > 30) { // 30 CPS is basically impossible without macros
-                flag(player, CheckType.AUTO_CLICK, 2.0, "cps=$cps")
+                flag(player, CheckType.AUTO_CLICK, 2.0, "cps=$cps", detectedValue = "$cps CPS")
             }
         }
     }
