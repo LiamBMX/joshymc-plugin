@@ -276,10 +276,6 @@ Allows viewing the dynamic stock market with `/market`.
 Default: true
 NOTE: not currently enforced in code — see AUDIT NOTES.
 
-joshymc.lottery
-Allows buying lottery tickets and checking the prize pool with `/lottery`.
-Default: true
-
 joshymc.credits
 Allows managing player credits (admin) via `/credits <balance|pay>`.
 Default: OP
