@@ -31,8 +31,9 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Spawners are plain vanilla Minecraft mob spawners. JoshyMC only adds a
  * `/spawner shop` convenience storefront (spawners.yml defines mob + price)
- * and Silk Touch pickup that preserves the spawner's mob type — there is no
- * custom GUI, storage, or production system (removed in issue #772).
+ * and requires Silk Touch to break a spawner, preserving its mob type as a
+ * dropped item — there is no custom GUI, storage, or production system
+ * (removed in issue #772).
  */
 class SpawnerManager(private val plugin: Joshymc) : Listener {
 
@@ -226,8 +227,9 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         state.update(true, false)
     }
 
-    /** Silk Touch pickup preserves the mob type as exactly one item; without Silk
-     *  Touch the block just breaks (XP only), matching vanilla. Runs at HIGHEST
+    /** Spawners require Silk Touch to break at all; without it the break is
+     *  cancelled outright (no block loss, no drops, no XP). With Silk Touch,
+     *  pickup preserves the mob type as exactly one item. Runs at HIGHEST
      *  with ignoreCancelled=true, so anything that cancels the break earlier
      *  (WorldGuard, claim protection, spawn protection) is respected as-is. */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -235,14 +237,18 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
         val block = event.block
         if (block.type != Material.SPAWNER) return
 
-        event.isDropItems = false
         val mainHand = event.player.inventory.itemInMainHand
-        if (mainHand.containsEnchantment(Enchantment.SILK_TOUCH)) {
-            val currentType = (block.state as? CreatureSpawner)?.spawnedType
-            if (currentType != null) {
-                val item = createSpawnerItem(currentType)
-                block.world.dropItemNaturally(block.location.add(0.5, 0.5, 0.5), item)
-            }
+        if (!mainHand.containsEnchantment(Enchantment.SILK_TOUCH)) {
+            event.isCancelled = true
+            plugin.commsManager.send(event.player, Component.text("You need Silk Touch to mine spawners.", NamedTextColor.RED))
+            return
+        }
+
+        event.isDropItems = false
+        val currentType = (block.state as? CreatureSpawner)?.spawnedType
+        if (currentType != null) {
+            val item = createSpawnerItem(currentType)
+            block.world.dropItemNaturally(block.location.add(0.5, 0.5, 0.5), item)
         }
     }
 
