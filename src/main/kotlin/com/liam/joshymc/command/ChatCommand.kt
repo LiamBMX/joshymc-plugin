@@ -100,6 +100,10 @@ class ChatCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 if (sender.hasPermission("joshymc.chat.admin")) subs.addAll(listOf("mute", "unmute", "clear"))
                 if (sender.hasPermission(ChatManager.PERM_CLEARING)) subs.add("clearing")
                 subs.filter { it.startsWith(args[0], ignoreCase = true) }
+                val options = mutableListOf<String>()
+                if (sender.hasPermission("joshymc.chat.admin")) options.addAll(listOf("mute", "unmute", "clear"))
+                if (sender.hasPermission(ChatManager.PERM_CLEARING)) options.add("clearing")
+                options.filter { it.startsWith(args[0], ignoreCase = true) }
             }
             2 -> if (args[0].equals("clearing", ignoreCase = true) && sender.hasPermission(ChatManager.PERM_CLEARING)) {
                 listOf("on", "off").filter { it.startsWith(args[1], ignoreCase = true) }
