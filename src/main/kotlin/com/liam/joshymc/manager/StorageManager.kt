@@ -201,6 +201,16 @@ class StorageManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    /**
+     * Deletes every vault this player owns, across all vault numbers.
+     * Used by `/playerdata reset` — no bounded "max vaults" check since
+     * historical rows can exist beyond a lowered config max.
+     */
+    fun clearAllVaults(uuid: UUID) {
+        plugin.databaseManager.execute("DELETE FROM player_vaults WHERE uuid = ?", uuid.toString())
+        adminViewingVaults.entries.removeIf { it.value.first == uuid }
+    }
+
     // ---- Save vault ----
 
     fun saveVault(player: Player, number: Int, inventory: Inventory) {

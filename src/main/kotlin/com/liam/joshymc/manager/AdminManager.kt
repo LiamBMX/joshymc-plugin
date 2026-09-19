@@ -462,6 +462,14 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         )
     }
 
+    /** Blanks the disconnect-time Inventory cache row for [uuid], if one exists, so a stale /invsee preview can't show cleared items. */
+    fun clearCachedInventory(uuid: UUID) {
+        plugin.databaseManager.execute(
+            "UPDATE player_invsee_cache SET inventory_data = '' WHERE uuid = ?",
+            uuid.toString()
+        )
+    }
+
     fun openOfflineEnderchest(admin: Player, uuid: java.util.UUID, name: String) {
         val items = getCachedEnderchestItems(uuid)
         if (items == null) {
