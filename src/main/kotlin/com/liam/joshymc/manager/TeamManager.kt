@@ -536,8 +536,14 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             "DELETE FROM team_echests WHERE team_name = ?", teamName
         )
 
-        openEchests[player.uniqueId] = teamName
+        // player.openInventory() closes whatever inventory the player currently
+        // has open first (e.g. the /team GUI, if this was opened via its Team
+        // Ender Chest button), firing InventoryCloseEvent for it. Track AFTER
+        // that call returns so onEchestClose doesn't mistake that stale close
+        // for the echest closing and save the wrong inventory's contents into
+        // team_echests (issue #837).
         player.openInventory(inv)
+        openEchests[player.uniqueId] = teamName
     }
 
     fun saveTeamEchest(teamName: String, inventory: Inventory) {
