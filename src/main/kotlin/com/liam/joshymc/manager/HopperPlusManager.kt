@@ -147,8 +147,6 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
                 val block = world.getBlockAt(data.x, data.y, data.z)
                 if (block.type != Material.HOPPER) continue
 
-                val hopperState = block.state as? Hopper ?: continue
-
                 val counter = (tickCounters[k] ?: 0) + 1
                 tickCounters[k] = counter
 
@@ -162,6 +160,10 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
                 }
 
                 if (counter % interval != 0) continue
+
+                // block.state snapshots the tile entity — only allocate it on
+                // ticks that actually transfer, not every tick for every hopper.
+                val hopperState = block.state as? Hopper ?: continue
 
                 transferItems(hopperState, data)
 
