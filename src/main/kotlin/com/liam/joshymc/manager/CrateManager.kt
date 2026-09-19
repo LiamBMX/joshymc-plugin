@@ -1337,6 +1337,23 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val serialized = deserializeItem(reward.itemBase64)
         if (serialized != null) {
             serialized.amount = reward.amount
+            if (plugin.creditVoucherManager.isCreditVoucher(serialized)) {
+                // The stored reward template is a Base64 snapshot of whatever voucher was
+                // held when the reward was configured — including that voucher's unique
+                // voucher_uuid. Handing out the same snapshot verbatim would give every
+                // winner an item with an IDENTICAL voucher_uuid, so only the first person
+                // to redeem it would succeed; everyone else would hit the "already
+                // redeemed" duplicate-id check. Mint a fresh id (and force amount back to
+                // 1, since a legitimate voucher never stacks) on every delivery.
+                serialized.amount = 1
+                serialized.editMeta { meta ->
+                    meta.persistentDataContainer.set(
+                        plugin.creditVoucherManager.voucherUuidKey,
+                        PersistentDataType.STRING,
+                        UUID.randomUUID().toString()
+                    )
+                }
+            }
             return serialized
         }
 
