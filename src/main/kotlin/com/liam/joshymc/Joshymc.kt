@@ -169,6 +169,8 @@ class Joshymc : JavaPlugin() {
 
     lateinit var antiDupeManager: com.liam.joshymc.manager.AntiDupeManager
         private set
+    lateinit var combatAlertManager: com.liam.joshymc.manager.CombatAlertManager
+        private set
 
     lateinit var creditsManager: com.liam.joshymc.manager.CreditsManager
         private set
@@ -324,6 +326,9 @@ class Joshymc : JavaPlugin() {
 
         antiDupeManager = com.liam.joshymc.manager.AntiDupeManager(this)
         antiDupeManager.start()
+
+        combatAlertManager = com.liam.joshymc.manager.CombatAlertManager(this)
+        combatAlertManager.start()
 
         stockMarketManager = StockMarketManager(this)
         stockMarketManager.start()
