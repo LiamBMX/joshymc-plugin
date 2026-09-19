@@ -24,15 +24,24 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     private val kills = ConcurrentHashMap<UUID, Int>()
     private val deaths = ConcurrentHashMap<UUID, Int>()
 
+    /** All-time peak concurrent (real, connected) player count. Single source of truth. */
+    private var peakPlayers: Int = 0
+
     fun start() {
         // Load kills/deaths from DB
         loadStats()
+
+        // Load the persisted all-time peak player count
+        loadPeakPlayers()
 
         // Set up scoreboards for all online players
         for (player in Bukkit.getOnlinePlayers()) {
             setupScoreboard(player)
             updateTabName(player)
         }
+
+        // In case the stored peak is stale (e.g. table just created), check current count too
+        checkPeakPlayers(Bukkit.getOnlinePlayers().size)
 
         // Sidebar update every 2 seconds (40 ticks)
         sidebarTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
@@ -82,6 +91,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val player = event.player
+        checkPeakPlayers(Bukkit.getOnlinePlayers().size)
         setupScoreboard(player)
         updateSidebar(player)
         updateTabHeaderFooter(player)
@@ -251,6 +261,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
                 "\n\n" +
                 "&7\u028F\u1D0F\u1D1C\u0280 \u1D18\u026A\u0274\u0262&6: $ping\n" +
                 "&7\u1D0F\u0274\u029F\u026A\u0274\u1D07 \u1D18\u029F\u1D00\u028F\u1D07\u0280\uA731&6: $online\n" +
+                "&7\u1D18\u1D07\u1D00\u1D0B \u1D18\u029F\u1D00\u028F\u1D07\u0280\uA731&6: $peakPlayers\n" +
                 "\n" +
                 "&r"
             ))
@@ -337,6 +348,31 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         for (uuid in (kills.keys + deaths.keys)) {
             saveStats(uuid)
         }
+    }
+
+    // ── All-Time Peak Player Count ────────────────────────────────────
+
+    private fun loadPeakPlayers() {
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS peak_players (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                count INTEGER NOT NULL DEFAULT 0
+            )
+        """.trimIndent())
+
+        peakPlayers = plugin.databaseManager.queryFirst(
+            "SELECT count FROM peak_players WHERE id = 1"
+        ) { it.getInt("count") } ?: 0
+    }
+
+    /** Bukkit.getOnlinePlayers() only ever contains real connected players — NPCs/bots never appear here. */
+    private fun checkPeakPlayers(online: Int) {
+        if (online <= peakPlayers) return
+        peakPlayers = online
+        plugin.databaseManager.execute(
+            "INSERT OR REPLACE INTO peak_players (id, count) VALUES (1, ?)",
+            peakPlayers
+        )
     }
 
     companion object {
