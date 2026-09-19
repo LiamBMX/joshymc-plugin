@@ -210,7 +210,6 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // Cosmetics
         pm.registerEvents(plugin.killEffectManager, plugin)
-        pm.registerEvents(plugin.joinEffectManager, plugin)
 
         // Back location tracking
         pm.registerEvents(BackLocationListener(plugin), plugin)

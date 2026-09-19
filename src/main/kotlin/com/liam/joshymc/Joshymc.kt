@@ -30,7 +30,6 @@ import com.liam.joshymc.manager.ChatTagManager
 import com.liam.joshymc.manager.MarketManager
 import com.liam.joshymc.manager.QuestCycleManager
 import com.liam.joshymc.manager.FishingManager
-import com.liam.joshymc.manager.JoinEffectManager
 import com.liam.joshymc.manager.KillEffectManager
 import com.liam.joshymc.manager.SpawnWorldManager
 import com.liam.joshymc.manager.TalismanManager
@@ -253,8 +252,6 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var killEffectManager: KillEffectManager
         private set
-    lateinit var joinEffectManager: JoinEffectManager
-        private set
     lateinit var adminManager: AdminManager
         private set
     lateinit var endManager: EndManager
@@ -390,7 +387,6 @@ class Joshymc : JavaPlugin() {
         talismanManager = TalismanManager(this)
         fishingManager = FishingManager(this)
         killEffectManager = KillEffectManager(this)
-        joinEffectManager = JoinEffectManager(this)
         adminManager = AdminManager(this)
         modModeManager = com.liam.joshymc.manager.ModModeManager(this)
         hideStaffManager = com.liam.joshymc.manager.HideStaffManager(this)
@@ -490,7 +486,6 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("talismans")) talismanManager.start()
         if (isFeatureEnabled("custom-fishing")) fishingManager.start()
         if (isFeatureEnabled("kill-effects")) killEffectManager.start()
-        if (isFeatureEnabled("join-effects")) joinEffectManager.start()
         adminManager.start()
         modModeManager.start()
         hideStaffManager.start()

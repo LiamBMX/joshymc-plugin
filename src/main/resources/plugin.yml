@@ -230,10 +230,6 @@ commands:
     description: Manage kill effects
     usage: /killeffect [remove]
     aliases: [ke]
-  joineffect:
-    description: Manage join effects
-    usage: /joineffect
-    aliases: [je]
   fish:
     description: View your fish collection
     usage: /fish [stats|leaderboard]
@@ -918,9 +914,6 @@ permissions:
     default: true
   joshymc.killeffect:
     description: Use kill effect commands
-    default: true
-  joshymc.joineffect:
-    description: Use join effect commands
     default: true
   joshymc.fish:
     description: Use fishing collection
