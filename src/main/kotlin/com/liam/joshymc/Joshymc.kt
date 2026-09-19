@@ -1079,6 +1079,16 @@ class Joshymc : JavaPlugin() {
             permission = com.liam.joshymc.manager.ChatManager.PERM_CLEARING,
             hidden = true
         ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.CoinflipManager.NOTIFY_SETTING_KEY,
+            displayName = "Coinflip Notifications",
+            description = "Receive global Coinflip creation/winner announcements",
+            material = org.bukkit.Material.GOLD_NUGGET,
+            disabledMaterial = org.bukkit.Material.BARRIER,
+            default = true,
+            permission = "joshymc.coinflip",
+            hidden = true
+        ))
 
         // Active /settings toggles (issue #501)
         settingsManager.register(SettingsManager.SettingDef(
