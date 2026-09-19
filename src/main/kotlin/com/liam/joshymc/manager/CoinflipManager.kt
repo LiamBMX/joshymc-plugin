@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
@@ -18,6 +19,10 @@ import java.util.concurrent.ThreadLocalRandom
  * source of truth. No house cut: pot = both bets, winner gets it all.
  */
 class CoinflipManager(private val plugin: Joshymc) {
+
+    companion object {
+        const val NOTIFY_SETTING_KEY = "coinflip_notify"
+    }
 
     enum class Status { WAITING, LOCKED, FLIPPING, COMPLETED, CANCELLED }
 
@@ -133,6 +138,21 @@ class CoinflipManager(private val plugin: Joshymc) {
         plugin.commsManager.send(player, Component.text(text, color), CommunicationsManager.Category.DEFAULT)
     }
 
+    /** Sends a global Coinflip announcement to every online player who hasn't opted out via `/cf notify off`. */
+    private fun announce(message: Component) {
+        for (viewer in Bukkit.getOnlinePlayers()) {
+            if (plugin.settingsManager.getSetting(viewer, NOTIFY_SETTING_KEY)) {
+                plugin.commsManager.send(viewer, message, CommunicationsManager.Category.DEFAULT)
+            }
+        }
+    }
+
+    fun setNotifyEnabled(player: Player, value: Boolean) {
+        plugin.settingsManager.setSetting(player, NOTIFY_SETTING_KEY, value)
+    }
+
+    fun isNotifyEnabled(player: Player): Boolean = plugin.settingsManager.getSetting(player, NOTIFY_SETTING_KEY)
+
     // ---- Queries ----
 
     fun getCoinflip(id: Int): CoinflipInfo? {
@@ -213,6 +233,14 @@ class CoinflipManager(private val plugin: Joshymc) {
         )
 
         send(player, "Coinflip created for ${plugin.economyManager.formatShort(amount)}.", NamedTextColor.GREEN)
+
+        announce(
+            Component.text("${player.name} created a Coinflip for ${plugin.economyManager.formatShort(amount)}! ", NamedTextColor.YELLOW)
+                .append(
+                    Component.text("[Join]", NamedTextColor.GREEN)
+                        .clickEvent(ClickEvent.runCommand("/coinflip"))
+                )
+        )
     }
 
     fun cancelCoinflip(player: Player, id: Int) {
@@ -359,5 +387,9 @@ class CoinflipManager(private val plugin: Joshymc) {
         Bukkit.getPlayer(loserUuid)?.let {
             send(it, "$winnerName won the ${plugin.economyManager.formatShort(pot)} Coinflip.", NamedTextColor.RED)
         }
+
+        announce(
+            Component.text("$winnerName won the Coinflip and received ${plugin.economyManager.formatShort(pot)}!", NamedTextColor.GOLD)
+        )
     }
 }
