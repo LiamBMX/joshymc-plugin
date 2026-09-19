@@ -15,6 +15,7 @@ import org.bukkit.entity.Player
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemFlag
 import org.bukkit.inventory.ItemStack
+import org.bukkit.persistence.PersistentDataType
 import java.io.File
 import java.util.UUID
 
@@ -268,6 +269,19 @@ class KitManager(private val plugin: Joshymc) {
         // Give items
         for ((slot, item) in kit.items) {
             val clone = item.clone()
+            if (plugin.creditVoucherManager.isCreditVoucher(clone)) {
+                // kit.items is a shared in-memory template reused for every claimer — handing
+                // out item.clone() verbatim would give every claimer an identical voucher_uuid,
+                // so only the first person to redeem it would succeed. Mint a fresh id per
+                // delivery, same fix as CrateManager.buildRewardItem (issue #833).
+                clone.editMeta { meta ->
+                    meta.persistentDataContainer.set(
+                        plugin.creditVoucherManager.voucherUuidKey,
+                        PersistentDataType.STRING,
+                        UUID.randomUUID().toString()
+                    )
+                }
+            }
             if (slot < player.inventory.size && player.inventory.getItem(slot) == null) {
                 player.inventory.setItem(slot, clone)
             } else {
