@@ -468,6 +468,9 @@ commands:
   punish:
     description: Unified moderation command (ban/tempban/tempmute/unban/unmute/warn/unwarn)
     usage: /punish <player> <ban|tempban|tempmute|unban|unmute|warn|unwarn> [duration] <reason>
+  playerdata:
+    description: Reset a banned player's inventory, ender chest, vaults, claims, and homes
+    usage: /playerdata reset <player> <reason>
   alts:
     description: List possible alternate accounts for a player
     usage: /alts <player>
@@ -1181,6 +1184,12 @@ permissions:
     default: op
   joshymc.punish.unwarn:
     description: Remove warnings from players via /punish
+    default: op
+  joshymc.playerdata:
+    description: Base access to the /playerdata command
+    default: op
+  joshymc.playerdata.reset:
+    description: Wipe a banned player's inventory, ender chest, vaults, claims, and homes
     default: op
   joshymc.modmode:
     description: Use Moderator Mode (Moderator and higher)

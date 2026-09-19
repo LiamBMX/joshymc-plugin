@@ -397,6 +397,8 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
     fun getClaimsByPlayer(uuid: UUID): List<Claim> = claims.filter { it.ownerUuid == uuid }
 
+    fun getClaimsTrustedBy(uuid: UUID): List<Claim> = claims.filter { it.trusted.contains(uuid) }
+
     fun getClaimsByTeam(teamName: String): List<Claim> = claims.filter { it.teamName == teamName }
 
     /**

@@ -37,6 +37,7 @@ import com.liam.joshymc.command.ClaimCommand
 import com.liam.joshymc.command.CraftCommand
 import com.liam.joshymc.command.EnchantCommand
 import com.liam.joshymc.command.EnderchestCommand
+import com.liam.joshymc.command.PlayerDataCommand
 import com.liam.joshymc.command.EnderchestPreviewCommand
 import com.liam.joshymc.command.FeedCommand
 import com.liam.joshymc.command.FlyCommand
@@ -534,6 +535,7 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("invsee")?.let { val c = InvseeCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("enderchest")?.let { val c = EnderchestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("playerdata")?.let { val c = PlayerDataCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("hat")?.setExecutor(HatCommand(plugin))
         plugin.getCommand("craft")?.setExecutor(CraftCommand(plugin))
         plugin.getCommand("anvil")?.setExecutor(AnvilCommand(plugin))
@@ -817,6 +819,7 @@ class CommandManager(private val plugin: Joshymc) {
         "tphere" to "joshymc.tphere",
         "invsee" to "joshymc.invsee",
         "enderchest" to "joshymc.enderchest",
+        "playerdata" to "joshymc.playerdata",
         "hat" to "joshymc.hat",
         "craft" to "joshymc.craft",
         "anvil" to "joshymc.anvil",
