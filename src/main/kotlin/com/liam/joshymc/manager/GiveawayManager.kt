@@ -1100,6 +1100,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         // player happens to be holding a matching material. Block it outright.
         if (event.action == InventoryAction.COLLECT_TO_CURSOR) {
             event.isCancelled = true
+            player.updateInventory()
             return
         }
 
@@ -1112,6 +1113,11 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
 
         if (slot >= rewardSlotCount) {
             event.isCancelled = true
+            // Cancelling a NUMBER_KEY/hotbar-swap or SWAP_OFFHAND click doesn't always
+            // stop the client from visually predicting the swap — force a resync so a
+            // control item (the confirm wool, Clear/Back buttons) can never end up
+            // looking like it moved into the player's hotbar/off-hand.
+            player.updateInventory()
             when (slot) {
                 ITEM_EDITOR_CLEAR_SLOT -> clearItemEditorSlots(player, inv, rewardSlotCount)
                 ITEM_EDITOR_BACK_SLOT -> {
@@ -1143,6 +1149,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         val rewardSlotCount = itemEditorRewardSlotCount()
         if (event.rawSlots.any { it < inv.size && it >= rewardSlotCount }) {
             event.isCancelled = true
+            player.updateInventory()
         }
     }
 
@@ -1151,7 +1158,13 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         val player = event.player as? Player ?: return
         val inv = itemEditorInventories.remove(player.uniqueId) ?: return
         if (event.inventory != inv) return
-        commitItemEditorToPending(player, inv, itemEditorRewardSlotCount())
+        // A bare close (ESC, clicking outside the window, etc.) never goes through Save &
+        // Return, so it must behave like Back — hand the staged items straight back to the
+        // player instead of folding them into the creation draft. Without this, closing the
+        // editor any way other than clicking Save silently committed whatever was staged,
+        // which contradicts the editor's own "Save & Return" vs "Back (Discard Changes)" choice.
+        clearItemEditorSlots(player, inv, itemEditorRewardSlotCount())
+        plugin.commsManager.send(player, Component.text("Item editor closed — changes were not saved.", NamedTextColor.YELLOW))
     }
 
     private fun openConfirmGui(player: Player) {
