@@ -266,6 +266,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var portalManager: PortalManager
         private set
+    lateinit var fakeBaseManager: com.liam.joshymc.manager.FakeBaseManager
+        private set
     lateinit var voteManager: VoteManager
         private set
     lateinit var spawnDecorationManager: SpawnDecorationManager
@@ -397,6 +399,7 @@ class Joshymc : JavaPlugin() {
         arenaManager = ArenaManager(this)
         buildPvpManager = BuildPvpManager(this)
         portalManager = PortalManager(this)
+        fakeBaseManager = com.liam.joshymc.manager.FakeBaseManager(this)
         voteManager = VoteManager(this)
         spawnDecorationManager = SpawnDecorationManager(this)
         spawnWorldManager = SpawnWorldManager(this)
@@ -499,6 +502,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("arenas")) arenaManager.start()
         buildPvpManager.start()
         if (isFeatureEnabled("portals")) portalManager.start()
+        fakeBaseManager.start()
         if (isFeatureEnabled("voting")) voteManager.start()
         spawnDecorationManager.start()
         eventManager.start()

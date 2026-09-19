@@ -662,6 +662,10 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Portals ──────────────────────────────────────
         plugin.getCommand("portal")?.let { val c = PortalCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
+        // ── Fake Base / Spawn Stash ────────────────────────
+        plugin.getCommand("fakebase")?.let { val c = com.liam.joshymc.command.FakeBaseCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("spawnstash")?.let { it.setExecutor(com.liam.joshymc.command.SpawnStashCommand(plugin)) }
+
         // ── Voting ──────────────────────────────────────
         // JoshyMC no longer claims the unprefixed `/vote` alias — it's exposed
         // only as `/jvote` (alias `/joshyvote`). This guarantees other voting
