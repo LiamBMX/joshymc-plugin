@@ -1065,6 +1065,16 @@ class Joshymc : JavaPlugin() {
             permission = com.liam.joshymc.manager.StaffChatManager.PERM_VIEW,
             hidden = true
         ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.ChatManager.CLEARING_SETTING_KEY,
+            displayName = "Chat Clearing",
+            description = "Have your screen cleared by /chat clear",
+            material = org.bukkit.Material.WRITABLE_BOOK,
+            disabledMaterial = org.bukkit.Material.BARRIER,
+            default = true,
+            permission = com.liam.joshymc.manager.ChatManager.PERM_CLEARING,
+            hidden = true
+        ))
 
         // Active /settings toggles (issue #501)
         settingsManager.register(SettingsManager.SettingDef(
