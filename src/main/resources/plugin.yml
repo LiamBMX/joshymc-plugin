@@ -472,6 +472,9 @@ commands:
   punish:
     description: Unified moderation command (ban/tempban/tempmute/unban/unmute/warn/unwarn)
     usage: /punish <player> <ban|tempban|tempmute|unban|unmute|warn|unwarn> [duration] <reason>
+  alts:
+    description: List possible alternate accounts for a player
+    usage: /alts <player>
   vanish:
     description: Toggle vanish mode
     usage: /vanish [player]
@@ -1152,6 +1155,9 @@ permissions:
     default: op
   joshymc.history:
     description: View punishment history
+    default: op
+  joshymc.alts:
+    description: List possible alternate accounts for a player
     default: op
   joshymc.punishment.notify:
     description: Receive punishment notifications

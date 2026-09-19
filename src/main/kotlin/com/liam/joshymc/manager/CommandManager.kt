@@ -584,6 +584,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("pkick")?.let { val c = KickCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("history")?.let { val c = HistoryCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("punish")?.let { val c = PunishCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("alts")?.let { val c = com.liam.joshymc.command.AltsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Vanish ──────────────────────────────────────
         val vanishCmd = VanishCommand(plugin)
@@ -845,6 +846,7 @@ class CommandManager(private val plugin: Joshymc) {
         "unwarn" to "joshymc.unwarn",
         "pkick" to "joshymc.kick",
         "history" to "joshymc.history",
+        "alts" to "joshymc.alts",
         "vanish" to "joshymc.vanish",
         "report" to "joshymc.report",
         "reports" to "joshymc.reports.view",
