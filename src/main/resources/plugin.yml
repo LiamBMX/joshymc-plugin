@@ -198,8 +198,8 @@ commands:
     description: Open the server shop
     usage: /shop
   worth:
-    description: Browse sell prices in a read-only Worth GUI
-    usage: /worth
+    description: Browse sell prices in a read-only Worth GUI, or look up a single item's shop price
+    usage: /worth [item]
   sell:
     description: Sell items for money
     usage: /sell [hand|all]
