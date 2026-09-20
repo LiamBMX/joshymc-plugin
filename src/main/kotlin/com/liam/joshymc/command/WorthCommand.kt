@@ -19,9 +19,10 @@ import org.bukkit.entity.Player
  * item; ServerShopManager reads straight from SellPriceManager, so /worth always matches
  * /sell exactly.
  *
- * With an item argument (`/worth <item>`): prints that item's /shop buy/sell price directly
- * in chat, read from the same ServerShopManager `shop.yml` categories `/shop` itself
- * browses — there is no separate price list to fall out of sync.
+ * With an item argument (`/worth <item>`): prints that item's price in chat. Sell price comes
+ * from SellPriceManager — the same authoritative source /sell reads — so any item sellable
+ * through /sell shows up here, not just items also listed in /shop. Buy price (if any) still
+ * comes from ServerShopManager, since /shop is the only purchase system.
  */
 class WorthCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
@@ -49,17 +50,17 @@ class WorthCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return true
         }
 
-        val pricing = plugin.serverShopManager.getShopPricing(material)
-        if (pricing == null) {
+        val sellPrice = plugin.sellPriceManager.getPrice(material)
+        val buyPrice = plugin.serverShopManager.getBuyPrice(material)
+
+        if (sellPrice == null && buyPrice == null) {
             plugin.commsManager.send(
                 sender,
-                Component.text("This item does not currently have a shop value.", NamedTextColor.RED),
+                Component.text("This item cannot be bought or sold.", NamedTextColor.RED),
                 CommunicationsManager.Category.ECONOMY
             )
             return true
         }
-
-        val (buyPrice, sellPrice) = pricing
 
         plugin.commsManager.send(
             sender,
@@ -85,18 +86,25 @@ class WorthCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (args.size != 1) return emptyList()
 
         val prefix = args[0].lowercase()
-        val shopNames = plugin.serverShopManager.getAllShopMaterials()
+
+        val sellableNames = plugin.sellPriceManager.getAllPrices().keys
             .map { it.name.lowercase() }
             .filter { it.startsWith(prefix) }
-        if (shopNames.size >= 30) return shopNames.take(30)
+        if (sellableNames.size >= 30) return sellableNames.take(30)
+
+        val shopNames = plugin.serverShopManager.getAllShopMaterials()
+            .map { it.name.lowercase() }
+            .filter { it.startsWith(prefix) && it !in sellableNames }
+        val combined = sellableNames + shopNames
+        if (combined.size >= 30) return combined.take(30)
 
         val extra = Material.entries.asSequence()
             .filter { it.isItem && !it.isAir }
             .map { it.name.lowercase() }
-            .filter { it.startsWith(prefix) && it !in shopNames }
-            .take(30 - shopNames.size)
+            .filter { it.startsWith(prefix) && it !in combined }
+            .take(30 - combined.size)
             .toList()
 
-        return shopNames + extra
+        return combined + extra
     }
 }
