@@ -49,6 +49,7 @@ import com.liam.joshymc.command.HealCommand
 import com.liam.joshymc.command.HelpCommand
 import com.liam.joshymc.command.InvseeCommand
 import com.liam.joshymc.command.IgnoreCommand
+import com.liam.joshymc.command.MessagesCommand
 import com.liam.joshymc.command.MsgCommand
 import com.liam.joshymc.command.ReplyCommand
 import com.liam.joshymc.command.SmiteCommand
@@ -557,6 +558,7 @@ class CommandManager(private val plugin: Joshymc) {
         val msgCmd = MsgCommand(plugin)
         plugin.getCommand("msg")?.let { it.setExecutor(msgCmd); it.tabCompleter = msgCmd }
         plugin.getCommand("reply")?.setExecutor(ReplyCommand(plugin))
+        plugin.getCommand("messages")?.let { val c = MessagesCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // TPA system
         val tpaCmd = TpaCommand(plugin)

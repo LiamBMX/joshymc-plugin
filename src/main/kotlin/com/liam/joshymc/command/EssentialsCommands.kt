@@ -961,6 +961,10 @@ class MsgCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             plugin.commsManager.send(sender, Component.text("That player is not accepting messages from you.", NamedTextColor.RED))
             return true
         }
+        if (!plugin.commsManager.canReceivePersonalMessages(target)) {
+            plugin.commsManager.send(sender, Component.text("That player has personal messages disabled.", NamedTextColor.RED))
+            return true
+        }
         val message = args.drop(1).joinToString(" ")
         sender.sendMessage(Component.text("[me → ${target.name}] ", NamedTextColor.GRAY).append(Component.text(message, NamedTextColor.WHITE)))
         target.sendMessage(Component.text("[${sender.name} → me] ", NamedTextColor.GRAY).append(Component.text(message, NamedTextColor.WHITE)))
@@ -989,6 +993,10 @@ class ReplyCommand(private val plugin: Joshymc) : CommandExecutor {
         }
         val target = Bukkit.getPlayer(targetUuid) ?: run {
             plugin.commsManager.send(sender, Component.text("That player is offline.", NamedTextColor.RED))
+            return true
+        }
+        if (!plugin.commsManager.canReceivePersonalMessages(target)) {
+            plugin.commsManager.send(sender, Component.text("That player has personal messages disabled.", NamedTextColor.RED))
             return true
         }
         val message = args.joinToString(" ")

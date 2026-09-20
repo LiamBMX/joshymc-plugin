@@ -12,6 +12,12 @@ import org.bukkit.entity.Player
 
 class CommunicationsManager(private val plugin: Joshymc) {
 
+    companion object {
+        // Player preference for whether they want optional personal/direct
+        // messages (e.g. /msg, /reply). Never gates critical/system messages.
+        const val PERSONAL_MESSAGES_SETTING_KEY = "personal_messages"
+    }
+
     // Supports & color codes AND &#RRGGBB hex colors (e.g., "&#FF5555&lRed")
     private val legacySerializer = LegacyComponentSerializer.builder()
         .character('&')
@@ -83,6 +89,15 @@ class CommunicationsManager(private val plugin: Joshymc) {
     fun sendActionBar(player: Player, message: Component) {
         player.sendActionBar(message)
     }
+
+    /**
+     * Whether [player] wants to receive OPTIONAL personal/direct messages
+     * (e.g. /msg, /reply). Features must never route critical/system
+     * messages (punishments, moderation notices, errors, transaction
+     * confirmations) through this check.
+     */
+    fun canReceivePersonalMessages(player: Player): Boolean =
+        plugin.settingsManager.getSetting(player, PERSONAL_MESSAGES_SETTING_KEY)
 
     // ---- Chat formatting ----
 

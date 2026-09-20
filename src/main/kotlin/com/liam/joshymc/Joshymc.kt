@@ -1171,6 +1171,14 @@ class Joshymc : JavaPlugin() {
             disabledMaterial = org.bukkit.Material.GRAY_DYE,
             default = true
         ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.CommunicationsManager.PERSONAL_MESSAGES_SETTING_KEY,
+            displayName = "Personal Messages",
+            description = "Allow other players to send you /msg private messages",
+            material = org.bukkit.Material.WRITABLE_BOOK,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = true
+        ))
     }
 
     /**

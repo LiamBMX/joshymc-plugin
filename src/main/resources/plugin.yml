@@ -429,6 +429,10 @@ commands:
     description: Reply to last message
     usage: /reply <message>
     aliases: [r]
+  messages:
+    description: Toggle whether you receive optional personal messages
+    usage: /messages <on|off>
+    aliases: [msgs]
   resource:
     description: Teleport to the resource world
     usage: /resource
