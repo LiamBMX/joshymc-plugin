@@ -3,6 +3,7 @@ package com.liam.joshymc.listener
 import com.liam.joshymc.Joshymc
 import org.bukkit.Bukkit
 import org.bukkit.entity.ArmorStand
+import org.bukkit.entity.EntityType
 import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Mob
 import org.bukkit.entity.Player
@@ -42,11 +43,15 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
          * Returns true for entities that the mob-hide setting should manage.
          * ArmorStands are LivingEntities but not mobs — always keep them visible.
          * Xray shulkers (tagged "joshymc_xray") are helper entities for the
-         * xray enchant and must remain visible to the enchant owner.
+         * xray enchant and must remain visible to the enchant owner. Axolotls
+         * and Iron Golems are exempt from hiding at the user's request — see
+         * issue #917.
          */
         private fun shouldHide(entity: LivingEntity): Boolean {
             if (entity is ArmorStand) return false
             if (entity is Villager) return false
+            if (entity.type == EntityType.AXOLOTL) return false
+            if (entity.type == EntityType.IRON_GOLEM) return false
             if (entity.scoreboardTags.contains("joshymc_xray")) return false
             return true
         }
