@@ -116,21 +116,11 @@ jobs:
             echo "Branch name doesn't match claude/issue-N; no issue to close"
           fi
 
-          # Compute next version (v1.0.X -> v1.0.X+1) and dispatch Release
-          git fetch --tags origin
-          LATEST=$(git tag --sort=-v:refname | grep -E '^v1\.0\.[0-9]+$' | head -1 || true)
-          if [ -z "$LATEST" ]; then
-            NEXT="v1.0.1"
-          else
-            BASE=${LATEST#v1.0.}
-            NEXT="v1.0.$((BASE + 1))"
-          fi
-          echo "Latest tag: ${LATEST:-none}  Next: $NEXT"
-
+          # The release workflow is serialized and allocates the version at run
+          # time. Doing that here races when multiple PRs merge close together.
           gh workflow run release.yml \
             --repo "$REPO" \
-            --ref main \
-            -f tag="$NEXT"
+            --ref main
 
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
-            "Auto-release dispatched: \`$NEXT\`. JAR will appear in [Releases](https://github.com/$REPO/releases) once the Release workflow finishes."
+            "Auto-release dispatched. The next patch version and JAR will appear in [Releases](https://github.com/$REPO/releases) once the serialized Release workflow finishes."
