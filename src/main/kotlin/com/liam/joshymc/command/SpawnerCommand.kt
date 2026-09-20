@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -86,9 +87,7 @@ class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         var given = 0
         for (target in targets) {
             val item = plugin.spawnerManager.createSpawnerItem(typeId, amount) ?: continue
-            target.inventory.addItem(item).values.forEach { overflow ->
-                target.world.dropItemNaturally(target.location, overflow)
-            }
+            plugin.giveItemSafely(target, item)
             given++
         }
 

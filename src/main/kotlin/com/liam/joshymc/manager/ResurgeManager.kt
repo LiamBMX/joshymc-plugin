@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -155,8 +156,7 @@ class ResurgeManager(private val plugin: Joshymc) : Listener {
         // Give Resurge Key(s) — 2 on milestone resurges (5, 10, 15, ...)
         val keyCount = if (newCount % 5 == 0) 2 else 1
         val keyStack = plugin.crateManager.createKeyStack("resurge", keyCount) ?: createResurgeKey(keyCount)
-        val overflow = player.inventory.addItem(keyStack)
-        overflow.values.forEach { stack -> player.world.dropItemNaturally(player.location, stack) }
+        plugin.giveItemSafely(player, keyStack)
 
         // Notify
         val title = Title.title(

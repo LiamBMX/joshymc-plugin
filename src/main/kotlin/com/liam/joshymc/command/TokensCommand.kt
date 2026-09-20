@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -56,10 +57,7 @@ class TokensCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return true
         }
 
-        val overflow = target.inventory.addItem(tokenItem)
-        if (overflow.isNotEmpty()) {
-            target.world.dropItemNaturally(target.location, overflow.values.first())
-        }
+        plugin.giveItemSafely(target, tokenItem)
 
         target.sendMessage(
             Component.text("You received ", NamedTextColor.GOLD)
@@ -154,10 +152,7 @@ class TokensCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         plugin.economyManager.withdraw(sender.uniqueId, cost)
-        val overflow = sender.inventory.addItem(tokenItem)
-        if (overflow.isNotEmpty()) {
-            sender.world.dropItemNaturally(sender.location, overflow.values.first())
-        }
+        plugin.giveItemSafely(sender, tokenItem)
 
         sender.sendMessage(
             Component.text("Bought ", NamedTextColor.GREEN)

@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -411,8 +412,14 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         var delivered = 0
         for ((rowId, itemBase64) in rows) {
             val item = deserializeItem(itemBase64)
-            val leftover = player.inventory.addItem(item)
-            if (leftover.isEmpty()) {
+            // Route into the saved backup inventory (not the temp staff loadout) while
+            // Moderator/Trainee Mode is active, same as every other reward delivery.
+            val leftover = when {
+                plugin.modModeManager.isModMode(player) -> plugin.modModeManager.addItemToBackup(player.uniqueId, item)
+                plugin.traineeModeManager.isTraineeMode(player) -> plugin.traineeModeManager.addItemToBackup(player.uniqueId, item)
+                else -> player.inventory.addItem(item).values.firstOrNull()
+            }
+            if (leftover == null) {
                 plugin.databaseManager.execute("DELETE FROM giveaway_items WHERE id = ?", rowId)
                 delivered++
             } else {
@@ -420,7 +427,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
                 // over is gone from the row so it can never be delivered twice.
                 plugin.databaseManager.execute(
                     "UPDATE giveaway_items SET item = ? WHERE id = ?",
-                    serializeItem(leftover.values.first()), rowId
+                    serializeItem(leftover), rowId
                 )
             }
         }
@@ -463,8 +470,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
     private fun returnPending(player: Player, pending: PendingCreation) {
         if (pending.coins > 0) plugin.economyManager.deposit(player.uniqueId, pending.coins)
         for (item in pending.items) {
-            val leftover = player.inventory.addItem(item)
-            leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+            plugin.giveItemSafely(player, item)
         }
     }
 
@@ -495,8 +501,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         val pending = pendingCreations[player.uniqueId] ?: return
         if (index < 0 || index >= pending.items.size) return
         val item = pending.items.removeAt(index)
-        val leftover = player.inventory.addItem(item)
-        leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+        plugin.giveItemSafely(player, item)
     }
 
     fun promptCoins(player: Player) {
@@ -1071,8 +1076,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
             } else {
                 // No active creation draft (e.g. it was already confirmed/cancelled elsewhere)
                 // — return the item instead of losing it.
-                val leftover = player.inventory.addItem(item)
-                leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+                plugin.giveItemSafely(player, item)
             }
         }
     }
@@ -1081,8 +1085,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         for (slot in 0 until rewardSlotCount) {
             val item = inv.getItem(slot) ?: continue
             if (item.type == Material.AIR) continue
-            val leftover = player.inventory.addItem(item)
-            leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+            plugin.giveItemSafely(player, item)
             inv.setItem(slot, null)
         }
         player.playSound(player.location, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.2f)

@@ -883,7 +883,7 @@ class ServerShopManager(private val plugin: Joshymc) {
         val overflow = when (shopItem.kind) {
             ShopItemKind.POTION -> {
                 val leftovers = mutableListOf<ItemStack>()
-                repeat(amount) { leftovers.addAll(player.inventory.addItem(buildPotionItem(shopItem)).values) }
+                repeat(amount) { leftovers.addAll(deliverOne(player, buildPotionItem(shopItem))) }
                 leftovers
             }
             ShopItemKind.SPAWNER -> {
@@ -895,9 +895,9 @@ class ServerShopManager(private val plugin: Joshymc) {
                     plugin.commsManager.send(player, Component.text("Purchase failed; you have been refunded.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
                     return false
                 }
-                player.inventory.addItem(stack).values.toList()
+                deliverOne(player, stack)
             }
-            ShopItemKind.MATERIAL -> player.inventory.addItem(ItemStack(shopItem.material, amount)).values.toList()
+            ShopItemKind.MATERIAL -> deliverOne(player, ItemStack(shopItem.material, amount))
         }
 
         // Drop any items that didn't fit
@@ -916,6 +916,21 @@ class ServerShopManager(private val plugin: Joshymc) {
         )
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.2f)
         return true
+    }
+
+    /**
+     * Delivers [item] into the inventory the player will actually keep — their saved
+     * Moderator/Trainee Mode backup while one of those is active, their live inventory
+     * otherwise. Returns a single-element list with whatever didn't fit (for the caller's
+     * existing "drop overflow at feet" pass), or empty if it all fit.
+     */
+    private fun deliverOne(player: Player, item: ItemStack): List<ItemStack> {
+        val leftover = when {
+            plugin.modModeManager.isModMode(player) -> plugin.modModeManager.addItemToBackup(player.uniqueId, item)
+            plugin.traineeModeManager.isTraineeMode(player) -> plugin.traineeModeManager.addItemToBackup(player.uniqueId, item)
+            else -> player.inventory.addItem(item).values.firstOrNull()
+        }
+        return if (leftover != null) listOf(leftover) else emptyList()
     }
 
     // ── Sell Logic ──────────────────────────────────────────────────────

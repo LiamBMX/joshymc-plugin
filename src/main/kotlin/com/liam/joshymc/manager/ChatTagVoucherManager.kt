@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -81,10 +82,7 @@ class ChatTagVoucherManager(private val plugin: Joshymc) {
         if (plugin.chatTagManager.getVoucherTag(tagId) == null) return false
         repeat(quantity) {
             val stack = createVoucherStack(tagId) ?: return@repeat
-            val leftover = player.inventory.addItem(stack)
-            for ((_, item) in leftover) {
-                player.world.dropItemNaturally(player.location, item)
-            }
+            plugin.giveItemSafely(player, stack)
         }
         return true
     }

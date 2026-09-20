@@ -3,6 +3,7 @@ package com.liam.joshymc.manager
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.util.MinecraftColors
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -586,10 +587,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     fun giveKey(player: Player, crateType: String, amount: Int = 1): Boolean {
         val key = createKeyStack(crateType, amount) ?: return false
-        val leftover = player.inventory.addItem(key)
-        for ((_, item) in leftover) {
-            player.world.dropItemNaturally(player.location, item)
-        }
+        plugin.giveItemSafely(player, key)
         return true
     }
 
@@ -777,10 +775,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 consumeOneKey(p)
                 p.closeInventory()
                 val rewardItem = buildRewardItem(rewardRef)
-                val leftover = p.inventory.addItem(rewardItem)
-                for ((_, drop) in leftover) {
-                    p.world.dropItemNaturally(p.location, drop)
-                }
+                plugin.giveItemSafely(p, rewardItem)
                 spawnWinParticles(p, crate)
                 p.playSound(p.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
                 plugin.commsManager.send(
@@ -1035,8 +1030,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
             for (reward in rewardsToGrant) {
                 val rewardItem = buildRewardItem(reward)
-                val leftover = p.inventory.addItem(rewardItem)
-                for ((_, drop) in leftover) p.world.dropItemNaturally(p.location, drop)
+                plugin.giveItemSafely(p, rewardItem)
             }
             spawnWinParticles(p, crate)
             p.playSound(p.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
@@ -1079,10 +1073,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     private fun openInstant(player: Player, crate: CrateDef) {
         val reward = selectWeightedReward(crate)
         val rewardItem = buildRewardItem(reward)
-        val leftover = player.inventory.addItem(rewardItem)
-        for ((_, item) in leftover) {
-            player.world.dropItemNaturally(player.location, item)
-        }
+        plugin.giveItemSafely(player, rewardItem)
         spawnWinParticles(player, crate)
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
         plugin.commsManager.send(
@@ -1161,8 +1152,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     spawnWinParticles(player, crate)
                     player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
                     val rewardItem = buildRewardItem(winner)
-                    val leftover = player.inventory.addItem(rewardItem)
-                    for ((_, item) in leftover) player.world.dropItemNaturally(player.location, item)
+                    plugin.giveItemSafely(player, rewardItem)
                     plugin.commsManager.send(player,
                         Component.text("You won ", NamedTextColor.GREEN)
                             .append(Component.text(winner.displayName, TextColor.color(0xFFAA00)))
@@ -1265,10 +1255,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     // Give reward
                     if (winnerReward != null) {
                         val rewardItem = buildRewardItem(winnerReward)
-                        val leftover = player.inventory.addItem(rewardItem)
-                        for ((_, item) in leftover) {
-                            player.world.dropItemNaturally(player.location, item)
-                        }
+                        plugin.giveItemSafely(player, rewardItem)
 
                         plugin.commsManager.send(
                             player,
@@ -1608,10 +1595,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
             val reward = selectWeightedReward(crate)
             val rewardItem = buildRewardItem(reward)
-            val leftover = player.inventory.addItem(rewardItem)
-            for ((_, item) in leftover) {
-                player.world.dropItemNaturally(player.location, item)
-            }
+            plugin.giveItemSafely(player, rewardItem)
             rewardSummary[reward.displayName] = (rewardSummary[reward.displayName] ?: 0) + reward.amount
             keysUsed++
         }

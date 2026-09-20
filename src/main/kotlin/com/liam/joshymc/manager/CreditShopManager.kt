@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -381,10 +382,7 @@ class CreditShopManager(private val plugin: Joshymc) {
 
         val give = shopItem.item.clone()
         give.amount = amount
-        val overflow = player.inventory.addItem(give)
-        for (remaining in overflow.values) {
-            player.world.dropItemNaturally(player.location, remaining)
-        }
+        plugin.giveItemSafely(player, give)
 
         plugin.commsManager.send(player,
             Component.text("Bought ", NamedTextColor.GREEN)

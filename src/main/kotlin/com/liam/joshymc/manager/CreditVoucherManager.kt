@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -77,10 +78,7 @@ class CreditVoucherManager(private val plugin: Joshymc) {
     /** Gives [quantity] separate 1-count voucher items (never a stack) worth [amount] Credits each. */
     fun give(player: Player, amount: Int, quantity: Int) {
         repeat(quantity) {
-            val leftover = player.inventory.addItem(createVoucherStack(amount))
-            for ((_, item) in leftover) {
-                player.world.dropItemNaturally(player.location, item)
-            }
+            plugin.giveItemSafely(player, createVoucherStack(amount))
         }
     }
 

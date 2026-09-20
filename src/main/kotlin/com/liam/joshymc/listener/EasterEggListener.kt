@@ -1,6 +1,7 @@
 package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
 import org.bukkit.Material
@@ -67,10 +68,7 @@ class EasterEggListener(private val plugin: Joshymc) : Listener {
         val prizeStack = prizeItem.createItemStack()
 
         // Give to player
-        val leftover = player.inventory.addItem(prizeStack)
-        if (leftover.isNotEmpty()) {
-            leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
-        }
+        plugin.giveItemSafely(player, prizeStack)
 
         // Effects
         val loc = player.location.add(0.0, 1.0, 0.0)

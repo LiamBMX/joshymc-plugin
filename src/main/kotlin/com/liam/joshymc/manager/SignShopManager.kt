@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -802,7 +803,7 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
         }
 
         // Give buyer the exact item that was in the chest (preserves actual enchants, PDC, etc.)
-        buyer.inventory.addItem(removedItem)
+        plugin.giveItemSafely(buyer, removedItem)
 
         buyer.playSound(buyer.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f)
         plugin.commsManager.send(
@@ -871,10 +872,7 @@ class SignShopManager(private val plugin: Joshymc) : Listener {
 
         // Give buyer the exact items that were in the chest (preserves enchants, PDC, etc.)
         for (item in removedItems) {
-            val overflow = buyer.inventory.addItem(item)
-            for (leftover in overflow.values) {
-                buyer.world.dropItemNaturally(buyer.location, leftover)
-            }
+            plugin.giveItemSafely(buyer, item)
         }
 
         buyer.playSound(buyer.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f)

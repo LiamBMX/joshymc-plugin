@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -69,7 +70,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
             val eggs = plugin.itemManager.getAllItems().filter { it.id.endsWith("_egg") }
             for (egg in eggs) {
-                target.inventory.addItem(egg.createItemStack(amount))
+                plugin.giveItemSafely(target, egg.createItemStack(amount))
             }
             sender.sendMessage(
                 Component.text("Gave ${eggs.size} eggs (x$amount) to ${target.name}", NamedTextColor.GREEN)
@@ -97,7 +98,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
 
-        target.inventory.addItem(customItem.createItemStack(amount))
+        plugin.giveItemSafely(target, customItem.createItemStack(amount))
         sender.sendMessage(
             Component.text("Gave ", NamedTextColor.GREEN)
                 .append(customItem.displayName)

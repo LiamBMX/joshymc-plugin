@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -115,10 +116,7 @@ class PhysicalVoucherManager(private val plugin: Joshymc) {
     /** Adds vouchers to the player's inventory, safely dropping any overflow at their feet. */
     fun give(player: Player, id: String, amount: Int = 1): Boolean {
         val stack = createVoucherStack(id, amount) ?: return false
-        val leftover = player.inventory.addItem(stack)
-        for ((_, item) in leftover) {
-            player.world.dropItemNaturally(player.location, item)
-        }
+        plugin.giveItemSafely(player, stack)
         return true
     }
 

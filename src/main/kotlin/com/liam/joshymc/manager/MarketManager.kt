@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -564,10 +565,7 @@ class MarketManager(private val plugin: Joshymc) {
         plugin.economyManager.withdraw(player.uniqueId, totalCost)
 
         val items = ItemStack(material, amount)
-        val overflow = player.inventory.addItem(items)
-        for (remaining in overflow.values) {
-            player.world.dropItemNaturally(player.location, remaining)
-        }
+        plugin.giveItemSafely(player, items)
 
         recordTransaction(material, "BUY", amount)
 

@@ -2,6 +2,8 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.giveItemSafely
+import com.liam.joshymc.util.giveItemsSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -230,8 +232,7 @@ class GiftManager(private val plugin: Joshymc) : Listener {
     private fun returnPending(player: Player, pending: PendingGift) {
         if (pending.coins > 0) plugin.economyManager.deposit(player.uniqueId, pending.coins)
         for (item in pending.items) {
-            val leftover = player.inventory.addItem(item)
-            leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+            plugin.giveItemSafely(player, item)
         }
     }
 
@@ -303,8 +304,7 @@ class GiftManager(private val plugin: Joshymc) : Listener {
         val pending = pendingGifts[player.uniqueId] ?: return
         if (index < 0 || index >= pending.items.size) return
         val item = pending.items.removeAt(index)
-        val leftover = player.inventory.addItem(item)
-        leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+        plugin.giveItemSafely(player, item)
     }
 
     fun promptCoins(player: Player) {
@@ -468,8 +468,7 @@ class GiftManager(private val plugin: Joshymc) : Listener {
         }
 
         if (gift.coins > 0) plugin.economyManager.deposit(player.uniqueId, gift.coins)
-        val leftover = player.inventory.addItem(*items.toTypedArray())
-        leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+        plugin.giveItemsSafely(player, items)
         plugin.databaseManager.execute("DELETE FROM gift_items WHERE gift_id = ?", id)
 
         plugin.commsManager.send(player, Component.text("Gift #$id cancelled and refunded.", NamedTextColor.GREEN))
@@ -524,8 +523,7 @@ class GiftManager(private val plugin: Joshymc) : Listener {
         }
 
         if (gift.coins > 0) plugin.economyManager.deposit(player.uniqueId, gift.coins)
-        val leftover = player.inventory.addItem(*items.toTypedArray())
-        leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+        plugin.giveItemsSafely(player, items)
         plugin.databaseManager.execute("DELETE FROM gift_items WHERE gift_id = ?", id)
 
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.2f)
