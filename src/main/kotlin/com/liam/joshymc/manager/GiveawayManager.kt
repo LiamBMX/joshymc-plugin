@@ -1088,6 +1088,22 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         player.playSound(player.location, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.2f)
     }
 
+    /**
+     * Cancelling an [InventoryClickEvent]/[InventoryDragEvent] doesn't always beat the
+     * client's local prediction of a NUMBER_KEY/SWAP_OFFHAND swap or a drag — the
+     * container's state id only advances after our handler returns, so a resync sent
+     * from inside the event can arrive with a stale state id and get ignored by the
+     * client. Send one immediately (fixes the common case) and one on the next tick,
+     * after the transaction has actually finished server-side, to guarantee the client
+     * corrects itself even when the immediate resync loses that race.
+     */
+    private fun resyncNextTick(player: Player) {
+        player.updateInventory()
+        Bukkit.getScheduler().runTask(plugin, Runnable {
+            if (player.isOnline) player.updateInventory()
+        })
+    }
+
     @EventHandler
     fun onItemEditorClick(event: InventoryClickEvent) {
         val player = event.whoClicked as? Player ?: return
@@ -1100,7 +1116,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         // player happens to be holding a matching material. Block it outright.
         if (event.action == InventoryAction.COLLECT_TO_CURSOR) {
             event.isCancelled = true
-            player.updateInventory()
+            resyncNextTick(player)
             return
         }
 
@@ -1117,7 +1133,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
             // stop the client from visually predicting the swap — force a resync so a
             // control item (the confirm wool, Clear/Back buttons) can never end up
             // looking like it moved into the player's hotbar/off-hand.
-            player.updateInventory()
+            resyncNextTick(player)
             when (slot) {
                 ITEM_EDITOR_CLEAR_SLOT -> clearItemEditorSlots(player, inv, rewardSlotCount)
                 ITEM_EDITOR_BACK_SLOT -> {
@@ -1149,7 +1165,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         val rewardSlotCount = itemEditorRewardSlotCount()
         if (event.rawSlots.any { it < inv.size && it >= rewardSlotCount }) {
             event.isCancelled = true
-            player.updateInventory()
+            resyncNextTick(player)
         }
     }
 
