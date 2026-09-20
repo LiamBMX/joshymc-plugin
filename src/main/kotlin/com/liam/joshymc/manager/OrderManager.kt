@@ -173,6 +173,9 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             .sortedBy { plugin.serverShopManager.formatMaterialName(it) }
     }
 
+    /** Public accessor for /order tab-completion — the same catalog Item Selection uses. */
+    fun orderableMaterialCatalog(): List<Material> = orderableMaterials
+
     private var expiryTask: BukkitTask? = null
 
     // ---- Lifecycle ----
@@ -812,19 +815,37 @@ class OrderManager(private val plugin: Joshymc) : Listener {
 
     // ---- Queries ----
 
-    fun getActiveOrders(page: Int, sort: SortMode, pageSize: Int = 28): List<BuyOrder> {
+    fun getActiveOrders(page: Int, sort: SortMode, pageSize: Int = 28, material: Material? = null): List<BuyOrder> {
+        if (material == null) {
+            val offset = page * pageSize
+            return plugin.databaseManager.query(
+                "SELECT * FROM buy_orders WHERE remaining_qty > 0 AND expires_at > ? ORDER BY ${sort.orderBy} LIMIT ? OFFSET ?",
+                System.currentTimeMillis(), pageSize, offset
+            ) { rs -> mapOrder(rs) }
+        }
+
+        // The item column is a serialized ItemStack blob, so material filtering can't happen in SQL —
+        // pull every active order and filter in memory (bounded by per-player order limits).
+        val matching = plugin.databaseManager.query(
+            "SELECT * FROM buy_orders WHERE remaining_qty > 0 AND expires_at > ? ORDER BY ${sort.orderBy}",
+            System.currentTimeMillis()
+        ) { rs -> mapOrder(rs) }.filter { it.item.type == material }
+
         val offset = page * pageSize
-        return plugin.databaseManager.query(
-            "SELECT * FROM buy_orders WHERE remaining_qty > 0 AND expires_at > ? ORDER BY ${sort.orderBy} LIMIT ? OFFSET ?",
-            System.currentTimeMillis(), pageSize, offset
-        ) { rs -> mapOrder(rs) }
+        return if (offset >= matching.size) emptyList() else matching.drop(offset).take(pageSize)
     }
 
-    fun getTotalActiveOrders(): Int {
-        return plugin.databaseManager.queryFirst(
-            "SELECT COUNT(*) as cnt FROM buy_orders WHERE remaining_qty > 0 AND expires_at > ?",
+    fun getTotalActiveOrders(material: Material? = null): Int {
+        if (material == null) {
+            return plugin.databaseManager.queryFirst(
+                "SELECT COUNT(*) as cnt FROM buy_orders WHERE remaining_qty > 0 AND expires_at > ?",
+                System.currentTimeMillis()
+            ) { rs -> rs.getInt("cnt") } ?: 0
+        }
+        return plugin.databaseManager.query(
+            "SELECT item FROM buy_orders WHERE remaining_qty > 0 AND expires_at > ?",
             System.currentTimeMillis()
-        ) { rs -> rs.getInt("cnt") } ?: 0
+        ) { rs -> deserializeItem(rs.getString("item")).type }.count { it == material }
     }
 
     fun getPlayerOrders(uuid: UUID): List<BuyOrder> {
@@ -1227,11 +1248,11 @@ class OrderManager(private val plugin: Joshymc) : Listener {
 
     // ---- Main marketplace GUI ----
 
-    fun openMainGui(player: Player, page: Int = 0) {
+    fun openMainGui(player: Player, page: Int = 0, materialFilter: Material? = null) {
         val sort = playerSort.getOrDefault(player.uniqueId, SortMode.NEWEST)
         val gui = borderedGui(MAIN_TITLE, 54)
 
-        val orders = getActiveOrders(page, sort)
+        val orders = getActiveOrders(page, sort, material = materialFilter)
         val slots = contentSlots(54)
         for ((index, order) in orders.withIndex()) {
             if (index >= slots.size) break
@@ -1245,11 +1266,11 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        val total = getTotalActiveOrders()
+        val total = getTotalActiveOrders(materialFilter)
         val totalPages = maxOf(1, (total + 27) / 28)
 
         if (page > 0) {
-            gui.setItem(46, simpleIcon(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ -> openMainGui(p, page - 1) }
+            gui.setItem(46, simpleIcon(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ -> openMainGui(p, page - 1, materialFilter) }
         }
 
         val myOrderCount = getPlayerActiveOrderCount(player.uniqueId)
@@ -1281,18 +1302,36 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             listOf(Component.empty(), Component.text("  Click to change", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
         )) { p, _ ->
             playerSort[p.uniqueId] = sort.next()
-            openMainGui(p, 0)
+            openMainGui(p, 0, materialFilter)
         }
 
         if (page < totalPages - 1) {
-            gui.setItem(52, simpleIcon(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ -> openMainGui(p, page + 1) }
+            gui.setItem(52, simpleIcon(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ -> openMainGui(p, page + 1, materialFilter) }
         }
 
         gui.inventory.setItem(4, simpleIcon(
             Material.PAPER,
             Component.text("Page ${page + 1}/$totalPages", NamedTextColor.WHITE),
-            listOf(Component.text("  $total active order(s)", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+            listOfNotNull(
+                Component.text("  $total active order(s)", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                materialFilter?.let {
+                    Component.text("  Filtered: ${plugin.serverShopManager.formatMaterialName(it)}", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)
+                }
+            )
         ))
+
+        if (materialFilter != null) {
+            gui.setItem(45, simpleIcon(
+                Material.BARRIER,
+                Component.text("Clear Filter", NamedTextColor.RED).decoration(TextDecoration.BOLD, true),
+                listOf(
+                    Component.empty(),
+                    loreLine("Filtering: ").append(Component.text(plugin.serverShopManager.formatMaterialName(materialFilter), NamedTextColor.WHITE)),
+                    Component.empty(),
+                    Component.text("  Click to show all orders", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+                )
+            )) { p, _ -> openMainGui(p, 0) }
+        }
 
         playerPages[player.uniqueId] = page
         plugin.guiManager.open(player, gui)
