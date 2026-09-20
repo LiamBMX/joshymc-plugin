@@ -1,0 +1,14 @@
+# Banned Words Configuration
+#
+# Words/phrases here are censored out of public chat (and blocked from
+# nicknames/stock tickers, which already reuse this filter). Matching is
+# case-insensitive and also catches obvious evasion attempts:
+#   - leetspeak substitutions: 1/! -> i, 0 -> o, 3 -> e, 4/@ -> a, 5/$ -> s
+#   - letters split up with spaces, dots, hyphens, or underscores
+#
+# Add/remove entries below and reload the plugin to apply changes.
+# Phrases with spaces are supported too.
+
+banned-words:
+  - exampleword
+  - "example phrase"
