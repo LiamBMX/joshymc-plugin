@@ -195,7 +195,9 @@ jobs:
         # softprops/action-gh-release creates the release via GITHUB_TOKEN, so the
         # `release: published` event is suppressed (anti-recursion). Dispatch the
         # notify workflow directly because workflow_dispatch is exempt from that rule.
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
+        # A notification outage must not mark an already-published JAR as failed.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
