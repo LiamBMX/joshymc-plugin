@@ -410,6 +410,22 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
 
         if (rows.isEmpty()) return
 
+        // TEMPORARY (issue #931): staff-mode state is captured once up front so these
+        // debug lines can show the exact branch depositItemSafely takes for this player,
+        // pinpointing where a live delivery might diverge from the Gift path. Remove once
+        // the reported live-server behavior is confirmed fixed or root-caused.
+        val modMode = plugin.modModeManager.isModMode(player)
+        val traineeMode = plugin.traineeModeManager.isTraineeMode(player)
+        val branch = when {
+            modMode -> "MODMODE_BACKUP"
+            traineeMode -> "TRAINEEMODE_BACKUP"
+            else -> "LIVE_INVENTORY"
+        }
+        plugin.logger.info(
+            "[Giveaway][DEBUG] deliverPending start: player=${player.name} uuid=${player.uniqueId} " +
+                "pendingRows=${rows.size} modMode=$modMode traineeMode=$traineeMode branch=$branch"
+        )
+
         var delivered = 0
         for ((rowId, itemBase64) in rows) {
             val item = deserializeItem(itemBase64)
@@ -417,6 +433,10 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
             // delivery — routes into the saved backup inventory (not the temp staff
             // loadout) while Moderator/Trainee Mode is active.
             val leftover = plugin.depositItemSafely(player, item)
+            plugin.logger.info(
+                "[Giveaway][DEBUG] row=$rowId item=${item.type} amount=${item.amount} branch=$branch " +
+                    "leftover=${leftover?.let { "${it.type} x${it.amount}" } ?: "none"}"
+            )
             if (leftover == null) {
                 plugin.databaseManager.execute("DELETE FROM giveaway_items WHERE id = ?", rowId)
                 delivered++
