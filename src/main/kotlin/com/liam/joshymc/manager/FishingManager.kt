@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.giveItemSafely
 import org.bukkit.Bukkit
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -270,9 +271,7 @@ class FishingManager(private val plugin: Joshymc) : Listener {
         } else {
             // No caught entity or not an item — remove it and give directly
             caught?.remove()
-            player.inventory.addItem(fishItem).values.forEach {
-                player.world.dropItemNaturally(player.location, it)
-            }
+            plugin.giveItemSafely(player, fishItem)
         }
 
         event.expToDrop = ThreadLocalRandom.current().nextInt(1, 7)
@@ -324,9 +323,7 @@ class FishingManager(private val plugin: Joshymc) : Listener {
         val weight = generateWeight(rarity)
         val fishItem = createFishItem(fish, weight, player)
 
-        player.inventory.addItem(fishItem).values.forEach {
-            player.world.dropItemNaturally(player.location, it)
-        }
+        plugin.giveItemSafely(player, fishItem)
 
         val nameComponent = plugin.commsManager.parseLegacy("${rarity.color}${fish.name}")
         plugin.commsManager.send(player,

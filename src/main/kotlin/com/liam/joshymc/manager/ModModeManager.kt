@@ -258,6 +258,30 @@ class ModModeManager(private val plugin: Joshymc) {
         player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.6f, 0.8f)
     }
 
+    /**
+     * Adds [item] to this player's saved Moderator Mode backup inventory (the
+     * inventory that gets restored on exit) rather than their live Mod Mode
+     * hotbar. Used by [com.liam.joshymc.util.giveItemSafely] so item rewards
+     * received while active never end up in the temporary staff loadout.
+     * Returns any leftover that didn't fit — the whole item if there's no
+     * pending backup at all, which should never happen while [isModMode] is true.
+     */
+    fun addItemToBackup(uuid: UUID, item: ItemStack): ItemStack? {
+        val data = plugin.databaseManager.queryFirst(
+            "SELECT inventory_data FROM modmode_backups WHERE uuid = ?", uuid.toString()
+        ) { rs -> rs.getString("inventory_data") } ?: return item
+
+        val temp = Bukkit.createInventory(null, 36)
+        temp.contents = deserializeArray(data, 36)
+        val leftover = temp.addItem(item).values.firstOrNull()
+
+        plugin.databaseManager.execute(
+            "UPDATE modmode_backups SET inventory_data = ? WHERE uuid = ?",
+            serializeArray(temp.contents), uuid.toString()
+        )
+        return leftover
+    }
+
     private fun saveBackup(player: Player) {
         val invData = serializeArray(player.inventory.contents)
         val armorData = serializeArray(player.inventory.armorContents)

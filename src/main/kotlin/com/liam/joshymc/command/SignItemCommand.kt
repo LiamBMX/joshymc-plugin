@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -77,10 +78,7 @@ class SignItemCommand(private val plugin: Joshymc) : CommandExecutor {
 
         if (itemInHand.amount > 1) {
             itemInHand.amount -= 1
-            val leftover = sender.inventory.addItem(signedItem)
-            for ((_, remainingItem) in leftover) {
-                sender.world.dropItemNaturally(sender.location, remainingItem)
-            }
+            plugin.giveItemSafely(sender, signedItem)
         } else {
             sender.inventory.setItemInMainHand(signedItem)
         }

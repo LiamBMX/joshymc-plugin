@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -358,9 +359,15 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             markNotifyPending(buyerUuid)
             return
         }
-        val leftover = buyer.inventory.addItem(*items.toTypedArray())
+        // Route into the saved backup inventory (not the temp staff loadout) while
+        // Moderator/Trainee Mode is active, same as every other reward delivery.
+        val leftover = when {
+            plugin.modModeManager.isModMode(buyer) -> items.mapNotNull { plugin.modModeManager.addItemToBackup(buyerUuid, it) }
+            plugin.traineeModeManager.isTraineeMode(buyer) -> items.mapNotNull { plugin.traineeModeManager.addItemToBackup(buyerUuid, it) }
+            else -> buyer.inventory.addItem(*items.toTypedArray()).values.toList()
+        }
         if (leftover.isNotEmpty()) {
-            depositToOverflowOrQueue(buyerUuid, leftover.values.toList())
+            depositToOverflowOrQueue(buyerUuid, leftover)
             plugin.commsManager.send(
                 buyer,
                 Component.text("Your inventory was full, so your Orders delivery was sent to ", NamedTextColor.YELLOW)
@@ -433,10 +440,7 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             )
             if (rowsDeleted == 0) continue
 
-            val leftover = player.inventory.addItem(delivery.item)
-            if (leftover.isNotEmpty()) {
-                leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
-            }
+            plugin.giveItemSafely(player, delivery.item)
             claimed++
         }
 

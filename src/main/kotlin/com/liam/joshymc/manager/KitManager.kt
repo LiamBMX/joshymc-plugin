@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -282,13 +283,11 @@ class KitManager(private val plugin: Joshymc) {
                     )
                 }
             }
-            if (slot < player.inventory.size && player.inventory.getItem(slot) == null) {
+            val staffMode = plugin.modModeManager.isModMode(player) || plugin.traineeModeManager.isTraineeMode(player)
+            if (!staffMode && slot < player.inventory.size && player.inventory.getItem(slot) == null) {
                 player.inventory.setItem(slot, clone)
             } else {
-                val leftover = player.inventory.addItem(clone)
-                for ((_, remaining) in leftover) {
-                    player.world.dropItemNaturally(player.location, remaining)
-                }
+                plugin.giveItemSafely(player, clone)
             }
         }
 
