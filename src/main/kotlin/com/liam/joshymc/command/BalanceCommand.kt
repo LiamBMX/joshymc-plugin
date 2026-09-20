@@ -10,6 +10,7 @@ import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
+import java.util.UUID
 
 class BalanceCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
@@ -25,15 +26,16 @@ class BalanceCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         if (args.isNotEmpty()) {
-            val target = Bukkit.getPlayer(args[0])
+            val target = resolveTarget(args[0])
             if (target == null) {
                 plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
                 return true
             }
-            val balance = plugin.economyManager.getBalance(target)
+            val (targetName, targetUuid) = target
+            val balance = plugin.economyManager.getBalance(targetUuid)
             plugin.commsManager.send(
                 sender,
-                Component.text(target.name, NamedTextColor.WHITE)
+                Component.text(targetName, NamedTextColor.WHITE)
                     .append(Component.text("'s balance: ", NamedTextColor.GRAY))
                     .append(Component.text(plugin.economyManager.format(balance), NamedTextColor.GOLD)),
                 CommunicationsManager.Category.ECONOMY
@@ -49,6 +51,13 @@ class BalanceCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             CommunicationsManager.Category.ECONOMY
         )
         return true
+    }
+
+    private fun resolveTarget(name: String): Pair<String, UUID>? {
+        val online = Bukkit.getPlayerExact(name)
+        if (online != null) return online.name to online.uniqueId
+        val cached = Bukkit.getOfflinePlayerIfCached(name) ?: return null
+        return (cached.name ?: name) to cached.uniqueId
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
