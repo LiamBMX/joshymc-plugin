@@ -8,6 +8,7 @@ import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.entity.Animals
 import org.bukkit.entity.ArmorStand
+import org.bukkit.entity.Enemy
 import org.bukkit.entity.EnderDragon
 import org.bukkit.entity.Item
 import org.bukkit.entity.LivingEntity
@@ -167,7 +168,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
     }
 
     /**
-     * Manually trigger a ground item clear with a 10-second countdown.
+     * Manually trigger a ground item + hostile mob clear with a 10-second countdown.
      */
     fun triggerManualClear() {
         if (isClearingInProgress) return
@@ -180,7 +181,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
             CommunicationsManager.Category.ADMIN
         )
         plugin.commsManager.broadcast(
-            Component.text("  Ground items clearing in ", NamedTextColor.YELLOW)
+            Component.text("  Items and hostile mobs clearing in ", NamedTextColor.YELLOW)
                 .append(Component.text("10 seconds", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
             CommunicationsManager.Category.ADMIN
         )
@@ -207,19 +208,28 @@ class LagCleanerManager(private val plugin: Joshymc) {
 
         // Execute clear at 10 seconds
         plugin.server.scheduler.scheduleSyncDelayedTask(plugin, {
-            var count = 0
+            var itemCount = 0
+            var mobCount = 0
             for (world in plugin.server.worlds) {
                 for (entity in world.entities) {
-                    if (entity is Item && !isShulkerBox(entity)) {
-                        entity.remove()
-                        count++
+                    when {
+                        entity is Item && !isShulkerBox(entity) -> {
+                            entity.remove()
+                            itemCount++
+                        }
+                        entity is Enemy && !isProtected(entity) -> {
+                            entity.remove()
+                            mobCount++
+                        }
                     }
                 }
             }
             plugin.commsManager.broadcast(
                 Component.text("\u2714 ", NamedTextColor.GREEN)
                     .append(Component.text("Cleared ", NamedTextColor.GREEN))
-                    .append(Component.text("$count ground items", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
+                    .append(Component.text("$itemCount items", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true))
+                    .append(Component.text(" and ", NamedTextColor.GREEN))
+                    .append(Component.text("$mobCount hostile mobs", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
                 CommunicationsManager.Category.ADMIN
             )
             isClearingInProgress = false
