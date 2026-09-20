@@ -84,6 +84,11 @@ jobs:
             exit 0
           fi
 
+          # Claude opts into the heavier post-release Paper boot with a PR label.
+          RUN_SMOKE_TEST=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels \
+            --jq 'any(.labels[]; .name == "paper-smoke-test")')
+          echo "Paper smoke test requested: $RUN_SMOKE_TEST"
+
           # Gate 3: no sensitive paths
           FILES=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json files \
             --jq '.files[].path')
@@ -137,10 +142,11 @@ jobs:
             --ref main \
             -f commit="$MERGE_SHA" \
             -f pr_number="$PR_NUMBER" \
-            -f issue_number="$ISSUE_N"
+            -f issue_number="$ISSUE_N" \
+            -f run_smoke_test="$RUN_SMOKE_TEST"
 
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
-            "Auto-release dispatched for commit \`$MERGE_SHA\`. The next patch version and verified JAR will appear in [Releases](https://github.com/$REPO/releases) once the queued Release workflow finishes."
+            "Auto-release dispatched for commit \`$MERGE_SHA\` (Paper smoke test: **$RUN_SMOKE_TEST**). The next patch version and verified JAR will appear in [Releases](https://github.com/$REPO/releases) once the queued Release workflow finishes."
 
   report-ci-failure:
     if: ${{ github.event.workflow_run.conclusion != 'success' && github.event.workflow_run.event == 'pull_request' }}
