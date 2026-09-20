@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.manager.AuctionManager
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -29,8 +30,8 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 return true
             }
 
-            if (args.size < 2) {
-                plugin.commsManager.send(sender, Component.text("Usage: /ah sell <price>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            if (args.size < 3) {
+                plugin.commsManager.send(sender, Component.text("Usage: /ah sell <price> <money/credits>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
                 return true
             }
 
@@ -40,7 +41,13 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 return true
             }
 
-            plugin.auctionManager.listItem(sender, price)
+            val currency = AuctionManager.Currency.parse(args[2])
+            if (currency == null) {
+                plugin.commsManager.send(sender, Component.text("Invalid currency. Use 'money' or 'credits'.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                return true
+            }
+
+            plugin.auctionManager.listItem(sender, price, currency)
             return true
         }
 
@@ -104,6 +111,9 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
         if (args.size == 3 && args[0].equals("bid", ignoreCase = true) && sender.hasPermission("joshymc.ah.sell")) {
             return listOf("5m", "15m", "30m", "1h", "2h").filter { it.startsWith(args[2].lowercase()) }
+        }
+        if (args.size == 3 && args[0].equals("sell", ignoreCase = true) && sender.hasPermission("joshymc.ah.sell")) {
+            return listOf("money", "credits").filter { it.startsWith(args[2].lowercase()) }
         }
         return emptyList()
     }
