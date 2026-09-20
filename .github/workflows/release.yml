@@ -22,6 +22,11 @@ on:
         description: 'Linked issue number for failure reporting.'
         required: false
         default: ''
+      run_smoke_test:
+        description: 'Boot a disposable Paper server after the JAR is published.'
+        required: false
+        type: boolean
+        default: false
 
 # Serialize releases so two quickly merged PRs cannot reserve the same version.
 concurrency:
@@ -38,6 +43,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
+      source_sha: ${{ steps.source.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -257,6 +266,143 @@ jobs:
         run: |
           set -euo pipefail
           MESSAGE="Release failed for commit \`${SOURCE_SHA:-unknown}\`. No JAR should be deployed from this run. Review the [Release workflow logs]($RUN_URL)."
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$MESSAGE" || true
+          fi
+          if [ -n "$ISSUE_NUMBER" ]; then
+            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "$MESSAGE" || true
+          fi
+
+  paper-smoke-test:
+    name: Optional Paper startup smoke test
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_smoke_test }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Set up Java 25 for Paper
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Download verified release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: joshymc-${{ needs.build.outputs.version }}
+          path: artifact
+
+      - name: Download latest stable Paper 1.21.11
+        env:
+          PAPER_VERSION: '1.21.11'
+          USER_AGENT: 'JoshyMC-CI/1.0 (https://github.com/LiamBMX/joshymc-plugin)'
+        run: |
+          set -euo pipefail
+          mkdir -p smoke/plugins
+          cp "artifact/joshymc-${{ needs.build.outputs.version }}.jar" smoke/plugins/
+
+          BUILDS=$(curl --fail --silent --show-error --retry 3 \
+            -H "User-Agent: $USER_AGENT" \
+            "https://fill.papermc.io/v3/projects/paper/versions/$PAPER_VERSION/builds")
+          PAPER_URL=$(echo "$BUILDS" | jq -r \
+            'first(.[] | select(.channel == "STABLE") | .downloads."server:default".url) // empty')
+          if [ -z "$PAPER_URL" ]; then
+            echo "::error::No stable Paper build found for $PAPER_VERSION"
+            exit 1
+          fi
+          curl --fail --location --show-error --retry 3 \
+            -H "User-Agent: $USER_AGENT" \
+            "$PAPER_URL" -o smoke/paper.jar
+          echo 'eula=true' > smoke/eula.txt
+          cat > smoke/server.properties <<'EOF'
+          online-mode=false
+          network-compression-threshold=-1
+          spawn-protection=0
+          view-distance=2
+          simulation-distance=2
+          max-players=1
+          EOF
+
+      - name: Boot Paper and verify JoshyMC enables
+        env:
+          EXPECTED_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd smoke
+          mkfifo console
+          exec 3<>console
+          java -Xms512M -Xmx2G -jar paper.jar --nogui <console >server.log 2>&1 &
+          SERVER_PID=$!
+
+          stop_server() {
+            if kill -0 "$SERVER_PID" 2>/dev/null; then
+              echo stop >&3 || true
+              for _ in $(seq 1 30); do
+                kill -0 "$SERVER_PID" 2>/dev/null || return 0
+                sleep 1
+              done
+              kill "$SERVER_PID" 2>/dev/null || true
+            fi
+          }
+          trap stop_server EXIT
+
+          STARTED=false
+          for _ in $(seq 1 240); do
+            if grep -Fq 'Done (' server.log 2>/dev/null; then
+              STARTED=true
+              break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$STARTED" != true ]; then
+            echo "::error::Paper did not finish starting within 8 minutes"
+            tail -n 300 server.log || true
+            exit 1
+          fi
+          if ! grep -Fq "Enabling joshymc v$EXPECTED_VERSION" server.log; then
+            echo "::error::JoshyMC $EXPECTED_VERSION did not report successful enablement"
+            tail -n 300 server.log || true
+            exit 1
+          fi
+          if grep -Eq 'Error occurred while enabling joshymc|Could not load.*joshymc|Disabling joshymc' server.log; then
+            echo "::error::JoshyMC logged a load/enable failure"
+            tail -n 300 server.log || true
+            exit 1
+          fi
+
+          echo "Paper started and JoshyMC $EXPECTED_VERSION enabled successfully."
+          stop_server
+          trap - EXIT
+
+      - name: Upload Paper log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-smoke-log-${{ needs.build.outputs.version }}
+          path: smoke/server.log
+          if-no-files-found: ignore
+
+      - name: Report smoke-test failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.inputs.pr_number }}
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          MESSAGE="The JAR for \`$TAG\` was published, but its optional Paper startup smoke test failed. Do not deploy it until the [Paper log and workflow run]($RUN_URL) are reviewed."
           if [ -n "$PR_NUMBER" ]; then
             gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$MESSAGE" || true
           fi

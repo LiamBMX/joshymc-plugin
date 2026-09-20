@@ -86,6 +86,16 @@ jobs:
                  a PR that says "Closes #<number>". Do NOT cut a release —
                  humans review and merge first.
 
+               - After opening the PR, decide whether it needs a real Paper
+                 startup smoke test. This is an opt-in tool, requested by adding
+                 the `paper-smoke-test` label to the PR with `gh pr edit`.
+                 Add it when the change could affect plugin startup, lifecycle,
+                 configuration loading/migrations, databases, plugin.yml,
+                 dependency wiring, or broad manager initialization. Skip it
+                 for small isolated command text, formatting, or narrow gameplay
+                 behavior changes. Briefly state the decision in the PR body.
+                 The normal `./gradlew build` remains mandatory either way.
+
                Stay conservative: a bug fix doesn't need surrounding cleanup,
                and small changes are easier to review. Match existing style
                (Adventure API, commsManager.send, Kotlin only, no legacy
