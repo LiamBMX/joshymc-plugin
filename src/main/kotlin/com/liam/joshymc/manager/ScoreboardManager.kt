@@ -360,6 +360,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     // ── All-Time Peak Player Count ────────────────────────────────────
 
     private fun loadPeakPlayers() {
+        val dbFile = java.io.File(plugin.dataFolder, "data.db")
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS peak_players (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -367,19 +368,28 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
-        peakPlayers = plugin.databaseManager.queryFirst(
+        val persisted = plugin.databaseManager.queryFirst(
             "SELECT count FROM peak_players WHERE id = 1"
-        ) { it.getInt("count") } ?: 0
+        ) { it.getInt("count") }
+        peakPlayers = persisted ?: 0
+
+        val online = Bukkit.getOnlinePlayers().size
+        plugin.logger.info("[PeakPlayers] DB path: ${dbFile.absolutePath}")
+        plugin.logger.info("[PeakPlayers] Persisted peak loaded: ${persisted ?: "none (row missing, defaulted to 0)"}")
+        plugin.logger.info("[PeakPlayers] Online at startup: $online")
+        plugin.logger.info("[PeakPlayers] In-memory peak after startup: $peakPlayers")
     }
 
     /** Bukkit.getOnlinePlayers() only ever contains real connected players — NPCs/bots never appear here. */
     private fun checkPeakPlayers(online: Int) {
         if (online <= peakPlayers) return
+        val previous = peakPlayers
         peakPlayers = online
         plugin.databaseManager.execute(
             "INSERT OR REPLACE INTO peak_players (id, count) VALUES (1, ?)",
             peakPlayers
         )
+        plugin.logger.info("[PeakPlayers] New all-time peak: $peakPlayers (previous: $previous)")
         checkMilestoneReward(peakPlayers)
     }
 
