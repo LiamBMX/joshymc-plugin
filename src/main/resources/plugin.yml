@@ -129,7 +129,7 @@ commands:
     aliases: [bin, dispose]
   ah:
     description: Open the auction house
-    usage: /ah [sell <price>] [bid <starting price>] [notify <on|off>]
+    usage: /ah [sell <price> <money/credits>] [bid <starting price>] [notify <on|off>]
     aliases: [auction, auctionhouse]
   giveaway:
     description: Browse, enter, and create player giveaways

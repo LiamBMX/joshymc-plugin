@@ -55,12 +55,25 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    enum class Currency {
+        MONEY, CREDITS;
+
+        companion object {
+            fun parse(input: String): Currency? = when (input.lowercase()) {
+                "money" -> MONEY
+                "credits" -> CREDITS
+                else -> null
+            }
+        }
+    }
+
     data class AuctionListing(
         val id: Int,
         val sellerUuid: UUID,
         val sellerName: String,
         val item: ItemStack,
         val price: Double,
+        val currency: Currency,
         val listedAt: Long,
         val expiresAt: Long
     )
@@ -122,6 +135,10 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
                 expires_at INTEGER NOT NULL
             )
         """.trimIndent())
+
+        try {
+            plugin.databaseManager.execute("ALTER TABLE auction_listings ADD COLUMN currency TEXT NOT NULL DEFAULT 'MONEY'")
+        } catch (_: Exception) { /* column already exists */ }
 
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS auction_expired (
@@ -200,11 +217,11 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
 
     fun hasNotifications(uuid: UUID) = uuid in notificationsEnabled
 
-    private fun broadcastListing(seller: Player, item: ItemStack, price: Double, isBid: Boolean) {
+    private fun broadcastListing(seller: Player, item: ItemStack, price: Double, isBid: Boolean, currency: Currency = Currency.MONEY) {
         val priceText = if (isBid)
             Component.text("starting at ", NamedTextColor.GRAY).append(Component.text(plugin.economyManager.format(price), NamedTextColor.GOLD))
         else
-            Component.text(plugin.economyManager.format(price), NamedTextColor.GOLD)
+            Component.text(formatPrice(price, currency), NamedTextColor.GOLD)
 
         val msg = Component.text("[AH] ", TextColor.color(0x55FFFF))
             .append(Component.text(seller.name, NamedTextColor.WHITE))
@@ -287,9 +304,17 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             sellerName = rs.getString("seller_name"),
             item = deserializeItem(rs.getString("item")),
             price = rs.getDouble("price"),
+            currency = Currency.parse(rs.getString("currency") ?: "MONEY") ?: Currency.MONEY,
             listedAt = rs.getLong("listed_at"),
             expiresAt = rs.getLong("expires_at")
         )
+    }
+
+    private fun formatPrice(amount: Double, currency: Currency): String {
+        return when (currency) {
+            Currency.MONEY -> plugin.economyManager.format(amount)
+            Currency.CREDITS -> "${plugin.creditsManager.format(amount)} Credits"
+        }
     }
 
     private fun mapExpired(rs: java.sql.ResultSet): ExpiredItem {
@@ -331,7 +356,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
 
     // ---- Core methods ----
 
-    fun listItem(player: Player, price: Double) {
+    fun listItem(player: Player, price: Double, currency: Currency = Currency.MONEY) {
         val held = player.inventory.itemInMainHand
         if (held.type == Material.AIR) {
             plugin.commsManager.send(player, Component.text("Hold the item you want to sell.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
@@ -355,8 +380,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         val serialized = serializeItem(held)
 
         plugin.databaseManager.execute(
-            "INSERT INTO auction_listings (seller_uuid, seller_name, item, price, listed_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
-            player.uniqueId.toString(), player.name, serialized, price, now, expiresAt
+            "INSERT INTO auction_listings (seller_uuid, seller_name, item, price, currency, listed_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            player.uniqueId.toString(), player.name, serialized, price, currency.name, now, expiresAt
         )
 
         player.inventory.setItemInMainHand(null)
@@ -367,11 +392,11 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             Component.text("Listed ", NamedTextColor.GREEN)
                 .append(held.displayName())
                 .append(Component.text(" for ", NamedTextColor.GREEN))
-                .append(Component.text(plugin.economyManager.format(price), NamedTextColor.GOLD)),
+                .append(Component.text(formatPrice(price, currency), NamedTextColor.GOLD)),
             CommunicationsManager.Category.DEFAULT
         )
 
-        broadcastListing(player, held, price, isBid = false)
+        broadcastListing(player, held, price, isBid = false, currency = currency)
     }
 
     fun buyItem(player: Player, listingId: Int) {
@@ -391,7 +416,11 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        if (plugin.economyManager.getBalance(player) < listing.price) {
+        val buyerBalance = when (listing.currency) {
+            Currency.MONEY -> plugin.economyManager.getBalance(player)
+            Currency.CREDITS -> plugin.creditsManager.getBalance(player)
+        }
+        if (buyerBalance < listing.price) {
             plugin.commsManager.send(player, Component.text("You cannot afford this item.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
@@ -416,12 +445,16 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         }
 
         // Listing is now claimed by this buyer — safe to proceed
-        if (!plugin.economyManager.withdraw(player.uniqueId, listing.price)) {
+        val withdrawn = when (listing.currency) {
+            Currency.MONEY -> plugin.economyManager.withdraw(player.uniqueId, listing.price)
+            Currency.CREDITS -> plugin.creditsManager.withdraw(player.uniqueId, listing.price)
+        }
+        if (!withdrawn) {
             // Withdraw failed — re-insert the listing to undo the delete
             plugin.databaseManager.execute(
-                "INSERT INTO auction_listings (id, seller_uuid, seller_name, item, price, listed_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO auction_listings (id, seller_uuid, seller_name, item, price, currency, listed_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 listing.id, listing.sellerUuid.toString(), listing.sellerName,
-                serializeItem(listing.item), listing.price, listing.listedAt, listing.expiresAt
+                serializeItem(listing.item), listing.price, listing.currency.name, listing.listedAt, listing.expiresAt
             )
             plugin.commsManager.send(player, Component.text("Transaction failed.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
@@ -430,7 +463,10 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         // Calculate tax and pay seller
         val tax = listing.price * (taxPercent / 100.0)
         val sellerPayout = listing.price - tax
-        plugin.economyManager.deposit(listing.sellerUuid, sellerPayout)
+        when (listing.currency) {
+            Currency.MONEY -> plugin.economyManager.deposit(listing.sellerUuid, sellerPayout)
+            Currency.CREDITS -> plugin.creditsManager.deposit(listing.sellerUuid, sellerPayout)
+        }
 
         // Give item to buyer, routing to /overflow (then the expired-items queue) if full
         deliverOrHold(player.uniqueId, listing.item)
@@ -439,7 +475,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         plugin.commsManager.send(
             player,
             Component.text("Purchased for ", NamedTextColor.GREEN)
-                .append(Component.text(plugin.economyManager.format(listing.price), NamedTextColor.GOLD))
+                .append(Component.text(formatPrice(listing.price, listing.currency), NamedTextColor.GOLD))
                 .append(Component.text("!", NamedTextColor.GREEN)),
             CommunicationsManager.Category.DEFAULT
         )
@@ -452,8 +488,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
                 Component.text("Your listing was purchased by ", NamedTextColor.GREEN)
                     .append(Component.text(player.name, NamedTextColor.WHITE))
                     .append(Component.text(" for ", NamedTextColor.GREEN))
-                    .append(Component.text(plugin.economyManager.format(listing.price), NamedTextColor.GOLD))
-                    .append(Component.text(" (${plugin.economyManager.format(tax)} tax).", NamedTextColor.GRAY)),
+                    .append(Component.text(formatPrice(listing.price, listing.currency), NamedTextColor.GOLD))
+                    .append(Component.text(" (${formatPrice(tax, listing.currency)} tax).", NamedTextColor.GRAY)),
                 CommunicationsManager.Category.DEFAULT
             )
         }
@@ -1018,7 +1054,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             newLore.add(
                 Component.text("  Price: ", NamedTextColor.GRAY)
                     .decoration(TextDecoration.ITALIC, false)
-                    .append(Component.text(plugin.economyManager.format(listing.price), NamedTextColor.GOLD))
+                    .append(Component.text(formatPrice(listing.price, listing.currency), NamedTextColor.GOLD))
             )
             newLore.add(
                 Component.text("  Seller: ", NamedTextColor.GRAY)
@@ -1057,7 +1093,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
                 val newLore = (meta.lore() ?: mutableListOf()).toMutableList()
                 newLore.add(Component.empty())
                 newLore.add(Component.text("  [SELL]", NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, true))
-                newLore.add(Component.text("  Price: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false).append(Component.text(plugin.economyManager.format(listing.price), NamedTextColor.GOLD)))
+                newLore.add(Component.text("  Price: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false).append(Component.text(formatPrice(listing.price, listing.currency), NamedTextColor.GOLD)))
                 newLore.add(Component.text("  Time left: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false).append(Component.text(formatTimeLeft(listing.expiresAt), NamedTextColor.YELLOW)))
                 newLore.add(Component.empty())
                 newLore.add(Component.text("  Click to cancel", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
@@ -1341,7 +1377,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             newLore.add(
                 Component.text("  Price: ", NamedTextColor.GRAY)
                     .decoration(TextDecoration.ITALIC, false)
-                    .append(Component.text(plugin.economyManager.format(listing.price), NamedTextColor.GOLD))
+                    .append(Component.text(formatPrice(listing.price, listing.currency), NamedTextColor.GOLD))
             )
             newLore.add(
                 Component.text("  Seller: ", NamedTextColor.GRAY)
