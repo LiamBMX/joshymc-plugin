@@ -8,10 +8,10 @@ import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.entity.Animals
 import org.bukkit.entity.ArmorStand
-import org.bukkit.entity.Enemy
+import org.bukkit.entity.Entity
 import org.bukkit.entity.EnderDragon
 import org.bukkit.entity.Item
-import org.bukkit.entity.LivingEntity
+import org.bukkit.entity.Monster
 import org.bukkit.entity.NPC
 import org.bukkit.entity.Player
 import org.bukkit.entity.Shulker
@@ -45,7 +45,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
             checkAndClear()
         }, checkTicks, checkTicks)
 
-        plugin.logger.info("[LagCleaner] Monitoring entities (threshold: $entityThreshold entities, $itemThreshold items, checking every ${checkIntervalSeconds}s).")
+        plugin.logger.info("[LagCleaner] Monitoring entities (thresholds: $entityThreshold hostile mobs, $passiveMobThreshold passive mobs, $itemThreshold items, checking every ${checkIntervalSeconds}s).")
     }
 
     fun stop() {
@@ -57,32 +57,33 @@ class LagCleanerManager(private val plugin: Joshymc) {
     }
 
     private fun checkAndClear() {
-        var totalEntities = 0
-        var totalItems = 0
+        var hostileTotal = 0
+        var passiveTotal = 0
+        var itemTotal = 0
 
         for (world in plugin.server.worlds) {
             for (entity in world.entities) {
                 when {
-                    entity is Item -> totalItems++
-                    entity is LivingEntity && entity !is Player && !isProtected(entity) -> totalEntities++
+                    entity is Item -> itemTotal++
+                    isEligibleHostileForLagClear(entity) -> hostileTotal++
+                    isEligiblePassiveForLagClear(entity) -> passiveTotal++
                 }
             }
         }
 
-        val needsClear = totalEntities >= entityThreshold || totalItems >= itemThreshold
+        val hostileExceeded = hostileTotal >= entityThreshold
+        val passiveExceeded = passiveTotal >= passiveMobThreshold
+        val itemExceeded = itemTotal >= itemThreshold
 
-        if (!needsClear) return
+        if (!hostileExceeded && !passiveExceeded && !itemExceeded) return
 
         isClearingInProgress = true
 
-        val reason = when {
-            totalEntities >= entityThreshold && totalItems >= itemThreshold ->
-                "$totalEntities entities and $totalItems ground items detected"
-            totalEntities >= entityThreshold ->
-                "$totalEntities entities detected"
-            else ->
-                "$totalItems ground items detected"
-        }
+        val reasonParts = mutableListOf<String>()
+        if (hostileExceeded) reasonParts.add("$hostileTotal hostile mobs")
+        if (passiveExceeded) reasonParts.add("$passiveTotal passive mobs")
+        if (itemExceeded) reasonParts.add("$itemTotal dropped items")
+        val reason = "${reasonParts.joinToString(" and ")} detected"
 
         // 30 second warning
         plugin.commsManager.broadcast(
@@ -129,13 +130,19 @@ class LagCleanerManager(private val plugin: Joshymc) {
         var itemCount = 0
         var mobCount = 0
 
-        // Count passive mobs first to decide whether to clear them
+        // Re-count eligible hostile/passive mobs at execution time to decide which
+        // categories still warrant a clear (population may have shifted during the countdown).
+        var hostileTotal = 0
         var passiveTotal = 0
         for (world in plugin.server.worlds) {
             for (entity in world.entities) {
-                if (entity is Animals && entity !is Player && !isProtected(entity)) passiveTotal++
+                when {
+                    isEligibleHostileForLagClear(entity) -> hostileTotal++
+                    isEligiblePassiveForLagClear(entity) -> passiveTotal++
+                }
             }
         }
+        val clearHostile = hostileTotal >= entityThreshold
         val clearPassive = passiveTotal >= passiveMobThreshold
 
         for (world in plugin.server.worlds) {
@@ -146,12 +153,13 @@ class LagCleanerManager(private val plugin: Joshymc) {
                         entity.remove()
                         itemCount++
                     }
-                    // Clear living non-player mobs; passive mobs only if above threshold
-                    entity is LivingEntity && entity !is Player && !isProtected(entity) -> {
-                        if (clearPassive || entity !is Animals) {
-                            entity.remove()
-                            mobCount++
-                        }
+                    clearHostile && isEligibleHostileForLagClear(entity) -> {
+                        entity.remove()
+                        mobCount++
+                    }
+                    clearPassive && isEligiblePassiveForLagClear(entity) -> {
+                        entity.remove()
+                        mobCount++
                     }
                 }
             }
@@ -217,7 +225,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
                             entity.remove()
                             itemCount++
                         }
-                        entity is Enemy && !isProtected(entity) -> {
+                        isEligibleHostileForLagClear(entity) -> {
                             entity.remove()
                             mobCount++
                         }
@@ -238,6 +246,17 @@ class LagCleanerManager(private val plugin: Joshymc) {
 
     private fun isShulkerBox(item: Item): Boolean =
         item.itemStack.type.name.endsWith("SHULKER_BOX")
+
+    /**
+     * Centralized eligibility checks shared by the automatic threshold counters,
+     * the automatic clear, and manual `/admin lagclear` so counting and removal
+     * never disagree on what's actually eligible.
+     */
+    private fun isEligibleHostileForLagClear(entity: Entity): Boolean =
+        entity is Monster && !isProtected(entity)
+
+    private fun isEligiblePassiveForLagClear(entity: Entity): Boolean =
+        entity is Animals && entity !is Player && !isProtected(entity)
 
     /**
      * Per Joshy's request: keep nametagged, tamed, villagers, and shulkers.
