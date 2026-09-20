@@ -11,6 +11,7 @@ import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.inventory.ItemStack
 import org.bukkit.scoreboard.DisplaySlot
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -27,12 +28,18 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     /** All-time peak concurrent (real, connected) player count. Single source of truth. */
     private var peakPlayers: Int = 0
 
+    /** Highest 5-player milestone (>= 20) that has already been rewarded. Persisted server-wide. */
+    private var highestRewardedMilestone: Int = 0
+
     fun start() {
         // Load kills/deaths from DB
         loadStats()
 
         // Load the persisted all-time peak player count
         loadPeakPlayers()
+
+        // Load (or first-time initialize) the highest player-count milestone already rewarded
+        loadMilestoneState()
 
         // Set up scoreboards for all online players
         for (player in Bukkit.getOnlinePlayers()) {
@@ -373,6 +380,85 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
             "INSERT OR REPLACE INTO peak_players (id, count) VALUES (1, ?)",
             peakPlayers
         )
+        checkMilestoneReward(peakPlayers)
+    }
+
+    // ── Peak Player Milestone Rewards ─────────────────────────────────
+
+    private fun loadMilestoneState() {
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS player_milestones (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                highest_rewarded INTEGER NOT NULL DEFAULT 0
+            )
+        """.trimIndent())
+
+        val stored = plugin.databaseManager.queryFirst(
+            "SELECT highest_rewarded FROM player_milestones WHERE id = 1"
+        ) { it.getInt("highest_rewarded") }
+
+        highestRewardedMilestone = if (stored != null) {
+            stored
+        } else {
+            // First deploy after this feature was added: don't retroactively reward
+            // milestones the server already historically passed — just baseline
+            // to the highest one already implied by the existing peak.
+            val initial = milestoneFor(peakPlayers)
+            plugin.databaseManager.execute(
+                "INSERT OR REPLACE INTO player_milestones (id, highest_rewarded) VALUES (1, ?)",
+                initial
+            )
+            initial
+        }
+    }
+
+    /** Highest completed 5-player milestone at or below [online], or 0 if below the 20-player threshold. */
+    private fun milestoneFor(online: Int): Int {
+        if (online < MILESTONE_START) return 0
+        return (online / MILESTONE_STEP) * MILESTONE_STEP
+    }
+
+    private fun checkMilestoneReward(peak: Int) {
+        val milestone = milestoneFor(peak)
+        if (milestone <= highestRewardedMilestone) return
+
+        highestRewardedMilestone = milestone
+        plugin.databaseManager.execute(
+            "INSERT OR REPLACE INTO player_milestones (id, highest_rewarded) VALUES (1, ?)",
+            highestRewardedMilestone
+        )
+
+        rewardOnlinePlayersForMilestone(milestone)
+    }
+
+    private fun rewardOnlinePlayersForMilestone(milestone: Int) {
+        val moneyKey = plugin.itemManager.getItem("money_key")
+        val creditKey = plugin.itemManager.getItem("credit_key")
+        if (moneyKey == null || creditKey == null) {
+            plugin.logger.warning("[Scoreboard] Could not find money_key/credit_key custom item(s) for milestone reward.")
+            return
+        }
+
+        for (player in Bukkit.getOnlinePlayers()) {
+            giveOrDrop(player, moneyKey.createItemStack().apply { amount = 5 })
+            giveOrDrop(player, creditKey.createItemStack().apply { amount = 1 })
+        }
+
+        plugin.commsManager.broadcast(
+            plugin.commsManager.parseLegacy(
+                "&6&l🎉 PLAYER MILESTONE!\n" +
+                "&e» &fWe just reached &6$milestone &fplayers online!\n" +
+                "&e» &fEveryone online received &a5 Money Keys &f+ &b1 Credit Key&f!"
+            )
+        )
+    }
+
+    /** Adds to inventory, safely dropping any overflow at the player's feet instead of discarding it. */
+    private fun giveOrDrop(player: Player, stack: ItemStack) {
+        val leftover = player.inventory.addItem(stack)
+        for (drop in leftover.values) {
+            player.world.dropItemNaturally(player.location, drop)
+        }
     }
 
     companion object {
@@ -380,5 +466,8 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
 
         /** e.g. "09/06/26 12:36 PM" — compact so the sidebar stays narrow. */
         private val DATE_TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MM/dd/yy hh:mm a")
+
+        private const val MILESTONE_START = 20
+        private const val MILESTONE_STEP = 5
     }
 }
