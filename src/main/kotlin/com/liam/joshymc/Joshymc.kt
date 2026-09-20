@@ -79,6 +79,18 @@ class Joshymc : JavaPlugin() {
     companion object {
         lateinit var instance: Joshymc
             private set
+
+        // Dotted-key prefixes the config migrator must never backfill into an existing
+        // config.yml: these are admin-defined name->value maps (rank ids, purchasable-rank
+        // keys) shipped with example entries, not fixed plugin schema. Restoring entries an
+        // admin deleted from these breaks LuckPerms setups that reuse rank names. Issue #911.
+        private val NO_BACKFILL_SECTION_PREFIXES = listOf(
+            "ranks.list.",
+            "homes.limits-by-rank.",
+            "warps.limits-by-rank.",
+            "orders.limits.",
+            "rank-perks."
+        )
     }
 
     fun isFeatureEnabled(feature: String): Boolean {
@@ -1167,7 +1179,10 @@ class Joshymc : JavaPlugin() {
      * only writes when the file is absent — without this, users upgrading from
      * older versions never see new sections (e.g. afk.reward.money).
      *
-     * We touch only missing keys, so hand-edited values are left alone.
+     * We touch only missing keys, so hand-edited values are left alone. Sections
+     * in [NO_BACKFILL_SECTION_PREFIXES] are admin-owned name->value maps (rank ids,
+     * purchasable-rank keys, ...) rather than fixed schema — entries an admin
+     * intentionally deletes from those must stay deleted (see issue #911).
      */
     private fun migrateConfig() {
         val configFile = File(dataFolder, "config.yml")
@@ -1185,6 +1200,7 @@ class Joshymc : JavaPlugin() {
         var changed = 0
         for (key in defaults.getKeys(true)) {
             if (defaults.isConfigurationSection(key)) continue
+            if (NO_BACKFILL_SECTION_PREFIXES.any { key.startsWith(it) }) continue
             if (!config.contains(key, true)) {
                 config.set(key, defaults.get(key))
                 changed++

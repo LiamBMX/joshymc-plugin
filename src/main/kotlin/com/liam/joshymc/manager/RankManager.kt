@@ -242,30 +242,16 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     private fun loadRanks() {
         ranks.clear()
-        var section = plugin.config.getConfigurationSection("ranks.list")
+        val section = plugin.config.getConfigurationSection("ranks.list")
 
-        // If no ranks in config, add defaults and save
+        // No ranks.list in config at all (e.g. the admin deliberately removed it to manage
+        // ranks entirely via LuckPerms). Fall back to a code-level "default" rank only, in
+        // memory — never write example ranks back into config.yml. See issue #911.
         if (section == null) {
-            plugin.logger.info("[Ranks] No ranks found in config, creating defaults...")
-            val defaults = mapOf(
-                "owner" to Triple("&4&lOwner", 100, "Special Ranks"),
-                "admin" to Triple("&c&lAdmin", 90, "Staff Ranks"),
-                "mod" to Triple("&9&lMod", 80, "Staff Ranks"),
-                "helper" to Triple("&a&lHelper", 70, "Staff Ranks"),
-                "vip" to Triple("&6&lVIP", 50, "Player Ranks"),
-                "member" to Triple("&7Member", 10, "Player Ranks"),
-                "default" to Triple("&8Player", 0, "Player Ranks")
-            )
-            for ((id, triple) in defaults) {
-                plugin.config.set("ranks.list.$id.tag", triple.first)
-                plugin.config.set("ranks.list.$id.weight", triple.second)
-                plugin.config.set("ranks.list.$id.category", triple.third)
-            }
-            plugin.saveConfig()
-            section = plugin.config.getConfigurationSection("ranks.list")
+            plugin.logger.info("[Ranks] No ranks.list found in config; using a code-level 'default' rank fallback only.")
+            ranks["default"] = Rank("default", "&8Player", 0, "Player Ranks")
+            return
         }
-
-        if (section == null) return
 
         for (id in section.getKeys(false)) {
             val rankSection = section.getConfigurationSection(id) ?: continue
