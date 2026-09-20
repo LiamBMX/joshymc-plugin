@@ -160,7 +160,10 @@ commands:
   orders:
     description: Open the Buy Orders marketplace
     usage: /orders [admin <view|info|cancel|remove> ...]
-    aliases: [buyorders, order]
+    aliases: [buyorders]
+  order:
+    description: Quick shortcut to search Buy Orders for a specific item
+    usage: /order [item]
   overflow:
     description: View items held in your persistent Overflow storage
     usage: /overflow
