@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.depositItemSafely
 import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -412,13 +413,10 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         var delivered = 0
         for ((rowId, itemBase64) in rows) {
             val item = deserializeItem(itemBase64)
-            // Route into the saved backup inventory (not the temp staff loadout) while
-            // Moderator/Trainee Mode is active, same as every other reward delivery.
-            val leftover = when {
-                plugin.modModeManager.isModMode(player) -> plugin.modModeManager.addItemToBackup(player.uniqueId, item)
-                plugin.traineeModeManager.isTraineeMode(player) -> plugin.traineeModeManager.addItemToBackup(player.uniqueId, item)
-                else -> player.inventory.addItem(item).values.firstOrNull()
-            }
+            // Same authoritative staff-mode-aware routing GiftManager uses for every
+            // delivery — routes into the saved backup inventory (not the temp staff
+            // loadout) while Moderator/Trainee Mode is active.
+            val leftover = plugin.depositItemSafely(player, item)
             if (leftover == null) {
                 plugin.databaseManager.execute("DELETE FROM giveaway_items WHERE id = ?", rowId)
                 delivered++
