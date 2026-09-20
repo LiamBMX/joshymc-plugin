@@ -245,18 +245,14 @@ class ServerShopManager(private val plugin: Joshymc) {
     }
 
     /**
-     * The exact buy/sell prices `/shop` shows for [material], read straight from the same
-     * `shop.yml` categories `/shop` itself browses (not the `/sell`-only sell-prices.yml
-     * catalog `getBaseSellPrice` also falls back to). Returns null if the item has no
-     * shop.yml entry at all; a non-null side is null if that side isn't configured
-     * (e.g. a sell-only item has a null buy price).
+     * The `/shop` buy price for [material], or null if it has no purchasable shop.yml entry.
+     * Buy prices only ever come from `/shop` — there is no other purchase system — so unlike
+     * sell price this doesn't need a separate authoritative source.
      */
-    fun getShopPricing(material: Material): Pair<Double?, Double?>? {
+    fun getBuyPrice(material: Material): Double? {
         for (category in categories) {
-            val item = category.items.find { it.material == material && (it.buyPrice > 0 || it.sellPrice > 0) }
-            if (item != null) {
-                return (item.buyPrice.takeIf { it > 0 }) to (item.sellPrice.takeIf { it > 0 })
-            }
+            val item = category.items.find { it.material == material && it.buyPrice > 0 }
+            if (item != null) return item.buyPrice
         }
         return null
     }
