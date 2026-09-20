@@ -825,6 +825,9 @@ permissions:
   joshymc.credits:
     description: Manage player credits via /credits (admin)
     default: op
+  joshymc.credits.balance:
+    description: Check your own or another player's credits balance via /credits bal
+    default: true
   joshymc.credits.pay:
     description: Pay other players credits via /credits pay
     default: true

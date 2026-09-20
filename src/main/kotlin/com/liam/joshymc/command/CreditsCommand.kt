@@ -10,6 +10,7 @@ import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
+import java.util.UUID
 
 class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
@@ -104,7 +105,13 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         // args is either empty or ["balance", <player?>]
         val targetName = if (args.size >= 2) args[1] else null
 
-        val target: Player? = if (targetName != null) Bukkit.getPlayer(targetName) else sender as? Player
+        val target: Pair<String, UUID>? = if (targetName != null) {
+            resolveTarget(targetName)
+        } else if (sender is Player) {
+            sender.name to sender.uniqueId
+        } else {
+            null
+        }
         if (target == null) {
             if (targetName == null) {
                 sender.sendMessage(Component.text("Console must specify a player: /credits balance <player>", NamedTextColor.RED))
@@ -113,21 +120,22 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             }
             return true
         }
+        val (targetDisplayName, targetUuid) = target
 
-        val isSelf = sender is Player && sender.uniqueId == target.uniqueId
+        val isSelf = sender is Player && sender.uniqueId == targetUuid
 
-        if (!isSelf && !sender.hasPermission("joshymc.credits")) {
+        if (!isSelf && !sender.hasPermission("joshymc.credits.balance")) {
             val message = Component.text("No permission to view another player's credits.", NamedTextColor.RED)
             if (sender is Player) plugin.commsManager.send(sender, message, CommunicationsManager.Category.ECONOMY) else sender.sendMessage(message)
             return true
         }
 
-        val balance = plugin.creditsManager.format(plugin.creditsManager.getBalance(target))
+        val balance = plugin.creditsManager.format(plugin.creditsManager.getBalance(targetUuid))
         val message = if (isSelf) {
             Component.text("Your credits: ", NamedTextColor.GRAY)
                 .append(Component.text(balance, NamedTextColor.AQUA))
         } else {
-            Component.text(target.name, NamedTextColor.WHITE)
+            Component.text(targetDisplayName, NamedTextColor.WHITE)
                 .append(Component.text("'s credits: ", NamedTextColor.GRAY))
                 .append(Component.text(balance, NamedTextColor.AQUA))
         }
@@ -137,6 +145,13 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             sender.sendMessage(message)
         }
         return true
+    }
+
+    private fun resolveTarget(name: String): Pair<String, UUID>? {
+        val online = Bukkit.getPlayerExact(name)
+        if (online != null) return online.name to online.uniqueId
+        val cached = Bukkit.getOfflinePlayerIfCached(name) ?: return null
+        return (cached.name ?: name) to cached.uniqueId
     }
 
     private fun handlePay(sender: CommandSender, args: Array<out String>): Boolean {
