@@ -37,6 +37,11 @@ class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
 
     fun shutdown() {
         if (::connection.isInitialized && !connection.isClosed) {
+            try {
+                connection.createStatement().use { it.execute("PRAGMA wal_checkpoint(TRUNCATE)") }
+            } catch (e: Exception) {
+                plugin.logger.warning("[Database] WAL checkpoint on shutdown failed: ${e.message}")
+            }
             connection.close()
         }
     }

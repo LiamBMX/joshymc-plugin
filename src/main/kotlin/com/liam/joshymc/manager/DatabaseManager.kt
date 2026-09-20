@@ -23,6 +23,15 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
 
     fun shutdown() {
         if (::connection.isInitialized && !connection.isClosed) {
+            // Force WAL contents into data.db itself before closing. Without this,
+            // recently-committed rows only live in data.db-wal — if a restart/redeploy
+            // ever loses or skips that sidecar file (e.g. a backup step that only
+            // grabs data.db), the last writes before shutdown would appear to vanish.
+            try {
+                connection.createStatement().use { it.execute("PRAGMA wal_checkpoint(TRUNCATE)") }
+            } catch (e: Exception) {
+                plugin.logger.warning("[Database] WAL checkpoint on shutdown failed: ${e.message}")
+            }
             connection.close()
             plugin.logger.info("[Database] Connection closed.")
         }
