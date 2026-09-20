@@ -65,6 +65,7 @@ import com.liam.joshymc.manager.ChatManager
 import com.liam.joshymc.manager.BoosterManager
 import com.liam.joshymc.manager.MobStackManager
 import com.liam.joshymc.util.ConfigUtil
+import com.liam.joshymc.util.ProfanityFilter
 import org.bukkit.Bukkit
 import org.bukkit.GameRule
 import org.bukkit.Location
@@ -300,6 +301,8 @@ class Joshymc : JavaPlugin() {
 
         saveDefaultConfig()
         migrateConfig()
+
+        ProfanityFilter.load(this)
 
         databaseManager = DatabaseManager(this)
         databaseManager.start()
@@ -632,6 +635,7 @@ class Joshymc : JavaPlugin() {
 
         // 5. Reload config from disk
         safe("reloadConfig") { reloadConfig() }
+        safe("ProfanityFilter.load") { ProfanityFilter.load(this) }
 
         // 6. Re-register everything
         safe("sellPriceManager.start") { sellPriceManager.start() }
