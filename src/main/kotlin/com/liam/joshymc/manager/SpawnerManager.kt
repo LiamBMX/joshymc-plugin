@@ -1,5 +1,6 @@
 package com.liam.joshymc.manager
 
+import com.destroystokyo.paper.event.entity.PreSpawnerSpawnEvent
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
@@ -14,6 +15,7 @@ import org.bukkit.World
 import org.bukkit.block.CreatureSpawner
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.enchantments.Enchantment
+import org.bukkit.entity.Entity
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -21,12 +23,15 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockPlaceEvent
+import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.world.ChunkLoadEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.BlockStateMeta
 import org.bukkit.persistence.PersistentDataType
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.ceil
+import kotlin.math.floor
 
 /**
  * Spawners are plain vanilla Minecraft mob spawners. JoshyMC only adds a
@@ -250,6 +255,48 @@ class SpawnerManager(private val plugin: Joshymc) : Listener {
             val item = createSpawnerItem(currentType)
             block.world.dropItemNaturally(block.location.add(0.5, 0.5, 0.5), item)
         }
+    }
+
+    /** Vanilla mob spawners refuse to spawn a mob whenever the candidate position
+     *  fails that species' placement rules (surface block, light level, biome,
+     *  water presence, etc. — pigs/cows won't spawn on stone, chickens won't
+     *  spawn in open air). [PreSpawnerSpawnEvent] fires before those rules are
+     *  checked (its javadoc: "fires even if the spawning might fail later"), so
+     *  cancelling it here and spawning the entity ourselves via
+     *  [World.spawnEntity] — which never runs those placement checks, only
+     *  natural spawning and spawner ticks do — bypasses them entirely, and only
+     *  for SPAWNER-reason spawns (issue #903). Basic collision safety is kept by
+     *  removing the entity again if its bounding box overlaps a solid block. */
+    @EventHandler(ignoreCancelled = true)
+    fun onPreSpawnerSpawn(event: PreSpawnerSpawnEvent) {
+        event.isCancelled = true
+        val location = event.spawnLocation
+        val world = location.world ?: return
+        val entity = world.spawnEntity(location, event.type, CreatureSpawnEvent.SpawnReason.SPAWNER)
+        if (isObstructed(entity)) {
+            entity.remove()
+        }
+    }
+
+    /** True if the entity's bounding box overlaps any non-passable block,
+     *  i.e. it would be spawning inside a wall/floor/ceiling. */
+    private fun isObstructed(entity: Entity): Boolean {
+        val box = entity.boundingBox
+        val world = entity.world
+        val minX = floor(box.minX).toInt()
+        val minY = floor(box.minY).toInt()
+        val minZ = floor(box.minZ).toInt()
+        val maxX = ceil(box.maxX).toInt() - 1
+        val maxY = ceil(box.maxY).toInt() - 1
+        val maxZ = ceil(box.maxZ).toInt() - 1
+        for (x in minX..maxX) {
+            for (y in minY..maxY) {
+                for (z in minZ..maxZ) {
+                    if (!world.getBlockAt(x, y, z).isPassable) return true
+                }
+            }
+        }
+        return false
     }
 
     /** Converts any not-yet-migrated legacy custom spawner in a newly loaded chunk
