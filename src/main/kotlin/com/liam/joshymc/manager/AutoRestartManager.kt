@@ -3,6 +3,7 @@ package com.liam.joshymc.manager
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.Sound
 
@@ -43,21 +44,20 @@ class AutoRestartManager(private val plugin: Joshymc) {
         val warningSeconds = plugin.config.getInt("auto-restart.warning-seconds", 300)
         secondsRemaining = warningSeconds
 
-        broadcastAll(Component.text("Server restarting in ${formatTime(secondsRemaining)}!", NamedTextColor.RED))
+        broadcastAll(restartMessage("Server restarting in ${formatTime(secondsRemaining)}!"))
 
         countdownTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, Runnable {
             secondsRemaining--
             when {
                 secondsRemaining in warningPoints -> {
-                    val color = if (secondsRemaining <= 30) NamedTextColor.GOLD else NamedTextColor.YELLOW
-                    broadcastAll(Component.text("Server restarting in ${formatTime(secondsRemaining)}!", color))
+                    broadcastAll(restartMessage("Server restarting in ${formatTime(secondsRemaining)}!"))
                     if (secondsRemaining <= 10) playCountdownSound()
                 }
                 secondsRemaining <= 0 -> {
                     cancelCountdown()
-                    broadcastAll(Component.text("Server is restarting now. See you soon!", NamedTextColor.RED))
+                    broadcastAll(restartMessage("Server is restarting now. See you soon!"))
                     Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
-                        val kickMessage = Component.text("Server is restarting. Back in a moment!", NamedTextColor.RED)
+                        val kickMessage = restartMessage("Server is restarting. Back in a moment!")
                         for (player in Bukkit.getOnlinePlayers()) {
                             player.kick(kickMessage)
                         }
@@ -74,6 +74,10 @@ class AutoRestartManager(private val plugin: Joshymc) {
             countdownTaskId = -1
         }
         secondsRemaining = 0
+    }
+
+    private fun restartMessage(text: String): Component {
+        return Component.text(text, NamedTextColor.YELLOW).decorate(TextDecoration.BOLD)
     }
 
     private fun broadcastAll(message: Component) {
