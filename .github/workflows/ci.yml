@@ -6,12 +6,18 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+# Never interrupt a build already in progress. A newer run for the same PR waits.
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 

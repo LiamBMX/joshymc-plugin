@@ -23,6 +23,11 @@ on:
     workflows: [CI]
     types: [completed]
 
+# Queue duplicate completion handlers instead of cancelling active automation.
+concurrency:
+  group: auto-merge-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: write
@@ -33,6 +38,7 @@ jobs:
   merge:
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -93,6 +99,14 @@ jobs:
           echo "All gates passed; merging PR #$PR_NUMBER"
           gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch
 
+          MERGE_SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" \
+            --json mergeCommit --jq '.mergeCommit.oid // empty')
+          if [ -z "$MERGE_SHA" ]; then
+            echo "::error::Could not resolve merge commit for PR #$PR_NUMBER"
+            exit 1
+          fi
+          echo "Merged commit: $MERGE_SHA"
+
           # ---- post-merge tasks ----
 
           # Close linked issue: parse N from `claude/issue-N`
@@ -120,7 +134,37 @@ jobs:
           # time. Doing that here races when multiple PRs merge close together.
           gh workflow run release.yml \
             --repo "$REPO" \
-            --ref main
+            --ref main \
+            -f commit="$MERGE_SHA" \
+            -f pr_number="$PR_NUMBER" \
+            -f issue_number="$ISSUE_N"
 
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
-            "Auto-release dispatched. The next patch version and JAR will appear in [Releases](https://github.com/$REPO/releases) once the serialized Release workflow finishes."
+            "Auto-release dispatched for commit \`$MERGE_SHA\`. The next patch version and verified JAR will appear in [Releases](https://github.com/$REPO/releases) once the queued Release workflow finishes."
+
+  report-ci-failure:
+    if: ${{ github.event.workflow_run.conclusion != 'success' && github.event.workflow_run.event == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Comment actionable CI failure
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          case "$HEAD_BRANCH" in claude/*) ;; *) exit 0 ;; esac
+
+          PR_NUMBER=$(gh pr list --repo "$REPO" --head "$HEAD_BRANCH" --state open \
+            --json number --jq '.[0].number // empty')
+          [ -n "$PR_NUMBER" ] || exit 0
+
+          ISSUE_N=$(echo "$HEAD_BRANCH" | sed -nE 's|^claude/issue-([0-9]+)$|\1|p')
+          MESSAGE="Auto-merge is paused because CI finished with **$CONCLUSION**. Review the [failed CI run]($RUN_URL), push a fix to this PR, and CI will retry without cancelling any active run."
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$MESSAGE"
+          if [ -n "$ISSUE_N" ]; then
+            gh issue comment "$ISSUE_N" --repo "$REPO" --body "$MESSAGE"
+          fi
