@@ -17,7 +17,9 @@ import kotlin.math.ceil
  */
 object StockPortfolioGui {
 
-    private const val PAGE_SIZE = 45
+    /** Each holding takes 3 slots: info icon, BUY MORE button, SELL button. */
+    private const val SLOTS_PER_STOCK = 3
+    private const val PAGE_SIZE = 45 / SLOTS_PER_STOCK
 
     fun build(plugin: Joshymc, player: Player, page: Int): CustomGui {
         val market = plugin.stockMarketManager
@@ -48,12 +50,10 @@ object StockPortfolioGui {
 
         for ((index, pair) in pageItems.withIndex()) {
             val (stock, holding) = pair
-            gui.setItem(index, buildHoldingIcon(plugin, stock, holding)) { p, event ->
-                when {
-                    event.isLeftClick -> StockTradingGui.startBuy(plugin, p, stock)
-                    event.isRightClick -> StockTradingGui.startSell(plugin, p, stock)
-                }
-            }
+            val base = index * SLOTS_PER_STOCK
+            gui.setItem(base, buildHoldingIcon(plugin, stock, holding))
+            gui.setItem(base + 1, buildBuyButton(stock)) { p, _ -> StockTradingGui.startBuy(plugin, p, stock) }
+            gui.setItem(base + 2, buildSellButton(stock)) { p, _ -> StockTradingGui.startSell(plugin, p, stock) }
         }
 
         for (slot in 45..53) gui.setItem(slot, StockGuiUtil.filler(Material.BLACK_STAINED_GLASS_PANE))
@@ -105,14 +105,26 @@ object StockPortfolioGui {
             Component.text("24h: ", NamedTextColor.GRAY)
                 .append(Component.text("${StockGuiUtil.pct(stats.changePercent24h)} ${stats.trend.arrow}", StockGuiUtil.trendColor(stats.trend)))
         )
-        lore.add(Component.empty())
-        lore.add(Component.text("LEFT CLICK: ", NamedTextColor.GREEN).append(Component.text("Buy More", NamedTextColor.WHITE)))
-        lore.add(Component.text("RIGHT CLICK: ", NamedTextColor.RED).append(Component.text("Sell", NamedTextColor.WHITE)))
-
         return StockGuiUtil.item(
             stock.icon,
             Component.text("${stock.name} ", NamedTextColor.GOLD).append(Component.text("[${stock.ticker}]", NamedTextColor.GRAY)),
             lore
+        )
+    }
+
+    private fun buildBuyButton(stock: StockMarketManager.Stock): ItemStack {
+        return StockGuiUtil.item(
+            Material.LIME_STAINED_GLASS_PANE,
+            Component.text("BUY MORE ", NamedTextColor.GREEN).append(Component.text("[${stock.ticker}]", NamedTextColor.GRAY)),
+            listOf(Component.empty(), Component.text("Click to invest in ${stock.name}", NamedTextColor.GRAY))
+        )
+    }
+
+    private fun buildSellButton(stock: StockMarketManager.Stock): ItemStack {
+        return StockGuiUtil.item(
+            Material.RED_STAINED_GLASS_PANE,
+            Component.text("SELL ", NamedTextColor.RED).append(Component.text("[${stock.ticker}]", NamedTextColor.GRAY)),
+            listOf(Component.empty(), Component.text("Click to sell your ${stock.name}", NamedTextColor.GRAY))
         )
     }
 }
