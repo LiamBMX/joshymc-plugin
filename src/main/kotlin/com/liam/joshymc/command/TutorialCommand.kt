@@ -91,6 +91,11 @@ class TutorialCommand(private val plugin: Joshymc) : CommandExecutor {
         return true
     }
 
+    /** Opens the tutorial GUI for [player], e.g. for automatic first-join opening. */
+    fun openForPlayer(player: Player) {
+        openTutorialGui(player, 0)
+    }
+
     private fun openTutorialGui(player: Player, page: Int) {
         val totalPages = maxOf(1, (steps.size + STEPS_PER_PAGE - 1) / STEPS_PER_PAGE)
         val clampedPage = page.coerceIn(0, totalPages - 1)
