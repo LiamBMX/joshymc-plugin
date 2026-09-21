@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.BedrockUtil
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -339,6 +340,7 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
         playerData.remove(event.player.uniqueId)
+        BedrockUtil.clearCache(event.player.uniqueId)
     }
 
     // ══════════════════════════════════════════════════════════
@@ -926,6 +928,27 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
         }
         data.inventoryClicksThisSecond++
 
+        val timeSinceLast = now - data.lastInventoryClickTime
+        data.lastInventoryClickTime = now
+
+        // Bedrock/Geyser can legitimately fire dozens of inventory transactions within a
+        // few ms of each other (bulk crafting, shift-clicking large stacks, crafting-grid
+        // batches) — this click-rate heuristic can't tell that apart from a Java
+        // autoclicker/inventory exploit, so it's skipped for Bedrock players (issue #935).
+        // Every other anti-cheat check (illegal items, nuker, dupe protection, etc.) still
+        // runs for them unchanged.
+        if (BedrockUtil.isBedrockPlayer(player.uniqueId)) {
+            if (data.inventoryClicksThisSecond > 25 || timeSinceLast in 1..15) {
+                plugin.logger.fine(
+                    "[AntiCheat] Bedrock inventory burst ignored: player=${player.name} " +
+                        "uuid=${player.uniqueId} clicks=${data.inventoryClicksThisSecond}/s " +
+                        "delta=${timeSinceLast}ms slot=${event.slot} action=${event.action} " +
+                        "invType=${event.inventory.type}"
+                )
+            }
+            return
+        }
+
         // More than 25 inventory clicks per second is impossible legitimately
         if (data.inventoryClicksThisSecond > 25) {
             flag(player, CheckType.INVENTORY, 3.0, "clicks=${data.inventoryClicksThisSecond}/s")
@@ -933,11 +956,9 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
         }
 
         // Individual click speed: less than 20ms between clicks
-        val timeSinceLast = now - data.lastInventoryClickTime
         if (timeSinceLast in 1..15) {
             flag(player, CheckType.INVENTORY, 2.0, "delta=${timeSinceLast}ms")
         }
-        data.lastInventoryClickTime = now
     }
 
     // ── BadPackets (Invalid Actions) ────────────────────
