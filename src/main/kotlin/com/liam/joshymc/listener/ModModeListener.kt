@@ -5,12 +5,15 @@ import com.liam.joshymc.manager.ModModeManager
 import io.papermc.paper.event.player.PlayerPickBlockEvent
 import io.papermc.paper.event.player.PlayerPickEntityEvent
 import io.papermc.paper.event.player.PlayerPickItemEvent
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
+import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
@@ -138,6 +141,16 @@ class ModModeListener(private val plugin: Joshymc) : Listener {
         if (plugin.modModeManager.isModTool(event.itemInHand)) {
             event.isCancelled = true
         }
+    }
+
+    /** Moderator Mode staff must never break world blocks, regardless of gamemode
+     *  (Creative would otherwise allow instant-break), rank, permissions, world, or tool. */
+    @EventHandler
+    fun onBlockBreak(event: BlockBreakEvent) {
+        val player = event.player
+        if (!plugin.modModeManager.isModMode(player)) return
+        event.isCancelled = true
+        plugin.commsManager.sendActionBar(player, Component.text("You cannot break blocks while in staff mode.", NamedTextColor.RED))
     }
 
     /** Moderator Mode players must never pick up world items — the item stays put for
