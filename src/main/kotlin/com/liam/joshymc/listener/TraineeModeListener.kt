@@ -2,12 +2,15 @@ package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.TraineeModeManager
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
+import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
@@ -95,6 +98,16 @@ class TraineeModeListener(private val plugin: Joshymc) : Listener {
         if (plugin.traineeModeManager.isTraineeTool(event.itemInHand)) {
             event.isCancelled = true
         }
+    }
+
+    /** Trainee Mode staff must never break world blocks, regardless of gamemode,
+     *  rank, permissions, world, or tool. */
+    @EventHandler
+    fun onBlockBreak(event: BlockBreakEvent) {
+        val player = event.player
+        if (!plugin.traineeModeManager.isTraineeMode(player)) return
+        event.isCancelled = true
+        plugin.commsManager.sendActionBar(player, Component.text("You cannot break blocks while in staff mode.", NamedTextColor.RED))
     }
 
     /** Trainee Mode players must never pick up world items. */
