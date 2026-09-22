@@ -131,6 +131,7 @@ import com.liam.joshymc.command.VoteCommand
 import com.liam.joshymc.command.WorldCommand
 import com.liam.joshymc.command.RestartCommand
 import com.liam.joshymc.command.InvestCommand
+import com.liam.joshymc.command.StockCommand
 import com.liam.joshymc.command.ResurgeCommand
 import com.liam.joshymc.command.WorthCommand
 
@@ -697,6 +698,7 @@ class CommandManager(private val plugin: Joshymc) {
 
         // ── Investments ──────────────────────────────────
         plugin.getCommand("invest")?.let { val c = InvestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("stock")?.let { val c = StockCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── World Management ────────────────────────────
         plugin.getCommand("world")?.let {
