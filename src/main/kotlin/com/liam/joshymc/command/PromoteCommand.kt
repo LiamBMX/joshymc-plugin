@@ -68,17 +68,22 @@ class PromoteCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return true
         }
 
-        val remaining = getCooldownRemaining(sender.uniqueId)
-        if (remaining > 0) {
-            plugin.commsManager.send(
-                sender,
-                Component.text("You can promote another livestream in ${formatCooldown(remaining)}.", NamedTextColor.RED)
-            )
-            return true
+        val bypassCooldown = sender.hasPermission("joshymc.promote.live.bypass")
+        if (!bypassCooldown) {
+            val remaining = getCooldownRemaining(sender.uniqueId)
+            if (remaining > 0) {
+                plugin.commsManager.send(
+                    sender,
+                    Component.text("You can promote another livestream in ${formatCooldown(remaining)}.", NamedTextColor.RED)
+                )
+                return true
+            }
         }
 
         val url = platform.buildUrl(username)
-        setCooldown(sender.uniqueId)
+        if (!bypassCooldown) {
+            setCooldown(sender.uniqueId)
+        }
 
         val message = Component.text("[LIVE] ", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
             .append(Component.text("${sender.name} is now live on ${platform.label}!\n", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.BOLD, false).decoration(TextDecoration.ITALIC, false))
