@@ -351,7 +351,9 @@ class CommandManager(private val plugin: Joshymc) {
         }
 
         plugin.getCommand("mines")?.let {
-            it.setExecutor(com.liam.joshymc.command.MinesCommand(plugin))
+            val c = com.liam.joshymc.command.MinesCommand(plugin)
+            it.setExecutor(c)
+            it.tabCompleter = c
         }
 
         plugin.getCommand("roulette")?.let {
