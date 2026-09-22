@@ -30,8 +30,8 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 return true
             }
 
-            if (args.size < 3) {
-                plugin.commsManager.send(sender, Component.text("Usage: /ah sell <price> <money/credits>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            if (args.size < 2) {
+                plugin.commsManager.send(sender, Component.text("Usage: /ah sell <price> [money/credits]", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
                 return true
             }
 
@@ -41,9 +41,9 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 return true
             }
 
-            val currency = AuctionManager.Currency.parse(args[2])
+            val currency = if (args.size >= 3) AuctionManager.Currency.parse(args[2]) else AuctionManager.Currency.MONEY
             if (currency == null) {
-                plugin.commsManager.send(sender, Component.text("Invalid currency. Use 'money' or 'credits'.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                plugin.commsManager.send(sender, Component.text("Invalid currency. Use money or credits.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
                 return true
             }
 
