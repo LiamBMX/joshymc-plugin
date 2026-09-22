@@ -13,6 +13,7 @@ import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
+import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.inventory.ClickType
@@ -134,6 +135,25 @@ class TraineeModeListener(private val plugin: Joshymc) : Listener {
         val source = event.damager
         val attacker = source as? Player ?: (source as? Projectile)?.shooter as? Player ?: return
         if (plugin.traineeModeManager.isTraineeMode(attacker)) {
+            event.isCancelled = true
+        }
+    }
+
+    /**
+     * Trainee Mode players must never die, from any damage source (PvP, mobs,
+     * fall, fire/lava, void, explosions, suffocation, drowning, poison/wither,
+     * projectiles, etc). Cancel any hit that would otherwise be fatal instead
+     * of trying to restore state after [PlayerDeathEvent] fires. Runs at HIGH
+     * so it sees the final damage after other plugins/enchantments have
+     * adjusted it, but before CombatListener's MONITOR-priority tag handler.
+     * [TraineeModeManager.handleDeath] is kept as a backstop in case a death
+     * still occurs through a path this doesn't cover.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onLethalDamage(event: EntityDamageEvent) {
+        val player = event.entity as? Player ?: return
+        if (!plugin.traineeModeManager.isTraineeMode(player)) return
+        if (event.finalDamage >= player.health) {
             event.isCancelled = true
         }
     }
