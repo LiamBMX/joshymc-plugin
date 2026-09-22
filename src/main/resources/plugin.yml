@@ -147,7 +147,7 @@ commands:
     usage: /casino
   mines:
     description: Jump straight into the Casino's Mines game
-    usage: /mines [bet]
+    usage: /mines [bet] or /mines <mines> <amount>
   roulette:
     description: Jump straight into the Casino's Roulette game
     usage: /roulette [bet]
