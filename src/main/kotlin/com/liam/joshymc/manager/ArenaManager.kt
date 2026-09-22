@@ -634,6 +634,46 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
     }
 
     /**
+     * PlayerMoveEvent only covers walking/knockback. Teleports (ender pearls,
+     * chorus fruit, /tpa, /home, /warp, and every other JoshyMC teleport
+     * command) go through Player.teleport() instead, which fires
+     * PlayerTeleportEvent — so combat-tagged arena players could otherwise
+     * pearl or command their way out. Cancel any teleport that would take a
+     * combat-tagged player from inside their arena to outside it (or into
+     * another world); teleports that land back inside the same arena are
+     * unaffected.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onCombatTeleport(event: org.bukkit.event.player.PlayerTeleportEvent) {
+        val player = event.player
+        if (!plugin.combatManager.isTagged(player)) return
+
+        val from = event.from
+        val to = event.to ?: return
+
+        val arenaId = playersInArena[player.uniqueId]
+        val arena = (if (arenaId != null) arenas.find { it.id == arenaId } else null)
+            ?: findArenaAt(player)
+            ?: return
+
+        val fromInside = from.world?.name == arena.world
+                && from.blockY >= arena.minY
+                && isInsidePolygon(from.x, from.z, arena.points)
+        if (!fromInside) return
+
+        val toInside = to.world?.name == arena.world
+                && to.blockY >= arena.minY
+                && isInsidePolygon(to.x, to.z, arena.points)
+        if (toInside) return
+
+        event.isCancelled = true
+        plugin.commsManager.sendActionBar(
+            player,
+            Component.text("You can't leave the arena while in combat!", NamedTextColor.RED)
+        )
+    }
+
+    /**
      * Backstop: every 5 ticks, sweep all combat-tagged players. If any of
      * them ended up OUTSIDE their arena polygon (high-velocity launch,
      * server-side teleport from another plugin, anything that bypassed the
