@@ -1382,3 +1382,6 @@ permissions:
   joshymc.promote.live:
     description: Announce a clickable Twitch/TikTok/YouTube livestream link via /promote live — grant to Media personnel
     default: op
+  joshymc.promote.live.bypass:
+    description: Bypass the 30-minute cooldown on /promote live
+    default: op
