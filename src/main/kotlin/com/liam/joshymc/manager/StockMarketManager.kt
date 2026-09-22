@@ -77,6 +77,12 @@ class StockMarketManager(private val plugin: Joshymc) {
         private set
     var nameMaxLength = 24
         private set
+    /** Flat cost to run `/stock promote <ticker>` — an advertisement only, never a price/market effect. */
+    var promotionCost = 250_000.0
+        private set
+    /** Per-player cooldown (minutes) between `/stock promote` runs, regardless of which stock. */
+    var promotionCooldownMinutes = 30
+        private set
 
     private var activityVeryHigh = 1_000_000.0
     private var activityHigh = 250_000.0
@@ -237,6 +243,12 @@ class StockMarketManager(private val plugin: Joshymc) {
         data class Failure(val message: String) : CreateOutcome()
     }
 
+    sealed class PromoteOutcome {
+        data class Success(val stock: Stock) : PromoteOutcome()
+        data class OnCooldown(val remainingMs: Long) : PromoteOutcome()
+        data class Failure(val message: String) : PromoteOutcome()
+    }
+
     // ── Lifecycle ────────────────────────────────────────────────────
 
     fun start() {
@@ -285,6 +297,13 @@ class StockMarketManager(private val plugin: Joshymc) {
         """.trimIndent())
 
         plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS stock_promotions (
+                uuid TEXT PRIMARY KEY,
+                promoted_at INTEGER NOT NULL
+            )
+        """.trimIndent())
+
+        plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS stock_admin_actions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ticker TEXT NOT NULL,
@@ -324,6 +343,8 @@ class StockMarketManager(private val plugin: Joshymc) {
         chatInputTimeoutSeconds = cfg.getInt("stock-market.chat-input-timeout-seconds", 30)
         nameMinLength = cfg.getInt("stock-market.name-min-length", 3)
         nameMaxLength = cfg.getInt("stock-market.name-max-length", 24)
+        promotionCost = cfg.getDouble("stock-market.promotion-cost", 250_000.0)
+        promotionCooldownMinutes = cfg.getInt("stock-market.promotion-cooldown-minutes", 30)
         protectedStocks = cfg.getStringList("stock-market.protected-stocks").map { it.trim().lowercase() }.toSet()
 
         activityVeryHigh = cfg.getDouble("stock-market.activity-thresholds.very-high", 1_000_000.0)
@@ -760,6 +781,53 @@ class StockMarketManager(private val plugin: Joshymc) {
         }
 
         return CreateOutcome.Success(created!!)
+    }
+
+    // ── Promotion (advertisement-only, no price/market effect) ──────
+
+    fun getPromotionCooldownRemaining(uuid: UUID): Long {
+        val promotedAt = plugin.databaseManager.queryFirst(
+            "SELECT promoted_at FROM stock_promotions WHERE uuid = ?", uuid.toString()
+        ) { rs -> rs.getLong("promoted_at") } ?: return 0L
+
+        val cooldownMs = promotionCooldownMinutes.toLong() * 60_000L
+        val remaining = cooldownMs - (System.currentTimeMillis() - promotedAt)
+        return if (remaining > 0) remaining else 0L
+    }
+
+    /**
+     * Charges [player] [promotionCost] and broadcasts an advertisement for [tickerInput]'s
+     * stock. Never touches price, market cap, shares outstanding, or holdings — the only
+     * economic effect is the flat charge. Fully atomic: on any failure the player is not
+     * charged and no cooldown is recorded.
+     */
+    fun promoteStock(player: Player, tickerInput: String): PromoteOutcome {
+        val stock = resolveStock(tickerInput)
+            ?: return PromoteOutcome.Failure("Stock '$tickerInput' not found.")
+
+        val remaining = getPromotionCooldownRemaining(player.uniqueId)
+        if (remaining > 0) return PromoteOutcome.OnCooldown(remaining)
+
+        if (!plugin.economyManager.has(player.uniqueId, promotionCost)) {
+            return PromoteOutcome.Failure("You need ${plugin.economyManager.format(promotionCost)} to promote a stock.")
+        }
+
+        try {
+            plugin.databaseManager.transaction {
+                if (!plugin.economyManager.withdraw(player.uniqueId, promotionCost)) {
+                    throw IllegalStateException("insufficient_funds")
+                }
+                plugin.databaseManager.execute(
+                    "INSERT INTO stock_promotions (uuid, promoted_at) VALUES (?, ?) " +
+                        "ON CONFLICT(uuid) DO UPDATE SET promoted_at = ?",
+                    player.uniqueId.toString(), System.currentTimeMillis(), System.currentTimeMillis()
+                )
+            }
+        } catch (e: Exception) {
+            return PromoteOutcome.Failure("Promotion failed (${e.message ?: "unknown error"}). You have not been charged.")
+        }
+
+        return PromoteOutcome.Success(stock)
     }
 
     // ── Buy/Sell precondition checks (shared by orchestration + GUI previews) ─

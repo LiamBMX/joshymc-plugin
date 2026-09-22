@@ -171,6 +171,9 @@ commands:
     description: Open the player-driven stock market (trade, create, and track stocks)
     usage: /invest [admin <reset|delete|confirm|cancel> <stock>]
     aliases: [stocks]
+  stock:
+    description: Pay to broadcast a server-wide advertisement for a stock
+    usage: /stock promote <ticker>
   eco:
     description: Manage player economy
     usage: /eco <give|take|set|reset> <player> <amount>
@@ -1312,6 +1315,9 @@ permissions:
   joshymc.invest.admin.*:
     description: All /invest admin permissions (wildcard)
     default: op
+  joshymc.stock.promote:
+    description: Use /stock promote to pay for a server-wide stock advertisement
+    default: true
   joshymc.booster:
     description: Activate server boosters via /booster
     default: op
