@@ -16,13 +16,18 @@ import kotlin.math.ceil
  * paginated, with a sort-cycle control preserved across page navigation. Also hosts
  * the large-transaction confirmation GUI (section 26) and the static buy/sell
  * execution helpers used by both GUI clicks and the chat-input listener.
+ *
+ * Pure browsing screen — no separate Buy/Sell buttons here (those Bedrock-friendly
+ * two-button layouts live only in [StockPortfolioGui]). Clicking a stock's icon
+ * starts a buy, since this screen is how players discover and invest in stocks
+ * they don't already hold; selling happens from My Investments.
  */
 object StockTradingGui {
 
     val SORT_DEFAULT = StockMarketManager.SortMode.HIGHEST_MARKET_CAP
 
-    /** Each stock takes 3 slots: info icon, BUY button, SELL button. */
-    private const val SLOTS_PER_STOCK = 3
+    /** Each stock takes 1 slot: the info icon, which is also the buy trigger. */
+    private const val SLOTS_PER_STOCK = 1
     private const val PAGE_SIZE = 45 / SLOTS_PER_STOCK
 
     fun build(plugin: Joshymc, player: Player, sort: StockMarketManager.SortMode, page: Int): CustomGui {
@@ -46,9 +51,7 @@ object StockTradingGui {
         for ((index, stock) in pageItems.withIndex()) {
             val stats = statsByTicker.getValue(stock.ticker)
             val base = index * SLOTS_PER_STOCK
-            gui.setItem(base, buildStockIcon(plugin, player, stock, stats))
-            gui.setItem(base + 1, buildBuyButton(stock)) { p, _ -> startBuy(plugin, p, stock) }
-            gui.setItem(base + 2, buildSellButton(plugin, player, stock)) { p, _ -> startSell(plugin, p, stock) }
+            gui.setItem(base, buildStockIcon(plugin, player, stock, stats)) { p, _ -> startBuy(plugin, p, stock) }
         }
 
         // Control row
@@ -114,33 +117,12 @@ object StockTradingGui {
                     .append(Component.text(StockGuiUtil.moneyDelta(pl, econ::formatShort) + " (${StockGuiUtil.pct(plPercent)})", StockGuiUtil.plColor(pl)))
             )
         }
+        lore.add(Component.empty())
+        lore.add(Component.text("Click to invest", NamedTextColor.GREEN))
 
         return StockGuiUtil.item(
             stock.icon,
             Component.text("${stock.name} ", NamedTextColor.GOLD).append(Component.text("[${stock.ticker}]", NamedTextColor.GRAY)),
-            lore
-        )
-    }
-
-    private fun buildBuyButton(stock: StockMarketManager.Stock): org.bukkit.inventory.ItemStack {
-        return StockGuiUtil.item(
-            Material.LIME_STAINED_GLASS_PANE,
-            Component.text("BUY ", NamedTextColor.GREEN).append(Component.text("[${stock.ticker}]", NamedTextColor.GRAY)),
-            listOf(Component.empty(), Component.text("Click to invest in ${stock.name}", NamedTextColor.GRAY))
-        )
-    }
-
-    private fun buildSellButton(plugin: Joshymc, player: Player, stock: StockMarketManager.Stock): org.bukkit.inventory.ItemStack {
-        val holding = plugin.stockMarketManager.getHolding(stock.ticker, player.uniqueId)
-        val owns = holding != null && holding.shares > StockMarketManager.EPSILON
-        val lore = if (owns) {
-            listOf(Component.empty(), Component.text("Click to sell your ${stock.name}", NamedTextColor.GRAY))
-        } else {
-            listOf(Component.empty(), Component.text("You don't own shares in this stock", NamedTextColor.GRAY))
-        }
-        return StockGuiUtil.item(
-            Material.RED_STAINED_GLASS_PANE,
-            Component.text("SELL ", NamedTextColor.RED).append(Component.text("[${stock.ticker}]", NamedTextColor.GRAY)),
             lore
         )
     }
