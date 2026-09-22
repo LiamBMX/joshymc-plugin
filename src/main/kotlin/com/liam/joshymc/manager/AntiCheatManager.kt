@@ -708,15 +708,21 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             }
 
             // Angle check — is the target behind the player?
-            // Applies even on sweep hits: a real sweep arc only reaches targets in front of the player.
-            val eyeDir = attacker.eyeLocation.direction.normalize()
-            val toTarget = victim.location.toVector().subtract(attacker.eyeLocation.toVector()).normalize()
-            val dot = eyeDir.dot(toTarget)
+            // Skipped for sweep hits: vanilla Sweeping Edge damages every living entity within
+            // ~3 blocks of the player's own position (Player#attack -> distanceToSqr < 9.0), with
+            // no facing-direction restriction. A legitimate sweep can land on a mob standing beside
+            // or behind the attacker, so applying this angle check to secondary sweep damage produced
+            // false KillAura flags for normal play. The primary hit (ENTITY_ATTACK) is unaffected.
+            if (!isSweep) {
+                val eyeDir = attacker.eyeLocation.direction.normalize()
+                val toTarget = victim.location.toVector().subtract(attacker.eyeLocation.toVector()).normalize()
+                val dot = eyeDir.dot(toTarget)
 
-            // dot < 0 means target is behind the player (>90 degrees)
-            if (dot < -0.3) {
-                flag(attacker, CheckType.KILL_AURA, 5.0, "angle=behind dot=${"%.2f".format(dot)}",
-                    victim, "dot=${"%.2f".format(dot)}")
+                // dot < 0 means target is behind the player (>90 degrees)
+                if (dot < -0.3) {
+                    flag(attacker, CheckType.KILL_AURA, 5.0, "angle=behind dot=${"%.2f".format(dot)}",
+                        victim, "dot=${"%.2f".format(dot)}")
+                }
             }
         }
 
