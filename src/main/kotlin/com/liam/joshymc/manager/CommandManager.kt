@@ -22,6 +22,7 @@ import com.liam.joshymc.command.NickCommand
 import com.liam.joshymc.command.PunishCommand
 import com.liam.joshymc.command.ReportCommand
 import com.liam.joshymc.command.LiveCommand
+import com.liam.joshymc.command.PromoteCommand
 import com.liam.joshymc.command.MediaCommand
 import com.liam.joshymc.command.RulesCommand
 import com.liam.joshymc.command.TutorialCommand
@@ -513,6 +514,8 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("media")?.setExecutor(MediaCommand(plugin))
         plugin.getCommand("discord")?.setExecutor(DiscordCommand(plugin))
         plugin.getCommand("live")?.let { val c = LiveCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("promote")?.let { val c = PromoteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        PromoteCommand.createTable(plugin)
 
         // ── Essentials-style commands ────────────────
         plugin.getCommand("back")?.setExecutor(BackCommand(plugin))
