@@ -102,6 +102,8 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
             "harvest_key" to 70,
             "stockpile_key" to 20,
             "homestead_key" to 10
+        )
+
         // Weekly Quest completion reward (issue #969): exactly one of these custom items
         // (registered in ItemManager, see item/impl/RetexturedKeys.kt), weighted by odds.
         private val WEEKLY_KEY_WEIGHTS = listOf(
