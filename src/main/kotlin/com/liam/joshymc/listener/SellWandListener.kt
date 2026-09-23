@@ -2,7 +2,6 @@ package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.command.SellWandCommand
-import com.liam.joshymc.item.impl.CRAFTING_MATERIAL_IDS
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -79,11 +78,12 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
 
         for (i in 0 until inventory.size) {
             val slot = inventory.getItem(i) ?: continue
-            // Custom crafting materials are admin-granted only — never sellable, even if
-            // they share a vanilla Material with a sellable item (e.g. Void Shard = PRISMARINE_SHARD).
-            if (plugin.itemManager.getCustomItemId(slot) in CRAFTING_MATERIAL_IDS) continue
-            val basePrice = plugin.serverShopManager.getSellPrice(slot.type) ?: 0.0
-            if (basePrice <= 0) continue
+            // sellPriceManager is the single authoritative source for sell pricing — the same
+            // one /sell, /sellall and /worth use — so Sell Wands always reflect the current
+            // sell-prices.yml value instead of the stale legacy ServerShopManager catalog.
+            // isSellable() also rejects custom items (e.g. Void Shard = PRISMARINE_SHARD).
+            if (!plugin.sellPriceManager.isSellable(slot)) continue
+            val basePrice = plugin.sellPriceManager.getPrice(slot.type) ?: continue
 
             val price = plugin.serverShopManager.applyCropBonus(basePrice, slot.type, player.uniqueId)
             val mutMult = plugin.mutationsManager.getMutationMultiplier(slot)
