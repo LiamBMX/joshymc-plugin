@@ -870,8 +870,10 @@ quests:
     repeat-protection-weeks: 4
     completion-reward:
       enabled: true
-      commands:
-        - "crate givekey joshy {player} 3"
+      # In addition to any commands below, completing every Weekly Quest always grants
+      # exactly one weighted-random crate key (Homestead Key 70% / Campfire Key 25% /
+      # Cabin Key 5%) — handled internally, not configurable here.
+      commands: []
 
   quest-master:
     enabled: true

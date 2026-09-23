@@ -3,6 +3,7 @@ package com.liam.joshymc.manager
 import io.papermc.paper.event.player.PlayerTradeEvent
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.depositItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -30,6 +31,7 @@ import org.bukkit.event.inventory.CraftItemEvent
 import org.bukkit.event.inventory.FurnaceExtractEvent
 import org.bukkit.event.player.PlayerExpChangeEvent
 import org.bukkit.event.player.PlayerFishEvent
+import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerLevelChangeEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
@@ -43,6 +45,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ThreadLocalRandom
 
 // ── Data model ──────────────────────────────────────────────────
 
@@ -92,6 +95,14 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         private val ALWAYS_HARVESTABLE = setOf(
             "MELON", "PUMPKIN", "SUGAR_CANE", "CACTUS", "BAMBOO", "NETHER_WART",
             "COCOA", "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES", "WEEPING_VINES"
+        )
+
+        // Weekly Quest completion reward (issue #969): exactly one of these custom items
+        // (registered in ItemManager, see item/impl/RetexturedKeys.kt), weighted by odds.
+        private val WEEKLY_KEY_WEIGHTS = listOf(
+            "homestead_key" to 70,
+            "campfire_key" to 25,
+            "cabin_key" to 5
         )
     }
 
@@ -571,6 +582,20 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
                 PRIMARY KEY (uuid, weekly_cycle_id)
             )
         """.trimIndent())
+
+        // Records the single weighted-random crate key rolled for a player's Weekly Quest
+        // completion. The row itself (not just quest_weekly_completion.bonus_claimed) is
+        // the source of truth for "which key" so a delivery that didn't fit on the first
+        // try (full inventory/backup) can be safely retried later without re-rolling.
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS quest_weekly_key_reward (
+                uuid TEXT NOT NULL,
+                weekly_cycle_id TEXT NOT NULL,
+                key_id TEXT NOT NULL,
+                delivered INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (uuid, weekly_cycle_id)
+            )
+        """.trimIndent())
     }
 
     // ── Progress tracking ───────────────────────────────────────
@@ -758,7 +783,10 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         val cycleId = weeklyCycleIdState
         if (!claimWeeklyBonusOnce(uuid.toString(), cycleId)) return
 
-        if (weeklyCompletionRewardEnabled) runRewardCommands(player, weeklyCompletionCommands)
+        if (weeklyCompletionRewardEnabled) {
+            runRewardCommands(player, weeklyCompletionCommands)
+            awardWeeklyKeyReward(player, cycleId)
+        }
         player.playSound(player.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 1.0f)
         plugin.commsManager.send(player, plugin.commsManager.parseLegacy("&d&l★ Weekly Quests Complete! &eBonus reward granted!"))
 
@@ -769,6 +797,78 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
             )
             checkQuestMasterReward(player, cycleId)
         }
+    }
+
+    private fun rollWeeklyKeyId(): String {
+        val total = WEEKLY_KEY_WEIGHTS.sumOf { it.second }
+        var roll = ThreadLocalRandom.current().nextInt(total)
+        for ((id, weight) in WEEKLY_KEY_WEIGHTS) {
+            if (roll < weight) return id
+            roll -= weight
+        }
+        return WEEKLY_KEY_WEIGHTS.last().first
+    }
+
+    /**
+     * Rolls and persists the single weighted crate key for this player's Weekly Quest
+     * completion, then attempts immediate delivery. The roll is written with INSERT OR
+     * IGNORE keyed on (uuid, weekly_cycle_id) — combined with [claimWeeklyBonusOnce] already
+     * having gated this call to exactly once per cycle, a key can never be rolled twice for
+     * the same player/cycle, even across a restart or a racing duplicate completion tick.
+     */
+    private fun awardWeeklyKeyReward(player: Player, cycleId: String) {
+        val uuid = player.uniqueId.toString()
+        val keyId = rollWeeklyKeyId()
+        plugin.databaseManager.execute(
+            "INSERT OR IGNORE INTO quest_weekly_key_reward (uuid, weekly_cycle_id, key_id, delivered) VALUES (?, ?, ?, 0)",
+            uuid, cycleId, keyId
+        )
+        deliverPendingWeeklyKeyRewards(player)
+    }
+
+    /**
+     * Delivers any undelivered weekly crate key rewards for [player] via the authoritative
+     * staff-mode-aware item delivery path ([depositItemSafely] — routes into the ModMode/
+     * TraineeMode backup inventory while active, live inventory otherwise). A key that
+     * doesn't fit anywhere stays `delivered = 0` and is retried here again on next join or
+     * quest completion — it is never dropped on the ground or silently lost.
+     */
+    private fun deliverPendingWeeklyKeyRewards(player: Player) {
+        val uuid = player.uniqueId.toString()
+        val pending = plugin.databaseManager.query(
+            "SELECT weekly_cycle_id, key_id FROM quest_weekly_key_reward WHERE uuid = ? AND delivered = 0",
+            uuid
+        ) { rs -> Pair(rs.getString("weekly_cycle_id"), rs.getString("key_id")) }
+        if (pending.isEmpty()) return
+
+        for ((rewardCycleId, keyId) in pending) {
+            val customItem = plugin.itemManager.getItem(keyId)
+            if (customItem == null) {
+                plugin.logger.warning("[QuestCycle] Unknown weekly key reward id '$keyId' for $uuid — skipping delivery.")
+                continue
+            }
+            val leftover = plugin.depositItemSafely(player, customItem.createItemStack(1))
+            if (leftover != null) continue // still doesn't fit — stays pending for the next retry
+
+            plugin.databaseManager.execute(
+                "UPDATE quest_weekly_key_reward SET delivered = 1 WHERE uuid = ? AND weekly_cycle_id = ?",
+                uuid, rewardCycleId
+            )
+            plugin.commsManager.send(
+                player,
+                Component.text("★ Weekly Quest Reward! ", NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD)
+                    .append(Component.text("You received a ", NamedTextColor.YELLOW))
+                    .append(customItem.displayName)
+                    .append(Component.text("!", NamedTextColor.YELLOW))
+            )
+            player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.3f)
+        }
+    }
+
+    @EventHandler
+    fun onJoin(event: PlayerJoinEvent) {
+        val player = event.player
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable { deliverPendingWeeklyKeyRewards(player) }, 20L)
     }
 
     private fun ensureQuestMasterRow(uuid: String, weeklyCycleId: String) {
@@ -1133,7 +1233,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
             gui.setItem(weeklySlots[i], buildQuestItem(quest, progress)) { p, _ -> showQuestDetails(p, quest, getProgress(p.uniqueId, quest)) }
         }
         val weeklyDone = weeklyPool.count { getProgress(uuid, it).completed }
-        gui.setItem(52, bonusItem("Weekly Completion", weeklyDone, weeklyPool.size, 3, isWeeklyBonusClaimed(uuid, weeklyCycleIdState)))
+        gui.setItem(52, bonusItem("Weekly Completion", weeklyDone, weeklyPool.size, 1, isWeeklyBonusClaimed(uuid, weeklyCycleIdState)))
 
         val qm = getQuestMasterProgress(uuid, weeklyCycleIdState)
         gui.setItem(13, questMasterItem(qm))
