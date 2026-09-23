@@ -30,6 +30,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
 
     private val effects = mutableListOf<KillEffect>()
     private val equipped = ConcurrentHashMap<UUID, String>()
+    private val warnedParticles = ConcurrentHashMap.newKeySet<Particle>()
 
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
         editMeta { it.displayName(Component.empty()) }
@@ -339,7 +340,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
                     plugin.server.scheduler.runTaskLater(plugin, Runnable {
                         val y = tick * 0.3
                         val pillarLoc = center.clone().add(0.0, y, 0.0)
-                        world.spawnParticle(Particle.FLAME, pillarLoc, 10, 0.15, 0.05, 0.15, 0.02)
+                        spawnParticleSafe(world, Particle.FLAME, pillarLoc, 10, 0.15, 0.05, 0.15, 0.02)
                     }, tick.toLong())
                 }
             }
@@ -353,7 +354,8 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
 
             "thunder_clap" -> {
                 world.playSound(center, Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 0.8f, 1.2f)
-                scheduleParticles(center, Particle.FLASH, 2, 0.0, 0.0, 0.0, ticks = 2)
+                scheduleParticles(center, Particle.FLASH, 2, 0.0, 0.0, 0.0,
+                    data = Color.WHITE, ticks = 2)
                 scheduleParticles(center, Particle.ELECTRIC_SPARK, 30, 0.5, 0.5, 0.5, ticks = 6)
             }
 
@@ -368,7 +370,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
                 for (tick in 0..7) {
                     plugin.server.scheduler.runTaskLater(plugin, Runnable {
                         val riseLoc = center.clone().add(0.0, tick * 0.4, 0.0)
-                        world.spawnParticle(Particle.SOUL, riseLoc, 4, 0.2, 0.1, 0.2, 0.01)
+                        spawnParticleSafe(world, Particle.SOUL, riseLoc, 4, 0.2, 0.1, 0.2, 0.01)
                     }, tick.toLong())
                 }
             }
@@ -378,7 +380,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
                 for (tick in 0..9) {
                     plugin.server.scheduler.runTaskLater(plugin, Runnable {
                         val riseLoc = center.clone().add(0.0, tick * 0.3, 0.0)
-                        world.spawnParticle(Particle.END_ROD, riseLoc, 5, 0.2, 0.1, 0.2, 0.01)
+                        spawnParticleSafe(world, Particle.END_ROD, riseLoc, 5, 0.2, 0.1, 0.2, 0.01)
                     }, tick.toLong())
                 }
             }
@@ -413,7 +415,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
                         val offset = center.clone().add(
                             Math.cos(angle) * 0.8, tick * 0.15, Math.sin(angle) * 0.8
                         )
-                        world.spawnParticle(Particle.COMPOSTER, offset, 8, 0.2, 0.1, 0.2, 0.02)
+                        spawnParticleSafe(world, Particle.COMPOSTER, offset, 8, 0.2, 0.1, 0.2, 0.02)
                     }, tick.toLong())
                 }
             }
@@ -429,7 +431,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
                 for (tick in 0..9) {
                     plugin.server.scheduler.runTaskLater(plugin, Runnable {
                         val rainLoc = center.clone().add(0.0, 3.0, 0.0)
-                        world.spawnParticle(Particle.CHERRY_LEAVES, rainLoc, 8, 1.0, 0.2, 1.0, 0.01)
+                        spawnParticleSafe(world, Particle.CHERRY_LEAVES, rainLoc, 8, 1.0, 0.2, 1.0, 0.01)
                     }, tick.toLong())
                 }
             }
@@ -442,7 +444,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
                         val swirlLoc = center.clone().add(
                             Math.cos(angle) * 0.7, 0.5 + Math.sin(tick * 0.5) * 0.3, Math.sin(angle) * 0.7
                         )
-                        world.spawnParticle(Particle.WAX_ON, swirlLoc, 5, 0.15, 0.15, 0.15, 0.01)
+                        spawnParticleSafe(world, Particle.WAX_ON, swirlLoc, 5, 0.15, 0.15, 0.15, 0.01)
                     }, tick.toLong())
                 }
             }
@@ -488,7 +490,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
                         val sphereLoc = center.clone().add(
                             Math.cos(angle) * radius, Math.sin(tick * 0.5) * 0.5, Math.sin(angle) * radius
                         )
-                        world.spawnParticle(Particle.DRAGON_BREATH, sphereLoc, 6, 0.1, 0.1, 0.1, 0.01)
+                        spawnParticleSafe(world, Particle.DRAGON_BREATH, sphereLoc, 6, 0.1, 0.1, 0.1, 0.01, data = 1.0f)
                     }, tick.toLong())
                 }
             }
@@ -498,7 +500,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
                 for (tick in 0..9) {
                     plugin.server.scheduler.runTaskLater(plugin, Runnable {
                         val beamLoc = center.clone().add(0.0, tick * 0.5, 0.0)
-                        world.spawnParticle(Particle.END_ROD, beamLoc, 8, 0.1, 0.05, 0.1, 0.01)
+                        spawnParticleSafe(world, Particle.END_ROD, beamLoc, 8, 0.1, 0.05, 0.1, 0.01)
                     }, tick.toLong())
                 }
             }
@@ -512,7 +514,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
                         val swirlLoc = center.clone().add(
                             Math.cos(angle) * radius, tick * 0.1, Math.sin(angle) * radius
                         )
-                        world.spawnParticle(Particle.ENCHANT, swirlLoc, 10, 0.1, 0.1, 0.1, 0.5)
+                        spawnParticleSafe(world, Particle.ENCHANT, swirlLoc, 10, 0.1, 0.1, 0.1, 0.5)
                     }, tick.toLong())
                 }
             }
@@ -555,12 +557,39 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             if (count <= 0) continue
 
             plugin.server.scheduler.runTaskLater(plugin, Runnable {
-                if (data != null) {
-                    world.spawnParticle(particle, loc, count, dx, dy, dz, speed, data)
-                } else {
-                    world.spawnParticle(particle, loc, count, dx, dy, dz, speed)
-                }
+                spawnParticleSafe(world, particle, loc, count, dx, dy, dz, speed, data)
             }, tick.toLong())
+        }
+    }
+
+    /**
+     * Spawns a particle, guarding against [Particle]s whose required data class (e.g. [Particle.DustOptions],
+     * [Float] for [Particle.DRAGON_BREATH], [Color] for [Particle.FLASH]) wasn't supplied or doesn't match.
+     * Paper throws an [IllegalArgumentException] in that case; we log it once per particle type instead of
+     * letting a misconfigured kill effect spam the console on every future kill.
+     */
+    private fun spawnParticleSafe(
+        world: World,
+        particle: Particle,
+        loc: Location,
+        count: Int,
+        dx: Double, dy: Double, dz: Double,
+        speed: Double = 0.0,
+        data: Any? = null
+    ) {
+        try {
+            if (data != null) {
+                world.spawnParticle(particle, loc, count, dx, dy, dz, speed, data)
+            } else {
+                world.spawnParticle(particle, loc, count, dx, dy, dz, speed)
+            }
+        } catch (e: IllegalArgumentException) {
+            if (warnedParticles.add(particle)) {
+                plugin.logger.warning(
+                    "Kill effect particle ${particle.name} failed to spawn (${e.message}); " +
+                        "further occurrences will be skipped silently."
+                )
+            }
         }
     }
 }
