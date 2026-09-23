@@ -3,6 +3,7 @@ package com.liam.joshymc.manager
 import io.papermc.paper.event.player.PlayerTradeEvent
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.depositItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -30,6 +31,7 @@ import org.bukkit.event.inventory.CraftItemEvent
 import org.bukkit.event.inventory.FurnaceExtractEvent
 import org.bukkit.event.player.PlayerExpChangeEvent
 import org.bukkit.event.player.PlayerFishEvent
+import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerLevelChangeEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
@@ -92,6 +94,13 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         private val ALWAYS_HARVESTABLE = setOf(
             "MELON", "PUMPKIN", "SUGAR_CANE", "CACTUS", "BAMBOO", "NETHER_WART",
             "COCOA", "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES", "WEEPING_VINES"
+        )
+
+        /** Daily Quest completion reward: exactly one of these keys, weighted. */
+        private val DAILY_COMPLETION_KEY_WEIGHTS = listOf(
+            "harvest_key" to 70,
+            "stockpile_key" to 20,
+            "homestead_key" to 10
         )
     }
 
@@ -551,6 +560,11 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
                 PRIMARY KEY (uuid, daily_cycle_id)
             )
         """.trimIndent())
+        // reward_key: which key was rolled for this completion. reward_delivered: whether it has
+        // actually reached the player's inventory/backup yet — lets a full-inventory delivery stay
+        // recoverable (retried on next join) instead of being lost.
+        try { plugin.databaseManager.execute("ALTER TABLE quest_daily_completion ADD COLUMN reward_key TEXT") } catch (_: Exception) {}
+        try { plugin.databaseManager.execute("ALTER TABLE quest_daily_completion ADD COLUMN reward_delivered INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
 
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS quest_weekly_completion (
@@ -741,11 +755,74 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         val cycleId = dailyCycleIdState
         if (!claimDailyBonusOnce(uuid.toString(), cycleId)) return
 
-        if (dailyCompletionRewardEnabled) runRewardCommands(player, dailyCompletionCommands)
+        if (dailyCompletionRewardEnabled) {
+            val keyId = rollDailyCompletionKey()
+            plugin.databaseManager.execute(
+                "UPDATE quest_daily_completion SET reward_key = ? WHERE uuid = ? AND daily_cycle_id = ?",
+                keyId, uuid.toString(), cycleId
+            )
+            deliverDailyCompletionReward(player, uuid.toString(), cycleId, keyId)
+            runRewardCommands(player, dailyCompletionCommands)
+        }
         player.playSound(player.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.6f, 1.0f)
         plugin.commsManager.send(player, plugin.commsManager.parseLegacy("&6&l★ Daily Quests Complete! &eBonus reward granted!"))
 
         if (questMasterEnabled) creditQuestMasterDailySet(player, cycleId)
+    }
+
+    /** Weighted pick among the Daily Quest completion keys — Harvest 70% / Stockpile 20% / Homestead 10%. */
+    private fun rollDailyCompletionKey(): String {
+        val totalWeight = DAILY_COMPLETION_KEY_WEIGHTS.sumOf { it.second }
+        var roll = (Math.random() * totalWeight).toInt()
+        for ((id, weight) in DAILY_COMPLETION_KEY_WEIGHTS) {
+            roll -= weight
+            if (roll < 0) return id
+        }
+        return DAILY_COMPLETION_KEY_WEIGHTS.last().first
+    }
+
+    /**
+     * Hands [keyId] to [player] via the authoritative staff-mode-aware delivery path. If it
+     * doesn't fully fit, the reward stays flagged undelivered in `quest_daily_completion` and
+     * is retried the next time this player joins ([onJoinDeliverPendingDailyReward]) — it is
+     * never dropped on the ground or silently lost.
+     */
+    private fun deliverDailyCompletionReward(player: Player, uuid: String, cycleId: String, keyId: String) {
+        val item = plugin.itemManager.getItem(keyId)?.createItemStack()
+        if (item == null) {
+            plugin.logger.warning("[QuestCycle] Daily completion reward key '$keyId' is not a registered custom item — reward left pending.")
+            return
+        }
+        val leftover = plugin.depositItemSafely(player, item)
+        if (leftover == null) {
+            plugin.databaseManager.execute(
+                "UPDATE quest_daily_completion SET reward_delivered = 1 WHERE uuid = ? AND daily_cycle_id = ?", uuid, cycleId
+            )
+        } else {
+            plugin.commsManager.send(
+                player,
+                plugin.commsManager.parseLegacy("&eYour Daily Quest key didn't fit — free up inventory space and rejoin to receive it.")
+            )
+        }
+    }
+
+    /** Retries any Daily Quest completion key rewards that couldn't be delivered (e.g. full inventory) when they were rolled. */
+    @EventHandler
+    fun onJoinDeliverPendingDailyReward(event: PlayerJoinEvent) {
+        val player = event.player
+        val uuid = player.uniqueId.toString()
+        val pending = plugin.databaseManager.query(
+            "SELECT daily_cycle_id, reward_key FROM quest_daily_completion WHERE uuid = ? AND reward_delivered = 0 AND reward_key IS NOT NULL",
+            uuid
+        ) { rs -> rs.getString("daily_cycle_id") to rs.getString("reward_key") }
+        if (pending.isEmpty()) return
+
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            if (!player.isOnline) return@Runnable
+            for ((cycleId, keyId) in pending) {
+                deliverDailyCompletionReward(player, uuid, cycleId, keyId)
+            }
+        }, 20L)
     }
 
     private fun checkWeeklySetCompletion(player: Player) {

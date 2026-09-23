@@ -856,10 +856,11 @@ quests:
       minute: 0
     repeat-protection-days: 7
     completion-reward:
+      # Grants exactly one key when enabled: Harvest Key 70% / Stockpile Key 20% / Homestead Key 10%.
       enabled: true
-      # {player} is replaced with the player's name. Commands run from console.
-      commands:
-        - "crate givekey joshy {player} 1"
+      # Optional extra commands run on top of the key above. {player} is replaced with the
+      # player's name. Commands run from console.
+      commands: []
 
   weekly:
     selected: 3
