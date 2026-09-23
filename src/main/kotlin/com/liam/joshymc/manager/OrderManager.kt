@@ -497,6 +497,21 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         openItemSelectGui(player, 0)
     }
 
+    /** `/order create <item>` shortcut — skips Item Selection and drops straight into the Quantity step. */
+    fun beginCreateOrderForItem(player: Player, material: Material) {
+        if (getPlayerActiveOrderCount(player.uniqueId) >= getActiveOrderLimit(player)) {
+            plugin.commsManager.send(player, Component.text("You have reached your active Buy Order limit (${getActiveOrderLimit(player)}).", NamedTextColor.RED))
+            return
+        }
+        if (material !in orderableMaterials) {
+            plugin.commsManager.send(player, Component.text("Buy Orders can't be created for that item.", NamedTextColor.RED))
+            return
+        }
+
+        createSessions[player.uniqueId] = CreateOrderSession(item = ItemStack(material), pricePerItem = minPrice)
+        openQuantityGui(player)
+    }
+
     fun handleCreateChatInput(player: Player, raw: String) {
         val field = awaitingCustomInput[player.uniqueId] ?: return
         val session = createSessions[player.uniqueId]

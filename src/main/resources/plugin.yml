@@ -162,8 +162,8 @@ commands:
     usage: /orders [admin <view|info|cancel|remove> ...]
     aliases: [buyorders]
   order:
-    description: Quick shortcut to search Buy Orders for a specific item
-    usage: /order [item]
+    description: Quick shortcut to search Buy Orders, or jump straight into creating one
+    usage: /order [item|create <item>]
   overflow:
     description: View items held in your persistent Overflow storage
     usage: /overflow

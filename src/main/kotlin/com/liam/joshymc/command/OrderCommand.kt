@@ -13,7 +13,9 @@ import org.bukkit.entity.Player
 /**
  * `/order` — quick shortcut into the Buy Orders marketplace. With no args it's identical to
  * `/orders`; with an item name it opens the same GUI pre-filtered to that item instead of
- * making the player search through it manually.
+ * making the player search through it manually. `/order create <item>` jumps straight into
+ * the Buy Order creation flow with that item already selected — a separate shortcut so it
+ * doesn't collide with the existing `/order <item>` search filter.
  */
 class OrderCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
@@ -33,6 +35,21 @@ class OrderCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return true
         }
 
+        if (args[0].equals("create", ignoreCase = true)) {
+            val itemArgs = args.drop(1)
+            if (itemArgs.isEmpty()) {
+                plugin.commsManager.send(sender, Component.text("Usage: /order create <item>", NamedTextColor.RED))
+                return true
+            }
+            val material = Material.matchMaterial(itemArgs.joinToString("_").uppercase())
+            if (material == null || material !in plugin.orderManager.orderableMaterialCatalog()) {
+                plugin.commsManager.send(sender, Component.text("Unknown item, or Buy Orders can't be created for it.", NamedTextColor.RED))
+                return true
+            }
+            plugin.orderManager.beginCreateOrderForItem(sender, material)
+            return true
+        }
+
         val material = Material.matchMaterial(args.joinToString("_").uppercase())
         if (material == null || plugin.orderManager.getTotalActiveOrders(material) == 0) {
             plugin.commsManager.send(sender, Component.text("No matching buy orders were found for that item.", NamedTextColor.RED))
@@ -44,11 +61,22 @@ class OrderCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (args.size != 1) return emptyList()
-        val prefix = args[0].lowercase()
-        return plugin.orderManager.orderableMaterialCatalog()
-            .map { it.name.lowercase() }
-            .filter { it.startsWith(prefix) }
-            .take(30)
+        if (args.isEmpty()) return emptyList()
+
+        if (args.size == 1) {
+            val prefix = args[0].lowercase()
+            val options = listOf("create") + plugin.orderManager.orderableMaterialCatalog().map { it.name.lowercase() }
+            return options.filter { it.startsWith(prefix) }.take(30)
+        }
+
+        if (args[0].equals("create", ignoreCase = true) && args.size == 2) {
+            val prefix = args[1].lowercase()
+            return plugin.orderManager.orderableMaterialCatalog()
+                .map { it.name.lowercase() }
+                .filter { it.startsWith(prefix) }
+                .take(30)
+        }
+
+        return emptyList()
     }
 }
