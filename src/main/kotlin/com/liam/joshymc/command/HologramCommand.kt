@@ -14,7 +14,7 @@ import org.bukkit.entity.Player
 
 class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
-    private val subcommands = listOf("create", "delete", "addline", "removeline", "setline", "move", "list", "cleanup", "nuke", "scale", "rotation")
+    private val subcommands = listOf("create", "delete", "addline", "removeline", "setline", "move", "center", "list", "cleanup", "nuke", "scale", "rotation")
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
@@ -39,6 +39,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             "removeline" -> handleRemoveLine(sender, args)
             "setline" -> handleSetLine(sender, args)
             "move" -> handleMove(sender, args)
+            "center" -> handleCenter(sender, args)
             "list" -> handleList(sender)
             "cleanup" -> handleCleanup(sender)
             "nuke" -> handleNuke(sender)
@@ -162,6 +163,22 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         plugin.commsManager.send(player, Component.text("Moved hologram '$id' to your location.", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
     }
 
+    private fun handleCenter(player: Player, args: Array<out String>) {
+        if (args.size < 2) {
+            plugin.commsManager.send(player, Component.text("Usage: /holo center <id>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            return
+        }
+
+        val id = args[1].lowercase()
+
+        if (!plugin.hologramManager.centerHologram(id)) {
+            plugin.commsManager.send(player, Component.text("Hologram '$id' not found.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            return
+        }
+
+        plugin.commsManager.send(player, Component.text("Centered hologram '$id' within its block.", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
+    }
+
     private fun handleList(player: Player) {
         val ids = plugin.hologramManager.getHologramIds()
 
@@ -260,6 +277,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             "/holo removeline <id> <lineNumber>",
             "/holo setline <id> <lineNumber> <text...>",
             "/holo move <id>",
+            "/holo center <id>",
             "/holo list",
             "/holo scale <id> <size>",
             "/holo rotation <id> <degrees|unlock>",
@@ -281,7 +299,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
         if (args.size == 2) {
             val sub = args[0].lowercase()
-            if (sub in listOf("delete", "addline", "removeline", "setline", "move", "scale", "rotation")) {
+            if (sub in listOf("delete", "addline", "removeline", "setline", "move", "center", "scale", "rotation")) {
                 val prefix = args[1].lowercase()
                 return plugin.hologramManager.getHologramIds().filter { it.startsWith(prefix) }
             }

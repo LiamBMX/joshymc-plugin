@@ -2,24 +2,64 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.item.impl.CRAFTING_MATERIAL_IDS
+import com.liam.joshymc.listener.CustomArmorListener
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
+import org.bukkit.NamespacedKey
+import org.bukkit.Registry
 import org.bukkit.Sound
-import org.bukkit.persistence.PersistentDataType
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.event.inventory.ClickType
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.meta.PotionMeta
+import org.bukkit.potion.PotionEffect
+import org.bukkit.potion.PotionEffectType
+import org.bukkit.potion.PotionType
 import java.io.File
+import java.util.UUID
 
 class ServerShopManager(private val plugin: Joshymc) {
 
-    data class ShopItem(val material: Material, val buyPrice: Double, val sellPrice: Double)
+    enum class ShopItemKind { MATERIAL, POTION, SPAWNER }
+
+    data class ShopItem(
+        val material: Material,
+        val buyPrice: Double,
+        val sellPrice: Double,
+        val kind: ShopItemKind = ShopItemKind.MATERIAL,
+        val displayName: String? = null,
+        val potionEffect: PotionEffectType? = null,
+        val potionAmplifier: Int = 0,
+        val spawnerTypeId: String? = null
+    )
     data class ShopCategory(val id: String, val name: String, val icon: Material, val items: List<ShopItem>)
 
+    /** The /worth GUI's Filter button cycles through exactly these three sort modes, in order. */
+    enum class WorthFilterMode(val label: String) {
+        PRICE_DESC("Price: Highest to Lowest"),
+        PRICE_ASC("Price: Lowest to Highest"),
+        ALPHABETICAL("Alphabetical Order");
+
+        fun next(): WorthFilterMode = entries[(ordinal + 1) % entries.size]
+    }
+
+    // Per-player selected /worth filter mode, so paging and re-opening the GUI keeps
+    // whatever mode the player last chose. Defaults to PRICE_DESC (v1.0.49 default).
+    private val worthFilterModeByPlayer = mutableMapOf<UUID, WorthFilterMode>()
+
+    // shop.yml is the single buy/sell catalog browsed from the /shop GUI. Every
+    // item carries both a "buy" and a "sell" price.
     private val categories = mutableListOf<ShopCategory>()
+
+    // sell-prices.yml's legacy `categories:` block. It feeds getSellPrice()/getBaseSellPrice()
+    // alongside shop.yml, which other systems (sell wand, market, spawner drops) still rely
+    // on. The /worth GUI itself no longer reads this — it browses SellPriceManager's
+    // `prices:` catalog directly (the same one /sell uses) so nothing needs a category.
+    private val sellCategories = mutableListOf<ShopCategory>()
 
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
         editMeta { it.displayName(Component.empty()) }
@@ -33,10 +73,93 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     fun start() {
         categories.clear()
+        sellCategories.clear()
 
-        val file = plugin.configFile("shop.yml")
+        mergeMissingCategoriesFromDefaults("shop.yml")
+        removeObsoleteCategories("shop.yml", "spawners")
+        loadCategoriesInto(categories, "shop.yml")
+
+        mergeMissingCategoriesFromDefaults("sell-prices.yml")
+        loadCategoriesInto(sellCategories, "sell-prices.yml")
+
+        plugin.logger.info("Loaded ${categories.size} shop categories with ${categories.sumOf { it.items.size }} items")
+        plugin.logger.info("Loaded ${sellCategories.size} sell-price categories with ${sellCategories.sumOf { it.items.size }} items")
+    }
+
+    /**
+     * Merge any top-level categories that exist in the bundled `shop.yml` resource but are
+     * missing from the user's saved file (e.g. a new "spawners" category shipped in an
+     * update). Existing categories/items (with admin tweaks) are left untouched — same
+     * pattern as SpawnerManager.mergeMissingFromDefaults.
+     */
+    private fun mergeMissingCategoriesFromDefaults(fileName: String) {
+        val file = plugin.configFile(fileName)
         if (!file.exists()) {
-            plugin.saveResource("shop.yml", false)
+            plugin.saveResource(fileName, false)
+            return
+        }
+
+        val defaultStream = plugin.getResource(fileName) ?: return
+        val defaults = YamlConfiguration.loadConfiguration(defaultStream.bufferedReader())
+        val userCfg = YamlConfiguration.loadConfiguration(file)
+
+        if (com.liam.joshymc.util.ConfigUtil.looksLikeParseFailure(file, userCfg)) {
+            plugin.logger.severe("[Shop] $fileName failed to load (invalid YAML) — the existing file has been preserved and was NOT overwritten. Fix the syntax error and reload.")
+            return
+        }
+
+        val defaultsSection = defaults.getConfigurationSection("categories") ?: return
+        val userSection = userCfg.getConfigurationSection("categories") ?: userCfg.createSection("categories")
+
+        var added = 0
+        for (categoryId in defaultsSection.getKeys(false)) {
+            if (userSection.contains(categoryId)) continue
+            userSection.set(categoryId, defaultsSection.get(categoryId))
+            added++
+        }
+        if (added > 0) {
+            try {
+                com.liam.joshymc.util.ConfigUtil.backup(file, plugin.logger, "Shop")
+                userCfg.save(file)
+                plugin.logger.info("[Shop] Merged $added new shop categor${if (added == 1) "y" else "ies"} from bundled defaults.")
+            } catch (e: Exception) {
+                plugin.logger.warning("[Shop] Failed to save merged shop.yml: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Drops categories that shipped in an older bundled shop.yml but no longer exist in the
+     * current defaults (e.g. "spawners", replaced by "redstone") from the user's saved file,
+     * so upgraded servers stop serving a category that's supposed to be fully retired.
+     */
+    private fun removeObsoleteCategories(fileName: String, vararg categoryIds: String) {
+        val file = plugin.configFile(fileName)
+        if (!file.exists()) return
+
+        val userCfg = YamlConfiguration.loadConfiguration(file)
+        val userSection = userCfg.getConfigurationSection("categories") ?: return
+
+        var removed = 0
+        for (categoryId in categoryIds) {
+            if (!userSection.contains(categoryId)) continue
+            userSection.set(categoryId, null)
+            removed++
+        }
+        if (removed > 0) {
+            try {
+                userCfg.save(file)
+                plugin.logger.info("[Shop] Removed $removed obsolete shop categor${if (removed == 1) "y" else "ies"} from shop.yml.")
+            } catch (e: Exception) {
+                plugin.logger.warning("[Shop] Failed to save shop.yml after removing obsolete categories: ${e.message}")
+            }
+        }
+    }
+
+    private fun loadCategoriesInto(target: MutableList<ShopCategory>, fileName: String) {
+        val file = plugin.configFile(fileName)
+        if (!file.exists()) {
+            plugin.saveResource(fileName, false)
         }
 
         val config = YamlConfiguration.loadConfiguration(file)
@@ -44,6 +167,7 @@ class ServerShopManager(private val plugin: Joshymc) {
 
         for (categoryId in categoriesSection.getKeys(false)) {
             val section = categoriesSection.getConfigurationSection(categoryId) ?: continue
+            if (!section.getBoolean("enabled", true)) continue
             val name = section.getString("name") ?: categoryId
             val iconName = section.getString("icon") ?: "CHEST"
             val icon = Material.matchMaterial(iconName) ?: Material.CHEST
@@ -51,45 +175,133 @@ class ServerShopManager(private val plugin: Joshymc) {
             val items = mutableListOf<ShopItem>()
             val itemsSection = section.getConfigurationSection("items") ?: continue
 
-            for (materialName in itemsSection.getKeys(false)) {
-                val material = Material.matchMaterial(materialName) ?: continue
-                val itemSection = itemsSection.getConfigurationSection(materialName) ?: continue
+            for (key in itemsSection.getKeys(false)) {
+                val itemSection = itemsSection.getConfigurationSection(key) ?: continue
+                if (!itemSection.getBoolean("enabled", true)) continue
+
+                // Most entries key directly off the Material name (e.g. "WHEAT:"). Entries that
+                // need a custom id (multiple potions sharing Material.SPLASH_POTION, or any
+                // number of spawner entries sharing Material.SPAWNER) instead specify an
+                // explicit "material:" field (spawner entries default it to SPAWNER).
+                val spawnerTypeId = itemSection.getString("spawner")
+                val material = if (spawnerTypeId != null) {
+                    Material.SPAWNER
+                } else {
+                    Material.matchMaterial(itemSection.getString("material") ?: key) ?: continue
+                }
                 val buyPrice = itemSection.getDouble("buy", 0.0)
                 val sellPrice = itemSection.getDouble("sell", 0.0)
-                items.add(ShopItem(material, buyPrice, sellPrice))
+                val displayName = itemSection.getString("name")
+
+                val effectName = itemSection.getString("effect")
+                when {
+                    spawnerTypeId != null ->
+                        items.add(ShopItem(material, buyPrice, sellPrice, ShopItemKind.SPAWNER, displayName, spawnerTypeId = spawnerTypeId))
+                    effectName != null -> {
+                        val effect = Registry.EFFECT.get(NamespacedKey.minecraft(effectName.lowercase())) ?: continue
+                        val amplifier = itemSection.getInt("amplifier", 0)
+                        items.add(ShopItem(material, buyPrice, sellPrice, ShopItemKind.POTION, displayName, effect, amplifier))
+                    }
+                    else -> items.add(ShopItem(material, buyPrice, sellPrice, ShopItemKind.MATERIAL, displayName))
+                }
             }
 
-            categories.add(ShopCategory(categoryId, name, icon, items))
+            val existing = target.indexOfFirst { it.id == categoryId }
+            if (existing >= 0) {
+                val merged = target[existing]
+                target[existing] = merged.copy(items = merged.items + items)
+            } else {
+                target.add(ShopCategory(categoryId, name, icon, items))
+            }
         }
-
-        plugin.logger.info("Loaded ${categories.size} shop categories with ${categories.sumOf { it.items.size }} items")
     }
 
     fun getCategories(): List<ShopCategory> = categories.toList()
 
     fun getCategory(id: String): ShopCategory? = categories.find { it.id == id }
 
-    fun getSellPrice(material: Material): Double? {
+    fun getCategoryIdForMaterial(material: Material): String? {
         for (category in categories) {
-            val item = category.items.find { it.material == material }
-            if (item != null && item.sellPrice > 0) {
-                // Apply market multiplier for dynamic pricing
-                val multiplier = plugin.marketManager.getMultiplier(material)
-                return item.sellPrice * multiplier
-            }
+            if (category.items.any { it.material == material && it.sellPrice > 0 }) return category.id
         }
         return null
+    }
+
+    fun getSellPrice(material: Material): Double? {
+        val base = getBaseSellPrice(material) ?: return null
+        return base * plugin.boosterManager.getSellMultiplier(material)
     }
 
     fun getBaseSellPrice(material: Material): Double? {
         for (category in categories) {
-            val item = category.items.find { it.material == material }
-            if (item != null && item.sellPrice > 0) return item.sellPrice
+            val item = category.items.find { it.material == material && it.sellPrice > 0 }
+            if (item != null) return item.sellPrice
+        }
+        for (category in sellCategories) {
+            val item = category.items.find { it.material == material && it.sellPrice > 0 }
+            if (item != null) return item.sellPrice
         }
         return null
     }
 
+    /**
+     * The `/shop` buy price for [material], or null if it has no purchasable shop.yml entry.
+     * Buy prices only ever come from `/shop` — there is no other purchase system — so unlike
+     * sell price this doesn't need a separate authoritative source.
+     */
+    fun getBuyPrice(material: Material): Double? {
+        for (category in categories) {
+            val item = category.items.find { it.material == material && it.buyPrice > 0 }
+            if (item != null) return item.buyPrice
+        }
+        return null
+    }
+
+    /** Distinct materials that have a `/shop` entry — used to prioritize `/worth` tab completion. */
+    fun getAllShopMaterials(): List<Material> {
+        return categories.flatMap { it.items }
+            .filter { it.buyPrice > 0 || it.sellPrice > 0 }
+            .map { it.material }
+            .distinct()
+    }
+
+    /**
+     * The full, flat pool of sellable items the /worth GUI's Filter modes draw from, sorted
+     * per [mode]. Sourced directly from SellPriceManager's central `prices:` catalog — the
+     * exact same data /sell reads — so every configured item shows up with no category
+     * assignment required and no separate /worth price list to fall out of sync.
+     */
+    private fun getWorthItems(mode: WorthFilterMode): List<ShopItem> {
+        val items = plugin.sellPriceManager.getAllPrices().map { (material, price) ->
+            ShopItem(material, buyPrice = 0.0, sellPrice = price)
+        }
+        return when (mode) {
+            WorthFilterMode.PRICE_DESC -> items.sortedByDescending { it.sellPrice }
+            WorthFilterMode.PRICE_ASC -> items.sortedBy { it.sellPrice }
+            WorthFilterMode.ALPHABETICAL -> items.sortedBy { displayLabel(it).lowercase() }
+        }
+    }
+
+    /** Returns the sell price with the Flower Armor 1.2x crop bonus applied if applicable. */
+    fun applyCropBonus(price: Double, material: Material, playerUuid: UUID): Double {
+        return if (material in CustomArmorListener.FLOWER_CROP_MATERIALS &&
+                   CustomArmorListener.hasFlowerSetBonus(playerUuid)) {
+            price * 1.2
+        } else {
+            price
+        }
+    }
+
     // ── Main Menu ───────────────────────────────────────────────────────
+
+    private data class MenuButton(val name: String, val icon: Material, val itemCount: Int, val onClick: (Player) -> Unit)
+
+    /** Category buttons are driven entirely by shop.yml, including the Spawners category. */
+    private fun buildMenuButtons(): List<MenuButton> {
+        return categories.map { category ->
+            MenuButton(category.name, category.icon, category.items.size) { p -> openCategory(p, category.id, 0) }
+        }
+    }
 
     fun openMainMenu(player: Player) {
         val title = Component.text("Server Shop", NamedTextColor.AQUA)
@@ -100,26 +312,28 @@ class ServerShopManager(private val plugin: Joshymc) {
         gui.fill(FILLER.clone())
         gui.border(BORDER.clone())
 
+        val buttons = buildMenuButtons()
+
         // Place category icons in the middle area (row 1, columns 1-7)
         val availableSlots = mutableListOf<Int>()
         for (col in 1..7) {
             availableSlots.add(9 + col) // row 1
         }
 
-        val centered = centerInRow(categories.size, availableSlots)
+        val centered = centerInRow(buttons.size, availableSlots)
 
         for ((index, slot) in centered.withIndex()) {
-            val category = categories[index]
-            val icon = ItemStack(category.icon).apply {
+            val button = buttons[index]
+            val icon = ItemStack(button.icon).apply {
                 editMeta { meta ->
                     meta.displayName(
-                        Component.text(category.name, NamedTextColor.AQUA)
+                        Component.text(button.name, NamedTextColor.AQUA)
                             .decoration(TextDecoration.BOLD, true)
                             .decoration(TextDecoration.ITALIC, false)
                     )
                     meta.lore(listOf(
                         Component.empty(),
-                        Component.text("${category.items.size} items", NamedTextColor.GRAY)
+                        Component.text("${button.itemCount} items", NamedTextColor.GRAY)
                             .decoration(TextDecoration.ITALIC, false),
                         Component.empty(),
                         Component.text("Click to browse", NamedTextColor.YELLOW)
@@ -130,7 +344,7 @@ class ServerShopManager(private val plugin: Joshymc) {
 
             gui.setItem(slot, icon) { p, _ ->
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
-                openCategory(p, category.id, 0)
+                button.onClick(p)
             }
         }
 
@@ -168,12 +382,20 @@ class ServerShopManager(private val plugin: Joshymc) {
         val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(category.items.size)
         val pageItems = if (startIndex < category.items.size) category.items.subList(startIndex, endIndex) else emptyList()
 
-        // Item slots: rows 1-4, columns 1-7
-        val itemSlots = mutableListOf<Int>()
-        for (row in 1..4) {
-            for (col in 1..7) {
-                itemSlots.add(row * 9 + col)
+        // Item slots: rows 1-4, columns 1-7. The End and Nether categories have exactly
+        // 9 items and are displayed as a centered 3x3 grid instead of the usual top-left flow.
+        val itemSlots = if (categoryId == "end" || categoryId == "nether") {
+            val centeredRows = listOf(1, 2, 3)
+            val centeredCols = listOf(3, 4, 5)
+            centeredRows.flatMap { row -> centeredCols.map { col -> row * 9 + col } }
+        } else {
+            val slots = mutableListOf<Int>()
+            for (row in 1..4) {
+                for (col in 1..7) {
+                    slots.add(row * 9 + col)
+                }
             }
+            slots
         }
 
         for ((index, shopItem) in pageItems.withIndex()) {
@@ -239,48 +461,241 @@ class ServerShopManager(private val plugin: Joshymc) {
         plugin.guiManager.open(player, gui)
     }
 
-    // ── Item Icon Builder ───────────────────────────────────────────────
+    // ── Worth GUI (read-only sell price guide) ──────────────────────────
+    //
+    // Browses getWorthItems() purely for information. Item slots are never given a
+    // click handler, so GuiManager's "click on top inventory is always cancelled" rule
+    // makes every slot inert — there is no sell/buy logic to trigger. There are no
+    // categories: every item from SellPriceManager's central catalog is shown, paginated,
+    // and a single Filter button cycles through 3 sort modes (see WorthFilterMode). The
+    // selected mode is remembered per-player and only resets pagination back to page 0
+    // when the mode itself changes, not when paging within a mode.
 
-    private fun buildShopItemIcon(shopItem: ShopItem): ItemStack {
+    fun openWorthMenu(player: Player) {
+        val mode = worthFilterModeByPlayer[player.uniqueId] ?: WorthFilterMode.PRICE_DESC
+        worthFilterModeByPlayer[player.uniqueId] = mode
+        openWorthList(player, mode, 0)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    private fun openWorthList(player: Player, mode: WorthFilterMode, page: Int) {
+        val items = getWorthItems(mode)
+
+        val title = Component.text("Worth Guide", NamedTextColor.GOLD)
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+
+        val gui = CustomGui(title, 54)
+        gui.fill(FILLER.clone())
+        for (i in 0..8) gui.inventory.setItem(i, BORDER.clone())
+        for (i in 45..53) gui.inventory.setItem(i, BORDER.clone())
+
+        val totalPages = ((items.size - 1) / ITEMS_PER_PAGE).coerceAtLeast(0)
+        val startIndex = page * ITEMS_PER_PAGE
+        val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(items.size)
+        val pageItems = if (startIndex < items.size) items.subList(startIndex, endIndex) else emptyList()
+
+        val itemSlots = mutableListOf<Int>()
+        for (row in 1..4) {
+            for (col in 1..7) {
+                itemSlots.add(row * 9 + col)
+            }
+        }
+
+        for ((index, shopItem) in pageItems.withIndex()) {
+            gui.setItem(itemSlots[index], buildWorthItemIcon(shopItem))
+        }
+
+        gui.setItem(45, buildWorthCloseButton()) { p, _ -> p.closeInventory() }
+
+        gui.setItem(49, buildWorthFilterButton(mode)) { p, _ ->
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            val nextMode = mode.next()
+            worthFilterModeByPlayer[p.uniqueId] = nextMode
+            openWorthList(p, nextMode, 0)
+        }
+
+        if (page > 0) {
+            val prevItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Previous Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(46, prevItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openWorthList(p, mode, page - 1)
+            }
+        }
+
+        if (page < totalPages) {
+            val nextItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Next Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(52, nextItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openWorthList(p, mode, page + 1)
+            }
+        }
+
+        plugin.guiManager.open(player, gui)
+    }
+
+    private fun buildWorthCloseButton(): ItemStack {
+        return ItemStack(Material.BARRIER).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text("Close", NamedTextColor.RED)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+            }
+        }
+    }
+
+    private fun buildWorthFilterButton(mode: WorthFilterMode): ItemStack {
+        return ItemStack(Material.HOPPER).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text("Filter", NamedTextColor.GOLD)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                val lore = mutableListOf(
+                    Component.text("Current Mode: ", NamedTextColor.GRAY)
+                        .append(Component.text(mode.label, NamedTextColor.YELLOW))
+                        .decoration(TextDecoration.ITALIC, false),
+                    Component.empty(),
+                    Component.text("Available Modes:", NamedTextColor.GRAY)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                for (option in WorthFilterMode.entries) {
+                    val selected = option == mode
+                    lore.add(
+                        Component.text(if (selected) "» " else "  ", NamedTextColor.GREEN)
+                            .append(
+                                Component.text(
+                                    option.label,
+                                    if (selected) NamedTextColor.GREEN else NamedTextColor.DARK_GRAY
+                                )
+                            )
+                            .decoration(TextDecoration.BOLD, selected)
+                            .decoration(TextDecoration.ITALIC, false)
+                    )
+                }
+                lore.add(Component.empty())
+                lore.add(
+                    Component.text("Click to cycle filter options!", NamedTextColor.YELLOW)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                meta.lore(lore)
+            }
+        }
+    }
+
+    private fun buildWorthItemIcon(shopItem: ShopItem): ItemStack {
         return ItemStack(shopItem.material).apply {
             editMeta { meta ->
                 meta.displayName(
-                    Component.text(formatMaterialName(shopItem.material), NamedTextColor.WHITE)
+                    Component.text(displayLabel(shopItem), NamedTextColor.WHITE)
+                        .decoration(TextDecoration.BOLD, true)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                meta.lore(listOf(
+                    Component.text("Worth: ", NamedTextColor.GRAY)
+                        .append(Component.text("${plugin.economyManager.format(shopItem.sellPrice)} each", NamedTextColor.GREEN))
+                        .decoration(TextDecoration.ITALIC, false)
+                ))
+            }
+        }
+    }
+
+    // ── Potion Items ─────────────────────────────────────────────────────
+    //
+    // Some shop entries (e.g. "Splash Potion of Strength II") have no vanilla brewing
+    // recipe. We build them directly against PotionMeta: base potion type WATER (so the
+    // client doesn't show a stale "no effects" tooltip) plus a single custom effect.
+
+    private fun buildPotionItem(shopItem: ShopItem): ItemStack {
+        val effect = shopItem.potionEffect ?: return ItemStack(shopItem.material)
+        // Instant effects (Instant Health/Damage) apply immediately; duration is irrelevant.
+        // Everything else uses vanilla's tier-II duration (1:30) to match player expectations.
+        val durationTicks = when (effect) {
+            PotionEffectType.INSTANT_HEALTH, PotionEffectType.INSTANT_DAMAGE -> 1
+            else -> 1800
+        }
+
+        val item = ItemStack(shopItem.material)
+        item.editMeta { meta ->
+            val potionMeta = meta as PotionMeta
+            potionMeta.basePotionType = PotionType.WATER
+            potionMeta.addCustomEffect(PotionEffect(effect, durationTicks, shopItem.potionAmplifier), true)
+        }
+        return item
+    }
+
+    private fun displayLabel(shopItem: ShopItem): String = shopItem.displayName ?: formatMaterialName(shopItem.material)
+
+    // ── Item Icon Builder ───────────────────────────────────────────────
+
+    /**
+     * Spawner entries reuse SpawnerManager.createSpawnerItem so the delivered item is
+     * identical (mob type, PDC tag, drop-table lore) to a spawner bought via /spawner —
+     * there is no separate "shop spawner" format that could ever preserve the wrong mob.
+     */
+    private fun buildSpawnerIcon(shopItem: ShopItem): ItemStack {
+        val typeId = shopItem.spawnerTypeId ?: return ItemStack(Material.BARRIER)
+        val item = plugin.spawnerManager.createSpawnerItem(typeId) ?: return ItemStack(Material.BARRIER)
+        item.editMeta { meta ->
+            val lore = (meta.lore() ?: emptyList()).toMutableList()
+            if (shopItem.buyPrice > 0) {
+                lore.add(
+                    plugin.commsManager.parseLegacy("&7Buy: &a${plugin.economyManager.format(shopItem.buyPrice)}")
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                lore.add(Component.empty())
+                lore.add(
+                    Component.text("Left-click to choose buy amount", NamedTextColor.GREEN)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+            } else {
+                lore.add(Component.text("Not for sale", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+            }
+            meta.lore(lore)
+        }
+        return item
+    }
+
+    private fun buildShopItemIcon(shopItem: ShopItem): ItemStack {
+        if (shopItem.kind == ShopItemKind.SPAWNER) return buildSpawnerIcon(shopItem)
+        val base = if (shopItem.kind == ShopItemKind.POTION) buildPotionItem(shopItem) else ItemStack(shopItem.material)
+        return base.apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text(displayLabel(shopItem), NamedTextColor.WHITE)
                         .decoration(TextDecoration.BOLD, true)
                         .decoration(TextDecoration.ITALIC, false)
                 )
 
                 val lore = mutableListOf<Component>()
 
-                // Dynamic prices from market
-                val multiplier = plugin.marketManager.getMultiplier(shopItem.material)
-                val liveBuy = if (shopItem.buyPrice > 0) shopItem.buyPrice * multiplier else 0.0
-                val liveSell = if (shopItem.sellPrice > 0) shopItem.sellPrice * multiplier else 0.0
-                val pctChange = ((multiplier - 1.0) * 100).toInt()
-                val trendText = when {
-                    pctChange > 2 -> " &a(+$pctChange%)"
-                    pctChange < -2 -> " &c($pctChange%)"
-                    else -> ""
-                }
-
                 // Buy price
-                if (liveBuy > 0) {
+                if (shopItem.buyPrice > 0) {
                     lore.add(
-                        plugin.commsManager.parseLegacy("&7Buy: &a${plugin.economyManager.format(liveBuy)}$trendText")
+                        plugin.commsManager.parseLegacy("&7Buy: &a${plugin.economyManager.format(shopItem.buyPrice)}")
                             .decoration(TextDecoration.ITALIC, false)
                     )
                 } else {
                     lore.add(Component.text("Not for sale", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
-                }
-
-                // Sell price
-                if (liveSell > 0) {
-                    lore.add(
-                        plugin.commsManager.parseLegacy("&7Sell: &e${plugin.economyManager.format(liveSell)}$trendText")
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                } else {
-                    lore.add(Component.text("Cannot sell", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
                 }
 
                 lore.add(Component.empty())
@@ -289,16 +704,6 @@ class ServerShopManager(private val plugin: Joshymc) {
                 if (shopItem.buyPrice > 0) {
                     lore.add(
                         Component.text("Left-click to choose buy amount", NamedTextColor.GREEN)
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                }
-                if (shopItem.sellPrice > 0) {
-                    lore.add(
-                        Component.text("Right-click to sell 1", NamedTextColor.YELLOW)
-                            .decoration(TextDecoration.ITALIC, false)
-                    )
-                    lore.add(
-                        Component.text("Shift+right to sell all", NamedTextColor.YELLOW)
                             .decoration(TextDecoration.ITALIC, false)
                     )
                 }
@@ -311,18 +716,14 @@ class ServerShopManager(private val plugin: Joshymc) {
     // ── Click Handler ───────────────────────────────────────────────────
 
     private fun handleItemClick(player: Player, shopItem: ShopItem, clickType: ClickType) {
-        val multiplier = plugin.marketManager.getMultiplier(shopItem.material)
-        val liveBuy = shopItem.buyPrice * multiplier
-        val liveSell = shopItem.sellPrice * multiplier
-
         val noSell = { plugin.commsManager.send(player, Component.text("You cannot sell this item.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY); player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f) }
         val noBuy = { plugin.commsManager.send(player, Component.text("This item is not for sale.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY); player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f) }
 
         when (clickType) {
             ClickType.LEFT, ClickType.SHIFT_LEFT ->
-                if (liveBuy > 0) openBuyQuantityGui(player, shopItem, liveBuy) else noBuy()
-            ClickType.RIGHT -> if (liveSell > 0) sellItem(player, shopItem.material, liveSell, 1) else noSell()
-            ClickType.SHIFT_RIGHT -> if (liveSell > 0) sellItem(player, shopItem.material, liveSell, -1) else noSell()
+                if (shopItem.buyPrice > 0) openBuyQuantityGui(player, shopItem) else noBuy()
+            ClickType.RIGHT -> if (shopItem.sellPrice > 0) sellItem(player, shopItem.material, applyCropBonus(shopItem.sellPrice, shopItem.material, player.uniqueId), 1) else noSell()
+            ClickType.SHIFT_RIGHT -> if (shopItem.sellPrice > 0) sellItem(player, shopItem.material, applyCropBonus(shopItem.sellPrice, shopItem.material, player.uniqueId), -1) else noSell()
             else -> {}
         }
     }
@@ -337,11 +738,12 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     private val MAX_BUY = 640
 
-    private fun openBuyQuantityGui(player: Player, shopItem: ShopItem, livePrice: Double) {
+    private fun openBuyQuantityGui(player: Player, shopItem: ShopItem) {
         var amount = 1
+        val livePrice = shopItem.buyPrice
 
         val gui = CustomGui(
-            Component.text("Buy ${formatMaterialName(shopItem.material)}", NamedTextColor.DARK_GREEN)
+            Component.text("Buy ${displayLabel(shopItem)}", NamedTextColor.DARK_GREEN)
                 .decoration(TextDecoration.BOLD, true)
                 .decoration(TextDecoration.ITALIC, false),
             27
@@ -352,10 +754,15 @@ class ServerShopManager(private val plugin: Joshymc) {
 
         fun renderDynamic() {
             val total = livePrice * amount
-            val itemDisplay = ItemStack(shopItem.material, amount.coerceIn(1, 64))
+            val itemDisplay = when (shopItem.kind) {
+                ShopItemKind.POTION -> buildPotionItem(shopItem)
+                ShopItemKind.SPAWNER -> shopItem.spawnerTypeId?.let { plugin.spawnerManager.createSpawnerItem(it) } ?: ItemStack(Material.BARRIER)
+                ShopItemKind.MATERIAL -> ItemStack(shopItem.material)
+            }
+            itemDisplay.amount = amount.coerceIn(1, 64)
             itemDisplay.editMeta { meta ->
                 meta.displayName(
-                    Component.text(formatMaterialName(shopItem.material), NamedTextColor.WHITE)
+                    Component.text(displayLabel(shopItem), NamedTextColor.WHITE)
                         .decoration(TextDecoration.ITALIC, false)
                         .decoration(TextDecoration.BOLD, true)
                 )
@@ -413,11 +820,9 @@ class ServerShopManager(private val plugin: Joshymc) {
         // Confirm button — handler is bound here; renderDynamic() overwrites
         // the visual on each click but the bound handler persists.
         gui.setItem(22, ItemStack(Material.LIME_CONCRETE)) { p, _ ->
-            p.closeInventory()
-            // Re-fetch the live price on confirm so a market price tick
-            // mid-GUI doesn't let the player lock in a stale rate.
-            val currentPrice = shopItem.buyPrice * plugin.marketManager.getMultiplier(shopItem.material)
-            buyItem(p, shopItem.material, currentPrice, amount.coerceIn(1, MAX_BUY))
+            if (buyItem(p, shopItem, amount.coerceIn(1, MAX_BUY))) {
+                openMainMenu(p)
+            }
         }
 
         renderDynamic()
@@ -451,8 +856,8 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     // ── Buy Logic ───────────────────────────────────────────────────────
 
-    private fun buyItem(player: Player, material: Material, buyPrice: Double, amount: Int) {
-        val totalCost = buyPrice * amount
+    private fun buyItem(player: Player, shopItem: ShopItem, amount: Int): Boolean {
+        val totalCost = shopItem.buyPrice * amount
 
         if (!plugin.economyManager.has(player.uniqueId, totalCost)) {
             plugin.commsManager.send(player,
@@ -464,21 +869,43 @@ class ServerShopManager(private val plugin: Joshymc) {
                 CommunicationsManager.Category.ECONOMY
             )
             player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
-            return
+            return false
         }
 
-        plugin.economyManager.withdraw(player.uniqueId, totalCost)
-
-        val items = ItemStack(material, amount)
-        val overflow = player.inventory.addItem(items)
-
-        // Drop any items that didn't fit; tag them so quest progress is not counted
-        for (remaining in overflow.values) {
-            val dropped = player.world.dropItemNaturally(player.location, remaining)
-            dropped.persistentDataContainer.set(plugin.questManager.shopDropKey, PersistentDataType.BYTE, 1)
+        if (!plugin.economyManager.withdraw(player.uniqueId, totalCost)) {
+            plugin.commsManager.send(player, Component.text("Purchase failed.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return false
         }
 
-        val name = formatMaterialName(material)
+        // Potions cap at 1 per stack (vanilla), so deliver them one at a time rather than
+        // as a single ItemStack with an oversized amount. Spawners are delivered via
+        // SpawnerManager so the correct mob type/PDC tag is always preserved.
+        val overflow = when (shopItem.kind) {
+            ShopItemKind.POTION -> {
+                val leftovers = mutableListOf<ItemStack>()
+                repeat(amount) { leftovers.addAll(deliverOne(player, buildPotionItem(shopItem))) }
+                leftovers
+            }
+            ShopItemKind.SPAWNER -> {
+                val stack = shopItem.spawnerTypeId?.let { plugin.spawnerManager.createSpawnerItem(it, amount) }
+                if (stack == null) {
+                    // Delivery is impossible (misconfigured spawner id) — refund instead of
+                    // silently keeping the player's money for an item that can't be given.
+                    plugin.economyManager.deposit(player.uniqueId, totalCost)
+                    plugin.commsManager.send(player, Component.text("Purchase failed; you have been refunded.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+                    return false
+                }
+                deliverOne(player, stack)
+            }
+            ShopItemKind.MATERIAL -> deliverOne(player, ItemStack(shopItem.material, amount))
+        }
+
+        // Drop any items that didn't fit
+        for (remaining in overflow) {
+            player.world.dropItemNaturally(player.location, remaining)
+        }
+
+        val name = displayLabel(shopItem)
         plugin.commsManager.send(player,
             Component.text("Bought ", NamedTextColor.GREEN)
                 .append(Component.text("${amount}x $name", NamedTextColor.WHITE))
@@ -488,24 +915,46 @@ class ServerShopManager(private val plugin: Joshymc) {
             CommunicationsManager.Category.ECONOMY
         )
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.2f)
+        return true
+    }
 
-        // Record transaction for market price fluctuation
-        plugin.marketManager.recordTransaction(material, "BUY", amount)
+    /**
+     * Delivers [item] into the inventory the player will actually keep — their saved
+     * Moderator/Trainee Mode backup while one of those is active, their live inventory
+     * otherwise. Returns a single-element list with whatever didn't fit (for the caller's
+     * existing "drop overflow at feet" pass), or empty if it all fit.
+     */
+    private fun deliverOne(player: Player, item: ItemStack): List<ItemStack> {
+        val leftover = when {
+            plugin.modModeManager.isModMode(player) -> plugin.modModeManager.addItemToBackup(player.uniqueId, item)
+            plugin.traineeModeManager.isTraineeMode(player) -> plugin.traineeModeManager.addItemToBackup(player.uniqueId, item)
+            else -> player.inventory.addItem(item).values.firstOrNull()
+        }
+        return if (leftover != null) listOf(leftover) else emptyList()
     }
 
     // ── Sell Logic ──────────────────────────────────────────────────────
+
+    // Custom crafting materials (Void Shard, etc.) share a vanilla Material with sellable
+    // items — never let them sell for that material's price. They're admin-granted only.
+    private fun isCraftingMaterial(stack: ItemStack): Boolean =
+        plugin.itemManager.getCustomItemId(stack) in CRAFTING_MATERIAL_IDS
 
     fun sellItem(player: Player, material: Material, sellPrice: Double, amount: Int) {
         val inventory = player.inventory
 
         if (amount == -1) {
-            // Sell all of that material
+            // Sell all of that material — compute earnings per slot to honour mutation multipliers
             var totalCount = 0
+            var totalEarned = 0.0
             for (slot in 0 until inventory.size) {
                 val stack = inventory.getItem(slot) ?: continue
-                if (stack.type == material) {
-                    totalCount += stack.amount
-                }
+                if (stack.type != material) continue
+                if (isCraftingMaterial(stack)) continue
+                val mutMult = plugin.mutationsManager.getMutationMultiplier(stack)
+                totalEarned += sellPrice * mutMult * stack.amount
+                totalCount += stack.amount
+                inventory.setItem(slot, null)
             }
 
             if (totalCount == 0) {
@@ -519,23 +968,8 @@ class ServerShopManager(private val plugin: Joshymc) {
                 return
             }
 
-            // Remove all of that material
-            var remaining = totalCount
-            for (slot in 0 until inventory.size) {
-                if (remaining <= 0) break
-                val stack = inventory.getItem(slot) ?: continue
-                if (stack.type == material) {
-                    val take = remaining.coerceAtMost(stack.amount)
-                    stack.amount -= take
-                    remaining -= take
-                    if (stack.amount <= 0) {
-                        inventory.setItem(slot, null)
-                    }
-                }
-            }
-
-            val totalEarned = sellPrice * totalCount
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
+            plugin.marketManager.recordTransaction(material, "SELL", totalCount)
 
             plugin.commsManager.send(player,
                 Component.text("Sold ", NamedTextColor.YELLOW)
@@ -546,10 +980,13 @@ class ServerShopManager(private val plugin: Joshymc) {
                 CommunicationsManager.Category.ECONOMY
             )
             player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.0f)
-            plugin.marketManager.recordTransaction(material, "SELL", totalCount)
         } else {
-            // Sell specific amount
-            if (!inventory.contains(material, amount)) {
+            // Sell specific amount — drain slots in order and apply per-slot mutation multipliers
+            val sellableAvailable = (0 until inventory.size).sumOf { slot ->
+                val stack = inventory.getItem(slot)
+                if (stack == null || stack.type != material || isCraftingMaterial(stack)) 0 else stack.amount
+            }
+            if (sellableAvailable < amount) {
                 plugin.commsManager.send(player,
                     Component.text("You don't have enough ", NamedTextColor.RED)
                         .append(Component.text(formatMaterialName(material), NamedTextColor.WHITE))
@@ -560,22 +997,21 @@ class ServerShopManager(private val plugin: Joshymc) {
                 return
             }
 
-            // Remove the items
             var remaining = amount
+            var totalEarned = 0.0
             for (slot in 0 until inventory.size) {
                 if (remaining <= 0) break
                 val stack = inventory.getItem(slot) ?: continue
-                if (stack.type == material) {
-                    val take = remaining.coerceAtMost(stack.amount)
-                    stack.amount -= take
-                    remaining -= take
-                    if (stack.amount <= 0) {
-                        inventory.setItem(slot, null)
-                    }
-                }
+                if (stack.type != material) continue
+                if (isCraftingMaterial(stack)) continue
+                val take = remaining.coerceAtMost(stack.amount)
+                val mutMult = plugin.mutationsManager.getMutationMultiplier(stack)
+                totalEarned += sellPrice * mutMult * take
+                stack.amount -= take
+                remaining -= take
+                if (stack.amount <= 0) inventory.setItem(slot, null)
             }
 
-            val totalEarned = sellPrice * amount
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
             plugin.marketManager.recordTransaction(material, "SELL", amount)
 

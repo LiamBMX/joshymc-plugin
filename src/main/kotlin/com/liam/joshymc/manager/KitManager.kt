@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -12,19 +13,22 @@ import org.bukkit.Sound
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.enchantments.Enchantment
 import org.bukkit.entity.Player
+import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemFlag
 import org.bukkit.inventory.ItemStack
+import org.bukkit.persistence.PersistentDataType
 import java.io.File
+import java.util.UUID
 
 class KitManager(private val plugin: Joshymc) {
 
     companion object {
-        val KIT_GUI_TITLE: Component = Component.text("         ")
-            .append(Component.text("Kits", TextColor.color(0x55FFFF)))
+        val KIT_GUI_TITLE: Component = Component.text("KITS", TextColor.color(0x55FFFF))
             .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false)
 
         private const val CREATE_KIT_TITLE_PREFIX = "Creating Kit: "
+        private const val EDIT_KIT_TITLE_PREFIX = "Editing Kit: "
 
         private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
             editMeta { it.displayName(Component.empty()) }
@@ -32,6 +36,70 @@ class KitManager(private val plugin: Joshymc) {
         private val BORDER = ItemStack(Material.CYAN_STAINED_GLASS_PANE).apply {
             editMeta { it.displayName(Component.empty()) }
         }
+
+        // /editkit GUI layout: content area mirrors the 36-slot /createkit inventory
+        // (so slot keys stay identical), plus a bottom control row.
+        const val EDIT_GUI_SIZE = 45
+        val EDIT_CONTENT_SLOTS = 0..35
+        val EDIT_CONTROL_SLOTS = 36..44
+        const val EDIT_INFO_SLOT = 36
+        const val EDIT_RELOAD_SLOT = 40
+        const val EDIT_SAVE_SLOT = 42
+        const val EDIT_CANCEL_SLOT = 44
+
+        /**
+         * Shape-based centering for the /kit content area (rows 1-3, cols 1-7 of the
+         * 45-slot GUI), mirroring the compact-formation approach used by the crate
+         * preview/pick-a-reward GUIs (see CrateManager.CrateLayout).
+         */
+        private object KitLayout {
+            const val CONTENT_ROWS = 3
+            const val CONTENT_COLS = 7
+            const val CAPACITY = CONTENT_ROWS * CONTENT_COLS
+
+            /**
+             * Column indices (0..6) that evenly spread [rowLen] items across a 7-wide row,
+             * bucketing the row into [rowLen] equal-width slices and taking each slice's
+             * center. This keeps a gap between neighboring icons whenever the row isn't
+             * completely full, instead of clustering items into tight adjacent pairs.
+             */
+            private fun columnIndices(rowLen: Int): List<Int> {
+                if (rowLen <= 0) return emptyList()
+                if (rowLen >= CONTENT_COLS) return (0 until CONTENT_COLS).toList()
+                val binWidth = CONTENT_COLS.toDouble() / rowLen
+                return (0 until rowLen).map { i -> (i * binWidth + binWidth / 2).toInt() }
+            }
+
+            /** Per-row item counts (top to bottom), balanced across as few rows as needed. */
+            private fun rowCounts(count: Int): List<Int> {
+                if (count <= 0) return emptyList()
+                if (count <= CONTENT_COLS) return listOf(count)
+                val capped = count.coerceAtMost(CAPACITY)
+                val rows = ((capped - 1) / CONTENT_COLS + 1).coerceAtMost(CONTENT_ROWS)
+                val base = capped / rows
+                val remainder = capped % rows
+                return (0 until rows).map { r -> if (r < remainder) base + 1 else base }
+            }
+
+            /** Absolute GUI slots (within the 45-slot inventory) for [count] kit icons, centered. */
+            fun slots(count: Int): List<Int> {
+                val rows = rowCounts(count)
+                val verticalOffset = (CONTENT_ROWS - rows.size).coerceAtLeast(0) / 2
+                val result = mutableListOf<Int>()
+                for ((i, rowLen) in rows.withIndex()) {
+                    val physicalRow = 1 + verticalOffset + i
+                    for (col in columnIndices(rowLen)) {
+                        result.add(physicalRow * 9 + (1 + col))
+                    }
+                }
+                return result
+            }
+        }
+
+        /** Capitalizes each word of a kit's internal id for display only (e.g. "trail_blazer" -> "Trail Blazer"). */
+        fun displayName(kitName: String): String =
+            kitName.split('_', ' ').filter { it.isNotEmpty() }
+                .joinToString(" ") { it.lowercase().replaceFirstChar(Char::uppercase) }
     }
 
     data class KitDef(
@@ -41,6 +109,17 @@ class KitManager(private val plugin: Joshymc) {
         val permission: String,
         val items: Map<Int, ItemStack>
     )
+
+    data class EditSession(
+        val kitName: String,
+        val editorId: UUID,
+        val inventory: Inventory,
+        val originalItems: Map<Int, ItemStack>,
+        val overflowItems: Map<Int, ItemStack>
+    )
+
+    private val editSessions = mutableMapOf<UUID, EditSession>()
+    private val editLocks = mutableMapOf<String, UUID>()
 
     private var kitsFile: File = plugin.configFile("kits.yml")
     private var kitsConfig: YamlConfiguration = YamlConfiguration()
@@ -61,6 +140,19 @@ class KitManager(private val plugin: Joshymc) {
         loadKits()
 
         plugin.logger.info("[KitManager] Started with ${kits.size} kit(s).")
+    }
+
+    /** Force-closes any open /editkit sessions and releases their locks. Called on disable/reload. */
+    fun stop() {
+        for (session in editSessions.values.toList()) {
+            val editor = Bukkit.getPlayer(session.editorId) ?: continue
+            if (editor.openInventory.topInventory == session.inventory) {
+                plugin.commsManager.send(editor, Component.text("Kit editor closed (server reloading). No changes were saved.", NamedTextColor.YELLOW))
+                editor.closeInventory()
+            }
+        }
+        editSessions.clear()
+        editLocks.clear()
     }
 
     private fun loadKits() {
@@ -178,13 +270,24 @@ class KitManager(private val plugin: Joshymc) {
         // Give items
         for ((slot, item) in kit.items) {
             val clone = item.clone()
-            if (slot < player.inventory.size && player.inventory.getItem(slot) == null) {
+            if (plugin.creditVoucherManager.isCreditVoucher(clone)) {
+                // kit.items is a shared in-memory template reused for every claimer — handing
+                // out item.clone() verbatim would give every claimer an identical voucher_uuid,
+                // so only the first person to redeem it would succeed. Mint a fresh id per
+                // delivery, same fix as CrateManager.buildRewardItem (issue #833).
+                clone.editMeta { meta ->
+                    meta.persistentDataContainer.set(
+                        plugin.creditVoucherManager.voucherUuidKey,
+                        PersistentDataType.STRING,
+                        UUID.randomUUID().toString()
+                    )
+                }
+            }
+            val staffMode = plugin.modModeManager.isModMode(player) || plugin.traineeModeManager.isTraineeMode(player)
+            if (!staffMode && slot < player.inventory.size && player.inventory.getItem(slot) == null) {
                 player.inventory.setItem(slot, clone)
             } else {
-                val leftover = player.inventory.addItem(clone)
-                for ((_, remaining) in leftover) {
-                    player.world.dropItemNaturally(player.location, remaining)
-                }
+                plugin.giveItemSafely(player, clone)
             }
         }
 
@@ -252,9 +355,14 @@ class KitManager(private val plugin: Joshymc) {
         // Side borders (rows 1-3)
         for (row in 1..3) { gui.inventory.setItem(row * 9, BORDER.clone()); gui.inventory.setItem(row * 9 + 8, BORDER.clone()) }
 
-        // Place kits in middle area (rows 1-3, cols 1-7)
-        val slots = mutableListOf<Int>()
-        for (row in 1..3) for (col in 1..7) slots.add(row * 9 + col)
+        // Close button, centered on the bottom control row.
+        val close = ItemStack(Material.BARRIER)
+        close.editMeta { it.displayName(Component.text("Close", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false)) }
+        gui.setItem(40, close) { p, _ -> p.closeInventory() }
+
+        // Centered, shape-based icon placement (see KitLayout) so the layout stays
+        // balanced whether there are 1 or 21 kits, instead of a fixed grid with gaps.
+        val slots = KitLayout.slots(kits.size)
 
         var rendered = 0
         for ((idx, kitDef) in kits.values.withIndex()) {
@@ -280,14 +388,19 @@ class KitManager(private val plugin: Joshymc) {
     private fun renderKitIcon(gui: CustomGui, slot: Int, player: Player, kitDef: KitDef) {
         val onCooldown = !canClaim(player, kitDef.name)
         val hasPermission = player.hasPermission(kitDef.permission)
+        val ready = hasPermission && !onCooldown
+        val locked = !hasPermission
 
-        val displayMat = if (onCooldown) Material.RED_STAINED_GLASS_PANE else kitDef.icon
-        val item = ItemStack(displayMat)
+        val item = ItemStack(kitDef.icon)
 
         item.editMeta { meta ->
-                val nameColor = if (onCooldown) NamedTextColor.RED else NamedTextColor.AQUA
+                val nameColor = when {
+                    locked -> NamedTextColor.GRAY
+                    onCooldown -> NamedTextColor.GOLD
+                    else -> NamedTextColor.AQUA
+                }
                 meta.displayName(
-                    Component.text(kitDef.name, nameColor)
+                    Component.text(displayName(kitDef.name), nameColor)
                         .decoration(TextDecoration.ITALIC, false)
                         .decoration(TextDecoration.BOLD, true)
                 )
@@ -295,48 +408,68 @@ class KitManager(private val plugin: Joshymc) {
                 val lore = mutableListOf<Component>()
                 lore.add(Component.empty())
 
-                // Cooldown info
-                val cooldownText = "${kitDef.cooldownHours}h cooldown"
-                lore.add(Component.text("  $cooldownText", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+                lore.add(
+                    Component.text("Cooldown: ", NamedTextColor.GRAY)
+                        .decoration(TextDecoration.ITALIC, false)
+                        .append(Component.text("${kitDef.cooldownHours}h", NamedTextColor.WHITE))
+                )
 
-                // Status
-                if (!hasPermission) {
-                    lore.add(Component.text("  No Permission", NamedTextColor.DARK_RED).decoration(TextDecoration.ITALIC, false))
-                } else if (onCooldown) {
-                    val remaining = getCooldownRemaining(player, kitDef.name)
-                    val formatted = formatCooldown(remaining)
-                    lore.add(Component.text("  $formatted remaining", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
-                } else {
-                    lore.add(Component.text("  Ready", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                val statusValue = when {
+                    locked -> Component.text("Locked", NamedTextColor.RED)
+                    onCooldown -> Component.text("${formatCooldown(getCooldownRemaining(player, kitDef.name))} remaining", NamedTextColor.GOLD)
+                    else -> Component.text("Ready", NamedTextColor.GREEN)
                 }
-
-                // Items preview
-                lore.add(Component.empty())
-                lore.add(Component.text("  Contents:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
-                for ((_, kitItem) in kitDef.items) {
-                    val itemName = kitItem.type.name.lowercase().replace("_", " ")
-                    val amount = if (kitItem.amount > 1) " x${kitItem.amount}" else ""
-                    lore.add(Component.text("  - $itemName$amount", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false))
-                }
+                lore.add(
+                    Component.text("Status: ", NamedTextColor.GRAY)
+                        .decoration(TextDecoration.ITALIC, false)
+                        .append(statusValue.decoration(TextDecoration.ITALIC, false))
+                )
 
                 lore.add(Component.empty())
-                if (hasPermission && !onCooldown) {
-                    lore.add(Component.text("  Click to claim", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+                if (ready) {
+                    lore.add(Component.text("Left-Click to claim", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
                 }
+                lore.add(Component.text("Right-Click to preview", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
 
                 meta.lore(lore)
 
-                if (onCooldown) {
+                // Subtle glint on ready kits only — no glint while on cooldown or locked.
+                if (ready) {
                     meta.addEnchant(Enchantment.UNBREAKING, 1, true)
                     meta.addItemFlags(ItemFlag.HIDE_ENCHANTS)
                 }
             }
 
         val kitName = kitDef.name
-        gui.setItem(slot, item) { p, _ ->
-            p.closeInventory()
-            claimKit(p, kitName)
+        gui.setItem(slot, item) { p, event ->
+            if (event.click.isRightClick) {
+                openKitPreviewGui(p, kitDef)
+            } else {
+                p.closeInventory()
+                claimKit(p, kitName)
+            }
         }
+    }
+
+    /** Read-only preview of a kit's contents — items can be hovered for full tooltips (enchants, attributes, etc.) but not taken. */
+    fun openKitPreviewGui(player: Player, kitDef: KitDef) {
+        val sortedItems = kitDef.items.toSortedMap().values.toList()
+        val rows = (((sortedItems.size - 1) / 9) + 1).coerceIn(1, 6)
+        val size = rows * 9
+
+        val title = Component.text("Preview: ")
+            .append(Component.text(displayName(kitDef.name), TextColor.color(0x55FFFF)))
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+        val gui = CustomGui(title, size)
+
+        for ((index, kitItem) in sortedItems.withIndex()) {
+            if (index >= size) break
+            gui.inventory.setItem(index, kitItem.clone())
+        }
+
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.4f, 1.4f)
     }
 
     fun openCreateKitGui(player: Player, kitName: String) {
@@ -378,6 +511,128 @@ class KitManager(private val plugin: Joshymc) {
             }
         }, 5L, 5L)
     }
+
+    fun getEditSession(player: Player): EditSession? = editSessions[player.uniqueId]
+
+    /** Opens (or re-opens) the /editkit GUI for `name`. Handles the "already being edited" lock. */
+    fun openEditKitGui(player: Player, name: String) {
+        val kit = kits[name]
+        if (kit == null) {
+            plugin.commsManager.send(player, Component.text("Kit '$name' does not exist.", NamedTextColor.RED))
+            return
+        }
+
+        val lockHolder = editLocks[name]
+        if (lockHolder != null && lockHolder != player.uniqueId) {
+            val holder = Bukkit.getPlayer(lockHolder)
+            if (holder != null && holder.isOnline) {
+                plugin.commsManager.send(
+                    player,
+                    Component.text("That kit is currently being edited by ${holder.name}.", NamedTextColor.RED)
+                )
+                return
+            }
+            // Holder went offline without their session getting cleaned up — release the stale lock.
+            editLocks.remove(name)
+            editSessions.remove(lockHolder)
+        }
+
+        // Editing a second kit replaces any edit session this player already had open (discarded, not saved).
+        editSessions[player.uniqueId]?.let { discardEditSession(player, closeInventory = true) }
+
+        val inv = Bukkit.createInventory(null, EDIT_GUI_SIZE, editGuiTitle(name))
+        for ((slot, item) in kit.items) {
+            if (slot in EDIT_CONTENT_SLOTS) inv.setItem(slot, item.clone())
+        }
+        renderEditControlRow(inv, name)
+
+        val overflow = kit.items.filterKeys { it !in EDIT_CONTENT_SLOTS }
+        editSessions[player.uniqueId] = EditSession(name, player.uniqueId, inv, kit.items, overflow)
+        editLocks[name] = player.uniqueId
+
+        player.openInventory(inv)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    fun handleEditSave(player: Player) {
+        val session = editSessions[player.uniqueId] ?: return
+        val kit = kits[session.kitName]
+        if (kit == null) {
+            plugin.commsManager.send(player, Component.text("Kit '${session.kitName}' no longer exists.", NamedTextColor.RED))
+            discardEditSession(player, closeInventory = true)
+            return
+        }
+
+        val items = mutableMapOf<Int, ItemStack>()
+        for (slot in EDIT_CONTENT_SLOTS) {
+            val item = session.inventory.getItem(slot)
+            if (item != null && item.type != Material.AIR) items[slot] = item.clone()
+        }
+        // Slots outside the editable area (shouldn't normally exist) are preserved untouched.
+        items.putAll(session.overflowItems)
+
+        saveKit(session.kitName, kit.icon, kit.cooldownHours, kit.permission, items)
+
+        editSessions.remove(player.uniqueId)
+        editLocks.remove(session.kitName)
+
+        plugin.commsManager.send(player, Component.text("Kit '${session.kitName}' has been updated.", NamedTextColor.GREEN))
+        player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.2f)
+        player.closeInventory()
+    }
+
+    fun handleEditCancel(player: Player) {
+        if (!editSessions.containsKey(player.uniqueId)) return
+        plugin.commsManager.send(player, Component.text("Kit edit cancelled.", NamedTextColor.YELLOW))
+        discardEditSession(player, closeInventory = true)
+    }
+
+    fun handleEditReload(player: Player) {
+        val session = editSessions[player.uniqueId] ?: return
+        for (slot in EDIT_CONTENT_SLOTS) session.inventory.setItem(slot, null)
+        for ((slot, item) in session.originalItems) {
+            if (slot in EDIT_CONTENT_SLOTS) session.inventory.setItem(slot, item.clone())
+        }
+        plugin.commsManager.send(player, Component.text("Reloaded original kit contents.", NamedTextColor.YELLOW))
+        player.playSound(player.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+    }
+
+    /** Ends a player's edit session without saving. Used for close-without-save, quit, cancel, and reload/shutdown. */
+    fun discardEditSession(player: Player, closeInventory: Boolean) {
+        val session = editSessions.remove(player.uniqueId) ?: return
+        if (editLocks[session.kitName] == player.uniqueId) editLocks.remove(session.kitName)
+        if (closeInventory && player.isOnline && player.openInventory.topInventory == session.inventory) {
+            player.closeInventory()
+        }
+    }
+
+    private fun renderEditControlRow(inv: Inventory, kitName: String) {
+        for (slot in EDIT_CONTROL_SLOTS) inv.setItem(slot, FILLER.clone())
+
+        val info = ItemStack(Material.PAPER)
+        info.editMeta { meta ->
+            meta.displayName(Component.text("Editing: $kitName", NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false))
+            meta.lore(listOf(Component.text("Move items to edit this kit's contents.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)))
+        }
+        inv.setItem(EDIT_INFO_SLOT, info)
+
+        val reload = ItemStack(Material.ORANGE_DYE)
+        reload.editMeta { it.displayName(Component.text("Reload Original", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false)) }
+        inv.setItem(EDIT_RELOAD_SLOT, reload)
+
+        val save = ItemStack(Material.LIME_DYE)
+        save.editMeta { it.displayName(Component.text("Save Changes", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false)) }
+        inv.setItem(EDIT_SAVE_SLOT, save)
+
+        val cancel = ItemStack(Material.RED_DYE)
+        cancel.editMeta { it.displayName(Component.text("Cancel", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false)) }
+        inv.setItem(EDIT_CANCEL_SLOT, cancel)
+    }
+
+    private fun editGuiTitle(name: String): Component =
+        Component.text(EDIT_KIT_TITLE_PREFIX)
+            .append(Component.text(name, NamedTextColor.AQUA))
+            .decoration(TextDecoration.ITALIC, false)
 
     private fun formatCooldown(millis: Long): String {
         if (millis <= 0) return "Ready"

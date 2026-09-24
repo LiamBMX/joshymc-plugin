@@ -282,6 +282,13 @@ class WarpManager(private val plugin: Joshymc) {
         return true
     }
 
+    /** Deletes every home this player owns. Returns the number of homes removed. */
+    fun deleteAllHomes(uuid: String): Int {
+        val count = getHomeCount(uuid)
+        plugin.databaseManager.execute("DELETE FROM homes WHERE uuid = ?", uuid)
+        return count
+    }
+
     fun getHomes(uuid: String): List<String> {
         return plugin.databaseManager.query(
             "SELECT name FROM homes WHERE uuid = ? ORDER BY name", uuid

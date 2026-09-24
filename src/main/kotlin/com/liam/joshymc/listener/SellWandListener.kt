@@ -48,6 +48,15 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
             return
         }
 
+        if (!plugin.claimManager.canAccess(player, block.location)) {
+            plugin.commsManager.send(
+                player,
+                Component.text("You can't use a Sell Wand in someone else's claim.", NamedTextColor.RED),
+                CommunicationsManager.Category.ECONOMY
+            )
+            return
+        }
+
         // Read multiplier and uses from PDC
         val multiplier = SellWandCommand.getMultiplier(plugin, item)
         val usesLeft = SellWandCommand.getUses(plugin, item)
@@ -69,10 +78,16 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
 
         for (i in 0 until inventory.size) {
             val slot = inventory.getItem(i) ?: continue
-            val price = plugin.serverShopManager.getSellPrice(slot.type) ?: 0.0
-            if (price <= 0) continue
+            // sellPriceManager is the single authoritative source for sell pricing — the same
+            // one /sell, /sellall and /worth use — so Sell Wands always reflect the current
+            // sell-prices.yml value instead of the stale legacy ServerShopManager catalog.
+            // isSellable() also rejects custom items (e.g. Void Shard = PRISMARINE_SHARD).
+            if (!plugin.sellPriceManager.isSellable(slot)) continue
+            val basePrice = plugin.sellPriceManager.getPrice(slot.type) ?: continue
 
-            totalEarned += price * multiplier * slot.amount
+            val price = plugin.serverShopManager.applyCropBonus(basePrice, slot.type, player.uniqueId)
+            val mutMult = plugin.mutationsManager.getMutationMultiplier(slot)
+            totalEarned += price * multiplier * mutMult * slot.amount
             breakdown[slot.type] = (breakdown[slot.type] ?: 0) + slot.amount
             inventory.setItem(i, null)
         }

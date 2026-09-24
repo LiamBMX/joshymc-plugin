@@ -1,0 +1,427 @@
+package com.liam.joshymc.manager
+
+import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.giveItemSafely
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextDecoration
+import org.bukkit.Material
+import org.bukkit.Sound
+import org.bukkit.entity.Player
+import org.bukkit.inventory.ItemStack
+import java.util.Base64
+
+/**
+ * "/cshop" — a shop that only accepts Credits (see [CreditsManager]). Unlike
+ * [ServerShopManager], which is driven by a static material catalog in
+ * shop.yml, admins stock this shop item-by-item at runtime via /cshop
+ * additem/removeitem/category, so listings preserve the exact ItemStack
+ * (custom name, lore, enchants, PDC tags, etc.) that was in their hand.
+ */
+class CreditShopManager(private val plugin: Joshymc) {
+
+    data class CreditShopCategory(val id: String, val name: String, val icon: Material)
+    data class CreditShopItem(val id: Int, val categoryId: String, val item: ItemStack, val price: Double)
+
+    private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
+        editMeta { it.displayName(Component.empty()) }
+    }
+
+    private val BORDER = ItemStack(Material.PURPLE_STAINED_GLASS_PANE).apply {
+        editMeta { it.displayName(Component.empty()) }
+    }
+
+    private val ITEMS_PER_PAGE = 28 // rows 1-4, columns 1-7
+
+    fun start() {
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS credit_shop_categories (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                icon TEXT NOT NULL
+            )
+        """.trimIndent())
+
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS credit_shop_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category_id TEXT NOT NULL,
+                item TEXT NOT NULL,
+                price REAL NOT NULL,
+                added_at INTEGER NOT NULL
+            )
+        """.trimIndent())
+    }
+
+    // ── Admin management ─────────────────────────────────────────────────
+
+    fun createCategory(name: String, icon: Material): CreditShopCategory? {
+        val id = slugify(name)
+        if (getCategory(id) != null) return null
+        plugin.databaseManager.execute(
+            "INSERT INTO credit_shop_categories (id, name, icon) VALUES (?, ?, ?)",
+            id, name, icon.name
+        )
+        return CreditShopCategory(id, name, icon)
+    }
+
+    fun addItem(categoryId: String, item: ItemStack, price: Double): Int {
+        plugin.databaseManager.execute(
+            "INSERT INTO credit_shop_items (category_id, item, price, added_at) VALUES (?, ?, ?, ?)",
+            categoryId, serializeItem(item), price, System.currentTimeMillis()
+        )
+        return plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { rs -> rs.getInt("id") } ?: -1
+    }
+
+    fun removeItem(id: Int): Boolean {
+        return plugin.databaseManager.executeUpdate("DELETE FROM credit_shop_items WHERE id = ?", id) > 0
+    }
+
+    /**
+     * Removes a category and every listing under it (both physical items and
+     * vouchers, see [VoucherManager.deleteVouchersByCategory]) so no listing
+     * is ever left pointing at a category that no longer exists.
+     */
+    fun removeCategory(id: String): Boolean {
+        if (getCategory(id) == null) return false
+        plugin.databaseManager.transaction {
+            plugin.databaseManager.execute("DELETE FROM credit_shop_items WHERE category_id = ?", id)
+            plugin.voucherManager.deleteVouchersByCategory(id)
+            plugin.databaseManager.execute("DELETE FROM credit_shop_categories WHERE id = ?", id)
+        }
+        return true
+    }
+
+    fun getCategories(): List<CreditShopCategory> {
+        return plugin.databaseManager.query("SELECT * FROM credit_shop_categories ORDER BY name") { mapCategory(it) }
+    }
+
+    fun getCategory(id: String): CreditShopCategory? {
+        return plugin.databaseManager.queryFirst("SELECT * FROM credit_shop_categories WHERE id = ?", id) { mapCategory(it) }
+    }
+
+    /** Returns the existing category for [name], or creates it with [icon] if it doesn't exist yet. */
+    fun getOrCreateCategory(name: String, icon: Material): CreditShopCategory {
+        val id = slugify(name)
+        return getCategory(id) ?: createCategory(name, icon) ?: getCategory(id)!!
+    }
+
+    fun getItem(id: Int): CreditShopItem? {
+        return plugin.databaseManager.queryFirst("SELECT * FROM credit_shop_items WHERE id = ?", id) { mapItem(it) }
+    }
+
+    fun getItemsForCategory(categoryId: String): List<CreditShopItem> {
+        return plugin.databaseManager.query(
+            "SELECT * FROM credit_shop_items WHERE category_id = ? ORDER BY id", categoryId
+        ) { mapItem(it) }
+    }
+
+    fun slugify(name: String): String {
+        val slug = name.lowercase().trim().replace(Regex("[^a-z0-9]+"), "_").trim('_')
+        return slug.ifEmpty { "category" }
+    }
+
+    // ── Serialization / row mapping ──────────────────────────────────────
+
+    private fun serializeItem(item: ItemStack): String {
+        return Base64.getEncoder().encodeToString(item.serializeAsBytes())
+    }
+
+    private fun deserializeItem(base64: String): ItemStack {
+        return ItemStack.deserializeBytes(Base64.getDecoder().decode(base64))
+    }
+
+    private fun mapCategory(rs: java.sql.ResultSet): CreditShopCategory {
+        return CreditShopCategory(
+            id = rs.getString("id"),
+            name = rs.getString("name"),
+            icon = Material.matchMaterial(rs.getString("icon")) ?: Material.CHEST
+        )
+    }
+
+    private fun mapItem(rs: java.sql.ResultSet): CreditShopItem {
+        return CreditShopItem(
+            id = rs.getInt("id"),
+            categoryId = rs.getString("category_id"),
+            item = deserializeItem(rs.getString("item")),
+            price = rs.getDouble("price")
+        )
+    }
+
+    // ── Main Menu ─────────────────────────────────────────────────────────
+
+    fun openMainMenu(player: Player) {
+        val categories = getCategories()
+
+        val title = Component.text("Credits Shop", NamedTextColor.LIGHT_PURPLE)
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+
+        val gui = CustomGui(title, 27)
+        gui.fill(FILLER.clone())
+        gui.border(BORDER.clone())
+
+        val availableSlots = mutableListOf<Int>()
+        for (col in 1..7) {
+            availableSlots.add(9 + col) // row 1
+        }
+
+        val centered = centerInRow(categories.size, availableSlots)
+
+        for ((index, slot) in centered.withIndex()) {
+            val category = categories[index]
+            val icon = ItemStack(category.icon).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text(category.name, NamedTextColor.LIGHT_PURPLE)
+                            .decoration(TextDecoration.BOLD, true)
+                            .decoration(TextDecoration.ITALIC, false)
+                    )
+                    val listingCount = getItemsForCategory(category.id).size + plugin.voucherManager.getVouchersByCategory(category.id).size
+                    meta.lore(listOf(
+                        Component.empty(),
+                        Component.text("$listingCount items", NamedTextColor.GRAY)
+                            .decoration(TextDecoration.ITALIC, false),
+                        Component.empty(),
+                        Component.text("Click to browse", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                    ))
+                }
+            }
+
+            gui.setItem(slot, icon) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openCategory(p, category.id, 0)
+            }
+        }
+
+        if (categories.isEmpty()) {
+            val empty = ItemStack(Material.BARRIER).apply {
+                editMeta { meta ->
+                    meta.displayName(Component.text("No categories yet", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+                }
+            }
+            gui.setItem(13, empty)
+        }
+
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    // ── Category Page ────────────────────────────────────────────────────
+
+    fun openCategory(player: Player, categoryId: String, page: Int) {
+        val category = getCategory(categoryId) ?: return
+        val items = getItemsForCategory(categoryId)
+        val vouchers = plugin.voucherManager.getVouchersByCategory(categoryId)
+        val listings: List<Any> = items + vouchers
+
+        val title = Component.text(category.name, NamedTextColor.LIGHT_PURPLE)
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+
+        val totalPages = ((listings.size - 1) / ITEMS_PER_PAGE).coerceAtLeast(0)
+        val startIndex = page * ITEMS_PER_PAGE
+        val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(listings.size)
+        val pageListings = if (startIndex < listings.size) listings.subList(startIndex, endIndex) else emptyList()
+
+        // Size the chest to the number of items on this page instead of always opening
+        // 6 rows: 1 content row per 7 items (up to the 4-row/28-item page cap), plus the
+        // top glass border row and bottom control row.
+        val contentRows = if (pageListings.isEmpty()) 1 else ((pageListings.size - 1) / 7 + 1).coerceIn(1, 4)
+        val size = (contentRows + 2) * 9
+        val bottomRowStart = size - 9
+
+        val gui = CustomGui(title, size)
+        gui.fill(FILLER.clone())
+
+        for (i in 0..8) gui.inventory.setItem(i, BORDER.clone())
+        for (i in bottomRowStart until size) gui.inventory.setItem(i, BORDER.clone())
+
+        val contentRowSlots = (1..contentRows).map { row -> (1..7).map { col -> row * 9 + col } }
+        val itemSlots = mutableListOf<Int>()
+        var remaining = pageListings.size
+        for (i in 0 until contentRows) {
+            val countInRow = if (i == contentRows - 1) remaining else 7
+            itemSlots.addAll(centerRowSlots(contentRowSlots[i], countInRow))
+            remaining -= countInRow
+        }
+
+        for ((index, listing) in pageListings.withIndex()) {
+            val slot = itemSlots[index]
+            when (listing) {
+                is CreditShopItem -> {
+                    val icon = buildShopItemIcon(listing, category, player)
+                    gui.setItem(slot, icon) { p, event ->
+                        val amount = if (event.click.isShiftClick) listing.item.maxStackSize else 1
+                        purchase(p, listing, amount)
+                        openCategory(p, categoryId, page)
+                    }
+                }
+                is VoucherManager.Voucher -> {
+                    val icon = plugin.voucherManager.buildIcon(listing, player)
+                    gui.setItem(slot, icon) { p, _ ->
+                        plugin.voucherManager.redeem(p, listing.id)
+                        openCategory(p, categoryId, page)
+                    }
+                }
+            }
+        }
+
+        val backItem = ItemStack(Material.BARRIER).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text("Back to Categories", NamedTextColor.RED)
+                        .decoration(TextDecoration.ITALIC, false)
+                        .decoration(TextDecoration.BOLD, true)
+                )
+            }
+        }
+        gui.setItem(bottomRowStart + 4, backItem) { p, _ ->
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            openMainMenu(p)
+        }
+
+        if (page > 0) {
+            val prevItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Previous Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(bottomRowStart + 1, prevItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openCategory(p, categoryId, page - 1)
+            }
+        }
+
+        if (page < totalPages) {
+            val nextItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Next Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(bottomRowStart + 7, nextItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openCategory(p, categoryId, page + 1)
+            }
+        }
+
+        plugin.guiManager.open(player, gui)
+    }
+
+    private fun buildShopItemIcon(shopItem: CreditShopItem, category: CreditShopCategory, viewer: Player): ItemStack {
+        val icon = shopItem.item.clone()
+        icon.amount = 1
+        icon.editMeta { meta ->
+            val lore = mutableListOf<Component>()
+            val existingLore = meta.lore()
+            if (!existingLore.isNullOrEmpty()) {
+                lore.addAll(existingLore)
+                lore.add(Component.empty())
+            }
+
+            lore.add(
+                plugin.commsManager.parseLegacy("&7Price: &b${plugin.creditsManager.format(shopItem.price)} credits")
+                    .decoration(TextDecoration.ITALIC, false)
+            )
+            lore.add(
+                Component.text("Category: ${category.name}", NamedTextColor.GRAY)
+                    .decoration(TextDecoration.ITALIC, false)
+            )
+            if (viewer.hasPermission("joshymc.cshop.admin")) {
+                lore.add(
+                    Component.text("ID: ${shopItem.id}", NamedTextColor.DARK_GRAY)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+            }
+            lore.add(Component.empty())
+            lore.add(
+                Component.text("Click to buy 1", NamedTextColor.GREEN)
+                    .decoration(TextDecoration.ITALIC, false)
+            )
+            if (shopItem.item.maxStackSize > 1) {
+                lore.add(
+                    Component.text("Shift-click to buy a stack (${shopItem.item.maxStackSize})", NamedTextColor.YELLOW)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+            }
+
+            meta.lore(lore)
+        }
+        return icon
+    }
+
+    // ── Purchase Logic ───────────────────────────────────────────────────
+
+    private fun purchase(player: Player, shopItem: CreditShopItem, amount: Int) {
+        val totalCost = shopItem.price * amount
+
+        if (plugin.creditsManager.getBalance(player) < totalCost) {
+            plugin.commsManager.send(player,
+                Component.text("You need ", NamedTextColor.RED)
+                    .append(Component.text("${plugin.creditsManager.format(totalCost)} credits", NamedTextColor.AQUA))
+                    .append(Component.text(" but only have ", NamedTextColor.RED))
+                    .append(Component.text("${plugin.creditsManager.format(plugin.creditsManager.getBalance(player))} credits", NamedTextColor.AQUA))
+                    .append(Component.text(".", NamedTextColor.RED)),
+                CommunicationsManager.Category.ECONOMY
+            )
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+            return
+        }
+
+        if (!plugin.creditsManager.withdraw(player.uniqueId, totalCost)) return
+
+        val give = shopItem.item.clone()
+        give.amount = amount
+        plugin.giveItemSafely(player, give)
+
+        plugin.commsManager.send(player,
+            Component.text("Bought ", NamedTextColor.GREEN)
+                .append(Component.text("${amount}x ", NamedTextColor.WHITE))
+                .append(shopItem.item.displayName())
+                .append(Component.text(" for ", NamedTextColor.GREEN))
+                .append(Component.text("${plugin.creditsManager.format(totalCost)} credits", NamedTextColor.AQUA))
+                .append(Component.text(".", NamedTextColor.GREEN)),
+            CommunicationsManager.Category.ECONOMY
+        )
+        player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.2f)
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    private fun centerInRow(count: Int, rowSlots: List<Int>): List<Int> {
+        if (count >= rowSlots.size) return rowSlots.take(count)
+        val offset = (rowSlots.size - count) / 2
+        return rowSlots.subList(offset, offset + count)
+    }
+
+    /**
+     * Maps [count] items onto [rowSlots] (the 7 inner, non-glass slots of one content row,
+     * left to right) so the row reads as visually centered/symmetrical, matching the crate
+     * reward preview layout.
+     */
+    private fun centerRowSlots(rowSlots: List<Int>, count: Int): List<Int> {
+        if (count <= 0) return emptyList()
+        if (count >= 7) return rowSlots.take(7)
+        val a = rowSlots[0]; val b = rowSlots[1]; val c = rowSlots[2]; val d = rowSlots[3]
+        val e = rowSlots[4]; val f = rowSlots[5]; val g = rowSlots[6]
+        return when (count) {
+            1 -> listOf(d)
+            2 -> listOf(c, e)
+            3 -> listOf(c, d, e)
+            4 -> listOf(b, c, e, f)
+            5 -> listOf(b, c, d, e, f)
+            6 -> listOf(a, b, c, e, f, g)
+            else -> rowSlots.take(count)
+        }
+    }
+}

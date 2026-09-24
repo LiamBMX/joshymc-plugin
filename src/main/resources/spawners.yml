@@ -1,307 +1,103 @@
-# Custom Spawners — these are SEPARATE from vanilla spawners.
-# Vanilla spawners (found in dungeons, mineshafts, etc.) still work normally:
-# they spawn mobs, can be silk-touched, and have no GUI.
+# Spawners — plain Minecraft mob spawners, sold here for convenience.
 #
-# Custom spawners are bought from /spawner (shop GUI) or given by admins. They:
-#   - Don't spawn mobs (they generate drops directly into a storage chest)
-#   - Have a right-click GUI for storage / sell-all / disable
-#   - Are owner-locked (only the player who placed it can pick it up)
-#   - Stack on top of each other
-#   - Integrate with hoppers (place a hopper below to auto-extract)
-#
-# Each spawner type below defines its mob, drops, timing, and shop price.
+# Placing one of these creates a normal vanilla spawner block: it spawns the
+# configured mob on the usual vanilla timer and the mob drops its normal
+# loot. There is no custom GUI, storage, or production system — these
+# spawners behave exactly like a spawner picked up from a dungeon with Silk
+# Touch.
 #
 # Fields:
-#   display-name: Item name in inventory and GUI title
-#   mob: Vanilla EntityType used for the spinning mob inside the spawner
-#   interval-seconds: How often drops are generated (default 30)
+#   display-name: Item name shown in inventory and in /spawner shop
+#   mob: Vanilla EntityType the spawner spawns
 #   buy-price: Cost to purchase from /spawner shop (omit or set to -1 to hide)
-#   drops-per-interval:
-#     min: Minimum drop rolls per interval
-#     max: Maximum drop rolls per interval (random in range)
-#   drops:
-#     - material: Bukkit Material name
-#       amount: How many per roll (default 1)
-#       sell-price: Sell value per item via "Sell All"
-#       chance: 0.0-1.0 probability (default 1.0)
 
 spawners:
   zombie:
     display-name: "&aZombie Spawner"
     mob: ZOMBIE
-    interval-seconds: 30
     buy-price: 25000
-    drops-per-interval:
-      min: 1
-      max: 3
-    drops:
-      - material: ROTTEN_FLESH
-        amount: 2
-        sell-price: 5
-      - material: IRON_INGOT
-        amount: 1
-        sell-price: 50
-        chance: 0.15
-      - material: CARROT
-        amount: 1
-        sell-price: 8
-        chance: 0.30
 
   skeleton:
     display-name: "&fSkeleton Spawner"
     mob: SKELETON
-    interval-seconds: 30
     buy-price: 30000
-    drops-per-interval:
-      min: 1
-      max: 3
-    drops:
-      - material: BONE
-        amount: 1
-        sell-price: 8
-      - material: ARROW
-        amount: 2
-        sell-price: 3
 
   spider:
     display-name: "&8Spider Spawner"
     mob: SPIDER
-    interval-seconds: 30
     buy-price: 35000
-    drops-per-interval:
-      min: 1
-      max: 2
-    drops:
-      - material: STRING
-        amount: 1
-        sell-price: 6
-      - material: SPIDER_EYE
-        amount: 1
-        sell-price: 12
-        chance: 0.4
+
+  cave_spider:
+    display-name: "&3Cave Spider Spawner"
+    mob: CAVE_SPIDER
+    buy-price: -1
 
   creeper:
     display-name: "&2Creeper Spawner"
     mob: CREEPER
-    interval-seconds: 30
     buy-price: 50000
-    drops-per-interval:
-      min: 1
-      max: 2
-    drops:
-      - material: GUNPOWDER
-        amount: 1
-        sell-price: 15
 
   blaze:
     display-name: "&6Blaze Spawner"
     mob: BLAZE
-    interval-seconds: 30
     buy-price: 100000
-    drops-per-interval:
-      min: 1
-      max: 2
-    drops:
-      - material: BLAZE_ROD
-        amount: 1
-        sell-price: 75
 
   iron_golem:
     display-name: "&7Iron Golem Spawner"
     mob: IRON_GOLEM
-    interval-seconds: 30
     buy-price: 250000
-    drops-per-interval:
-      min: 1
-      max: 2
-    drops:
-      - material: IRON_INGOT
-        amount: 1
-        sell-price: 50
-      - material: POPPY
-        amount: 1
-        sell-price: 2
-        chance: 0.5
 
   slime:
     display-name: "&aSlime Spawner"
     mob: SLIME
-    interval-seconds: 30
     buy-price: 60000
-    drops-per-interval:
-      min: 1
-      max: 3
-    drops:
-      - material: SLIME_BALL
-        amount: 1
-        sell-price: 12
 
   magma_cube:
     display-name: "&cMagma Cube Spawner"
     mob: MAGMA_CUBE
-    interval-seconds: 30
     buy-price: 90000
-    drops-per-interval:
-      min: 1
-      max: 2
-    drops:
-      - material: MAGMA_CREAM
-        amount: 1
-        sell-price: 30
 
   enderman:
     display-name: "&5Enderman Spawner"
     mob: ENDERMAN
-    interval-seconds: 30
     buy-price: 150000
-    drops-per-interval:
-      min: 1
-      max: 2
-    drops:
-      - material: ENDER_PEARL
-        amount: 1
-        sell-price: 80
 
   witch:
     display-name: "&dWitch Spawner"
     mob: WITCH
-    interval-seconds: 45
     buy-price: 120000
-    drops-per-interval:
-      min: 1
-      max: 2
-    drops:
-      - material: REDSTONE
-        amount: 2
-        sell-price: 4
-      - material: GLOWSTONE_DUST
-        amount: 1
-        sell-price: 6
-      - material: SUGAR
-        amount: 1
-        sell-price: 2
-      - material: GLASS_BOTTLE
-        amount: 1
-        sell-price: 3
-        chance: 0.5
 
   ghast:
     display-name: "&fGhast Spawner"
     mob: GHAST
-    interval-seconds: 60
     buy-price: 200000
-    drops-per-interval:
-      min: 1
-      max: 1
-    drops:
-      - material: GHAST_TEAR
-        amount: 1
-        sell-price: 200
-      - material: GUNPOWDER
-        amount: 1
-        sell-price: 15
-        chance: 0.6
 
   drowned:
     display-name: "&3Drowned Spawner"
     mob: DROWNED
-    interval-seconds: 30
     buy-price: 80000
-    drops-per-interval:
-      min: 1
-      max: 2
-    drops:
-      - material: ROTTEN_FLESH
-        amount: 1
-        sell-price: 5
-      - material: COPPER_INGOT
-        amount: 1
-        sell-price: 20
-        chance: 0.4
-      - material: NAUTILUS_SHELL
-        amount: 1
-        sell-price: 250
-        chance: 0.05
 
   husk:
     display-name: "&eHusk Spawner"
     mob: HUSK
-    interval-seconds: 30
     buy-price: 28000
-    drops-per-interval:
-      min: 1
-      max: 3
-    drops:
-      - material: ROTTEN_FLESH
-        amount: 2
-        sell-price: 5
-      - material: SAND
-        amount: 1
-        sell-price: 2
 
   stray:
     display-name: "&bStray Spawner"
     mob: STRAY
-    interval-seconds: 30
     buy-price: 35000
-    drops-per-interval:
-      min: 1
-      max: 3
-    drops:
-      - material: BONE
-        amount: 1
-        sell-price: 8
-      - material: ARROW
-        amount: 2
-        sell-price: 3
 
   wither_skeleton:
     display-name: "&8Wither Skeleton Spawner"
     mob: WITHER_SKELETON
-    interval-seconds: 60
     buy-price: 500000
-    drops-per-interval:
-      min: 1
-      max: 1
-    drops:
-      - material: WITHER_SKELETON_SKULL
-        amount: 1
-        sell-price: 1500
-        chance: 0.05
-      - material: BONE
-        amount: 1
-        sell-price: 8
-      - material: COAL
-        amount: 1
-        sell-price: 6
-        chance: 0.4
 
   pillager:
     display-name: "&7Pillager Spawner"
     mob: PILLAGER
-    interval-seconds: 45
     buy-price: 75000
-    drops-per-interval:
-      min: 1
-      max: 2
-    drops:
-      - material: ARROW
-        amount: 2
-        sell-price: 3
-      - material: EMERALD
-        amount: 1
-        sell-price: 35
-        chance: 0.15
 
   phantom:
     display-name: "&5Phantom Spawner"
     mob: PHANTOM
-    interval-seconds: 60
     buy-price: 110000
-    drops-per-interval:
-      min: 1
-      max: 2
-    drops:
-      - material: PHANTOM_MEMBRANE
-        amount: 1
-        sell-price: 60

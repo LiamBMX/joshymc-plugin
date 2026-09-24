@@ -1,15 +1,15 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
-import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
+import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 
-class SpawnCommand(private val plugin: Joshymc) : CommandExecutor {
+class SpawnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
@@ -25,5 +25,9 @@ class SpawnCommand(private val plugin: Joshymc) : CommandExecutor {
 
         TeleportChecks.teleportWithWarmup(sender, spawn, plugin)
         return true
+    }
+
+    override fun onTabComplete(sender: CommandSender, command: Command, label: String, args: Array<out String>): List<String> {
+        return emptyList()
     }
 }

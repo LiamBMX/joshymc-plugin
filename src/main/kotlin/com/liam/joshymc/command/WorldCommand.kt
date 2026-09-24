@@ -57,6 +57,51 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
             plugin.logger.info("Dungeon world created successfully.")
         }
+
+        /**
+         * Ensures the "pvp" world exists and is loaded on startup: imports the
+         * existing folder from disk if present, otherwise creates a fresh one.
+         * Never recreates/resets a world that already exists. Called from
+         * Joshymc.onEnable(), before arena initialization.
+         */
+        fun ensurePvpWorld(plugin: Joshymc) {
+            val name = "pvp"
+
+            val alreadyLoaded = Bukkit.getWorld(name)
+            if (alreadyLoaded != null) {
+                // Engine-level PvP (World#setPVP, backed by bukkit.yml) is a
+                // separate switch from our own Claim system — if it's off,
+                // melee damage between players never even reaches our
+                // listeners. This world exists specifically for PvP, so force it
+                // on every enable; finer-grained allow/deny is JoshyMC's job.
+                alreadyLoaded.setPVP(true)
+                return
+            }
+
+            val worldFolder = File(Bukkit.getWorldContainer(), name)
+            val exists = worldFolder.exists() && File(worldFolder, "level.dat").exists()
+
+            val world = if (exists) {
+                plugin.logger.info("[PvP World] Auto-importing existing 'pvp' world...")
+                WorldCreator(name).createWorld()
+            } else {
+                plugin.logger.info("[PvP World] No 'pvp' world found on disk — creating a new one...")
+                WorldCreator(name)
+                    .type(WorldType.NORMAL)
+                    .environment(World.Environment.NORMAL)
+                    .createWorld()
+            }
+
+            if (world == null) {
+                plugin.logger.severe(
+                    "[PvP World] Failed to ${if (exists) "import" else "create"} the 'pvp' world! " +
+                        "Arena features that depend on it will be unavailable until this is resolved."
+                )
+            } else {
+                world.setPVP(true)
+                plugin.logger.info("[PvP World] 'pvp' world ${if (exists) "loaded" else "created"} successfully.")
+            }
+        }
     }
 
     /**

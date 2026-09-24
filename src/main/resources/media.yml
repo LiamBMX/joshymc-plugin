@@ -1,0 +1,21 @@
+media:
+  enabled: true
+  title: "MEDIA REQUIREMENTS"
+  icon: BOOK
+  requirements:
+    - "Must be active on JoshyMC"
+    - "Must create Minecraft/JoshyMC content"
+    - "Content must be public and appropriate"
+    - "Must meet the minimum follower/subscriber requirement"
+    - "Must meet the minimum average view requirement"
+    - "Must consistently upload/stream"
+    - "Must represent JoshyMC professionally"
+    - "Must follow all server rules"
+  platforms:
+    - "YouTube"
+    - "TikTok"
+    - "Twitch"
+  apply-lines:
+    - "Open a Media application in Discord"
+    - "Provide your channel/profile links"
+    - "Provide recent analytics if requested"

@@ -13,6 +13,8 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerMoveEvent
+import org.bukkit.event.player.PlayerRespawnEvent
 import java.io.File
 import java.util.UUID
 
@@ -27,30 +29,37 @@ class SpawnWorldManager(private val plugin: Joshymc) : Listener {
     private val pasteY = plugin.config.getInt("spawn-world.paste-y", 64)
     private val pasteZ = plugin.config.getInt("spawn-world.paste-z", 0)
 
+    /** True only when [createSpawnWorld] just generated a brand-new world (no pre-existing level.dat). */
+    private var isNewlyCreated = false
+
     fun start() {
         if (!plugin.config.getBoolean("spawn-world.enabled", true)) return
 
+        val alreadyLoaded = Bukkit.getWorld(worldName) != null
         val world = Bukkit.getWorld(worldName) ?: createSpawnWorld()
         if (world == null) {
             plugin.logger.warning("[SpawnWorld] Failed to create spawn world.")
             return
         }
 
-        // Lobby game rules
-        world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false)
-        world.setGameRule(GameRule.DO_WEATHER_CYCLE, false)
-        world.setGameRule(GameRule.DO_MOB_SPAWNING, false)
-        world.setGameRule(GameRule.DO_FIRE_TICK, false)
-        world.setGameRule(GameRule.MOB_GRIEFING, false)
-        world.setGameRule(GameRule.RANDOM_TICK_SPEED, 0)
-        world.setGameRule(GameRule.DO_TILE_DROPS, false)
-        world.setGameRule(GameRule.ANNOUNCE_ADVANCEMENTS, false)
+        // Only apply lobby defaults the very first time the world is created —
+        // an existing spawn world keeps whatever time/gamerules/weather were saved to it.
+        if (!alreadyLoaded && isNewlyCreated) {
+            world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false)
+            world.setGameRule(GameRule.DO_WEATHER_CYCLE, false)
+            world.setGameRule(GameRule.DO_MOB_SPAWNING, false)
+            world.setGameRule(GameRule.DO_FIRE_TICK, false)
+            world.setGameRule(GameRule.MOB_GRIEFING, false)
+            world.setGameRule(GameRule.RANDOM_TICK_SPEED, 0)
+            world.setGameRule(GameRule.DO_TILE_DROPS, false)
+            world.setGameRule(GameRule.ANNOUNCE_ADVANCEMENTS, false)
+            world.time = 6000
+            world.setStorm(false)
+            world.isThundering = false
+        }
 
         // Set spawn point
         world.spawnLocation = Location(world, -520.0, -8.0, 0.0)
-        world.time = 6000
-        world.setStorm(false)
-        world.isThundering = false
 
         // Check if schematic needs pasting
         val markerFile = File(plugin.dataFolder, ".spawn_loaded")
@@ -75,6 +84,7 @@ class SpawnWorldManager(private val plugin: Joshymc) : Listener {
             if (world != null) {
                 plugin.logger.info("[SpawnWorld] Loaded existing spawn world '$worldName'.")
             }
+            isNewlyCreated = false
             return world
         }
 
@@ -87,6 +97,7 @@ class SpawnWorldManager(private val plugin: Joshymc) : Listener {
         if (world != null) {
             plugin.logger.info("[SpawnWorld] World '$worldName' created.")
         }
+        isNewlyCreated = world != null
         return world
     }
 
@@ -203,18 +214,36 @@ class SpawnWorldManager(private val plugin: Joshymc) : Listener {
 
     // ── Spawn fly ──────────────────────────────────────────
 
+    companion object {
+        const val FLY_PERMISSION = "joshymc.spawn.fly"
+    }
+
     private fun enableSpawnFly(player: Player) {
         if (player.gameMode == GameMode.CREATIVE || player.gameMode == GameMode.SPECTATOR) return
-        if (player.allowFlight) hadFlyBefore.add(player.uniqueId)
-        player.allowFlight = true
+
+        // Remember whatever flight state they walked in with so it can be
+        // restored as-is when they leave, regardless of permission.
+        if (player.allowFlight) hadFlyBefore.add(player.uniqueId) else hadFlyBefore.remove(player.uniqueId)
+
+        if (player.hasPermission(FLY_PERMISSION)) {
+            player.allowFlight = true
+        } else if (player.allowFlight || player.isFlying) {
+            // No spawn-fly permission — flight isn't allowed here even if they
+            // legitimately have it elsewhere (e.g. joshymc.fly in another world).
+            player.allowFlight = false
+            player.isFlying = false
+        }
     }
 
     private fun disableSpawnFly(player: Player) {
         if (player.gameMode == GameMode.CREATIVE || player.gameMode == GameMode.SPECTATOR) return
-        // Only remove fly if they didn't have it before (e.g. from /fly command)
-        if (hadFlyBefore.remove(player.uniqueId)) return
-        player.allowFlight = false
-        player.isFlying = false
+        if (hadFlyBefore.remove(player.uniqueId)) {
+            // They had flight before entering spawn — give it back.
+            player.allowFlight = true
+        } else {
+            player.allowFlight = false
+            player.isFlying = false
+        }
     }
 
     @EventHandler
@@ -237,5 +266,26 @@ class SpawnWorldManager(private val plugin: Joshymc) : Listener {
                 }
             }, 5L)
         }
+    }
+
+    // Respawning into spawn (e.g. a bed/anchor spawn point set there).
+    @EventHandler
+    fun onRespawnInSpawn(event: PlayerRespawnEvent) {
+        val player = event.player
+        if (event.respawnLocation.world?.name != worldName) return
+        Bukkit.getScheduler().runTask(plugin, Runnable {
+            if (player.isOnline && player.world.name == worldName) enableSpawnFly(player)
+        })
+    }
+
+    @EventHandler
+    fun onVoidFall(event: PlayerMoveEvent) {
+        val player = event.player
+        if (player.world.name != worldName) return
+        if (event.to.y > 0) return
+        val spawn = plugin.warpManager.getSpawn()
+            ?: Bukkit.getWorld(worldName)?.spawnLocation
+            ?: return
+        player.teleport(spawn)
     }
 }

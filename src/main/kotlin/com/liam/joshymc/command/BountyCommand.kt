@@ -1,6 +1,8 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gui.bounty.BountyListGui
+import com.liam.joshymc.gui.bounty.BountyMainGui
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -25,7 +27,7 @@ class BountyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         if (args.isEmpty()) {
-            sendUsage(sender)
+            BountyMainGui.open(plugin, sender)
             return true
         }
 
@@ -82,68 +84,22 @@ class BountyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         if (plugin.teamManager.placeBounty(player.uniqueId, player.name, target.uniqueId, target.name, amount)) {
-            plugin.commsManager.send(
-                player,
-                Component.text("Placed a ", NamedTextColor.GRAY)
-                    .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GREEN))
-                    .append(Component.text(" bounty on ", NamedTextColor.GRAY))
-                    .append(Component.text(target.name, NamedTextColor.WHITE)),
-                CommunicationsManager.Category.DEFAULT
-            )
-
-            // Broadcast to all players
-            Bukkit.getOnlinePlayers().forEach { p ->
-                if (p != player) {
-                    plugin.commsManager.send(
-                        p,
-                        Component.text(player.name, NamedTextColor.WHITE)
-                            .append(Component.text(" placed a ", NamedTextColor.GRAY))
-                            .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GREEN))
-                            .append(Component.text(" bounty on ", NamedTextColor.GRAY))
-                            .append(Component.text(target.name, NamedTextColor.RED)),
-                        CommunicationsManager.Category.DEFAULT
-                    )
-                }
-            }
+            plugin.teamManager.announceBountyPlaced(player, target, amount)
         } else {
             plugin.commsManager.send(player, Component.text("Could not place bounty. Insufficient funds.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
         }
     }
 
     private fun handleList(player: Player) {
-        val bounties = plugin.teamManager.getBounties()
-        if (bounties.isEmpty()) {
-            plugin.commsManager.send(player, Component.text("No active bounties.", NamedTextColor.GRAY), CommunicationsManager.Category.DEFAULT)
-            return
-        }
-
-        player.sendMessage(Component.text("--- Active Bounties ---", NamedTextColor.GREEN))
-        bounties.forEach { bounty ->
-            player.sendMessage(
-                Component.text(" #${bounty.id} ", NamedTextColor.DARK_GRAY)
-                    .append(Component.text(bounty.targetName, NamedTextColor.RED))
-                    .append(Component.text(" - ", NamedTextColor.GRAY))
-                    .append(Component.text(plugin.economyManager.format(bounty.amount), NamedTextColor.GREEN))
-                    .append(Component.text(" (by ${bounty.placedByName})", NamedTextColor.DARK_GRAY))
-            )
-        }
-
-        // Show totals per player
-        val grouped = bounties.groupBy { it.targetName }
-        if (grouped.any { it.value.size > 1 }) {
-            player.sendMessage(Component.text("--- Totals ---", NamedTextColor.GREEN))
-            grouped.forEach { (name, playerBounties) ->
-                val total = playerBounties.sumOf { it.amount }
-                player.sendMessage(
-                    Component.text(" $name", NamedTextColor.WHITE)
-                        .append(Component.text(": ", NamedTextColor.GRAY))
-                        .append(Component.text(plugin.economyManager.format(total), NamedTextColor.GREEN))
-                )
-            }
-        }
+        BountyListGui.open(plugin, player)
     }
 
     private fun handleCancel(player: Player, args: Array<out String>) {
+        if (!player.hasPermission("joshymc.bounty.cancel")) {
+            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
         if (args.size < 2) {
             plugin.commsManager.send(player, Component.text("Usage: /bounty cancel <id>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
@@ -155,14 +111,14 @@ class BountyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return
         }
 
-        if (plugin.teamManager.cancelBounty(id, player.uniqueId)) {
+        if (plugin.teamManager.cancelBounty(id)) {
             plugin.commsManager.send(
                 player,
                 Component.text("Bounty #$id cancelled. Money refunded.", NamedTextColor.GREEN),
                 CommunicationsManager.Category.DEFAULT
             )
         } else {
-            plugin.commsManager.send(player, Component.text("Could not cancel bounty. It may not exist or you didn't place it.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            plugin.commsManager.send(player, Component.text("Could not cancel bounty. It may not exist anymore.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
         }
     }
 

@@ -79,7 +79,8 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
         return true
     }
 
-    private fun vanish(player: Player) {
+    /** Public so other systems (e.g. Moderator Mode) can vanish/unvanish a player programmatically. */
+    fun vanish(player: Player) {
         vanished.add(player.uniqueId)
         for (online in Bukkit.getOnlinePlayers()) {
             if (online == player) continue
@@ -88,7 +89,7 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
         }
     }
 
-    private fun unvanish(player: Player) {
+    fun unvanish(player: Player) {
         vanished.remove(player.uniqueId)
         for (online in Bukkit.getOnlinePlayers()) {
             if (online == player) continue

@@ -2,11 +2,14 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.MinecraftColors
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
+import org.bukkit.Color
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
@@ -35,6 +38,83 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         private val PREVIEW_GUI_TITLE_PREFIX = "Preview: "
     }
 
+    /**
+     * Shared shape-based reward layout used by BOTH the Preview and Pick-a-Reward
+     * GUIs, so the same crate always renders as the same compact formation in both
+     * places instead of a plain row-by-row fill.
+     */
+    private object CrateLayout {
+        const val USABLE_ROWS = 3
+        const val USABLE_COLUMNS = 7
+        const val PAGE_CAPACITY = USABLE_ROWS * USABLE_COLUMNS // 21
+
+        // Predefined compact formations (row-by-row item counts, top to bottom).
+        // Above this, rows are distributed as evenly as possible (see rowCounts).
+        private val FIXED_SHAPES = mapOf(
+            1 to listOf(1), 2 to listOf(2), 3 to listOf(3),
+            4 to listOf(2, 2), 5 to listOf(3, 2), 6 to listOf(3, 3),
+            7 to listOf(7),
+            8 to listOf(4, 4), 9 to listOf(3, 3, 3), 10 to listOf(5, 5),
+            11 to listOf(7, 4), 12 to listOf(6, 6), 13 to listOf(7, 6), 14 to listOf(7, 7)
+        )
+
+        /** Column indices (0..6) that symmetrically center [rowLen] items within a 7-wide row. */
+        private fun columnIndices(rowLen: Int): List<Int> = when (rowLen) {
+            0 -> emptyList()
+            1 -> listOf(3)
+            2 -> listOf(2, 4)
+            3 -> listOf(2, 3, 4)
+            4 -> listOf(1, 2, 4, 5)
+            5 -> listOf(1, 2, 3, 4, 5)
+            6 -> listOf(0, 1, 2, 4, 5, 6)
+            else -> (0 until USABLE_COLUMNS).toList()
+        }
+
+        /** Per-row item counts (top to bottom) forming a compact formation for [count] items. */
+        private fun rowCounts(count: Int): List<Int> {
+            if (count <= 0) return emptyList()
+            FIXED_SHAPES[count]?.let { return it }
+            val capped = count.coerceAtMost(PAGE_CAPACITY)
+            val base = capped / USABLE_ROWS
+            val remainder = capped % USABLE_ROWS
+            return (0 until USABLE_ROWS).map { row -> if (row < remainder) base + 1 else base }
+        }
+
+        /**
+         * (row, col) grid positions, 0-indexed within a [USABLE_ROWS] x [USABLE_COLUMNS]
+         * box, for [count] rewards (capped to one page) — horizontally and vertically centered.
+         */
+        fun positions(count: Int): List<Pair<Int, Int>> {
+            val rows = rowCounts(count)
+            val verticalOffset = (USABLE_ROWS - rows.size).coerceAtLeast(0) / 2
+            val result = mutableListOf<Pair<Int, Int>>()
+            for ((i, rowLen) in rows.withIndex()) {
+                for (col in columnIndices(rowLen)) {
+                    result.add((verticalOffset + i) to col)
+                }
+            }
+            return result
+        }
+
+        fun pageCount(total: Int): Int = if (total <= 0) 1 else (total - 1) / PAGE_CAPACITY + 1
+    }
+
+    private fun navButton(label: String): ItemStack {
+        val item = ItemStack(Material.ARROW)
+        item.editMeta { meta ->
+            meta.displayName(Component.text(label, NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+        }
+        return item
+    }
+
+    private fun pageIndicator(current: Int, total: Int): ItemStack {
+        val item = ItemStack(Material.PAPER)
+        item.editMeta { meta ->
+            meta.displayName(Component.text("Page $current / $total", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+        }
+        return item
+    }
+
     // --- Data classes ---
 
     data class CrateReward(
@@ -51,7 +131,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val itemBase64: String? = null
     )
 
-    enum class CrateMode { RANDOM, SELECT }
+    enum class CrateMode { RANDOM, SELECT, SELECT_3 }
 
     enum class AnimationType { SPIN, PULSE, INSTANT }
 
@@ -60,12 +140,24 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val displayName: String,
         val keyMaterial: Material,
         val keyName: String,
+        /**
+         * Optional custom ItemModel key applied to physical keys for this crate
+         * (e.g. a retextured TRIAL_KEY). Purely cosmetic — key identity is always
+         * determined by the [crateKeyKey] PDC tag, never by this model.
+         */
+        val keyItemModel: NamespacedKey? = null,
         val animationGlass: Material,
         val rewards: List<CrateReward>,
         val mode: CrateMode = CrateMode.RANDOM,
         val animationType: AnimationType = AnimationType.SPIN,
         val idleParticle: Particle = Particle.END_ROD,
-        val winParticle: Particle = Particle.FIREWORK
+        val winParticle: Particle = Particle.FIREWORK,
+        /**
+         * Color applied to colorable particle types (currently only Particle.DUST).
+         * Null means "no color configured" — colorable particles fall back to a
+         * default color and non-colorable particles are unaffected either way.
+         */
+        val particleColor: Color? = null
     )
 
     data class CrateLocation(
@@ -76,12 +168,19 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val crateType: String
     )
 
+    /** In-progress "Select 3" pick state for one player. Lives only as long as the picker/confirm GUI is open. */
+    private data class Select3Session(val crateId: String, val selectedIndices: MutableSet<Int> = mutableSetOf())
+
+    /** True for modes where the player manually picks reward(s) instead of an animated random draw — key consumption is deferred until the pick is finalized. */
+    private fun isManualPickMode(mode: CrateMode) = mode == CrateMode.SELECT || mode == CrateMode.SELECT_3
+
     // --- State ---
 
-    private val crateKeyKey = NamespacedKey(plugin, "crate_key")
+    val crateKeyKey = NamespacedKey(plugin, "crate_key")
     private val crates = mutableMapOf<String, CrateDef>()
     private val crateLocations = mutableListOf<CrateLocation>()
     private val activeAnimations = mutableSetOf<UUID>()
+    private val select3Sessions = mutableMapOf<UUID, Select3Session>()
     private var particleTask: BukkitTask? = null
     private lateinit var cratesFile: File
     private lateinit var cratesConfig: YamlConfiguration
@@ -127,6 +226,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         particleTask?.cancel()
         particleTask = null
         activeAnimations.clear()
+        select3Sessions.clear()
     }
 
     // --- Config loading ---
@@ -141,6 +241,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val keyMaterialStr = crateSection.getString("key-material", "TRIPWIRE_HOOK") ?: "TRIPWIRE_HOOK"
             val keyMaterial = try { Material.valueOf(keyMaterialStr) } catch (_: Exception) { Material.TRIPWIRE_HOOK }
             val keyName = crateSection.getString("key-name", "$displayName Key") ?: "$displayName Key"
+            val keyItemModel = crateSection.getString("key-item-model")?.takeIf { it.isNotBlank() }?.let { modelStr ->
+                val parsed = NamespacedKey.fromString(modelStr)
+                if (parsed == null) {
+                    plugin.logger.warning("[Crates] Invalid key-item-model '$modelStr' for crate '$id' — falling back to default key appearance.")
+                }
+                parsed
+            }
             val glassStr = crateSection.getString("animation-glass", "WHITE_STAINED_GLASS_PANE") ?: "WHITE_STAINED_GLASS_PANE"
             val animationGlass = try { Material.valueOf(glassStr) } catch (_: Exception) { Material.WHITE_STAINED_GLASS_PANE }
 
@@ -155,6 +262,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
             val winParticleStr = crateSection.getString("win-particle", "FIREWORK") ?: "FIREWORK"
             val winParticle = try { Particle.valueOf(winParticleStr.uppercase()) } catch (_: Exception) { Particle.FIREWORK }
+
+            val particleColor = MinecraftColors.byId(crateSection.getString("particle-color"))?.color
 
             val rewards = mutableListOf<CrateReward>()
             val rewardsSection = crateSection.getConfigurationSection("rewards")
@@ -183,7 +292,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 }
             }
 
-            crates[id] = CrateDef(id, displayName, keyMaterial, keyName, animationGlass, rewards, mode, animationType, idleParticle, winParticle)
+            crates[id] = CrateDef(
+                id, displayName, keyMaterial, keyName, keyItemModel, animationGlass, rewards,
+                mode, animationType, idleParticle, winParticle, particleColor
+            )
         }
     }
 
@@ -215,8 +327,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     fun createCrate(id: String, displayName: String): Boolean {
         if (crates.containsKey(id)) return false
-        crates[id] = CrateDef(id, displayName, Material.TRIPWIRE_HOOK, "$displayName Key", Material.WHITE_STAINED_GLASS_PANE, emptyList(),
-            CrateMode.RANDOM, AnimationType.SPIN, Particle.END_ROD, Particle.FIREWORK)
+        crates[id] = CrateDef(
+            id, displayName, Material.TRIPWIRE_HOOK, "$displayName Key", null, Material.WHITE_STAINED_GLASS_PANE, emptyList(),
+            CrateMode.RANDOM, AnimationType.SPIN, Particle.END_ROD, Particle.FIREWORK
+        )
         saveCrates()
         return true
     }
@@ -271,15 +385,17 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
-    fun setCrateKeyMaterial(crateId: String, material: Material, keyName: String): Boolean {
+    fun setCrateKeyMaterial(crateId: String, material: Material, keyName: String, keyItemModel: NamespacedKey? = null): Boolean {
         val crate = crates[crateId] ?: return false
-        crates[crateId] = crate.copy(keyMaterial = material, keyName = keyName)
+        crates[crateId] = crate.copy(keyMaterial = material, keyName = keyName, keyItemModel = keyItemModel)
         saveCrates()
         return true
     }
 
+    /** Returns false (and leaves the mode unchanged) if switching to SELECT_3 without at least 3 rewards configured. */
     fun setCrateMode(crateId: String, mode: CrateMode): Boolean {
         val crate = crates[crateId] ?: return false
+        if (mode == CrateMode.SELECT_3 && crate.rewards.size < 3) return false
         crates[crateId] = crate.copy(mode = mode)
         saveCrates()
         return true
@@ -313,6 +429,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    fun setCrateParticleColor(crateId: String, colorId: String): Boolean {
+        val crate = crates[crateId] ?: return false
+        val entry = MinecraftColors.byId(colorId) ?: return false
+        crates[crateId] = crate.copy(particleColor = entry.color)
+        saveCrates()
+        return true
+    }
+
     private fun saveCrates() {
         cratesConfig.set("crates", null)
         for ((id, crate) in crates) {
@@ -320,11 +444,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             cratesConfig.set("$path.display-name", crate.displayName)
             cratesConfig.set("$path.key-material", crate.keyMaterial.name)
             cratesConfig.set("$path.key-name", crate.keyName)
+            cratesConfig.set("$path.key-item-model", crate.keyItemModel?.asString())
             cratesConfig.set("$path.animation-glass", crate.animationGlass.name)
             cratesConfig.set("$path.mode", crate.mode.name.lowercase())
             cratesConfig.set("$path.animation-type", crate.animationType.name.lowercase())
             cratesConfig.set("$path.idle-particle", crate.idleParticle.name)
             cratesConfig.set("$path.win-particle", crate.winParticle.name)
+            val colorId = MinecraftColors.ALL.firstOrNull { it.color == crate.particleColor }?.id
+            cratesConfig.set("$path.particle-color", colorId)
 
             for ((idx, reward) in crate.rewards.withIndex()) {
                 val rewardPath = "$path.rewards.reward_$idx"
@@ -449,16 +576,18 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
             meta.persistentDataContainer.set(crateKeyKey, PersistentDataType.STRING, crateType)
             meta.setEnchantmentGlintOverride(true)
+
+            // Cosmetic only — key identity always comes from the crateKeyKey PDC tag above.
+            if (crate.keyItemModel != null) {
+                meta.setItemModel(crate.keyItemModel)
+            }
         }
         return key
     }
 
     fun giveKey(player: Player, crateType: String, amount: Int = 1): Boolean {
         val key = createKeyStack(crateType, amount) ?: return false
-        val leftover = player.inventory.addItem(key)
-        for ((_, item) in leftover) {
-            player.world.dropItemNaturally(player.location, item)
-        }
+        plugin.giveItemSafely(player, key)
         return true
     }
 
@@ -481,7 +610,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * reward, so calling this for them would double-charge.
      */
     fun consumeOneKeyIfAuto(player: Player, crateType: String) {
-        if (crates[crateType]?.mode != CrateMode.SELECT) {
+        if (!isManualPickMode(crates[crateType]?.mode ?: CrateMode.RANDOM)) {
             consumeOneKey(player)
         }
     }
@@ -514,6 +643,17 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
 
+        // SELECT_3 mode: open the multi-pick GUI instead of animating
+        if (crate.mode == CrateMode.SELECT_3) {
+            if (crate.rewards.size < 3) {
+                plugin.commsManager.send(player, Component.text("This crate is misconfigured for Select 3 (needs at least 3 rewards) — contact an admin.", NamedTextColor.RED))
+                return
+            }
+            select3Sessions[player.uniqueId] = Select3Session(crate.id)
+            openSelect3Gui(player, crate)
+            return
+        }
+
         activeAnimations.add(player.uniqueId)
 
         when (crate.animationType) {
@@ -525,42 +665,54 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     // --- SELECT mode GUI ---
 
-    private fun openSelectGui(player: Player, crate: CrateDef) {
+    private fun openSelectGui(player: Player, crate: CrateDef, page: Int = 0) {
         val title = Component.text("Pick a Reward: ")
             .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
             .decoration(TextDecoration.ITALIC, false)
 
-        val size = when {
-            crate.rewards.size <= 7 -> 27
-            crate.rewards.size <= 21 -> 45
-            else -> 54
-        }
+        val totalPages = CrateLayout.pageCount(crate.rewards.size)
+        val safePage = page.coerceIn(0, totalPages - 1)
+        val pageStart = safePage * CrateLayout.PAGE_CAPACITY
+        val pageRewards = crate.rewards.drop(pageStart).take(CrateLayout.PAGE_CAPACITY)
 
+        val size = 45
         val gui = CustomGui(title, size)
 
-        // Fill with glass border
+        // Fill everything with glass so the formation's empty gaps look intentional.
         val filler = ItemStack(crate.animationGlass)
         filler.editMeta { it.displayName(Component.empty()) }
+        for (i in 0 until size) gui.inventory.setItem(i, filler.clone())
+
+        val positions = CrateLayout.positions(pageRewards.size)
         gui.border(filler)
 
-        // Place rewards in the center area
-        val slots = mutableListOf<Int>()
+        // Place rewards centered inside the inner 7-wide content area, balanced across rows.
         val startRow = 1
         val endRow = (size / 9) - 2
-        for (row in startRow..endRow) {
-            for (col in 1..7) {
-                slots.add(row * 9 + col)
-            }
+        val contentRows = (startRow..endRow).map { row -> (1..7).map { col -> row * 9 + col } }
+
+        val rewardCount = crate.rewards.size
+        val rowsNeeded = if (rewardCount == 0) 0 else (rewardCount + 6) / 7
+        val verticalOffset = (contentRows.size - rowsNeeded).coerceAtLeast(0) / 2
+        val rowSizes = getBalancedRowSizes(rewardCount, rowsNeeded)
+
+        val slots = mutableListOf<Int>()
+        for (i in 0 until rowsNeeded) {
+            val rowIndex = verticalOffset + i
+            if (rowIndex >= contentRows.size) break
+            slots.addAll(getCenteredRewardSlots(contentRows[rowIndex], rowSizes[i]))
         }
 
-        for ((idx, reward) in crate.rewards.withIndex()) {
-            if (idx >= slots.size) break
-            val slot = slots[idx]
+        for ((idx, reward) in pageRewards.withIndex()) {
+            if (idx >= positions.size) break
+            val (row, col) = positions[idx]
+            val slot = (row + 1) * 9 + (col + 1)
 
             // Use the actual stored item (preserves trims, custom items)
             val item = deserializeItem(reward.itemBase64)
                 ?: ItemStack(reward.material, reward.amount.coerceIn(1, 64))
             item.amount = reward.amount.coerceIn(1, 64)
+            val existingLore = item.itemMeta?.lore() ?: emptyList()
             item.editMeta { meta ->
                 meta.displayName(
                     Component.text(reward.displayName, TextColor.color(0xFFAA00))
@@ -574,7 +726,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                         .append(Component.text("${reward.amount}", NamedTextColor.WHITE))
                         .decoration(TextDecoration.ITALIC, false)
                 )
-                if (reward.enchantments.isNotEmpty()) {
+                if (existingLore.isNotEmpty()) {
+                    lore.add(Component.empty())
+                    lore.addAll(existingLore)
+                } else if (reward.enchantments.isNotEmpty()) {
                     lore.add(Component.empty())
                     lore.add(Component.text("  Enchantments:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
                     for ((ench, level) in reward.enchantments) {
@@ -620,10 +775,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 consumeOneKey(p)
                 p.closeInventory()
                 val rewardItem = buildRewardItem(rewardRef)
-                val leftover = p.inventory.addItem(rewardItem)
-                for ((_, drop) in leftover) {
-                    p.world.dropItemNaturally(p.location, drop)
-                }
+                plugin.giveItemSafely(p, rewardItem)
                 spawnWinParticles(p, crate)
                 p.playSound(p.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
                 plugin.commsManager.send(
@@ -636,6 +788,282 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             }
         }
 
+        if (totalPages > 1) {
+            if (safePage > 0) {
+                gui.setItem(39, navButton("« Previous Page")) { p, _ -> openSelectGui(p, crate, safePage - 1) }
+            }
+            gui.setItem(40, pageIndicator(safePage + 1, totalPages))
+            if (safePage < totalPages - 1) {
+                gui.setItem(41, navButton("Next Page »")) { p, _ -> openSelectGui(p, crate, safePage + 1) }
+            }
+        }
+
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    // --- SELECT_3 mode GUI ---
+
+    /**
+     * "Select 3" pick GUI — same shape-based layout as [openSelectGui], but tracks up to
+     * 3 picks in [select3Sessions] before handing off to [openSelect3Confirm]. Clicking an
+     * already-picked reward deselects it. No key is consumed here — only at confirmation,
+     * so closing this GUI without finishing never costs a key.
+     */
+    private fun openSelect3Gui(player: Player, crate: CrateDef, page: Int = 0) {
+        val session = select3Sessions[player.uniqueId]
+        if (session == null || session.crateId != crate.id) {
+            player.closeInventory()
+            plugin.commsManager.send(player, Component.text("Your selection session expired — try opening the crate again.", NamedTextColor.RED))
+            return
+        }
+
+        val title = Component.text("Select 3: ")
+            .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
+            .decoration(TextDecoration.ITALIC, false)
+
+        val totalPages = CrateLayout.pageCount(crate.rewards.size)
+        val safePage = page.coerceIn(0, totalPages - 1)
+        val pageStart = safePage * CrateLayout.PAGE_CAPACITY
+        val pageRewards = crate.rewards.drop(pageStart).take(CrateLayout.PAGE_CAPACITY)
+
+        val size = 45
+        val gui = CustomGui(title, size)
+        gui.onClose = { p -> select3Sessions.remove(p.uniqueId) }
+
+        val filler = ItemStack(crate.animationGlass)
+        filler.editMeta { it.displayName(Component.empty()) }
+        for (i in 0 until size) gui.inventory.setItem(i, filler.clone())
+        gui.border(filler)
+
+        val progress = ItemStack(Material.NAME_TAG)
+        progress.editMeta { meta ->
+            meta.displayName(
+                Component.text("Selected: ${session.selectedIndices.size}/3", NamedTextColor.YELLOW)
+                    .decoration(TextDecoration.ITALIC, false)
+            )
+            meta.lore(listOf(
+                Component.empty(),
+                Component.text("  Pick 3 different rewards.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("  Click a selected reward again to deselect.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+            ))
+        }
+        gui.setItem(4, progress)
+
+        val positions = CrateLayout.positions(pageRewards.size)
+
+        for ((idxOnPage, reward) in pageRewards.withIndex()) {
+            if (idxOnPage >= positions.size) break
+            val globalIndex = pageStart + idxOnPage
+            val (row, col) = positions[idxOnPage]
+            val slot = (row + 1) * 9 + (col + 1)
+            val isSelected = session.selectedIndices.contains(globalIndex)
+
+            val item = deserializeItem(reward.itemBase64)
+                ?: ItemStack(reward.material, reward.amount.coerceIn(1, 64))
+            item.amount = reward.amount.coerceIn(1, 64)
+            val existingLore = item.itemMeta?.lore() ?: emptyList()
+            item.editMeta { meta ->
+                meta.displayName(
+                    Component.text(reward.displayName, TextColor.color(0xFFAA00))
+                        .decoration(TextDecoration.ITALIC, false)
+                        .decoration(TextDecoration.BOLD, true)
+                )
+                val lore = mutableListOf<Component>()
+                lore.add(Component.empty())
+                lore.add(
+                    Component.text("  Amount: ", NamedTextColor.GRAY)
+                        .append(Component.text("${reward.amount}", NamedTextColor.WHITE))
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+                if (existingLore.isNotEmpty()) {
+                    lore.add(Component.empty())
+                    lore.addAll(existingLore)
+                } else if (reward.enchantments.isNotEmpty()) {
+                    lore.add(Component.empty())
+                    lore.add(Component.text("  Enchantments:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+                    for ((ench, level) in reward.enchantments) {
+                        lore.add(
+                            Component.text("  - ${ench.key.key.replace("_", " ")} $level", NamedTextColor.DARK_GRAY)
+                                .decoration(TextDecoration.ITALIC, false)
+                        )
+                    }
+                }
+                lore.add(Component.empty())
+                if (isSelected) {
+                    lore.add(Component.text("  Selected", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                    lore.add(Component.text("  Click to deselect", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+                } else {
+                    lore.add(Component.text("  Click to select!", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                }
+                lore.add(Component.empty())
+                meta.lore(lore)
+                if (isSelected) meta.setEnchantmentGlintOverride(true)
+            }
+
+            gui.setItem(slot, item) { p, _ ->
+                val sess = select3Sessions[p.uniqueId]
+                if (sess == null || sess.crateId != crate.id) {
+                    p.closeInventory()
+                    plugin.commsManager.send(p, Component.text("Your selection session expired — try opening the crate again.", NamedTextColor.RED))
+                    return@setItem
+                }
+                if (sess.selectedIndices.contains(globalIndex)) {
+                    sess.selectedIndices.remove(globalIndex)
+                    p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.6f, 1.0f)
+                    openSelect3Gui(p, crate, safePage)
+                    return@setItem
+                }
+                if (sess.selectedIndices.size >= 3) return@setItem
+                sess.selectedIndices.add(globalIndex)
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.6f, 1.3f)
+                if (sess.selectedIndices.size >= 3) {
+                    openSelect3Confirm(p, crate)
+                } else {
+                    openSelect3Gui(p, crate, safePage)
+                }
+            }
+        }
+
+        if (totalPages > 1) {
+            if (safePage > 0) {
+                gui.setItem(39, navButton("« Previous Page")) { p, _ -> openSelect3Gui(p, crate, safePage - 1) }
+            }
+            gui.setItem(40, pageIndicator(safePage + 1, totalPages))
+            if (safePage < totalPages - 1) {
+                gui.setItem(41, navButton("Next Page »")) { p, _ -> openSelect3Gui(p, crate, safePage + 1) }
+            }
+        }
+
+        plugin.guiManager.open(player, gui)
+        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    /** Final review step for Select 3 — shows the 3 chosen rewards and requires Confirm before payout. */
+    private fun openSelect3Confirm(player: Player, crate: CrateDef) {
+        val session = select3Sessions[player.uniqueId]
+        if (session == null || session.crateId != crate.id || session.selectedIndices.size != 3) {
+            select3Sessions.remove(player.uniqueId)
+            player.closeInventory()
+            plugin.commsManager.send(player, Component.text("Your selection session expired — try opening the crate again.", NamedTextColor.RED))
+            return
+        }
+        val chosen = session.selectedIndices.mapNotNull { crate.rewards.getOrNull(it) }
+        if (chosen.size != 3) {
+            select3Sessions.remove(player.uniqueId)
+            player.closeInventory()
+            plugin.commsManager.send(player, Component.text("This crate's rewards changed — please reopen and try again.", NamedTextColor.RED))
+            return
+        }
+
+        val title = Component.text("Confirm Selection: ")
+            .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
+            .decoration(TextDecoration.ITALIC, false)
+        val gui = CustomGui(title, 27)
+        gui.onClose = { p -> select3Sessions.remove(p.uniqueId) }
+
+        val filler = ItemStack(Material.BLACK_STAINED_GLASS_PANE)
+        filler.editMeta { it.displayName(Component.empty()) }
+        for (i in 0 until 27) gui.inventory.setItem(i, filler.clone())
+
+        val displaySlots = listOf(11, 13, 15)
+        for ((i, reward) in chosen.withIndex()) {
+            gui.inventory.setItem(displaySlots[i], buildRewardDisplay(reward))
+        }
+
+        val confirmItem = ItemStack(Material.EMERALD_BLOCK)
+        confirmItem.editMeta { meta ->
+            meta.displayName(
+                Component.text("Confirm", NamedTextColor.GREEN)
+                    .decoration(TextDecoration.ITALIC, false)
+                    .decoration(TextDecoration.BOLD, true)
+            )
+            meta.lore(listOf(
+                Component.empty(),
+                Component.text("  Consume 1 key and claim these 3 rewards.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+            ))
+        }
+        gui.setItem(20, confirmItem) { p, _ ->
+            val currentSession = select3Sessions[p.uniqueId]
+            if (currentSession == null || currentSession.crateId != crate.id || currentSession.selectedIndices.size != 3) {
+                select3Sessions.remove(p.uniqueId)
+                p.closeInventory()
+                plugin.commsManager.send(p, Component.text("Your selection session expired — try opening the crate again.", NamedTextColor.RED))
+                return@setItem
+            }
+            val rewardsToGrant = currentSession.selectedIndices.mapNotNull { crate.rewards.getOrNull(it) }
+            if (rewardsToGrant.size != 3) {
+                select3Sessions.remove(p.uniqueId)
+                p.closeInventory()
+                plugin.commsManager.send(p, Component.text("This crate's rewards changed — please reopen and try again.", NamedTextColor.RED))
+                return@setItem
+            }
+
+            val keyInHand = p.inventory.itemInMainHand
+            if (!isKey(keyInHand, crate.id)) {
+                select3Sessions.remove(p.uniqueId)
+                p.closeInventory()
+                plugin.commsManager.send(
+                    p,
+                    Component.text("You no longer have a ", NamedTextColor.RED)
+                        .append(Component.text(crate.keyName, TextColor.color(0xFFAA00)))
+                        .append(Component.text(".", NamedTextColor.RED))
+                )
+                return@setItem
+            }
+            val hasFreeSlot = p.inventory.firstEmpty() != -1 || keyInHand.amount == 1
+            if (!hasFreeSlot) {
+                p.closeInventory()
+                plugin.commsManager.send(
+                    p,
+                    Component.text("Your inventory is full — clear some space and try again.", NamedTextColor.RED)
+                )
+                p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                return@setItem
+            }
+
+            consumeOneKey(p)
+            select3Sessions.remove(p.uniqueId)
+            p.closeInventory()
+
+            for (reward in rewardsToGrant) {
+                val rewardItem = buildRewardItem(reward)
+                plugin.giveItemSafely(p, rewardItem)
+            }
+            spawnWinParticles(p, crate)
+            p.playSound(p.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
+            plugin.commsManager.send(p, Component.text("You selected:", NamedTextColor.GREEN))
+            for (reward in rewardsToGrant) {
+                plugin.commsManager.send(
+                    p,
+                    Component.text("  - ", NamedTextColor.DARK_GRAY)
+                        .append(Component.text(reward.displayName, TextColor.color(0xFFAA00)))
+                        .append(Component.text(" x${reward.amount}", NamedTextColor.GREEN))
+                )
+            }
+        }
+
+        val cancelItem = ItemStack(Material.BARRIER)
+        cancelItem.editMeta { meta ->
+            meta.displayName(
+                Component.text("Cancel", NamedTextColor.RED)
+                    .decoration(TextDecoration.ITALIC, false)
+                    .decoration(TextDecoration.BOLD, true)
+            )
+            meta.lore(listOf(
+                Component.empty(),
+                Component.text("  Discard this selection — no key used.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+            ))
+        }
+        gui.setItem(24, cancelItem) { p, _ ->
+            select3Sessions.remove(p.uniqueId)
+            p.closeInventory()
+            plugin.commsManager.send(p, Component.text("Selection cancelled — no key was used.", NamedTextColor.YELLOW))
+        }
+
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
@@ -645,10 +1073,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     private fun openInstant(player: Player, crate: CrateDef) {
         val reward = selectWeightedReward(crate)
         val rewardItem = buildRewardItem(reward)
-        val leftover = player.inventory.addItem(rewardItem)
-        for ((_, item) in leftover) {
-            player.world.dropItemNaturally(player.location, item)
-        }
+        plugin.giveItemSafely(player, rewardItem)
         spawnWinParticles(player, crate)
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
         plugin.commsManager.send(
@@ -727,8 +1152,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     spawnWinParticles(player, crate)
                     player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
                     val rewardItem = buildRewardItem(winner)
-                    val leftover = player.inventory.addItem(rewardItem)
-                    for ((_, item) in leftover) player.world.dropItemNaturally(player.location, item)
+                    plugin.giveItemSafely(player, rewardItem)
                     plugin.commsManager.send(player,
                         Component.text("You won ", NamedTextColor.GREEN)
                             .append(Component.text(winner.displayName, TextColor.color(0xFFAA00)))
@@ -780,6 +1204,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             gui.inventory.setItem(slot, buildRewardDisplay(selectWeightedReward(crate)))
         }
 
+        // Point arrows at the winning slot (13) from top-middle (4) and bottom-middle (22)
+        gui.inventory.setItem(4, winningSlotIndicator(pointingDown = true))
+        gui.inventory.setItem(22, winningSlotIndicator(pointingDown = false))
+
         plugin.guiManager.open(player, gui)
 
         scheduleAnimationStep(player, gui.inventory, crate, 2L, 0, 40)
@@ -827,10 +1255,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     // Give reward
                     if (winnerReward != null) {
                         val rewardItem = buildRewardItem(winnerReward)
-                        val leftover = player.inventory.addItem(rewardItem)
-                        for ((_, item) in leftover) {
-                            player.world.dropItemNaturally(player.location, item)
-                        }
+                        plugin.giveItemSafely(player, rewardItem)
 
                         plugin.commsManager.send(
                             player,
@@ -871,11 +1296,26 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return crate.rewards.last()
     }
 
+    /** Static arrow marker pointing toward the winning center slot (13) from the given side. */
+    private fun winningSlotIndicator(pointingDown: Boolean): ItemStack {
+        val arrow = ItemStack(Material.ARROW)
+        arrow.editMeta { meta ->
+            meta.displayName(
+                Component.text(if (pointingDown) "▼ Winning Slot ▼" else "▲ Winning Slot ▲", NamedTextColor.YELLOW)
+                    .decoration(TextDecoration.ITALIC, false)
+                    .decoration(TextDecoration.BOLD, true)
+            )
+        }
+        return arrow
+    }
+
     private fun buildRewardDisplay(reward: CrateReward): ItemStack {
         // If we have a serialized item (custom items, trims), use it as the base
         // and overwrite the display name/lore for clarity in the GUI.
         val base = deserializeItem(reward.itemBase64) ?: ItemStack(reward.material, reward.amount)
         if (base.amount != reward.amount) base.amount = reward.amount
+
+        val existingLore = base.itemMeta?.lore() ?: emptyList()
 
         base.editMeta { meta ->
             meta.displayName(
@@ -883,11 +1323,15 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     .decoration(TextDecoration.ITALIC, false)
                     .decoration(TextDecoration.BOLD, true)
             )
-            meta.lore(listOf(
-                Component.empty(),
-                Component.text("  x${reward.amount}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.empty()
-            ))
+            val lore = mutableListOf<Component>()
+            lore.add(Component.empty())
+            lore.add(Component.text("  x${reward.amount}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+            if (existingLore.isNotEmpty()) {
+                lore.add(Component.empty())
+                lore.addAll(existingLore)
+            }
+            lore.add(Component.empty())
+            meta.lore(lore)
         }
         return base
     }
@@ -897,6 +1341,23 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val serialized = deserializeItem(reward.itemBase64)
         if (serialized != null) {
             serialized.amount = reward.amount
+            if (plugin.creditVoucherManager.isCreditVoucher(serialized)) {
+                // The stored reward template is a Base64 snapshot of whatever voucher was
+                // held when the reward was configured — including that voucher's unique
+                // voucher_uuid. Handing out the same snapshot verbatim would give every
+                // winner an item with an IDENTICAL voucher_uuid, so only the first person
+                // to redeem it would succeed; everyone else would hit the "already
+                // redeemed" duplicate-id check. Mint a fresh id (and force amount back to
+                // 1, since a legitimate voucher never stacks) on every delivery.
+                serialized.amount = 1
+                serialized.editMeta { meta ->
+                    meta.persistentDataContainer.set(
+                        plugin.creditVoucherManager.voucherUuidKey,
+                        PersistentDataType.STRING,
+                        UUID.randomUUID().toString()
+                    )
+                }
+            }
             return serialized
         }
 
@@ -954,50 +1415,45 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 player.world.spawnParticle(Particle.EXPLOSION, loc, 5, 0.3, 0.3, 0.3, 0.0)
             }
             else -> {
-                player.world.spawnParticle(crate.winParticle, loc, 30, 0.5, 0.5, 0.5, 0.1)
+                spawnCrateParticle(player.world, loc, crate.winParticle, crate.particleColor, 30, 0.5, 0.5, 0.5, 0.1)
             }
         }
     }
 
-    fun openPreview(player: Player, crateType: String) {
+    fun openPreview(player: Player, crateType: String, page: Int = 0) {
         val crate = crates[crateType] ?: return
 
         val title = Component.text(PREVIEW_GUI_TITLE_PREFIX)
             .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
             .decoration(TextDecoration.ITALIC, false)
 
-        val size = when {
-            crate.rewards.size <= 7 -> 27
-            crate.rewards.size <= 21 -> 45
-            else -> 54
-        }
+        val totalPages = CrateLayout.pageCount(crate.rewards.size)
+        val safePage = page.coerceIn(0, totalPages - 1)
+        val pageStart = safePage * CrateLayout.PAGE_CAPACITY
+        val pageRewards = crate.rewards.drop(pageStart).take(CrateLayout.PAGE_CAPACITY)
 
-        val inv = Bukkit.createInventory(null, size, title)
+        val size = 45
+        val gui = CustomGui(title, size)
 
         // Fill with black glass
         val filler = ItemStack(Material.BLACK_STAINED_GLASS_PANE)
         filler.editMeta { it.displayName(Component.empty()) }
-        for (i in 0 until size) inv.setItem(i, filler.clone())
+        for (i in 0 until size) gui.inventory.setItem(i, filler.clone())
 
-        // Place rewards in the middle area
+        // Place rewards in a compact, centered shape-based formation.
         val totalWeight = crate.rewards.sumOf { it.weight }
-        val slots = mutableListOf<Int>()
-        val startRow = 1
-        val endRow = (size / 9) - 2
-        for (row in startRow..endRow) {
-            for (col in 1..7) {
-                slots.add(row * 9 + col)
-            }
-        }
+        val positions = CrateLayout.positions(pageRewards.size)
 
-        for ((idx, reward) in crate.rewards.withIndex()) {
-            if (idx >= slots.size) break
-            val slot = slots[idx]
+        for ((idx, reward) in pageRewards.withIndex()) {
+            if (idx >= positions.size) break
+            val (row, col) = positions[idx]
+            val slot = (row + 1) * 9 + (col + 1)
             val percentage = (reward.weight.toDouble() / totalWeight * 100).let { "%.1f".format(it) }
 
             // Use serialized item if present (preserves trims, custom items)
             val item = deserializeItem(reward.itemBase64) ?: ItemStack(reward.material, reward.amount)
             item.amount = reward.amount.coerceIn(1, 64)
+            val existingLore = item.itemMeta?.lore() ?: emptyList()
             item.editMeta { meta ->
                 meta.displayName(
                     Component.text(reward.displayName, TextColor.color(0xFFAA00))
@@ -1018,7 +1474,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                         .decoration(TextDecoration.ITALIC, false)
                 )
 
-                if (reward.enchantments.isNotEmpty()) {
+                if (existingLore.isNotEmpty()) {
+                    lore.add(Component.empty())
+                    lore.addAll(existingLore)
+                } else if (reward.enchantments.isNotEmpty()) {
                     lore.add(Component.empty())
                     lore.add(Component.text("  Enchantments:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
                     for ((ench, level) in reward.enchantments) {
@@ -1034,12 +1493,53 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 meta.lore(lore)
             }
 
-            inv.setItem(slot, item)
+            gui.inventory.setItem(slot, item)
         }
 
-        val gui = CustomGui(title, size, inv)
+        if (totalPages > 1) {
+            if (safePage > 0) {
+                gui.setItem(39, navButton("« Previous Page")) { p, _ -> openPreview(p, crateType, safePage - 1) }
+            }
+            gui.setItem(40, pageIndicator(safePage + 1, totalPages))
+            if (safePage < totalPages - 1) {
+                gui.setItem(41, navButton("Next Page »")) { p, _ -> openPreview(p, crateType, safePage + 1) }
+            }
+        }
+
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    /**
+     * Maps [count] rewards onto [rowSlots] (the 7 inner, non-glass slots of one content row,
+     * left to right) so the row reads as visually centered/symmetrical.
+     */
+    private fun getCenteredRewardSlots(rowSlots: List<Int>, count: Int): List<Int> {
+        if (count <= 0) return emptyList()
+        if (count >= 7) return rowSlots.take(7)
+        val a = rowSlots[0]; val b = rowSlots[1]; val c = rowSlots[2]; val d = rowSlots[3]
+        val e = rowSlots[4]; val f = rowSlots[5]; val g = rowSlots[6]
+        return when (count) {
+            1 -> listOf(d)
+            2 -> listOf(c, e)
+            3 -> listOf(c, d, e)
+            4 -> listOf(b, c, e, f)
+            5 -> listOf(b, c, d, e, f)
+            6 -> listOf(a, b, c, e, f, g)
+            else -> rowSlots.take(count)
+        }
+    }
+
+    /**
+     * Splits [count] items across [rows] rows as evenly as possible, front-loading the
+     * remainder onto the earlier rows (e.g. 9 across 2 rows -> [5, 4]) instead of always
+     * filling each row to its 7-item max before spilling into the next.
+     */
+    private fun getBalancedRowSizes(count: Int, rows: Int): List<Int> {
+        if (rows <= 0) return emptyList()
+        val base = count / rows
+        val extra = count % rows
+        return (0 until rows).map { i -> if (i < extra) base + 1 else base }
     }
 
     // --- Mass open ---
@@ -1063,8 +1563,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         val keyCount = itemInHand.amount
 
-        // SELECT crates normally require the player to pick — mass open falls back to weighted random.
-        if (crate.mode == CrateMode.SELECT) {
+        // SELECT / SELECT_3 crates normally require the player to pick — mass open falls back to weighted random.
+        if (isManualPickMode(crate.mode)) {
             plugin.commsManager.send(
                 player,
                 Component.text("Mass-opening a ", NamedTextColor.GRAY)
@@ -1095,10 +1595,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
             val reward = selectWeightedReward(crate)
             val rewardItem = buildRewardItem(reward)
-            val leftover = player.inventory.addItem(rewardItem)
-            for ((_, item) in leftover) {
-                player.world.dropItemNaturally(player.location, item)
-            }
+            plugin.giveItemSafely(player, rewardItem)
             rewardSummary[reward.displayName] = (rewardSummary[reward.displayName] ?: 0) + reward.amount
             keysUsed++
         }
@@ -1152,9 +1649,33 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
                 val crate = crates[loc.crateType]
                 val particle = crate?.idleParticle ?: Particle.END_ROD
-                world.spawnParticle(particle, particleLoc, 3, 0.3, 0.5, 0.3, 0.02)
+                spawnCrateParticle(world, particleLoc, particle, crate?.particleColor, 3, 0.3, 0.5, 0.3, 0.02)
             }
         }, 10L, 10L)
+    }
+
+    /**
+     * Spawns a crate particle, supplying DustOptions when the particle type
+     * requires color data (currently only Particle.DUST). Non-colorable
+     * particles are unaffected — this just avoids duplicating the DUST check
+     * everywhere a crate particle is spawned.
+     */
+    private fun spawnCrateParticle(
+        world: org.bukkit.World,
+        loc: Location,
+        particle: Particle,
+        color: Color?,
+        count: Int,
+        offsetX: Double,
+        offsetY: Double,
+        offsetZ: Double,
+        speed: Double
+    ) {
+        if (particle == Particle.DUST) {
+            world.spawnParticle(particle, loc, count, offsetX, offsetY, offsetZ, speed, Particle.DustOptions(color ?: Color.RED, 1.2f))
+        } else {
+            world.spawnParticle(particle, loc, count, offsetX, offsetY, offsetZ, speed)
+        }
     }
 
     // --- Event handlers ---
@@ -1276,7 +1797,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        if (crates[crateType]?.mode != CrateMode.SELECT) {
+        if (!isManualPickMode(crates[crateType]?.mode ?: CrateMode.RANDOM)) {
             consumeOneKey(player)
         }
         openCrate(player, crateType, block)
@@ -1401,9 +1922,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        // SELECT mode defers key consumption until the player actually picks a reward,
+        // SELECT / SELECT_3 defer key consumption until the player actually finalizes a pick,
         // so closing the GUI without choosing does not cost a key.
-        if (crates[crateType]?.mode != CrateMode.SELECT) {
+        if (!isManualPickMode(crates[crateType]?.mode ?: CrateMode.RANDOM)) {
             consumeOneKey(player)
         }
 
@@ -1416,5 +1937,11 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         if (crateType != null) {
             event.isCancelled = true
         }
+    }
+
+    /** Belt-and-suspenders: an in-progress Select 3 pick never survives a disconnect. */
+    @EventHandler
+    fun onPlayerQuit(event: org.bukkit.event.player.PlayerQuitEvent) {
+        select3Sessions.remove(event.player.uniqueId)
     }
 }

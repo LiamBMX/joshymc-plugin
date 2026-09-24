@@ -22,6 +22,8 @@ import org.bukkit.event.block.BlockBurnEvent
 import org.bukkit.event.block.BlockRedstoneEvent
 import org.bukkit.event.block.BlockSpreadEvent
 import org.bukkit.event.entity.EntityChangeBlockEvent
+import org.bukkit.entity.FallingBlock
+import org.bukkit.entity.TNTPrimed
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityExplodeEvent
 import org.bukkit.event.hanging.HangingBreakByEntityEvent
@@ -29,8 +31,10 @@ import org.bukkit.event.hanging.HangingPlaceEvent
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent
 import org.bukkit.event.player.PlayerBucketEmptyEvent
 import org.bukkit.event.player.PlayerBucketFillEvent
+import org.bukkit.event.player.PlayerFishEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.vehicle.VehicleDestroyEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -40,13 +44,14 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
     private val messageCooldowns = ConcurrentHashMap<UUID, Long>()
 
     private val denyMessage = Component.text("You cannot do that in this claim.", NamedTextColor.RED)
+    private val pvpDenyMessage = Component.text("PvP is disabled in this claim.", NamedTextColor.RED)
 
-    private fun denyWithMessage(player: Player) {
+    private fun denyWithMessage(player: Player, message: Component = denyMessage) {
         val now = System.currentTimeMillis()
         val last = messageCooldowns[player.uniqueId] ?: 0L
         if (now - last >= 1000L) {
             messageCooldowns[player.uniqueId] = now
-            plugin.commsManager.send(player, denyMessage)
+            plugin.commsManager.send(player, message)
         }
     }
 
@@ -81,6 +86,10 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         // anyone with a key can use them even at spawn.
         if (plugin.crateManager.getCrateTypeAt(block) != null) return
 
+        // Ender chests are personal storage — every player sees only their own
+        // inventory, so blocking them via claim protection serves no purpose.
+        if (block.type == Material.ENDER_CHEST) return
+
         if (!plugin.claimManager.canAccess(player, block.location)) {
             event.isCancelled = true
             denyWithMessage(player)
@@ -94,13 +103,17 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         val victim = event.entity
 
         if (victim is Player) {
-            // PvP — cancel if victim is in a claim and attacker can't access
+            // Self-inflicted (e.g. a player's own thrown wind charge knocking
+            // them back) isn't PvP — don't let claim PvP-toggle protection
+            // cancel the vanilla knockback/damage a player deals to themselves.
+            if (attacker == victim) return
             val claim = plugin.claimManager.getClaimAt(victim.location) ?: return
-            val attackerClaim = plugin.claimManager.getClaimAt(attacker.location)
-            // Allow PvP if both are in the same claim (same chunk claim)
-            if (attackerClaim != null && attackerClaim == claim) return
+            // Owner opted in to PvP — allow it
+            if (claim.pvpEnabled) return
+            // Victim's claim has PvP disabled — block all PvP damage to them,
+            // regardless of where the attacker is standing.
             event.isCancelled = true
-            denyWithMessage(attacker)
+            denyWithMessage(attacker, pvpDenyMessage)
         } else {
             // Non-player entities (animals, villagers, etc.)
             if (!plugin.claimManager.canAccess(attacker, victim.location)) {
@@ -160,10 +173,25 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         }
     }
 
-    // 10. Entity explosion — remove claimed blocks from explosion
+    // 10. Entity explosion — protect claimed blocks; honour per-claim TNT toggle for primed TNT
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onEntityExplode(event: EntityExplodeEvent) {
-        event.blockList().removeIf { plugin.claimManager.getClaimAt(it.location) != null }
+        if (event.entity is TNTPrimed) {
+            val sourceClaim = plugin.claimManager.getClaimAt(event.entity.location)
+            if (sourceClaim != null && sourceClaim.tntEnabled) {
+                // TNT placed inside a claim that has TNT enabled: allow damage within
+                // the same claim, but still protect blocks belonging to other claims.
+                event.blockList().removeIf { block ->
+                    val target = plugin.claimManager.getClaimAt(block.location)
+                    target != null && target.id != sourceClaim.id
+                }
+            } else {
+                // TNT outside any claim, or in a claim with TNT disabled: protect all claimed blocks.
+                event.blockList().removeIf { plugin.claimManager.getClaimAt(it.location) != null }
+            }
+        } else {
+            event.blockList().removeIf { plugin.claimManager.getClaimAt(it.location) != null }
+        }
     }
 
     // 11. Block explosion — remove claimed blocks from explosion
@@ -181,6 +209,10 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
                 event.isCancelled = true
                 denyWithMessage(entity)
             }
+        } else if (entity is FallingBlock) {
+            // Gravity blocks (sand, gravel, concrete powder, etc.) landing inside a
+            // claim is normal physics — don't block it.
+            return
         } else {
             // Non-player entity (enderman, wither, etc.) — block if in a claim
             if (plugin.claimManager.getClaimAt(event.block.location) != null) {
@@ -323,6 +355,33 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
     fun onBlockBurn(event: BlockBurnEvent) {
         if (plugin.claimManager.getClaimAt(event.block.location) != null) {
             event.isCancelled = true
+        }
+    }
+
+    // 20. Fishing rod — prevent hooking lit TNT to stop it being reeled into claims.
+    //     PlayerFishEvent fires when the hook makes contact; cancelling it releases the entity.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onFishEntity(event: PlayerFishEvent) {
+        if (event.state != PlayerFishEvent.State.CAUGHT_ENTITY) return
+        if (event.caught !is TNTPrimed) return
+        event.isCancelled = true
+    }
+
+    // 21. Player movement — block denied players from entering a claim.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPlayerMove(event: PlayerMoveEvent) {
+        val from = event.from
+        val to = event.to
+        // Only react on block-boundary crossings to avoid firing every frame.
+        if (from.blockX == to.blockX && from.blockZ == to.blockZ) return
+        val player = event.player
+        if (!plugin.claimManager.isDenied(player, to)) return
+        event.isCancelled = true
+        val now = System.currentTimeMillis()
+        val last = messageCooldowns[player.uniqueId] ?: 0L
+        if (now - last >= 1000L) {
+            messageCooldowns[player.uniqueId] = now
+            plugin.commsManager.send(player, Component.text("You have been banned from this claim.", NamedTextColor.RED))
         }
     }
 

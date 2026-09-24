@@ -50,12 +50,14 @@ class ChatColorCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
             "rainbow", "gradient_fire", "gradient_ice", "gradient_nature", "gradient_sunset"
         )
 
-        private val gradientColorLists = mapOf(
+        val gradientColorLists = mapOf(
             "GRADIENT_FIRE" to listOf("&4", "&c", "&6", "&e"),
             "GRADIENT_ICE" to listOf("&f", "&b", "&3", "&9"),
             "GRADIENT_NATURE" to listOf("&2", "&a", "&e", "&a", "&2"),
             "GRADIENT_SUNSET" to listOf("&c", "&5", "&9", "&1"),
         )
+
+        val rainbowColors = listOf("&c", "&6", "&e", "&a", "&b", "&9", "&d")
 
         fun createTable(plugin: Joshymc) {
             plugin.databaseManager.createTable(
@@ -100,9 +102,8 @@ class ChatColorCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
         }
 
         fun rainbowText(text: String): String {
-            val colors = listOf("&c", "&6", "&e", "&a", "&b", "&9", "&d")
             return text.mapIndexed { i, c ->
-                if (c == ' ') " " else "${colors[i % colors.size]}$c"
+                if (c == ' ') " " else "${rainbowColors[i % rainbowColors.size]}$c"
             }.joinToString("")
         }
 

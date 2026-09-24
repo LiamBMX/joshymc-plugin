@@ -14,7 +14,7 @@ import org.bukkit.attribute.AttributeModifier
 import org.bukkit.enchantments.Enchantment
 import org.bukkit.Color
 import org.bukkit.Particle
-import org.bukkit.entity.ArmorStand
+import org.bukkit.entity.Allay
 import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -672,17 +672,17 @@ class TalismanManager(private val plugin: Joshymc) : Listener {
                 continue
             }
 
-            var armorStand: ArmorStand? = null
+            var pet: Allay? = null
             for (world in Bukkit.getWorlds()) {
                 val entity = world.getEntity(entityUuid)
-                if (entity is ArmorStand) {
-                    armorStand = entity
+                if (entity is Allay) {
+                    pet = entity
                     break
                 }
             }
 
             // If pet is dead/removed, respawn it
-            if (armorStand == null || armorStand.isDead) {
+            if (pet == null || pet.isDead) {
                 val def = getPlayerTalisman(playerUuid)
                 if (def != null && def.unique) {
                     spawnPet(player, def)
@@ -700,13 +700,8 @@ class TalismanManager(private val plugin: Joshymc) : Listener {
             val petLoc = player.location.add(offsetX, 1.5, offsetZ)
             petLoc.yaw = ((angle * 180 / Math.PI) + 180).toFloat()
 
-            // If too far away (e.g. after teleport), teleport directly
-            val previousLoc = armorStand.location.clone()
-            if (armorStand.world != player.world || armorStand.location.distanceSquared(player.location) > 400) {
-                armorStand.teleport(petLoc)
-            } else {
-                armorStand.teleport(petLoc)
-            }
+            val previousLoc = pet.location.clone()
+            pet.teleport(petLoc)
 
             // Spawn trailing gold dust particles at previous position
             val dustOptions = Particle.DustOptions(Color.fromRGB(255, 215, 0), 0.8f)

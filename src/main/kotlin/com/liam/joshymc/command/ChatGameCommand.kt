@@ -12,12 +12,11 @@ import org.bukkit.command.TabCompleter
 /**
  * `/chatgame [type]` — admin command to start a chat game on demand.
  *
- * - `/chatgame` — start a random game
+ * - `/chatgame` — start a random game (Math or Type)
  * - `/chatgame math` — start a math game
- * - `/chatgame unscramble` — start an unscramble game
- * - `/chatgame type` — start a "type this token" game
- * - `/chatgame reverse` — start a "type backwards" game
- * - `/chatgame status` — show the active game (and answer, since it's admin)
+ * - `/chatgame type` — start a type-the-phrase game
+ * - `/chatgame status` — utility only: show the active game (and answer,
+ *   since it's admin). Never starts a game and is never randomly selected.
  */
 class ChatGameCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
@@ -53,7 +52,7 @@ class ChatGameCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
                 ?: run {
                     sender.sendMessage(
                         Component.text(
-                            "Usage: /chatgame [math|unscramble|type|reverse|status]",
+                            "Usage: /chatgame [math|type|status]",
                             NamedTextColor.RED
                         )
                     )

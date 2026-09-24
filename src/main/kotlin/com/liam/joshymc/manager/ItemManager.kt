@@ -12,10 +12,6 @@ class ItemManager(private val plugin: Joshymc) {
     fun registerAll() {
         register(VoidDrill())
         register(VoidDrill5x5())
-        register(VoidBore())
-        register(VoidBore5x5())
-        register(VoidBoreChunk())
-        register(AfkKey())
         register(EasterEgg())
         register(ExplosiveEgg())
         register(FreezeEgg())
@@ -28,67 +24,106 @@ class ItemManager(private val plugin: Joshymc) {
         register(CobwebEgg())
         register(ConfusionEgg())
         register(EnderEgg())
-        register(CarrotSword())
-        register(BunnyHelmet())
-        register(BunnyChestplate())
-        register(BunnyLeggings())
-        register(BunnyBoots())
+        register(BubbleButtLeggings())
 
-        // Crafting materials
-        register(VoidShard())
-        register(SoulFragment())
-        register(InfernoCore())
-        register(CrystalEssence())
-        register(AncientRune())
-        register(EnchantedDust())
+        // Utility blocks
+        register(FastHopper())
 
-        // Custom weapons
-        register(VoidBlade())
-        register(SoulScythe())
-        register(InfernoAxe())
-        register(CrystalMace())
-        register(CarrotLauncher())
+        // Wands
+        register(SellWand())
 
-        // Custom tools
-        register(AutoMiner())
-        register(FarmersSickle())
-        register(LumberjacksAxe())
-        register(Excavator())
-        register(MagnetWand())
+        // Currency
+        register(Token())
 
-        // Armor sets
-        register(VoidHelmet()); register(VoidChestplate()); register(VoidLeggings()); register(VoidBoots())
-        register(InfernoHelmet()); register(InfernoChestplate()); register(InfernoLeggings()); register(InfernoBoots())
-        register(CrystalHelmet()); register(CrystalChestplate()); register(CrystalLeggings()); register(CrystalBoots())
-        register(SoulHelmet()); register(SoulChestplate()); register(SoulLeggings()); register(SoulBoots())
+        // October Halloween Collection
+        register(PhantomsGrasp())
+        register(Gravedigger())
+        register(JackOLanternMask())
+        register(BoneRattler())
+        register(PumpkinPummel())
+        // September Autumn Collection
+        register(AutumnsEdge())
+        register(HarvestScythe())
+        register(OrchardPickaxe())
+        register(GoldenCrest())
+        register(FallingLeaf())
+        // Woodland Collection
+        register(LumberjacksLegacy())
+        register(WoodlandHunter())
+        register(Maplefang())
+        register(AutumnWanderer())
+        register(Hearthkeeper())
+        // Winter Collection
+        register(Frostbite())
+        register(GlacierBreaker())
+        register(IceSkates())
+        register(WingsOfTheBlizzard())
+        register(WintersWrath())
 
-        // Consumables
-        register(MoneyPouchSmall())
-        register(MoneyPouchMedium())
-        register(MoneyPouchLarge())
-        register(XpTome())
-        register(SpeedApple())
-        register(StrengthApple())
-        register(GiantsBrew())
-        register(MinersBrew())
-        register(WardensHeart())
+        // Retextured Trial Keys
+        register(JanuaryKey())
+        register(FebruaryKey())
+        register(MarchKey())
+        register(AprilKey())
+        register(MayKey())
+        register(JuneKey())
+        register(JulyKey())
+        register(AugustKey())
+        register(SeptemberKey())
+        register(OctoberKey())
+        register(NovemberKey())
+        register(DecemberKey())
+        register(MoneyKey())
+        register(HarvestKey())
+        register(StockpileKey())
+        register(HomesteadKey())
+        register(CampfireKey())
+        register(CabinKey())
+        register(CreditKey())
 
-        // Legendary items
-        register(BlazeKingsCrown())
-        register(PhantomCloak())
-        register(PoseidonsTrident())
-        register(ClaimBlockToken())
-        register(SkillTomeMining())
-        register(SkillTomeFarming())
+        // Moderator Mode hotbar tools
+        register(ModModePunish(plugin))
+        register(ModModeRandomTp(plugin))
+        register(ModModeFreeze(plugin))
+        register(ModModeVanish(plugin))
+        register(ModModeInvsee(plugin))
+        register(ModModeSpectator(plugin))
+        register(ModModeEcsee(plugin))
+        register(ModModeVault(plugin))
 
-        // Seasonal limited editions (3D models from resourcepack/art/items)
-        LimitedEditionItems.all().forEach { register(it) }
+        // Trainee Mode hotbar tools
+        register(TraineeInspector())
+        register(TraineeInvsee())
+        register(TraineeTeleport())
+        register(TraineeHistory())
+        register(TraineeStaffChat())
+        register(TraineeReports())
 
         plugin.logger.info("Registered ${items.size} custom item(s).")
+        validateModelIds()
     }
 
     private fun register(item: CustomItem) {
         items[item.id] = item
+    }
+
+    /**
+     * Warns (without failing startup) if two different custom items resolve to the same
+     * `minecraft:item_model` id, e.g. from copy-pasting an existing item class and forgetting
+     * to change its model id. This can't verify the resourcepack assets themselves (those
+     * aren't shipped inside the plugin jar), only that two in-code items don't collide.
+     */
+    private fun validateModelIds() {
+        val ownerByModelId = mutableMapOf<String, String>()
+        for (item in items.values) {
+            val modelId = item.createItemStack().itemMeta?.itemModel?.key ?: continue
+            val existingOwner = ownerByModelId.putIfAbsent(modelId, item.id)
+            if (existingOwner != null && existingOwner != item.id) {
+                plugin.logger.warning(
+                    "Custom item model ID collision: '$modelId' is used by both '$existingOwner' and '${item.id}'."
+                )
+            }
+        }
     }
 
     fun clear() {

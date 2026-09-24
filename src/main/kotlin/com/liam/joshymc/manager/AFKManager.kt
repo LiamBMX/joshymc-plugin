@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -525,10 +526,7 @@ class AFKManager(private val plugin: Joshymc) {
                     else ->
                         ItemStack(reward.material, reward.amount)
                 }
-                val leftover = player.inventory.addItem(stack)
-                if (leftover.isNotEmpty()) {
-                    leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
-                }
+                plugin.giveItemSafely(player, stack)
                 val label = reward.crateKeyType?.let { "$it key" }
                     ?: reward.customItemId
                     ?: reward.material.name.lowercase().replace('_', ' ')

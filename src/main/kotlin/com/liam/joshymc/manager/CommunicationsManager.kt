@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.TextComponent
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -10,6 +11,12 @@ import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 
 class CommunicationsManager(private val plugin: Joshymc) {
+
+    companion object {
+        // Player preference for whether they want optional personal/direct
+        // messages (e.g. /msg, /reply). Never gates critical/system messages.
+        const val PERSONAL_MESSAGES_SETTING_KEY = "personal_messages"
+    }
 
     // Supports & color codes AND &#RRGGBB hex colors (e.g., "&#FF5555&lRed")
     private val legacySerializer = LegacyComponentSerializer.builder()
@@ -36,6 +43,7 @@ class CommunicationsManager(private val plugin: Joshymc) {
         TELEPORT("WARP", TextColor.color(0x55FF55)),
         ADMIN("ADMIN", TextColor.color(0xFF5555)),
         ECONOMY("ECONOMY", TextColor.color(0xFFD700)),
+        CASINO("CASINO", TextColor.color(0xFF55FF)),
     }
 
     private val categoryPrefixes = mutableMapOf<Category, Component>()
@@ -82,6 +90,15 @@ class CommunicationsManager(private val plugin: Joshymc) {
         player.sendActionBar(message)
     }
 
+    /**
+     * Whether [player] wants to receive OPTIONAL personal/direct messages
+     * (e.g. /msg, /reply). Features must never route critical/system
+     * messages (punishments, moderation notices, errors, transaction
+     * confirmations) through this check.
+     */
+    fun canReceivePersonalMessages(player: Player): Boolean =
+        plugin.settingsManager.getSetting(player, PERSONAL_MESSAGES_SETTING_KEY)
+
     // ---- Chat formatting ----
 
     fun formatChat(player: Player, message: Component): Component {
@@ -115,40 +132,112 @@ class CommunicationsManager(private val plugin: Joshymc) {
         val messageComponent = if (chatColorId != null) {
             val colorCode = com.liam.joshymc.command.ChatColorCommand.CHAT_COLORS[chatColorId]
             if (colorCode != null && colorCode.startsWith("&") && colorCode != "&l") {
-                // Simple color — map & code to NamedTextColor
-                val namedColor = when (colorCode) {
-                    "&0" -> net.kyori.adventure.text.format.NamedTextColor.BLACK
-                    "&1" -> net.kyori.adventure.text.format.NamedTextColor.DARK_BLUE
-                    "&2" -> net.kyori.adventure.text.format.NamedTextColor.DARK_GREEN
-                    "&3" -> net.kyori.adventure.text.format.NamedTextColor.DARK_AQUA
-                    "&4" -> net.kyori.adventure.text.format.NamedTextColor.DARK_RED
-                    "&5" -> net.kyori.adventure.text.format.NamedTextColor.DARK_PURPLE
-                    "&6" -> net.kyori.adventure.text.format.NamedTextColor.GOLD
-                    "&7" -> net.kyori.adventure.text.format.NamedTextColor.GRAY
-                    "&8" -> net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY
-                    "&9" -> net.kyori.adventure.text.format.NamedTextColor.BLUE
-                    "&a" -> net.kyori.adventure.text.format.NamedTextColor.GREEN
-                    "&b" -> net.kyori.adventure.text.format.NamedTextColor.AQUA
-                    "&c" -> net.kyori.adventure.text.format.NamedTextColor.RED
-                    "&d" -> net.kyori.adventure.text.format.NamedTextColor.LIGHT_PURPLE
-                    "&e" -> net.kyori.adventure.text.format.NamedTextColor.YELLOW
-                    "&f" -> net.kyori.adventure.text.format.NamedTextColor.WHITE
-                    else -> null
-                }
+                // Simple color — map & code to NamedTextColor. Setting the color on the
+                // root only affects style inheritance, so any child with its own explicit
+                // click/hover event (e.g. the [ec] token) keeps working.
+                val namedColor = namedColorFor(colorCode)
                 if (namedColor != null) message.color(namedColor) else message
             } else if (colorCode == "&l") {
                 message.decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, true)
+            } else if (colorCode != null) {
+                // Rainbow/gradient — recolor per character while walking the component
+                // tree, instead of flattening to plain text and re-parsing. Flattening
+                // would destroy any interactive child (e.g. the [ec] Ender Chest token),
+                // so components carrying a clickEvent/hoverEvent are left untouched.
+                applyChatColorToComponent(message, colorCode)
             } else {
-                // Rainbow/gradient — serialize to plain text, apply color, re-parse
-                val plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(message)
-                val colored = com.liam.joshymc.command.ChatColorCommand.applyColor(plugin, player.uniqueId, plain)
-                parseLegacy(colored)
+                message
             }
         } else {
             message
         }
 
         return prefixComponent.append(messageComponent)
+    }
+
+    private fun namedColorFor(code: String): NamedTextColor? = when (code) {
+        "&0" -> NamedTextColor.BLACK
+        "&1" -> NamedTextColor.DARK_BLUE
+        "&2" -> NamedTextColor.DARK_GREEN
+        "&3" -> NamedTextColor.DARK_AQUA
+        "&4" -> NamedTextColor.DARK_RED
+        "&5" -> NamedTextColor.DARK_PURPLE
+        "&6" -> NamedTextColor.GOLD
+        "&7" -> NamedTextColor.GRAY
+        "&8" -> NamedTextColor.DARK_GRAY
+        "&9" -> NamedTextColor.BLUE
+        "&a" -> NamedTextColor.GREEN
+        "&b" -> NamedTextColor.AQUA
+        "&c" -> NamedTextColor.RED
+        "&d" -> NamedTextColor.LIGHT_PURPLE
+        "&e" -> NamedTextColor.YELLOW
+        "&f" -> NamedTextColor.WHITE
+        else -> null
+    }
+
+    /**
+     * Recolors a rainbow/gradient chat color onto [component] character-by-character
+     * without flattening it to a string first, so any child component that carries its
+     * own clickEvent/hoverEvent (e.g. the `[ec]` Ender Chest preview token) is left
+     * completely untouched — its interactivity survives regardless of chat color.
+     */
+    private fun applyChatColorToComponent(component: Component, code: String): Component {
+        return when (code) {
+            "RAINBOW" -> {
+                val colors = com.liam.joshymc.command.ChatColorCommand.rainbowColors
+                var position = 0
+                recolorComponent(component) { isSpace ->
+                    val picked = if (isSpace) null else colors[position % colors.size]
+                    position++
+                    picked
+                }
+            }
+            "GRADIENT_FIRE", "GRADIENT_ICE", "GRADIENT_NATURE", "GRADIENT_SUNSET" -> {
+                val colors = com.liam.joshymc.command.ChatColorCommand.gradientColorLists[code] ?: return component
+                val totalVisible = countVisibleChars(component)
+                var visited = 0
+                recolorComponent(component) { isSpace ->
+                    if (isSpace) {
+                        null
+                    } else {
+                        val ratio = if (totalVisible <= 1) 0.0 else visited.toDouble() / (totalVisible - 1) * (colors.size - 1)
+                        val picked = colors[ratio.toInt().coerceIn(0, colors.size - 1)]
+                        visited++
+                        picked
+                    }
+                }
+            }
+            else -> component
+        }
+    }
+
+    private fun countVisibleChars(component: Component): Int {
+        if (component.clickEvent() != null || component.hoverEvent() != null) return 0
+        var count = if (component is TextComponent) component.content().count { it != ' ' } else 0
+        for (child in component.children()) {
+            count += countVisibleChars(child)
+        }
+        return count
+    }
+
+    private fun recolorComponent(component: Component, colorForChar: (isSpace: Boolean) -> String?): Component {
+        // Interactive components (click/hover events, e.g. the [ec] token) are left
+        // completely as-is — they neither get recolored nor consume position/index.
+        if (component.clickEvent() != null || component.hoverEvent() != null) {
+            return component
+        }
+
+        val newChildren = component.children().map { recolorComponent(it, colorForChar) }
+
+        if (component is TextComponent && component.content().isNotEmpty()) {
+            val pieces = component.content().map { c ->
+                val code = colorForChar(c == ' ')
+                if (code == null) Component.text(c.toString()) else Component.text(c.toString(), namedColorFor(code))
+            }
+            return Component.text("").style(component.style()).children(pieces + newChildren)
+        }
+
+        return component.children(newChildren)
     }
 
     // ---- LuckPerms integration (runtime reflection, no compile dependency) ----

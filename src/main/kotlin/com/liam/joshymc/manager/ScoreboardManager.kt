@@ -11,7 +11,9 @@ import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.inventory.ItemStack
 import org.bukkit.scoreboard.DisplaySlot
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -22,10 +24,23 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
 
     private val kills = ConcurrentHashMap<UUID, Int>()
     private val deaths = ConcurrentHashMap<UUID, Int>()
+    private val sidebarLines = mutableMapOf<UUID, List<Component>>()
+
+    /** All-time peak concurrent (real, connected) player count. Single source of truth. */
+    private var peakPlayers: Int = 0
+
+    /** Highest 5-player milestone (>= 20) that has already been rewarded. Persisted server-wide. */
+    private var highestRewardedMilestone: Int = 0
 
     fun start() {
         // Load kills/deaths from DB
         loadStats()
+
+        // Load the persisted all-time peak player count
+        loadPeakPlayers()
+
+        // Load (or first-time initialize) the highest player-count milestone already rewarded
+        loadMilestoneState()
 
         // Set up scoreboards for all online players
         for (player in Bukkit.getOnlinePlayers()) {
@@ -33,15 +48,13 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
             updateTabName(player)
         }
 
+        // In case the stored peak is stale (e.g. table just created), check current count too
+        checkPeakPlayers(Bukkit.getOnlinePlayers().size)
+
         // Sidebar update every 2 seconds (40 ticks)
         sidebarTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
             for (player in Bukkit.getOnlinePlayers()) {
                 updateSidebar(player)
-                // Re-apply rank team selection so the collision variant
-                // (collide vs no-collide) tracks the player's current state
-                // — world change, arena entry/exit, combat tag — without
-                // needing a dedicated event hook for each.
-                plugin.rankManager.applyTeamFor(player)
             }
             updateBelowNameHealth()
         }, 0L, 40L)
@@ -69,6 +82,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
 
         // Save all stats before shutdown
         saveAllStats()
+        sidebarLines.clear()
 
         // Clear scoreboards for all online players
         for (player in Bukkit.getOnlinePlayers()) {
@@ -81,6 +95,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val player = event.player
+        checkPeakPlayers(Bukkit.getOnlinePlayers().size)
         setupScoreboard(player)
         updateSidebar(player)
         updateTabHeaderFooter(player)
@@ -89,8 +104,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler
     fun onPlayerQuit(event: PlayerQuitEvent) {
-        // Optionally keep kills/deaths in memory for when they rejoin
-        // No cleanup needed for scoreboard — it's discarded with the player
+        sidebarLines.remove(event.player.uniqueId)
     }
 
     @EventHandler
@@ -103,17 +117,23 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         if (killer != null) {
             kills.merge(killer.uniqueId, 1, Int::plus)
             saveStats(killer.uniqueId)
+
+            val killerTeam = plugin.teamManager.getPlayerTeam(killer.uniqueId)
+            if (killerTeam != null) {
+                plugin.teamManager.addTeamKill(killerTeam)
+            }
         }
     }
 
     // ── Sidebar ─────────────────────────────────────────────────────
 
     private fun setupScoreboard(player: Player) {
+        sidebarLines.remove(player.uniqueId)
         val board = Bukkit.getScoreboardManager().newScoreboard
         val objective = board.registerNewObjective(
             "joshymc_sidebar",
             org.bukkit.scoreboard.Criteria.DUMMY,
-            plugin.commsManager.parseLegacy("&6&lJOSHYMC SURVIVAL")
+            plugin.commsManager.parseLegacy("&6&lJoshyMC")
         )
         objective.displaySlot = DisplaySlot.SIDEBAR
         // Hide the red score numbers
@@ -158,71 +178,65 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    /** Public entry point so the /scoreboard toggle can refresh instantly instead of waiting on the 2s tick. */
+    fun refreshSidebar(player: Player) {
+        updateSidebar(player)
+    }
+
     private fun updateSidebar(player: Player) {
         val board = player.scoreboard
         val objective = board.getObjective("joshymc_sidebar") ?: return
 
-        // Clear existing line teams + score entries from the previous tick
-        for (entry in board.entries.toSet()) {
-            board.resetScores(entry)
+        if (!plugin.settingsManager.getSetting(player, SCOREBOARD_SETTING_KEY)) {
+            if (objective.displaySlot != null) objective.displaySlot = null
+            return
         }
-        for (t in board.teams.toList()) {
-            if (t.name.startsWith("sbline_")) t.unregister()
-        }
+        if (objective.displaySlot != DisplaySlot.SIDEBAR) objective.displaySlot = DisplaySlot.SIDEBAR
 
-        val balance = formatCompact(plugin.economyManager.getBalance(player))
+        val balance = plugin.economyManager.formatShort(plugin.economyManager.getBalance(player))
+        val credits = plugin.creditsManager.format(plugin.creditsManager.getBalance(player))
         val rank = plugin.rankManager.getPlayerRank(player)
         val rankTagComponent = rank?.displayTag?.let { plugin.commsManager.parseLegacy(it) }
             ?: plugin.commsManager.parseLegacy("&7None")
-        val team = plugin.teamManager.getPlayerTeam(player.uniqueId) ?: "None"
+        val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
+        val team = teamName?.let { plugin.teamManager.getTeam(it)?.displayName } ?: "No Team"
         val playerKills = kills.getOrDefault(player.uniqueId, 0)
-        val playtime = formatPlaytime(plugin.playtimeManager.getPlaytime(player.uniqueId))
+        val playerDeaths = deaths.getOrDefault(player.uniqueId, 0)
+        val playtime = plugin.playtimeManager.formatPlaytimeShort(plugin.playtimeManager.getPlaytime(player.uniqueId))
         val ping = player.ping
+        val dateTime = java.time.ZonedDateTime.now(plugin.timezoneManager.zoneFor(player)).format(DATE_TIME_FMT)
 
-        // Per-player timezone — defaults to EST when the player hasn't picked one,
-        // overridden via /timezone <zone>. The Minecraft client doesn't tell us
-        // its zone, so we either trust the player's choice or fall back to EST.
-        val zone = plugin.timezoneManager.zoneFor(player)
-        val now = java.time.ZonedDateTime.now(zone)
-        val dateFmt = java.time.format.DateTimeFormatter.ofPattern("MM/dd/yyyy hh:mma")
-        val dateStr = now.format(dateFmt)
-
-        // Build each line as an Adventure Component so hex codes like &#FF5555
-        // on rank tags render via the same native-RGB path as the tab list
-        // (instead of legacy §x which Minecraft may render slightly differently).
         val lines = mutableListOf<Component>()
-        lines.add(plugin.commsManager.parseLegacy("&6&m                         "))
-        lines.add(plugin.commsManager.parseLegacy("&7$dateStr"))
+        lines.add(plugin.commsManager.parseLegacy("&b${player.name} &7[&f$ping&7]"))
+        lines.add(plugin.commsManager.parseLegacy("&f$dateTime"))
         lines.add(Component.empty())
-        lines.add(plugin.commsManager.parseLegacy("&6&l${player.name}"))
-        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D18\u026A\u0274\u0262&6: &3$ping"))
         lines.add(
-            plugin.commsManager.parseLegacy("&6| &7\u0280\u1D00\u0274\u1D0B&6:&r ")
+            plugin.commsManager.parseLegacy("&d\u2605 &f\u0280\u1D00\u0274\u1D0B&8: ")
                 .append(rankTagComponent)
         )
-        if (team != "None") {
-            lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D1B\u1D07\u1D00\u1D0D&6: &b$team"))
-        }
+        lines.add(plugin.commsManager.parseLegacy("&a$ &f\u1D0D\u1D0F\u0274\u1D07\u028F&8: &a$$balance"))
+        lines.add(plugin.commsManager.parseLegacy("&e\u26C3 &f\u1D04\u0280\u1D07\u1D05\u026A\u1D1B\uA731&8: &e$credits"))
+        lines.add(plugin.commsManager.parseLegacy("&c\u2694 &f\u1D0B\u026A\u029F\u029F\uA731&8: &c$playerKills"))
+        lines.add(plugin.commsManager.parseLegacy("&6\u2620 &f\u1D05\u1D07\u1D00\u1D1B\u029C\uA731&8: &6$playerDeaths"))
         lines.add(Component.empty())
-        lines.add(plugin.commsManager.parseLegacy("&6&lStats:"))
-        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D0D\u1D0F\u0274\u1D07\u028F&6: &a$$balance"))
-        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D0B\u026A\u029F\u029F\uA731&6: &c$playerKills"))
-        lines.add(plugin.commsManager.parseLegacy("&6| &7\u1D18\u029F\u1D00\u028F\u1D1B\u026A\u1D0D\u1D07&6: &e$playtime"))
-        lines.add(Component.empty())
-        lines.add(plugin.commsManager.parseLegacy("&7\u1D05\u026A\uA731\u1D04\u1D0F\u0280\u1D05.\u0262\u0262/\u1D0A\u1D0F\uA731\u029C\u028F\u1D0D\u1D04"))
-        lines.add(plugin.commsManager.parseLegacy("&6&m                         "))
+        lines.add(plugin.commsManager.parseLegacy("&f&l\u026A\u0274\uA730\u1D0F"))
+        lines.add(plugin.commsManager.parseLegacy("&f\u1D1B\u1D07\u1D00\u1D0D&8: &b$team"))
+        lines.add(plugin.commsManager.parseLegacy("&f\u1D18\u029F\u1D00\u028F\u1D1B\u026A\u1D0D\u1D07&8: &e$playtime"))
 
         // Team-prefix trick: each line is rendered as a team's prefix (Component)
         // attached to a unique invisible "entry" string. Top line gets the highest score.
+        val previous = sidebarLines[player.uniqueId]
         for ((index, component) in lines.withIndex()) {
             val entry = lineEntry(index)
             val teamName = "sbline_$index"
-            val sbTeam = board.registerNewTeam(teamName)
-            sbTeam.addEntry(entry)
-            sbTeam.prefix(component)
-
-            objective.getScore(entry).score = lines.size - index
+            val existing = board.getTeam(teamName)
+            val sbTeam = existing ?: board.registerNewTeam(teamName).also {
+                it.addEntry(entry)
+                objective.getScore(entry).score = lines.size - index
+            }
+            if (existing == null || previous?.getOrNull(index) != component) sbTeam.prefix(component)
         }
+        sidebarLines[player.uniqueId] = lines
     }
 
     /** Unique, visually-empty entry string per sidebar row (combo of two color codes). */
@@ -231,12 +245,6 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val a = hex[(index / 16) and 0xF]
         val b = hex[index and 0xF]
         return "\u00A7$a\u00A7$b"
-    }
-
-    private fun formatPlaytime(seconds: Long): String {
-        val days = seconds / 86400
-        val hours = (seconds % 86400) / 3600
-        return "${days}d ${hours}h"
     }
 
     // ── Tab List ────────────────────────────────────────────────────
@@ -252,10 +260,13 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
                 "\n\n" +
                 "&7\u028F\u1D0F\u1D1C\u0280 \u1D18\u026A\u0274\u0262&6: $ping\n" +
                 "&7\u1D0F\u0274\u029F\u026A\u0274\u1D07 \u1D18\u029F\u1D00\u028F\u1D07\u0280\uA731&6: $online\n" +
+                "&7\u1D18\u1D07\u1D00\u1D0B \u1D18\u029F\u1D00\u028F\u1D07\u0280\uA731&6: $peakPlayers\n" +
+                "\n" +
                 "&r"
             ))
 
         val footer = plugin.commsManager.parseLegacy(
+            "\n" +
             "\n" +
             "&6&m                                   &r\n" +
             "&7\u1D21\u1D07\u0299\uA731\u1D1B\u1D0F\u0280\u1D07&6: \uA731\u1D1B\u1D0F\u0280\u1D07.\u1D0A\u1D0F\uA731\u029C\u028F\u1D0D\u1D04.\u0274\u1D07\u1D1B\n" +  // ᴡᴇʙsᴛᴏʀᴇ: sᴛᴏʀᴇ.ᴊᴏsʜʏᴍᴄ.ɴᴇᴛ
@@ -277,39 +288,9 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
             plugin.commsManager.parseLegacy("$prefix$name")
         )
 
-        // Tab list sort is handled by the jmc_* rank teams (named jmc_00_owner,
-        // jmc_01_admin, …, jmc_06_default) — Bukkit sorts the player list by
-        // team name, and these are already weight-prefixed in descending
-        // order. We previously had a separate ztab_* team layer that ran
-        // every 5 seconds and moved each player into a sort team, but a
-        // player can only be in ONE scoreboard team per scoreboard, so the
-        // ztab_* assignment was overwriting the jmc_* rank team — that's
-        // why rank prefixes disappeared after the first tab refresh tick.
-        //
-        // Make sure stale ztab_* teams from old plugin versions are gone so
-        // they don't keep stealing entries.
-        for (online in Bukkit.getOnlinePlayers()) {
-            val board = online.scoreboard
-            board.teams
-                .filter { it.name.startsWith("ztab_") }
-                .forEach { it.unregister() }
-        }
-        // Re-anchor the player in their rank team in case anything else
-        // moved them (e.g. a /reload mid-session).
-        plugin.rankManager.applyTeamFor(player)
     }
 
     // ── Utility ─────────────────────────────────────────────────────
-
-    private fun formatCompact(amount: Double): String {
-        return when {
-            amount >= 1_000_000_000_000 -> "${"%.1f".format(amount / 1_000_000_000_000)}T"
-            amount >= 1_000_000_000 -> "${"%.1f".format(amount / 1_000_000_000)}B"
-            amount >= 1_000_000 -> "${"%.1f".format(amount / 1_000_000)}M"
-            amount >= 1_000 -> "${"%.1f".format(amount / 1_000)}K"
-            else -> "${"%.0f".format(amount)}"
-        }.replace(".0K", "K").replace(".0M", "M").replace(".0B", "B").replace(".0T", "T")
-    }
 
     // ── Kill/Death Persistence ──────────────────────────────────────
 
@@ -346,5 +327,129 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         for (uuid in (kills.keys + deaths.keys)) {
             saveStats(uuid)
         }
+    }
+
+    // ── All-Time Peak Player Count ────────────────────────────────────
+
+    private fun loadPeakPlayers() {
+        val dbFile = java.io.File(plugin.dataFolder, "data.db")
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS peak_players (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                count INTEGER NOT NULL DEFAULT 0
+            )
+        """.trimIndent())
+
+        val persisted = plugin.databaseManager.queryFirst(
+            "SELECT count FROM peak_players WHERE id = 1"
+        ) { it.getInt("count") }
+        peakPlayers = persisted ?: 0
+
+        val online = Bukkit.getOnlinePlayers().size
+        plugin.logger.info("[PeakPlayers] DB path: ${dbFile.absolutePath}")
+        plugin.logger.info("[PeakPlayers] Persisted peak loaded: ${persisted ?: "none (row missing, defaulted to 0)"}")
+        plugin.logger.info("[PeakPlayers] Online at startup: $online")
+        plugin.logger.info("[PeakPlayers] In-memory peak after startup: $peakPlayers")
+    }
+
+    /** Bukkit.getOnlinePlayers() only ever contains real connected players — NPCs/bots never appear here. */
+    private fun checkPeakPlayers(online: Int) {
+        if (online <= peakPlayers) return
+        val previous = peakPlayers
+        peakPlayers = online
+        plugin.databaseManager.execute(
+            "INSERT OR REPLACE INTO peak_players (id, count) VALUES (1, ?)",
+            peakPlayers
+        )
+        plugin.logger.info("[PeakPlayers] New all-time peak: $peakPlayers (previous: $previous)")
+        checkMilestoneReward(peakPlayers)
+    }
+
+    // ── Peak Player Milestone Rewards ─────────────────────────────────
+
+    private fun loadMilestoneState() {
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS player_milestones (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                highest_rewarded INTEGER NOT NULL DEFAULT 0
+            )
+        """.trimIndent())
+
+        val stored = plugin.databaseManager.queryFirst(
+            "SELECT highest_rewarded FROM player_milestones WHERE id = 1"
+        ) { it.getInt("highest_rewarded") }
+
+        highestRewardedMilestone = if (stored != null) {
+            stored
+        } else {
+            // First deploy after this feature was added: don't retroactively reward
+            // milestones the server already historically passed — just baseline
+            // to the highest one already implied by the existing peak.
+            val initial = milestoneFor(peakPlayers)
+            plugin.databaseManager.execute(
+                "INSERT OR REPLACE INTO player_milestones (id, highest_rewarded) VALUES (1, ?)",
+                initial
+            )
+            initial
+        }
+    }
+
+    /** Highest completed 5-player milestone at or below [online], or 0 if below the 20-player threshold. */
+    private fun milestoneFor(online: Int): Int {
+        if (online < MILESTONE_START) return 0
+        return (online / MILESTONE_STEP) * MILESTONE_STEP
+    }
+
+    private fun checkMilestoneReward(peak: Int) {
+        val milestone = milestoneFor(peak)
+        if (milestone <= highestRewardedMilestone) return
+
+        highestRewardedMilestone = milestone
+        plugin.databaseManager.execute(
+            "INSERT OR REPLACE INTO player_milestones (id, highest_rewarded) VALUES (1, ?)",
+            highestRewardedMilestone
+        )
+
+        rewardOnlinePlayersForMilestone(milestone)
+    }
+
+    private fun rewardOnlinePlayersForMilestone(milestone: Int) {
+        val moneyKey = plugin.itemManager.getItem("money_key")
+        val creditKey = plugin.itemManager.getItem("credit_key")
+        if (moneyKey == null || creditKey == null) {
+            plugin.logger.warning("[Scoreboard] Could not find money_key/credit_key custom item(s) for milestone reward.")
+            return
+        }
+
+        for (player in Bukkit.getOnlinePlayers()) {
+            giveOrDrop(player, moneyKey.createItemStack().apply { amount = 5 })
+            giveOrDrop(player, creditKey.createItemStack().apply { amount = 1 })
+        }
+
+        plugin.commsManager.broadcast(
+            plugin.commsManager.parseLegacy(
+                "&6&l🎉 PLAYER MILESTONE!\n" +
+                "&e» &fWe just reached &6$milestone &fplayers online!\n" +
+                "&e» &fEveryone online received &a5 Money Keys &f+ &b1 Credit Key&f!"
+            )
+        )
+    }
+
+    /** Adds to inventory, safely dropping any overflow at the player's feet instead of discarding it. */
+    private fun giveOrDrop(player: Player, stack: ItemStack) {
+        val leftover = player.inventory.addItem(stack)
+        for (drop in leftover.values) {
+            player.world.dropItemNaturally(player.location, drop)
+        }
+    }
+
+    companion object {
+        const val SCOREBOARD_SETTING_KEY = "scoreboard"
+
+        /** e.g. "09/06/26 12:36 PM" — compact so the sidebar stays narrow. */
+        private val DATE_TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MM/dd/yy hh:mm a")
+
+        private const val MILESTONE_START = 20
+        private const val MILESTONE_STEP = 5
     }
 }

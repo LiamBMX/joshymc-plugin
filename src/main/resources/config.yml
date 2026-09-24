@@ -15,15 +15,9 @@ prefix: "&b&lJoshyMC &8» &r"
 features:
   talismans: true
   custom-fishing: true
-  skills: true
   quests: true
   market: true
-  trails: true
   kill-effects: true
-  join-effects: true
-  emotes: true
-  glow: true
-  gadgets: true
   custom-enchants: true
   anticheat: true
   combat-log-npc: true
@@ -33,11 +27,80 @@ features:
   arenas: true
   npcs: false
   chat-games: true
+  coinflip: true
+  mob-stacking: false
+  kill-streaks: true
+  login-streaks: true
+  orders: true
+  giveaways: true
+  gift: true
+  casino: true
+
+# Mob Stacking — merges nearby mobs of the same type into a single entity
+mob-stacking:
+  # Radius (in blocks) to search for nearby mobs to merge
+  radius: 5.0
+  # Maximum number of mobs that can be combined into one stack
+  max-stack-size: 50
+
+# Coinflip — 1v1 Player-vs-Player betting. No house cut: the winner takes the full pot.
+coinflip:
+  # Minimum bet amount
+  min-bet: 1.0
+  # Maximum bet amount (-1 = unlimited)
+  max-bet: -1.0
+  # Max WAITING (unmatched) Coinflips a single player can have listed at once
+  max-waiting-per-player: 1
+  # How long the flip animation runs for, in ticks (20 ticks = 1 second)
+  animation-duration-ticks: 80
+  # How long the result stays on screen before the GUI closes, in ticks
+  result-display-ticks: 50
+
+# Casino — Coins-only Mines/Roulette/Crash/Towers behind /casino. Never uses Credits.
+casino:
+  enabled: true
+  # Minimum bet amount
+  min-bet: 1000.0
+  # Maximum bet amount (-1 = unlimited)
+  max-bet: -1.0
+
+  mines:
+    enabled: true
+    house-edge-percent: 3.0
+    min-mines: 1
+    max-mines: 10
+
+  roulette:
+    enabled: true
+    house-edge-percent: 3.0
+
+  crash:
+    enabled: true
+    house-edge-percent: 3.0
+    betting-seconds: 20
+    # Log routine round/bet activity (round started, bets, cashouts, crashes) to console.
+    # Leave off in normal operation — errors/failures are always logged regardless of this.
+    debug: false
+
+  towers:
+    enabled: true
+    house-edge-percent: 3.0
+    # Number of levels to climb before the tower auto-cashes-out
+    levels: 8
+
+  statistics:
+    enabled: true
 
 # Chat formatting
 chat:
   # Format for player messages. Placeholders: {prefix}, {suffix}, {tag}, {player}, {message}
   format: "{prefix}{tag}{player}{suffix} &8» &f{message}"
+
+  # Message sent after /chat clear. Placeholders: {player}
+  clear-message: "&7Chat has been cleared by &f{player}&7."
+
+  # Format for Staff Chat messages (/staffchat, /sc). Placeholders: {player}, {message}
+  staffchat-format: "&8[&cStaff Chat&8] &f{player}&7: &f{message}"
 
 discord:
   # Bot token from https://discord.com/developers/applications
@@ -54,6 +117,63 @@ discord:
   # Placeholders: {name}, {message}
   minecraft-format: "&9[Discord] &f{name} &7» &f{message}"
 
+  punishments:
+    # Post every issued punishment (ban/tempban/mute/tempmute/warn) as its own
+    # Discord Forum post. Requires the bot to have View Channel, Create Posts,
+    # Send Messages and Embed Links on the forum channel below.
+    enabled: true
+    forum-channel-id: "1548796268099272864"
+
+# Anti-Dupe — audit log + Discord alerts when a system catches a duplicate/replay
+# attempt (e.g. an auction bought twice, a voucher redeemed twice). Detection only —
+# never auto-bans, mutes, or reverses anything. Reuses the Discord bot above; set
+# discord.channel-id below to a channel the bot can post embeds in.
+anti-dupe:
+  enabled: true
+
+  discord:
+    enabled: true
+    channel-id: "1548819333394862151"
+
+  # Which risk levels post a Discord embed. Everything is always written to the
+  # audit log (anti_dupe_detections table) regardless of these toggles.
+  alerts:
+    low: false
+    medium: true
+    high: true
+    critical: true
+
+  # Repeats of the exact same detection type for the same player within this many
+  # seconds are grouped into a single follow-up embed instead of spamming the channel.
+  rate-limit-seconds: 10
+
+# PvP Cheat Detection Alerts — Discord embeds when AntiCheatManager (or GrimAC, via the
+# /jmc-violation bridge) flags combat-relevant cheating (KillAura, Reach, AutoClick/CPS,
+# AntiKB/Velocity, AimSnap). Detection + staff alerting only — never auto-bans, kicks,
+# mutes, or freezes anyone. Reuses the Discord bot above; set discord.channel-id below to
+# a channel the bot can post embeds in.
+combat-alerts:
+  enabled: true
+
+  discord:
+    enabled: true
+    channel-id: "1550719798760177734"
+
+  # Repeats of the exact same check for the same player within this many seconds are
+  # grouped into a single follow-up embed instead of spamming the channel.
+  rate-limit-seconds: 30
+
+# PvP Kill Logs — Discord embed for every player-on-player kill (killer, victim, weapon,
+# location, time). Only fires for kills with an identifiable player killer (melee or
+# player-fired projectiles) — mob kills and environmental deaths are never announced.
+# Reporting only — never touches kill streaks, bounties, or PvP rewards. Reuses the
+# Discord bot above; set discord.channel-id below to a channel the bot can post embeds in.
+pvp-kill-logs:
+  enabled: true
+
+  discord:
+    channel-id: "1550719798760177734"
+
 # Recipe Blocker — block players from crafting specific items
 # Use material names from: https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Material.html
 recipe-blocker:
@@ -64,6 +184,82 @@ recipe-blocker:
 # Combat — PvP toggle, combat tagging, flight/elytra disable
 combat:
   tag-duration-seconds: 15
+  # Whether players can use elytra while combat-tagged (toggle via /pvp elytra <on|off>)
+  allow-elytra: false
+  # Whether players can throw ender pearls while combat-tagged (toggle via /pvp enderpearl <on|off>)
+  allow-enderpearl: false
+
+# PvP Kill Streaks — consecutive kills without dying. Milestones pay out cash,
+# and once a player's streak reaches the bounty threshold, killing them
+# transfers a % of their money to whoever ends their streak.
+kill-streaks:
+  # Whether ANY death (mob, fall, lava, void, etc.) resets the current streak.
+  # If false, only PvP deaths reset it.
+  reset-on-any-death: true
+  # Streaks that trigger a milestone reward. Reward = milestone x reward-per-kill.
+  milestones: [3, 5, 10, 15, 25, 50, 100, 200, 500]
+  # Milestones at or above this streak get a server-wide broadcast; below it,
+  # only the killer is told.
+  milestone-broadcast-min-streak: 5
+  milestone-rewards:
+    enabled: true
+    reward-per-kill: 10000
+  bounty:
+    enabled: true
+    # Current streak a player must be on before dying puts their money at risk.
+    minimum-streak: 5
+    # % of the victim's current balance transferred to the killer.
+    percentage: 10.0
+    broadcast: true
+  anti-farm:
+    # The same killer -> victim pair only earns streak/bounty credit once per window.
+    same-victim-cooldown-minutes: 30
+  environmental-streak-loss:
+    # Broadcast when a player loses a large streak to a non-PvP death (no money changes hands).
+    broadcast: true
+    minimum-streak: 10
+  # Personal "You killed X! Kill Streak: N" message on every valid streak kill.
+  kill-message: true
+
+# Daily Login Streak — /loginstreak. Reuses the existing economy for the
+# daily reward, Credits for the weekly bonus, and the crate system for the
+# weekly bonus key. A day begins/ends at midnight in `timezone`. AFK time
+# (per AFKManager) never counts toward the playtime requirement.
+login-streaks:
+  enabled: true
+  # IANA time zone used for the daily boundary (handles DST automatically).
+  # Matches the existing Daily Quest reset schedule by default.
+  timezone: "America/New_York"
+  # Eligible (non-AFK) playtime required to complete a Login day.
+  required-playtime-minutes: 30
+  gui:
+    title: "Daily Login Streak"
+    # How often the open GUI re-renders playtime/streak progress, in seconds.
+    refresh-seconds: 2
+  daily-reward:
+    amount: 100000
+  weekly-bonus:
+    enabled: true
+    # Every Nth completed streak day awards the bonus on top of the daily reward.
+    every-days: 7
+    credits: 100
+    # One key is chosen at random from this list and given on a weekly bonus.
+    eligible-keys:
+      - "common"
+      - "rare"
+      - "joshy"
+  grace:
+    enabled: true
+    # Number of consecutive successful Login completions required to restore
+    # Grace after it's consumed.
+    recharge-completed-days: 7
+
+# The End — toggle via /dimension end <open|close> (ops only)
+end:
+  # Whether players can teleport into the End through end portals.
+  # When false, players walking into an end portal simply phase through it
+  # instead of being teleported.
+  open: true
 
 # External plugin integrations
 integrations:
@@ -76,8 +272,9 @@ integrations:
     auto-install: true
 
 # Chat games — periodic chat-typing puzzles for online players
-# Game types: math, unscramble, type-this-token, reverse-this-word
-# An admin can manually trigger games with /chatgame [type].
+# Game types: math, type-the-phrase. Status is a utility-only check and is
+# never randomly selected. An admin can manually trigger games with
+# /chatgame [type].
 chat-games:
   enabled: true
   # How often the auto-scheduler triggers a game when no game is running
@@ -90,8 +287,8 @@ chat-games:
   # Auto-expire a game if no one solves it within this many seconds.
   solve-window-seconds: 60
   reward:
-    money: 1000
-    xp: 25
+    # Credits (existing Credits economy) awarded to the winner.
+    credits: 3
 
 # Crates — debug toggles
 # debug-interactions: when true, every right-click on a registered crate (or
@@ -115,6 +312,7 @@ lag-cleaner:
   entity-threshold: 1500
   item-threshold: 800
   check-interval-seconds: 60
+  passive-mob-threshold: 700
 
 # Mining — Veinminer, Auto Smelt, Tree Feller
 mining:
@@ -166,7 +364,7 @@ afk:
     #
     # `material` accepts three formats:
     #   1. Bukkit material  — DIRT, IRON_INGOT, DIAMOND, etc.
-    #   2. Custom item id   — easter_egg, void_drill, money_pouch_small, etc.
+    #   2. Custom item id   — easter_egg, void_drill, bubble_butt_leggings, etc.
     #   3. Crate key        — crate:vote, key:afk  (must match a crate type)
     items:
       - material: DIRT
@@ -186,6 +384,41 @@ afk:
 vaults:
   max: 10
 
+# Moderator Mode — /modmode staff toolkit (joshymc.modmode)
+modmode:
+  # Automatically vanish the staff member when Moderator Mode is enabled (unless already vanished)
+  auto-vanish: true
+  # Random Teleport tool eligibility
+  rtp:
+    exclude-vanished: true
+    exclude-modmode-staff: true
+  # Hotbar tool materials/names — leave a key out to use its default
+  tools:
+    punish:
+      material: MACE
+      name: "&cPunish"
+    rtp:
+      material: ENDER_PEARL
+      name: "&dRandom TP"
+    freeze:
+      material: PACKED_ICE
+      name: "&bFreeze / Unfreeze"
+    vanish:
+      material: SLIME_BALL
+      name: "&aVanish"
+    invsee:
+      material: ENDER_CHEST
+      name: "&5Invsee"
+    spectator:
+      material: ENDER_EYE
+      name: "&3Spectator"
+    ecsee:
+      material: CHEST
+      name: "&6ECSee"
+    vault:
+      material: BARREL
+      name: "&2Player Vault"
+
 # RTP — Random Teleport
 rtp:
   min-range: 500
@@ -195,10 +428,171 @@ rtp:
 # Auction House
 auction:
   listing-duration-hours: 48
-  max-listings-per-player: 10
+  max-listings-per-player: 5
   min-price: 1
   max-price: 1000000000
   tax-percent: 5
+
+# Player-created Giveaways — /giveaway (alias /gwy)
+giveaways:
+  # Every giveaway lasts exactly this long. Normal players cannot override it.
+  duration-hours: 24
+  # Max ACTIVE giveaways a single player may host at once. 0 = unlimited.
+  max-active-per-player: 1
+  # Max ACTIVE giveaways server-wide. -1 = unlimited.
+  max-active-total: -1
+  allow-coins: true
+  allow-items: true
+  allow-description: true
+  max-description-length: 120
+  max-title-length: 32
+  # Max prize item stacks a single giveaway can hold (1-45; the item rewards editor GUI has
+  # 45 reward slots).
+  max-prize-items: 27
+
+# Player-to-player gifting — /gift, /gift mailbox
+gift:
+  # Max unclaimed gifts a single player may have outstanding as a sender. 0 = unlimited.
+  max-pending-per-sender: 20
+  # Max unclaimed gifts a single player's mailbox may hold as a recipient. 0 = unlimited.
+  max-mailbox-size: 100
+  # Cooldown between a player sending gifts. 0 = no cooldown.
+  send-cooldown-seconds: 5
+  allow-coins: true
+  allow-message: true
+  max-message-length: 120
+  # Max item stacks a single gift can hold.
+  max-gift-items: 27
+
+# Buy Orders — /orders, a player-driven "I want this item" marketplace.
+# Complements /ah (players sell what they have) without duplicating it —
+# buy orders are always fully escrowed and only ever filled by real players.
+orders:
+  expiration-days: 7
+  default-active-order-limit: 5
+  minimum-price-per-item: 1
+  maximum-price-per-item: 1000000000
+  maximum-quantity-per-order: 100000
+  # Custom items (PDC-tagged) cannot be requested/sold into orders unless enabled here.
+  custom-items:
+    enabled: false
+  notifications:
+    enabled: true
+  # Staff/VIP TOTAL active-order overrides (separate from rank-perks below — these are
+  # not purchasable ranks). Highest limit the player has permission for wins, and is used
+  # only if it's greater than the base+rank-perk total. Permission node is "joshymc.orders.limit.<key>".
+  limits:
+    vip: 15
+    admin: 50
+
+# Rank Perks — configurable EXTRA Auction House listing slots and Buy Order slots granted
+# to purchasable ranks, on top of the base limits above (auction.max-listings-per-player /
+# orders.default-active-order-limit). Formula: final limit = base limit + rank bonus.
+#
+# Eligibility is permission-based ("joshymc.rankperk.<key>"), granted to each rank's LuckPerms
+# group externally — same pattern as /mcr. If a player is eligible for multiple rank perks
+# (e.g. via LuckPerms inheritance), bonuses are NOT stacked: only the single highest-applicable
+# rank's bonus is applied, and both fields always come from that same rank.
+rank-perks:
+  scout:
+    auction-extra-listings: 2
+    orders-extra-orders: 2
+  pathfinder:
+    auction-extra-listings: 5
+    orders-extra-orders: 5
+  lumberjack:
+    auction-extra-listings: 8
+    orders-extra-orders: 8
+  trailblazer:
+    auction-extra-listings: 12
+    orders-extra-orders: 12
+  voyager:
+    auction-extra-listings: 16
+    orders-extra-orders: 16
+  ranger:
+    auction-extra-listings: 20
+    orders-extra-orders: 20
+  pioneer:
+    auction-extra-listings: 25
+    orders-extra-orders: 25
+
+# Stock Market — /invest, a player-driven stock market (progressive percentage-based pricing)
+stock-market:
+  # Minimum dollar amount for a single purchase.
+  minimum-buy: 1000.0
+  # Cost for a player to create their own public stock.
+  stock-creation-cost: 1000000.0
+  # Starting price/share for newly created (player-owned) stocks. Server-owned stocks like
+  # JOSH use server-stock-base-price instead — see below.
+  default-stock-price: 10.0
+  # Shares outstanding a newly created stock starts with (creator owns all of them).
+  initial-shares: 100000.0
+  # ── Pricing model — ALL stocks (player-created and server-owned alike) share this one model ──
+  # There is NO server-funded buy/sell contribution or adjustment of any kind; buying and
+  # selling always use the plain calculated transaction value. shares-per-price-step shares
+  # trade at the current price before it takes its next pricing step:
+  #  - below percentage-pricing-threshold: price moves by the flat low-price-tick amount.
+  #  - at/above percentage-pricing-threshold: price moves by price-step-percent (e.g. 1.0 = 1%).
+  # A trade smaller than the remaining capacity at the current price doesn't move it at all; a
+  # large trade walks the ladder progressively, so it gets more expensive as it fills instead of
+  # pricing the whole order at the starting price. Selling steps the price back down through the
+  # exact mathematical inverse, so an immediate buy-then-sell of the same shares is reversible
+  # (no free-money round trip). The ladder position is shared/global per stock (not per-holder),
+  # so splitting one large order into many small ones can't dodge price impact either.
+  # Absolute floor for any stock's price. Never $0, never negative, never NaN/Infinity.
+  minimum-stock-price: 0.001
+  # Flat per-step price movement while a stock is below percentage-pricing-threshold.
+  low-price-tick: 0.01
+  # Price at/above which pricing steps switch from the flat tick to a percentage move.
+  percentage-pricing-threshold: 1.00
+  # Per-step price movement, as a percentage (1.0 = 1%), once at/above the threshold.
+  price-step-percent: 1.0
+  # Shares tradable at the current price before it takes its next pricing step. Lower = price
+  # moves more readily (more volatile); higher = a stock can absorb more volume before moving.
+  shares-per-price-step: 10000.0
+  # Starting price/share for the permanent JoshyMC (JOSH) server stock.
+  server-stock-base-price: 10.0
+  # Trading window (hours) used for 24h open/high/low/volume/activity/trend stats.
+  market-activity-period-hours: 24
+  # Buy/sell dollar amount at or above which a confirmation GUI is shown before executing.
+  large-transaction-threshold: 500000.0
+  # How long (seconds) a chat-input prompt (name/buy amount/sell amount) stays valid.
+  chat-input-timeout-seconds: 30
+  # Stock name length limits (players choose the full name; the ticker is auto-generated).
+  name-min-length: 3
+  name-max-length: 24
+  # /stock promote <ticker> — flat cost per promotion. Advertisement only; never changes
+  # stock price, market cap, shares outstanding, holdings, or the pricing algorithm.
+  promotion-cost: 250000.0
+  # Per-player cooldown (minutes) between /stock promote runs, regardless of which stock.
+  promotion-cooldown-minutes: 30
+  # Stocks (matched by ticker or name, case-insensitive) that /invest admin reset/delete may
+  # never target. The JOSH server stock is always protected regardless of this list.
+  protected-stocks: []
+  # Pool of non-placeable materials randomly (and permanently) assigned as a stock's icon.
+  icon-materials:
+    - DIAMOND
+    - EMERALD
+    - PRISMARINE_CRYSTALS
+    - PRISMARINE_SHARD
+    - AMETHYST_SHARD
+    - ECHO_SHARD
+    - NETHER_STAR
+    - BLAZE_POWDER
+    - FIRE_CHARGE
+    - GHAST_TEAR
+    - HEART_OF_THE_SEA
+    - RABBIT_FOOT
+    - MAGMA_CREAM
+  # 24h dollar-volume thresholds used to classify a stock's Market Activity tier.
+  activity-thresholds:
+    very-high: 1000000.0
+    high: 250000.0
+    moderate: 50000.0
+    low: 5000.0
+  # A stock's 24h % price change must exceed +/- this band to count as Growing/Decaying
+  # rather than Stable.
+  trend-stable-band-percent: 2.0
 
 # Spawn World — auto-loads a schematic into a flat world
 spawn-world:
@@ -257,8 +651,15 @@ announcements:
 
 # Welcome / MOTD — join/leave messages
 welcome:
-  first-join-message: "&6&l★ &eWelcome &f{player} &eto JoshyMC! &6&l★"
+  # Type "welcome" in chat within 30 seconds of a new player's first join to
+  # reward them (see WelcomeListener) — no command involved anymore.
+  first-join-message: "&6&l★ &eWelcome &f{player} &eto JoshyMC! Type &f\"welcome\" &ein chat within 30 seconds to welcome them! &6&l★"
   first-join-broadcast: true
+  # The numbered "Welcome <player> to JoshyMC! [#<join number>]" announcement.
+  # <join number> is the player's permanent, UUID-based historical join
+  # sequence number (e.g. #1 for the first ever player, restart-safe).
+  join-number-broadcast: true
+  join-number-message: "&#ff9d2eWelcome &#ffd84d{player} &fto &#ff9d2eJoshyMC&f! &#ffd84d[#{join_number}]"
   join-format: "&8[&a+&8] &7{player}"
   leave-format: "&8[&c-&8] &7{player}"
   motd:
@@ -307,46 +708,113 @@ voting:
   rewards:
     money: 25000
     claim-blocks: 50
-    items:
-      - "money_pouch_small:1"
   streak-bonuses:
     7: 100000
     14: 250000
     30: 1000000
 
-# Claims — block-based land protection with golden shovel
+# Claims — block-based land protection with golden shovel. Overworld-only:
+# claims can only be created/managed/enforced in Environment.NORMAL worlds.
 claims:
   starting-blocks: 500     # Claim blocks each player starts with
   blocks-per-hour: 100     # Blocks earned per hour of playtime
   max-blocks: 50000        # Maximum total claim blocks a player can have
+  # Worlds where claims cannot be created, resized, or managed, and where
+  # existing (legacy) claims stop enforcing protection entirely. Matching is
+  # case-insensitive against the world's actual Bukkit name. Legacy claim
+  # records in these worlds are kept in the database but are inert.
+  blocked-worlds:
+    - resource
+    - spawn
+    - pvp
+    - event
+    - world_end
+    - afk
+    - dungeon
+
+# Credits — secondary currency, passively earned from playtime
+credits:
+  per-hour: 1.0  # Credits awarded per hour of playtime
+
+# Physical Money Vouchers — real inventory items (issue #537), separate from the
+# virtual Credit Shop vouchers above. Right-clicking one deposits normal server
+# money ONLY (never credits/ranks/perms/commands/items) and consumes exactly one.
+# Identification is PDC-only, so a renamed item can never be redeemed — the id
+# below is what's stored on the item, and the amount always comes from here.
+# Add as many ids as you want; give them with /voucher give <player> <id> [amount].
+physical-vouchers:
+  money_1000:
+    enabled: true
+    material: PAPER
+    display-name: "&a$1,000 Voucher"
+    amount: 1000
+    lore:
+      - "&7Right-click to redeem"
+      - "&7Reward: &a$1,000"
+  money_5000:
+    enabled: true
+    material: PAPER
+    display-name: "&a$5,000 Voucher"
+    amount: 5000
+    lore:
+      - "&7Right-click to redeem"
+      - "&7Reward: &a$5,000"
+  money_10000:
+    enabled: true
+    material: PAPER
+    display-name: "&a$10,000 Voucher"
+    amount: 10000
+    lore:
+      - "&7Right-click to redeem"
+      - "&7Reward: &a$10,000"
 
 # Ranks — displayed as chat tags before the player's name
 # Tag uses & color codes (e.g., &c = red, &l = bold, &a = green)
 # OR hex colors with &#RRGGBB format (e.g., &#FF5555&lAdmin for hex red bold)
-# Weight determines display priority (higher = more important)
+# Weight determines display priority (higher = more important).
+# category groups ranks together in /rank list (e.g. "Player Ranks", "Staff Ranks", "Special Ranks").
 ranks:
   list:
     owner:
       tag: "&4&lOwner"
       weight: 100
+      category: "Special Ranks"
     admin:
       tag: "&c&lAdmin"
       weight: 90
+      category: "Staff Ranks"
+    lead_mod:
+      tag: "&1&lLead Mod"
+      weight: 85
+      category: "Staff Ranks"
     mod:
       tag: "&9&lMod"
       weight: 80
+      category: "Staff Ranks"
+    jr_mod:
+      tag: "&3&lJr Mod"
+      weight: 75
+      category: "Staff Ranks"
     helper:
       tag: "&a&lHelper"
       weight: 70
+      category: "Staff Ranks"
+    trainee:
+      tag: "&2&lTrainee"
+      weight: 60
+      category: "Staff Ranks"
     vip:
       tag: "&6&lVIP"
       weight: 50
+      category: "Player Ranks"
     member:
       tag: "&7Member"
       weight: 10
+      category: "Player Ranks"
     default:
       tag: "&8Player"
       weight: 0
+      category: "Player Ranks"
 
 # Auto Restart — periodically restart the server to prevent memory-related disconnects
 auto-restart:
@@ -379,4 +847,104 @@ anticheat:
     nuker: true          # Detects nuker (breaking >80 blocks/sec)
     badpackets: true     # Detects invalid packets (impossible pitch, actions while dead)
     illegitems: true     # Detects illegal items (over-enchanted, stacked unstackables)
+    aimsnap: true        # Detects aim-lock/kill-aura snaps (extreme rotation + immediate precise hit)
+
+# Daily / Weekly / Quest Master quest system — /quests
+# Quest definitions themselves (names, objectives, amounts, per-quest rewards,
+# icons, categories) live in a separate player-editable file:
+# plugins/Joshymc/config/quest-cycle.yml (see that file for the full list).
+# This section only controls selection counts, reset schedule, repeat
+# protection, and the bonus/completion rewards.
+quests:
+  # IANA time zone used for all daily/weekly scheduling (handles DST automatically)
+  timezone: "America/New_York"
+
+  daily:
+    selected-medium: 2
+    selected-hard: 1
+    reset:
+      hour: 0
+      minute: 0
+    repeat-protection-days: 7
+    completion-reward:
+      # Grants exactly one key when enabled: Harvest Key 70% / Stockpile Key 20% / Homestead Key 10%.
+      enabled: true
+      # Optional extra commands run on top of the key above. {player} is replaced with the
+      # player's name. Commands run from console.
+      commands: []
+
+  weekly:
+    selected: 3
+    reset:
+      day: "MONDAY"
+      hour: 0
+      minute: 0
+    repeat-protection-weeks: 4
+    completion-reward:
+      enabled: true
+      # In addition to any commands below, completing every Weekly Quest always grants
+      # exactly one weighted-random crate key (Homestead Key 70% / Campfire Key 25% /
+      # Cabin Key 5%) — handled internally, not configurable here.
+      commands: []
+
+  quest-master:
+    enabled: true
+    required-daily-sets: 5
+    require-weekly-completion: true
+    reward:
+      commands:
+        - "credits give {player} 100"
     inventory: true      # Detects inventory hacks (>25 clicks/sec)
+
+# Custom branded ban/tempban disconnect + rejoin screens for /punish (and /ban, /tempban).
+# Each list entry is one line of the screen, parsed with the same &/&#RRGGBB color codes
+# used everywhere else in this config. If a template is missing or fails to format, a
+# safe built-in fallback message is shown instead - a banned player never slips through.
+#
+# Placeholders: %player% %reason% %staff% %duration% %remaining% %expires% %punishment_id%
+# - ban-message is shown for permanent bans issued through /punish, /ban, or the admin panel.
+# - tempban-message is shown for temporary bans and always reflects the CURRENT remaining
+#   time, even on rejoin - never the original duration from when the ban was issued.
+punishments:
+  ban-message:
+    - "&#D96320&l✦ JOSHYMC ✦"
+    - ""
+    - "&#C9442A&lYOU HAVE BEEN PERMANENTLY BANNED"
+    - ""
+    - "&#E8BF73Reason"
+    - "&f%reason%"
+    - ""
+    - "&#E8BF73Banned By"
+    - "&f%staff%"
+    - ""
+    - "&#E8BF73Punishment ID"
+    - "&f#%punishment_id%"
+    - ""
+    - "&#6B3E26&m-----------------------------"
+    - ""
+    - "&#EBA338Think this was a mistake?"
+    - "&#EBA338Appeal at &#D96320discord.gg/joshymc"
+  tempban-message:
+    - "&#D96320&l✦ JOSHYMC ✦"
+    - ""
+    - "&#C9442A&lYOU HAVE BEEN TEMPORARILY BANNED"
+    - ""
+    - "&#E8BF73Reason"
+    - "&f%reason%"
+    - ""
+    - "&#E8BF73Banned By"
+    - "&f%staff%"
+    - ""
+    - "&#E8BF73Remaining"
+    - "&f%remaining%"
+    - ""
+    - "&#E8BF73Expires"
+    - "&f%expires%"
+    - ""
+    - "&#E8BF73Punishment ID"
+    - "&f#%punishment_id%"
+    - ""
+    - "&#6B3E26&m-----------------------------"
+    - ""
+    - "&#EBA338Think this was a mistake?"
+    - "&#EBA338Appeal at &#D96320discord.gg/joshymc"

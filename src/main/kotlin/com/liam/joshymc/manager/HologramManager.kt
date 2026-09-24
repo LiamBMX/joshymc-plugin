@@ -6,12 +6,13 @@ import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.World
 import org.bukkit.entity.Display
-import org.bukkit.entity.Entity
-import org.bukkit.entity.Player
 import org.bukkit.entity.TextDisplay
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.world.WorldLoadEvent
 import java.util.UUID
 
-class HologramManager(private val plugin: Joshymc) {
+class HologramManager(private val plugin: Joshymc) : Listener {
 
     private val legacySerializer = LegacyComponentSerializer.legacyAmpersand()
 
@@ -43,6 +44,11 @@ class HologramManager(private val plugin: Joshymc) {
         try { plugin.databaseManager.execute("ALTER TABLE holograms ADD COLUMN scale REAL DEFAULT 1.0") } catch (_: Exception) {}
         try { plugin.databaseManager.execute("ALTER TABLE holograms ADD COLUMN yaw REAL DEFAULT 0.0") } catch (_: Exception) {}
         try { plugin.databaseManager.execute("ALTER TABLE holograms ADD COLUMN locked INTEGER DEFAULT 0") } catch (_: Exception) {}
+
+        // Listen for worlds that load after the initial loadAll() tick so holograms
+        // in those worlds are still spawned (e.g. plugin-managed worlds that finish
+        // loading slightly after tick 1).
+        plugin.server.pluginManager.registerEvents(this, plugin)
 
         // Spawn all saved holograms once the server is ready
         plugin.server.scheduler.runTaskLater(plugin, Runnable { loadAll() }, 1L)
@@ -93,6 +99,13 @@ class HologramManager(private val plugin: Joshymc) {
         }
         plugin.databaseManager.execute("DELETE FROM holograms WHERE id = ?", id)
         return true
+    }
+
+    /** Snap the hologram's X/Z to the center of its current block (+ 0.5), keeping Y unchanged. */
+    fun centerHologram(id: String): Boolean {
+        val loc = getLocation(id) ?: return false
+        val centered = Location(loc.world, Math.floor(loc.x) + 0.5, loc.y, Math.floor(loc.z) + 0.5)
+        return moveHologram(id, centered)
     }
 
     fun moveHologram(id: String, location: Location): Boolean {
@@ -266,7 +279,46 @@ class HologramManager(private val plugin: Joshymc) {
         } ?: HoloStyle(1f, 0f, false)
     }
 
+    private data class HoloRow(
+        val id: String,
+        val worldName: String,
+        val x: Double,
+        val y: Double,
+        val z: Double,
+        val lines: List<String>,
+        val style: HoloStyle
+    )
+
     private fun loadAll() {
+        val rows = plugin.databaseManager.query(
+            "SELECT id, world, x, y, z, lines, scale, yaw, locked FROM holograms"
+        ) { rs ->
+            HoloRow(
+                id = rs.getString("id"),
+                worldName = rs.getString("world"),
+                x = rs.getDouble("x"),
+                y = rs.getDouble("y"),
+                z = rs.getDouble("z"),
+                lines = rs.getString("lines").let { if (it.isEmpty()) emptyList() else it.split("\n") },
+                style = HoloStyle(
+                    scale = rs.getFloat("scale").let { if (it <= 0f) 1f else it },
+                    yaw = rs.getFloat("yaw"),
+                    locked = rs.getInt("locked") == 1
+                )
+            )
+        }
+
+        // Force-load each hologram's chunk before scanning for stale entities below.
+        // world.entities only sees entities in already-loaded chunks, so a hologram
+        // whose chunk hadn't loaded yet at this tick would be invisible to the scan —
+        // its persisted (isPersistent = true) TextDisplay from the previous run would
+        // survive untouched, and a second copy would spawn on top of it once a player
+        // later loaded that chunk. That's the restart-duplication bug.
+        for (row in rows) {
+            val world = Bukkit.getWorld(row.worldName) ?: continue
+            world.getChunkAt(Location(world, row.x, row.y, row.z))
+        }
+
         // Remove any hologram entities that survived from a prior run (persistent=true
         // before this fix, or a crash before despawn). Without this, loadAll spawns
         // duplicates on top of the still-loaded entities.
@@ -279,33 +331,54 @@ class HologramManager(private val plugin: Joshymc) {
         }
         entities.clear()
 
-        data class HoloRow(val id: String, val location: Location, val lines: List<String>, val style: HoloStyle)
+        var spawned = 0
+        var skipped = 0
+        for (row in rows) {
+            val world = Bukkit.getWorld(row.worldName)
+            if (world == null) {
+                // World not loaded yet — WorldLoadEvent handler will pick it up later.
+                plugin.logger.warning("[Holograms] Skipping hologram '${row.id}' — world '${row.worldName}' is not loaded.")
+                skipped++
+                continue
+            }
+            spawnEntities(
+                id = row.id,
+                origin = Location(world, row.x, row.y, row.z),
+                lines = row.lines,
+                style = row.style
+            )
+            spawned++
+        }
 
-        val holograms = plugin.databaseManager.query<HoloRow?>(
-            "SELECT id, world, x, y, z, lines, scale, yaw, locked FROM holograms"
+        if (spawned > 0) plugin.logger.info("[Holograms] Loaded $spawned hologram(s).")
+        if (skipped > 0) plugin.logger.warning("[Holograms] $skipped hologram(s) deferred — awaiting world load.")
+    }
+
+    /** Spawns any holograms in a world that just became available (missed by loadAll). */
+    @EventHandler
+    fun onWorldLoad(event: WorldLoadEvent) {
+        val worldName = event.world.name
+        var spawned = 0
+        plugin.databaseManager.query(
+            "SELECT id, world, x, y, z, lines, scale, yaw, locked FROM holograms WHERE world = ?",
+            worldName
         ) { rs ->
-            val world = Bukkit.getWorld(rs.getString("world"))
-            if (world != null) {
-                HoloRow(
-                    id = rs.getString("id"),
-                    location = Location(world, rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z")),
-                    lines = rs.getString("lines").let { if (it.isEmpty()) emptyList() else it.split("\n") },
-                    style = HoloStyle(
-                        scale = rs.getFloat("scale").let { if (it <= 0f) 1f else it },
-                        yaw = rs.getFloat("yaw"),
-                        locked = rs.getInt("locked") == 1
-                    )
+            val id = rs.getString("id")
+            if (entities.containsKey(id)) return@query  // already tracked
+            val world = Bukkit.getWorld(worldName) ?: return@query
+            spawnEntities(
+                id = id,
+                origin = Location(world, rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z")),
+                lines = rs.getString("lines").let { if (it.isEmpty()) emptyList() else it.split("\n") },
+                style = HoloStyle(
+                    scale = rs.getFloat("scale").let { if (it <= 0f) 1f else it },
+                    yaw = rs.getFloat("yaw"),
+                    locked = rs.getInt("locked") == 1
                 )
-            } else null
-        }.filterNotNull()
-
-        for (row in holograms) {
-            spawnEntities(row.id, row.location, row.lines, row.style)
+            )
+            spawned++
         }
-
-        if (holograms.isNotEmpty()) {
-            plugin.logger.info("[Holograms] Loaded ${holograms.size} hologram(s).")
-        }
+        if (spawned > 0) plugin.logger.info("[Holograms] Spawned $spawned hologram(s) for late-loading world '$worldName'.")
     }
 
     private fun spawnEntities(id: String, origin: Location, lines: List<String>, style: HoloStyle = loadStyle(id)) {
@@ -326,9 +399,10 @@ class HologramManager(private val plugin: Joshymc) {
                 entity.isShadowed = true
                 entity.addScoreboardTag("joshymc_holo_$id")
 
-                // Don't persist — the DB is the source of truth; loadAll() re-spawns on restart.
-                // Persistent entities would double-spawn on top of the freshly-spawned ones.
-                entity.isPersistent = false
+                // Persist so the entity survives chunk unloads (e.g. when everyone moves to
+                // the spawn world). loadAll() removes all tagged entities at startup before
+                // re-spawning from DB, so no duplicates accumulate across restarts.
+                entity.isPersistent = true
 
                 // Apply scale via Display transformation
                 if (style.scale != 1f) {

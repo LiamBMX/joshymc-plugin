@@ -19,6 +19,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitTask
@@ -45,7 +46,10 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         val ownerUuid: UUID,
         val teamName: String?,
         val createdAt: Long,
-        val trusted: MutableSet<UUID> = mutableSetOf()
+        val trusted: MutableSet<UUID> = mutableSetOf(),
+        val denied: MutableSet<UUID> = mutableSetOf(),
+        var pvpEnabled: Boolean = false,
+        var tntEnabled: Boolean = false
     ) {
         val minX get() = min(x1, x2)
         val maxX get() = max(x1, x2)
@@ -98,12 +102,20 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     val showingParticles = mutableSetOf<UUID>()
     private var particleTask: BukkitTask? = null
     private var blockAccrualTask: BukkitTask? = null
+    private var claimExpiryTask: BukkitTask? = null
 
     private var startingBlocks = 500
     private var blocksPerHour = 100
     private var maxTotalBlocks = 50000
 
+    /** Worlds (lowercase) where claims can't be created, managed, or enforced. Configurable via claims.blocked-worlds. */
+    private var blockedWorlds: Set<String> = DEFAULT_BLOCKED_WORLDS
+
     private val claimWandKey = NamespacedKey(plugin, "claim_wand")
+
+    companion object {
+        private val DEFAULT_BLOCKED_WORLDS = setOf("resource", "spawn", "pvp", "event", "world_end", "afk", "dungeon")
+    }
 
     // ══════════════════════════════════════════════════════════
     //  LIFECYCLE
@@ -113,6 +125,11 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         startingBlocks = plugin.config.getInt("claims.starting-blocks", 500)
         blocksPerHour = plugin.config.getInt("claims.blocks-per-hour", 100)
         maxTotalBlocks = plugin.config.getInt("claims.max-blocks", 50000)
+
+        val configuredBlockedWorlds = plugin.config.getStringList("claims.blocked-worlds")
+        blockedWorlds = (if (configuredBlockedWorlds.isNotEmpty()) configuredBlockedWorlds else DEFAULT_BLOCKED_WORLDS.toList())
+            .map { it.lowercase() }
+            .toSet()
 
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS claims_v2 (
@@ -125,6 +142,14 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
                 created_at INTEGER NOT NULL
             )
         """.trimIndent())
+
+        try {
+            plugin.databaseManager.execute("ALTER TABLE claims_v2 ADD COLUMN pvp_enabled INTEGER NOT NULL DEFAULT 0")
+        } catch (_: Exception) { /* column already exists */ }
+
+        try {
+            plugin.databaseManager.execute("ALTER TABLE claims_v2 ADD COLUMN tnt_enabled INTEGER NOT NULL DEFAULT 0")
+        } catch (_: Exception) { /* column already exists */ }
 
         // Migrate: drop old chunk-based subclaims table if it has the wrong schema
         try {
@@ -168,6 +193,14 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         """.trimIndent())
 
         plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS claim_denied (
+                claim_id INTEGER NOT NULL,
+                player_uuid TEXT NOT NULL,
+                PRIMARY KEY (claim_id, player_uuid)
+            )
+        """.trimIndent())
+
+        plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS claim_blocks (
                 uuid TEXT PRIMARY KEY,
                 total_blocks INTEGER NOT NULL DEFAULT $startingBlocks
@@ -178,13 +211,25 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         loadSubclaims()
         startParticleTask()
         startBlockAccrualTask()
+        purgeInactiveClaims()
+        startClaimExpiryTask()
 
         plugin.logger.info("[Claims] Started with ${claims.size} claim(s) and ${subclaims.size} subclaim(s).")
+
+        val legacyClaims = claims.filter { Bukkit.getWorld(it.world)?.environment?.let { env -> env != org.bukkit.World.Environment.NORMAL } == true }
+        if (legacyClaims.isNotEmpty()) {
+            plugin.logger.warning(
+                "[Claims] ${legacyClaims.size} legacy claim(s) exist outside the Overworld " +
+                    "(ids: ${legacyClaims.joinToString(", ") { it.id.toString() }}) — claims are now Overworld-only, " +
+                    "so these are no longer enforced or editable. They are kept for reference; clean them up manually if desired."
+            )
+        }
     }
 
     fun stop() {
         particleTask?.cancel(); particleTask = null
         blockAccrualTask?.cancel(); blockAccrualTask = null
+        claimExpiryTask?.cancel(); claimExpiryTask = null
         showingParticles.clear()
     }
 
@@ -195,6 +240,9 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
             val trustedUuids = plugin.databaseManager.query(
                 "SELECT player_uuid FROM claim_trusted WHERE claim_id = ?", id
             ) { tr -> UUID.fromString(tr.getString("player_uuid")) }
+            val deniedUuids = plugin.databaseManager.query(
+                "SELECT player_uuid FROM claim_denied WHERE claim_id = ?", id
+            ) { dr -> UUID.fromString(dr.getString("player_uuid")) }
             Claim(
                 id = id, world = rs.getString("world"),
                 x1 = rs.getInt("x1"), z1 = rs.getInt("z1"),
@@ -202,7 +250,10 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
                 ownerUuid = UUID.fromString(rs.getString("owner_uuid")),
                 teamName = rs.getString("team_name"),
                 createdAt = rs.getLong("created_at"),
-                trusted = trustedUuids.toMutableSet()
+                trusted = trustedUuids.toMutableSet(),
+                denied = deniedUuids.toMutableSet(),
+                pvpEnabled = rs.getInt("pvp_enabled") == 1,
+                tntEnabled = rs.getInt("tnt_enabled") == 1
             )
         })
     }
@@ -270,11 +321,75 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         }, 6000L, 6000L) // Every 5 minutes
     }
 
+    private fun startClaimExpiryTask() {
+        val ticksPerDay = 20L * 60 * 60 * 24
+        claimExpiryTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+            purgeInactiveClaims()
+        }, ticksPerDay, ticksPerDay)
+    }
+
+    private fun purgeInactiveClaims() {
+        val thirtyDaysMs = 30L * 24 * 60 * 60 * 1000
+        val cutoff = System.currentTimeMillis() - thirtyDaysMs
+
+        val ownerUuids = plugin.databaseManager.query("SELECT DISTINCT owner_uuid FROM claims_v2") { rs ->
+            rs.getString("owner_uuid")
+        }
+
+        var purgedClaims = 0
+        for (uuidStr in ownerUuids) {
+            val uuid = UUID.fromString(uuidStr)
+            // Never purge claims of currently online players
+            if (Bukkit.getPlayer(uuid) != null) continue
+
+            val lastSeen = plugin.databaseManager.queryFirst(
+                "SELECT last_join FROM playtime WHERE uuid = ?", uuidStr
+            ) { it.getLong("last_join") } ?: Bukkit.getOfflinePlayer(uuid).lastPlayed
+
+            // lastSeen == 0L means no data — skip to avoid false positives
+            if (lastSeen == 0L || lastSeen >= cutoff) continue
+
+            val playerClaims = claims.filter { it.ownerUuid == uuid }
+            for (claim in playerClaims) {
+                val subs = subclaims.filter { it.parentClaimId == claim.id }
+                for (sc in subs) {
+                    plugin.databaseManager.execute("DELETE FROM subclaim_access WHERE subclaim_id = ?", sc.id)
+                    plugin.databaseManager.execute("DELETE FROM subclaims WHERE id = ?", sc.id)
+                }
+                subclaims.removeAll(subs.toSet())
+
+                plugin.databaseManager.execute("DELETE FROM claim_trusted WHERE claim_id = ?", claim.id)
+                plugin.databaseManager.execute("DELETE FROM claim_denied WHERE claim_id = ?", claim.id)
+                getSnapshotFile(claim).let { if (it.exists()) it.delete() }
+                plugin.databaseManager.execute("DELETE FROM claims_v2 WHERE id = ?", claim.id)
+                purgedClaims++
+            }
+            claims.removeAll(playerClaims.toSet())
+        }
+
+        if (purgedClaims > 0) {
+            plugin.logger.info("[Claims] Purged $purgedClaims claim(s) from players inactive for 30+ days.")
+        }
+    }
+
     // ══════════════════════════════════════════════════════════
     //  CLAIM OPERATIONS
     // ══════════════════════════════════════════════════════════
 
+    /**
+     * Claims only exist and are enforced in the Overworld, and never in a
+     * configured blocked world — even if a legacy claim's stored bounds
+     * technically overlap one (e.g. a world that was blocked after claims
+     * were already made in it). This is the single choke point that keeps
+     * protection, trust, and management commands scoped to allowed worlds:
+     * every listener and command resolves "the claim here" through this
+     * method, so a blocked world's legacy claims become non-enforcing and
+     * un-editable without deleting their database rows.
+     */
     fun getClaimAt(location: Location): Claim? {
+        val world = location.world ?: return null
+        if (world.environment != org.bukkit.World.Environment.NORMAL) return null
+        if (world.name.lowercase() in blockedWorlds) return null
         return claims.firstOrNull { it.contains(location) }
     }
 
@@ -282,16 +397,20 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
     fun getClaimsByPlayer(uuid: UUID): List<Claim> = claims.filter { it.ownerUuid == uuid }
 
+    fun getClaimsTrustedBy(uuid: UUID): List<Claim> = claims.filter { it.trusted.contains(uuid) }
+
     fun getClaimsByTeam(teamName: String): List<Claim> = claims.filter { it.teamName == teamName }
 
     /**
      * Create a claim between two corners. Returns the new claim or null on failure.
      */
-    private val blockedWorlds = setOf("resource", "spawn", "afk")
-
     fun createClaim(player: Player, pos1: Location, pos2: Location): ClaimCreateResult {
-        val worldName = pos1.world?.name ?: return ClaimCreateResult.Failure("Invalid world.")
-        if (worldName in blockedWorlds) return ClaimCreateResult.Failure("You cannot claim land in this world.")
+        val world = pos1.world ?: return ClaimCreateResult.Failure("Invalid world.")
+        if (world.environment != org.bukkit.World.Environment.NORMAL) {
+            return ClaimCreateResult.Failure("Claims can only be created in the Overworld.")
+        }
+        val worldName = world.name
+        if (worldName.lowercase() in blockedWorlds) return ClaimCreateResult.Failure("Claims are disabled in this world.")
         if (pos1.world?.name != pos2.world?.name) return ClaimCreateResult.Failure("Corners must be in the same world.")
 
         val minX = min(pos1.blockX, pos2.blockX)
@@ -343,8 +462,9 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         }
         subclaims.removeAll(subs.toSet())
 
-        // Remove trusted players
+        // Remove trusted and denied players
         plugin.databaseManager.execute("DELETE FROM claim_trusted WHERE claim_id = ?", claim.id)
+        plugin.databaseManager.execute("DELETE FROM claim_denied WHERE claim_id = ?", claim.id)
 
         // Restore terrain only when an admin force-deletes someone else's claim.
         // When the owner voluntarily unclims, skip restore so legitimately mined
@@ -477,6 +597,24 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    fun setClaimPvp(claimId: Int, enabled: Boolean) {
+        val claim = claims.find { it.id == claimId } ?: return
+        claim.pvpEnabled = enabled
+        plugin.databaseManager.execute(
+            "UPDATE claims_v2 SET pvp_enabled = ? WHERE id = ?",
+            if (enabled) 1 else 0, claimId
+        )
+    }
+
+    fun setClaimTnt(claimId: Int, enabled: Boolean) {
+        val claim = claims.find { it.id == claimId } ?: return
+        claim.tntEnabled = enabled
+        plugin.databaseManager.execute(
+            "UPDATE claims_v2 SET tnt_enabled = ? WHERE id = ?",
+            if (enabled) 1 else 0, claimId
+        )
+    }
+
     // ══════════════════════════════════════════════════════════
     //  TRUST SYSTEM
     // ══════════════════════════════════════════════════════════
@@ -502,6 +640,40 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     }
 
     fun getTrustedPlayers(claim: Claim): Set<UUID> = claim.trusted
+
+    // ══════════════════════════════════════════════════════════
+    //  DENY SYSTEM
+    // ══════════════════════════════════════════════════════════
+
+    fun denyPlayer(claim: Claim, targetUuid: UUID): Boolean {
+        if (claim.denied.contains(targetUuid)) return false
+        plugin.databaseManager.execute(
+            "INSERT OR IGNORE INTO claim_denied (claim_id, player_uuid) VALUES (?, ?)",
+            claim.id, targetUuid.toString()
+        )
+        claim.denied.add(targetUuid)
+        return true
+    }
+
+    fun undenyPlayer(claim: Claim, targetUuid: UUID): Boolean {
+        if (!claim.denied.contains(targetUuid)) return false
+        plugin.databaseManager.execute(
+            "DELETE FROM claim_denied WHERE claim_id = ? AND player_uuid = ?",
+            claim.id, targetUuid.toString()
+        )
+        claim.denied.remove(targetUuid)
+        return true
+    }
+
+    fun getDeniedPlayers(claim: Claim): Set<UUID> = claim.denied
+
+    fun isDenied(player: Player, location: Location): Boolean {
+        if (player.hasPermission("joshymc.claim.bypass")) return false
+        val claim = getClaimAt(location) ?: return false
+        if (claim.ownerUuid == player.uniqueId) return false
+        if (claim.teamName != null && plugin.teamManager.getPlayerTeam(player.uniqueId) == claim.teamName) return false
+        return claim.denied.contains(player.uniqueId)
+    }
 
     sealed class ClaimCreateResult {
         data class Success(val claim: Claim) : ClaimCreateResult()
@@ -658,8 +830,12 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
         val subclaim = getSubclaimAt(location)
         if (subclaim != null) {
-            if (subclaim.accessList.contains(player.uniqueId)) return true
             if (subclaim.ownerUuid == player.uniqueId) return true
+            if (subclaim.accessList.contains(player.uniqueId)) return true
+            // Claim managers (owner + team owner/admin) always have full access
+            if (canManageClaim(player, claim)) return true
+            // Inside a subclaim but no explicit access — deny even claim-trusted players
+            return false
         }
 
         if (claim.ownerUuid == player.uniqueId) return true
@@ -677,6 +853,10 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
     fun canManageClaim(player: Player, claim: Claim): Boolean {
         if (player.hasPermission("joshymc.claim.admin")) return true
+        // Legacy claims sitting in a now-blocked world are inactive/non-editable —
+        // this closes GUI paths (ClaimManagementGui etc.) that look claims up by id
+        // instead of by location, so they can't bypass the getClaimAt() choke point.
+        if (claim.world.lowercase() in blockedWorlds) return false
         if (claim.ownerUuid == player.uniqueId) return true
         if (claim.teamName != null) {
             val playerTeam = plugin.teamManager.getPlayerTeam(player.uniqueId)
@@ -709,8 +889,13 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         if (!isClaimWand(player)) return
         if (!player.hasPermission("joshymc.claim")) return
 
-        if (player.world.name in blockedWorlds) {
-            plugin.commsManager.send(player, Component.text("You cannot claim land in this world.", NamedTextColor.RED))
+        if (player.world.environment != org.bukkit.World.Environment.NORMAL) {
+            plugin.commsManager.send(player, Component.text("Claims can only be created in the Overworld.", NamedTextColor.RED))
+            return
+        }
+
+        if (player.world.name.lowercase() in blockedWorlds) {
+            plugin.commsManager.send(player, Component.text("Claims are disabled in this world.", NamedTextColor.RED))
             return
         }
 
@@ -771,6 +956,12 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         )
     }
 
+    @EventHandler
+    fun onQuit(event: PlayerQuitEvent) {
+        pendingCorner1.remove(event.player.uniqueId)
+        selections.remove(event.player.uniqueId)
+    }
+
     // ══════════════════════════════════════════════════════════
     //  PARTICLE VISUALIZATION — highly visible borders
     // ══════════════════════════════════════════════════════════
@@ -788,6 +979,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         particleTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
             for (uuid in showingParticles.toSet()) {
                 val player = Bukkit.getPlayer(uuid) ?: continue
+                if (player.world.environment != org.bukkit.World.Environment.NORMAL) continue
                 val playerTeam = plugin.teamManager.getPlayerTeam(player.uniqueId)
 
                 for (claim in claims) {
@@ -881,17 +1073,21 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
     fun buildClaimMap(player: Player): List<String> {
         val loc = player.location
-        val worldName = loc.world.name
         val playerTeam = plugin.teamManager.getPlayerTeam(player.uniqueId)
-        val radius = 40 // blocks
+        val chunkRadius = 5 // 11x11 chunk grid
+        val centerChunkX = loc.blockX shr 4
+        val centerChunkZ = loc.blockZ shr 4
         val lines = mutableListOf<String>()
 
-        lines.add("&7--- Claim Map (40 block radius) ---")
-        for (dz in -4..4) {
+        lines.add("&7--- Claim Map ($chunkRadius chunk radius) ---")
+        for (dz in -chunkRadius..chunkRadius) {
             val sb = StringBuilder("  ")
-            for (dx in -8..8) {
-                val checkX = loc.blockX + dx * 5
-                val checkZ = loc.blockZ + dz * 5
+            for (dx in -chunkRadius..chunkRadius) {
+                // Sample the chunk's center block — claims aren't required to align
+                // to chunk boundaries, so this mirrors the point-sample approach the
+                // old block-radius map used, just anchored to real chunk coordinates.
+                val checkX = ((centerChunkX + dx) shl 4) + 8
+                val checkZ = ((centerChunkZ + dz) shl 4) + 8
                 val checkLoc = Location(loc.world, checkX.toDouble(), 0.0, checkZ.toDouble())
                 val claim = getClaimAt(checkLoc)
                 val char = when {

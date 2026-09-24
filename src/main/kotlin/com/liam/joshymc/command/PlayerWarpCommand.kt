@@ -71,11 +71,17 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         return true
     }
 
-    // Returns -1 for unlimited, otherwise the max player warps allowed for this player's rank.
+    // Returns -1 for unlimited, otherwise the highest pwarp limit across all of this player's ranks.
     private fun pwarpLimit(player: Player): Int {
-        val rankId = plugin.rankManager.getPlayerRank(player)?.id ?: "default"
-        val rankLimit = plugin.config.getInt("warps.limits-by-rank.$rankId", Int.MIN_VALUE)
-        return if (rankLimit != Int.MIN_VALUE) rankLimit
+        val rankIds = plugin.rankManager.getPlayerRankIds(player.uniqueId).ifEmpty { setOf("default") }
+        var best = Int.MIN_VALUE
+        for (rankId in rankIds) {
+            val limit = plugin.config.getInt("warps.limits-by-rank.$rankId", Int.MIN_VALUE)
+            if (limit == Int.MIN_VALUE) continue
+            if (limit == -1 || best == -1) return -1
+            best = maxOf(best, limit)
+        }
+        return if (best != Int.MIN_VALUE) best
                else plugin.config.getInt("warps.player-max-per-player", 3)
     }
 
@@ -94,6 +100,14 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
         if (!NAME_REGEX.matches(name)) {
             plugin.commsManager.send(sender, Component.text("Warp names must be alphanumeric/underscores, max 20 characters.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            return
+        }
+
+        val worldEnv = sender.world.environment
+        if (worldEnv != org.bukkit.World.Environment.NORMAL &&
+            worldEnv != org.bukkit.World.Environment.NETHER &&
+            worldEnv != org.bukkit.World.Environment.THE_END) {
+            plugin.commsManager.send(sender, Component.text("Player warps can only be set in the Overworld, Nether, or End.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
             return
         }
 
@@ -171,9 +185,15 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         }
     }
 
-    fun openPlayerWarpGui(player: Player) {
-        val warps = plugin.warpManager.getAllPlayerWarps()
-        val size = 54 // 6 rows for more space
+    fun openPlayerWarpGui(player: Player, page: Int = 0) {
+        val allWarps = plugin.warpManager.getAllPlayerWarps()
+        val warpsPerPage = 28 // rows 1-4, cols 1-7
+        val totalPages = ((allWarps.size - 1) / warpsPerPage).coerceAtLeast(0)
+        val clampedPage = page.coerceIn(0, totalPages)
+        val startIndex = clampedPage * warpsPerPage
+        val pageWarps = allWarps.subList(startIndex, (startIndex + warpsPerPage).coerceAtMost(allWarps.size))
+
+        val size = 54
         val gui = CustomGui(TITLE, size)
 
         // Fill
@@ -185,8 +205,7 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         val slots = mutableListOf<Int>()
         for (row in 1..4) for (col in 1..7) slots.add(row * 9 + col)
 
-        for ((idx, warp) in warps.withIndex()) {
-            if (idx >= slots.size) break
+        for ((idx, warp) in pageWarps.withIndex()) {
             val slot = slots[idx]
             val loc = warp.location
             val ownerName = plugin.warpManager.getPlayerWarpOwnerName(warp.name) ?: "Unknown"
@@ -232,7 +251,7 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             }
         }
 
-        if (warps.isEmpty()) {
+        if (allWarps.isEmpty()) {
             val noWarps = ItemStack(Material.BARRIER)
             noWarps.editMeta { meta ->
                 meta.displayName(
@@ -245,6 +264,40 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 ))
             }
             gui.inventory.setItem(22, noWarps)
+        }
+
+        // Previous page — slot 46
+        if (clampedPage > 0) {
+            val prevItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Previous Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(46, prevItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openPlayerWarpGui(p, clampedPage - 1)
+            }
+        }
+
+        // Next page — slot 52
+        if (clampedPage < totalPages) {
+            val nextItem = ItemStack(Material.ARROW).apply {
+                editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Next Page", NamedTextColor.YELLOW)
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true)
+                    )
+                }
+            }
+            gui.setItem(52, nextItem) { p, _ ->
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+                openPlayerWarpGui(p, clampedPage + 1)
+            }
         }
 
         plugin.guiManager.open(player, gui)

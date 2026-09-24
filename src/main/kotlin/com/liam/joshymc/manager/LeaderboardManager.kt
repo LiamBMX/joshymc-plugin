@@ -186,7 +186,7 @@ class LeaderboardManager(private val plugin: Joshymc) {
                 n
             ).map { (uuid, sec) -> nameOf(uuid) to plugin.playtimeManager.formatPlaytime(sec) }
             Type.QUESTS -> queryUuidIntTop(
-                "SELECT uuid, COUNT(*) AS n FROM quest_progress WHERE completed = 1 GROUP BY uuid ORDER BY n DESC LIMIT ?",
+                "SELECT uuid, COUNT(*) AS n FROM quest_cycle_progress WHERE completed = 1 GROUP BY uuid ORDER BY n DESC LIMIT ?",
                 n
             ).map { (uuid, count) -> nameOf(uuid) to count.toString() }
 
@@ -245,7 +245,7 @@ class LeaderboardManager(private val plugin: Joshymc) {
                 """
                 SELECT tm.team_name AS team, COUNT(*) AS n
                 FROM team_members tm
-                JOIN quest_progress qp ON qp.uuid = tm.uuid AND qp.completed = 1
+                JOIN quest_cycle_progress qp ON qp.uuid = tm.uuid AND qp.completed = 1
                 GROUP BY tm.team_name
                 ORDER BY n DESC
                 LIMIT ?

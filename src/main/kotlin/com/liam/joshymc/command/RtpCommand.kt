@@ -15,6 +15,7 @@ import org.bukkit.World
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
+import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
@@ -23,20 +24,16 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
-class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
+class RtpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private val cooldowns = ConcurrentHashMap<UUID, Long>()
 
     // Custom head textures (base64-encoded Mojang skin URLs)
     companion object {
         // Grass block head
-        private const val OVERWORLD_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjJhNmIwNmRiMzRmYmI0NWE3NjhiNzE0ZjFiMTFkMWYzYzJhYjJiOGViNjk3YzdiMmI4NWQ3NDk5Y2NlZSJ9fX0="
+        private const val OVERWORLD_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzQ3ZjIwMTgxNWMyYWI1Y2RmZWUwZmEyOTIyNTJlOGE5YmU2YWM2Y2FmMmIyODRiNDlkODc2ZGVjMDlmZWYxMSJ9fX0="
         // Netherrack head
-        private const val NETHER_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZGI2NTRkNTc2Y2I5MzEzZGRhOWEyYTM0MDhhNGUxOGVmYWQ4NTA1OGM5ZWI5NThkODdkNjdiYjljNWUwZjEifX19"
-        // End stone head
-        private const val END_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvN2E2OGMxZjdmZDBjMjY4YjM3MjFjNzJmNmFlOWI1OTQyMmFhODJmYzRlZTk1YjUyNjRlMWI1ZjQxMDk4NjQifX19"
-        // Compass/globe head
-        private const val RESOURCE_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNDUyOGVkNDRmODhjZmI1ZjI0ZmM4NmE4NTVjOTQyODFhNGQzNGI2Njg1NjM2MzI1MjMxNGI2MTRiMjk4NWIxIn19fQ=="
+        private const val NETHER_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvN2FiNGY2NzA4OWQ4YTZmNTdmMTkxNzI2YmI5ZGU5MTMyMGY0MGFmMDlkYzMwYjIyNmJhYzdlNDIwNzVhNmRiYSJ9fX0="
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
@@ -47,19 +44,53 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
 
         if (TeleportChecks.checkAndApply(sender, plugin)) return true
 
-        val cooldownSeconds = plugin.config.getInt("rtp.cooldown-seconds", 60)
-        val now = System.currentTimeMillis()
-        val lastUse = cooldowns[sender.uniqueId]
-        if (lastUse != null) {
-            val remaining = cooldownSeconds - ((now - lastUse) / 1000)
+        if (sender.world.environment == World.Environment.THE_END) {
+            plugin.commsManager.send(sender, Component.text("You cannot use /rtp in the End.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
+            return true
+        }
+
+        if (args.isNotEmpty() && args[0].equals("end", ignoreCase = true)) {
+            if (!sender.hasPermission("joshymc.rtp.end")) {
+                plugin.commsManager.send(sender, Component.text("You do not have permission to RTP to the End.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
+                return true
+            }
+
+            val remaining = cooldownRemaining(sender)
             if (remaining > 0) {
                 plugin.commsManager.send(sender, Component.text("RTP is on cooldown. Wait ${remaining}s.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
                 return true
             }
+
+            val endWorld = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.THE_END }
+            if (endWorld == null) {
+                plugin.commsManager.send(sender, Component.text("No End world found.", NamedTextColor.RED))
+                return true
+            }
+            startRtp(sender, endWorld, allowEnd = true)
+            return true
+        }
+
+        val remaining = cooldownRemaining(sender)
+        if (remaining > 0) {
+            plugin.commsManager.send(sender, Component.text("RTP is on cooldown. Wait ${remaining}s.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
+            return true
         }
 
         openWorldSelector(sender)
         return true
+    }
+
+    override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
+        if (args.size == 1 && sender.hasPermission("joshymc.rtp.end")) {
+            return listOf("end").filter { it.startsWith(args[0], ignoreCase = true) }
+        }
+        return emptyList()
+    }
+
+    private fun cooldownRemaining(player: Player): Long {
+        val cooldownSeconds = plugin.config.getInt("rtp.cooldown-seconds", 60)
+        val lastUse = cooldowns[player.uniqueId] ?: return 0
+        return cooldownSeconds - ((System.currentTimeMillis() - lastUse) / 1000)
     }
 
     private fun openWorldSelector(player: Player) {
@@ -79,7 +110,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
         border.editMeta { it.displayName(Component.empty()) }
         gui.border(border)
 
-        // Overworld (slot 10)
+        // Overworld (slot 11)
         val overworldHead = createCustomHead(
             OVERWORLD_TEXTURE,
             Component.text("Overworld", TextColor.color(0x55FF55))
@@ -94,7 +125,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
                 Component.empty()
             )
         )
-        gui.setItem(10, overworldHead) { p, _ ->
+        gui.setItem(11, overworldHead) { p, _ ->
             p.closeInventory()
             val resourceWorldName = plugin.config.getString("resource-world.world-name", "resource") ?: "resource"
             // Find the main survival overworld — NORMAL environment, not spawn, not resource
@@ -112,7 +143,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
             startRtp(p, world)
         }
 
-        // Nether (slot 12)
+        // Nether (slot 15)
         val netherHead = createCustomHead(
             NETHER_TEXTURE,
             Component.text("The Nether", TextColor.color(0xFF5555))
@@ -127,7 +158,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
                 Component.empty()
             )
         )
-        gui.setItem(12, netherHead) { p, _ ->
+        gui.setItem(15, netherHead) { p, _ ->
             p.closeInventory()
             val world = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.NETHER }
             if (world == null) {
@@ -137,63 +168,16 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor {
             startRtp(p, world)
         }
 
-        // The End (slot 14)
-        val endHead = createCustomHead(
-            END_TEXTURE,
-            Component.text("The End", TextColor.color(0xAA55FF))
-                .decoration(TextDecoration.BOLD, true)
-                .decoration(TextDecoration.ITALIC, false),
-            listOf(
-                Component.empty(),
-                Component.text("  Teleport to a random location", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.text("  in the End.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.empty(),
-                Component.text("  Click to teleport!", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.ITALIC, false),
-                Component.empty()
-            )
-        )
-        gui.setItem(14, endHead) { p, _ ->
-            p.closeInventory()
-            val world = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.THE_END }
-            if (world == null) {
-                plugin.commsManager.send(p, Component.text("No end world found.", NamedTextColor.RED))
-                return@setItem
-            }
-            startRtp(p, world)
-        }
-
-        // Resource World (slot 16)
-        val resourceHead = createCustomHead(
-            RESOURCE_TEXTURE,
-            Component.text("Resource World", TextColor.color(0xFFAA00))
-                .decoration(TextDecoration.BOLD, true)
-                .decoration(TextDecoration.ITALIC, false),
-            listOf(
-                Component.empty(),
-                Component.text("  Teleport to a random location", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.text("  in the resource world.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.text("  This world resets periodically!", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false),
-                Component.empty(),
-                Component.text("  Click to teleport!", NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false),
-                Component.empty()
-            )
-        )
-        gui.setItem(16, resourceHead) { p, _ ->
-            p.closeInventory()
-            val resourceWorldName = plugin.config.getString("resource-world.world-name", "resource") ?: "resource"
-            val world = Bukkit.getWorld(resourceWorldName)
-            if (world == null) {
-                plugin.commsManager.send(p, Component.text("Resource world is not loaded.", NamedTextColor.RED))
-                return@setItem
-            }
-            startRtp(p, world)
-        }
-
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
-    private fun startRtp(player: Player, world: World, skipWarmup: Boolean = false) {
+    private fun startRtp(player: Player, world: World, skipWarmup: Boolean = false, allowEnd: Boolean = false) {
+        if (world.environment == World.Environment.THE_END && !allowEnd) {
+            plugin.commsManager.send(player, Component.text("You cannot use /rtp in the End.", NamedTextColor.RED), CommunicationsManager.Category.TELEPORT)
+            return
+        }
+
         val minRange = plugin.config.getInt("rtp.min-range", 500)
         val maxRange = plugin.config.getInt("rtp.max-range", 5000)
 

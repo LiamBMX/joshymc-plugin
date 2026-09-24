@@ -24,6 +24,9 @@ class CombatManager(private val plugin: Joshymc) {
     private var combatDurationMs: Long = 15_000
     private var tickTaskId: Int = -1
 
+    var allowElytraInCombat: Boolean = false
+    var allowEnderpearlInCombat: Boolean = false
+
     // Combat log NPC data
     data class CombatNPC(
         val entityUuid: UUID,
@@ -41,6 +44,8 @@ class CombatManager(private val plugin: Joshymc) {
 
     fun start() {
         combatDurationMs = plugin.config.getLong("combat.tag-duration-seconds", 15) * 1000
+        allowElytraInCombat = plugin.config.getBoolean("combat.allow-elytra", false)
+        allowEnderpearlInCombat = plugin.config.getBoolean("combat.allow-enderpearl", false)
 
         // Tick task — runs every tick (50ms) for smooth countdown
         tickTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
@@ -56,6 +61,7 @@ class CombatManager(private val plugin: Joshymc) {
                 if (now >= expiry) {
                     // Expired
                     combatTags.remove(uuid)
+                    plugin.rankManager.refreshCollisionIfChanged(player)
                     restoreFlightIfEligible(player)
                     plugin.commsManager.sendActionBar(player,
                         Component.text("You are no longer in combat.", NamedTextColor.GREEN)
@@ -94,6 +100,7 @@ class CombatManager(private val plugin: Joshymc) {
     fun tag(player: Player) {
         val wasTagged = isTagged(player)
         combatTags[player.uniqueId] = System.currentTimeMillis() + combatDurationMs
+        if (!wasTagged) plugin.rankManager.refreshCollisionIfChanged(player)
 
         if (!wasTagged && player.gameMode == GameMode.SURVIVAL) {
             // First tag — disable flight + elytra. We MUST also clear
@@ -110,7 +117,7 @@ class CombatManager(private val plugin: Joshymc) {
                     CommunicationsManager.Category.COMBAT
                 )
             }
-            if (player.isGliding) {
+            if (player.isGliding && !allowElytraInCombat) {
                 player.isGliding = false
                 plugin.commsManager.send(player,
                     Component.text("Elytra disabled — you are in combat!", NamedTextColor.RED),
@@ -127,15 +134,12 @@ class CombatManager(private val plugin: Joshymc) {
 
     fun isTagged(player: Player): Boolean {
         val expiry = combatTags[player.uniqueId] ?: return false
-        if (System.currentTimeMillis() >= expiry) {
-            combatTags.remove(player.uniqueId)
-            return false
-        }
-        return true
+        return System.currentTimeMillis() < expiry
     }
 
     fun untag(player: Player) {
         combatTags.remove(player.uniqueId)
+        plugin.rankManager.refreshCollisionIfChanged(player)
         restoreFlightIfEligible(player)
     }
 
@@ -169,8 +173,9 @@ class CombatManager(private val plugin: Joshymc) {
         val loc = player.location
         val world = loc.world
 
-        // Store inventory before clearing
-        val invContents = player.inventory.contents.map { it?.clone() }.toTypedArray()
+        // Store inventory before clearing. Use storageContents (36 main slots only) so
+        // armor and offhand are never double-counted — they are captured separately below.
+        val invContents = player.inventory.storageContents.map { it?.clone() }.toTypedArray()
         val armorContents = player.inventory.armorContents.map { it?.clone() }.toTypedArray()
         val offhand = player.inventory.itemInOffHand.clone()
 
@@ -262,6 +267,8 @@ class CombatManager(private val plugin: Joshymc) {
     }
 
     fun isCombatNPC(entityUuid: UUID): Boolean = activeNPCs.containsKey(entityUuid)
+
+    fun isCombatLogged(player: Player): Boolean = combatLoggedPlayers.contains(player.uniqueId)
 
     private fun dropLoot(loc: org.bukkit.Location, npc: CombatNPC) {
         val world = loc.world

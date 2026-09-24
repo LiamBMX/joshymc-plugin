@@ -21,16 +21,53 @@ import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import java.util.Base64
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class TeamManager(private val plugin: Joshymc) : Listener {
+
+    companion object {
+        const val MAX_TEAM_SIZE = 10
+        const val DEFAULT_BOUNTY_AMOUNT = 10_000.0
+        // Same ceiling OrderManager uses for escrow — keeps GUI increments/custom
+        // input from overflowing into Infinity/NaN territory (issue #556).
+        const val MAX_BOUNTY_AMOUNT = 1.0e15
+    }
 
     data class TeamInfo(val name: String, val displayName: String, val ownerUuid: String, val createdAt: Long)
     data class TeamMember(val uuid: String, val teamName: String, val role: String, val joinedAt: Long)
     data class BountyInfo(val id: Int, val targetUuid: String, val targetName: String, val placedByUuid: String, val placedByName: String, val amount: Double, val placedAt: Long)
+    data class TeamRanking(
+        val name: String,
+        val displayName: String,
+        val ownerUuid: String,
+        val memberCount: Int,
+        val balance: Double,
+        val kills: Long,
+        val isOpen: Boolean
+    )
+
+    enum class TeamSort { KILLS, BALANCE }
+
+    /** In-progress `/bounty` GUI placement flow state (issue #556). */
+    data class BountySession(
+        var targetUuid: UUID? = null,
+        var targetName: String? = null,
+        var amount: Double = DEFAULT_BOUNTY_AMOUNT,
+        var playerSelectPage: Int = 0
+    )
 
     private val openEchests = mutableMapOf<UUID, String>() // player UUID -> team name
+    private val teamChatEnabled = mutableSetOf<UUID>()
+
+    // Bounty GUI session state — AsyncChatEvent runs off the main thread, so these
+    // must be thread-safe (issue #556).
+    private val bountySessions = ConcurrentHashMap<UUID, BountySession>()
+    private val awaitingBountyAmountInput = ConcurrentHashMap.newKeySet<UUID>()
 
     fun start() {
+        bountySessions.clear()
+        awaitingBountyAmountInput.clear()
+
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS teams (
                 name TEXT PRIMARY KEY,
@@ -100,6 +137,22 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
+        try {
+            plugin.databaseManager.execute("ALTER TABLE teams ADD COLUMN last_renamed_at INTEGER DEFAULT 0")
+        } catch (_: Exception) {}
+
+        try {
+            plugin.databaseManager.execute("ALTER TABLE teams ADD COLUMN pvp_enabled INTEGER NOT NULL DEFAULT 0")
+        } catch (_: Exception) {}
+
+        try {
+            plugin.databaseManager.execute("ALTER TABLE teams ADD COLUMN is_open INTEGER NOT NULL DEFAULT 0")
+        } catch (_: Exception) {}
+
+        try {
+            plugin.databaseManager.execute("ALTER TABLE teams ADD COLUMN total_kills INTEGER NOT NULL DEFAULT 0")
+        } catch (_: Exception) {}
+
         plugin.logger.info("[Teams] TeamManager started.")
     }
 
@@ -123,6 +176,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
 
     fun deleteTeam(name: String): Boolean {
         val team = getTeam(name) ?: return false
+        getTeamMembers(name).forEach { teamChatEnabled.remove(UUID.fromString(it.uuid)) }
         plugin.databaseManager.execute("DELETE FROM team_invites WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_members WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_balances WHERE team_name = ?", name)
@@ -201,6 +255,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         ) { true } ?: return false
 
         if (getPlayerTeam(uuid) != null) return false
+        if (getTeamMembers(teamName).size >= MAX_TEAM_SIZE) return false
 
         plugin.databaseManager.execute(
             "DELETE FROM team_invites WHERE uuid = ? AND team_name = ?",
@@ -221,6 +276,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
 
         if (member == "owner") return false
 
+        teamChatEnabled.remove(uuid)
         plugin.databaseManager.execute(
             "DELETE FROM team_members WHERE uuid = ? AND team_name = ?",
             uuid.toString(), teamName
@@ -232,6 +288,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         val role = getPlayerRole(uuid) ?: return false
         if (role == "owner") return false
 
+        teamChatEnabled.remove(uuid)
         plugin.databaseManager.execute("DELETE FROM team_members WHERE uuid = ?", uuid.toString())
         return true
     }
@@ -285,6 +342,57 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         plugin.databaseManager.execute(
             "UPDATE teams SET owner_uuid = ? WHERE name = ?",
             newOwnerUuid.toString(), teamName
+        )
+        return true
+    }
+
+    fun renameTeam(teamName: String, newDisplayName: String) {
+        plugin.databaseManager.execute(
+            "UPDATE teams SET display_name = ?, last_renamed_at = ? WHERE name = ?",
+            newDisplayName, System.currentTimeMillis(), teamName
+        )
+    }
+
+    fun getLastRenamedAt(teamName: String): Long {
+        return plugin.databaseManager.queryFirst(
+            "SELECT last_renamed_at FROM teams WHERE name = ?", teamName
+        ) { rs -> rs.getLong("last_renamed_at") } ?: 0L
+    }
+
+    fun isTeamPvpEnabled(teamName: String): Boolean {
+        return plugin.databaseManager.queryFirst(
+            "SELECT pvp_enabled FROM teams WHERE name = ?", teamName
+        ) { rs -> rs.getInt("pvp_enabled") == 1 } ?: false
+    }
+
+    fun setTeamPvp(teamName: String, enabled: Boolean) {
+        plugin.databaseManager.execute(
+            "UPDATE teams SET pvp_enabled = ? WHERE name = ?",
+            if (enabled) 1 else 0, teamName
+        )
+    }
+
+    fun isTeamOpen(teamName: String): Boolean {
+        return plugin.databaseManager.queryFirst(
+            "SELECT is_open FROM teams WHERE name = ?", teamName
+        ) { rs -> rs.getInt("is_open") == 1 } ?: false
+    }
+
+    fun setTeamOpen(teamName: String, open: Boolean) {
+        plugin.databaseManager.execute(
+            "UPDATE teams SET is_open = ? WHERE name = ?",
+            if (open) 1 else 0, teamName
+        )
+    }
+
+    fun joinOpenTeam(uuid: UUID, teamName: String): Boolean {
+        if (!isTeamOpen(teamName)) return false
+        if (getPlayerTeam(uuid) != null) return false
+        if (getTeamMembers(teamName).size >= MAX_TEAM_SIZE) return false
+
+        plugin.databaseManager.execute(
+            "INSERT INTO team_members (uuid, team_name, role, joined_at) VALUES (?, ?, ?, ?)",
+            uuid.toString(), teamName, "member", System.currentTimeMillis()
         )
         return true
     }
@@ -347,6 +455,57 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         )
     }
 
+    // ── Team kills / leaderboard methods ──
+
+    /**
+     * Historical kill counter on the team itself (not derived from current
+     * members' personal stats), so it survives members leaving/joining.
+     */
+    fun addTeamKill(teamName: String) {
+        plugin.databaseManager.execute(
+            "UPDATE teams SET total_kills = total_kills + 1 WHERE name = ?", teamName
+        )
+    }
+
+    fun getTeamKills(teamName: String): Long {
+        return plugin.databaseManager.queryFirst(
+            "SELECT total_kills FROM teams WHERE name = ?", teamName
+        ) { rs -> rs.getLong("total_kills") } ?: 0L
+    }
+
+    /** One query for every team's rank stats, sorted for the requested category. */
+    fun getTeamRankings(sort: TeamSort): List<TeamRanking> {
+        val rows = plugin.databaseManager.query(
+            """
+            SELECT t.name, t.display_name, t.owner_uuid, t.is_open, t.total_kills AS kills,
+                   COALESCE(tb.balance, 0) AS balance,
+                   (SELECT COUNT(*) FROM team_members WHERE team_name = t.name) AS member_count
+            FROM teams t
+            LEFT JOIN team_balances tb ON tb.team_name = t.name
+            """.trimIndent()
+        ) { rs ->
+            TeamRanking(
+                name = rs.getString("name"),
+                displayName = rs.getString("display_name"),
+                ownerUuid = rs.getString("owner_uuid"),
+                memberCount = rs.getInt("member_count"),
+                balance = rs.getDouble("balance"),
+                kills = rs.getLong("kills"),
+                isOpen = rs.getInt("is_open") == 1
+            )
+        }
+
+        val comparator = when (sort) {
+            TeamSort.KILLS -> compareByDescending<TeamRanking> { it.kills }
+                .thenByDescending { it.balance }
+                .thenBy { it.displayName.lowercase() }
+            TeamSort.BALANCE -> compareByDescending<TeamRanking> { it.balance }
+                .thenByDescending { it.kills }
+                .thenBy { it.displayName.lowercase() }
+        }
+        return rows.sortedWith(comparator)
+    }
+
     // ── Team echest methods ──
 
     fun openTeamEchest(player: Player, teamName: String) {
@@ -377,8 +536,14 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             "DELETE FROM team_echests WHERE team_name = ?", teamName
         )
 
-        openEchests[player.uniqueId] = teamName
+        // player.openInventory() closes whatever inventory the player currently
+        // has open first (e.g. the /team GUI, if this was opened via its Team
+        // Ender Chest button), firing InventoryCloseEvent for it. Track AFTER
+        // that call returns so onEchestClose doesn't mistake that stale close
+        // for the echest closing and save the wrong inventory's contents into
+        // team_echests (issue #837).
         player.openInventory(inv)
+        openEchests[player.uniqueId] = teamName
     }
 
     fun saveTeamEchest(teamName: String, inventory: Inventory) {
@@ -411,6 +576,8 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onEchestQuit(event: PlayerQuitEvent) {
         val player = event.player
+        teamChatEnabled.remove(player.uniqueId)
+        clearBountySession(player.uniqueId)
         val teamName = openEchests.remove(player.uniqueId) ?: return
         val inv = player.openInventory.topInventory
         saveTeamEchest(teamName, inv)
@@ -428,35 +595,124 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    private fun mapBountyRow(rs: java.sql.ResultSet): BountyInfo = BountyInfo(
+        rs.getInt("id"),
+        rs.getString("target_uuid"),
+        rs.getString("target_name"),
+        rs.getString("placed_by_uuid"),
+        rs.getString("placed_by_name"),
+        rs.getDouble("amount"),
+        rs.getLong("placed_at")
+    )
+
     fun getBounties(): List<BountyInfo> {
-        return plugin.databaseManager.query("SELECT * FROM bounties ORDER BY amount DESC") { rs ->
-            BountyInfo(
-                rs.getInt("id"),
-                rs.getString("target_uuid"),
-                rs.getString("target_name"),
-                rs.getString("placed_by_uuid"),
-                rs.getString("placed_by_name"),
-                rs.getDouble("amount"),
-                rs.getLong("placed_at")
-            )
-        }
+        // Secondary "id ASC" tiebreak keeps ordering stable/predictable across
+        // refreshes when two bounties share the same amount (bounty-list GUI, #494).
+        return plugin.databaseManager.query("SELECT * FROM bounties ORDER BY amount DESC, id ASC") { rs -> mapBountyRow(rs) }
+    }
+
+    fun getBounty(id: Int): BountyInfo? {
+        return plugin.databaseManager.queryFirst("SELECT * FROM bounties WHERE id = ?", id) { rs -> mapBountyRow(rs) }
     }
 
     fun getBountiesOnPlayer(uuid: UUID): List<BountyInfo> {
         return plugin.databaseManager.query(
-            "SELECT * FROM bounties WHERE target_uuid = ? ORDER BY amount DESC",
+            "SELECT * FROM bounties WHERE target_uuid = ? ORDER BY amount DESC, id ASC",
             uuid.toString()
-        ) { rs ->
-            BountyInfo(
-                rs.getInt("id"),
-                rs.getString("target_uuid"),
-                rs.getString("target_name"),
-                rs.getString("placed_by_uuid"),
-                rs.getString("placed_by_name"),
-                rs.getDouble("amount"),
-                rs.getLong("placed_at")
-            )
+        ) { rs -> mapBountyRow(rs) }
+    }
+
+    /** Bounties the given player has personally placed — backs the "My Bounties" GUI (issue #556). */
+    fun getBountiesPlacedBy(uuid: UUID): List<BountyInfo> {
+        return plugin.databaseManager.query(
+            "SELECT * FROM bounties WHERE placed_by_uuid = ? ORDER BY amount DESC, id ASC",
+            uuid.toString()
+        ) { rs -> mapBountyRow(rs) }
+    }
+
+    /**
+     * Shared success message + server broadcast for a newly placed bounty, used by
+     * both `/bounty set` and the Place Bounty GUI flow (issue #556) so there's a
+     * single place that describes what placing a bounty looks like to everyone.
+     */
+    fun announceBountyPlaced(placer: Player, target: Player, amount: Double) {
+        plugin.commsManager.send(
+            placer,
+            Component.text("Placed a ", NamedTextColor.GRAY)
+                .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GREEN))
+                .append(Component.text(" bounty on ", NamedTextColor.GRAY))
+                .append(Component.text(target.name, NamedTextColor.WHITE)),
+            CommunicationsManager.Category.DEFAULT
+        )
+
+        Bukkit.getOnlinePlayers().forEach { p ->
+            if (p != placer) {
+                plugin.commsManager.send(
+                    p,
+                    Component.text(placer.name, NamedTextColor.WHITE)
+                        .append(Component.text(" placed a ", NamedTextColor.GRAY))
+                        .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GREEN))
+                        .append(Component.text(" bounty on ", NamedTextColor.GRAY))
+                        .append(Component.text(target.name, NamedTextColor.RED)),
+                    CommunicationsManager.Category.DEFAULT
+                )
+            }
         }
+    }
+
+    // ── Bounty GUI session state (issue #556) ──
+
+    fun getOrCreateBountySession(uuid: UUID): BountySession = bountySessions.getOrPut(uuid) { BountySession() }
+
+    fun getBountySession(uuid: UUID): BountySession? = bountySessions[uuid]
+
+    fun clearBountySession(uuid: UUID) {
+        bountySessions.remove(uuid)
+        awaitingBountyAmountInput.remove(uuid)
+    }
+
+    fun beginAwaitingBountyAmountInput(uuid: UUID) {
+        awaitingBountyAmountInput.add(uuid)
+    }
+
+    fun cancelAwaitingBountyAmountInput(uuid: UUID) {
+        awaitingBountyAmountInput.remove(uuid)
+    }
+
+    fun isAwaitingBountyAmountInput(uuid: UUID): Boolean = uuid in awaitingBountyAmountInput
+
+    private fun handleBountyAmountChatInput(player: Player, raw: String) {
+        if (!awaitingBountyAmountInput.contains(player.uniqueId)) return
+        val session = bountySessions[player.uniqueId]
+        if (session == null) {
+            awaitingBountyAmountInput.remove(player.uniqueId)
+            return
+        }
+
+        if (raw.equals("cancel", ignoreCase = true)) {
+            awaitingBountyAmountInput.remove(player.uniqueId)
+            plugin.commsManager.send(player, Component.text("Cancelled.", NamedTextColor.GRAY), CommunicationsManager.Category.DEFAULT)
+            com.liam.joshymc.gui.bounty.BountyPlaceGui.openAmountSelect(plugin, player)
+            return
+        }
+
+        val amount = plugin.economyManager.parseAmount(raw)
+        if (amount == null || !amount.isFinite() || amount <= 0.0) {
+            plugin.commsManager.send(player, Component.text("Invalid amount. Type a positive number, or 'cancel'.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+        if (amount > MAX_BOUNTY_AMOUNT) {
+            plugin.commsManager.send(player, Component.text("That amount is too large.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+        if (!plugin.economyManager.has(player.uniqueId, amount)) {
+            plugin.commsManager.send(player, Component.text("You don't have enough money for that amount.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        session.amount = amount
+        awaitingBountyAmountInput.remove(player.uniqueId)
+        com.liam.joshymc.gui.bounty.BountyPlaceGui.openAmountSelect(plugin, player)
     }
 
     fun getTotalBounty(uuid: UUID): Double {
@@ -506,24 +762,16 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    fun cancelBounty(id: Int, playerUuid: UUID): Boolean {
-        val bounty = plugin.databaseManager.queryFirst(
-            "SELECT * FROM bounties WHERE id = ? AND placed_by_uuid = ?",
-            id, playerUuid.toString()
-        ) { rs ->
-            BountyInfo(
-                rs.getInt("id"),
-                rs.getString("target_uuid"),
-                rs.getString("target_name"),
-                rs.getString("placed_by_uuid"),
-                rs.getString("placed_by_name"),
-                rs.getDouble("amount"),
-                rs.getLong("placed_at")
-            )
-        } ?: return false
+    /**
+     * Cancels a bounty by id and refunds whoever originally placed it. Callers
+     * (command + GUI) are responsible for the `joshymc.bounty.cancel` permission
+     * check server-side before calling this — see issue #494.
+     */
+    fun cancelBounty(id: Int): Boolean {
+        val bounty = getBounty(id) ?: return false
 
         plugin.databaseManager.execute("DELETE FROM bounties WHERE id = ?", id)
-        plugin.economyManager.deposit(playerUuid, bounty.amount)
+        plugin.economyManager.deposit(UUID.fromString(bounty.placedByUuid), bounty.amount)
         return true
     }
 
@@ -532,21 +780,44 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.LOW)
     fun onChat(event: AsyncChatEvent) {
         val player = event.player
-        val plainMessage = PlainTextComponentSerializer.plainText().serialize(event.message())
 
-        if (!plainMessage.startsWith("!")) return
-
-        event.isCancelled = true
-
-        val teamName = getPlayerTeam(player.uniqueId) ?: run {
-            plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+        // Bounty GUI custom-amount capture (issue #556) — takes priority over team
+        // chat so a player mid-flow can't accidentally send it as a team message.
+        if (player.uniqueId in awaitingBountyAmountInput) {
+            event.isCancelled = true
+            val raw = PlainTextComponentSerializer.plainText().serialize(event.message()).trim()
+            plugin.server.scheduler.runTask(plugin, Runnable { handleBountyAmountChatInput(player, raw) })
             return
         }
 
-        val msg = plainMessage.removePrefix("!").trim()
-        if (msg.isEmpty()) return
+        val plainMessage = PlainTextComponentSerializer.plainText().serialize(event.message())
 
-        sendTeamMessage(player, teamName, msg)
+        if (plainMessage.startsWith("!")) {
+            event.isCancelled = true
+            val teamName = getPlayerTeam(player.uniqueId) ?: run {
+                plugin.commsManager.send(player, Component.text("You are not in a team.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                return
+            }
+            val msg = plainMessage.removePrefix("!").trim()
+            if (msg.isEmpty()) return
+            sendTeamMessage(player, teamName, msg)
+            return
+        }
+
+        if (player.uniqueId in teamChatEnabled) {
+            val teamName = getPlayerTeam(player.uniqueId) ?: run {
+                teamChatEnabled.remove(player.uniqueId)
+                return
+            }
+            event.isCancelled = true
+            sendTeamMessage(player, teamName, plainMessage)
+        }
+    }
+
+    fun isTeamChatEnabled(uuid: UUID): Boolean = uuid in teamChatEnabled
+
+    fun setTeamChat(uuid: UUID, enabled: Boolean) {
+        if (enabled) teamChatEnabled.add(uuid) else teamChatEnabled.remove(uuid)
     }
 
     fun sendTeamMessage(sender: Player, teamName: String, message: String) {
@@ -577,12 +848,15 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         if (attacker == null || attacker == victim) return
 
         if (isTeammate(attacker.uniqueId, victim.uniqueId)) {
-            event.isCancelled = true
-            plugin.commsManager.send(
-                attacker,
-                Component.text("You cannot hurt your teammate!", NamedTextColor.RED),
-                CommunicationsManager.Category.DEFAULT
-            )
+            val teamName = getPlayerTeam(attacker.uniqueId) ?: return
+            if (!isTeamPvpEnabled(teamName)) {
+                event.isCancelled = true
+                plugin.commsManager.send(
+                    attacker,
+                    Component.text("You cannot hurt your teammate! (Team PvP is off)", NamedTextColor.RED),
+                    CommunicationsManager.Category.DEFAULT
+                )
+            }
         }
     }
 

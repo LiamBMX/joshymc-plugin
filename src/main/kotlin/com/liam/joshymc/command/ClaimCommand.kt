@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gui.claim.ClaimMainGui
 import com.liam.joshymc.manager.ClaimManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -42,11 +43,19 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             handleUnclaim(sender); return true
         }
 
+        if (args.isEmpty()) {
+            ClaimMainGui.open(plugin, sender)
+            return true
+        }
+
         when (sub) {
             "wand" -> handleWand(sender)
             "trust" -> handleTrust(sender, args)
             "untrust" -> handleUntrust(sender, args)
             "trusted" -> handleTrustedList(sender)
+            "deny" -> handleDeny(sender, args)
+            "undeny" -> handleUndeny(sender, args)
+            "denied" -> handleDeniedList(sender)
             "show" -> handleShow(sender)
             "team" -> handleTeam(sender)
             "personal" -> handlePersonal(sender)
@@ -56,6 +65,8 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "blocks" -> handleBlocks(sender, args)
             "expand" -> handleExpand(sender, args)
             "shrink" -> handleShrink(sender, args)
+            "pvp" -> handlePvp(sender, args)
+            "tnt" -> handleTnt(sender, args)
             else -> showHelp(sender)
         }
         return true
@@ -173,6 +184,65 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
         val names = trusted.mapNotNull { Bukkit.getOfflinePlayer(it).name }.joinToString(", ")
         plugin.commsManager.send(player, Component.text("Trusted: ", NamedTextColor.GREEN).append(Component.text(names, NamedTextColor.WHITE)))
+    }
+
+    private fun handleDeny(player: Player, args: Array<out String>) {
+        val targetName = args.getOrNull(1)
+        if (targetName == null) {
+            plugin.commsManager.send(player, Component.text("Usage: /claim deny <player>", NamedTextColor.RED))
+            return
+        }
+        val claim = plugin.claimManager.getClaimAt(player.location)
+        if (claim == null) { plugin.commsManager.send(player, Component.text("You're not standing in a claim.", NamedTextColor.RED)); return }
+        if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) {
+            plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED)); return
+        }
+        val target = Bukkit.getOfflinePlayer(targetName)
+        if (target.uniqueId == claim.ownerUuid) {
+            plugin.commsManager.send(player, Component.text("You cannot deny the claim owner.", NamedTextColor.RED)); return
+        }
+        if (plugin.claimManager.denyPlayer(claim, target.uniqueId)) {
+            plugin.claimManager.untrustPlayer(claim, target.uniqueId)
+            plugin.commsManager.send(player, Component.text("Denied $targetName from entering this claim.", NamedTextColor.GREEN))
+            Bukkit.getPlayer(target.uniqueId)?.let { online ->
+                if (plugin.claimManager.isDenied(online, online.location)) {
+                    online.teleport(online.location)
+                }
+            }
+        } else {
+            plugin.commsManager.send(player, Component.text("$targetName is already denied.", NamedTextColor.RED))
+        }
+    }
+
+    private fun handleUndeny(player: Player, args: Array<out String>) {
+        val targetName = args.getOrNull(1)
+        if (targetName == null) {
+            plugin.commsManager.send(player, Component.text("Usage: /claim undeny <player>", NamedTextColor.RED))
+            return
+        }
+        val claim = plugin.claimManager.getClaimAt(player.location)
+        if (claim == null) { plugin.commsManager.send(player, Component.text("You're not standing in a claim.", NamedTextColor.RED)); return }
+        if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) {
+            plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED)); return
+        }
+        val target = Bukkit.getOfflinePlayer(targetName)
+        if (plugin.claimManager.undenyPlayer(claim, target.uniqueId)) {
+            plugin.commsManager.send(player, Component.text("$targetName can now enter this claim.", NamedTextColor.GREEN))
+        } else {
+            plugin.commsManager.send(player, Component.text("$targetName is not denied.", NamedTextColor.RED))
+        }
+    }
+
+    private fun handleDeniedList(player: Player) {
+        val claim = plugin.claimManager.getClaimAt(player.location)
+        if (claim == null) { plugin.commsManager.send(player, Component.text("You're not standing in a claim.", NamedTextColor.RED)); return }
+        val denied = plugin.claimManager.getDeniedPlayers(claim)
+        if (denied.isEmpty()) {
+            plugin.commsManager.send(player, Component.text("No denied players on this claim.", NamedTextColor.GRAY))
+            return
+        }
+        val names = denied.mapNotNull { Bukkit.getOfflinePlayer(it).name }.joinToString(", ")
+        plugin.commsManager.send(player, Component.text("Denied: ", NamedTextColor.RED).append(Component.text(names, NamedTextColor.WHITE)))
     }
 
     private fun handleWand(player: Player) {
@@ -367,6 +437,56 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
     }
 
+    private fun handlePvp(player: Player, args: Array<out String>) {
+        val claim = plugin.claimManager.getClaimAt(player.location)
+        if (claim == null) {
+            plugin.commsManager.send(player, Component.text("You're not standing in a claim.", NamedTextColor.RED))
+            return
+        }
+        if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) {
+            plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED))
+            return
+        }
+        val toggle = args.getOrNull(1)?.lowercase()
+        if (toggle != "on" && toggle != "off") {
+            plugin.commsManager.send(player, Component.text("Usage: /claim pvp <on|off>", NamedTextColor.RED))
+            return
+        }
+        val enabled = toggle == "on"
+        plugin.claimManager.setClaimPvp(claim.id, enabled)
+        plugin.commsManager.send(
+            player,
+            Component.text("PvP in this claim is now ", NamedTextColor.GREEN)
+                .append(Component.text(if (enabled) "enabled" else "disabled", if (enabled) NamedTextColor.RED else NamedTextColor.GRAY))
+                .append(Component.text(".", NamedTextColor.GREEN))
+        )
+    }
+
+    private fun handleTnt(player: Player, args: Array<out String>) {
+        val claim = plugin.claimManager.getClaimAt(player.location)
+        if (claim == null) {
+            plugin.commsManager.send(player, Component.text("You're not standing in a claim.", NamedTextColor.RED))
+            return
+        }
+        if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) {
+            plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED))
+            return
+        }
+        val toggle = args.getOrNull(1)?.lowercase()
+        if (toggle != "on" && toggle != "off") {
+            plugin.commsManager.send(player, Component.text("Usage: /claim tnt <on|off>", NamedTextColor.RED))
+            return
+        }
+        val enabled = toggle == "on"
+        plugin.claimManager.setClaimTnt(claim.id, enabled)
+        plugin.commsManager.send(
+            player,
+            Component.text("TNT in this claim is now ", NamedTextColor.GREEN)
+                .append(Component.text(if (enabled) "enabled" else "disabled", if (enabled) NamedTextColor.RED else NamedTextColor.GRAY))
+                .append(Component.text(".", NamedTextColor.GREEN))
+        )
+    }
+
     private fun showHelp(player: Player) {
         val gold = TextColor.color(0xFFD700)
         val msg = Component.text()
@@ -385,6 +505,10 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             .append(Component.text("  /claim blocks", NamedTextColor.YELLOW)).append(Component.text(" — claim block balance\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim expand [dir] <amount>", NamedTextColor.YELLOW)).append(Component.text(" — expand claim\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim shrink [dir] <amount>", NamedTextColor.YELLOW)).append(Component.text(" — shrink claim edge\n", NamedTextColor.GRAY))
+            .append(Component.text("  /claim deny <player>", NamedTextColor.YELLOW)).append(Component.text(" — ban player from entering\n", NamedTextColor.GRAY))
+            .append(Component.text("  /claim undeny <player>", NamedTextColor.YELLOW)).append(Component.text(" — remove entry ban\n", NamedTextColor.GRAY))
+            .append(Component.text("  /claim pvp <on|off>", NamedTextColor.YELLOW)).append(Component.text(" — toggle PvP in your claim\n", NamedTextColor.GRAY))
+            .append(Component.text("  /claim tnt <on|off>", NamedTextColor.YELLOW)).append(Component.text(" — toggle TNT explosions in your claim\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim team", NamedTextColor.YELLOW)).append(Component.text(" — share with team\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim personal", NamedTextColor.YELLOW)).append(Component.text(" — un-share\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim map", NamedTextColor.YELLOW)).append(Component.text(" — nearby claims\n", NamedTextColor.GRAY))
@@ -398,11 +522,12 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (alias.equals("unclaim", true)) return emptyList()
         val directions = listOf("north", "south", "east", "west")
         return when (args.size) {
-            1 -> listOf("wand", "trust", "untrust", "trusted", "show", "team", "personal", "map", "info", "list", "blocks", "expand", "shrink", "help").filter { it.startsWith(args[0].lowercase()) }
+            1 -> listOf("wand", "trust", "untrust", "trusted", "deny", "undeny", "denied", "show", "team", "personal", "map", "info", "list", "blocks", "expand", "shrink", "pvp", "tnt", "help").filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
                 "blocks" -> listOf("give").filter { it.startsWith(args[1].lowercase()) }
-                "trust", "untrust" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], true) }
+                "trust", "untrust", "deny", "undeny" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], true) }
                 "expand", "shrink" -> directions.filter { it.startsWith(args[1].lowercase()) }
+                "pvp", "tnt" -> listOf("on", "off").filter { it.startsWith(args[1].lowercase()) }
                 else -> emptyList()
             }
             3 -> when {

@@ -10,6 +10,7 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.scoreboard.Scoreboard
 import java.util.UUID
 
@@ -22,11 +23,25 @@ class RankManager(private val plugin: Joshymc) : Listener {
     data class Rank(
         val id: String,
         val displayTag: String,   // e.g., "&c&lAdmin"
-        val weight: Int           // Higher = more important
+        val weight: Int,          // Higher = more important
+        val category: String = "Ranks"  // Grouping shown by /rank list, e.g. "Staff Ranks"
+    )
+
+    /**
+     * A configurable EXTRA-slot perk for a purchasable rank (Scout, Pathfinder, ...).
+     * These ranks live entirely in LuckPerms/permissions — not in [ranks] — so eligibility
+     * is resolved via the "joshymc.rankperk.<key>" permission node, same pattern as /mcr.
+     */
+    data class RankPerk(
+        val key: String,
+        val auctionExtraListings: Int,
+        val ordersExtraOrders: Int
     )
 
     private val ranks = mutableMapOf<String, Rank>()
     private val playerRanks = mutableMapOf<UUID, MutableSet<String>>() // UUID -> set of rank IDs
+    private val collisionStates = mutableMapOf<UUID, Boolean>()
+    private val rankPerks = mutableListOf<RankPerk>()
 
     private val legacy = LegacyComponentSerializer.legacyAmpersand()
 
@@ -44,6 +59,9 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
         // Load ranks from config
         loadRanks()
+
+        // Load rank-perk EXTRA-slot bonuses (Auction House / Buy Orders) from config
+        loadRankPerks()
 
         // Load player ranks from DB
         loadPlayerRanks()
@@ -81,6 +99,7 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onQuit(event: PlayerQuitEvent) {
+        collisionStates.remove(event.player.uniqueId)
         // Remove the leaving player's entry from every viewer's scoreboard
         // so the team doesn't keep an orphan.
         for (viewer in Bukkit.getOnlinePlayers()) {
@@ -90,6 +109,18 @@ class RankManager(private val plugin: Joshymc) : Listener {
                 .filter { it.name.startsWith(TEAM_PREFIX) && it.hasEntry(event.player.name) }
                 .forEach { it.removeEntry(event.player.name) }
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onWorldChange(event: PlayerChangedWorldEvent) {
+        refreshCollisionIfChanged(event.player)
+    }
+
+    /** Update all viewers only when a player's collision-team variant changes. */
+    fun refreshCollisionIfChanged(player: Player) {
+        if (!player.isOnline) return
+        val collide = shouldCollide(player)
+        if (collisionStates[player.uniqueId] != collide) applyTeamFor(player)
     }
 
     /**
@@ -102,6 +133,7 @@ class RankManager(private val plugin: Joshymc) : Listener {
      * after temporarily moving the player to a custom team.
      */
     fun applyTeamFor(player: Player) {
+        collisionStates[player.uniqueId] = shouldCollide(player)
         // 1. Add this player to the right team on every viewer's board so
         //    everyone sees their nameplate prefix.
         for (viewer in Bukkit.getOnlinePlayers()) {
@@ -119,8 +151,8 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     /**
      * Register a JoshyMC rank team for every rank on [board] if not present.
-     * Existing teams keep their entries — we only update the prefix to keep
-     * config edits live. Two variants per rank: `<name>_y` (collisions
+     * Existing teams keep their entries and settings. Two variants per rank:
+     * `<name>_y` (collisions
      * enabled) and `<name>_n` (collisions disabled). Same prefix on both,
      * differs only by COLLISION_RULE — the right variant is chosen per
      * player based on [shouldCollide].
@@ -131,13 +163,15 @@ class RankManager(private val plugin: Joshymc) : Listener {
             for (collide in listOf(true, false)) {
                 val name = teamNameFor(rank, idx, collide)
                 val existing = board.getTeam(name)
-                val team = existing ?: board.registerNewTeam(name)
-                team.prefix(legacy.deserialize("&8[${rank.displayTag}&8] &r"))
-                team.setOption(
-                    org.bukkit.scoreboard.Team.Option.COLLISION_RULE,
-                    if (collide) org.bukkit.scoreboard.Team.OptionStatus.ALWAYS
-                    else org.bukkit.scoreboard.Team.OptionStatus.NEVER
-                )
+                if (existing == null) {
+                    val team = board.registerNewTeam(name)
+                    team.prefix(legacy.deserialize("&8[${rank.displayTag}&8] &r"))
+                    team.setOption(
+                        org.bukkit.scoreboard.Team.Option.COLLISION_RULE,
+                        if (collide) org.bukkit.scoreboard.Team.OptionStatus.ALWAYS
+                        else org.bukkit.scoreboard.Team.OptionStatus.NEVER
+                    )
+                }
             }
         }
     }
@@ -226,35 +260,35 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     private fun loadRanks() {
         ranks.clear()
-        var section = plugin.config.getConfigurationSection("ranks.list")
+        val section = plugin.config.getConfigurationSection("ranks.list")
 
-        // If no ranks in config, add defaults and save
+        // No ranks.list in config at all (e.g. the admin deliberately removed it to manage
+        // ranks entirely via LuckPerms). Fall back to a code-level "default" rank only, in
+        // memory — never write example ranks back into config.yml. See issue #911.
         if (section == null) {
-            plugin.logger.info("[Ranks] No ranks found in config, creating defaults...")
-            val defaults = mapOf(
-                "owner" to ("&4&lOwner" to 100),
-                "admin" to ("&c&lAdmin" to 90),
-                "mod" to ("&9&lMod" to 80),
-                "helper" to ("&a&lHelper" to 70),
-                "vip" to ("&6&lVIP" to 50),
-                "member" to ("&7Member" to 10),
-                "default" to ("&8Player" to 0)
-            )
-            for ((id, pair) in defaults) {
-                plugin.config.set("ranks.list.$id.tag", pair.first)
-                plugin.config.set("ranks.list.$id.weight", pair.second)
-            }
-            plugin.saveConfig()
-            section = plugin.config.getConfigurationSection("ranks.list")
+            plugin.logger.info("[Ranks] No ranks.list found in config; using a code-level 'default' rank fallback only.")
+            ranks["default"] = Rank("default", "&8Player", 0, "Player Ranks")
+            return
         }
-
-        if (section == null) return
 
         for (id in section.getKeys(false)) {
             val rankSection = section.getConfigurationSection(id) ?: continue
             val tag = rankSection.getString("tag", "&7$id") ?: "&7$id"
             val weight = rankSection.getInt("weight", 0)
-            ranks[id] = Rank(id, tag, weight)
+            val category = rankSection.getString("category", "Ranks") ?: "Ranks"
+            ranks[id] = Rank(id, tag, weight, category)
+        }
+    }
+
+    private fun loadRankPerks() {
+        rankPerks.clear()
+        val section = plugin.config.getConfigurationSection("rank-perks") ?: return
+        for (key in section.getKeys(false)) {
+            val perkSection = section.getConfigurationSection(key) ?: continue
+            // getInt() already falls back to 0 on missing/non-numeric YAML values; clamp negatives too.
+            val auctionExtra = perkSection.getInt("auction-extra-listings", 0).coerceAtLeast(0)
+            val ordersExtra = perkSection.getInt("orders-extra-orders", 0).coerceAtLeast(0)
+            rankPerks.add(RankPerk(key, auctionExtra, ordersExtra))
         }
     }
 
@@ -304,6 +338,20 @@ class RankManager(private val plugin: Joshymc) : Listener {
     fun getPlayerRankIds(uuid: UUID): Set<String> = playerRanks[uuid] ?: emptySet()
 
     /**
+     * Resolves the single highest-applicable purchasable rank-perk for this player, based on
+     * the "joshymc.rankperk.<key>" permission node (granted per LuckPerms group externally).
+     * Bonuses are NOT stacked across inherited groups — only the perk with the largest
+     * auction-extra-listings (Buy Order extra as tiebreaker) among the player's granted
+     * perks is used, so both fields always come from the same rank. Returns null if the
+     * player has no rank-perk permission.
+     */
+    fun getRankPerkBonus(player: Player): RankPerk? {
+        return rankPerks
+            .filter { player.hasPermission("joshymc.rankperk.${it.key}") }
+            .maxWithOrNull(compareBy({ it.auctionExtraListings }, { it.ordersExtraOrders }))
+    }
+
+    /**
      * Set a player's rank. Pass null to remove their rank.
      *
      * If LuckPerms is installed, this also updates the player's parent group so
@@ -338,6 +386,76 @@ class RankManager(private val plugin: Joshymc) : Listener {
         Bukkit.getPlayer(uuid)?.let { applyTeamFor(it) }
 
         syncWithLuckPerms(uuid, rankId)
+    }
+
+    /**
+     * Add ONLY [rankId] to [uuid]'s rank set, leaving every other rank the
+     * player already has untouched. Returns false (no changes made) if the
+     * player already has this rank.
+     */
+    fun addRank(uuid: UUID, rankId: String): Boolean {
+        val set = playerRanks.getOrPut(uuid) { mutableSetOf() }
+        if (rankId in set) return false
+        set.add(rankId)
+        plugin.databaseManager.execute(
+            "INSERT OR IGNORE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
+            uuid.toString(), rankId
+        )
+        // Preserve the default rank alongside any non-default rank so players
+        // retain their base permissions/display when a special rank is added.
+        if (rankId != "default" && ranks.containsKey("default") && set.add("default")) {
+            plugin.databaseManager.execute(
+                "INSERT OR IGNORE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
+                uuid.toString(), "default"
+            )
+            addLuckPermsGroup(uuid, "default")
+        }
+
+        Bukkit.getPlayer(uuid)?.let { applyTeamFor(it) }
+        addLuckPermsGroup(uuid, rankId)
+        return true
+    }
+
+    /**
+     * Remove ONLY [rankId] from [uuid]'s rank set, leaving every other rank
+     * the player has untouched. Returns false (no changes made) if the
+     * player doesn't have this rank.
+     */
+    fun removeRank(uuid: UUID, rankId: String): Boolean {
+        val set = playerRanks[uuid] ?: return false
+        if (rankId !in set) return false
+        set.remove(rankId)
+        if (set.isEmpty()) playerRanks.remove(uuid)
+        plugin.databaseManager.execute(
+            "DELETE FROM player_ranks WHERE uuid = ? AND rank_id = ?",
+            uuid.toString(), rankId
+        )
+
+        Bukkit.getPlayer(uuid)?.let { applyTeamFor(it) }
+        removeLuckPermsGroup(uuid, rankId)
+        return true
+    }
+
+    /** Add a single LuckPerms parent node without touching any other group. */
+    private fun addLuckPermsGroup(uuid: UUID, rankId: String) {
+        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) return
+        val name = Bukkit.getOfflinePlayer(uuid).name ?: return
+        try {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent add $rankId")
+        } catch (e: Exception) {
+            plugin.logger.warning("[Ranks] LuckPerms add failed for $name ($rankId): ${e.message}")
+        }
+    }
+
+    /** Remove a single LuckPerms parent node without touching any other group. */
+    private fun removeLuckPermsGroup(uuid: UUID, rankId: String) {
+        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) return
+        val name = Bukkit.getOfflinePlayer(uuid).name ?: return
+        try {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent remove $rankId")
+        } catch (e: Exception) {
+            plugin.logger.warning("[Ranks] LuckPerms remove failed for $name ($rankId): ${e.message}")
+        }
     }
 
     private fun syncWithLuckPerms(uuid: UUID, rankId: String?) {

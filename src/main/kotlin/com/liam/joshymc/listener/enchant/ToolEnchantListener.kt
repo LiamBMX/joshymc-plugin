@@ -1,7 +1,11 @@
 package com.liam.joshymc.listener.enchant
 
 import com.liam.joshymc.Joshymc
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
+import org.bukkit.GameMode
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.block.data.Ageable
 import org.bukkit.entity.Player
@@ -14,8 +18,10 @@ import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockDamageEvent
 import org.bukkit.event.block.BlockDropItemEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.PlayerInventory
+import org.bukkit.scheduler.BukkitTask
 import java.util.UUID
 
 class ToolEnchantListener(private val plugin: Joshymc) : Listener {
@@ -25,6 +31,10 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
     /** Prevents recursive triggers for explosive and ground_pound. */
     private val explosiveProcessing = mutableSetOf<UUID>()
     private val groundPoundProcessing = mutableSetOf<UUID>()
+
+    // bedrock_breaker — tracks active mining tasks; maxSeconds varies by enchant level
+    private data class BedrockMineData(val location: Location, var elapsed: Int, val maxSeconds: Int, val task: BukkitTask)
+    private val bedrockMining = mutableMapOf<UUID, BedrockMineData>()
 
     // ── Smelt map (autosmelt) ───────────────────────────
 
@@ -167,6 +177,92 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
         ) {
             event.instaBreak = true
         }
+
+        // bedrock_breaker — pickaxe only, survival only, overworld/nether/end/resource only
+        if (isPickaxe(item.type)
+            && enchants.hasEnchant(item, "bedrock_breaker")
+            && event.block.type == Material.BEDROCK
+            && player.gameMode != GameMode.CREATIVE
+        ) {
+            val worldName = player.world.name
+            if (worldName in setOf("spawn", "afk", "pvp")
+                || plugin.arenaManager.isInArena(player)
+                || worldName == plugin.eventManager.eventWorldName
+            ) {
+                player.sendActionBar(Component.text("Bedrock Breaker cannot be used here.", NamedTextColor.RED))
+                return
+            }
+
+            val loc = event.block.location
+
+            // Respect claim protection — cannot mine bedrock in a claim without access
+            if (!plugin.claimManager.canAccess(player, loc)) {
+                player.sendActionBar(Component.text("You don't have access to this claim.", NamedTextColor.RED))
+                return
+            }
+
+            val existing = bedrockMining[player.uniqueId]
+
+            // Already tracking this exact block — don't restart the timer
+            if (existing != null && existing.location == loc) return
+
+            // Different block — cancel the previous task first
+            existing?.task?.cancel()
+            bedrockMining.remove(player.uniqueId)
+
+            val level = enchants.getLevel(item, "bedrock_breaker")
+            val maxSeconds = when (level) {
+                3 -> 30
+                2 -> 45
+                else -> 60
+            }
+
+            val task = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
+                val current = bedrockMining[player.uniqueId] ?: return@Runnable
+                val target = player.getTargetBlockExact(5)
+                val held = player.inventory.itemInMainHand
+
+                // Cancel if the player looks away, switches items, or loses the enchant
+                if (target == null
+                    || target.location != current.location
+                    || !isPickaxe(held.type)
+                    || !enchants.hasEnchant(held, "bedrock_breaker")
+                ) {
+                    current.task.cancel()
+                    bedrockMining.remove(player.uniqueId)
+                    player.sendActionBar(Component.text("Mining interrupted.", NamedTextColor.RED))
+                    return@Runnable
+                }
+
+                current.elapsed++
+                val remaining = current.maxSeconds - current.elapsed
+
+                if (remaining <= 0) {
+                    val block = current.location.block
+                    if (block.type == Material.BEDROCK && plugin.claimManager.canAccess(player, current.location)) {
+                        block.type = Material.AIR
+                        player.playSound(player.location, Sound.BLOCK_STONE_BREAK, 1.0f, 0.8f)
+                        player.sendActionBar(Component.text("Bedrock destroyed!", NamedTextColor.GREEN))
+                    } else if (block.type == Material.BEDROCK) {
+                        player.sendActionBar(Component.text("Mining interrupted — claim access lost.", NamedTextColor.RED))
+                    }
+                    current.task.cancel()
+                    bedrockMining.remove(player.uniqueId)
+                } else {
+                    player.sendActionBar(
+                        Component.text("Mining Bedrock... ", NamedTextColor.YELLOW)
+                            .append(Component.text("${remaining}s remaining", NamedTextColor.GOLD))
+                    )
+                }
+            }, 20L, 20L)
+
+            bedrockMining[player.uniqueId] = BedrockMineData(loc, 0, maxSeconds, task)
+        }
+    }
+
+    @EventHandler
+    fun onPlayerQuit(event: PlayerQuitEvent) {
+        bedrockMining.remove(event.player.uniqueId)?.task?.cancel()
     }
 
     // ═══════════════════════════════════════════════════════
@@ -230,7 +326,7 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
             val explosiveLevel = enchants.getLevel(item, "explosive")
             if (explosiveLevel > 0 && player.uniqueId !in explosiveProcessing) {
                 val chance = 0.05 * explosiveLevel
-                if (Math.random() < chance) {
+                if (Math.random() < chance && !isNearUnauthorizedClaim(player, event.block.location, 5)) {
                     explosiveProcessing.add(player.uniqueId)
                     try {
                         val center = event.block
@@ -349,4 +445,20 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
 
     private fun isTool(type: Material): Boolean =
         isPickaxe(type) || isShovel(type) || isAxe(type) || isHoe(type)
+
+    // Returns true if any block within [radius] blocks (x/z plane) is in a claim the player can't access.
+    // Claims are 2D so we only sweep x/z; a 5-block buffer keeps the explosion away from claim borders.
+    private fun isNearUnauthorizedClaim(player: Player, center: Location, radius: Int): Boolean {
+        val world = center.world ?: return false
+        val cx = center.blockX
+        val cz = center.blockZ
+        val y = center.blockY.toDouble()
+        for (dx in -radius..radius) {
+            for (dz in -radius..radius) {
+                val loc = Location(world, (cx + dx).toDouble(), y, (cz + dz).toDouble())
+                if (plugin.claimManager.getClaimAt(loc) != null && !plugin.claimManager.canAccess(player, loc)) return true
+            }
+        }
+        return false
+    }
 }

@@ -184,6 +184,33 @@ class StorageManager(private val plugin: Joshymc) : Listener {
         plugin.commsManager.send(admin, Component.text("Viewing $targetName's vault #$number.", NamedTextColor.GRAY))
     }
 
+    // ---- Read-only vault snapshot (Moderator Mode view-only access) ----
+
+    /**
+     * Non-destructive read of a vault's stored contents — unlike [openVault]/[openVaultAsAdmin]
+     * this does NOT delete the rows from the DB, so it's safe to use for a read-only peek.
+     */
+    fun getVaultSnapshot(uuid: UUID, number: Int): List<Pair<Int, ItemStack>> {
+        return plugin.databaseManager.query(
+            "SELECT slot, item FROM player_vaults WHERE uuid = ? AND vault_number = ?",
+            uuid.toString(), number
+        ) { rs ->
+            val slot = rs.getInt("slot")
+            val bytes = Base64.getDecoder().decode(rs.getString("item"))
+            slot to ItemStack.deserializeBytes(bytes)
+        }
+    }
+
+    /**
+     * Deletes every vault this player owns, across all vault numbers.
+     * Used by `/playerdata reset` — no bounded "max vaults" check since
+     * historical rows can exist beyond a lowered config max.
+     */
+    fun clearAllVaults(uuid: UUID) {
+        plugin.databaseManager.execute("DELETE FROM player_vaults WHERE uuid = ?", uuid.toString())
+        adminViewingVaults.entries.removeIf { it.value.first == uuid }
+    }
+
     // ---- Save vault ----
 
     fun saveVault(player: Player, number: Int, inventory: Inventory) {
@@ -317,12 +344,6 @@ class StorageManager(private val plugin: Joshymc) : Listener {
 
         // Save own vault if one is open
         val vaultNumber = openVaults.remove(player.uniqueId) ?: return
-
-        val title = event.view.title()
-        val expectedTitle = Component.text("$VAULT_TITLE_PREFIX$vaultNumber")
-            .decoration(TextDecoration.ITALIC, false)
-        if (title != expectedTitle) return
-
         saveVault(player, vaultNumber, event.inventory)
     }
 

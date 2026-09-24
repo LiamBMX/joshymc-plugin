@@ -41,8 +41,10 @@ class TimezoneManager(private val plugin: Joshymc) {
     }
 
     /** Player's chosen timezone, falling back to EST (America/New_York). */
-    fun zoneFor(player: Player): ZoneId =
-        cache[player.uniqueId] ?: DEFAULT_ZONE
+    fun zoneFor(player: Player): ZoneId = zoneFor(player.uniqueId)
+
+    /** Same as [zoneFor], but usable before the player has an online [Player] object (e.g. pre-login). */
+    fun zoneFor(uuid: UUID): ZoneId = cache[uuid] ?: DEFAULT_ZONE
 
     /** Returns null when nothing's been set; useful for /timezone with no args. */
     fun explicitZoneFor(player: Player): ZoneId? = cache[player.uniqueId]

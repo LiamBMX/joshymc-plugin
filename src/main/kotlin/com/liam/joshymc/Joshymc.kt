@@ -6,7 +6,9 @@ import com.liam.joshymc.link.LinkManager
 import com.liam.joshymc.manager.CombatManager
 import com.liam.joshymc.manager.CommandManager
 import com.liam.joshymc.manager.DatabaseManager
+import com.liam.joshymc.manager.PlayerDatabaseManager
 import com.liam.joshymc.manager.ItemManager
+import com.liam.joshymc.manager.KillStreakManager
 import com.liam.joshymc.manager.LagCleanerManager
 import com.liam.joshymc.manager.ListenerManager
 import com.liam.joshymc.manager.RecipeManager
@@ -26,15 +28,9 @@ import com.liam.joshymc.manager.ResourceWorldManager
 import com.liam.joshymc.manager.ScoreboardManager
 import com.liam.joshymc.manager.ChatTagManager
 import com.liam.joshymc.manager.MarketManager
-import com.liam.joshymc.manager.QuestManager
-import com.liam.joshymc.manager.EmoteManager
+import com.liam.joshymc.manager.QuestCycleManager
 import com.liam.joshymc.manager.FishingManager
-import com.liam.joshymc.manager.GadgetManager
-import com.liam.joshymc.manager.GlowManager
-import com.liam.joshymc.manager.JoinEffectManager
 import com.liam.joshymc.manager.KillEffectManager
-import com.liam.joshymc.manager.TrailManager
-import com.liam.joshymc.manager.SkillManager
 import com.liam.joshymc.manager.SpawnWorldManager
 import com.liam.joshymc.manager.TalismanManager
 import com.liam.joshymc.manager.ClaimManager
@@ -43,6 +39,7 @@ import com.liam.joshymc.manager.ServerShopManager
 import com.liam.joshymc.manager.AuctionManager
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.EconomyManager
+import com.liam.joshymc.manager.StockMarketManager
 import com.liam.joshymc.manager.CrateManager
 import com.liam.joshymc.manager.HologramManager
 import com.liam.joshymc.manager.KitManager
@@ -51,6 +48,7 @@ import com.liam.joshymc.manager.HopperPlusManager
 import com.liam.joshymc.manager.SignShopManager
 import com.liam.joshymc.manager.SpawnerManager
 import com.liam.joshymc.manager.StorageManager
+import com.liam.joshymc.manager.EnderChestManager
 import com.liam.joshymc.manager.TeamManager
 import com.liam.joshymc.manager.TimezoneManager
 import com.liam.joshymc.manager.TradeManager
@@ -58,10 +56,16 @@ import com.liam.joshymc.manager.WarpManager
 import com.liam.joshymc.command.VanishCommand
 import com.liam.joshymc.command.WorldCommand
 import com.liam.joshymc.manager.ArenaManager
+import com.liam.joshymc.manager.BuildPvpManager
 import com.liam.joshymc.manager.PortalManager
 import com.liam.joshymc.manager.SpawnDecorationManager
 import com.liam.joshymc.manager.VoteManager
-import com.liam.joshymc.manager.WorldFlagManager
+import com.liam.joshymc.manager.EndManager
+import com.liam.joshymc.manager.ChatManager
+import com.liam.joshymc.manager.BoosterManager
+import com.liam.joshymc.manager.MobStackManager
+import com.liam.joshymc.util.ConfigUtil
+import com.liam.joshymc.util.ProfanityFilter
 import org.bukkit.Bukkit
 import org.bukkit.GameRule
 import org.bukkit.Location
@@ -69,13 +73,24 @@ import org.bukkit.World
 import org.bukkit.event.HandlerList
 import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
-import java.util.Properties
 
 class Joshymc : JavaPlugin() {
 
     companion object {
         lateinit var instance: Joshymc
             private set
+
+        // Dotted-key prefixes the config migrator must never backfill into an existing
+        // config.yml: these are admin-defined name->value maps (rank ids, purchasable-rank
+        // keys) shipped with example entries, not fixed plugin schema. Restoring entries an
+        // admin deleted from these breaks LuckPerms setups that reuse rank names. Issue #911.
+        private val NO_BACKFILL_SECTION_PREFIXES = listOf(
+            "ranks.list.",
+            "homes.limits-by-rank.",
+            "warps.limits-by-rank.",
+            "orders.limits.",
+            "rank-perks."
+        )
     }
 
     fun isFeatureEnabled(feature: String): Boolean {
@@ -118,6 +133,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var databaseManager: DatabaseManager
         private set
+    lateinit var playerDatabaseManager: PlayerDatabaseManager
+        private set
     lateinit var settingsManager: SettingsManager
         private set
     lateinit var lagCleanerManager: LagCleanerManager
@@ -136,6 +153,10 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var storageManager: StorageManager
         private set
+    lateinit var overflowManager: com.liam.joshymc.manager.OverflowManager
+        private set
+    lateinit var enderChestManager: EnderChestManager
+        private set
     lateinit var hologramManager: HologramManager
         private set
     lateinit var leaderboardManager: com.liam.joshymc.manager.LeaderboardManager
@@ -146,6 +167,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var auctionManager: AuctionManager
         private set
+    lateinit var orderManager: com.liam.joshymc.manager.OrderManager
+        private set
     lateinit var signShopManager: SignShopManager
         private set
     lateinit var hopperPlusManager: HopperPlusManager
@@ -155,6 +178,31 @@ class Joshymc : JavaPlugin() {
     lateinit var teamManager: TeamManager
         private set
     lateinit var economyManager: EconomyManager
+
+    lateinit var antiDupeManager: com.liam.joshymc.manager.AntiDupeManager
+        private set
+    lateinit var combatAlertManager: com.liam.joshymc.manager.CombatAlertManager
+        private set
+
+    lateinit var creditsManager: com.liam.joshymc.manager.CreditsManager
+        private set
+    lateinit var stockMarketManager: StockMarketManager
+        private set
+    lateinit var giveawayManager: com.liam.joshymc.manager.GiveawayManager
+        private set
+    lateinit var giftManager: com.liam.joshymc.manager.GiftManager
+        private set
+    lateinit var coinflipManager: com.liam.joshymc.manager.CoinflipManager
+        private set
+    lateinit var casinoManager: com.liam.joshymc.manager.CasinoManager
+        private set
+    lateinit var casinoMinesManager: com.liam.joshymc.manager.CasinoMinesManager
+        private set
+    lateinit var casinoRouletteManager: com.liam.joshymc.manager.CasinoRouletteManager
+        private set
+    lateinit var casinoCrashManager: com.liam.joshymc.manager.CasinoCrashManager
+        private set
+    lateinit var casinoTowersManager: com.liam.joshymc.manager.CasinoTowersManager
         private set
     lateinit var guiManager: GuiManager
         private set
@@ -164,11 +212,27 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var serverShopManager: ServerShopManager
         private set
+    lateinit var sellPriceManager: com.liam.joshymc.manager.SellPriceManager
+        private set
+    lateinit var creditShopManager: com.liam.joshymc.manager.CreditShopManager
+        private set
+    lateinit var voucherManager: com.liam.joshymc.manager.VoucherManager
+        private set
+    lateinit var physicalVoucherManager: com.liam.joshymc.manager.PhysicalVoucherManager
+        private set
+    lateinit var creditVoucherManager: com.liam.joshymc.manager.CreditVoucherManager
+        private set
+    lateinit var rankVoucherManager: com.liam.joshymc.manager.RankVoucherManager
+        private set
+    lateinit var chatTagVoucherManager: com.liam.joshymc.manager.ChatTagVoucherManager
+        private set
     lateinit var rankManager: RankManager
         private set
     lateinit var claimManager: ClaimManager
         private set
     lateinit var punishmentManager: PunishmentManager
+        private set
+    lateinit var altManager: com.liam.joshymc.manager.AltManager
         private set
     lateinit var resourceWorldManager: ResourceWorldManager
         private set
@@ -180,6 +244,10 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var playtimeManager: PlaytimeManager
         private set
+    lateinit var killStreakManager: KillStreakManager
+        private set
+    lateinit var loginStreakManager: com.liam.joshymc.manager.LoginStreakManager
+        private set
     lateinit var chatTagManager: ChatTagManager
         private set
     lateinit var marketManager: MarketManager
@@ -188,33 +256,28 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var vanishCommand: VanishCommand
     lateinit var rtpCommand: com.liam.joshymc.command.RtpCommand
-    lateinit var questManager: QuestManager
+    lateinit var sellCommand: com.liam.joshymc.command.SellCommand
+    lateinit var questCycleManager: QuestCycleManager
         private set
     lateinit var talismanManager: TalismanManager
         private set
     lateinit var fishingManager: FishingManager
         private set
-    lateinit var skillManager: SkillManager
-        private set
-    lateinit var trailManager: TrailManager
-        private set
     lateinit var killEffectManager: KillEffectManager
-        private set
-    lateinit var joinEffectManager: JoinEffectManager
-        private set
-    lateinit var emoteManager: EmoteManager
-        private set
-    lateinit var glowManager: GlowManager
-        private set
-    lateinit var gadgetManager: GadgetManager
         private set
     lateinit var adminManager: AdminManager
         private set
-    lateinit var worldFlagManager: WorldFlagManager
+    lateinit var endManager: EndManager
+        private set
+    lateinit var chatManager: ChatManager
         private set
     lateinit var arenaManager: ArenaManager
         private set
+    lateinit var buildPvpManager: BuildPvpManager
+        private set
     lateinit var portalManager: PortalManager
+        private set
+    lateinit var fakeBaseManager: com.liam.joshymc.manager.FakeBaseManager
         private set
     lateinit var voteManager: VoteManager
         private set
@@ -224,15 +287,40 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var timezoneManager: TimezoneManager
         private set
+    lateinit var eventManager: com.liam.joshymc.manager.EventManager
+        private set
+    lateinit var resurgeManager: com.liam.joshymc.manager.ResurgeManager
+        private set
+    lateinit var boosterManager: BoosterManager
+        private set
+    lateinit var mobStackManager: MobStackManager
+        private set
+    lateinit var mutationsManager: com.liam.joshymc.manager.MutationsManager
+        private set
+    lateinit var modModeManager: com.liam.joshymc.manager.ModModeManager
+        private set
+    lateinit var hideStaffManager: com.liam.joshymc.manager.HideStaffManager
+        private set
+    lateinit var staffChatManager: com.liam.joshymc.manager.StaffChatManager
+        private set
+    lateinit var traineeModeManager: com.liam.joshymc.manager.TraineeModeManager
+        private set
 
     override fun onEnable() {
         instance = this
 
+        ConfigUtil.backupsDir(dataFolder)
+
         saveDefaultConfig()
         migrateConfig()
 
+        ProfanityFilter.load(this)
+
         databaseManager = DatabaseManager(this)
         databaseManager.start()
+
+        playerDatabaseManager = PlayerDatabaseManager(this)
+        playerDatabaseManager.start()
 
         settingsManager = SettingsManager(this)
         settingsManager.start()
@@ -250,6 +338,15 @@ class Joshymc : JavaPlugin() {
         economyManager = EconomyManager(this)
         economyManager.start()
 
+        antiDupeManager = com.liam.joshymc.manager.AntiDupeManager(this)
+        antiDupeManager.start()
+
+        combatAlertManager = com.liam.joshymc.manager.CombatAlertManager(this)
+        combatAlertManager.start()
+
+        stockMarketManager = StockMarketManager(this)
+        stockMarketManager.start()
+
         guiManager = GuiManager()
 
         combatManager = CombatManager(this)
@@ -261,16 +358,29 @@ class Joshymc : JavaPlugin() {
         warpManager = WarpManager(this)
         kitManager = KitManager(this)
         storageManager = StorageManager(this)
+        overflowManager = com.liam.joshymc.manager.OverflowManager(this)
+        enderChestManager = EnderChestManager(this)
         tradeManager = TradeManager(this)
         hologramManager = HologramManager(this)
         leaderboardManager = com.liam.joshymc.manager.LeaderboardManager(this)
         npcManager = NPCManager(this)
         crateManager = CrateManager(this)
+        coinflipManager = com.liam.joshymc.manager.CoinflipManager(this)
+        casinoManager = com.liam.joshymc.manager.CasinoManager(this)
+        casinoMinesManager = com.liam.joshymc.manager.CasinoMinesManager(this)
+        casinoRouletteManager = com.liam.joshymc.manager.CasinoRouletteManager(this)
+        casinoCrashManager = com.liam.joshymc.manager.CasinoCrashManager(this)
+        casinoTowersManager = com.liam.joshymc.manager.CasinoTowersManager(this)
         auctionManager = AuctionManager(this)
+        giveawayManager = com.liam.joshymc.manager.GiveawayManager(this)
+        giftManager = com.liam.joshymc.manager.GiftManager(this)
+        orderManager = com.liam.joshymc.manager.OrderManager(this)
         signShopManager = SignShopManager(this)
         hopperPlusManager = HopperPlusManager(this)
         spawnerManager = SpawnerManager(this)
         teamManager = TeamManager(this)
+        killStreakManager = KillStreakManager(this)
+        loginStreakManager = com.liam.joshymc.manager.LoginStreakManager(this)
         resourcePackManager = ResourcePackManager(this)
         discordManager = DiscordManager(this)
         lagCleanerManager = LagCleanerManager(this)
@@ -278,6 +388,7 @@ class Joshymc : JavaPlugin() {
         antiCheatManager = AntiCheatManager(this)
         claimManager = ClaimManager(this)
         punishmentManager = PunishmentManager(this)
+        altManager = com.liam.joshymc.manager.AltManager(this)
         resourceWorldManager = ResourceWorldManager(this)
         timezoneManager = TimezoneManager(this)
         timezoneManager.start()
@@ -285,25 +396,43 @@ class Joshymc : JavaPlugin() {
         announcementManager = AnnouncementManager(this)
         autoRestartManager = AutoRestartManager(this)
         playtimeManager = PlaytimeManager(this)
-        questManager = QuestManager(this)
+        creditsManager = com.liam.joshymc.manager.CreditsManager(this)
+        questCycleManager = QuestCycleManager(this)
+        questCycleManager.createTables()
         talismanManager = TalismanManager(this)
         fishingManager = FishingManager(this)
-        skillManager = SkillManager(this)
-        trailManager = TrailManager(this)
         killEffectManager = KillEffectManager(this)
-        joinEffectManager = JoinEffectManager(this)
-        emoteManager = EmoteManager(this)
-        glowManager = GlowManager(this)
-        gadgetManager = GadgetManager(this)
         adminManager = AdminManager(this)
-        worldFlagManager = WorldFlagManager(this)
+        modModeManager = com.liam.joshymc.manager.ModModeManager(this)
+        hideStaffManager = com.liam.joshymc.manager.HideStaffManager(this)
+        staffChatManager = com.liam.joshymc.manager.StaffChatManager(this)
+        traineeModeManager = com.liam.joshymc.manager.TraineeModeManager(this)
+        endManager = EndManager(this)
+        chatManager = ChatManager(this)
         arenaManager = ArenaManager(this)
+        buildPvpManager = BuildPvpManager(this)
         portalManager = PortalManager(this)
+        fakeBaseManager = com.liam.joshymc.manager.FakeBaseManager(this)
         voteManager = VoteManager(this)
         spawnDecorationManager = SpawnDecorationManager(this)
         spawnWorldManager = SpawnWorldManager(this)
         customEnchantManager = CustomEnchantManager(this)
         serverShopManager = ServerShopManager(this)
+        creditShopManager = com.liam.joshymc.manager.CreditShopManager(this)
+        voucherManager = com.liam.joshymc.manager.VoucherManager(this)
+        physicalVoucherManager = com.liam.joshymc.manager.PhysicalVoucherManager(this)
+        creditVoucherManager = com.liam.joshymc.manager.CreditVoucherManager(this)
+        rankVoucherManager = com.liam.joshymc.manager.RankVoucherManager(this)
+        chatTagVoucherManager = com.liam.joshymc.manager.ChatTagVoucherManager(this)
+        eventManager = com.liam.joshymc.manager.EventManager(this)
+        resurgeManager = com.liam.joshymc.manager.ResurgeManager(this)
+        boosterManager = BoosterManager(this)
+        mobStackManager = MobStackManager(this)
+        if (isFeatureEnabled("mob-stacking")) mobStackManager.start()
+        mutationsManager = com.liam.joshymc.manager.MutationsManager(this)
+        mutationsManager.start()
+        sellPriceManager = com.liam.joshymc.manager.SellPriceManager(this)
+        sellPriceManager.start()
 
         itemManager.registerAll()
         recipeManager.registerAll()
@@ -313,15 +442,30 @@ class Joshymc : JavaPlugin() {
         warpManager.start()
         kitManager.start()
         storageManager.start()
+        overflowManager.start()
+        enderChestManager.start()
         hologramManager.start()
         leaderboardManager.start()
         if (isFeatureEnabled("npcs")) npcManager.start()
         crateManager.start()
+        if (isFeatureEnabled("coinflip")) coinflipManager.start()
+        if (isFeatureEnabled("casino")) {
+            casinoManager.start()
+            casinoMinesManager.start()
+            casinoRouletteManager.start()
+            casinoCrashManager.start()
+            casinoTowersManager.start()
+        }
         auctionManager.start()
+        if (isFeatureEnabled("giveaways")) giveawayManager.start()
+        if (isFeatureEnabled("gift")) giftManager.start()
+        if (isFeatureEnabled("orders")) orderManager.start()
         signShopManager.start()
         hopperPlusManager.start()
         spawnerManager.start()
         teamManager.start()
+        if (isFeatureEnabled("kill-streaks")) killStreakManager.start()
+        if (isFeatureEnabled("login-streaks")) loginStreakManager.start()
         resourcePackManager.start()
         lagCleanerManager.start()
         combatManager.start()
@@ -329,14 +473,22 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("anticheat")) antiCheatManager.start()
         claimManager.start()
         punishmentManager.start()
+        altManager.start()
         if (isFeatureEnabled("resource-world")) resourceWorldManager.start()
         scoreboardManager.start()
         announcementManager.start()
         autoRestartManager.start()
         playtimeManager.start()
+        creditsManager.start()
         registerEnchants()
         if (isFeatureEnabled("custom-enchants")) customEnchantManager.start()
         serverShopManager.start()
+        creditShopManager.start()
+        voucherManager.start()
+        physicalVoucherManager.start()
+        creditVoucherManager.start()
+        rankVoucherManager.start()
+        chatTagVoucherManager.start()
 
         marketManager = MarketManager(this)
         if (isFeatureEnabled("market")) marketManager.start()
@@ -344,33 +496,34 @@ class Joshymc : JavaPlugin() {
         chatGamesManager = com.liam.joshymc.manager.ChatGamesManager(this)
         if (isFeatureEnabled("chat-games")) chatGamesManager.start()
 
-        if (isFeatureEnabled("quests")) questManager.start()
+        resurgeManager.start()
+        if (isFeatureEnabled("quests")) questCycleManager.start()
         if (isFeatureEnabled("talismans")) talismanManager.start()
         if (isFeatureEnabled("custom-fishing")) fishingManager.start()
-        if (isFeatureEnabled("skills")) skillManager.start()
-        if (isFeatureEnabled("trails")) trailManager.start()
         if (isFeatureEnabled("kill-effects")) killEffectManager.start()
-        if (isFeatureEnabled("join-effects")) joinEffectManager.start()
-        if (isFeatureEnabled("emotes")) emoteManager.start()
-        if (isFeatureEnabled("gadgets")) gadgetManager.start()
-        if (isFeatureEnabled("glow")) glowManager.start()
         adminManager.start()
-        worldFlagManager.start()
+        modModeManager.start()
+        hideStaffManager.start()
+        traineeModeManager.start()
+        endManager.start()
+        chatManager.start()
         // Start spawn world BEFORE arenas so the world exists when arena ticks begin
         spawnWorldManager.start()
+        // Auto-import the pvp world BEFORE arenas so it's loaded when arena ticks begin
+        WorldCommand.ensurePvpWorld(this)
 
         if (isFeatureEnabled("arenas")) arenaManager.start()
+        buildPvpManager.start()
         if (isFeatureEnabled("portals")) portalManager.start()
+        fakeBaseManager.start()
         if (isFeatureEnabled("voting")) voteManager.start()
         spawnDecorationManager.start()
+        eventManager.start()
 
         discordManager.start()
 
         // Ensure dungeon void world exists
         WorldCommand.ensureDungeonWorld(this)
-
-        // Ensure default overworld has structures disabled (only resource world has structures)
-        enforceServerStructures()
 
         // Apply world borders and game rules on a 1-tick delay (after all worlds are loaded)
         server.scheduler.runTaskLater(this, Runnable { applyWorldSettings() }, 1L)
@@ -388,12 +541,25 @@ class Joshymc : JavaPlugin() {
 
     override fun onDisable() {
         storageManager.saveOpenVaults()
+        overflowManager.saveOpenOverflows()
+        enderChestManager.saveOpenSessions()
+        if (::sellCommand.isInitialized) sellCommand.resolveAllOpenSessions()
         hologramManager.stop()
         npcManager.stop()
         crateManager.stop()
         auctionManager.stop()
+        giveawayManager.stop()
+        giftManager.stop()
+        coinflipManager.stop()
+        casinoMinesManager.stop()
+        casinoRouletteManager.stop()
+        casinoCrashManager.stop()
+        casinoTowersManager.stop()
+        casinoManager.stop()
+        orderManager.stop()
         hopperPlusManager.stop()
         spawnerManager.stop()
+        kitManager.stop()
         afkManager.stop()
         antiCheatManager.stop()
         portalManager.stop()
@@ -405,11 +571,23 @@ class Joshymc : JavaPlugin() {
         announcementManager.stop()
         autoRestartManager.stop()
         playtimeManager.stop()
+        killStreakManager.stop()
+        loginStreakManager.stop()
+        creditsManager.stop()
+        questCycleManager.stop()
         resourceWorldManager.stop()
+        buildPvpManager.stop()
         combatManager.stop()
         lagCleanerManager.stop()
+        mobStackManager.stop()
+        mutationsManager.stop()
+        modModeManager.stop()
+        hideStaffManager.stop()
+        traineeModeManager.stop()
+        eventManager.shutdown()
         resourcePackManager.shutdown()
         discordManager.shutdown()
+        playerDatabaseManager.shutdown()
         databaseManager.shutdown()
         logger.info("JoshyMC has been disabled!")
     }
@@ -433,13 +611,29 @@ class Joshymc : JavaPlugin() {
 
         // 3. Shutdown services
         safe("storageManager.saveOpenVaults") { storageManager.saveOpenVaults() }
+        safe("overflowManager.saveOpenOverflows") { overflowManager.saveOpenOverflows() }
+        safe("enderChestManager.saveOpenSessions") { enderChestManager.saveOpenSessions() }
+        safe("sellCommand.resolveAllOpenSessions") { if (::sellCommand.isInitialized) sellCommand.resolveAllOpenSessions() }
         safe("hologramManager.stop") { hologramManager.stop() }
         safe("npcManager.stop") { npcManager.stop() }
         safe("crateManager.stop") { crateManager.stop() }
         safe("auctionManager.stop") { auctionManager.stop() }
+        safe("giveawayManager.stop") { giveawayManager.stop() }
+        safe("giftManager.stop") { giftManager.stop() }
+        safe("coinflipManager.stop") { coinflipManager.stop() }
+        safe("casinoMinesManager.stop") { casinoMinesManager.stop() }
+        safe("casinoRouletteManager.stop") { casinoRouletteManager.stop() }
+        safe("casinoCrashManager.stop") { casinoCrashManager.stop() }
+        safe("casinoTowersManager.stop") { casinoTowersManager.stop() }
+        safe("casinoManager.stop") { casinoManager.stop() }
+        safe("orderManager.stop") { orderManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
+        safe("questCycleManager.stop") { questCycleManager.stop() }
         safe("spawnerManager.stop") { spawnerManager.stop() }
+        safe("kitManager.stop") { kitManager.stop() }
         safe("afkManager.stop") { afkManager.stop() }
+        safe("killStreakManager.stop") { killStreakManager.stop() }
+        safe("loginStreakManager.stop") { loginStreakManager.stop() }
         safe("antiCheatManager.stop") { antiCheatManager.stop() }
         safe("combatManager.stop") { combatManager.stop() }
         safe("autoRestartManager.stop") { autoRestartManager.stop() }
@@ -453,23 +647,42 @@ class Joshymc : JavaPlugin() {
 
         // 5. Reload config from disk
         safe("reloadConfig") { reloadConfig() }
+        safe("ProfanityFilter.load") { ProfanityFilter.load(this) }
 
         // 6. Re-register everything
+        safe("sellPriceManager.start") { sellPriceManager.start() }
         safe("itemManager.registerAll") { itemManager.registerAll() }
         safe("recipeManager.registerAll") { recipeManager.registerAll() }
         safe("listenerManager.registerAll") { listenerManager.registerAll() }
         safe("linkManager.load") { linkManager.load() }
         // WarpManager uses DB directly, no reload needed
+        safe("physicalVoucherManager.reload") { physicalVoucherManager.reload() }
         safe("kitManager.start") { kitManager.start() }
         safe("storageManager.start") { storageManager.start() }
+        safe("overflowManager.start") { overflowManager.start() }
+        safe("enderChestManager.start") { enderChestManager.start() }
         safe("hologramManager.start") { hologramManager.start() }
         if (isFeatureEnabled("npcs")) safe("npcManager.start") { npcManager.start() }
+        if (isFeatureEnabled("quests")) safe("questCycleManager.start") { questCycleManager.start() }
         safe("crateManager.start") { crateManager.start() }
         safe("auctionManager.start") { auctionManager.start() }
+        if (isFeatureEnabled("giveaways")) safe("giveawayManager.start") { giveawayManager.start() }
+        if (isFeatureEnabled("gift")) safe("giftManager.start") { giftManager.start() }
+        if (isFeatureEnabled("coinflip")) safe("coinflipManager.start") { coinflipManager.start() }
+        if (isFeatureEnabled("casino")) {
+            safe("casinoManager.start") { casinoManager.start() }
+            safe("casinoMinesManager.start") { casinoMinesManager.start() }
+            safe("casinoRouletteManager.start") { casinoRouletteManager.start() }
+            safe("casinoCrashManager.start") { casinoCrashManager.start() }
+            safe("casinoTowersManager.start") { casinoTowersManager.start() }
+        }
+        if (isFeatureEnabled("orders")) safe("orderManager.start") { orderManager.start() }
         safe("signShopManager.start") { signShopManager.start() }
         safe("hopperPlusManager.start") { hopperPlusManager.start() }
         safe("spawnerManager.start") { spawnerManager.start() }
         safe("teamManager.start") { teamManager.start() }
+        if (isFeatureEnabled("kill-streaks")) safe("killStreakManager.start") { killStreakManager.start() }
+        if (isFeatureEnabled("login-streaks")) safe("loginStreakManager.start") { loginStreakManager.start() }
         safe("resourcePackManager.start") { resourcePackManager.start() }
 
         // 7. Commands just get new instances (executors are swapped, not re-registered)
@@ -519,6 +732,8 @@ class Joshymc : JavaPlugin() {
         cem.register(CustomEnchant("striker", "Striker", 3, EnchantTarget.SWORD,
             conflicts = setOf("fire_aspect_conflict"),
             description = "Chance to strike lightning on the enemy"))
+        cem.register(CustomEnchant("slayer", "Slayer", 2, EnchantTarget.SWORD,
+            description = "Increases XP gained from killing mobs"))
 
         // ── Axe ─────────────────────────────────────────
         cem.register(CustomEnchant("cleave", "Cleave", 3, EnchantTarget.AXE,
@@ -539,6 +754,8 @@ class Joshymc : JavaPlugin() {
             description = "Reduces axe damage taken"))
         cem.register(CustomEnchant("xray", "Xray", 5, EnchantTarget.HELMET,
             description = "While crouching, ores glow nearby. Higher levels = larger radius"))
+        cem.register(CustomEnchant("saturation", "Saturation", 1, EnchantTarget.HELMET,
+            description = "Slowly restores hunger over time"))
 
         // ── Chestplate ──────────────────────────────────
         cem.register(CustomEnchant("overload", "Overload", 3, EnchantTarget.CHESTPLATE,
@@ -565,14 +782,18 @@ class Joshymc : JavaPlugin() {
             description = "No fall damage"))
         cem.register(CustomEnchant("rockets", "Rockets", 1, EnchantTarget.BOOTS,
             description = "Levitation when below 2 hearts"))
+        cem.register(CustomEnchant("lava_walker", "Lava Walker", 3, EnchantTarget.BOOTS,
+            description = "Converts nearby lava to obsidian as you walk"))
 
         // ── Shovel ──────────────────────────────────────
         cem.register(CustomEnchant("glass_breaker", "Glass Breaker", 1, EnchantTarget.SHOVEL,
             description = "Breaks glass instantly"))
 
-        // ── Pickaxe / Shovel / Axe ──────────────────────
+        // ── Pickaxe / Shovel / Axe / Hoe ────────────────
         cem.register(CustomEnchant("magnet", "Magnet", 1, EnchantTarget.ALL_TOOLS,
             description = "Mined blocks go straight to your inventory"))
+        cem.register(CustomEnchant("crab_claw", "Crab Claw", 3, EnchantTarget.ALL_TOOLS,
+            description = "Extends block-mining reach by 1-3 blocks"))
 
         // ── Pickaxe ─────────────────────────────────────
         cem.register(CustomEnchant("autosmelt", "Autosmelt", 1, EnchantTarget.PICKAXE,
@@ -583,6 +804,8 @@ class Joshymc : JavaPlugin() {
             description = "Automatically condenses ores into blocks"))
         cem.register(CustomEnchant("explosive", "Explosive", 3, EnchantTarget.PICKAXE,
             description = "Chance to blow up a 3x3x3 area"))
+        cem.register(CustomEnchant("bedrock_breaker", "Bedrock Breaker", 3, EnchantTarget.PICKAXE,
+            description = "Mine bedrock (no drops): I=60s, II=45s, III=30s"))
 
         // ── Hoe ─────────────────────────────────────────
         cem.register(CustomEnchant("ground_pound", "Ground Pound", 1, EnchantTarget.HOE,
@@ -591,37 +814,55 @@ class Joshymc : JavaPlugin() {
             description = "Auto-replants crops when broken"))
         cem.register(CustomEnchant("blessing", "Blessing", 1, EnchantTarget.HOE,
             description = "Auto-regrows replanted crops (requires Great Harvest)"))
-    }
 
-    /**
-     * Ensures server.properties has generate-structures=false so the main
-     * overworld doesn't generate structures. The resource world (created via
-     * WorldCreator) will still have structures since it uses its own settings.
-     * Requires a server restart to take effect on new chunks.
-     */
-    private fun enforceServerStructures() {
-        val propsFile = File(server.worldContainer.parentFile, "server.properties")
-        if (!propsFile.exists()) return
+        // ── Mace ─────────────────────────────────────────
+        cem.register(CustomEnchant("meteor", "Meteor", 1, EnchantTarget.MACE,
+            description = "Higher fall = wider smash damage radius"))
+        cem.register(CustomEnchant("crater", "Crater", 3, EnchantTarget.MACE,
+            description = "Smash attacks stun nearby enemies"))
 
-        try {
-            val props = Properties()
-            propsFile.inputStream().use { props.load(it) }
+        // ── Fishing Rod ──────────────────────────────────
+        cem.register(CustomEnchant("barbed_hook", "Barbed Hook", 4, EnchantTarget.FISHING_ROD,
+            description = "Hooked entities take damage over time"))
+        cem.register(CustomEnchant("netcaster", "Netcaster", 3, EnchantTarget.FISHING_ROD,
+            description = "Chance to catch multiple fish at once"))
 
-            val current = props.getProperty("generate-structures", "true")
-            if (current == "true") {
-                props.setProperty("generate-structures", "false")
-                propsFile.outputStream().use { props.store(it, null) }
-                logger.info("[WorldSetup] Set generate-structures=false in server.properties. Restart for full effect on new chunks.")
-            }
-        } catch (e: Exception) {
-            logger.warning("[WorldSetup] Could not update server.properties: ${e.message}")
-        }
+        // ── Crossbow ─────────────────────────────────────
+        cem.register(CustomEnchant("shrapnel", "Shrapnel", 3, EnchantTarget.CROSSBOW,
+            description = "Arrows explode on impact"))
+        cem.register(CustomEnchant("sniper", "Sniper", 1, EnchantTarget.CROSSBOW,
+            description = "Increased damage the further the target"))
+        cem.register(CustomEnchant("hunter", "Hunter", 5, EnchantTarget.CROSSBOW,
+            description = "Bonus damage to flying mobs and gliding players"))
+
+        // ── Trident ──────────────────────────────────────
+        cem.register(CustomEnchant("harpoon", "Harpoon", 1, EnchantTarget.TRIDENT,
+            description = "Thrown tridents drag hit entities back toward you"))
+        cem.register(CustomEnchant("tidal_leap", "Tidal Leap", 1, EnchantTarget.TRIDENT,
+            description = "Riptide launches even without rain (requires Riptide)"))
+
+        // ── Shield ───────────────────────────────────────
+        cem.register(CustomEnchant("reflect", "Reflect", 3, EnchantTarget.SHIELD,
+            description = "Chance to reflect incoming damage back at the attacker"))
+
+        // ── Elytra ───────────────────────────────────────
+        cem.register(CustomEnchant("cloudstep", "Cloudstep", 1, EnchantTarget.ELYTRA,
+            description = "Prevents collision damage while gliding with an elytra"))
+
+        // ── Spyglass ─────────────────────────────────────
+        cem.register(CustomEnchant("spyglass_hunter", "Hunter", 3, EnchantTarget.SPYGLASS,
+            description = "Highlights nearby players and mobs while zoomed in"))
+
+        // ── Any item ─────────────────────────────────────
+        cem.register(CustomEnchant("absorb", "Absorb", 4, EnchantTarget.ALL,
+            description = "Slowly repairs durability while exposed to sunlight"))
     }
 
     /**
      * Apply world borders and structure settings to Nether, End, and Overworld.
-     * - Nether and End get a 10k x 10k border
-     * - Default overworld has structures disabled (resource world keeps them)
+     * - Nether and End get a 10k x 10k border; vanilla structures stay enabled
+     *   there (and in the main overworld) — only custom/server worlds have
+     *   structures disabled.
      */
     fun applyWorldSettings() {
         val resourceWorldName = config.getString("resource-world.world-name", "resource") ?: "resource"
@@ -657,7 +898,12 @@ class Joshymc : JavaPlugin() {
                         world.worldBorder.size = overworldSize
                         logger.info("[WorldSetup] Overworld '${world.name}' border set to ${overworldSize.toInt()}x${overworldSize.toInt()}.")
                         world.setGameRule(GameRule.DO_TRADER_SPAWNING, false)
-                        disableStructureGeneration(world)
+                        // The main survival overworld keeps vanilla structure
+                        // generation — only custom/server worlds (pvp, afk,
+                        // dungeon, event, etc.) get structures disabled.
+                        if (world.name != "world") {
+                            disableStructureGeneration(world)
+                        }
                     }
                 }
                 else -> {}
@@ -752,6 +998,123 @@ class Joshymc : JavaPlugin() {
     }
 
     private fun registerSettings() {
+        // Legacy settings — retired from the /settings GUI/command (see issue #501),
+        // but the toggle keys are still read by their own dedicated command/listener,
+        // so they stay registered (hidden) to preserve correct defaults for new players.
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "gsit",
+            displayName = "Sit on Blocks",
+            description = "Right-click stairs/slabs to sit",
+            material = org.bukkit.Material.OAK_STAIRS,
+            disabledMaterial = org.bukkit.Material.BARRIER,
+            default = true,
+            permission = "joshymc.gsit",
+            hidden = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "death_coords",
+            displayName = "Death Coordinates",
+            description = "Show coordinates when you die",
+            material = org.bukkit.Material.RECOVERY_COMPASS,
+            disabledMaterial = org.bukkit.Material.COMPASS,
+            default = true,
+            permission = "joshymc.deathcoords",
+            hidden = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "random_coords",
+            displayName = "Random Coords",
+            description = "Randomize X/Z shown to you (Y stays real)",
+            material = org.bukkit.Material.ENDER_PEARL,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = false,
+            permission = "joshymc.randomcoords",
+            hidden = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "pvp",
+            displayName = "PvP",
+            description = "Toggle player vs player combat",
+            material = org.bukkit.Material.DIAMOND_SWORD,
+            disabledMaterial = org.bukkit.Material.WOODEN_SWORD,
+            default = true,
+            permission = "joshymc.pvp",
+            hidden = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "veinminer",
+            displayName = "Veinminer",
+            description = "Sneak + mine to break ore veins",
+            material = org.bukkit.Material.DIAMOND_PICKAXE,
+            disabledMaterial = org.bukkit.Material.STONE_PICKAXE,
+            default = true,
+            permission = "joshymc.veinminer",
+            hidden = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "autosmelt",
+            displayName = "Auto Smelt",
+            description = "Automatically smelt ore drops",
+            material = org.bukkit.Material.BLAST_FURNACE,
+            disabledMaterial = org.bukkit.Material.FURNACE,
+            default = false,
+            permission = "joshymc.autosmelt",
+            hidden = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "treefeller",
+            displayName = "Tree Feller",
+            description = "Sneak + chop to fell entire trees",
+            material = org.bukkit.Material.DIAMOND_AXE,
+            disabledMaterial = org.bukkit.Material.STONE_AXE,
+            default = false,
+            permission = "joshymc.treefeller",
+            hidden = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.StaffChatManager.VIEW_SETTING_KEY,
+            displayName = "Staff Chat Viewing",
+            description = "Receive Staff Chat messages from other staff",
+            material = org.bukkit.Material.WRITABLE_BOOK,
+            disabledMaterial = org.bukkit.Material.BARRIER,
+            default = true,
+            permission = com.liam.joshymc.manager.StaffChatManager.PERM_VIEW,
+            hidden = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.ChatManager.CLEARING_SETTING_KEY,
+            displayName = "Chat Clearing",
+            description = "Have your screen cleared by /chat clear",
+            material = org.bukkit.Material.WRITABLE_BOOK,
+            disabledMaterial = org.bukkit.Material.BARRIER,
+            default = true,
+            permission = com.liam.joshymc.manager.ChatManager.PERM_CLEARING,
+            hidden = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.CoinflipManager.NOTIFY_SETTING_KEY,
+            displayName = "Coinflip Notifications",
+            description = "Receive global Coinflip creation/winner announcements",
+            material = org.bukkit.Material.GOLD_NUGGET,
+            disabledMaterial = org.bukkit.Material.BARRIER,
+            default = true,
+            permission = "joshymc.coinflip",
+            hidden = true
+        ))
+
+        // Active /settings toggles (issue #501)
+        settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.ScoreboardManager.SCOREBOARD_SETTING_KEY,
+            displayName = "Scoreboard",
+            description = "Show your sidebar scoreboard",
+            material = org.bukkit.Material.ITEM_FRAME,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = true,
+            permission = "joshymc.scoreboard",
+            onToggle = { player, _ ->
+                scoreboardManager.refreshSidebar(player)
+            }
+        ))
         settingsManager.register(SettingsManager.SettingDef(
             key = "night_vision",
             displayName = "Night Vision",
@@ -765,62 +1128,8 @@ class Joshymc : JavaPlugin() {
             }
         ))
         settingsManager.register(SettingsManager.SettingDef(
-            key = "gsit",
-            displayName = "Sit on Blocks",
-            description = "Right-click stairs/slabs to sit",
-            material = org.bukkit.Material.OAK_STAIRS,
-            disabledMaterial = org.bukkit.Material.BARRIER,
-            default = true,
-            permission = "joshymc.gsit"
-        ))
-        settingsManager.register(SettingsManager.SettingDef(
-            key = "death_coords",
-            displayName = "Death Coordinates",
-            description = "Show coordinates when you die",
-            material = org.bukkit.Material.RECOVERY_COMPASS,
-            disabledMaterial = org.bukkit.Material.COMPASS,
-            default = true,
-            permission = "joshymc.deathcoords"
-        ))
-        settingsManager.register(SettingsManager.SettingDef(
-            key = "pvp",
-            displayName = "PvP",
-            description = "Toggle player vs player combat",
-            material = org.bukkit.Material.DIAMOND_SWORD,
-            disabledMaterial = org.bukkit.Material.WOODEN_SWORD,
-            default = false,
-            permission = "joshymc.pvp"
-        ))
-        settingsManager.register(SettingsManager.SettingDef(
-            key = "veinminer",
-            displayName = "Veinminer",
-            description = "Sneak + mine to break ore veins",
-            material = org.bukkit.Material.DIAMOND_PICKAXE,
-            disabledMaterial = org.bukkit.Material.STONE_PICKAXE,
-            default = true,
-            permission = "joshymc.veinminer"
-        ))
-        settingsManager.register(SettingsManager.SettingDef(
-            key = "autosmelt",
-            displayName = "Auto Smelt",
-            description = "Automatically smelt ore drops",
-            material = org.bukkit.Material.BLAST_FURNACE,
-            disabledMaterial = org.bukkit.Material.FURNACE,
-            default = false,
-            permission = "joshymc.autosmelt"
-        ))
-        settingsManager.register(SettingsManager.SettingDef(
-            key = "treefeller",
-            displayName = "Tree Feller",
-            description = "Sneak + chop to fell entire trees",
-            material = org.bukkit.Material.DIAMOND_AXE,
-            disabledMaterial = org.bukkit.Material.STONE_AXE,
-            default = false,
-            permission = "joshymc.treefeller"
-        ))
-        settingsManager.register(SettingsManager.SettingDef(
             key = "mob_visibility",
-            displayName = "Show Mobs",
+            displayName = "Mob Visibility",
             description = "Hide mobs from your view (mobs ignore you too)",
             material = org.bukkit.Material.ZOMBIE_HEAD,
             disabledMaterial = org.bukkit.Material.SKELETON_SKULL,
@@ -830,6 +1139,46 @@ class Joshymc : JavaPlugin() {
                 com.liam.joshymc.listener.MobVisibilityListener.applyTo(this, player, enabled)
             }
         ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "payments",
+            displayName = "Payments",
+            description = "Allow other players to send you money",
+            material = org.bukkit.Material.GOLD_INGOT,
+            disabledMaterial = org.bukkit.Material.IRON_INGOT,
+            default = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "credit_payments",
+            displayName = "Credit Payments",
+            description = "Allow other players to send you Credits",
+            material = org.bukkit.Material.SUNFLOWER,
+            disabledMaterial = org.bukkit.Material.WITHER_ROSE,
+            default = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "tpa",
+            displayName = "TPA Requests",
+            description = "Allow other players to send you /tpa requests",
+            material = org.bukkit.Material.ENDER_PEARL,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = "tpahere",
+            displayName = "TPAHere Requests",
+            description = "Allow other players to send you /tpahere requests",
+            material = org.bukkit.Material.ENDER_EYE,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = true
+        ))
+        settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.CommunicationsManager.PERSONAL_MESSAGES_SETTING_KEY,
+            displayName = "Personal Messages",
+            description = "Allow other players to send you /msg private messages",
+            material = org.bukkit.Material.WRITABLE_BOOK,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = true
+        ))
     }
 
     /**
@@ -838,9 +1187,19 @@ class Joshymc : JavaPlugin() {
      * only writes when the file is absent — without this, users upgrading from
      * older versions never see new sections (e.g. afk.reward.money).
      *
-     * We touch only missing keys, so hand-edited values are left alone.
+     * We touch only missing keys, so hand-edited values are left alone. Sections
+     * in [NO_BACKFILL_SECTION_PREFIXES] are admin-owned name->value maps (rank ids,
+     * purchasable-rank keys, ...) rather than fixed schema — entries an admin
+     * intentionally deletes from those must stay deleted (see issue #911).
      */
     private fun migrateConfig() {
+        val configFile = File(dataFolder, "config.yml")
+        val onDisk = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(configFile)
+        if (ConfigUtil.looksLikeParseFailure(configFile, onDisk)) {
+            logger.severe("[ConfigMigrator] config.yml failed to load (invalid YAML) — the existing file has been preserved and was NOT overwritten. Fix the syntax error and restart or /joshymc reload.")
+            return
+        }
+
         val defaultStream = getResource("config.yml") ?: return
         val defaults = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
             defaultStream.bufferedReader()
@@ -849,6 +1208,7 @@ class Joshymc : JavaPlugin() {
         var changed = 0
         for (key in defaults.getKeys(true)) {
             if (defaults.isConfigurationSection(key)) continue
+            if (NO_BACKFILL_SECTION_PREFIXES.any { key.startsWith(it) }) continue
             if (!config.contains(key, true)) {
                 config.set(key, defaults.get(key))
                 changed++
@@ -856,6 +1216,7 @@ class Joshymc : JavaPlugin() {
         }
 
         if (changed > 0) {
+            ConfigUtil.backup(configFile, logger, "ConfigMigrator")
             saveConfig()
             logger.info("[ConfigMigrator] Backfilled $changed missing config key(s) from defaults.")
         }

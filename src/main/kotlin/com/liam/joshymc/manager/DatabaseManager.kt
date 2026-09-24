@@ -5,7 +5,7 @@ import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
 
-class DatabaseManager(private val plugin: Joshymc) {
+class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
 
     private lateinit var connection: Connection
 
@@ -18,11 +18,20 @@ class DatabaseManager(private val plugin: Joshymc) {
         // Enable WAL mode for better concurrent read performance
         connection.createStatement().use { it.execute("PRAGMA journal_mode=WAL") }
 
-        plugin.logger.info("[Database] Connected to SQLite (${dbFile.name})")
+        plugin.logger.info("[Database] Loaded server database: ${dbFile.name}")
     }
 
     fun shutdown() {
         if (::connection.isInitialized && !connection.isClosed) {
+            // Force WAL contents into data.db itself before closing. Without this,
+            // recently-committed rows only live in data.db-wal — if a restart/redeploy
+            // ever loses or skips that sidecar file (e.g. a backup step that only
+            // grabs data.db), the last writes before shutdown would appear to vanish.
+            try {
+                connection.createStatement().use { it.execute("PRAGMA wal_checkpoint(TRUNCATE)") }
+            } catch (e: Exception) {
+                plugin.logger.warning("[Database] WAL checkpoint on shutdown failed: ${e.message}")
+            }
             connection.close()
             plugin.logger.info("[Database] Connection closed.")
         }
@@ -31,7 +40,7 @@ class DatabaseManager(private val plugin: Joshymc) {
     /**
      * Execute a statement that doesn't return results (CREATE, INSERT, UPDATE, DELETE).
      */
-    fun execute(sql: String, vararg params: Any?) {
+    override fun execute(sql: String, vararg params: Any?) {
         connection.prepareStatement(sql).use { stmt ->
             params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
             stmt.executeUpdate()
@@ -42,7 +51,7 @@ class DatabaseManager(private val plugin: Joshymc) {
      * Execute a statement and return the number of affected rows.
      * Used for atomic check-and-delete to prevent race condition dupes.
      */
-    fun executeUpdate(sql: String, vararg params: Any?): Int {
+    override fun executeUpdate(sql: String, vararg params: Any?): Int {
         return connection.prepareStatement(sql).use { stmt ->
             params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
             stmt.executeUpdate()
@@ -52,7 +61,7 @@ class DatabaseManager(private val plugin: Joshymc) {
     /**
      * Execute a query and map each row to a result using the provided mapper.
      */
-    fun <T> query(sql: String, vararg params: Any?, mapper: (java.sql.ResultSet) -> T): List<T> {
+    override fun <T> query(sql: String, vararg params: Any?, mapper: (java.sql.ResultSet) -> T): List<T> {
         val results = mutableListOf<T>()
         connection.prepareStatement(sql).use { stmt ->
             params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
@@ -68,14 +77,14 @@ class DatabaseManager(private val plugin: Joshymc) {
     /**
      * Execute a query and return the first result, or null.
      */
-    fun <T> queryFirst(sql: String, vararg params: Any?, mapper: (java.sql.ResultSet) -> T): T? {
+    override fun <T> queryFirst(sql: String, vararg params: Any?, mapper: (java.sql.ResultSet) -> T): T? {
         return query(sql, *params, mapper = mapper).firstOrNull()
     }
 
     /**
      * Run multiple statements in a single transaction for better performance.
      */
-    fun transaction(block: () -> Unit) {
+    override fun transaction(block: () -> Unit) {
         connection.autoCommit = false
         try {
             block()
@@ -91,7 +100,7 @@ class DatabaseManager(private val plugin: Joshymc) {
     /**
      * Create a table if it doesn't exist. Called by individual managers during init.
      */
-    fun createTable(sql: String) {
+    override fun createTable(sql: String) {
         connection.createStatement().use { it.execute(sql) }
     }
 }

@@ -5,15 +5,28 @@ import io.papermc.paper.event.player.AsyncChatEvent
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
+import org.bukkit.Bukkit
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 class PunishmentManager(private val plugin: Joshymc) : Listener {
 
-    data class ActivePunishment(val reason: String?, val expiresAt: Long?, val punisherName: String)
+    data class ActivePunishment(
+        val reason: String?,
+        val expiresAt: Long?,
+        val punisherName: String,
+        val id: Int = 0,
+        val durationMs: Long? = null
+    )
+
+    /** Result of inserting a new punishment row - callers need the id + resolved expiry to build the branded disconnect message. */
+    data class InsertedPunishment(val id: Int, val expiresAt: Long?)
 
     data class PunishmentRecord(
         val id: Int,
@@ -42,6 +55,13 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
+        // Migrations: revoke audit trail for unban/unmute/unwarn (added for /punish)
+        try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_by TEXT") } catch (_: Exception) {}
+        try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_by_uuid TEXT") } catch (_: Exception) {}
+        try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_reason TEXT") } catch (_: Exception) {}
+        try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_at INTEGER") } catch (_: Exception) {}
+        try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN discord_thread_id TEXT") } catch (_: Exception) {}
+
         plugin.server.pluginManager.registerEvents(this, plugin)
 
         // Periodic expiry check every 60 seconds (1200 ticks)
@@ -52,34 +72,43 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
 
     // ── Bans ────────────────────────────────────────────────
 
-    fun ban(targetUuid: UUID, targetName: String, punisherName: String, punisherUuid: UUID? = null, reason: String? = null) {
-        insert(targetUuid, targetName, punisherName, punisherUuid, "BAN", reason, null)
+    fun ban(targetUuid: UUID, targetName: String, punisherName: String, punisherUuid: UUID? = null, reason: String? = null): InsertedPunishment {
+        return insert(targetUuid, targetName, punisherName, punisherUuid, "BAN", reason, null)
     }
 
-    fun tempban(targetUuid: UUID, targetName: String, punisherName: String, punisherUuid: UUID? = null, reason: String? = null, durationMs: Long) {
-        insert(targetUuid, targetName, punisherName, punisherUuid, "TEMPBAN", reason, durationMs)
+    fun tempban(targetUuid: UUID, targetName: String, punisherName: String, punisherUuid: UUID? = null, reason: String? = null, durationMs: Long): InsertedPunishment {
+        return insert(targetUuid, targetName, punisherName, punisherUuid, "TEMPBAN", reason, durationMs)
     }
 
-    fun unban(targetUuid: UUID) {
-        plugin.databaseManager.execute(
-            "UPDATE punishments SET active = 0 WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1",
+    fun unban(targetUuid: UUID, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null) {
+        val revokedIds = plugin.databaseManager.query(
+            "SELECT id FROM punishments WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1",
             targetUuid.toString()
+        ) { rs -> rs.getInt("id") }
+
+        plugin.databaseManager.execute(
+            "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1",
+            revokerName, revokerUuid?.toString(), revokeReason, System.currentTimeMillis(), targetUuid.toString()
         )
+
+        revokedIds.forEach { syncDiscordRevocation(it, revokerName, revokeReason) }
     }
 
     fun isBanned(targetUuid: UUID): ActivePunishment? {
         val now = System.currentTimeMillis()
         return plugin.databaseManager.queryFirst(
-            "SELECT reason, expires_at, punisher_name FROM punishments WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1 ORDER BY created_at DESC LIMIT 1",
+            "SELECT id, reason, expires_at, punisher_name, duration_ms FROM punishments WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1 ORDER BY created_at DESC LIMIT 1",
             targetUuid.toString()
         ) { rs ->
             val expiresAt = rs.getLong("expires_at").takeIf { !rs.wasNull() }
             // If it's a temp ban and expired, it's not active
             if (expiresAt != null && expiresAt <= now) return@queryFirst null
             ActivePunishment(
+                id = rs.getInt("id"),
                 reason = rs.getString("reason"),
                 expiresAt = expiresAt,
-                punisherName = rs.getString("punisher_name")
+                punisherName = rs.getString("punisher_name"),
+                durationMs = rs.getLong("duration_ms").takeIf { !rs.wasNull() }
             )
         }
     }
@@ -94,11 +123,18 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         insert(targetUuid, targetName, punisherName, punisherUuid, "TEMPMUTE", reason, durationMs)
     }
 
-    fun unmute(targetUuid: UUID) {
-        plugin.databaseManager.execute(
-            "UPDATE punishments SET active = 0 WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1",
+    fun unmute(targetUuid: UUID, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null) {
+        val revokedIds = plugin.databaseManager.query(
+            "SELECT id FROM punishments WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1",
             targetUuid.toString()
+        ) { rs -> rs.getInt("id") }
+
+        plugin.databaseManager.execute(
+            "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1",
+            revokerName, revokerUuid?.toString(), revokeReason, System.currentTimeMillis(), targetUuid.toString()
         )
+
+        revokedIds.forEach { syncDiscordRevocation(it, revokerName, revokeReason) }
     }
 
     fun isMuted(targetUuid: UUID): ActivePunishment? {
@@ -130,6 +166,32 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         ) { rs -> mapRecord(rs) }
     }
 
+    fun getActiveWarnings(targetUuid: UUID): List<PunishmentRecord> = getWarnings(targetUuid).filter { it.active }
+
+    /** Remove the most recent active warning, or a specific one by [warnId]. Returns true if a row was updated. */
+    fun unwarn(targetUuid: UUID, warnId: Int? = null, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null): Boolean {
+        val now = System.currentTimeMillis()
+        return if (warnId != null) {
+            val updated = plugin.databaseManager.executeUpdate(
+                "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE id = ? AND target_uuid = ? AND type = 'WARN' AND active = 1",
+                revokerName, revokerUuid?.toString(), revokeReason, now, warnId, targetUuid.toString()
+            ) > 0
+            if (updated) syncDiscordRevocation(warnId, revokerName, revokeReason)
+            updated
+        } else {
+            val record = plugin.databaseManager.queryFirst(
+                "SELECT id FROM punishments WHERE target_uuid = ? AND type = 'WARN' AND active = 1 ORDER BY created_at DESC LIMIT 1",
+                targetUuid.toString()
+            ) { rs -> rs.getInt("id") } ?: return false
+            plugin.databaseManager.execute(
+                "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE id = ?",
+                revokerName, revokerUuid?.toString(), revokeReason, now, record
+            )
+            syncDiscordRevocation(record, revokerName, revokeReason)
+            true
+        }
+    }
+
     // ── Kicks ───────────────────────────────────────────────
 
     fun kick(targetUuid: UUID, targetName: String, punisherName: String, punisherUuid: UUID? = null, reason: String? = null) {
@@ -159,29 +221,13 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.LOWEST)
     fun onPreLogin(event: AsyncPlayerPreLoginEvent) {
+        // Flip any punishment that has naturally expired before checking - a tempban
+        // that lapsed since the last periodic sweep should let the player back in.
+        checkExpired()
+
         val ban = isBanned(event.uniqueId) ?: return
-
-        val message = Component.text()
-            .append(Component.text("You are banned from this server!", NamedTextColor.RED).decoration(TextDecoration.BOLD, true))
-            .append(Component.newline())
-            .append(Component.newline())
-
-        if (ban.reason != null) {
-            message.append(Component.text("Reason: ", NamedTextColor.GRAY))
-                .append(Component.text(ban.reason, NamedTextColor.WHITE))
-                .append(Component.newline())
-        }
-
-        if (ban.expiresAt != null) {
-            val remaining = ban.expiresAt - System.currentTimeMillis()
-            message.append(Component.text("Expires in: ", NamedTextColor.GRAY))
-                .append(Component.text(formatDuration(remaining), NamedTextColor.WHITE))
-        } else {
-            message.append(Component.text("Duration: ", NamedTextColor.GRAY))
-                .append(Component.text("Permanent", NamedTextColor.RED))
-        }
-
-        event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, message.build())
+        val message = buildBanMessage(ban.id, event.uniqueId, ban.reason, ban.punisherName, ban.durationMs, ban.expiresAt)
+        event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, message)
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -217,7 +263,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         type: String,
         reason: String?,
         durationMs: Long?
-    ) {
+    ): InsertedPunishment {
         val now = System.currentTimeMillis()
         val expiresAt = if (durationMs != null) now + durationMs else null
 
@@ -233,6 +279,94 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
             now,
             expiresAt
         )
+
+        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { rs -> rs.getInt("id") } ?: -1
+
+        // Kicks are momentary, not a standing punishment - only real punishments get a forum post.
+        if (id != -1 && type != "KICK") {
+            plugin.discordManager.syncPunishmentCreated(id, type, targetUuid, targetName, punisherName, reason, durationMs, expiresAt, now)
+        }
+
+        return InsertedPunishment(id, expiresAt)
+    }
+
+    private fun syncDiscordRevocation(punishmentId: Int, revokerName: String?, revokeReason: String?) {
+        val threadId = plugin.databaseManager.queryFirst(
+            "SELECT discord_thread_id FROM punishments WHERE id = ?", punishmentId
+        ) { rs -> rs.getString("discord_thread_id") } ?: return
+        plugin.discordManager.syncPunishmentRevoked(threadId, revokerName?.takeIf { it.isNotBlank() } ?: "Console", revokeReason)
+    }
+
+    /**
+     * Central formatter for permanent/temporary ban disconnect + rejoin-denial screens.
+     * Used both by /punish (and /ban, /tempban) at the moment of the kick, and by
+     * [onPreLogin] when a banned player tries to reconnect - same lines, same
+     * placeholders, so the two paths can never drift apart.
+     *
+     * Falls back to a safe, hardcoded message if `punishments.ban-message` /
+     * `punishments.tempban-message` is missing or fails to format - a banned
+     * player must never slip through because of a config typo.
+     */
+    fun buildBanMessage(
+        punishmentId: Int,
+        targetUuid: UUID,
+        reason: String?,
+        punisherName: String,
+        durationMs: Long?,
+        expiresAt: Long?
+    ): Component {
+        val configKey = if (expiresAt == null) "punishments.ban-message" else "punishments.tempban-message"
+        val lines = try {
+            plugin.config.getStringList(configKey)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Punishment] Failed to read $configKey from config.yml: ${e.message}")
+            emptyList()
+        }
+
+        if (lines.isEmpty()) {
+            plugin.logger.warning("[Punishment] $configKey is missing or empty in config.yml - using fallback ban message.")
+            return fallbackBanMessage(reason)
+        }
+
+        return try {
+            val now = System.currentTimeMillis()
+            val staff = if (punisherName.equals("CONSOLE", ignoreCase = true)) "Console" else punisherName
+            val replacements = listOf(
+                "%player%" to (Bukkit.getOfflinePlayer(targetUuid).name ?: "Unknown"),
+                "%reason%" to (reason?.takeIf { it.isNotBlank() } ?: "No reason specified"),
+                "%staff%" to staff,
+                "%duration%" to (durationMs?.let { formatDuration(it) } ?: "Permanent"),
+                "%remaining%" to (expiresAt?.let { formatDuration(it - now) } ?: ""),
+                "%expires%" to (expiresAt?.let { formatTimestamp(it, plugin.timezoneManager.zoneFor(targetUuid)) } ?: ""),
+                "%punishment_id%" to punishmentId.toString()
+            )
+
+            val builder = Component.text()
+            lines.forEachIndexed { index, rawLine ->
+                var line = rawLine
+                for ((key, value) in replacements) line = line.replace(key, value)
+                if (index > 0) builder.append(Component.newline())
+                builder.append(plugin.commsManager.parseLegacy(line))
+            }
+            builder.build()
+        } catch (e: Exception) {
+            plugin.logger.warning("[Punishment] Failed to format $configKey: ${e.message}")
+            fallbackBanMessage(reason)
+        }
+    }
+
+    private fun fallbackBanMessage(reason: String?): Component {
+        return Component.text()
+            .append(Component.text("You are banned from JoshyMC.", NamedTextColor.RED).decoration(TextDecoration.BOLD, true))
+            .append(Component.newline())
+            .append(Component.text("Reason: ${reason?.takeIf { it.isNotBlank() } ?: "No reason specified"}", NamedTextColor.GRAY))
+            .append(Component.newline())
+            .append(Component.text("Appeal: discord.gg/joshymc", NamedTextColor.GRAY))
+            .build()
+    }
+
+    private fun formatTimestamp(epochMs: Long, zone: ZoneId): String {
+        return Instant.ofEpochMilli(epochMs).atZone(zone).format(TIMESTAMP_FORMAT)
     }
 
     private fun mapRecord(rs: java.sql.ResultSet): PunishmentRecord {
@@ -248,6 +382,8 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
     }
 
     companion object {
+
+        private val TIMESTAMP_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a")
 
         /**
          * Format a duration in milliseconds to a human-readable string.
@@ -272,31 +408,48 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         }
 
         /**
-         * Parse a duration string like "1d2h30m" or "7d" into milliseconds.
-         * Supports d (days), h (hours), m (minutes), s (seconds).
-         * Returns null if the string is invalid.
+         * Parse a duration string like "1d2h30m", "7d", "1w" or "1mo" into milliseconds.
+         * Supports s (seconds), m (minutes), h (hours), d (days), w (weeks), mo (months, 30d).
+         * Rejects malformed/zero/negative/overflowing input by returning null.
          */
         fun parseDuration(input: String): Long? {
-            if (input.isBlank()) return null
+            val trimmed = input.trim().lowercase()
+            if (trimmed.isBlank()) return null
 
-            val regex = Regex("(\\d+)([dhms])")
-            val matches = regex.findAll(input.lowercase())
-            if (!matches.any()) return null
+            val regex = Regex("(\\d+)(mo|[smhdw])")
+            val matches = regex.findAll(trimmed).toList()
+            if (matches.isEmpty()) return null
 
-            var total = 0L
-            for (match in regex.findAll(input.lowercase())) {
-                val value = match.groupValues[1].toLongOrNull() ?: return null
-                val unit = match.groupValues[2]
-                total += when (unit) {
-                    "d" -> value * 86400000
-                    "h" -> value * 3600000
-                    "m" -> value * 60000
-                    "s" -> value * 1000
-                    else -> return null
+            // Reject trailing/interleaved garbage - every character must belong to a matched token.
+            val matchedLength = matches.sumOf { it.value.length }
+            if (matchedLength != trimmed.length) return null
+
+            val total = try {
+                var sum = 0L
+                for (match in matches) {
+                    val value = match.groupValues[1].toLongOrNull() ?: return null
+                    val unitMs = when (match.groupValues[2]) {
+                        "mo" -> 2_592_000_000L
+                        "w" -> 604_800_000L
+                        "d" -> 86_400_000L
+                        "h" -> 3_600_000L
+                        "m" -> 60_000L
+                        "s" -> 1_000L
+                        else -> return null
+                    }
+                    sum = Math.addExact(sum, Math.multiplyExact(value, unitMs))
                 }
+                sum
+            } catch (_: ArithmeticException) {
+                return null
             }
 
-            return if (total > 0) total else null
+            if (total <= 0L) return null
+
+            val maxDuration = 100L * 365 * 86_400_000L // ~100 years - reject absurd overflow values
+            if (total > maxDuration) return null
+
+            return total
         }
     }
 }

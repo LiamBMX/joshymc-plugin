@@ -48,6 +48,10 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
 
     private val arenas = mutableListOf<Arena>()
     private val arenaSelections = mutableMapOf<UUID, MutableList<Pair<Int, Int>>>()
+    /** World each player's in-progress wand selection was started in — points
+     *  added in a different world would silently corrupt the saved arena's
+     *  bounds, so new points are rejected unless the world matches. */
+    private val arenaSelectionWorlds = mutableMapOf<UUID, String>()
     val playersInArena = mutableMapOf<UUID, Int>()
     private val hadFlightInArena = java.util.concurrent.ConcurrentHashMap.newKeySet<UUID>()
 
@@ -56,29 +60,31 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
     private lateinit var pvpTask: BukkitTask
     private lateinit var particleTask: BukkitTask
 
-    private lateinit var arenasFile: File
-    private lateinit var arenasConfig: YamlConfiguration
+    // Initialized eagerly at construction time (not in start()) so that
+    // arenasConfig is guaranteed to exist even if the "arenas" feature flag
+    // is off and start() is never called, but the /arena command is still
+    // registered and reachable. See issue #590.
+    private val arenasFile: File = plugin.configFile("arenas.yml").also { file ->
+        if (!file.exists()) {
+            file.parentFile?.mkdirs()
+            file.createNewFile()
+        }
+    }
+    private var arenasConfig: YamlConfiguration = YamlConfiguration.loadConfiguration(arenasFile)
     private var nextId: Int = 1
 
     private val comms get() = plugin.commsManager
     private val db get() = plugin.databaseManager
 
+    init {
+        // One-time migration from the old SQLite arenas table to arenas.yml
+        migrateFromDatabaseIfNeeded()
+        loadArenas()
+    }
+
     // ── Lifecycle ────────────────────────────────────────
 
     fun start() {
-        // Initialize YAML storage (supports plugins/joshymc/config/arenas.yml or plugins/joshymc/arenas.yml)
-        arenasFile = plugin.configFile("arenas.yml")
-        if (!arenasFile.exists()) {
-            arenasFile.parentFile?.mkdirs()
-            arenasFile.createNewFile()
-        }
-        arenasConfig = YamlConfiguration.loadConfiguration(arenasFile)
-
-        // One-time migration from the old SQLite arenas table to arenas.yml
-        migrateFromDatabaseIfNeeded()
-
-        loadArenas()
-
         pvpTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickPvpZones() }, 20L, 10L)
         particleTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickBorderParticles() }, 40L, 30L)
 
@@ -301,6 +307,7 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 // having to flip /pvp first. The setting persists, but most
                 // players want it on inside the arena anyway.
                 playersInArena[player.uniqueId] = arena.id
+                plugin.rankManager.refreshCollisionIfChanged(player)
                 if (!plugin.settingsManager.getSetting(player, CombatManager.PVP_SETTING_KEY)) {
                     plugin.settingsManager.setSetting(player, CombatManager.PVP_SETTING_KEY, true)
                     comms.send(player, Component.text("PvP auto-enabled \u2014 you entered an arena.", NamedTextColor.YELLOW))
@@ -319,11 +326,14 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                     Title.Times.times(Duration.ofMillis(200), Duration.ofSeconds(2), Duration.ofMillis(500))
                 ))
                 player.playSound(player.location, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.3f, 1.2f)
+                comms.send(player, Component.text("Entered arena: ", NamedTextColor.RED)
+                    .append(Component.text(arena.name, NamedTextColor.GOLD)))
             } else if (arena == null && wasIn != null) {
                 // Leaving arena — remove barrier if they had one
                 val oldArena = arenas.find { it.id == wasIn }
                 if (oldArena != null) hideBarrier(player, oldArena)
                 playersInArena.remove(player.uniqueId)
+                plugin.rankManager.refreshCollisionIfChanged(player)
                 restoreArenaFlight(player)
                 player.showTitle(Title.title(
                     Component.text("Safe Zone", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true),
@@ -331,9 +341,22 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                     Title.Times.times(Duration.ofMillis(200), Duration.ofSeconds(1), Duration.ofMillis(500))
                 ))
                 player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_CHIME, 0.5f, 1.5f)
+                if (oldArena != null) {
+                    comms.send(player, Component.text("Left arena: ", NamedTextColor.GREEN)
+                        .append(Component.text(oldArena.name, NamedTextColor.GOLD)))
+                }
             } else if (arena != null && wasIn != null && arena.id != wasIn) {
-                // Moved to a different arena
+                // Moved directly from one arena into another — announce both
+                // the leave and the enter so messaging stays consistent with
+                // the null <-> arena transitions above.
+                val oldArena = arenas.find { it.id == wasIn }
                 playersInArena[player.uniqueId] = arena.id
+                if (oldArena != null) {
+                    comms.send(player, Component.text("Left arena: ", NamedTextColor.GREEN)
+                        .append(Component.text(oldArena.name, NamedTextColor.GOLD)))
+                }
+                comms.send(player, Component.text("Entered arena: ", NamedTextColor.RED)
+                    .append(Component.text(arena.name, NamedTextColor.GOLD)))
             }
         }
 
@@ -424,6 +447,13 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
         val block = event.clickedBlock ?: return
         val x = block.x
         val z = block.z
+
+        val selectionWorld = arenaSelectionWorlds[player.uniqueId]
+        if (selectionWorld != null && selectionWorld != block.world.name) {
+            comms.send(player, Component.text("Your selection points must all be in the same world. Use /arena clear to start over.", NamedTextColor.RED))
+            return
+        }
+        arenaSelectionWorlds[player.uniqueId] = block.world.name
 
         val selection = arenaSelections.getOrPut(player.uniqueId) { mutableListOf() }
         selection.add(x to z)
@@ -606,6 +636,46 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
     }
 
     /**
+     * PlayerMoveEvent only covers walking/knockback. Teleports (ender pearls,
+     * chorus fruit, /tpa, /home, /warp, and every other JoshyMC teleport
+     * command) go through Player.teleport() instead, which fires
+     * PlayerTeleportEvent — so combat-tagged arena players could otherwise
+     * pearl or command their way out. Cancel any teleport that would take a
+     * combat-tagged player from inside their arena to outside it (or into
+     * another world); teleports that land back inside the same arena are
+     * unaffected.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onCombatTeleport(event: org.bukkit.event.player.PlayerTeleportEvent) {
+        val player = event.player
+        if (!plugin.combatManager.isTagged(player)) return
+
+        val from = event.from
+        val to = event.to ?: return
+
+        val arenaId = playersInArena[player.uniqueId]
+        val arena = (if (arenaId != null) arenas.find { it.id == arenaId } else null)
+            ?: findArenaAt(player)
+            ?: return
+
+        val fromInside = from.world?.name == arena.world
+                && from.blockY >= arena.minY
+                && isInsidePolygon(from.x, from.z, arena.points)
+        if (!fromInside) return
+
+        val toInside = to.world?.name == arena.world
+                && to.blockY >= arena.minY
+                && isInsidePolygon(to.x, to.z, arena.points)
+        if (toInside) return
+
+        event.isCancelled = true
+        plugin.commsManager.sendActionBar(
+            player,
+            Component.text("You can't leave the arena while in combat!", NamedTextColor.RED)
+        )
+    }
+
+    /**
      * Backstop: every 5 ticks, sweep all combat-tagged players. If any of
      * them ended up OUTSIDE their arena polygon (high-velocity launch,
      * server-side teleport from another plugin, anything that bypassed the
@@ -753,6 +823,8 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
         barrierPlayers.remove(uuid)
         lastPlayerHitMs.remove(uuid)
         hadFlightInArena.remove(uuid)
+        arenaSelections.remove(uuid)
+        arenaSelectionWorlds.remove(uuid)
     }
 
     private fun getDamager(event: EntityDamageByEntityEvent): Player? {
@@ -818,6 +890,21 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 "undo" -> handleUndo(sender)
                 "clear" -> handleClear(sender)
                 "tp" -> handleTeleport(sender, args)
+                "buildwand" -> {
+                    sender.inventory.addItem(plugin.buildPvpManager.createWand())
+                    comms.send(sender, Component.text("Build PvP wand added. Right-click corner 1, then corner 2 to set the arena.", NamedTextColor.GREEN))
+                }
+                "resetbuild" -> {
+                    if (plugin.buildPvpManager.region == null) {
+                        comms.send(sender, Component.text("No Build PvP arena is set.", NamedTextColor.RED))
+                    } else {
+                        plugin.buildPvpManager.resetArena()
+                        comms.send(sender, Component.text("Build PvP arena manually reset.", NamedTextColor.GREEN))
+                    }
+                }
+                "clearbuild" -> {
+                    plugin.buildPvpManager.clearRegion(sender)
+                }
                 "debug" -> {
                     val loc = sender.location
                     comms.send(sender, Component.text("Your position: ${loc.x.toInt()}, ${loc.z.toInt()}", NamedTextColor.GRAY))
@@ -848,6 +935,9 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 "&e/arena info <name> &7- Arena details",
                 "&e/arena enable/disable <name> &7- Toggle arena",
                 "&e/arena tp <name> &7- Teleport to arena center",
+                "&e/arena buildwand &7- Get Build PvP wand (2-corner cuboid)",
+                "&e/arena resetbuild &7- Manually reset Build PvP arena",
+                "&e/arena clearbuild &7- Remove Build PvP arena",
                 ""
             )
             for (line in lines) {
@@ -883,8 +973,13 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 return
             }
 
-            createArena(name, player.world.name, minY, selection.toList())
+            // Use the world the points were actually collected in, not
+            // wherever the player happens to be standing now — they may
+            // have walked/teleported away since finishing their selection.
+            val world = arenaSelectionWorlds[player.uniqueId] ?: player.world.name
+            createArena(name, world, minY, selection.toList())
             arenaSelections.remove(player.uniqueId)
+            arenaSelectionWorlds.remove(player.uniqueId)
 
             comms.send(player, Component.text("Arena ", NamedTextColor.GREEN)
                 .append(Component.text(name, NamedTextColor.GOLD))
@@ -979,11 +1074,13 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 return
             }
             val removed = selection.removeAt(selection.size - 1)
+            if (selection.isEmpty()) arenaSelectionWorlds.remove(player.uniqueId)
             comms.send(player, Component.text("Removed point (${removed.first}, ${removed.second}). Remaining: ${selection.size}", NamedTextColor.YELLOW))
         }
 
         private fun handleClear(player: Player) {
             arenaSelections.remove(player.uniqueId)
+            arenaSelectionWorlds.remove(player.uniqueId)
             comms.send(player, Component.text("Selection cleared.", NamedTextColor.YELLOW))
         }
 
@@ -1020,7 +1117,7 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
 
             return when (args.size) {
                 1 -> {
-                    val subs = listOf("wand", "create", "delete", "list", "info", "enable", "disable", "points", "undo", "clear", "tp")
+                    val subs = listOf("wand", "create", "delete", "list", "info", "enable", "disable", "points", "undo", "clear", "tp", "buildwand", "resetbuild", "clearbuild")
                     subs.filter { it.startsWith(args[0].lowercase()) }
                 }
                 2 -> {

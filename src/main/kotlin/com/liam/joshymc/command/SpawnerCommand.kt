@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -13,21 +14,11 @@ import org.bukkit.entity.Player
 
 class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
-    private val subcommands = listOf("shop", "give", "list")
+    private val adminSubcommands = listOf("give", "list")
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        // /spawner (no args) → open shop GUI for everyone
-        if (args.isEmpty()) {
-            if (sender !is Player) {
-                sendMsg(sender, Component.text("Players only.", NamedTextColor.RED))
-                return true
-            }
-            plugin.spawnerManager.openShop(sender)
-            return true
-        }
-
-        // /spawner shop → also opens shop
-        if (args[0].equals("shop", ignoreCase = true)) {
+        // /spawner (no args) or /spawner shop → open the spawner shop GUI
+        if (args.isEmpty() || args[0].equals("shop", ignoreCase = true)) {
             if (sender !is Player) {
                 sendMsg(sender, Component.text("Players only.", NamedTextColor.RED))
                 return true
@@ -37,7 +28,8 @@ class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         // Other subcommands require admin permission
-        if (!sender.hasPermission("joshymc.spawner.admin")) {
+        // (joshymc.spawner.admin is the legacy singular form, kept for backward compatibility)
+        if (!sender.hasPermission("joshymc.spawner.admin") && !sender.hasPermission("joshymc.spawners.admin")) {
             sendMsg(sender, Component.text("No permission.", NamedTextColor.RED))
             return true
         }
@@ -95,9 +87,7 @@ class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         var given = 0
         for (target in targets) {
             val item = plugin.spawnerManager.createSpawnerItem(typeId, amount) ?: continue
-            target.inventory.addItem(item).values.forEach { overflow ->
-                target.world.dropItemNaturally(target.location, overflow)
-            }
+            plugin.giveItemSafely(target, item)
             given++
         }
 
@@ -114,7 +104,7 @@ class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         for (type in types) {
             sender.sendMessage(
                 Component.text("  - ${type.id} ", NamedTextColor.GRAY)
-                    .append(Component.text("(${type.mob.name}, ${type.intervalSeconds}s, ${type.minDropsPerInterval}-${type.maxDropsPerInterval} drops)", NamedTextColor.DARK_GRAY))
+                    .append(Component.text("(${type.mob.name})", NamedTextColor.DARK_GRAY))
             )
         }
     }
@@ -130,6 +120,7 @@ class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     private fun sendUsage(sender: CommandSender) {
         sendMsg(sender, Component.text("Spawner Commands:", NamedTextColor.GREEN))
         val usages = listOf(
+            "/spawner shop",
             "/spawner give <id> [player|@a] [amount]",
             "/spawner list"
         )
@@ -142,23 +133,24 @@ class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (!sender.hasPermission("joshymc.spawner.admin")) return emptyList()
+        val isAdmin = sender.hasPermission("joshymc.spawner.admin") || sender.hasPermission("joshymc.spawners.admin")
+        val allSubs = if (isAdmin) listOf("shop") + adminSubcommands else listOf("shop")
 
         return when (args.size) {
-            1 -> subcommands.filter { it.startsWith(args[0].lowercase()) }
+            1 -> allSubs.filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
-                "give" -> plugin.spawnerManager.getTypes().map { it.id }.filter { it.startsWith(args[1].lowercase()) }
+                "give" -> if (isAdmin) plugin.spawnerManager.getTypes().map { it.id }.filter { it.startsWith(args[1].lowercase()) } else emptyList()
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
-                "give" -> {
+                "give" -> if (isAdmin) {
                     val names = Bukkit.getOnlinePlayers().map { it.name } + listOf("@a", "@r")
                     names.filter { it.startsWith(args[2], ignoreCase = true) }
-                }
+                } else emptyList()
                 else -> emptyList()
             }
             4 -> when (args[0].lowercase()) {
-                "give" -> listOf("1", "4", "8", "16", "32", "64").filter { it.startsWith(args[3]) }
+                "give" -> if (isAdmin) listOf("1", "4", "8", "16", "32", "64").filter { it.startsWith(args[3]) } else emptyList()
                 else -> emptyList()
             }
             else -> emptyList()

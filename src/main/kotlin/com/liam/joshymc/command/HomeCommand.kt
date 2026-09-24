@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gui.home.HomeGui
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -18,7 +19,12 @@ class HomeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
-        val name = (args.getOrNull(0) ?: "home").lowercase()
+        if (args.isEmpty()) {
+            HomeGui.open(plugin, sender)
+            return true
+        }
+
+        val name = args[0].lowercase()
         val uuid = sender.uniqueId.toString()
 
         val location = plugin.warpManager.getHome(uuid, name)

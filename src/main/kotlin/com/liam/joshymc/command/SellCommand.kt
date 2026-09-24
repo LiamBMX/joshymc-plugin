@@ -16,7 +16,10 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.inventory.InventoryAction
+import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryCloseEvent
+import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
@@ -25,15 +28,26 @@ import java.util.concurrent.ConcurrentHashMap
 
 class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, Listener {
 
-    /** Tracks players with the sell GUI open — UUID to inventory */
-    private val openSellGuis = ConcurrentHashMap<UUID, Inventory>()
+    /** One deposit slots + control row, per open GUI. Removed from the map exactly once —
+     *  on close or on quit, whichever fires first — so a sale can never be processed twice. */
+    private class SellSession(val inventory: Inventory)
+
+    private val openSellSessions = ConcurrentHashMap<UUID, SellSession>()
+
+    /** Deposit area is the top 5 rows (0-44); the bottom row (45-53) is info/control only. */
+    private val DEPOSIT_SLOTS = 45
+    private val GUI_SIZE = 54
+
+    private val CONTROL_FILLER = ItemStack(Material.GRAY_STAINED_GLASS_PANE).apply {
+        editMeta { it.displayName(Component.empty()) }
+    }
 
     // Cache of all sellable material names for tab completion
     private var sellableMaterials: List<String> = emptyList()
 
     fun refreshSellableCache() {
         sellableMaterials = Material.entries
-            .filter { (plugin.serverShopManager.getSellPrice(it) ?: 0.0) > 0 }
+            .filter { plugin.sellPriceManager.getPrice(it) != null }
             .map { it.name.lowercase() }
     }
 
@@ -68,7 +82,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
                 true
             }
             null -> {
-                // /sell with no args — open sell GUI
+                // /sell with no args — open the deposit GUI
                 openSellGui(sender)
                 true
             }
@@ -87,7 +101,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
     }
 
     // ══════════════════════════════════════════════════════════
-    //  SELL GUI — place items in to sell them
+    //  SELL GUI — deposit items to sell them, sale confirms on close
     // ══════════════════════════════════════════════════════════
 
     private fun openSellGui(player: Player) {
@@ -95,51 +109,176 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false)
 
-        val inv = Bukkit.createInventory(null, 54, title)
-        openSellGuis[player.uniqueId] = inv
+        val inv = Bukkit.createInventory(null, GUI_SIZE, title)
+        buildControlRow(inv, 0.0)
+
+        openSellSessions[player.uniqueId] = SellSession(inv)
         player.openInventory(inv)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    private fun buildControlRow(inv: Inventory, estimate: Double) {
+        for (i in DEPOSIT_SLOTS until GUI_SIZE) inv.setItem(i, CONTROL_FILLER.clone())
+
+        val info = ItemStack(Material.PAPER).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text("How This Works", NamedTextColor.AQUA)
+                        .decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, true)
+                )
+                meta.lore(listOf(
+                    Component.empty(),
+                    Component.text("Place items in the slots above.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.text("Unsellable items are ignored", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.text("and returned to you.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.empty()
+                ))
+            }
+        }
+        inv.setItem(45, info)
+
+        inv.setItem(49, buildValueItem(estimate))
+
+        val closeInfo = ItemStack(Material.HOPPER).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text("Sells On Close", NamedTextColor.YELLOW)
+                        .decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, true)
+                )
+                meta.lore(listOf(
+                    Component.empty(),
+                    Component.text("Closing this menu sells", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.text("everything sellable above.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.text("No extra confirmation needed.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.empty()
+                ))
+            }
+        }
+        inv.setItem(53, closeInfo)
+    }
+
+    private fun buildValueItem(estimate: Double): ItemStack {
+        return ItemStack(Material.GOLD_INGOT).apply {
+            editMeta { meta ->
+                meta.displayName(
+                    Component.text("Estimated Value", NamedTextColor.GREEN)
+                        .decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, true)
+                )
+                meta.lore(listOf(
+                    Component.empty(),
+                    Component.text("$" + plugin.economyManager.formatShort(estimate), NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false),
+                    Component.empty()
+                ))
+            }
+        }
+    }
+
+    private fun refreshEstimate(session: SellSession) {
+        var total = 0.0
+        for (i in 0 until DEPOSIT_SLOTS) {
+            val item = session.inventory.getItem(i) ?: continue
+            total += plugin.sellPriceManager.getStackValue(item)
+        }
+        total = Math.round(total * 100.0) / 100.0
+        session.inventory.setItem(49, buildValueItem(total))
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    fun onSellGuiClick(event: InventoryClickEvent) {
+        val player = event.whoClicked as? Player ?: return
+        val session = openSellSessions[player.uniqueId] ?: return
+        if (event.view.topInventory !== session.inventory) return
+
+        // COLLECT_TO_CURSOR (double-click) gathers every matching-material stack from
+        // BOTH inventories regardless of which slot was actually clicked — that would
+        // scoop the control-row items (e.g. the "Estimated Value" gold ingot) off the
+        // GUI if the player happens to be holding a matching material. Block it outright.
+        if (event.action == InventoryAction.COLLECT_TO_CURSOR) {
+            event.isCancelled = true
+            return
+        }
+
+        // Block placing/taking/swapping in the control row — it's info-only.
+        if (event.clickedInventory === session.inventory && event.slot >= DEPOSIT_SLOTS) {
+            event.isCancelled = true
+            return
+        }
+
+        // Any other click that touches this GUI (deposit, shift-click, swap, etc.) may have
+        // changed the deposit contents — recompute the estimate once the click resolves.
+        Bukkit.getScheduler().runTask(plugin, Runnable {
+            if (openSellSessions[player.uniqueId] === session) refreshEstimate(session)
+        })
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    fun onSellGuiDrag(event: InventoryDragEvent) {
+        val player = event.whoClicked as? Player ?: return
+        val session = openSellSessions[player.uniqueId] ?: return
+        if (event.view.topInventory !== session.inventory) return
+
+        if (event.rawSlots.any { it in DEPOSIT_SLOTS until GUI_SIZE }) {
+            event.isCancelled = true
+            return
+        }
+
+        Bukkit.getScheduler().runTask(plugin, Runnable {
+            if (openSellSessions[player.uniqueId] === session) refreshEstimate(session)
+        })
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     fun onSellGuiClose(event: InventoryCloseEvent) {
         val player = event.player as? Player ?: return
-        val sellInv = openSellGuis.remove(player.uniqueId) ?: return
-
-        // Process the inventory: sell what's sellable, return what isn't
-        processSellGui(player, sellInv)
+        val session = openSellSessions.remove(player.uniqueId) ?: return
+        processSellSession(player, session)
     }
 
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
-        val sellInv = openSellGuis.remove(event.player.uniqueId) ?: return
-        // Return all items on disconnect (anti-dupe: don't sell, just give back)
-        returnAllItems(event.player, sellInv)
+        val session = openSellSessions.remove(event.player.uniqueId) ?: return
+        processSellSession(event.player, session)
     }
 
-    private fun processSellGui(player: Player, inv: Inventory) {
+    /** Called from Joshymc.onDisable()/reload() so no deposited items are ever lost on
+     *  shutdown or plugin reload — every open session is settled exactly once. */
+    fun resolveAllOpenSessions() {
+        for ((uuid, session) in openSellSessions.toMap()) {
+            openSellSessions.remove(uuid)
+            val player = Bukkit.getPlayer(uuid) ?: continue
+            processSellSession(player, session)
+            player.closeInventory()
+        }
+    }
+
+    private fun processSellSession(player: Player, session: SellSession) {
+        val inv = session.inventory
         var totalEarned = 0.0
+        var soldCount = 0
+        var returnedCount = 0
         val breakdown = mutableMapOf<Material, Int>()
         val unsellable = mutableListOf<ItemStack>()
 
-        for (i in 0 until inv.size) {
+        for (i in 0 until DEPOSIT_SLOTS) {
             val item = inv.getItem(i) ?: continue
             if (item.type == Material.AIR) continue
 
-            val price = plugin.serverShopManager.getSellPrice(item.type) ?: 0.0
-            if (price > 0) {
-                totalEarned += price * item.amount
+            if (plugin.sellPriceManager.isSellable(item)) {
+                totalEarned += plugin.sellPriceManager.getStackValue(item)
+                soldCount += item.amount
                 breakdown[item.type] = (breakdown[item.type] ?: 0) + item.amount
             } else {
                 unsellable.add(item.clone())
+                returnedCount += item.amount
             }
-            inv.setItem(i, null) // Clear the sell GUI slot
+            inv.setItem(i, null)
         }
 
-        // Return unsellable items to player
+        totalEarned = Math.round(totalEarned * 100.0) / 100.0
+
         for (item in unsellable) {
             val leftover = player.inventory.addItem(item)
-            for ((_, drop) in leftover) {
+            for (drop in leftover.values) {
                 player.world.dropItemNaturally(player.location, drop)
             }
         }
@@ -150,24 +289,35 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
                 plugin.marketManager.recordTransaction(material, "SELL", amount)
             }
             player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
-            sendSellSummary(player, totalEarned, breakdown)
-        } else if (unsellable.isNotEmpty()) {
-            plugin.commsManager.send(player,
-                Component.text("None of those items can be sold. Items returned.", NamedTextColor.RED),
-                CommunicationsManager.Category.ECONOMY
-            )
+        }
+
+        if (soldCount > 0 || returnedCount > 0) {
+            sendSellCloseSummary(player, soldCount, totalEarned, returnedCount)
         }
     }
 
-    private fun returnAllItems(player: Player, inv: Inventory) {
-        for (i in 0 until inv.size) {
-            val item = inv.getItem(i) ?: continue
-            if (item.type == Material.AIR) continue
-            val leftover = player.inventory.addItem(item)
-            for ((_, drop) in leftover) {
-                player.world.dropItemNaturally(player.location, drop)
-            }
+    private fun sendSellCloseSummary(player: Player, soldCount: Int, total: Double, returnedCount: Int) {
+        if (soldCount == 0) {
+            plugin.commsManager.send(player,
+                Component.text("None of those items could be sold. Items returned.", NamedTextColor.RED),
+                CommunicationsManager.Category.ECONOMY
+            )
+            return
         }
+
+        var message = Component.text("Sold ", NamedTextColor.GREEN)
+            .append(Component.text("${"%,d".format(soldCount)} items", NamedTextColor.WHITE))
+            .append(Component.text(" for ", NamedTextColor.GREEN))
+            .append(Component.text("$" + plugin.economyManager.formatShort(total), NamedTextColor.GOLD))
+            .append(Component.text(".", NamedTextColor.GREEN))
+
+        if (returnedCount > 0) {
+            message = message.append(
+                Component.text(" ${"%,d".format(returnedCount)} unsellable item${if (returnedCount == 1) "" else "s"} were returned.", NamedTextColor.GRAY)
+            )
+        }
+
+        plugin.commsManager.send(player, message, CommunicationsManager.Category.ECONOMY)
     }
 
     // ══════════════════════════════════════════════════════════
@@ -180,10 +330,12 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
 
         for (i in 0 until player.inventory.size) {
             val item = player.inventory.getItem(i) ?: continue
-            val price = plugin.serverShopManager.getSellPrice(item.type) ?: 0.0
-            if (price <= 0) continue
+            if (!plugin.sellPriceManager.isSellable(item)) continue
 
-            totalEarned += price * item.amount
+            val basePrice = plugin.sellPriceManager.getPrice(item.type) ?: continue
+            val price = plugin.serverShopManager.applyCropBonus(basePrice, item.type, player.uniqueId)
+            val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
+            totalEarned += price * mutMult * item.amount
             breakdown[item.type] = (breakdown[item.type] ?: 0) + item.amount
             player.inventory.setItem(i, null)
         }
@@ -212,16 +364,21 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             return
         }
 
-        val price = plugin.serverShopManager.getSellPrice(material) ?: 0.0
-        if (price <= 0) {
+        val basePrice = plugin.sellPriceManager.getPrice(material)
+        if (basePrice == null) {
             plugin.commsManager.send(player, Component.text("That item cannot be sold.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
         }
 
+        val price = plugin.serverShopManager.applyCropBonus(basePrice, material, player.uniqueId)
+
         var count = 0
+        var totalEarned = 0.0
         for (i in 0 until player.inventory.size) {
             val item = player.inventory.getItem(i) ?: continue
-            if (item.type == material) {
+            if (item.type == material && plugin.sellPriceManager.isSellable(item)) {
+                val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
+                totalEarned += price * mutMult * item.amount
                 count += item.amount
                 player.inventory.setItem(i, null)
             }
@@ -231,8 +388,6 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             plugin.commsManager.send(player, Component.text("You don't have any of that item.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
         }
-
-        val totalEarned = price * count
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
         plugin.marketManager.recordTransaction(material, "SELL", count)
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
@@ -250,30 +405,34 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             return
         }
 
-        val price = plugin.serverShopManager.getSellPrice(handItem.type) ?: 0.0
-        if (price <= 0) {
+        if (!plugin.sellPriceManager.isSellable(handItem)) {
             plugin.commsManager.send(player, Component.text("This item cannot be sold.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
         }
 
         val material = handItem.type
+        val basePrice = plugin.sellPriceManager.getPrice(material) ?: return
+        val price = plugin.serverShopManager.applyCropBonus(basePrice, material, player.uniqueId)
         val totalAmount: Int
         val totalEarned: Double
 
         if (allOfType) {
             var count = 0
+            var earned = 0.0
             for (i in 0 until player.inventory.size) {
                 val item = player.inventory.getItem(i) ?: continue
-                if (item.type == material) {
+                if (item.type == material && plugin.sellPriceManager.isSellable(item)) {
+                    val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
+                    earned += price * mutMult * item.amount
                     count += item.amount
                     player.inventory.setItem(i, null)
                 }
             }
             totalAmount = count
-            totalEarned = price * totalAmount
+            totalEarned = earned
         } else {
             totalAmount = handItem.amount
-            totalEarned = price * totalAmount
+            totalEarned = price * plugin.mutationsManager.getMutationMultiplier(handItem) * totalAmount
             player.inventory.setItemInMainHand(null)
         }
 
@@ -302,10 +461,6 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
                 CommunicationsManager.Category.ECONOMY
             )
         }
-    }
-
-    private fun formatMaterialName(material: Material): String {
-        return material.name.lowercase().replace('_', ' ')
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {

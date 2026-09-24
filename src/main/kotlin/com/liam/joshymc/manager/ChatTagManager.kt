@@ -5,6 +5,7 @@ import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
+import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.Sound
 import org.bukkit.configuration.file.YamlConfiguration
@@ -25,6 +26,7 @@ class ChatTagManager(private val plugin: Joshymc) {
     private val tags = mutableMapOf<String, ChatTag>()
     private val categories = mutableListOf<String>()
     private val playerTags = mutableMapOf<UUID, String>() // UUID -> tag ID
+    private val unlockedTags = mutableMapOf<UUID, MutableSet<String>>() // UUID -> unlocked tag IDs (issue #597)
 
     fun start() {
         // Save default tags.yml if missing; otherwise merge in any new
@@ -48,6 +50,11 @@ class ChatTagManager(private val plugin: Joshymc) {
             return
         }
         for (categoryId in tagsSection.getKeys(false)) {
+            // Only the approved normal categories (plus the dynamic voucher-only
+            // "Special Chat Tags" category) may load — issue #602 trimmed the
+            // category list, and this also prunes any leftover unapproved
+            // categories still sitting in an admin's on-disk tags.yml.
+            if (categoryId != VOUCHER_CATEGORY && categoryId !in APPROVED_CATEGORIES) continue
             categories.add(categoryId)
             val catSection = tagsSection.getConfigurationSection(categoryId) ?: continue
             for (tagId in catSection.getKeys(false)) {
@@ -74,6 +81,24 @@ class ChatTagManager(private val plugin: Joshymc) {
             if (tags.containsKey(tagId)) {
                 playerTags[uuid] = tagId
             }
+        }
+
+        // Chat Tag voucher unlocks (issue #597) — per-player ownership of tags that
+        // were redeemed from a physical voucher rather than granted via permission.
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS chat_tag_unlocks (
+                uuid TEXT NOT NULL,
+                tag_id TEXT NOT NULL,
+                PRIMARY KEY (uuid, tag_id)
+            )
+        """.trimIndent())
+
+        unlockedTags.clear()
+        val unlockRows = plugin.databaseManager.query("SELECT uuid, tag_id FROM chat_tag_unlocks") { rs ->
+            UUID.fromString(rs.getString("uuid")) to rs.getString("tag_id")
+        }
+        for ((uuid, tagId) in unlockRows) {
+            unlockedTags.getOrPut(uuid) { mutableSetOf() }.add(tagId)
         }
 
         plugin.logger.info("[ChatTags] Loaded ${tags.size} tags in ${categories.size} categories, ${playerTags.size} player selections.")
@@ -111,10 +136,120 @@ class ChatTagManager(private val plugin: Joshymc) {
 
     fun canUse(player: Player, tag: ChatTag): Boolean {
         if (tag.permission == null) return true
-        return player.hasPermission(tag.permission)
+        if (player.hasPermission(tag.permission)) return true
+        return hasUnlocked(player.uniqueId, tag.id)
+    }
+
+    // ── Voucher unlocks (issue #597) ──────────────────
+
+    fun hasUnlocked(uuid: UUID, tagId: String): Boolean = unlockedTags[uuid]?.contains(tagId) == true
+
+    /** Permanently grants [tagId] to [uuid]. Returns true if this is a new unlock, false if already owned. */
+    fun unlockTag(uuid: UUID, tagId: String): Boolean {
+        if (hasUnlocked(uuid, tagId)) return false
+        val rows = plugin.databaseManager.executeUpdate(
+            "INSERT OR IGNORE INTO chat_tag_unlocks (uuid, tag_id) VALUES (?, ?)",
+            uuid.toString(), tagId
+        )
+        if (rows <= 0) return false
+        unlockedTags.getOrPut(uuid) { mutableSetOf() }.add(tagId)
+        return true
+    }
+
+    /** True for tags created through `/voucher create` (issue #597) — the only tags physical Chat Tag vouchers may target. */
+    fun isVoucherTag(tag: ChatTag): Boolean = tag.category == VOUCHER_CATEGORY
+
+    fun getVoucherTagIds(): List<String> = tags.values.filter { isVoucherTag(it) }.map { it.id }
+
+    fun getVoucherTag(id: String): ChatTag? = tags[id]?.takeIf { isVoucherTag(it) }
+
+    /**
+     * Creates a brand-new, voucher-only Chat Tag. It's locked behind a unique
+     * per-tag permission node that nobody holds by default, so the only way to
+     * obtain it is redeeming the matching physical voucher via
+     * [ChatTagVoucherManager] (which calls [unlockTag]). Returns null if
+     * [rawId] normalizes to nothing, the display is blank, or the id already
+     * exists in any category.
+     */
+    fun createVoucherTag(rawId: String, rawDisplay: String): ChatTag? {
+        val id = rawId.lowercase().replace(Regex("[^a-z0-9_]"), "")
+        if (id.isBlank() || tags.containsKey(id)) return null
+
+        val trimmedDisplay = rawDisplay.trim()
+        if (trimmedDisplay.isBlank()) return null
+        val display = "$trimmedDisplay "
+
+        val permission = "$VOUCHER_PERMISSION_PREFIX$id"
+        val tag = ChatTag(id, VOUCHER_CATEGORY, display, permission)
+
+        tags[id] = tag
+        if (VOUCHER_CATEGORY !in categories) categories.add(VOUCHER_CATEGORY)
+        persistVoucherTag(id, display, permission)
+        return tag
+    }
+
+    private fun persistVoucherTag(id: String, display: String, permission: String) {
+        val file = plugin.configFile("tags.yml")
+        val config = YamlConfiguration.loadConfiguration(file)
+        config.set("tags.$VOUCHER_CATEGORY.$id.display", display)
+        config.set("tags.$VOUCHER_CATEGORY.$id.permission", permission)
+        try {
+            config.save(file)
+        } catch (e: Exception) {
+            plugin.logger.warning("[ChatTags] Failed to persist voucher tag '$id': ${e.message}")
+        }
+    }
+
+    enum class DeleteVoucherTagResult { NOT_FOUND, NOT_VOUCHER_TAG, DELETED }
+
+    /**
+     * Deletes a Chat Tag created via [createVoucherTag] (`/voucher tag delete`, issue #606).
+     * Refuses to touch normal built-in tags — only [isVoucherTag] tags qualify. Any player
+     * with the tag equipped is safely unequipped, and voucher ownership is revoked so
+     * un-redeemed physical vouchers for this id fail safely (see [ChatTagVoucherManager.redeem],
+     * which already treats an unknown [getTag] as an invalid voucher).
+     */
+    fun deleteVoucherTag(id: String): DeleteVoucherTagResult {
+        val tag = tags[id] ?: return DeleteVoucherTagResult.NOT_FOUND
+        if (!isVoucherTag(tag)) return DeleteVoucherTagResult.NOT_VOUCHER_TAG
+
+        tags.remove(id)
+
+        val equippedBy = playerTags.filterValues { it == id }.keys.toList()
+        for (uuid in equippedBy) playerTags.remove(uuid)
+        if (equippedBy.isNotEmpty()) {
+            plugin.databaseManager.execute("DELETE FROM player_tags WHERE tag_id = ?", id)
+        }
+
+        for (unlocked in unlockedTags.values) unlocked.remove(id)
+        plugin.databaseManager.execute("DELETE FROM chat_tag_unlocks WHERE tag_id = ?", id)
+
+        removeVoucherTagFromFile(id)
+
+        for (uuid in equippedBy) {
+            val online = Bukkit.getPlayer(uuid) ?: continue
+            plugin.commsManager.send(online, Component.text("Your equipped Chat Tag was removed by an admin.", NamedTextColor.YELLOW))
+        }
+
+        return DeleteVoucherTagResult.DELETED
+    }
+
+    private fun removeVoucherTagFromFile(id: String) {
+        val file = plugin.configFile("tags.yml")
+        val config = YamlConfiguration.loadConfiguration(file)
+        config.set("tags.$VOUCHER_CATEGORY.$id", null)
+        try {
+            config.save(file)
+        } catch (e: Exception) {
+            plugin.logger.warning("[ChatTags] Failed to remove voucher tag '$id' from tags.yml: ${e.message}")
+        }
     }
 
     // ── GUI ──────────────────────────────────────────
+
+    /** "Vibe" for a normal category, "Special Chat Tags" for the voucher-only category (issue #602). */
+    private fun categoryDisplayName(category: String): String =
+        if (category == VOUCHER_CATEGORY) "Special Chat Tags" else category.replaceFirstChar { it.uppercase() }
 
     fun openCategoryMenu(player: Player) {
         val size = 54
@@ -131,20 +266,18 @@ class ChatTagManager(private val plugin: Joshymc) {
 
         // Category icons
         val catMaterials = mapOf(
-            "prestige" to Material.GOLD_INGOT,
-            "og" to Material.CLOCK,
             "skill" to Material.DIAMOND_SWORD,
             "vibe" to Material.NOTE_BLOCK,
             "nature" to Material.OAK_SAPLING,
             "cosmic" to Material.END_STONE,
-            "gem" to Material.DIAMOND,
             "animal" to Material.BONE,
-            "food" to Material.COOKIE,
             "meme" to Material.PAPER,
-            "color" to Material.WHITE_WOOL,
-            "role" to Material.IRON_PICKAXE,
-            "season" to Material.SUNFLOWER,
-            "rare" to Material.NETHER_STAR
+            "music" to Material.JUKEBOX,
+            "pirate" to Material.TRIDENT,
+            "military" to Material.IRON_CHESTPLATE,
+            "mythical" to Material.DRAGON_EGG,
+            "cyberpunk" to Material.REDSTONE,
+            VOUCHER_CATEGORY to Material.NAME_TAG
         )
 
         val slots = mutableListOf<Int>()
@@ -159,7 +292,7 @@ class ChatTagManager(private val plugin: Joshymc) {
             val item = ItemStack(mat)
             item.editMeta { meta ->
                 meta.displayName(
-                    Component.text(category.replaceFirstChar { it.uppercase() }, NamedTextColor.GOLD)
+                    Component.text(categoryDisplayName(category), NamedTextColor.GOLD)
                         .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
                 )
                 meta.lore(listOf(
@@ -200,7 +333,7 @@ class ChatTagManager(private val plugin: Joshymc) {
         val currentTag = getPlayerTag(player)?.id
         val size = 54
         val gui = CustomGui(
-            Component.text("${category.replaceFirstChar { it.uppercase() }} Tags", NamedTextColor.GOLD)
+            Component.text(categoryDisplayName(category), NamedTextColor.GOLD)
                 .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
             size
         )
@@ -231,10 +364,20 @@ class ChatTagManager(private val plugin: Joshymc) {
                     .decoration(TextDecoration.ITALIC, false))
                 val lore = mutableListOf<Component>()
                 lore.add(Component.empty())
+                val isSpecial = category == VOUCHER_CATEGORY
                 when {
-                    isEquipped -> lore.add(Component.text("  Equipped!", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
-                    canUse -> lore.add(Component.text("  Click to equip", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
-                    else -> lore.add(Component.text("  Locked", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+                    isEquipped -> {
+                        if (isSpecial) lore.add(Component.text("  Owned", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                        lore.add(Component.text("  Equipped!", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                    }
+                    canUse -> {
+                        if (isSpecial) lore.add(Component.text("  Owned", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                        lore.add(Component.text("  Click to equip", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+                    }
+                    else -> {
+                        lore.add(Component.text("  Locked", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
+                        if (isSpecial) lore.add(Component.text("  Redeem the corresponding voucher to unlock", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+                    }
                 }
                 meta.lore(lore)
             }
@@ -288,6 +431,11 @@ class ChatTagManager(private val plugin: Joshymc) {
         val defaults = YamlConfiguration.loadConfiguration(defaultStream.bufferedReader())
         val userCfg = YamlConfiguration.loadConfiguration(userFile)
 
+        if (com.liam.joshymc.util.ConfigUtil.looksLikeParseFailure(userFile, userCfg)) {
+            plugin.logger.severe("[ChatTags] tags.yml failed to load (invalid YAML) — the existing file has been preserved and was NOT overwritten. Fix the syntax error and reload.")
+            return
+        }
+
         val defaultsSection = defaults.getConfigurationSection("tags") ?: return
         val userSection = userCfg.getConfigurationSection("tags")
             ?: userCfg.createSection("tags")
@@ -311,11 +459,23 @@ class ChatTagManager(private val plugin: Joshymc) {
         }
         if (categoriesAdded > 0 || tagsAdded > 0) {
             try {
+                com.liam.joshymc.util.ConfigUtil.backup(userFile, plugin.logger, "ChatTags")
                 userCfg.save(userFile)
                 plugin.logger.info("[ChatTags] Merged $categoriesAdded new categor${if (categoriesAdded == 1) "y" else "ies"} and $tagsAdded new tag${if (tagsAdded == 1) "" else "s"} from bundled defaults.")
             } catch (e: Exception) {
                 plugin.logger.warning("[ChatTags] Failed to save merged tags.yml: ${e.message}")
             }
         }
+    }
+
+    companion object {
+        private const val VOUCHER_CATEGORY = "voucher"
+        private const val VOUCHER_PERMISSION_PREFIX = "joshymc.tag.voucher."
+
+        // Normal (non-Special) Chat Tag categories approved for the shop — issue #602.
+        private val APPROVED_CATEGORIES = setOf(
+            "vibe", "nature", "animal", "music", "pirate",
+            "skill", "military", "meme", "mythical", "cyberpunk", "cosmic"
+        )
     }
 }

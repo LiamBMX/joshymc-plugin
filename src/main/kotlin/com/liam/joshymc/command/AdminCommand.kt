@@ -174,7 +174,7 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         sender.sendMessage(Component.text("  /admin rollback <player>", NamedTextColor.GRAY).append(Component.text(" - Restore inventory", NamedTextColor.DARK_GRAY)))
         sender.sendMessage(Component.text("  /admin banlist", NamedTextColor.GRAY).append(Component.text(" - View ban list", NamedTextColor.DARK_GRAY)))
         sender.sendMessage(Component.text("  /admin mutelist", NamedTextColor.GRAY).append(Component.text(" - View mute list", NamedTextColor.DARK_GRAY)))
-        sender.sendMessage(Component.text("  /admin lagclear", NamedTextColor.GRAY).append(Component.text(" - Manual ground item clear", NamedTextColor.DARK_GRAY)))
+        sender.sendMessage(Component.text("  /admin lagclear", NamedTextColor.GRAY).append(Component.text(" - Manual item + hostile mob clear", NamedTextColor.DARK_GRAY)))
     }
 
     override fun onTabComplete(

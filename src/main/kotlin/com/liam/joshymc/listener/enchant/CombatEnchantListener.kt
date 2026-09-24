@@ -13,6 +13,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityDeathEvent
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerVelocityEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.potion.PotionEffect
@@ -39,6 +40,9 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
     // ── Recursion guard: prevents cleave/striker/bleed damage from re-triggering enchants ─
     private val processingDamage = mutableSetOf<UUID>()
 
+    // ── Reflect guard: prevents reflected damage from triggering more enchants ─
+    private val reflectProcessing = mutableSetOf<UUID>()
+
     // ── Armor helpers ───────────────────────────────────────
     private fun getHelmet(player: Player): ItemStack? = player.inventory.helmet
     private fun getChestplate(player: Player): ItemStack? = player.inventory.chestplate
@@ -63,6 +67,15 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
                 || item.type == Material.NETHERITE_SWORD
     }
 
+    private fun isShovel(item: ItemStack): Boolean {
+        return item.type == Material.WOODEN_SHOVEL
+                || item.type == Material.STONE_SHOVEL
+                || item.type == Material.IRON_SHOVEL
+                || item.type == Material.GOLDEN_SHOVEL
+                || item.type == Material.DIAMOND_SHOVEL
+                || item.type == Material.NETHERITE_SHOVEL
+    }
+
     // ══════════════════════════════════════════════════════════
     //  ENTITY DAMAGE BY ENTITY — offensive + some defensive
     // ══════════════════════════════════════════════════════════
@@ -72,8 +85,9 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
         val attacker = event.damager as? Player ?: return
         val victim = event.entity as? LivingEntity ?: return
 
-        // Recursion guard: skip if this damage was caused by an enchant effect (cleave, striker, bleed)
+        // Recursion guard: skip if this damage was caused by an enchant effect (cleave, striker, bleed, reflect)
         if (attacker.uniqueId in processingDamage) return
+        if (attacker.uniqueId in reflectProcessing) return
 
         val weapon = attacker.inventory.itemInMainHand
 
@@ -84,6 +98,12 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
             handleLifesteal(event, attacker, weapon)
             handleBleed(attacker, victim, weapon)
             handleStriker(attacker, victim, weapon)
+        }
+
+        // ── Shovel enchants (weapon shovels like Flower Spade) ──
+        if (isShovel(weapon)) {
+            handleLifesteal(event, attacker, weapon)
+            handleBleed(attacker, victim, weapon)
         }
 
         // ── Axe enchants ────────────────────────────────────
@@ -100,6 +120,8 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
         }
     }
 
+    // ── Reflect (shield) — fires for both player and mob attackers ──────
+
     // ══════════════════════════════════════════════════════════
     //  ENTITY DAMAGE — ALL damage to players (defense enchants)
     //  This fires for PvP, PvE, fall, fire, explosions — everything
@@ -113,6 +135,16 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
         if (event.cause == EntityDamageEvent.DamageCause.FALL) {
             val boots = getBoots(player)
             if (boots != null && cem.hasEnchant(boots, "featherweight")) {
+                event.isCancelled = true
+                return
+            }
+        }
+
+        // Cloudstep — no wall-collision damage while gliding with an elytra
+        if (event.cause == EntityDamageEvent.DamageCause.FLY_INTO_WALL) {
+            val chestplate = player.inventory.chestplate
+            if (chestplate != null && chestplate.type == org.bukkit.Material.ELYTRA
+                && cem.hasEnchant(chestplate, "cloudstep")) {
                 event.isCancelled = true
                 return
             }
@@ -157,6 +189,12 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
 
         // Rockets — levitation when low health
         handleRockets(event, player)
+
+        // Reflect — chance to send damage back to the attacker (player or mob)
+        if (event is EntityDamageByEntityEvent && player.uniqueId !in reflectProcessing) {
+            val damager = event.damager as? LivingEntity
+            if (damager != null) handleReflect(event, damager, player)
+        }
     }
 
     // ══════════════════════════════════════════════════════════
@@ -171,6 +209,19 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
         // the weapon at hit time, this just records that a kill happened
         val kills = adrenalineKills.getOrPut(killer.uniqueId) { mutableListOf() }
         kills.add(System.currentTimeMillis())
+
+        // Slayer — bonus XP from mob kills (not player kills)
+        if (event.entity !is Player) {
+            val weapon = killer.inventory.itemInMainHand
+            if (isSword(weapon)) {
+                val level = cem.getLevel(weapon, "slayer")
+                if (level > 0) {
+                    val multiplier = if (level == 1) 1.2 else 1.5
+                    val bonus = (event.droppedExp * (multiplier - 1.0)).toInt()
+                    event.droppedExp += bonus
+                }
+            }
+        }
     }
 
     // ══════════════════════════════════════════════════════════
@@ -462,6 +513,30 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
         attacker.world.spawnParticle(Particle.WITCH, attacker.location.add(0.0, 1.0, 0.0), 15, 0.3, 0.5, 0.3, 0.0)
     }
 
+    // ── Reflect (shield) ────────────────────────────────────
+    private fun handleReflect(event: EntityDamageByEntityEvent, attacker: LivingEntity, victim: Player) {
+        val shield = victim.inventory.itemInOffHand
+        if (shield.type != org.bukkit.Material.SHIELD) return
+        val level = cem.getLevel(shield, "reflect")
+        if (level <= 0) return
+
+        val chance = 0.05 * level  // 5% / 10% / 15%
+        if (Math.random() > chance) return
+
+        // Guard both sides so neither can re-trigger enchants from the reflected damage
+        reflectProcessing.add(victim.uniqueId)
+        if (attacker is Player) reflectProcessing.add(attacker.uniqueId)
+        try {
+            attacker.damage(event.finalDamage, victim)
+        } finally {
+            reflectProcessing.remove(victim.uniqueId)
+            if (attacker is Player) reflectProcessing.remove(attacker.uniqueId)
+        }
+
+        victim.playSound(victim.location, Sound.ITEM_SHIELD_BLOCK, 1.0f, 1.5f)
+        victim.world.spawnParticle(Particle.CRIT, victim.location.add(0.0, 1.0, 0.0), 8, 0.3, 0.3, 0.3, 0.05)
+    }
+
     // ── Rockets (boots) ─────────────────────────────────────
     private fun handleRockets(event: EntityDamageEvent, player: Player) {
         val boots = getBoots(player) ?: return
@@ -483,5 +558,14 @@ class CombatEnchantListener(private val plugin: Joshymc) : Listener {
             player.addPotionEffect(PotionEffect(PotionEffectType.SLOW_FALLING, 100, 0, false, true, true))
             player.playSound(player.location, Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 1.0f, 1.5f)
         }, 2L)
+    }
+
+    @EventHandler
+    fun onQuit(event: PlayerQuitEvent) {
+        val uuid = event.player.uniqueId
+        adrenalineKills.remove(uuid)
+        guardianCooldowns.remove(uuid)
+        rocketsCooldowns.remove(uuid)
+        bleedTasks.remove(uuid)?.cancel()
     }
 }

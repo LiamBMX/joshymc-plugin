@@ -13,7 +13,7 @@ A non-exhaustive tour of what the plugin owns:
 - **Land & combat**: claims (rectangular + subclaims, claim-block currency), combat tagging with anti-log dupe, PvP arenas with polygon boundaries, per-world player collision toggle
 - **Economy**: balances, dynamic stock market, `/shop` GUI buy/sell, sign shops with PDC-preserving item matching, auction house, upgraded hoppers with filters
 - **Items & content**: custom items (drills, bores, eggs, weapons, armor, talismans, fishing collection), custom enchants, custom recipes, custom spawners with filtered drops and live storage, crates with keys and animations
-- **Player loops**: kits, warps + homes + RTP, TPA, player vaults, quests with tier gating, skills + XP, AFK system, playtime tracking, voting + Votifier listener
+- **Player loops**: kits, warps + homes + RTP, TPA, player vaults, quests with tier gating, AFK system, playtime tracking, voting + Votifier listener
 - **Cosmetics**: trails, kill effects, join effects, glow colors, emotes, gadgets, chat tags, chat colors, nicknames
 - **Social**: ranks (with dual-team collision trick), teams, two-way Discord bridge (JDA), chat games
 - **Admin & moderation**: `/admin` GUI panel (info, freeze, snapshot, rollback), bans/mutes/kicks/warns with history, internal anticheat + Grim integration bridge, world-flag overrides, multi-world support (resource world, spawn world, regen-on-demand)

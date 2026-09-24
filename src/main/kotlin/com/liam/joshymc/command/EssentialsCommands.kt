@@ -75,11 +75,6 @@ class BackLocationListener(private val plugin: Joshymc) : Listener {
 class GamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (!sender.hasPermission("joshymc.gamemode")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
-            return true
-        }
-
         // Shorthand commands: /gmc, /gms, /gma, /gmsp
         val mode = when (label.lowercase()) {
             "gmc" -> GameMode.CREATIVE
@@ -94,6 +89,18 @@ class GamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
                     return true
                 }
             }
+        }
+
+        val requiredPermission = when (mode) {
+            GameMode.CREATIVE -> "joshymc.gamemode.creative"
+            GameMode.SURVIVAL -> "joshymc.gamemode.survival"
+            GameMode.ADVENTURE -> "joshymc.gamemode.adventure"
+            GameMode.SPECTATOR -> "joshymc.gamemode.spectator"
+            else -> "joshymc.gamemode"
+        }
+        if (!sender.hasPermission(requiredPermission)) {
+            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            return true
         }
 
         // Target player
@@ -178,12 +185,44 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
-        // Block combat-tagged players (or staff trying to enable fly on a
-        // tagged target) from using fly to escape PvP.
-        if (plugin.combatManager.isTagged(target)) {
+        val targetingOther = target != sender
+        if (targetingOther && !sender.hasPermission("joshymc.fly.others")) {
+            sender.sendMessage(Component.text("You don't have permission to toggle flight for other players.", NamedTextColor.RED))
+            return true
+        }
+
+        // Block combat-tagged players or players in a PvP arena from flying.
+        val blockedReason = when {
+            plugin.combatManager.isTagged(target) -> "in combat"
+            plugin.arenaManager.playersInArena.containsKey(target.uniqueId) -> "in a PvP arena"
+            else -> null
+        }
+        if (blockedReason != null) {
             plugin.commsManager.send(
                 if (sender is Player) sender else target,
-                Component.text("Can't toggle flight while in combat.", NamedTextColor.RED)
+                Component.text("Can't toggle flight while $blockedReason.", NamedTextColor.RED)
+            )
+            return true
+        }
+
+        // Flight in the "pvp" world is gated purely on joshymc.fly.pvp — no rank
+        // or staff-mode exemptions. Spectators are left alone (see PvpWorldFlightListener).
+        if (target.world.name == "pvp" && target.gameMode != GameMode.SPECTATOR && !target.hasPermission("joshymc.fly.pvp")) {
+            plugin.commsManager.send(
+                if (sender is Player) sender else target,
+                Component.text("You cannot use /fly in the PvP world.", NamedTextColor.RED)
+            )
+            return true
+        }
+
+        // Flight in the "spawn" world is gated purely on joshymc.spawn.fly — no
+        // rank or staff-mode exemptions. Creative/Spectator are left alone.
+        if (target.world.name == "spawn" && target.gameMode != GameMode.SPECTATOR && target.gameMode != GameMode.CREATIVE &&
+            !target.hasPermission("joshymc.spawn.fly")
+        ) {
+            plugin.commsManager.send(
+                if (sender is Player) sender else target,
+                Component.text("You cannot use /fly in spawn.", NamedTextColor.RED)
             )
             return true
         }
@@ -194,14 +233,16 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         val state = if (target.allowFlight) "enabled" else "disabled"
         val color = if (target.allowFlight) NamedTextColor.GREEN else NamedTextColor.RED
         plugin.commsManager.send(target, Component.text("Flight $state.", color))
-        if (target != sender && sender is Player) {
+        if (targetingOther && sender is Player) {
             plugin.commsManager.send(sender, Component.text("Flight $state for ${target.name}.", color))
         }
         return true
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (args.size == 1) return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
+        if (args.size == 1 && sender.hasPermission("joshymc.fly.others")) {
+            return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
+        }
         return emptyList()
     }
 }
@@ -545,11 +586,17 @@ class InvseeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             plugin.commsManager.send(sender, Component.text("Usage: /invsee <player>", NamedTextColor.RED))
             return true
         }
-        val target = Bukkit.getPlayer(args[0]) ?: run {
+        val online = Bukkit.getPlayer(args[0])
+        if (online != null) {
+            sender.openInventory(online.inventory)
+            return true
+        }
+        val offline = Bukkit.getOfflinePlayer(args[0])
+        if (!offline.hasPlayedBefore()) {
             plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
             return true
         }
-        sender.openInventory(target.inventory)
+        plugin.adminManager.openOfflineInvsee(sender, offline.uniqueId, offline.name ?: args[0])
         return true
     }
 
@@ -570,19 +617,52 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
             return true
         }
-        val target = if (args.isNotEmpty() && sender.hasPermission("joshymc.enderchest.others")) {
-            Bukkit.getPlayer(args[0]) ?: run {
+
+        if (args.size >= 2 && args[1].equals("clear", ignoreCase = true)) {
+            if (!sender.hasPermission("joshymc.enderchest.clear")) {
+                plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                return true
+            }
+            val online = Bukkit.getPlayer(args[0])
+            val offline = online ?: Bukkit.getOfflinePlayer(args[0]).takeIf { it.hasPlayedBefore() }
+            val targetUuid = online?.uniqueId ?: offline?.uniqueId
+            val targetName = online?.name ?: offline?.name
+            if (targetUuid == null || targetName == null) {
                 plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
                 return true
             }
-        } else sender
 
-        sender.openInventory(target.enderChest)
+            plugin.enderChestManager.clear(targetUuid)
+            plugin.adminManager.clearCachedEnderchest(targetUuid)
+            plugin.adminManager.logAction(sender, "ENDERCHEST_CLEAR", Bukkit.getOfflinePlayer(targetUuid))
+            plugin.commsManager.send(sender, Component.text("Cleared $targetName's Ender Chest.", NamedTextColor.GREEN))
+            return true
+        }
+
+        if (args.isNotEmpty() && sender.hasPermission("joshymc.enderchest.others")) {
+            val online = Bukkit.getPlayer(args[0])
+            if (online != null) {
+                plugin.enderChestManager.open(sender, online)
+                return true
+            }
+            val offline = Bukkit.getOfflinePlayer(args[0])
+            if (!offline.hasPlayedBefore()) {
+                plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+                return true
+            }
+            plugin.adminManager.openOfflineEnderchest(sender, offline.uniqueId, offline.name ?: args[0])
+            return true
+        }
+
+        plugin.enderChestManager.open(sender, sender)
         return true
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
+        if (args.size == 2 && sender.hasPermission("joshymc.enderchest.clear")) {
+            return listOf("clear").filter { it.startsWith(args[1], ignoreCase = true) }
+        }
         return emptyList()
     }
 }
@@ -665,16 +745,39 @@ class SmithingCommand(private val plugin: Joshymc) : CommandExecutor {
 }
 
 // ══════════════════════════════════════════════════════════
+//  /stonecutter — open a stonecutter anywhere
+// ══════════════════════════════════════════════════════════
+
+class StonecutterCommand(private val plugin: Joshymc) : CommandExecutor {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (!sender.hasPermission("joshymc.stonecutter")) {
+            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            return true
+        }
+        // Bukkit doesn't expose openStonecutter directly; use the inventory
+        // type. Matches the /smithing and /anvil portable-workstation pattern.
+        @Suppress("DEPRECATION")
+        sender.openInventory(
+            org.bukkit.Bukkit.createInventory(sender, org.bukkit.event.inventory.InventoryType.STONECUTTER)
+        )
+        return true
+    }
+}
+
+// ══════════════════════════════════════════════════════════
 //  /repair — repair the held item, or all worn equipment with `all`
 // ══════════════════════════════════════════════════════════
 
 class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
+    companion object {
+        const val COST_HAND = 50_000.0
+        const val COST_ALL  = 500_000.0
+    }
+
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) { sender.sendMessage("Players only."); return true }
-        if (!sender.hasPermission("joshymc.repair")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
-            return true
-        }
+
         // Combat-tagged players can't use /repair to fix gear mid-fight.
         if (plugin.combatManager.isTagged(sender)) {
             plugin.commsManager.send(sender, Component.text("Can't repair while in combat.", NamedTextColor.RED))
@@ -682,10 +785,37 @@ class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         val mode = args.getOrNull(0)?.lowercase() ?: "hand"
-        var repaired = 0
         when (mode) {
-            "hand" -> if (repairItem(sender.inventory.itemInMainHand)) repaired++
+            "hand" -> {
+                if (!sender.hasPermission("joshymc.repair.hand")) {
+                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    return true
+                }
+                val balance = plugin.economyManager.getBalance(sender.uniqueId)
+                if (balance < COST_HAND) {
+                    plugin.commsManager.send(sender, Component.text("You need \$${"%.0f".format(COST_HAND)} to repair your held item.", NamedTextColor.RED))
+                    return true
+                }
+                val repaired = if (repairItem(sender.inventory.itemInMainHand)) 1 else 0
+                if (repaired == 0) {
+                    plugin.commsManager.send(sender, Component.text("Nothing to repair.", NamedTextColor.GRAY))
+                } else {
+                    plugin.economyManager.withdraw(sender.uniqueId, COST_HAND)
+                    plugin.commsManager.send(sender, Component.text("Repaired held item for \$${"%.0f".format(COST_HAND)}.", NamedTextColor.GREEN))
+                    sender.playSound(sender.location, org.bukkit.Sound.BLOCK_ANVIL_USE, 0.6f, 1.4f)
+                }
+            }
             "all" -> {
+                if (!sender.hasPermission("joshymc.repair.all")) {
+                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    return true
+                }
+                val balance = plugin.economyManager.getBalance(sender.uniqueId)
+                if (balance < COST_ALL) {
+                    plugin.commsManager.send(sender, Component.text("You need \$${"%.0f".format(COST_ALL)} to repair all items.", NamedTextColor.RED))
+                    return true
+                }
+                var repaired = 0
                 for (item in sender.inventory.contents) {
                     if (repairItem(item)) repaired++
                 }
@@ -693,18 +823,17 @@ class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
                     if (armor != null && repairItem(armor)) repaired++
                 }
                 if (repairItem(sender.inventory.itemInOffHand)) repaired++
+                if (repaired == 0) {
+                    plugin.commsManager.send(sender, Component.text("Nothing to repair.", NamedTextColor.GRAY))
+                } else {
+                    plugin.economyManager.withdraw(sender.uniqueId, COST_ALL)
+                    plugin.commsManager.send(sender, Component.text("Repaired $repaired item${if (repaired != 1) "s" else ""} for \$${"%.0f".format(COST_ALL)}.", NamedTextColor.GREEN))
+                    sender.playSound(sender.location, org.bukkit.Sound.BLOCK_ANVIL_USE, 0.6f, 1.4f)
+                }
             }
             else -> {
                 plugin.commsManager.send(sender, Component.text("Usage: /repair [hand|all]", NamedTextColor.RED))
-                return true
             }
-        }
-
-        if (repaired == 0) {
-            plugin.commsManager.send(sender, Component.text("Nothing to repair.", NamedTextColor.GRAY))
-        } else {
-            plugin.commsManager.send(sender, Component.text("Repaired $repaired item${if (repaired != 1) "s" else ""}.", NamedTextColor.GREEN))
-            sender.playSound(sender.location, org.bukkit.Sound.BLOCK_ANVIL_USE, 0.6f, 1.4f)
         }
         return true
     }
@@ -828,6 +957,14 @@ class MsgCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
             return true
         }
+        if (IgnoreCommand.isIgnoring(target.uniqueId, sender.uniqueId)) {
+            plugin.commsManager.send(sender, Component.text("That player is not accepting messages from you.", NamedTextColor.RED))
+            return true
+        }
+        if (!plugin.commsManager.canReceivePersonalMessages(target)) {
+            plugin.commsManager.send(sender, Component.text("That player has personal messages disabled.", NamedTextColor.RED))
+            return true
+        }
         val message = args.drop(1).joinToString(" ")
         sender.sendMessage(Component.text("[me → ${target.name}] ", NamedTextColor.GRAY).append(Component.text(message, NamedTextColor.WHITE)))
         target.sendMessage(Component.text("[${sender.name} → me] ", NamedTextColor.GRAY).append(Component.text(message, NamedTextColor.WHITE)))
@@ -856,6 +993,10 @@ class ReplyCommand(private val plugin: Joshymc) : CommandExecutor {
         }
         val target = Bukkit.getPlayer(targetUuid) ?: run {
             plugin.commsManager.send(sender, Component.text("That player is offline.", NamedTextColor.RED))
+            return true
+        }
+        if (!plugin.commsManager.canReceivePersonalMessages(target)) {
+            plugin.commsManager.send(sender, Component.text("That player has personal messages disabled.", NamedTextColor.RED))
             return true
         }
         val message = args.joinToString(" ")

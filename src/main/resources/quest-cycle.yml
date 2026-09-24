@@ -1,0 +1,1382 @@
+# ============================================================
+# Daily / Weekly / Quest Master quest definitions
+# ============================================================
+# This file is PLAYER-EDITABLE. On startup the plugin copies this file to
+# plugins/Joshymc/config/quest-cycle.yml (or plugins/Joshymc/quest-cycle.yml)
+# if it doesn't exist yet, and afterwards only ADDS quest ids that are new to
+# the bundled defaults — it never overwrites or removes entries you've
+# already edited. Delete an entry (or set enabled: false) to remove it from
+# rotation without losing the rest of your edits.
+#
+# Fields per quest:
+#   name          - display name shown in the GUI
+#   description   - short objective line, e.g. "Mine 500 Stone"
+#   category      - MINING, WOODCUTTING, FARMING, COMBAT, ANIMALS, FISHING,
+#                   CRAFTING, SMELTING, GENERAL, EXPLORATION, EXPERIENCE
+#   quest-type    - DAILY_MEDIUM, DAILY_HARD, or WEEKLY
+#   objective     - MINE_BLOCK, BREAK_LOG, HARVEST_CROP, KILL_MOB,
+#                   BREED_ANIMAL, CATCH_FISH, SMELT_ITEM, CRAFT_ITEM,
+#                   TRAVEL, TRAVEL_NETHER, GAIN_XP, GAIN_LEVELS,
+#                   ENCHANT_ITEM, TRADE_VILLAGER, PLACE_BLOCK
+#   target        - what the objective is matched against:
+#                     MINE_BLOCK/BREAK_LOG/HARVEST_CROP/SMELT_ITEM: a Material
+#                       name, "ANY", or (SMELT_ITEM only) "ORE_PRODUCT" for
+#                       smelted ore ingots specifically
+#                     KILL_MOB: an EntityType name, "ANY", "HOSTILE"
+#                       (any hostile mob), "NETHER_HOSTILE" (hostile mob
+#                       killed while in the Nether), or "PASSIVE_ANIMAL"
+#                     BREED_ANIMAL/CATCH_FISH: an EntityType/Material name
+#                       or "ANY"
+#                     Everything else: "ANY"
+#   amount        - required progress amount
+#   reward        - money awarded on individual completion
+#   icon          - GUI display Material
+#   enabled       - set to false to remove a quest from rotation
+quests:
+
+  # ── MEDIUM DAILY (60) ──────────────────────────────────────
+
+  dm01:
+    name: "Rock Around the Block"
+    description: "Mine 500 Stone"
+    category: MINING
+    quest-type: DAILY_MEDIUM
+    objective: MINE_BLOCK
+    target: STONE
+    amount: 500
+    reward: 25000.0
+    icon: STONE
+    enabled: true
+  dm02:
+    name: "Deepslate Date"
+    description: "Mine 400 Deepslate"
+    category: MINING
+    quest-type: DAILY_MEDIUM
+    objective: MINE_BLOCK
+    target: DEEPSLATE
+    amount: 400
+    reward: 25000.0
+    icon: DEEPSLATE
+    enabled: true
+  dm03:
+    name: "Coal Me Maybe"
+    description: "Mine 64 Coal Ore"
+    category: MINING
+    quest-type: DAILY_MEDIUM
+    objective: MINE_BLOCK
+    target: COAL_ORE
+    amount: 64
+    reward: 30000.0
+    icon: COAL_ORE
+    enabled: true
+  dm04:
+    name: "Iron It Out"
+    description: "Mine 48 Iron Ore"
+    category: MINING
+    quest-type: DAILY_MEDIUM
+    objective: MINE_BLOCK
+    target: IRON_ORE
+    amount: 48
+    reward: 35000.0
+    icon: IRON_ORE
+    enabled: true
+  dm05:
+    name: "Copper Top"
+    description: "Mine 64 Copper Ore"
+    category: MINING
+    quest-type: DAILY_MEDIUM
+    objective: MINE_BLOCK
+    target: COPPER_ORE
+    amount: 64
+    reward: 25000.0
+    icon: COPPER_ORE
+    enabled: true
+  dm06:
+    name: "Good as Gold"
+    description: "Mine 24 Gold Ore"
+    category: MINING
+    quest-type: DAILY_MEDIUM
+    objective: MINE_BLOCK
+    target: GOLD_ORE
+    amount: 24
+    reward: 40000.0
+    icon: GOLD_ORE
+    enabled: true
+  dm07:
+    name: "Redstone Ready"
+    description: "Mine 64 Redstone Ore"
+    category: MINING
+    quest-type: DAILY_MEDIUM
+    objective: MINE_BLOCK
+    target: REDSTONE_ORE
+    amount: 64
+    reward: 30000.0
+    icon: REDSTONE_ORE
+    enabled: true
+  dm08:
+    name: "Feeling Blue"
+    description: "Mine 32 Lapis Ore"
+    category: MINING
+    quest-type: DAILY_MEDIUM
+    objective: MINE_BLOCK
+    target: LAPIS_ORE
+    amount: 32
+    reward: 30000.0
+    icon: LAPIS_ORE
+    enabled: true
+  dm09:
+    name: "Shine Bright"
+    description: "Mine 8 Diamond Ore"
+    category: MINING
+    quest-type: DAILY_MEDIUM
+    objective: MINE_BLOCK
+    target: DIAMOND_ORE
+    amount: 8
+    reward: 50000.0
+    icon: DIAMOND_ORE
+    enabled: true
+  dm10:
+    name: "Netherrack Attack"
+    description: "Mine 500 Netherrack"
+    category: MINING
+    quest-type: DAILY_MEDIUM
+    objective: MINE_BLOCK
+    target: NETHERRACK
+    amount: 500
+    reward: 30000.0
+    icon: NETHERRACK
+    enabled: true
+
+  dm11:
+    name: "Log and Loaded"
+    description: "Break 200 Logs"
+    category: WOODCUTTING
+    quest-type: DAILY_MEDIUM
+    objective: BREAK_LOG
+    target: ANY
+    amount: 200
+    reward: 25000.0
+    icon: OAK_LOG
+    enabled: true
+  dm12:
+    name: "Oakey Dokey"
+    description: "Break 128 Oak Logs"
+    category: WOODCUTTING
+    quest-type: DAILY_MEDIUM
+    objective: BREAK_LOG
+    target: OAK_LOG
+    amount: 128
+    reward: 25000.0
+    icon: OAK_LOG
+    enabled: true
+  dm13:
+    name: "Spruce It Up"
+    description: "Break 128 Spruce Logs"
+    category: WOODCUTTING
+    quest-type: DAILY_MEDIUM
+    objective: BREAK_LOG
+    target: SPRUCE_LOG
+    amount: 128
+    reward: 25000.0
+    icon: SPRUCE_LOG
+    enabled: true
+  dm14:
+    name: "Birch Please"
+    description: "Break 128 Birch Logs"
+    category: WOODCUTTING
+    quest-type: DAILY_MEDIUM
+    objective: BREAK_LOG
+    target: BIRCH_LOG
+    amount: 128
+    reward: 25000.0
+    icon: BIRCH_LOG
+    enabled: true
+  dm15:
+    name: "Welcome to the Jungle"
+    description: "Break 128 Jungle Logs"
+    category: WOODCUTTING
+    quest-type: DAILY_MEDIUM
+    objective: BREAK_LOG
+    target: JUNGLE_LOG
+    amount: 128
+    reward: 30000.0
+    icon: JUNGLE_LOG
+    enabled: true
+  dm16:
+    name: "Acacia Later"
+    description: "Break 128 Acacia Logs"
+    category: WOODCUTTING
+    quest-type: DAILY_MEDIUM
+    objective: BREAK_LOG
+    target: ACACIA_LOG
+    amount: 128
+    reward: 25000.0
+    icon: ACACIA_LOG
+    enabled: true
+  dm17:
+    name: "Into the Dark Oak"
+    description: "Break 128 Dark Oak Logs"
+    category: WOODCUTTING
+    quest-type: DAILY_MEDIUM
+    objective: BREAK_LOG
+    target: DARK_OAK_LOG
+    amount: 128
+    reward: 25000.0
+    icon: DARK_OAK_LOG
+    enabled: true
+  dm18:
+    name: "Mangrove Madness"
+    description: "Break 96 Mangrove Logs"
+    category: WOODCUTTING
+    quest-type: DAILY_MEDIUM
+    objective: BREAK_LOG
+    target: MANGROVE_LOG
+    amount: 96
+    reward: 30000.0
+    icon: MANGROVE_LOG
+    enabled: true
+
+  dm19:
+    name: "Wheat Dreams"
+    description: "Harvest 300 Wheat"
+    category: FARMING
+    quest-type: DAILY_MEDIUM
+    objective: HARVEST_CROP
+    target: WHEAT
+    amount: 300
+    reward: 25000.0
+    icon: WHEAT
+    enabled: true
+  dm20:
+    name: "Carrot On"
+    description: "Harvest 300 Carrots"
+    category: FARMING
+    quest-type: DAILY_MEDIUM
+    objective: HARVEST_CROP
+    target: CARROTS
+    amount: 300
+    reward: 25000.0
+    icon: CARROT
+    enabled: true
+  dm21:
+    name: "Spud Bud"
+    description: "Harvest 300 Potatoes"
+    category: FARMING
+    quest-type: DAILY_MEDIUM
+    objective: HARVEST_CROP
+    target: POTATOES
+    amount: 300
+    reward: 25000.0
+    icon: POTATO
+    enabled: true
+  dm22:
+    name: "Drop the Beet"
+    description: "Harvest 250 Beetroot"
+    category: FARMING
+    quest-type: DAILY_MEDIUM
+    objective: HARVEST_CROP
+    target: BEETROOTS
+    amount: 250
+    reward: 25000.0
+    icon: BEETROOT
+    enabled: true
+  dm23:
+    name: "One in a Melon"
+    description: "Harvest 250 Melons"
+    category: FARMING
+    quest-type: DAILY_MEDIUM
+    objective: HARVEST_CROP
+    target: MELON
+    amount: 250
+    reward: 25000.0
+    icon: MELON
+    enabled: true
+  dm24:
+    name: "Pumpkin to Talk About"
+    description: "Harvest 150 Pumpkins"
+    category: FARMING
+    quest-type: DAILY_MEDIUM
+    objective: HARVEST_CROP
+    target: PUMPKIN
+    amount: 150
+    reward: 25000.0
+    icon: PUMPKIN
+    enabled: true
+  dm25:
+    name: "Sugar Rush"
+    description: "Harvest 300 Sugar Cane"
+    category: FARMING
+    quest-type: DAILY_MEDIUM
+    objective: HARVEST_CROP
+    target: SUGAR_CANE
+    amount: 300
+    reward: 25000.0
+    icon: SUGAR_CANE
+    enabled: true
+  dm26:
+    name: "Cocoa Loco"
+    description: "Harvest 200 Cocoa Beans"
+    category: FARMING
+    quest-type: DAILY_MEDIUM
+    objective: HARVEST_CROP
+    target: COCOA
+    amount: 200
+    reward: 25000.0
+    icon: COCOA_BEANS
+    enabled: true
+  dm27:
+    name: "Prickly Business"
+    description: "Harvest 200 Cactus"
+    category: FARMING
+    quest-type: DAILY_MEDIUM
+    objective: HARVEST_CROP
+    target: CACTUS
+    amount: 200
+    reward: 25000.0
+    icon: CACTUS
+    enabled: true
+  dm28:
+    name: "Wart You Doing?"
+    description: "Harvest 150 Nether Wart"
+    category: FARMING
+    quest-type: DAILY_MEDIUM
+    objective: HARVEST_CROP
+    target: NETHER_WART
+    amount: 150
+    reward: 30000.0
+    icon: NETHER_WART
+    enabled: true
+
+  dm29:
+    name: "Dead Tired"
+    description: "Kill 30 Zombies"
+    category: COMBAT
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: ZOMBIE
+    amount: 30
+    reward: 30000.0
+    icon: ZOMBIE_SPAWN_EGG
+    enabled: true
+  dm30:
+    name: "Bone to Pick"
+    description: "Kill 30 Skeletons"
+    category: COMBAT
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: SKELETON
+    amount: 30
+    reward: 30000.0
+    icon: SKELETON_SPAWN_EGG
+    enabled: true
+  dm31:
+    name: "Creepin' It Real"
+    description: "Kill 20 Creepers"
+    category: COMBAT
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: CREEPER
+    amount: 20
+    reward: 35000.0
+    icon: CREEPER_SPAWN_EGG
+    enabled: true
+  dm32:
+    name: "Web of Problems"
+    description: "Kill 30 Spiders"
+    category: COMBAT
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: SPIDER
+    amount: 30
+    reward: 30000.0
+    icon: SPIDER_SPAWN_EGG
+    enabled: true
+  dm33:
+    name: "End of the Line"
+    description: "Kill 10 Endermen"
+    category: COMBAT
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: ENDERMAN
+    amount: 10
+    reward: 40000.0
+    icon: ENDERMAN_SPAWN_EGG
+    enabled: true
+  dm34:
+    name: "Monster Mash"
+    description: "Kill 75 Hostile Mobs"
+    category: COMBAT
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: HOSTILE
+    amount: 75
+    reward: 35000.0
+    icon: IRON_SWORD
+    enabled: true
+  dm35:
+    name: "Hot Pursuit"
+    description: "Kill 30 Nether Hostile Mobs"
+    category: COMBAT
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: NETHER_HOSTILE
+    amount: 30
+    reward: 40000.0
+    icon: BLAZE_POWDER
+    enabled: true
+  dm36:
+    name: "Blazin' Through"
+    description: "Kill 15 Blazes"
+    category: COMBAT
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: BLAZE
+    amount: 15
+    reward: 40000.0
+    icon: BLAZE_SPAWN_EGG
+    enabled: true
+  dm37:
+    name: "Piglin Pickin'"
+    description: "Kill 30 Piglins"
+    category: COMBAT
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: PIGLIN
+    amount: 30
+    reward: 35000.0
+    icon: PIGLIN_SPAWN_EGG
+    enabled: true
+  dm38:
+    name: "Slimed Out"
+    description: "Kill 25 Slimes"
+    category: COMBAT
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: SLIME
+    amount: 25
+    reward: 35000.0
+    icon: SLIME_SPAWN_EGG
+    enabled: true
+
+  dm39:
+    name: "Moo-ve Along"
+    description: "Kill 30 Cows"
+    category: ANIMALS
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: COW
+    amount: 30
+    reward: 25000.0
+    icon: COW_SPAWN_EGG
+    enabled: true
+  dm40:
+    name: "Pork Patrol"
+    description: "Kill 30 Pigs"
+    category: ANIMALS
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: PIG
+    amount: 30
+    reward: 25000.0
+    icon: PIG_SPAWN_EGG
+    enabled: true
+  dm41:
+    name: "Chicken Run"
+    description: "Kill 30 Chickens"
+    category: ANIMALS
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: CHICKEN
+    amount: 30
+    reward: 25000.0
+    icon: CHICKEN_SPAWN_EGG
+    enabled: true
+  dm42:
+    name: "Baa-d Decisions"
+    description: "Kill 30 Sheep"
+    category: ANIMALS
+    quest-type: DAILY_MEDIUM
+    objective: KILL_MOB
+    target: SHEEP
+    amount: 30
+    reward: 25000.0
+    icon: SHEEP_SPAWN_EGG
+    enabled: true
+  dm43:
+    name: "Love Is in the Air"
+    description: "Breed 20 Animals"
+    category: ANIMALS
+    quest-type: DAILY_MEDIUM
+    objective: BREED_ANIMAL
+    target: ANY
+    amount: 20
+    reward: 30000.0
+    icon: WHEAT
+    enabled: true
+  dm44:
+    name: "Moo Matchmaker"
+    description: "Breed 15 Cows"
+    category: ANIMALS
+    quest-type: DAILY_MEDIUM
+    objective: BREED_ANIMAL
+    target: COW
+    amount: 15
+    reward: 30000.0
+    icon: COW_SPAWN_EGG
+    enabled: true
+  dm45:
+    name: "Hog Heaven"
+    description: "Breed 15 Pigs"
+    category: ANIMALS
+    quest-type: DAILY_MEDIUM
+    objective: BREED_ANIMAL
+    target: PIG
+    amount: 15
+    reward: 30000.0
+    icon: PIG_SPAWN_EGG
+    enabled: true
+  dm46:
+    name: "Cluck Buddies"
+    description: "Breed 15 Chickens"
+    category: ANIMALS
+    quest-type: DAILY_MEDIUM
+    objective: BREED_ANIMAL
+    target: CHICKEN
+    amount: 15
+    reward: 30000.0
+    icon: CHICKEN_SPAWN_EGG
+    enabled: true
+
+  dm47:
+    name: "Gone Fishin'"
+    description: "Catch 20 Fish"
+    category: FISHING
+    quest-type: DAILY_MEDIUM
+    objective: CATCH_FISH
+    target: ANY
+    amount: 20
+    reward: 30000.0
+    icon: FISHING_ROD
+    enabled: true
+  dm48:
+    name: "Cod You Not"
+    description: "Catch 15 Cod"
+    category: FISHING
+    quest-type: DAILY_MEDIUM
+    objective: CATCH_FISH
+    target: COD
+    amount: 15
+    reward: 30000.0
+    icon: COD
+    enabled: true
+  dm49:
+    name: "Salmon Says"
+    description: "Catch 15 Salmon"
+    category: FISHING
+    quest-type: DAILY_MEDIUM
+    objective: CATCH_FISH
+    target: SALMON
+    amount: 15
+    reward: 30000.0
+    icon: SALMON
+    enabled: true
+
+  dm50:
+    name: "Hot Stuff"
+    description: "Smelt 128 Items"
+    category: SMELTING
+    quest-type: DAILY_MEDIUM
+    objective: SMELT_ITEM
+    target: ANY
+    amount: 128
+    reward: 25000.0
+    icon: FURNACE
+    enabled: true
+  dm51:
+    name: "Furnace Frenzy"
+    description: "Smelt 256 Items"
+    category: SMELTING
+    quest-type: DAILY_MEDIUM
+    objective: SMELT_ITEM
+    target: ANY
+    amount: 256
+    reward: 35000.0
+    icon: FURNACE
+    enabled: true
+  dm52:
+    name: "Craft Attack"
+    description: "Craft 128 Items"
+    category: CRAFTING
+    quest-type: DAILY_MEDIUM
+    objective: CRAFT_ITEM
+    target: ANY
+    amount: 128
+    reward: 25000.0
+    icon: CRAFTING_TABLE
+    enabled: true
+  dm53:
+    name: "Turn Up the Heat"
+    description: "Smelt 64 Ores"
+    category: SMELTING
+    quest-type: DAILY_MEDIUM
+    objective: SMELT_ITEM
+    target: ORE_PRODUCT
+    amount: 64
+    reward: 30000.0
+    icon: IRON_INGOT
+    enabled: true
+
+  dm54:
+    name: "Miles to Go"
+    description: "Travel 5K Blocks"
+    category: EXPLORATION
+    quest-type: DAILY_MEDIUM
+    objective: TRAVEL
+    target: ANY
+    amount: 5000
+    reward: 30000.0
+    icon: LEATHER_BOOTS
+    enabled: true
+  dm55:
+    name: "Highway to Nether"
+    description: "Travel 2.5K Blocks in the Nether"
+    category: EXPLORATION
+    quest-type: DAILY_MEDIUM
+    objective: TRAVEL_NETHER
+    target: ANY
+    amount: 2500
+    reward: 35000.0
+    icon: NETHERRACK
+    enabled: true
+  dm56:
+    name: "Level Up"
+    description: "Gain 15 XP Levels"
+    category: EXPERIENCE
+    quest-type: DAILY_MEDIUM
+    objective: GAIN_LEVELS
+    target: ANY
+    amount: 15
+    reward: 30000.0
+    icon: EXPERIENCE_BOTTLE
+    enabled: true
+  dm57:
+    name: "XP Yourself"
+    description: "Gain 1,000 XP"
+    category: EXPERIENCE
+    quest-type: DAILY_MEDIUM
+    objective: GAIN_XP
+    target: ANY
+    amount: 1000
+    reward: 35000.0
+    icon: EXPERIENCE_BOTTLE
+    enabled: true
+  dm58:
+    name: "Charmed Life"
+    description: "Enchant 5 Items"
+    category: GENERAL
+    quest-type: DAILY_MEDIUM
+    objective: ENCHANT_ITEM
+    target: ANY
+    amount: 5
+    reward: 35000.0
+    icon: ENCHANTING_TABLE
+    enabled: true
+  dm59:
+    name: "Deal or No Deal"
+    description: "Complete 10 Villager Trades"
+    category: GENERAL
+    quest-type: DAILY_MEDIUM
+    objective: TRADE_VILLAGER
+    target: ANY
+    amount: 10
+    reward: 30000.0
+    icon: EMERALD
+    enabled: true
+  dm60:
+    name: "Block Party"
+    description: "Place 500 Blocks"
+    category: GENERAL
+    quest-type: DAILY_MEDIUM
+    objective: PLACE_BLOCK
+    target: ANY
+    amount: 500
+    reward: 30000.0
+    icon: GRASS_BLOCK
+    enabled: true
+
+  # ── HARD DAILY (30) ────────────────────────────────────────
+
+  dh01:
+    name: "Mine Over Matter"
+    description: "Mine 2.5K Blocks"
+    category: MINING
+    quest-type: DAILY_HARD
+    objective: MINE_BLOCK
+    target: ANY
+    amount: 2500
+    reward: 75000.0
+    icon: IRON_PICKAXE
+    enabled: true
+  dh02:
+    name: "Rock Bottom"
+    description: "Mine 2K Stone"
+    category: MINING
+    quest-type: DAILY_HARD
+    objective: MINE_BLOCK
+    target: STONE
+    amount: 2000
+    reward: 65000.0
+    icon: STONE
+    enabled: true
+  dh03:
+    name: "Deep Trouble"
+    description: "Mine 1.5K Deepslate"
+    category: MINING
+    quest-type: DAILY_HARD
+    objective: MINE_BLOCK
+    target: DEEPSLATE
+    amount: 1500
+    reward: 65000.0
+    icon: DEEPSLATE
+    enabled: true
+  dh04:
+    name: "Iron Will"
+    description: "Mine 150 Iron Ore"
+    category: MINING
+    quest-type: DAILY_HARD
+    objective: MINE_BLOCK
+    target: IRON_ORE
+    amount: 150
+    reward: 80000.0
+    icon: IRON_ORE
+    enabled: true
+  dh05:
+    name: "Diamond in the Rough"
+    description: "Mine 25 Diamond Ore"
+    category: MINING
+    quest-type: DAILY_HARD
+    objective: MINE_BLOCK
+    target: DIAMOND_ORE
+    amount: 25
+    reward: 100000.0
+    icon: DIAMOND_ORE
+    enabled: true
+  dh06:
+    name: "Red Alert"
+    description: "Mine 250 Redstone Ore"
+    category: MINING
+    quest-type: DAILY_HARD
+    objective: MINE_BLOCK
+    target: REDSTONE_ORE
+    amount: 250
+    reward: 70000.0
+    icon: REDSTONE_ORE
+    enabled: true
+
+  dh07:
+    name: "Timber Tantrum"
+    description: "Break 1K Logs"
+    category: WOODCUTTING
+    quest-type: DAILY_HARD
+    objective: BREAK_LOG
+    target: ANY
+    amount: 1000
+    reward: 75000.0
+    icon: OAK_LOG
+    enabled: true
+  dh08:
+    name: "Oak and Awe"
+    description: "Break 750 Oak Logs"
+    category: WOODCUTTING
+    quest-type: DAILY_HARD
+    objective: BREAK_LOG
+    target: OAK_LOG
+    amount: 750
+    reward: 70000.0
+    icon: OAK_LOG
+    enabled: true
+  dh09:
+    name: "Spruce Goose"
+    description: "Break 750 Spruce Logs"
+    category: WOODCUTTING
+    quest-type: DAILY_HARD
+    objective: BREAK_LOG
+    target: SPRUCE_LOG
+    amount: 750
+    reward: 70000.0
+    icon: SPRUCE_LOG
+    enabled: true
+
+  dh10:
+    name: "Crop Till You Drop"
+    description: "Harvest 1.5K Crops"
+    category: FARMING
+    quest-type: DAILY_HARD
+    objective: HARVEST_CROP
+    target: ANY
+    amount: 1500
+    reward: 75000.0
+    icon: WHEAT
+    enabled: true
+  dh11:
+    name: "Wheat Expectations"
+    description: "Harvest 1K Wheat"
+    category: FARMING
+    quest-type: DAILY_HARD
+    objective: HARVEST_CROP
+    target: WHEAT
+    amount: 1000
+    reward: 70000.0
+    icon: WHEAT
+    enabled: true
+  dh12:
+    name: "Carrot Craze"
+    description: "Harvest 1K Carrots"
+    category: FARMING
+    quest-type: DAILY_HARD
+    objective: HARVEST_CROP
+    target: CARROTS
+    amount: 1000
+    reward: 70000.0
+    icon: CARROT
+    enabled: true
+  dh13:
+    name: "Spud Dynasty"
+    description: "Harvest 1K Potatoes"
+    category: FARMING
+    quest-type: DAILY_HARD
+    objective: HARVEST_CROP
+    target: POTATOES
+    amount: 1000
+    reward: 70000.0
+    icon: POTATO
+    enabled: true
+  dh14:
+    name: "Sweet Victory"
+    description: "Harvest 1.5K Sugar Cane"
+    category: FARMING
+    quest-type: DAILY_HARD
+    objective: HARVEST_CROP
+    target: SUGAR_CANE
+    amount: 1500
+    reward: 75000.0
+    icon: SUGAR_CANE
+    enabled: true
+
+  dh15:
+    name: "Mob Mentality"
+    description: "Kill 250 Hostile Mobs"
+    category: COMBAT
+    quest-type: DAILY_HARD
+    objective: KILL_MOB
+    target: HOSTILE
+    amount: 250
+    reward: 100000.0
+    icon: NETHERITE_SWORD
+    enabled: true
+  dh16:
+    name: "Walk It Off"
+    description: "Kill 150 Zombies"
+    category: COMBAT
+    quest-type: DAILY_HARD
+    objective: KILL_MOB
+    target: ZOMBIE
+    amount: 150
+    reward: 75000.0
+    icon: ZOMBIE_SPAWN_EGG
+    enabled: true
+  dh17:
+    name: "Bad to the Bone"
+    description: "Kill 150 Skeletons"
+    category: COMBAT
+    quest-type: DAILY_HARD
+    objective: KILL_MOB
+    target: SKELETON
+    amount: 150
+    reward: 75000.0
+    icon: SKELETON_SPAWN_EGG
+    enabled: true
+  dh18:
+    name: "Explosive Personality"
+    description: "Kill 100 Creepers"
+    category: COMBAT
+    quest-type: DAILY_HARD
+    objective: KILL_MOB
+    target: CREEPER
+    amount: 100
+    reward: 90000.0
+    icon: CREEPER_SPAWN_EGG
+    enabled: true
+  dh19:
+    name: "Hell's Kitchen"
+    description: "Kill 150 Nether Hostile Mobs"
+    category: COMBAT
+    quest-type: DAILY_HARD
+    objective: KILL_MOB
+    target: NETHER_HOSTILE
+    amount: 150
+    reward: 100000.0
+    icon: BLAZE_POWDER
+    enabled: true
+  dh20:
+    name: "Through the Fire"
+    description: "Kill 75 Blazes"
+    category: COMBAT
+    quest-type: DAILY_HARD
+    objective: KILL_MOB
+    target: BLAZE
+    amount: 75
+    reward: 100000.0
+    icon: BLAZE_SPAWN_EGG
+    enabled: true
+  dh21:
+    name: "Don't Look Back"
+    description: "Kill 50 Endermen"
+    category: COMBAT
+    quest-type: DAILY_HARD
+    objective: KILL_MOB
+    target: ENDERMAN
+    amount: 50
+    reward: 100000.0
+    icon: ENDERMAN_SPAWN_EGG
+    enabled: true
+
+  dh22:
+    name: "Animal House"
+    description: "Breed 75 Animals"
+    category: ANIMALS
+    quest-type: DAILY_HARD
+    objective: BREED_ANIMAL
+    target: ANY
+    amount: 75
+    reward: 75000.0
+    icon: WHEAT
+    enabled: true
+  dh23:
+    name: "Farmageddon"
+    description: "Kill 200 Passive Animals"
+    category: ANIMALS
+    quest-type: DAILY_HARD
+    objective: KILL_MOB
+    target: PASSIVE_ANIMAL
+    amount: 200
+    reward: 70000.0
+    icon: HAY_BLOCK
+    enabled: true
+
+  dh24:
+    name: "Hook, Line, Sinker"
+    description: "Catch 75 Fish"
+    category: FISHING
+    quest-type: DAILY_HARD
+    objective: CATCH_FISH
+    target: ANY
+    amount: 75
+    reward: 75000.0
+    icon: FISHING_ROD
+    enabled: true
+  dh25:
+    name: "Something Fishy"
+    description: "Catch 100 Fish"
+    category: FISHING
+    quest-type: DAILY_HARD
+    objective: CATCH_FISH
+    target: ANY
+    amount: 100
+    reward: 100000.0
+    icon: FISHING_ROD
+    enabled: true
+
+  dh26:
+    name: "Road Trip"
+    description: "Travel 15K Blocks"
+    category: EXPLORATION
+    quest-type: DAILY_HARD
+    objective: TRAVEL
+    target: ANY
+    amount: 15000
+    reward: 75000.0
+    icon: LEATHER_BOOTS
+    enabled: true
+  dh27:
+    name: "Nether Say Never"
+    description: "Travel 7.5K Blocks in the Nether"
+    category: EXPLORATION
+    quest-type: DAILY_HARD
+    objective: TRAVEL_NETHER
+    target: ANY
+    amount: 7500
+    reward: 90000.0
+    icon: NETHERRACK
+    enabled: true
+  dh28:
+    name: "Too Hot to Handle"
+    description: "Smelt 1K Items"
+    category: SMELTING
+    quest-type: DAILY_HARD
+    objective: SMELT_ITEM
+    target: ANY
+    amount: 1000
+    reward: 75000.0
+    icon: FURNACE
+    enabled: true
+  dh29:
+    name: "Built Different"
+    description: "Place 2.5K Blocks"
+    category: GENERAL
+    quest-type: DAILY_HARD
+    objective: PLACE_BLOCK
+    target: ANY
+    amount: 2500
+    reward: 75000.0
+    icon: GRASS_BLOCK
+    enabled: true
+  dh30:
+    name: "Experience Required"
+    description: "Gain 5K XP"
+    category: EXPERIENCE
+    quest-type: DAILY_HARD
+    objective: GAIN_XP
+    target: ANY
+    amount: 5000
+    reward: 100000.0
+    icon: EXPERIENCE_BOTTLE
+    enabled: true
+
+  # ── WEEKLY (30) ────────────────────────────────────────────
+
+  w01:
+    name: "Mine Marathon"
+    description: "Mine 15K Blocks"
+    category: MINING
+    quest-type: WEEKLY
+    objective: MINE_BLOCK
+    target: ANY
+    amount: 15000
+    reward: 350000.0
+    icon: DIAMOND_PICKAXE
+    enabled: true
+  w02:
+    name: "Rock Solid"
+    description: "Mine 10K Stone"
+    category: MINING
+    quest-type: WEEKLY
+    objective: MINE_BLOCK
+    target: STONE
+    amount: 10000
+    reward: 300000.0
+    icon: STONE
+    enabled: true
+  w03:
+    name: "Deeper and Deeper"
+    description: "Mine 10K Deepslate"
+    category: MINING
+    quest-type: WEEKLY
+    objective: MINE_BLOCK
+    target: DEEPSLATE
+    amount: 10000
+    reward: 300000.0
+    icon: DEEPSLATE
+    enabled: true
+  w04:
+    name: "Coal Country"
+    description: "Mine 1K Coal Ore"
+    category: MINING
+    quest-type: WEEKLY
+    objective: MINE_BLOCK
+    target: COAL_ORE
+    amount: 1000
+    reward: 350000.0
+    icon: COAL_ORE
+    enabled: true
+  w05:
+    name: "Iron Kingdom"
+    description: "Mine 750 Iron Ore"
+    category: MINING
+    quest-type: WEEKLY
+    objective: MINE_BLOCK
+    target: IRON_ORE
+    amount: 750
+    reward: 400000.0
+    icon: IRON_ORE
+    enabled: true
+  w06:
+    name: "Diamonds Are Forever"
+    description: "Mine 150 Diamond Ore"
+    category: MINING
+    quest-type: WEEKLY
+    objective: MINE_BLOCK
+    target: DIAMOND_ORE
+    amount: 150
+    reward: 500000.0
+    icon: DIAMOND_ORE
+    enabled: true
+
+  w07:
+    name: "Tree-mendous Effort"
+    description: "Break 5K Logs"
+    category: WOODCUTTING
+    quest-type: WEEKLY
+    objective: BREAK_LOG
+    target: ANY
+    amount: 5000
+    reward: 350000.0
+    icon: OAK_LOG
+    enabled: true
+  w08:
+    name: "Mighty Oaks"
+    description: "Break 4K Oak Logs"
+    category: WOODCUTTING
+    quest-type: WEEKLY
+    objective: BREAK_LOG
+    target: OAK_LOG
+    amount: 4000
+    reward: 325000.0
+    icon: OAK_LOG
+    enabled: true
+  w09:
+    name: "Spruce Almighty"
+    description: "Break 4K Spruce Logs"
+    category: WOODCUTTING
+    quest-type: WEEKLY
+    objective: BREAK_LOG
+    target: SPRUCE_LOG
+    amount: 4000
+    reward: 325000.0
+    icon: SPRUCE_LOG
+    enabled: true
+
+  w10:
+    name: "Farmville IRL"
+    description: "Harvest 10K Crops"
+    category: FARMING
+    quest-type: WEEKLY
+    objective: HARVEST_CROP
+    target: ANY
+    amount: 10000
+    reward: 350000.0
+    icon: WHEAT
+    enabled: true
+  w11:
+    name: "Wheat Week"
+    description: "Harvest 7.5K Wheat"
+    category: FARMING
+    quest-type: WEEKLY
+    objective: HARVEST_CROP
+    target: WHEAT
+    amount: 7500
+    reward: 325000.0
+    icon: WHEAT
+    enabled: true
+  w12:
+    name: "Orange You Busy?"
+    description: "Harvest 7.5K Carrots"
+    category: FARMING
+    quest-type: WEEKLY
+    objective: HARVEST_CROP
+    target: CARROTS
+    amount: 7500
+    reward: 325000.0
+    icon: CARROT
+    enabled: true
+  w13:
+    name: "The Great Spud Rush"
+    description: "Harvest 7.5K Potatoes"
+    category: FARMING
+    quest-type: WEEKLY
+    objective: HARVEST_CROP
+    target: POTATOES
+    amount: 7500
+    reward: 325000.0
+    icon: POTATO
+    enabled: true
+  w14:
+    name: "Sweet Tooth"
+    description: "Harvest 10K Sugar Cane"
+    category: FARMING
+    quest-type: WEEKLY
+    objective: HARVEST_CROP
+    target: SUGAR_CANE
+    amount: 10000
+    reward: 350000.0
+    icon: SUGAR_CANE
+    enabled: true
+  w15:
+    name: "Melon Mania"
+    description: "Harvest 7.5K Melons"
+    category: FARMING
+    quest-type: WEEKLY
+    objective: HARVEST_CROP
+    target: MELON
+    amount: 7500
+    reward: 325000.0
+    icon: MELON
+    enabled: true
+
+  w16:
+    name: "Mob Wipeout"
+    description: "Kill 2K Hostile Mobs"
+    category: COMBAT
+    quest-type: WEEKLY
+    objective: KILL_MOB
+    target: HOSTILE
+    amount: 2000
+    reward: 450000.0
+    icon: NETHERITE_SWORD
+    enabled: true
+  w17:
+    name: "Zombie Apocalypse"
+    description: "Kill 1K Zombies"
+    category: COMBAT
+    quest-type: WEEKLY
+    objective: KILL_MOB
+    target: ZOMBIE
+    amount: 1000
+    reward: 400000.0
+    icon: ZOMBIE_SPAWN_EGG
+    enabled: true
+  w18:
+    name: "Bone Zone"
+    description: "Kill 1K Skeletons"
+    category: COMBAT
+    quest-type: WEEKLY
+    objective: KILL_MOB
+    target: SKELETON
+    amount: 1000
+    reward: 400000.0
+    icon: SKELETON_SPAWN_EGG
+    enabled: true
+  w19:
+    name: "Boom Goes the Week"
+    description: "Kill 750 Creepers"
+    category: COMBAT
+    quest-type: WEEKLY
+    objective: KILL_MOB
+    target: CREEPER
+    amount: 750
+    reward: 450000.0
+    icon: CREEPER_SPAWN_EGG
+    enabled: true
+  w20:
+    name: "Nether Cleanup Crew"
+    description: "Kill 1K Nether Hostile Mobs"
+    category: COMBAT
+    quest-type: WEEKLY
+    objective: KILL_MOB
+    target: NETHER_HOSTILE
+    amount: 1000
+    reward: 500000.0
+    icon: BLAZE_POWDER
+    enabled: true
+  w21:
+    name: "Blaze of Glory"
+    description: "Kill 500 Blazes"
+    category: COMBAT
+    quest-type: WEEKLY
+    objective: KILL_MOB
+    target: BLAZE
+    amount: 500
+    reward: 500000.0
+    icon: BLAZE_SPAWN_EGG
+    enabled: true
+
+  w22:
+    name: "Porkocalypse"
+    description: "Kill 500 Pigs"
+    category: ANIMALS
+    quest-type: WEEKLY
+    objective: KILL_MOB
+    target: PIG
+    amount: 500
+    reward: 300000.0
+    icon: PIG_SPAWN_EGG
+    enabled: true
+  w23:
+    name: "Udder Chaos"
+    description: "Kill 500 Cows"
+    category: ANIMALS
+    quest-type: WEEKLY
+    objective: KILL_MOB
+    target: COW
+    amount: 500
+    reward: 300000.0
+    icon: COW_SPAWN_EGG
+    enabled: true
+  w24:
+    name: "Cluckpocalypse"
+    description: "Kill 500 Chickens"
+    category: ANIMALS
+    quest-type: WEEKLY
+    objective: KILL_MOB
+    target: CHICKEN
+    amount: 500
+    reward: 300000.0
+    icon: CHICKEN_SPAWN_EGG
+    enabled: true
+  w25:
+    name: "Shear Madness"
+    description: "Kill 500 Sheep"
+    category: ANIMALS
+    quest-type: WEEKLY
+    objective: KILL_MOB
+    target: SHEEP
+    amount: 500
+    reward: 300000.0
+    icon: SHEEP_SPAWN_EGG
+    enabled: true
+  w26:
+    name: "Love Factory"
+    description: "Breed 500 Animals"
+    category: ANIMALS
+    quest-type: WEEKLY
+    objective: BREED_ANIMAL
+    target: ANY
+    amount: 500
+    reward: 350000.0
+    icon: WHEAT
+    enabled: true
+
+  w27:
+    name: "Reel Commitment"
+    description: "Catch 500 Fish"
+    category: FISHING
+    quest-type: WEEKLY
+    objective: CATCH_FISH
+    target: ANY
+    amount: 500
+    reward: 400000.0
+    icon: FISHING_ROD
+    enabled: true
+  w28:
+    name: "Around the Block"
+    description: "Travel 100K Blocks"
+    category: EXPLORATION
+    quest-type: WEEKLY
+    objective: TRAVEL
+    target: ANY
+    amount: 100000
+    reward: 400000.0
+    icon: LEATHER_BOOTS
+    enabled: true
+  w29:
+    name: "Blockbuster"
+    description: "Place 15K Blocks"
+    category: GENERAL
+    quest-type: WEEKLY
+    objective: PLACE_BLOCK
+    target: ANY
+    amount: 15000
+    reward: 350000.0
+    icon: GRASS_BLOCK
+    enabled: true
+  w30:
+    name: "Industrial Revolution"
+    description: "Smelt 7.5K Items"
+    category: SMELTING
+    quest-type: WEEKLY
+    objective: SMELT_ITEM
+    target: ANY
+    amount: 7500
+    reward: 350000.0
+    icon: FURNACE
+    enabled: true

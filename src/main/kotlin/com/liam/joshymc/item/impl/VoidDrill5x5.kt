@@ -7,6 +7,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
+import org.bukkit.enchantments.Enchantment
 
 class VoidDrill5x5 : CustomItem() {
 
@@ -29,6 +30,7 @@ class VoidDrill5x5 : CustomItem() {
 
     override fun applyMeta(meta: org.bukkit.inventory.meta.ItemMeta) {
         meta.isUnbreakable = true
+        meta.addEnchant(Enchantment.EFFICIENCY, 5, true)
         meta.setItemModel(org.bukkit.NamespacedKey(Joshymc.instance, "void_drill_5x5"))
     }
 }

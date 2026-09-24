@@ -7,6 +7,9 @@
 # animation-type: "spin" (scrolling slots), "pulse" (items vanish until winner remains), "instant" (no animation)
 # idle-particle: particle shown above crate block (e.g. END_ROD, FLAME, SOUL_FIRE_FLAME, CHERRY_LEAVES, HEART)
 # win-particle: particle burst on reward (e.g. FIREWORK, TOTEM_OF_UNDYING, EXPLOSION, HEART)
+# key-item-model: optional resource-pack model key applied to the key item (e.g. "joshymc:cabin_key").
+#   Purely cosmetic — the key is still identified by its internal crate ID. Omit to keep the
+#   default vanilla appearance for key-material. Falls back safely if the model key is invalid.
 
 crates:
   common:
@@ -87,4 +90,45 @@ crates:
         material: EXPERIENCE_BOTTLE
         amount: 32
         weight: 25
+        display-name: "XP Bottles"
+
+  joshy:
+    display-name: "Joshy Crate"
+    key-material: TRIPWIRE_HOOK
+    key-name: "Joshy Key"
+    animation-glass: YELLOW_STAINED_GLASS_PANE
+    mode: random
+    animation-type: pulse
+    idle-particle: CHERRY_LEAVES
+    win-particle: FIREWORK
+    rewards:
+      netherite_ingot:
+        material: NETHERITE_INGOT
+        amount: 2
+        weight: 10
+        display-name: "Netherite Ingots"
+      diamonds:
+        material: DIAMOND
+        amount: 16
+        weight: 25
+        display-name: "Diamonds"
+      emeralds:
+        material: EMERALD
+        amount: 32
+        weight: 30
+        display-name: "Emeralds"
+      elytra:
+        material: ELYTRA
+        amount: 1
+        weight: 5
+        display-name: "Elytra"
+      enchanted_golden_apple:
+        material: ENCHANTED_GOLDEN_APPLE
+        amount: 3
+        weight: 15
+        display-name: "Enchanted Golden Apples"
+      xp_bottles:
+        material: EXPERIENCE_BOTTLE
+        amount: 64
+        weight: 35
         display-name: "XP Bottles"

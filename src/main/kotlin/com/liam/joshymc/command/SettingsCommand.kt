@@ -25,7 +25,7 @@ class SettingsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         }
 
         val settingName = args[0].lowercase()
-        val settings = plugin.settingsManager.getRegisteredSettings()
+        val settings = plugin.settingsManager.getVisibleSettings(sender)
         val setting = settings.find { it.key.equals(settingName, ignoreCase = true) ||
             it.displayName.replace(" ", "").equals(settingName, ignoreCase = true) ||
             it.displayName.replace(" ", "_").equals(settingName, ignoreCase = true) }
@@ -78,8 +78,7 @@ class SettingsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
         if (args.size == 1) {
             val prefix = args[0].lowercase()
-            return plugin.settingsManager.getRegisteredSettings()
-                .filter { it.permission == null || sender.hasPermission(it.permission!!) }
+            return plugin.settingsManager.getVisibleSettings(sender)
                 .map { it.key }
                 .filter { it.startsWith(prefix) }
         }

@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -23,6 +24,7 @@ class MarketManager(private val plugin: Joshymc) {
 
     private val multiplierCache = ConcurrentHashMap<Material, Double>()
 
+    private var started = false
     private var recalculateTask: BukkitTask? = null
     private var cleanupTask: BukkitTask? = null
 
@@ -75,6 +77,7 @@ class MarketManager(private val plugin: Joshymc) {
             )
         }, 72000L, 72000L)
 
+        started = true
         plugin.logger.info("[Market] MarketManager started.")
     }
 
@@ -83,11 +86,13 @@ class MarketManager(private val plugin: Joshymc) {
         cleanupTask?.cancel()
         recalculateTask = null
         cleanupTask = null
+        started = false
     }
 
     // ── Transaction Recording ───────────────────────────────────────────
 
     fun recordTransaction(material: Material, type: String, amount: Int) {
+        if (!started) return
         plugin.databaseManager.execute(
             "INSERT INTO market_transactions (material, type, amount, timestamp) VALUES (?, ?, ?, ?)",
             material.name, type, amount, System.currentTimeMillis()
@@ -149,9 +154,7 @@ class MarketManager(private val plugin: Joshymc) {
         }
     }
 
-    fun getMultiplier(material: Material): Double {
-        return multiplierCache.getOrDefault(material, 1.0)
-    }
+    fun getMultiplier(material: Material): Double = 1.0
 
     fun getCurrentBuyPrice(material: Material): Double? {
         val base = getBaseBuyPrice(material) ?: return null
@@ -562,10 +565,7 @@ class MarketManager(private val plugin: Joshymc) {
         plugin.economyManager.withdraw(player.uniqueId, totalCost)
 
         val items = ItemStack(material, amount)
-        val overflow = player.inventory.addItem(items)
-        for (remaining in overflow.values) {
-            player.world.dropItemNaturally(player.location, remaining)
-        }
+        plugin.giveItemSafely(player, items)
 
         recordTransaction(material, "BUY", amount)
 

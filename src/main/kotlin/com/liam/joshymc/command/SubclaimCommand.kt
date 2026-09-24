@@ -6,8 +6,11 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
+import org.bukkit.Color
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
+import org.bukkit.Particle
+import org.bukkit.Particle.DustOptions
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -23,6 +26,8 @@ import org.bukkit.inventory.ItemFlag
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, Listener {
 
@@ -51,6 +56,7 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             "remove" -> handleRemove(sender, args)
             "delete" -> handleDelete(sender, args)
             "list" -> handleList(sender)
+            "show" -> handleShow(sender, args)
             "help" -> sendHelp(sender)
             else -> sendHelp(sender)
         }
@@ -243,6 +249,83 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         }
     }
 
+    private fun handleShow(player: Player, args: Array<out String>) {
+        val specificId = args.getOrNull(1)?.toIntOrNull()
+
+        if (specificId != null) {
+            val subclaim = plugin.claimManager.getSubclaim(specificId)
+            if (subclaim == null) {
+                plugin.commsManager.send(player, Component.text("Subclaim #$specificId not found.", NamedTextColor.RED))
+                return
+            }
+            if (subclaim.world != player.world.name) {
+                plugin.commsManager.send(player, Component.text("Subclaim #$specificId is in a different world.", NamedTextColor.RED))
+                return
+            }
+            showSubclaimBorder(player, subclaim)
+            plugin.commsManager.send(player, Component.text("Showing subclaim #$specificId.", NamedTextColor.GREEN))
+        } else {
+            val claim = plugin.claimManager.getClaimAt(player.location)
+            if (claim == null) {
+                plugin.commsManager.send(player, Component.text("This chunk is not claimed.", NamedTextColor.RED))
+                return
+            }
+            val subclaims = plugin.claimManager.getSubclaimsInClaim(claim).filter { it.world == player.world.name }
+            if (subclaims.isEmpty()) {
+                plugin.commsManager.send(player, Component.text("No subclaims in this claim.", NamedTextColor.RED))
+                return
+            }
+            subclaims.forEach { showSubclaimBorder(player, it) }
+            plugin.commsManager.send(
+                player,
+                Component.text("Showing ${subclaims.size} subclaim(s) in claim #${claim.id}.", NamedTextColor.GREEN)
+            )
+        }
+    }
+
+    private fun showSubclaimBorder(player: Player, subclaim: ClaimManager.Subclaim) {
+        val dust = DustOptions(Color.AQUA, 1.2f)
+        val cornerDust = DustOptions(Color.YELLOW, 1.8f)
+
+        val minX = min(subclaim.x1, subclaim.x2).toDouble()
+        val maxX = max(subclaim.x1, subclaim.x2).toDouble() + 1.0
+        val minY = min(subclaim.y1, subclaim.y2).toDouble()
+        val maxY = max(subclaim.y1, subclaim.y2).toDouble() + 1.0
+        val minZ = min(subclaim.z1, subclaim.z2).toDouble()
+        val maxZ = max(subclaim.z1, subclaim.z2).toDouble() + 1.0
+
+        val step = 0.5
+
+        // Draw horizontal edges at minY and maxY
+        for (y in listOf(minY, maxY)) {
+            var x = minX
+            while (x <= maxX) {
+                player.spawnParticle(Particle.DUST, x, y, minZ, 1, dust)
+                player.spawnParticle(Particle.DUST, x, y, maxZ, 1, dust)
+                x += step
+            }
+            var z = minZ
+            while (z <= maxZ) {
+                player.spawnParticle(Particle.DUST, minX, y, z, 1, dust)
+                player.spawnParticle(Particle.DUST, maxX, y, z, 1, dust)
+                z += step
+            }
+        }
+
+        // Draw vertical corner edges
+        val corners = listOf(
+            minX to minZ, maxX to minZ,
+            minX to maxZ, maxX to maxZ
+        )
+        for ((cx, cz) in corners) {
+            var y = minY
+            while (y <= maxY) {
+                player.spawnParticle(Particle.DUST, cx, y, cz, 1, if (y == minY || y == maxY) cornerDust else dust)
+                y += step
+            }
+        }
+    }
+
     private fun sendHelp(player: Player) {
         plugin.commsManager.send(player, Component.text("Subclaim Commands:", NamedTextColor.GREEN))
         val commands = listOf(
@@ -252,6 +335,7 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             "/subclaim remove <id> <player>" to "Remove player access from subclaim",
             "/subclaim delete <id>" to "Delete a subclaim",
             "/subclaim list" to "List subclaims in current chunk",
+            "/subclaim show [id]" to "Show subclaim border(s) visually",
             "/subclaim help" to "Show this help"
         )
         for ((cmd, desc) in commands) {
@@ -326,10 +410,10 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         if (sender !is Player) return emptyList()
 
         return when (args.size) {
-            1 -> listOf("wand", "create", "add", "remove", "delete", "list", "help")
+            1 -> listOf("wand", "create", "add", "remove", "delete", "list", "show", "help")
                 .filter { it.startsWith(args[0], ignoreCase = true) }
             2 -> when (args[0].lowercase()) {
-                "add", "remove", "delete" -> {
+                "add", "remove", "delete", "show" -> {
                     val claim = plugin.claimManager.getClaimAt(sender.location)
                     if (claim != null) {
                         plugin.claimManager.getSubclaimsInClaim(claim)

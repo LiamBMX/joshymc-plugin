@@ -10,35 +10,34 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
+import java.util.UUID
 
 class DrillMiningListener(private val plugin: Joshymc) : Listener {
 
-    private var isProcessing = false
+    private val processingPlayers = mutableSetOf<UUID>()
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onBlockBreak(event: BlockBreakEvent) {
         val player = event.player
         val item = player.inventory.itemInMainHand
+        val playerId = player.uniqueId
 
         val radius = when {
             plugin.itemManager.isCustomItem(item, "void_drill") -> 1
             plugin.itemManager.isCustomItem(item, "void_drill_5x5") -> 2
-            plugin.itemManager.isCustomItem(item, "excavator") -> 1  // 3x3 shovel
             else -> return
         }
 
-        if (isProcessing) return
+        if (playerId in processingPlayers) return
 
         val origin = event.block
         val face = getTargetBlockFace(player)
 
-        val blocksToBreak = getGridBlocks(origin, face, radius).filter {
-            it != origin && BlockUtil.isMineable(it.type) && plugin.claimManager.canAccess(player, it.location)
-        }
+        val blocksToBreak = getGridBlocks(origin, face, radius).filter { it != origin && canDrillBreak(player, it) }
 
         if (blocksToBreak.isEmpty()) return
 
-        isProcessing = true
+        processingPlayers.add(playerId)
 
         player.world.playSound(origin.location, Sound.BLOCK_PISTON_EXTEND, 0.8f, 1.6f)
 
@@ -62,14 +61,26 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
 
                 if (index == chunks.lastIndex) {
                     player.world.playSound(origin.location, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0f, 1.2f)
-                    isProcessing = false
+                    processingPlayers.remove(playerId)
                 }
             }, (index * 2).toLong())
         }
 
         plugin.server.scheduler.runTaskLater(plugin, Runnable {
-            isProcessing = false
+            processingPlayers.remove(playerId)
         }, ((chunks.size * 2) + 5).toLong())
+    }
+
+    /**
+     * Every block the drill reaches into must independently pass the same
+     * protection checks a normal single-block break would — claims at THAT
+     * block's own location. Standing inside an accessible claim must never
+     * let the drill reach across a boundary into a protected one.
+     */
+    private fun canDrillBreak(player: org.bukkit.entity.Player, block: Block): Boolean {
+        if (!BlockUtil.isMineable(block.type)) return false
+        if (!plugin.claimManager.canAccess(player, block.location)) return false
+        return true
     }
 
     private fun getTargetBlockFace(player: org.bukkit.entity.Player): BlockFace {

@@ -5,7 +5,11 @@ import com.liam.joshymc.manager.CombatManager
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.GameMode
+import org.bukkit.Material
+import org.bukkit.entity.AreaEffectCloud
+import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
 import org.bukkit.entity.TNTPrimed
@@ -14,14 +18,20 @@ import org.bukkit.Bukkit
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.entity.AreaEffectCloudApplyEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.entity.ProjectileLaunchEvent
+import org.bukkit.event.entity.PotionSplashEvent
 import org.bukkit.event.player.PlayerCommandPreprocessEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerToggleFlightEvent
+import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.meta.SkullMeta
+import org.bukkit.potion.PotionEffectType
+import java.util.concurrent.ThreadLocalRandom
 
 class CombatListener(private val plugin: Joshymc) : Listener {
 
@@ -44,6 +54,22 @@ class CombatListener(private val plugin: Joshymc) : Listener {
         private val BLOCKED_COMBAT_PREFIXED = BLOCKED_COMBAT_COMMANDS.flatMap {
             listOf("joshymc:$it", "minecraft:$it", "essentials:$it", "bukkit:$it")
         }.toSet()
+
+        // 1% chance for a victim's player head to drop on a PvP kill (issue #829).
+        private const val HEAD_DROP_CHANCE = 0.01
+
+        private val NEGATIVE_POTION_EFFECTS = setOf(
+            PotionEffectType.INSTANT_DAMAGE,
+            PotionEffectType.WEAKNESS,
+            PotionEffectType.POISON,
+            PotionEffectType.SLOWNESS,
+            PotionEffectType.MINING_FATIGUE,
+            PotionEffectType.BLINDNESS,
+            PotionEffectType.NAUSEA,
+            PotionEffectType.WITHER,
+            PotionEffectType.LEVITATION,
+            PotionEffectType.DARKNESS,
+        )
     }
 
     /**
@@ -84,28 +110,37 @@ class CombatListener(private val plugin: Joshymc) : Listener {
      *
      * This is the canonical place that mutually applies combat tags + drops
      * both players out of flight.
+     *
+     * Mod Mode / Trainee Mode are explicitly exempted here rather than relying
+     * on ModModeListener/TraineeModeListener cancelling the event first — both
+     * of those also run at MONITOR, so same-tier ordering between listeners is
+     * registration-order dependent and not something to depend on for combat
+     * tagging correctness.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onDamageTag(event: EntityDamageByEntityEvent) {
         val victim = event.entity as? Player ?: return
         val attacker = resolvePlayerSource(event) ?: return
         if (attacker == victim) return
+        if (plugin.modModeManager.isModMode(attacker) || plugin.traineeModeManager.isTraineeMode(attacker)) return
         val combat = plugin.combatManager
         combat.tag(attacker)
         combat.tag(victim)
     }
 
     /**
-     * Block flight while combat tagged — survival mode only.
+     * Block flight while combat tagged or inside a PvP arena — survival mode only.
      */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onToggleFlight(event: PlayerToggleFlightEvent) {
         if (!event.isFlying) return
         if (event.player.gameMode != GameMode.SURVIVAL) return
-        if (plugin.combatManager.isTagged(event.player)) {
+        val player = event.player
+        if (plugin.combatManager.isTagged(player) || plugin.arenaManager.playersInArena.containsKey(player.uniqueId)) {
             event.isCancelled = true
-            plugin.commsManager.send(event.player,
-                Component.text("You cannot fly while in combat!", NamedTextColor.RED),
+            val reason = if (plugin.combatManager.isTagged(player)) "in combat" else "in a PvP arena"
+            plugin.commsManager.send(player,
+                Component.text("You cannot fly while $reason!", NamedTextColor.RED),
                 CommunicationsManager.Category.COMBAT
             )
         }
@@ -113,12 +148,14 @@ class CombatListener(private val plugin: Joshymc) : Listener {
 
     /**
      * Block elytra while combat tagged — survival mode only.
+     * Skipped when the server-wide allow-elytra toggle is on.
      */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onToggleGlide(event: org.bukkit.event.entity.EntityToggleGlideEvent) {
         val player = event.entity as? Player ?: return
         if (!event.isGliding) return
         if (player.gameMode != GameMode.SURVIVAL) return
+        if (plugin.combatManager.allowElytraInCombat) return
         if (plugin.combatManager.isTagged(player)) {
             event.isCancelled = true
             plugin.commsManager.send(player,
@@ -131,12 +168,14 @@ class CombatListener(private val plugin: Joshymc) : Listener {
     /**
      * Block ender pearl + chorus fruit launches while combat tagged.
      * Pearls let players escape combat instantly otherwise.
+     * Skipped for ender pearls when the server-wide allow-enderpearl toggle is on.
      */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onPearlLaunch(event: ProjectileLaunchEvent) {
         val shooter = event.entity.shooter as? Player ?: return
         if (!plugin.combatManager.isTagged(shooter)) return
         val type = event.entity.type.name
+        if (type == "ENDER_PEARL" && plugin.combatManager.allowEnderpearlInCombat) return
         if (type == "ENDER_PEARL" || type == "CHORUS_FRUIT") {
             event.isCancelled = true
             plugin.commsManager.sendActionBar(shooter,
@@ -165,11 +204,41 @@ class CombatListener(private val plugin: Joshymc) : Listener {
     }
 
     /**
-     * Clear combat tag on death.
+     * Clear combat tag on death. Also suppress item drops for combat-logged players
+     * so loot comes exclusively from the NPC and never from the death event itself.
      */
     @EventHandler
     fun onDeath(event: PlayerDeathEvent) {
-        plugin.combatManager.untag(event.player)
+        val player = event.player
+        plugin.combatManager.untag(player)
+        if (plugin.combatManager.isCombatLogged(player)) {
+            event.drops.clear()
+        }
+        maybeDropPlayerHead(event)
+    }
+
+    /**
+     * 1% chance for the victim's player head (with their actual skin) to
+     * drop when killed by another player — melee or player-fired projectile.
+     * `LivingEntity.killer` already resolves the shooter for projectile
+     * kills, same as [com.liam.joshymc.manager.KillStreakManager] relies on.
+     * Only adds to the existing drops; never touches anything else.
+     */
+    private fun maybeDropPlayerHead(event: PlayerDeathEvent) {
+        val victim = event.player
+        val killer = victim.killer ?: return
+        if (killer.uniqueId == victim.uniqueId) return
+        if (ThreadLocalRandom.current().nextDouble() >= HEAD_DROP_CHANCE) return
+
+        val head = ItemStack(Material.PLAYER_HEAD)
+        head.editMeta { meta ->
+            if (meta is SkullMeta) meta.owningPlayer = victim
+            meta.displayName(
+                Component.text("${victim.name}'s Head", NamedTextColor.YELLOW)
+                    .decoration(TextDecoration.ITALIC, false)
+            )
+        }
+        event.drops.add(head)
     }
 
     /**
@@ -225,6 +294,86 @@ class CombatListener(private val plugin: Joshymc) : Listener {
                 event.isCancelled = true
             }
         }
+    }
+
+    /**
+     * TNT minecarts and End Crystals are not resolved by resolvePlayerSource, so
+     * the standard onDamage PvP gate skips them. Cancel damage from these sources
+     * when the victim has PvP disabled.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onExplosiveDamage(event: EntityDamageByEntityEvent) {
+        val victim = event.entity as? Player ?: return
+        val type = event.damager.type.name
+        if (type != "TNT_MINECART" && type != "END_CRYSTAL") return
+        if (!plugin.combatManager.canPvP(victim)) {
+            event.isCancelled = true
+        }
+    }
+
+    /**
+     * Deny negative splash potions from affecting players with PvP toggled off.
+     * Mirrors the onDamage pattern: blocks the throw if the thrower has PvP off,
+     * and protects the victim if the victim has PvP off.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onPotionSplash(event: PotionSplashEvent) {
+        if (event.entity.effects.none { it.type in NEGATIVE_POTION_EFFECTS }) return
+        val thrower = event.entity.shooter as? Player
+
+        for (entity in event.affectedEntities.toList()) {
+            val victim = entity as? Player ?: continue
+            if (thrower != null && victim == thrower) continue
+            val throwerPvpOff = thrower != null && !plugin.combatManager.canPvP(thrower)
+            val victimPvpOff = !plugin.combatManager.canPvP(victim)
+            if (throwerPvpOff || victimPvpOff) {
+                event.setIntensity(victim, 0.0)
+                if (thrower != null) {
+                    if (throwerPvpOff) {
+                        plugin.commsManager.sendActionBar(thrower,
+                            Component.text("Your PvP is disabled. /pvp on", NamedTextColor.RED))
+                    } else {
+                        plugin.commsManager.sendActionBar(thrower,
+                            Component.text("That player has PvP disabled.", NamedTextColor.RED))
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Deny negative lingering potions (area effect clouds) from affecting players
+     * with PvP toggled off. Handles both custom-effect clouds and vanilla base-type clouds.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onAreaEffectCloudApply(event: AreaEffectCloudApplyEvent) {
+        val cloud = event.entity
+        val isNegativeCloud = cloud.customEffects.any { it.type in NEGATIVE_POTION_EFFECTS } ||
+            cloud.basePotionType?.effectType?.let { it in NEGATIVE_POTION_EFFECTS } == true
+        if (!isNegativeCloud) return
+
+        val thrower = cloud.source as? Player
+        val toRemove = mutableListOf<LivingEntity>()
+
+        for (entity in event.affectedEntities) {
+            val victim = entity as? Player ?: continue
+            if (thrower != null && victim == thrower) continue
+            val throwerPvpOff = thrower != null && !plugin.combatManager.canPvP(thrower)
+            val victimPvpOff = !plugin.combatManager.canPvP(victim)
+            if (throwerPvpOff || victimPvpOff) {
+                toRemove.add(entity)
+                if (thrower != null) {
+                    if (throwerPvpOff) {
+                        plugin.commsManager.sendActionBar(thrower,
+                            Component.text("Your PvP is disabled. /pvp on", NamedTextColor.RED))
+                    } else {
+                        plugin.commsManager.sendActionBar(thrower,
+                            Component.text("That player has PvP disabled.", NamedTextColor.RED))
+                    }
+                }
+            }
+        }
+        event.affectedEntities.removeAll(toRemove)
     }
 
     /**

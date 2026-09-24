@@ -15,6 +15,7 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.block.Action
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerPortalEvent
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitTask
@@ -275,6 +276,11 @@ class PortalManager(private val plugin: Joshymc) : Listener {
             task.cancel()
             if (player.isOnline) onComplete()
         }, 20L)
+    }
+
+    @EventHandler
+    fun onQuit(event: PlayerQuitEvent) {
+        portalSelections.remove(event.player.uniqueId)
     }
 
     // Cancel vanilla portal teleportation when player is inside a custom portal

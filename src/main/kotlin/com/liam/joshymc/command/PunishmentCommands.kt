@@ -40,11 +40,11 @@ class BanCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         val punisherUuid = (sender as? Player)?.uniqueId
         val punisherName = sender.name
 
-        plugin.punishmentManager.ban(target.first, target.second, punisherName, punisherUuid, reason)
+        val inserted = plugin.punishmentManager.ban(target.first, target.second, punisherName, punisherUuid, reason)
 
         // Kick if online
         val online = Bukkit.getPlayer(target.first)
-        online?.kick(buildBanKickMessage(reason, null))
+        online?.kick(plugin.punishmentManager.buildBanMessage(inserted.id, target.first, reason, punisherName, null, null))
 
         val msg = Component.text("${target.second} has been permanently banned", NamedTextColor.RED)
             .let { if (reason != null) it.append(Component.text(" - $reason", NamedTextColor.GRAY)) else it }
@@ -89,10 +89,10 @@ class TempbanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val punisherUuid = (sender as? Player)?.uniqueId
         val punisherName = sender.name
 
-        plugin.punishmentManager.tempban(target.first, target.second, punisherName, punisherUuid, reason, durationMs)
+        val inserted = plugin.punishmentManager.tempban(target.first, target.second, punisherName, punisherUuid, reason, durationMs)
 
         val online = Bukkit.getPlayer(target.first)
-        online?.kick(buildBanKickMessage(reason, durationMs))
+        online?.kick(plugin.punishmentManager.buildBanMessage(inserted.id, target.first, reason, punisherName, durationMs, inserted.expiresAt))
 
         val durationStr = PunishmentManager.formatDuration(durationMs)
         val msg = Component.text("${target.second} has been banned for $durationStr", NamedTextColor.RED)
@@ -319,9 +319,9 @@ class WarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         plugin.punishmentManager.warn(target.first, target.second, punisherName, punisherUuid, reason)
 
-        val warnings = plugin.punishmentManager.getWarnings(target.first)
+        val activeWarns = plugin.punishmentManager.getWarnings(target.first).count { it.active }
         val msg = Component.text("${target.second} has been warned", NamedTextColor.YELLOW)
-            .append(Component.text(" (${warnings.size} total)", NamedTextColor.GRAY))
+            .append(Component.text(" ($activeWarns active)", NamedTextColor.GRAY))
             .let { if (reason != null) it.append(Component.text(" - $reason", NamedTextColor.GRAY)) else it }
         sender.sendMessage(msg)
         notifyStaff(sender, msg)
@@ -331,6 +331,64 @@ class WarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         if (online != null) {
             plugin.commsManager.send(online, Component.text("You have been warned!", NamedTextColor.YELLOW)
                 .let { if (reason != null) it.append(Component.text(" Reason: $reason", NamedTextColor.GRAY)) else it },
+                CommunicationsManager.Category.ADMIN
+            )
+        }
+
+        return true
+    }
+
+    override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
+        return if (args.size == 1) onlinePlayerNames(args[0]) else emptyList()
+    }
+}
+
+// ── /unwarn ─────────────────────────────────────────────────
+
+class UnwarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
+
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        if (!sender.hasPermission("joshymc.unwarn")) {
+            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            return true
+        }
+        if (args.isEmpty()) {
+            sender.sendMessage(Component.text("Usage: /unwarn <player> [id]", NamedTextColor.RED))
+            return true
+        }
+
+        val target = resolveOfflinePlayer(args[0])
+        if (target == null) {
+            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            return true
+        }
+
+        val warnId = if (args.size > 1) {
+            val parsed = args[1].toIntOrNull()
+            if (parsed == null) {
+                sender.sendMessage(Component.text("Invalid warning ID: ${args[1]}", NamedTextColor.RED))
+                return true
+            }
+            parsed
+        } else null
+
+        val removed = plugin.punishmentManager.unwarn(target.first, warnId)
+        if (!removed) {
+            val detail = if (warnId != null) "Warning #$warnId not found for ${target.second}." else "${target.second} has no active warnings."
+            sender.sendMessage(Component.text(detail, NamedTextColor.RED))
+            return true
+        }
+
+        val remaining = plugin.punishmentManager.getWarnings(target.first).count { it.active }
+        val msg = Component.text("Warning removed from ${target.second}", NamedTextColor.GREEN)
+            .append(Component.text(" ($remaining remaining)", NamedTextColor.GRAY))
+        sender.sendMessage(msg)
+        notifyStaff(sender, msg)
+
+        // Notify target if online
+        val online = Bukkit.getPlayer(target.first)
+        if (online != null) {
+            plugin.commsManager.send(online, Component.text("A warning has been removed from your record.", NamedTextColor.GREEN),
                 CommunicationsManager.Category.ADMIN
             )
         }
@@ -474,7 +532,7 @@ class HistoryCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
  * Resolve a player name to UUID + last known name.
  * Tries online first, then falls back to Bukkit's offline player cache.
  */
-private fun resolveOfflinePlayer(name: String): Pair<UUID, String>? {
+internal fun resolveOfflinePlayer(name: String): Pair<UUID, String>? {
     // Try online first
     val online = Bukkit.getPlayer(name)
     if (online != null) return online.uniqueId to online.name
@@ -489,13 +547,13 @@ private fun resolveOfflinePlayer(name: String): Pair<UUID, String>? {
     return null
 }
 
-private fun onlinePlayerNames(prefix: String): List<String> {
+internal fun onlinePlayerNames(prefix: String): List<String> {
     return Bukkit.getOnlinePlayers()
         .map { it.name }
         .filter { it.startsWith(prefix, ignoreCase = true) }
 }
 
-private fun notifyStaff(sender: CommandSender, message: Component) {
+internal fun notifyStaff(sender: CommandSender, message: Component) {
     val prefix = Component.text("[Staff] ", NamedTextColor.DARK_GRAY)
     val full = prefix.append(message)
     for (player in Bukkit.getOnlinePlayers()) {
@@ -503,27 +561,4 @@ private fun notifyStaff(sender: CommandSender, message: Component) {
             player.sendMessage(full)
         }
     }
-}
-
-private fun buildBanKickMessage(reason: String?, durationMs: Long?): Component {
-    val msg = Component.text()
-        .append(Component.text("You have been banned!", NamedTextColor.RED).decoration(TextDecoration.BOLD, true))
-        .append(Component.newline())
-
-    if (reason != null) {
-        msg.append(Component.newline())
-            .append(Component.text("Reason: ", NamedTextColor.GRAY))
-            .append(Component.text(reason, NamedTextColor.WHITE))
-    }
-
-    msg.append(Component.newline())
-    if (durationMs != null) {
-        msg.append(Component.text("Duration: ", NamedTextColor.GRAY))
-            .append(Component.text(PunishmentManager.formatDuration(durationMs), NamedTextColor.WHITE))
-    } else {
-        msg.append(Component.text("Duration: ", NamedTextColor.GRAY))
-            .append(Component.text("Permanent", NamedTextColor.RED))
-    }
-
-    return msg.build()
 }

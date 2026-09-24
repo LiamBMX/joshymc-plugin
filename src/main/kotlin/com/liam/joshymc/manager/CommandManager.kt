@@ -2,32 +2,44 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.command.CreateKitCommand
+import com.liam.joshymc.command.EditKitCommand
 import com.liam.joshymc.command.AnnounceCommand
 import com.liam.joshymc.command.AdminCommand
 import com.liam.joshymc.command.AnvilCommand
 import com.liam.joshymc.command.ChatGameCommand
+import com.liam.joshymc.command.CondenseCommand
 import com.liam.joshymc.command.LeaderboardCommand
+import com.liam.joshymc.command.ModModeCommand
 import com.liam.joshymc.command.RepairCommand
 import com.liam.joshymc.command.SmithingCommand
+import com.liam.joshymc.command.StonecutterCommand
 import com.liam.joshymc.command.ViolationBridgeCommand
 import com.liam.joshymc.command.BanCommand
 import com.liam.joshymc.command.HistoryCommand
 import com.liam.joshymc.command.KickCommand
 import com.liam.joshymc.command.MuteCommand
 import com.liam.joshymc.command.NickCommand
+import com.liam.joshymc.command.PunishCommand
 import com.liam.joshymc.command.ReportCommand
+import com.liam.joshymc.command.LiveCommand
+import com.liam.joshymc.command.PromoteCommand
+import com.liam.joshymc.command.MediaCommand
 import com.liam.joshymc.command.RulesCommand
+import com.liam.joshymc.command.TutorialCommand
 import com.liam.joshymc.command.TempbanCommand
 import com.liam.joshymc.command.TempmuteCommand
 import com.liam.joshymc.command.UnbanCommand
 import com.liam.joshymc.command.UnmuteCommand
 import com.liam.joshymc.command.VanishCommand
+import com.liam.joshymc.command.UnwarnCommand
 import com.liam.joshymc.command.WarnCommand
 import com.liam.joshymc.command.BackCommand
 import com.liam.joshymc.command.ClaimCommand
 import com.liam.joshymc.command.CraftCommand
 import com.liam.joshymc.command.EnchantCommand
 import com.liam.joshymc.command.EnderchestCommand
+import com.liam.joshymc.command.PlayerDataCommand
+import com.liam.joshymc.command.EnderchestPreviewCommand
 import com.liam.joshymc.command.FeedCommand
 import com.liam.joshymc.command.FlyCommand
 import com.liam.joshymc.command.GamemodeCommand
@@ -37,6 +49,8 @@ import com.liam.joshymc.command.HatCommand
 import com.liam.joshymc.command.HealCommand
 import com.liam.joshymc.command.HelpCommand
 import com.liam.joshymc.command.InvseeCommand
+import com.liam.joshymc.command.IgnoreCommand
+import com.liam.joshymc.command.MessagesCommand
 import com.liam.joshymc.command.MsgCommand
 import com.liam.joshymc.command.ReplyCommand
 import com.liam.joshymc.command.SmiteCommand
@@ -45,17 +59,12 @@ import com.liam.joshymc.command.SudoCommand
 import com.liam.joshymc.command.TopCommand
 import com.liam.joshymc.command.ChatColorCommand
 import com.liam.joshymc.command.CosmeticsCommand
-import com.liam.joshymc.command.EmoteCommand
-import com.liam.joshymc.command.GadgetCommand
-import com.liam.joshymc.command.GlowCommand
-import com.liam.joshymc.command.JoinEffectCommand
 import com.liam.joshymc.command.KillEffectCommand
-import com.liam.joshymc.command.TrailCommand
 import com.liam.joshymc.command.FishCommand
-import com.liam.joshymc.command.SkillsCommand
 import com.liam.joshymc.command.MarketCommand
-import com.liam.joshymc.command.QuestCommand
-import com.liam.joshymc.command.RewardsCommand
+import com.liam.joshymc.command.DailyCommand
+import com.liam.joshymc.command.DiscordCommand
+import com.liam.joshymc.command.QuestCycleCommand
 import com.liam.joshymc.command.TagCommand
 import com.liam.joshymc.command.TalismanCommand
 import com.liam.joshymc.command.TimezoneCommand
@@ -82,6 +91,8 @@ import com.liam.joshymc.command.DelWarpCommand
 import com.liam.joshymc.command.PlayerHomeCommand
 import com.liam.joshymc.command.EditWarpCommand
 import com.liam.joshymc.command.HomeCommand
+import com.liam.joshymc.command.DimensionCommand
+import com.liam.joshymc.command.ChatCommand
 import com.liam.joshymc.command.JoshyCommand
 import com.liam.joshymc.command.LinkCommand
 import com.liam.joshymc.command.NightVisionCommand
@@ -91,6 +102,7 @@ import com.liam.joshymc.command.RtpCommand
 import com.liam.joshymc.command.SetHomeCommand
 import com.liam.joshymc.command.SetSpawnCommand
 import com.liam.joshymc.command.SetWarpCommand
+import com.liam.joshymc.command.ScoreboardCommand
 import com.liam.joshymc.command.SettingsCommand
 import com.liam.joshymc.command.SitCommand
 import com.liam.joshymc.command.SpawnCommand
@@ -103,21 +115,26 @@ import com.liam.joshymc.command.CrateCommand
 import com.liam.joshymc.command.CrateEditorCommand
 import com.liam.joshymc.command.AuctionCommand
 import com.liam.joshymc.command.BountyCommand
+import com.liam.joshymc.command.KillStreakCommand
+import com.liam.joshymc.command.LoginStreakCommand
 import com.liam.joshymc.command.HopperPlusCommand
 import com.liam.joshymc.command.SignShopCommand
 import com.liam.joshymc.command.SpawnerCommand
 import com.liam.joshymc.command.TeamCommand
 import com.liam.joshymc.command.BalTopCommand
+import com.liam.joshymc.command.DeathTopCommand
 import com.liam.joshymc.command.KillTopCommand
-import com.liam.joshymc.command.QuestTopCommand
 import com.liam.joshymc.command.BalanceCommand
 import com.liam.joshymc.command.EcoCommand
 import com.liam.joshymc.command.PayCommand
 import com.liam.joshymc.command.PortalCommand
 import com.liam.joshymc.command.VoteCommand
 import com.liam.joshymc.command.WorldCommand
-import com.liam.joshymc.command.WorldFlagCommand
 import com.liam.joshymc.command.RestartCommand
+import com.liam.joshymc.command.InvestCommand
+import com.liam.joshymc.command.StockCommand
+import com.liam.joshymc.command.ResurgeCommand
+import com.liam.joshymc.command.WorthCommand
 
 class CommandManager(private val plugin: Joshymc) {
 
@@ -144,15 +161,39 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("condense")?.let {
+            val cmd = CondenseCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
         plugin.getCommand("pvp")?.let {
             val cmd = PvpCommand(plugin)
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("scoreboard")?.let {
+            val cmd = ScoreboardCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
         plugin.getCommand("sit")?.setExecutor(SitCommand(plugin))
 
-        plugin.getCommand("spawn")?.setExecutor(SpawnCommand(plugin))
+        plugin.getCommand("dimension")?.let {
+            val cmd = DimensionCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("chat")?.let {
+            val cmd = ChatCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("spawn")?.let { val c = SpawnCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("setspawn")?.setExecutor(SetSpawnCommand(plugin))
 
         // Server warps
@@ -208,6 +249,11 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
         plugin.getCommand("createkit")?.setExecutor(CreateKitCommand(plugin))
+        plugin.getCommand("editkit")?.let {
+            val cmd = EditKitCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
         plugin.getCommand("deletekit")?.let {
             val cmd = DeleteKitCommand(plugin)
             it.setExecutor(cmd)
@@ -222,6 +268,26 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("pv")?.let {
             val cmd = PlayerVaultCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("modmode")?.let {
+            val cmd = ModModeCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("hidestaff")?.setExecutor(com.liam.joshymc.command.HideStaffCommand(plugin))
+
+        plugin.getCommand("staffchat")?.let {
+            val cmd = com.liam.joshymc.command.StaffChatCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("traineemode")?.let {
+            val cmd = com.liam.joshymc.command.TraineeModeCommand(plugin)
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
@@ -264,6 +330,62 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("giveaway")?.let {
+            val cmd = com.liam.joshymc.command.GiveawayCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("gift")?.let {
+            val cmd = com.liam.joshymc.command.GiftCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("coinflip")?.let {
+            val cmd = com.liam.joshymc.command.CoinflipCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("casino")?.let {
+            it.setExecutor(com.liam.joshymc.command.CasinoCommand(plugin))
+        }
+
+        plugin.getCommand("mines")?.let {
+            val c = com.liam.joshymc.command.MinesCommand(plugin)
+            it.setExecutor(c)
+            it.tabCompleter = c
+        }
+
+        plugin.getCommand("roulette")?.let {
+            it.setExecutor(com.liam.joshymc.command.RouletteCommand(plugin))
+        }
+
+        plugin.getCommand("crash")?.let {
+            it.setExecutor(com.liam.joshymc.command.CrashCommand(plugin))
+        }
+
+        plugin.getCommand("towers")?.let {
+            it.setExecutor(com.liam.joshymc.command.TowersCommand(plugin))
+        }
+
+        plugin.getCommand("orders")?.let {
+            val cmd = com.liam.joshymc.command.OrdersCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("order")?.let {
+            val cmd = com.liam.joshymc.command.OrderCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("overflow")?.let {
+            it.setExecutor(com.liam.joshymc.command.OverflowCommand(plugin))
+        }
+
         plugin.getCommand("eco")?.let {
             val cmd = EcoCommand(plugin)
             it.setExecutor(cmd)
@@ -284,7 +406,7 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("baltop")?.setExecutor(BalTopCommand(plugin))
         plugin.getCommand("killtop")?.setExecutor(KillTopCommand(plugin))
-        plugin.getCommand("questtop")?.setExecutor(QuestTopCommand(plugin))
+        plugin.getCommand("deathstop")?.setExecutor(DeathTopCommand(plugin))
 
         plugin.getCommand("chestshop")?.let {
             val cmd = SignShopCommand(plugin)
@@ -316,10 +438,24 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("killstreak")?.let {
+            val cmd = KillStreakCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("loginstreak")?.let {
+            val cmd = LoginStreakCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
         plugin.getCommand("shop")?.setExecutor(ShopCommand(plugin))
+        plugin.getCommand("worth")?.let { val c = WorthCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         plugin.getCommand("sell")?.let {
             val cmd = SellCommand(plugin)
+            plugin.sellCommand = cmd
             it.setExecutor(cmd)
             it.tabCompleter = cmd
             plugin.server.pluginManager.registerEvents(cmd, plugin)
@@ -330,27 +466,30 @@ class CommandManager(private val plugin: Joshymc) {
         ChatColorCommand.createTable(plugin)
         plugin.getCommand("chatcolor")?.let { val c = ChatColorCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
+        // ── Ignore ───────────────────────────────────
+        IgnoreCommand.createTable(plugin)
+        plugin.getCommand("ignore")?.let { val c = IgnoreCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
         // ── Market ──────────────────────────────────
-        plugin.getCommand("market")?.let { val c = MarketCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        if (plugin.isFeatureEnabled("market")) {
+            plugin.getCommand("market")?.let { val c = MarketCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        }
 
         // ── Quests ──────────────────────────────────
-        plugin.getCommand("quests")?.let { val c = QuestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("rewards")?.setExecutor(RewardsCommand(plugin))
+        // /quests: unified Daily/Weekly/Quest Master GUI. /quest, /questboard, /questbook are
+        // plain plugin.yml aliases (see aliases: list) that route into this same executor.
+        plugin.getCommand("quests")?.let { val c = QuestCycleCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("daily")?.setExecutor(DailyCommand(plugin))
 
         // ── Cosmetics ─────────────────────────────────
-        plugin.getCommand("trail")?.let { val c = TrailCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("killeffect")?.let { val c = KillEffectCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("joineffect")?.let { val c = JoinEffectCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("emote")?.let { val c = EmoteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("glow")?.let { val c = GlowCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("gadget")?.let { val c = GadgetCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("cosmetics")?.let { val c = CosmeticsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Fishing ───────────────────────────────────
         plugin.getCommand("fish")?.let { val c = FishCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
-        // ── Skills ────────────────────────────────────
-        plugin.getCommand("skills")?.let { val c = SkillsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        // ── Resurge ───────────────────────────────────
+        plugin.getCommand("resurge")?.let { val c = ResurgeCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Talismans ─────────────────────────────────
         plugin.getCommand("talisman")?.let { val c = TalismanCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
@@ -371,6 +510,12 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Help & Rules GUI ─────────────────────────
         plugin.getCommand("help")?.setExecutor(HelpCommand(plugin))
         plugin.getCommand("rules")?.setExecutor(RulesCommand(plugin))
+        plugin.getCommand("tutorial")?.setExecutor(TutorialCommand(plugin))
+        plugin.getCommand("media")?.setExecutor(MediaCommand(plugin))
+        plugin.getCommand("discord")?.setExecutor(DiscordCommand(plugin))
+        plugin.getCommand("live")?.let { val c = LiveCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("promote")?.let { val c = PromoteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        PromoteCommand.createTable(plugin)
 
         // ── Essentials-style commands ────────────────
         plugin.getCommand("back")?.setExecutor(BackCommand(plugin))
@@ -403,12 +548,15 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("invsee")?.let { val c = InvseeCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("enderchest")?.let { val c = EnderchestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("playerdata")?.let { val c = PlayerDataCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("hat")?.setExecutor(HatCommand(plugin))
         plugin.getCommand("craft")?.setExecutor(CraftCommand(plugin))
         plugin.getCommand("anvil")?.setExecutor(AnvilCommand(plugin))
         plugin.getCommand("smithing")?.setExecutor(SmithingCommand(plugin))
+        plugin.getCommand("stonecutter")?.setExecutor(StonecutterCommand(plugin))
         plugin.getCommand("repair")?.let { val c = RepairCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("jmc-violation")?.setExecutor(ViolationBridgeCommand(plugin))
+        plugin.getCommand("jmc-ecview")?.setExecutor(EnderchestPreviewCommand(plugin))
         plugin.getCommand("chatgame")?.let { val c = ChatGameCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("leaderboard")?.let { val c = LeaderboardCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("gencave")?.let { val c = GenCaveCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
@@ -422,6 +570,7 @@ class CommandManager(private val plugin: Joshymc) {
         val msgCmd = MsgCommand(plugin)
         plugin.getCommand("msg")?.let { it.setExecutor(msgCmd); it.tabCompleter = msgCmd }
         plugin.getCommand("reply")?.setExecutor(ReplyCommand(plugin))
+        plugin.getCommand("messages")?.let { val c = MessagesCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // TPA system
         val tpaCmd = TpaCommand(plugin)
@@ -445,8 +594,11 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("tempmute")?.let { val c = TempmuteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("unmute")?.let { val c = UnmuteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("warn")?.let { val c = WarnCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("unwarn")?.let { val c = UnwarnCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("pkick")?.let { val c = KickCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("history")?.let { val c = HistoryCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("punish")?.let { val c = PunishCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("alts")?.let { val c = com.liam.joshymc.command.AltsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Vanish ──────────────────────────────────────
         val vanishCmd = VanishCommand(plugin)
@@ -517,8 +669,18 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd); it.tabCompleter = cmd
         }
 
+        // ── Event ─────────────────────────────────────────
+        plugin.getCommand("event")?.let {
+            val cmd = plugin.eventManager.EventCommand()
+            it.setExecutor(cmd); it.tabCompleter = cmd
+        }
+
         // ── Portals ──────────────────────────────────────
         plugin.getCommand("portal")?.let { val c = PortalCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        // ── Fake Base / Spawn Stash ────────────────────────
+        plugin.getCommand("fakebase")?.let { val c = com.liam.joshymc.command.FakeBaseCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("spawnstash")?.let { it.setExecutor(com.liam.joshymc.command.SpawnStashCommand(plugin)) }
 
         // ── Voting ──────────────────────────────────────
         // JoshyMC no longer claims the unprefixed `/vote` alias — it's exposed
@@ -537,8 +699,9 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd); it.tabCompleter = cmd
         }
 
-        // ── World Flags ──────────────────────────────────
-        plugin.getCommand("worldflag")?.let { val c = WorldFlagCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        // ── Investments ──────────────────────────────────
+        plugin.getCommand("invest")?.let { val c = InvestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("stock")?.let { val c = StockCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── World Management ────────────────────────────
         plugin.getCommand("world")?.let {
@@ -547,7 +710,189 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        // ── Boosters ─────────────────────────────────────
+        plugin.getCommand("booster")?.let { val c = com.liam.joshymc.command.BoosterCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        // ── Tokens ────────────────────────────────────────
+        plugin.getCommand("tokens")?.let { val c = com.liam.joshymc.command.TokensCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        // ── Credits ───────────────────────────────────────
+        plugin.getCommand("credits")?.let { val c = com.liam.joshymc.command.CreditsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        // ── Credit Shop ───────────────────────────────────
+        plugin.getCommand("cshop")?.let { val c = com.liam.joshymc.command.CreditShopCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        // ── Vouchers ──────────────────────────────────────
+        plugin.getCommand("voucher")?.let { val c = com.liam.joshymc.command.VoucherCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("creditvoucher")?.let { val c = com.liam.joshymc.command.CreditVoucherCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("rankvoucher")?.let { val c = com.liam.joshymc.command.RankVoucherCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        // ── Mutations ─────────────────────────────────────
+        plugin.getCommand("mutations")?.let { val c = com.liam.joshymc.command.MutationsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        // ── MCR (Ranger/Pioneer monthly Credits reward) ────
+        com.liam.joshymc.command.McrCommand.createTable(plugin)
+        plugin.getCommand("mcr")?.setExecutor(com.liam.joshymc.command.McrCommand(plugin))
+
+        // ── Sign Item (weekly autograph) ────────────────────
+        com.liam.joshymc.command.SignItemCommand.createTable(plugin)
+        plugin.getCommand("signitem")?.setExecutor(com.liam.joshymc.command.SignItemCommand(plugin))
+
+        // ── Skull ─────────────────────────────────────────
+        plugin.getCommand("skull")?.let { val c = com.liam.joshymc.command.SkullCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+
+        applyBasePermissions()
+
         plugin.logger.info("Commands registered.")
+    }
+
+    /**
+     * Base permission node required to use each command at all (issue #841). Bukkit's own
+     * command tab-completion (and vanilla /help) already hides a registered command from a
+     * sender who fails [org.bukkit.command.Command.testPermissionSilent] — setting this
+     * field is enough to make those commands disappear from suggestions with no further
+     * plumbing, and it's re-evaluated live so LuckPerms changes apply on the player's next
+     * tab-press without a restart.
+     *
+     * Only commands whose ENTIRE functionality is gated behind one fixed node are listed
+     * here. Commands that mix free-to-use and permission-gated subcommands (e.g. `/chat`,
+     * `/crate`, `/hopper`, `/cshop`) are intentionally left unset so the base command stays
+     * visible — those filter their gated subcommands directly in their own onTabComplete.
+     */
+    private val basePermissions: Map<String, String> = mapOf(
+        "nightvision" to "joshymc.nightvision",
+        "condense" to "joshymc.condense",
+        "pvp" to "joshymc.pvp",
+        "sit" to "joshymc.sit",
+        "dimension" to "joshymc.end.admin",
+        "setspawn" to "joshymc.setspawn",
+        "warp" to "joshymc.warp",
+        "setwarp" to "joshymc.setwarp",
+        "delwarp" to "joshymc.delwarp",
+        "editwarp" to "joshymc.editwarp",
+        "pwarp" to "joshymc.pwarp",
+        "phome" to "joshymc.phome",
+        "afk" to "joshymc.afk",
+        "kit" to "joshymc.kit",
+        "createkit" to "joshymc.createkit",
+        "editkit" to "joshymc.editkit",
+        "deletekit" to "joshymc.deletekit",
+        "trade" to "joshymc.trade",
+        "pv" to "joshymc.pv",
+        "modmode" to "joshymc.modmode",
+        "hidestaff" to "joshymc.hidestaff",
+        "staffchat" to "joshymc.staffchat",
+        "traineemode" to "joshymc.traineemode",
+        "holo" to "joshymc.holo",
+        "npc" to "joshymc.npc",
+        "crateeditor" to "joshymc.crateeditor",
+        "trash" to "joshymc.trash",
+        "ah" to "joshymc.ah",
+        "giveaway" to "joshymc.giveaway",
+        "gift" to "joshymc.gift",
+        "coinflip" to "joshymc.coinflip",
+        "casino" to "joshymc.casino",
+        "mines" to "joshymc.casino",
+        "roulette" to "joshymc.casino",
+        "crash" to "joshymc.casino",
+        "towers" to "joshymc.casino",
+        "orders" to "joshymc.orders",
+        "order" to "joshymc.orders",
+        "overflow" to "joshymc.overflow",
+        "eco" to "joshymc.eco",
+        "balance" to "joshymc.balance",
+        "pay" to "joshymc.pay",
+        "baltop" to "joshymc.baltop",
+        "killtop" to "joshymc.killtop",
+        "deathstop" to "joshymc.deathstop",
+        "chestshop" to "joshymc.shop",
+        "team" to "joshymc.team",
+        "bounty" to "joshymc.bounty",
+        "killstreak" to "joshymc.killstreak",
+        "loginstreak" to "joshymc.loginstreak",
+        "sell" to "joshymc.sell",
+        "chatcolor" to "joshymc.chatcolor",
+        "quests" to "joshymc.quests",
+        "daily" to "joshymc.quests",
+        "killeffect" to "joshymc.killeffect",
+        "cosmetics" to "joshymc.cosmetics",
+        "resurge" to "joshymc.resurge",
+        "talisman" to "joshymc.talisman",
+        "tag" to "joshymc.tag",
+        "nick" to "joshymc.nick",
+        "announce" to "joshymc.announce",
+        "back" to "joshymc.back",
+        "gmc" to "joshymc.gamemode.creative",
+        "gms" to "joshymc.gamemode.survival",
+        "gma" to "joshymc.gamemode.adventure",
+        "gmsp" to "joshymc.gamemode.spectator",
+        "fly" to "joshymc.fly",
+        "heal" to "joshymc.heal",
+        "feed" to "joshymc.feed",
+        "god" to "joshymc.god",
+        "speed" to "joshymc.speed",
+        "tp" to "joshymc.tp",
+        "tphere" to "joshymc.tphere",
+        "invsee" to "joshymc.invsee",
+        "enderchest" to "joshymc.enderchest",
+        "playerdata" to "joshymc.playerdata",
+        "hat" to "joshymc.hat",
+        "craft" to "joshymc.craft",
+        "anvil" to "joshymc.anvil",
+        "smithing" to "joshymc.smithing",
+        "stonecutter" to "joshymc.stonecutter",
+        "jmc-violation" to "joshymc.violation.bridge",
+        "chatgame" to "joshymc.chatgame",
+        "leaderboard" to "joshymc.leaderboard",
+        "gencave" to "joshymc.gencave",
+        "admin" to "joshymc.admin",
+        "enchant" to "joshymc.enchant",
+        "smite" to "joshymc.smite",
+        "top" to "joshymc.top",
+        "sudo" to "joshymc.sudo",
+        "restart" to "joshymc.restart",
+        "tpa" to "joshymc.tpa",
+        "ban" to "joshymc.ban",
+        "tempban" to "joshymc.tempban",
+        "unban" to "joshymc.unban",
+        "mute" to "joshymc.mute",
+        "tempmute" to "joshymc.tempmute",
+        "unmute" to "joshymc.unmute",
+        "warn" to "joshymc.warn",
+        "unwarn" to "joshymc.unwarn",
+        "pkick" to "joshymc.kick",
+        "history" to "joshymc.history",
+        "alts" to "joshymc.alts",
+        "vanish" to "joshymc.vanish",
+        "report" to "joshymc.report",
+        "reports" to "joshymc.reports.view",
+        "resource" to "joshymc.resource",
+        "claim" to "joshymc.claim",
+        "subclaim" to "joshymc.claim",
+        "unclaim" to "joshymc.claim",
+        "rank" to "joshymc.rank",
+        "sellwand" to "joshymc.sellwand.give",
+        "customenchant" to "joshymc.customenchant",
+        "portal" to "joshymc.portal",
+        "fakebase" to "joshymc.fakebase.create",
+        "spawnstash" to "joshymc.spawnstash",
+        "invest" to "joshymc.invest",
+        "world" to "joshymc.world",
+        "booster" to "joshymc.booster",
+        "credits" to "joshymc.credits",
+        "voucher" to "joshymc.vouchers",
+        "creditvoucher" to "joshymc.creditvoucher.admin",
+        "rankvoucher" to "joshymc.rankvoucher.admin",
+        "mutations" to "joshymc.mutations",
+        "mcr" to "joshymc.mcr",
+        "skull" to "joshymc.skull",
+        "live" to "joshymc.live"
+    )
+
+    private fun applyBasePermissions() {
+        for ((name, node) in basePermissions) {
+            plugin.getCommand(name)?.permission = node
+        }
     }
 
     /**
