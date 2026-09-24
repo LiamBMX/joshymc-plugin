@@ -147,7 +147,7 @@ class ChatGamesManager(private val plugin: Joshymc) {
                     .append(Component.text("!", NamedTextColor.YELLOW))
             )
             for (online in Bukkit.getOnlinePlayers()) {
-                online.playSound(online.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.5f, 1.4f)
+                online.playSound(online.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.15f, 1.4f)
             }
         })
         return true
