@@ -4,14 +4,15 @@
 A Paper MC plugin (Kotlin) for Joshy's Minecraft server. It replaces a stack of Spring/3rd-party plugins with a single custom plugin. As of v1.0.48 it owns: claims, combat, economy, market, auctions, sign shops, custom enchants, custom items, custom spawners, kits, warps/homes/RTP, TPA, vaults/storage, leaderboard holograms, NPCs, crates, arenas, portals, voting, ranks, teams, quests, talismans, fishing, skills, all cosmetics (trails/kill effects/join effects/glow/emote/gadget/chat tags/chat colors/nicks), AFK, anticheat (with Grim bridge), playtime, scoreboard sidebar, MOTD/welcome, announcements, world-flags + multi-world, resource world, spawn world, settings GUI, lag cleaner, recipe blocker, and a 2-way Discord bridge.
 
 ## Target Server
-- **Paper MC 1.21.11** — newer than the model's training cutoff. **Trust the user about API surface**; don't reach for `BlockFromToEvent` workarounds you remember from 1.16.
-- Java 21 toolchain
+- **Paper 26.2** (`paper-api 26.2.build.128-stable`, `api-version: '26.2'`) — newer than the model's training cutoff. **Trust the user about API surface**; check the jars with `javap` instead of guessing. Don't reach for `BlockFromToEvent` workarounds you remember from 1.16.
+- Kotlin compiled with a Java 21 toolchain to Java 21 bytecode; the server runs Java 25. `paper-api` is published for Java 25, so `build.gradle.kts` calls `java { disableAutoTargetJvm() }`.
+- No NMS and no paperweight: plain `compileOnly` Paper API.
 - Gradle + Shadow plugin for fat JAR, `run-paper` plugin for local testing
 - JDA 5.2.3 (shaded + relocated for Discord)
 
 ## Running locally
 ```bash
-./gradlew runServer    # Starts a Paper 1.21.11 test server with the plugin loaded
+./gradlew runServer    # Starts a Paper 26.2 test server (Java 25, fetched by the foojay resolver)
 ./gradlew build        # Builds the shadow JAR → jar/joshymc-1.0-SNAPSHOT-all.jar
 ```
 
@@ -74,7 +75,7 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 | **HopperPlusManager** | Upgraded hoppers with filters. |
 | **SpawnerManager** | Custom spawners loaded from `spawners.yml`. Each placed block is a `SpawnerBlock` (key, spawnerId, owner, stackCount, enabled, storage, **filteredOut: MutableSet\<Material\>** added v1.0.48). Drop generation uses `block.filteredOut` to discard at generation. **v1.0.48 GUI**: 54-slot storage view (45 storage + 9 buttons), per-spawner filter sub-GUI (`openFilterGui`), shorter title to avoid overflow, `openStorageGuis` map + per-second tick to refresh slots so hopper pulls show up live. |
 | **CrateManager** + **CrateEditorCommand** | Server crates with keys + animations. |
-| **NPCManager** | Static NPCs that run commands on click. |
+| **NPCManager** | Static NPCs that run commands on click. Each NPC is a `Mannequin` entity (player model, skin by player name via `ResolvableProfile`); no NMS. |
 | **HologramManager** | Floating text holograms. |
 | **LeaderboardManager** | (v1.0.45) 6 player + 6 team leaderboard hologram types via SQL aggregation joins. **v1.0.45 fix**: money leaderboard was rendering UUIDs as names — resolve via `nameOf(UUID.fromString(...))`. **v1.0.45 fix**: TEAM_MONEY SQL was joining `balances` but actual table is `economy`. |
 | **PunishmentManager** | Bans / mutes / kicks / warns + history. |
@@ -101,7 +102,7 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 | **FishingManager** | Custom fishing collection. |
 | **SkillManager** | XP/leveling skills. |
 | **TrailManager / KillEffectManager / JoinEffectManager / EmoteManager / GlowManager / GadgetManager** | Cosmetics. |
-| **ResourcePackManager** | Required resource pack on join. |
+| **ResourcePackManager** | Required resource pack on join. Serves the `resourcepack.zip` bundled in the JAR and replaces `plugins/Joshymc/resourcepack.zip` whenever the bundled one differs. |
 | **ItemManager → CustomItem** | Base class for all custom items; PDC-tagged. |
 | **CustomEnchantManager** | Custom enchants on gear (see `Joshymc.registerEnchants()`). |
 | **MobVisibilityListener** | (v1.0.43) Per-player mob hiding. **3 damage paths must all be closed**: (1) direct hit (`EntityDamageByEntityEvent` damager-is-LivingEntity), (2) projectile (`Projectile.shooter` resolution), (3) explosion AoE (`EntityDamageEvent` cause `ENTITY_EXPLOSION`/`BLOCK_EXPLOSION`/`WITHER`/`MAGIC`). |
@@ -135,7 +136,10 @@ Drills/bores: `void_drill`, `void_drill_5x5`, `void_bore`, `void_bore_5x5`, `voi
 
 ## Resource Pack
 - Required pack URL/hash in `config.yml > resource-pack`. `ResourcePackManager` enforces on join.
-- Skeleton at `resourcepack/` in repo root; zip + host externally.
+- Source lives in `resourcepack/` (pack format 88 for 26.2). Gradle's `resourcePackZip` task zips `pack.mcmeta` + `assets/` into the JAR on every build — never commit a zip.
+- **3D item art is code**: `resourcepack/art/items/<id>.py`, one module per item, built with `art/kit.py` (texture painters, `box`/`bar`/`arc`/`prism`/`turn`/`mirror` geometry with 26.2's free rotations, grip-aligned `display()` presets, worn layers via `save_layer`). Tools, run from `resourcepack/`: `py -m art.check <id>`, `py -m art.render <id>` (preview sheets copying 26.2's hand/head/wing transforms, vanilla item in the other hand for scale), `py -m art.build` (writes textures, models, item definitions and equipment assets). `_example.py` is the reference; modules starting with `_` never ship.
+- Wearables: helmets are 3D models on the head (equippable with **no** asset id, so the client draws the item model through its `head` transform); boots and elytras use `equipment/<id>.json` layers (`humanoid`, `wings`). Any chest item whose equipment asset has a `wings` layer renders wings.
+- For big art batches, fan out one agent per item (kit + checker + renderer, each agent owns one file), then review everything on one contact sheet.
 - Custom item models use `setItemModel(NamespacedKey)` — models live in `assets/joshymc/models/item/`.
 
 ## Discord Integration
@@ -163,9 +167,10 @@ Drills/bores: `void_drill`, `void_drill_5x5`, `void_bore`, `void_bore_5x5`, `voi
 - **`PlayerInventory.clear()` does NOT clear armor or off-hand** — must also `setArmorContents(arrayOfNulls(4))` + `setItemInOffHand(null)` for combat-log de-dupe. (v1.0.44 fix.)
 - **`event.inventory` in `InventoryClickEvent` is always the top inventory** — to know where the player actually clicked, use `event.clickedInventory`. (v1.0.48 GuiManager fix.)
 - **Bukkit chest GUI title overflows visually** — keep titles under ~28 chars. Don't append `(Page X/Y)` when there's only one page. (v1.0.48 spawner fix.)
-- **`Material.DO_TRADER_SPAWNING`** game rule shows a deprecation warning in 1.21.11. It still works; ignore for now.
+- **`GameRule.DO_TRADER_SPAWNING`** and the other old game-rule constants are deprecated (still work in 26.2).
+- **26.2 equipment getters are non-null** (`getHelmet()` returns an empty stack, not null), so Kotlin can't assign them as properties: use `setHelmet(...)` etc.
 - **GameRule import for `World.setGameRule`** — `org.bukkit.GameRule.DO_TRADER_SPAWNING`.
-- **`world.getCanGenerateStructures` is read-only on most Paper builds** — disabling structures requires the NMS reflection path in `Joshymc.disableStructureGeneration`. Three strategies: Bukkit setter → NMS WorldOptions record swap → log a manual instruction.
+- **`world.getCanGenerateStructures` is read-only on most Paper builds** — `Joshymc.disableStructureGeneration` tries a Bukkit setter, then an NMS WorldOptions reflection swap, then logs a manual instruction. On 26.2 the reflection path fails (`worldGenOptions()` is gone), so it falls through to the manual instruction.
 - **Generate-structures only takes effect on NEW chunks**; existing chunks keep their structure-gen settings. Worth saying so when the user asks why an old world still spawns villages.
 - **Polygon point-in-polygon uses ray-casting**; sub-block edge crossings can be missed if you compare blockX/blockZ. Use raw `from.x == to.x` checks for inside/outside transitions.
 - **Mob visibility = 3 damage paths** (direct, projectile, explosion). Closing only the first leaves creepers exploding through invisible walls.
