@@ -1,7 +1,7 @@
 name: joshymc
 version: '${version}'
 main: com.liam.joshymc.Joshymc
-api-version: '1.21'
+api-version: '26.2'
 description: Custom plugin for Joshy's server
 authors: [liam]
 

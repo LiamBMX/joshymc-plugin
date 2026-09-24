@@ -549,7 +549,7 @@ class GadgetManager(private val plugin: Joshymc) : Listener {
             a.isInvulnerable = true
             a.isSilent = true
             val helmet = ItemStack(Material.SLIME_BLOCK)
-            a.equipment.helmet = helmet
+            a.equipment.setHelmet(helmet)
             a.isPersistent = false
         }
 
@@ -714,13 +714,13 @@ class GadgetManager(private val plugin: Joshymc) : Listener {
             a.isPersistent = false
 
             // Copy player armor
-            a.equipment.helmet = player.inventory.helmet?.clone() ?: ItemStack(Material.PLAYER_HEAD).apply {
+            a.equipment.setHelmet(player.inventory.helmet?.clone() ?: ItemStack(Material.PLAYER_HEAD).apply {
                 editMeta { meta ->
                     if (meta is org.bukkit.inventory.meta.SkullMeta) {
                         meta.owningPlayer = player
                     }
                 }
-            }
+            })
             // Always set skull head
             val skull = ItemStack(Material.PLAYER_HEAD)
             skull.editMeta { meta ->
@@ -728,10 +728,10 @@ class GadgetManager(private val plugin: Joshymc) : Listener {
                     meta.owningPlayer = player
                 }
             }
-            a.equipment.helmet = skull
-            a.equipment.chestplate = player.inventory.chestplate?.clone()
-            a.equipment.leggings = player.inventory.leggings?.clone()
-            a.equipment.boots = player.inventory.boots?.clone()
+            a.equipment.setHelmet(skull)
+            a.equipment.setChestplate(player.inventory.chestplate?.clone())
+            a.equipment.setLeggings(player.inventory.leggings?.clone())
+            a.equipment.setBoots(player.inventory.boots?.clone())
         }
 
         world.playSound(loc, Sound.UI_BUTTON_CLICK, 1.0f, 1.5f)

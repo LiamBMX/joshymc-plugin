@@ -604,7 +604,7 @@ class HatCommand(private val plugin: Joshymc) : CommandExecutor {
             return true
         }
         val currentHelmet = sender.inventory.helmet
-        sender.inventory.helmet = item.clone()
+        sender.inventory.setHelmet(item.clone())
         sender.inventory.setItemInMainHand(currentHelmet ?: ItemStack(Material.AIR))
         plugin.commsManager.send(sender, Component.text("Hat equipped!", NamedTextColor.GREEN))
         return true

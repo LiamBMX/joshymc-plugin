@@ -34,3 +34,6 @@ Thumbs.db
 .env
 *.env
 secrets.yml
+
+# Python
+__pycache__/
