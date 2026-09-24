@@ -24,6 +24,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
 
     private val kills = ConcurrentHashMap<UUID, Int>()
     private val deaths = ConcurrentHashMap<UUID, Int>()
+    private val sidebarLines = mutableMapOf<UUID, List<Component>>()
 
     /** All-time peak concurrent (real, connected) player count. Single source of truth. */
     private var peakPlayers: Int = 0
@@ -54,11 +55,6 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         sidebarTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
             for (player in Bukkit.getOnlinePlayers()) {
                 updateSidebar(player)
-                // Re-apply rank team selection so the collision variant
-                // (collide vs no-collide) tracks the player's current state
-                // — world change, arena entry/exit, combat tag — without
-                // needing a dedicated event hook for each.
-                plugin.rankManager.applyTeamFor(player)
             }
             updateBelowNameHealth()
         }, 0L, 40L)
@@ -86,6 +82,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
 
         // Save all stats before shutdown
         saveAllStats()
+        sidebarLines.clear()
 
         // Clear scoreboards for all online players
         for (player in Bukkit.getOnlinePlayers()) {
@@ -107,8 +104,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler
     fun onPlayerQuit(event: PlayerQuitEvent) {
-        // Optionally keep kills/deaths in memory for when they rejoin
-        // No cleanup needed for scoreboard — it's discarded with the player
+        sidebarLines.remove(event.player.uniqueId)
     }
 
     @EventHandler
@@ -132,6 +128,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     // ── Sidebar ─────────────────────────────────────────────────────
 
     private fun setupScoreboard(player: Player) {
+        sidebarLines.remove(player.uniqueId)
         val board = Bukkit.getScoreboardManager().newScoreboard
         val objective = board.registerNewObjective(
             "joshymc_sidebar",
@@ -196,14 +193,6 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         }
         if (objective.displaySlot != DisplaySlot.SIDEBAR) objective.displaySlot = DisplaySlot.SIDEBAR
 
-        // Clear existing line teams + score entries from the previous tick
-        for (entry in board.entries.toSet()) {
-            board.resetScores(entry)
-        }
-        for (t in board.teams.toList()) {
-            if (t.name.startsWith("sbline_")) t.unregister()
-        }
-
         val balance = plugin.economyManager.formatShort(plugin.economyManager.getBalance(player))
         val credits = plugin.creditsManager.format(plugin.creditsManager.getBalance(player))
         val rank = plugin.rankManager.getPlayerRank(player)
@@ -236,15 +225,18 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
 
         // Team-prefix trick: each line is rendered as a team's prefix (Component)
         // attached to a unique invisible "entry" string. Top line gets the highest score.
+        val previous = sidebarLines[player.uniqueId]
         for ((index, component) in lines.withIndex()) {
             val entry = lineEntry(index)
             val teamName = "sbline_$index"
-            val sbTeam = board.registerNewTeam(teamName)
-            sbTeam.addEntry(entry)
-            sbTeam.prefix(component)
-
-            objective.getScore(entry).score = lines.size - index
+            val existing = board.getTeam(teamName)
+            val sbTeam = existing ?: board.registerNewTeam(teamName).also {
+                it.addEntry(entry)
+                objective.getScore(entry).score = lines.size - index
+            }
+            if (existing == null || previous?.getOrNull(index) != component) sbTeam.prefix(component)
         }
+        sidebarLines[player.uniqueId] = lines
     }
 
     /** Unique, visually-empty entry string per sidebar row (combo of two color codes). */
@@ -296,26 +288,6 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
             plugin.commsManager.parseLegacy("$prefix$name")
         )
 
-        // Tab list sort is handled by the jmc_* rank teams (named jmc_00_owner,
-        // jmc_01_admin, …, jmc_06_default) — Bukkit sorts the player list by
-        // team name, and these are already weight-prefixed in descending
-        // order. We previously had a separate ztab_* team layer that ran
-        // every 5 seconds and moved each player into a sort team, but a
-        // player can only be in ONE scoreboard team per scoreboard, so the
-        // ztab_* assignment was overwriting the jmc_* rank team — that's
-        // why rank prefixes disappeared after the first tab refresh tick.
-        //
-        // Make sure stale ztab_* teams from old plugin versions are gone so
-        // they don't keep stealing entries.
-        for (online in Bukkit.getOnlinePlayers()) {
-            val board = online.scoreboard
-            board.teams
-                .filter { it.name.startsWith("ztab_") }
-                .forEach { it.unregister() }
-        }
-        // Re-anchor the player in their rank team in case anything else
-        // moved them (e.g. a /reload mid-session).
-        plugin.rankManager.applyTeamFor(player)
     }
 
     // ── Utility ─────────────────────────────────────────────────────
