@@ -163,6 +163,17 @@ combat-alerts:
   # grouped into a single follow-up embed instead of spamming the channel.
   rate-limit-seconds: 30
 
+# PvP Kill Logs — Discord embed for every player-on-player kill (killer, victim, weapon,
+# location, time). Only fires for kills with an identifiable player killer (melee or
+# player-fired projectiles) — mob kills and environmental deaths are never announced.
+# Reporting only — never touches kill streaks, bounties, or PvP rewards. Reuses the
+# Discord bot above; set discord.channel-id below to a channel the bot can post embeds in.
+pvp-kill-logs:
+  enabled: true
+
+  discord:
+    channel-id: "1550719798760177734"
+
 # Recipe Blocker — block players from crafting specific items
 # Use material names from: https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Material.html
 recipe-blocker:

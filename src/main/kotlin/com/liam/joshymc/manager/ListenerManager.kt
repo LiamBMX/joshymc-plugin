@@ -22,6 +22,7 @@ import com.liam.joshymc.listener.MobVisibilityListener
 import com.liam.joshymc.listener.TreeFellerListener
 import com.liam.joshymc.listener.VeinminerListener
 import com.liam.joshymc.listener.UnknownCommandListener
+import com.liam.joshymc.listener.PvpKillLogListener
 import com.liam.joshymc.listener.PvpWorldFlightListener
 import com.liam.joshymc.listener.TradeInteractListener
 import com.liam.joshymc.command.BackLocationListener
@@ -77,6 +78,7 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // Phase 2 — Combat
         pm.registerEvents(CombatListener(plugin), plugin)
+        pm.registerEvents(PvpKillLogListener(plugin), plugin)
 
         // Phase 3 — Mining
         pm.registerEvents(VeinminerListener(plugin), plugin)
