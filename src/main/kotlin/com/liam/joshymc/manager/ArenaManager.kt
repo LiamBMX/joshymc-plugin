@@ -307,6 +307,7 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 // having to flip /pvp first. The setting persists, but most
                 // players want it on inside the arena anyway.
                 playersInArena[player.uniqueId] = arena.id
+                plugin.rankManager.refreshCollisionIfChanged(player)
                 if (!plugin.settingsManager.getSetting(player, CombatManager.PVP_SETTING_KEY)) {
                     plugin.settingsManager.setSetting(player, CombatManager.PVP_SETTING_KEY, true)
                     comms.send(player, Component.text("PvP auto-enabled \u2014 you entered an arena.", NamedTextColor.YELLOW))
@@ -332,6 +333,7 @@ class ArenaManager(private val plugin: Joshymc) : Listener {
                 val oldArena = arenas.find { it.id == wasIn }
                 if (oldArena != null) hideBarrier(player, oldArena)
                 playersInArena.remove(player.uniqueId)
+                plugin.rankManager.refreshCollisionIfChanged(player)
                 restoreArenaFlight(player)
                 player.showTitle(Title.title(
                     Component.text("Safe Zone", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true),

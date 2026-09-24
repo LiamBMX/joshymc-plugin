@@ -61,6 +61,7 @@ class CombatManager(private val plugin: Joshymc) {
                 if (now >= expiry) {
                     // Expired
                     combatTags.remove(uuid)
+                    plugin.rankManager.refreshCollisionIfChanged(player)
                     restoreFlightIfEligible(player)
                     plugin.commsManager.sendActionBar(player,
                         Component.text("You are no longer in combat.", NamedTextColor.GREEN)
@@ -99,6 +100,7 @@ class CombatManager(private val plugin: Joshymc) {
     fun tag(player: Player) {
         val wasTagged = isTagged(player)
         combatTags[player.uniqueId] = System.currentTimeMillis() + combatDurationMs
+        if (!wasTagged) plugin.rankManager.refreshCollisionIfChanged(player)
 
         if (!wasTagged && player.gameMode == GameMode.SURVIVAL) {
             // First tag — disable flight + elytra. We MUST also clear
@@ -132,15 +134,12 @@ class CombatManager(private val plugin: Joshymc) {
 
     fun isTagged(player: Player): Boolean {
         val expiry = combatTags[player.uniqueId] ?: return false
-        if (System.currentTimeMillis() >= expiry) {
-            combatTags.remove(player.uniqueId)
-            return false
-        }
-        return true
+        return System.currentTimeMillis() < expiry
     }
 
     fun untag(player: Player) {
         combatTags.remove(player.uniqueId)
+        plugin.rankManager.refreshCollisionIfChanged(player)
         restoreFlightIfEligible(player)
     }
 

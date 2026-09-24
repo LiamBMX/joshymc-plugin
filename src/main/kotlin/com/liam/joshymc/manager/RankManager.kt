@@ -10,6 +10,7 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.scoreboard.Scoreboard
 import java.util.UUID
 
@@ -39,6 +40,7 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     private val ranks = mutableMapOf<String, Rank>()
     private val playerRanks = mutableMapOf<UUID, MutableSet<String>>() // UUID -> set of rank IDs
+    private val collisionStates = mutableMapOf<UUID, Boolean>()
     private val rankPerks = mutableListOf<RankPerk>()
 
     private val legacy = LegacyComponentSerializer.legacyAmpersand()
@@ -97,6 +99,7 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onQuit(event: PlayerQuitEvent) {
+        collisionStates.remove(event.player.uniqueId)
         // Remove the leaving player's entry from every viewer's scoreboard
         // so the team doesn't keep an orphan.
         for (viewer in Bukkit.getOnlinePlayers()) {
@@ -106,6 +109,18 @@ class RankManager(private val plugin: Joshymc) : Listener {
                 .filter { it.name.startsWith(TEAM_PREFIX) && it.hasEntry(event.player.name) }
                 .forEach { it.removeEntry(event.player.name) }
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onWorldChange(event: PlayerChangedWorldEvent) {
+        refreshCollisionIfChanged(event.player)
+    }
+
+    /** Update all viewers only when a player's collision-team variant changes. */
+    fun refreshCollisionIfChanged(player: Player) {
+        if (!player.isOnline) return
+        val collide = shouldCollide(player)
+        if (collisionStates[player.uniqueId] != collide) applyTeamFor(player)
     }
 
     /**
@@ -118,6 +133,7 @@ class RankManager(private val plugin: Joshymc) : Listener {
      * after temporarily moving the player to a custom team.
      */
     fun applyTeamFor(player: Player) {
+        collisionStates[player.uniqueId] = shouldCollide(player)
         // 1. Add this player to the right team on every viewer's board so
         //    everyone sees their nameplate prefix.
         for (viewer in Bukkit.getOnlinePlayers()) {
@@ -135,8 +151,8 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     /**
      * Register a JoshyMC rank team for every rank on [board] if not present.
-     * Existing teams keep their entries — we only update the prefix to keep
-     * config edits live. Two variants per rank: `<name>_y` (collisions
+     * Existing teams keep their entries and settings. Two variants per rank:
+     * `<name>_y` (collisions
      * enabled) and `<name>_n` (collisions disabled). Same prefix on both,
      * differs only by COLLISION_RULE — the right variant is chosen per
      * player based on [shouldCollide].
@@ -147,13 +163,15 @@ class RankManager(private val plugin: Joshymc) : Listener {
             for (collide in listOf(true, false)) {
                 val name = teamNameFor(rank, idx, collide)
                 val existing = board.getTeam(name)
-                val team = existing ?: board.registerNewTeam(name)
-                team.prefix(legacy.deserialize("&8[${rank.displayTag}&8] &r"))
-                team.setOption(
-                    org.bukkit.scoreboard.Team.Option.COLLISION_RULE,
-                    if (collide) org.bukkit.scoreboard.Team.OptionStatus.ALWAYS
-                    else org.bukkit.scoreboard.Team.OptionStatus.NEVER
-                )
+                if (existing == null) {
+                    val team = board.registerNewTeam(name)
+                    team.prefix(legacy.deserialize("&8[${rank.displayTag}&8] &r"))
+                    team.setOption(
+                        org.bukkit.scoreboard.Team.Option.COLLISION_RULE,
+                        if (collide) org.bukkit.scoreboard.Team.OptionStatus.ALWAYS
+                        else org.bukkit.scoreboard.Team.OptionStatus.NEVER
+                    )
+                }
             }
         }
     }
