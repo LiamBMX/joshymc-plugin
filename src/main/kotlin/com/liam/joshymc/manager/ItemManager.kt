@@ -81,6 +81,9 @@ class ItemManager(private val plugin: Joshymc) {
         register(SkillTomeMining())
         register(SkillTomeFarming())
 
+        // Seasonal limited editions (3D models from resourcepack/art/items)
+        LimitedEditionItems.all().forEach { register(it) }
+
         plugin.logger.info("Registered ${items.size} custom item(s).")
     }
 

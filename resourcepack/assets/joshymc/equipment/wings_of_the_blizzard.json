@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "joshymc:wings_of_the_blizzard"
+      }
+    ],
+    "wings": [
+      {
+        "texture": "joshymc:wings_of_the_blizzard"
+      }
+    ]
+  }
+}
