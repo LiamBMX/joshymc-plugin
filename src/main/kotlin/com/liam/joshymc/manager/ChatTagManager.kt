@@ -11,6 +11,8 @@ import org.bukkit.Sound
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
+import org.bukkit.permissions.Permission
+import org.bukkit.permissions.PermissionDefault
 import java.io.File
 import java.util.UUID
 
@@ -101,7 +103,25 @@ class ChatTagManager(private val plugin: Joshymc) {
             unlockedTags.getOrPut(uuid) { mutableSetOf() }.add(tagId)
         }
 
+        // Voucher-tag permissions are dynamic (minted per tag id) and never live in
+        // plugin.yml, so they must be (re-)registered with Bukkit's PluginManager on
+        // every load. Without this, an unregistered permission node defaults to
+        // PermissionDefault.OP, meaning any operator automatically "has" it and
+        // canUse() reports the tag as already owned before it was ever redeemed —
+        // the voucher then appears completely unclaimable to whoever is testing it.
+        for (tag in tags.values) {
+            if (isVoucherTag(tag)) registerVoucherPermission(tag.permission)
+        }
+
         plugin.logger.info("[ChatTags] Loaded ${tags.size} tags in ${categories.size} categories, ${playerTags.size} player selections.")
+    }
+
+    private fun registerVoucherPermission(permission: String?) {
+        if (permission == null) return
+        val pm = Bukkit.getPluginManager()
+        if (pm.getPermission(permission) == null) {
+            pm.addPermission(Permission(permission, PermissionDefault.FALSE))
+        }
     }
 
     // ── Public API ──────────────────────────────────
@@ -184,6 +204,7 @@ class ChatTagManager(private val plugin: Joshymc) {
 
         tags[id] = tag
         if (VOUCHER_CATEGORY !in categories) categories.add(VOUCHER_CATEGORY)
+        registerVoucherPermission(permission)
         persistVoucherTag(id, display, permission)
         return tag
     }
@@ -214,6 +235,7 @@ class ChatTagManager(private val plugin: Joshymc) {
         if (!isVoucherTag(tag)) return DeleteVoucherTagResult.NOT_VOUCHER_TAG
 
         tags.remove(id)
+        tag.permission?.let { Bukkit.getPluginManager().removePermission(it) }
 
         val equippedBy = playerTags.filterValues { it == id }.keys.toList()
         for (uuid in equippedBy) playerTags.remove(uuid)
