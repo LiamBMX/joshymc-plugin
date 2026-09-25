@@ -12,7 +12,6 @@ import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
-import org.bukkit.inventory.ItemStack
 import org.bukkit.scoreboard.DisplaySlot
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -417,18 +416,15 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         rewardOnlinePlayersForMilestone(milestone)
     }
 
+    /**
+     * Uses the real /crate givekey pipeline (not raw custom-item creation) so players get
+     * actual functional crate keys instead of the old glitched, crate-less "money_key"/
+     * "credit_key" retextured trial keys.
+     */
     private fun rewardOnlinePlayersForMilestone(milestone: Int) {
-        val moneyKey = plugin.itemManager.getItem("money_key")
-        val creditKey = plugin.itemManager.getItem("credit_key")
-        if (moneyKey == null || creditKey == null) {
-            plugin.logger.warning("[Scoreboard] Could not find money_key/credit_key custom item(s) for milestone reward.")
-            return
-        }
-
-        for (player in Bukkit.getOnlinePlayers()) {
-            giveOrDrop(player, moneyKey.createItemStack().apply { amount = 5 })
-            giveOrDrop(player, creditKey.createItemStack().apply { amount = 1 })
-        }
+        val console = Bukkit.getConsoleSender()
+        Bukkit.dispatchCommand(console, "crate givekey money @a 5")
+        Bukkit.dispatchCommand(console, "crate givekey credit @a 1")
 
         plugin.commsManager.broadcast(
             plugin.commsManager.parseLegacy(
@@ -437,14 +433,6 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
                 "&e» &fEveryone online received &a5 Money Keys &f+ &b1 Credit Key&f!"
             )
         )
-    }
-
-    /** Adds to inventory, safely dropping any overflow at the player's feet instead of discarding it. */
-    private fun giveOrDrop(player: Player, stack: ItemStack) {
-        val leftover = player.inventory.addItem(stack)
-        for (drop in leftover.values) {
-            player.world.dropItemNaturally(player.location, drop)
-        }
     }
 
     /** A logo string from the resource pack font, untinted and without the text shadow. */
