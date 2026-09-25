@@ -208,6 +208,9 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val dateTime = java.time.ZonedDateTime.now(plugin.timezoneManager.zoneFor(player)).format(DATE_TIME_FMT)
 
         val lines = mutableListOf<Component>()
+        // The title logo hangs down over the top rows, inside the sidebar background.
+        // The client draws at most 15 lines, so there is no room for more rows below.
+        repeat(LOGO_ROWS) { lines.add(Component.empty()) }
         lines.add(plugin.commsManager.parseLegacy("&b${player.name} &7[&f$ping&7]"))
         lines.add(plugin.commsManager.parseLegacy("&f$dateTime"))
         lines.add(Component.empty())
@@ -454,8 +457,9 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         // JoshyMC logo glyphs (resourcepack/art/logo.py): two halves joined by a -1 space.
         /** 36 px tall, hanging down from its line: the tab list header. */
         private const val TAB_LOGO = "\uE001\uF801\uE002"
-        /** 30 px tall, rising out of the sidebar title bar so it never covers the first line. */
+        /** 32 px tall, hanging down from the sidebar title bar over [LOGO_ROWS] blank rows. */
         private const val SIDEBAR_LOGO = "\uE003\uF801\uE004"
+        private const val LOGO_ROWS = 3
 
         /** e.g. "09/06/26 12:36 PM" — compact so the sidebar stays narrow. */
         private val DATE_TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MM/dd/yy hh:mm a")

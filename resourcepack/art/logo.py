@@ -8,11 +8,12 @@ assets/minecraft/font/default.json maps them to two sizes:
 
     \\uE001 \\uF801 \\uE002   tab list header: 36 px tall, hanging DOWN from its line
                          (the header keeps blank lines under it)
-    \\uE003 \\uF801 \\uE004   sidebar title: 30 px tall, rising UP from the title bar
+    \\uE003 \\uF801 \\uE004   sidebar title: 32 px tall, hanging DOWN from the title bar over
+                         three blank lines, so the sidebar background covers all of it
 
 \\uF801 is a -1 space that closes the 1 px gap Minecraft leaves after every glyph.
 Each half is 192 texels wide so it lands on a whole number of GUI pixels at both
-sizes (54 and 45), and the halves meet without a seam.
+sizes (54 and 48), and the halves meet without a seam.
 """
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ FONT_TEXTURES = HERE.parent / "assets" / "joshymc" / "textures" / "font"
 FONT_JSON = HERE.parent / "assets" / "minecraft" / "font" / "default.json"
 HALF_W, H = 192, 128
 # (left char, right char, rendered height, ascent). Glyph top = 7 - ascent within its line.
-SIZES = {"tab": ("\uE001", "\uE002", 36, 7), "sidebar": ("\uE003", "\uE004", 30, 29)}
+SIZES = {"tab": ("\uE001", "\uE002", 36, 7), "sidebar": ("\uE003", "\uE004", 32, 6)}
 NEG1 = "\uF801"
 
 
