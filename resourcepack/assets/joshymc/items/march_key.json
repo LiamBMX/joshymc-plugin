@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/march_key"
+    "model": "joshymc:item/march_key/main"
   }
 }

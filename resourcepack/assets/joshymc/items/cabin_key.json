@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/cabin_key"
+    "model": "joshymc:item/cabin_key/main"
   }
 }

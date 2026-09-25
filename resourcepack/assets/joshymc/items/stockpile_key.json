@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/stockpile_key"
+    "model": "joshymc:item/stockpile_key/main"
   }
 }
