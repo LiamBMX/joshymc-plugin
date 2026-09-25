@@ -1259,6 +1259,9 @@ permissions:
   joshymc.team.admin:
     description: Bypass team rename cooldown and delete any team via /team delete
     default: op
+  joshymc.team.admin.echest:
+    description: View any team's Ender Chest read-only via /team admin echest
+    default: op
   joshymc.rank:
     description: Use rank commands
     default: op
