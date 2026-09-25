@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/cobweb_egg"
+    "model": "joshymc:item/cobweb_egg/main"
   }
 }
