@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/ruby_snapper"
+    "model": "joshymc:item/fish_ruby_snapper/main"
   }
 }

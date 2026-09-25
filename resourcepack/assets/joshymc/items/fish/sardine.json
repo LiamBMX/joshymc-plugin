@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/sardine"
+    "model": "joshymc:item/fish_sardine/main"
   }
 }

@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/soul_salmon"
+    "model": "joshymc:item/fish_soul_salmon/main"
   }
 }

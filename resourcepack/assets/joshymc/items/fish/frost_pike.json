@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/frost_pike"
+    "model": "joshymc:item/fish_frost_pike/main"
   }
 }

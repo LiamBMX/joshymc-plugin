@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/void_eel"
+    "model": "joshymc:item/fish_void_eel/main"
   }
 }

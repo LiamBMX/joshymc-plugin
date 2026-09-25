@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/grouper"
+    "model": "joshymc:item/fish_grouper/main"
   }
 }

@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/pond_minnow"
+    "model": "joshymc:item/fish_pond_minnow/main"
   }
 }

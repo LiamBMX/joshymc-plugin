@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/smelt"
+    "model": "joshymc:item/fish_smelt/main"
   }
 }
