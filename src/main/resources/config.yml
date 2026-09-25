@@ -485,36 +485,46 @@ orders:
     vip: 15
     admin: 50
 
-# Rank Perks — configurable EXTRA Auction House listing slots and Buy Order slots granted
-# to purchasable ranks, on top of the base limits above (auction.max-listings-per-player /
-# orders.default-active-order-limit). Formula: final limit = base limit + rank bonus.
+# Rank Perks — configurable EXTRA Auction House listing slots, Buy Order slots, and a sell-price
+# multiplier granted to purchasable ranks, on top of the base limits above
+# (auction.max-listings-per-player / orders.default-active-order-limit). Formula for the
+# listing/order limits: final limit = base limit + rank bonus. The sell-multiplier applies to
+# /sell (deposit GUI, "/sell all <item>", "/sell hand") and Sell Wands: final payout = base sell
+# value x sell-multiplier x any other multiplier already in play (e.g. Sell Wand, mutations).
 #
 # Eligibility is permission-based ("joshymc.rankperk.<key>"), granted to each rank's LuckPerms
 # group externally — same pattern as /mcr. If a player is eligible for multiple rank perks
 # (e.g. via LuckPerms inheritance), bonuses are NOT stacked: only the single highest-applicable
-# rank's bonus is applied, and both fields always come from that same rank.
+# rank's bonus is applied, and all three fields always come from that same rank.
 rank-perks:
   scout:
     auction-extra-listings: 2
     orders-extra-orders: 2
+    sell-multiplier: 1.05
   pathfinder:
     auction-extra-listings: 5
     orders-extra-orders: 5
+    sell-multiplier: 1.10
   lumberjack:
     auction-extra-listings: 8
     orders-extra-orders: 8
+    sell-multiplier: 1.15
   trailblazer:
     auction-extra-listings: 12
     orders-extra-orders: 12
+    sell-multiplier: 1.20
   voyager:
     auction-extra-listings: 16
     orders-extra-orders: 16
+    sell-multiplier: 1.25
   ranger:
     auction-extra-listings: 20
     orders-extra-orders: 20
+    sell-multiplier: 1.30
   pioneer:
     auction-extra-listings: 25
     orders-extra-orders: 25
+    sell-multiplier: 1.40
 
 # Stock Market — /invest, a player-driven stock market (progressive percentage-based pricing)
 stock-market:

@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import org.bukkit.Material
 import org.bukkit.block.Container
 import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.BlockStateMeta
 import org.bukkit.inventory.meta.BundleMeta
@@ -112,6 +113,14 @@ class SellPriceManager(private val plugin: Joshymc) {
         if (!isSellable(stack)) return 0.0
         val unitPrice = prices[stack.type] ?: return 0.0
         val raw = unitPrice * stack.amount
+        return Math.round(raw * 100.0) / 100.0
+    }
+
+    /** Decimal-safe value of the full stack after [seller]'s rank sell-multiplier; 0.0 if unsellable. */
+    fun getStackValue(stack: ItemStack, seller: Player): Double {
+        val base = getStackValue(stack)
+        if (base <= 0.0) return 0.0
+        val raw = base * plugin.rankManager.getSellMultiplier(seller)
         return Math.round(raw * 100.0) / 100.0
     }
 

@@ -35,7 +35,8 @@ class RankManager(private val plugin: Joshymc) : Listener {
     data class RankPerk(
         val key: String,
         val auctionExtraListings: Int,
-        val ordersExtraOrders: Int
+        val ordersExtraOrders: Int,
+        val sellMultiplier: Double = 1.0
     )
 
     private val ranks = mutableMapOf<String, Rank>()
@@ -288,7 +289,8 @@ class RankManager(private val plugin: Joshymc) : Listener {
             // getInt() already falls back to 0 on missing/non-numeric YAML values; clamp negatives too.
             val auctionExtra = perkSection.getInt("auction-extra-listings", 0).coerceAtLeast(0)
             val ordersExtra = perkSection.getInt("orders-extra-orders", 0).coerceAtLeast(0)
-            rankPerks.add(RankPerk(key, auctionExtra, ordersExtra))
+            val sellMultiplier = perkSection.getDouble("sell-multiplier", 1.0).coerceAtLeast(0.0)
+            rankPerks.add(RankPerk(key, auctionExtra, ordersExtra, sellMultiplier))
         }
     }
 
@@ -350,6 +352,14 @@ class RankManager(private val plugin: Joshymc) : Listener {
             .filter { player.hasPermission("joshymc.rankperk.${it.key}") }
             .maxWithOrNull(compareBy({ it.auctionExtraListings }, { it.ordersExtraOrders }))
     }
+
+    /**
+     * The player's sell-price multiplier from the same rank-perk pool as the auction/order
+     * bonuses above — resolved live off [getRankPerkBonus], so it's permission-based (never
+     * display name/prefix), reflects rank changes immediately, and never stacks across
+     * multiple eligible ranks. 1.0 (no bonus) if the player has no eligible rank-perk.
+     */
+    fun getSellMultiplier(player: Player): Double = getRankPerkBonus(player)?.sellMultiplier ?: 1.0
 
     /**
      * Set a player's rank. Pass null to remove their rank.
