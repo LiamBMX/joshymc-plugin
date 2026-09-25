@@ -1,0 +1,77 @@
+{
+  "model": {
+    "type": "minecraft:select",
+    "property": "minecraft:display_context",
+    "cases": [
+      {
+        "when": [
+          "gui"
+        ],
+        "model": {
+          "type": "minecraft:model",
+          "model": "joshymc:item/great_pumpkin_pie/gui"
+        }
+      }
+    ],
+    "fallback": {
+      "type": "minecraft:select",
+      "property": "minecraft:custom_model_data",
+      "index": 0,
+      "cases": [
+        {
+          "when": "bite_1",
+          "model": {
+            "type": "minecraft:model",
+            "model": "joshymc:item/great_pumpkin_pie/bite_1"
+          }
+        },
+        {
+          "when": "bite_2",
+          "model": {
+            "type": "minecraft:model",
+            "model": "joshymc:item/great_pumpkin_pie/bite_2"
+          }
+        },
+        {
+          "when": "bite_3",
+          "model": {
+            "type": "minecraft:model",
+            "model": "joshymc:item/great_pumpkin_pie/bite_3"
+          }
+        },
+        {
+          "when": "bite_4",
+          "model": {
+            "type": "minecraft:model",
+            "model": "joshymc:item/great_pumpkin_pie/bite_4"
+          }
+        },
+        {
+          "when": "bite_5",
+          "model": {
+            "type": "minecraft:model",
+            "model": "joshymc:item/great_pumpkin_pie/bite_5"
+          }
+        },
+        {
+          "when": "bite_6",
+          "model": {
+            "type": "minecraft:model",
+            "model": "joshymc:item/great_pumpkin_pie/bite_6"
+          }
+        },
+        {
+          "when": "bite_7",
+          "model": {
+            "type": "minecraft:model",
+            "model": "joshymc:item/great_pumpkin_pie/bite_7"
+          }
+        }
+      ],
+      "fallback": {
+        "type": "minecraft:model",
+        "model": "joshymc:item/great_pumpkin_pie/main"
+      }
+    }
+  }
+}

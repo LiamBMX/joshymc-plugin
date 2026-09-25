@@ -566,6 +566,8 @@ class Joshymc : JavaPlugin() {
         voteManager.stop()
         spawnDecorationManager.stop()
         listenerManager.passiveEnchantListener?.stop()
+        listenerManager.thrownTridentVisualListener?.stop()
+        listenerManager.greatPumpkinPieListener?.stop()
         claimManager.stop()
         scoreboardManager.stop()
         announcementManager.stop()

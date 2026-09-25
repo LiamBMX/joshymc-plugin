@@ -41,6 +41,7 @@ class ItemManager(private val plugin: Joshymc) {
         register(JackOLanternMask())
         register(BoneRattler())
         register(PumpkinPummel())
+        register(GreatPumpkinPie())
         // September Autumn Collection
         register(AutumnsEdge())
         register(HarvestScythe())
