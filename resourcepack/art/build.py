@@ -34,27 +34,37 @@ def build(item_id: str) -> bool:
         print(f"SKIPPED {item_id}: {len(errors)} check error(s); run py -m art.check {item_id}")
         return False
     module = __import__(f"art.items.{item_id}", fromlist=["x"])
+    model_key = getattr(module, "MODEL_KEY", item_id)
+    equipment_key = getattr(module, "EQUIPMENT_KEY", item_id)
     textures = ASSETS / "textures" / "item" / item_id
     models_dir = ASSETS / "models" / "item" / item_id
     for stale in (textures, models_dir):
         shutil.rmtree(stale, ignore_errors=True)
     layer_root = ASSETS / "textures" / "entity" / "equipment"
     for layer in kit.LAYERS:
-        (layer_root / layer / f"{item_id}.png").unlink(missing_ok=True)
-    (ASSETS / "equipment" / f"{item_id}.json").unlink(missing_ok=True)
+        for key in {item_id, equipment_key}:
+            (layer_root / layer / f"{key}.png").unlink(missing_ok=True)
+    (ASSETS / "equipment" / f"{equipment_key}.json").unlink(missing_ok=True)
 
     kit.begin(item_id, textures, layer_root)
     module.textures()
+    for name, meta in kit.animations().items():
+        write_json(textures / f"{name}.png.mcmeta", {"animation": meta})
     models = module.models()
     for name, m in models.items():
         write_json(models_dir / f"{name}.json", kit.resolve(m, item_id))
-    write_json(ASSETS / "items" / f"{item_id}.json",
+    write_json(ASSETS / "items" / f"{model_key}.json",
                kit.item_definition(item_id, module.KIND, set(models), bool(getattr(module, "OVERSIZED_GUI", False))))
     layers = kit.painted_layers()
     if layers:
-        write_json(ASSETS / "equipment" / f"{item_id}.json",
-                   {"layers": {layer: [{"texture": f"{kit.NAMESPACE}:{item_id}"}] for layer in sorted(layers)}})
+        if equipment_key != item_id:
+            for layer in layers:
+                (layer_root / layer / f"{item_id}.png").replace(layer_root / layer / f"{equipment_key}.png")
+        write_json(ASSETS / "equipment" / f"{equipment_key}.json",
+                   {"layers": {layer: [{"texture": f"{kit.NAMESPACE}:{equipment_key}"}] for layer in sorted(layers)}})
+    animated = len(kit.animations())
     print(f"built {item_id}: {len(models)} model(s), {len(kit.painted())} textures"
+          + (f" ({animated} animated)" if animated else "")
           + (f", worn {', '.join(sorted(layers))}" if layers else ""))
     return True
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 import importlib
 import math
 import pkgutil
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -151,12 +152,34 @@ def check(item_id: str) -> tuple[list[str], list[str], dict]:
         errors.append(f"KIND {module.KIND!r} must be one of {sorted(kit.KINDS)}")
         return errors, warnings, info
 
+    model_key = getattr(module, "MODEL_KEY", item_id)
+    if not isinstance(model_key, str) or not re.fullmatch(r"[a-z0-9_]+(/[a-z0-9_]+)*", model_key):
+        errors.append(f"MODEL_KEY {model_key!r} must be a lowercase path like 'fish/anchovy'")
+    equipment_key = getattr(module, "EQUIPMENT_KEY", item_id)
+    if not isinstance(equipment_key, str) or not re.fullmatch(r"[a-z0-9_]+", equipment_key):
+        errors.append(f"EQUIPMENT_KEY {equipment_key!r} must be lowercase letters, digits and _")
+
     tmp = Path(tempfile.mkdtemp(prefix=f"artcheck_{item_id}_"))
     kit.begin(item_id, tmp / "textures", tmp / "layers")
     module.textures()
     painted = kit.painted()
+    animations = kit.animations()
     for name in sorted(painted):
         size = Image.open(tmp / "textures" / f"{name}.png").size
+        meta = animations.get(name)
+        if meta is not None:
+            w, h = size
+            frames = h // w if w else 0
+            if w not in kit.ANIMATION_SIZES or h % w:
+                errors.append(f"animated texture {name!r} is {size}; frames must be square 16, 32 or 64 px")
+            elif not 2 <= frames <= kit.MAX_FRAMES:
+                errors.append(f"animated texture {name!r} has {frames} frames; use 2 to {kit.MAX_FRAMES}")
+            if not isinstance(meta.get("frametime"), int) or not 1 <= meta["frametime"] <= 200:
+                errors.append(f"animated texture {name!r}: frametime must be 1-200 ticks")
+            order = meta.get("frames")
+            if order is not None and (not order or any(not 0 <= i < frames for i in order)):
+                errors.append(f"animated texture {name!r}: order must list frame indices 0..{frames - 1}")
+            continue
         if size[0] not in ITEM_SIZES or size[1] not in ITEM_SIZES:
             errors.append(f"texture {name!r} is {size}; each side must be 16, 32, 64 or 128")
     layers = kit.painted_layers()
@@ -185,6 +208,10 @@ def check(item_id: str) -> tuple[list[str], list[str], dict]:
         used |= check_model(name, m, painted, module.KIND, oversized, errors, warnings)
     for name in sorted(painted - used):
         warnings.append(f"texture {name!r} is painted but never used")
+    if not animations:
+        warnings.append("no animated textures (see save_animation())")
+    elif not set(animations) & used:
+        warnings.append("the animated textures are never used by a model")
     main = models.get(required[0], {})
     if main.get("elements"):
         lo, hi = kit.bounds(main["elements"])
@@ -194,6 +221,7 @@ def check(item_id: str) -> tuple[list[str], list[str], dict]:
         info["held_blocks"] = round(length / 16 * scale * 0.9375, 2)
     info["models"] = len(models)
     info["textures"] = len(painted)
+    info["animated"] = len(set(animations) & used)
     return errors, warnings, info
 
 
@@ -218,6 +246,10 @@ def main(argv: list[str]) -> int:
             if "elements" in info:
                 extra = (f": {info['elements']} elements, {info['models']} model(s), {info['textures']} textures, "
                          f"held length about {info['held_blocks']} blocks (a vanilla sword is about 1.0)")
+            elif "textures" in info:
+                extra = f": sprite, {info['models']} model(s), {info['textures']} textures"
+            if info.get("animated"):
+                extra += f", {info['animated']} animated"
             print(f"OK {item_id}{extra}")
         for w in warnings:
             print(f"  ! {w}")

@@ -23,6 +23,25 @@ Frames used by the display presets (see display()):
     +X = the wearer's right. It renders on the head through the "head" transform.
   * shield: the board stands in the XY plane; its decorated front faces -Z.
   * boots, elytra, food: any frame, centred near (8, 8, 8); presets fit the GUI.
+  * cake (placeable food eaten slice by slice): build in BLOCK space. Model y = 0 is the
+    floor of the block it is placed on, centred on x = 8, z = 8; one block is 16 units.
+    "main" is the whole cake (also the inventory/held model) and "bite_1".."bite_7" are
+    the states with that many of its 8 slices eaten. The plugin shows the placed cake
+    with an ItemDisplay (no display transform), turned so slice 1 faces the player.
+  * item (eggs, coins, keys, fish, gadgets) and leggings: any frame, centred near
+    (8, 8, 8), like boots. "main" may also be a flat sprite(): a painted 2D icon that
+    Minecraft extrudes like vanilla items (use item/generated display, no display()).
+
+Animated textures: save_animation(frames, name, ...) stacks same-size square frames
+into one strip with a .png.mcmeta, and Minecraft plays it everywhere the item shows
+(inventory, hand, ground, head, thrown). animate(), wave(), shine() and sparkle() help
+paint seamless loops. Worn equipment layers cannot animate; only item textures can.
+
+Optional module constants for items whose game ids differ from the module name:
+    MODEL_KEY      the item_model path under assets/joshymc/items/ (default: ID),
+                   e.g. "fish/anchovy" for an item that uses joshymc:fish/anchovy
+    EQUIPMENT_KEY  the equipment asset id for worn layers (default: ID)
+    COUNTERPART    the vanilla sprite the preview shows beside it, e.g. "item/egg"
 """
 from __future__ import annotations
 
@@ -54,27 +73,35 @@ KINDS: dict[str, tuple[str, ...]] = {
     "boots": ("main",),
     "elytra": ("main",),
     "food": ("main",),
+    "cake": ("main",) + tuple(f"bite_{i}" for i in range(1, 8)),
+    "item": ("main",),
+    "leggings": ("main",),
 }
+CAKE_SLICES = 8  # the cake is gone after the 8th slice
 # "gui" replaces the model in inventories only; "broken" is the elytra at 1 durability.
 OPTIONAL_MODELS = ("gui", "broken")
 HANDHELD = ("sword", "pickaxe", "axe", "shovel", "hoe", "mace", "trident")
 # Worn looks painted with save_layer(). Helmets are 3D models on the head instead.
 LAYERS = ("humanoid", "humanoid_leggings", "wings")
-REQUIRED_LAYERS = {"boots": ("humanoid",), "elytra": ("wings",)}
+REQUIRED_LAYERS = {"boots": ("humanoid",), "elytra": ("wings",), "leggings": ("humanoid_leggings",)}
 NAMESPACE = "joshymc"
+# Animated frames are re-uploaded to the GPU as they play, so keep them modest.
+ANIMATION_SIZES = (16, 32, 64)
+MAX_FRAMES = 32
 
 # --------------------------------------------------------------------------------------
 # Output (set by check/render/build before calling textures())
 # --------------------------------------------------------------------------------------
 
-_out = {"id": None, "textures": None, "layers": None, "painted": set(), "painted_layers": set()}
+_out = {"id": None, "textures": None, "layers": None, "painted": set(), "painted_layers": set(),
+        "animations": {}}
 _NAME = re.compile(r"^[a-z0-9_]+$")
 
 
 def begin(item_id: str, texture_dir: Path, layer_dir: Path) -> None:
     """Point save()/save_layer() at an output folder. Called by the tools, not by items."""
     _out.update(id=item_id, textures=Path(texture_dir), layers=Path(layer_dir),
-                painted=set(), painted_layers=set())
+                painted=set(), painted_layers=set(), animations={})
 
 
 def painted() -> set[str]:
@@ -83,6 +110,11 @@ def painted() -> set[str]:
 
 def painted_layers() -> set[str]:
     return set(_out["painted_layers"])
+
+
+def animations() -> dict[str, dict]:
+    """name -> the mcmeta "animation" block of every animated texture painted so far."""
+    return {name: dict(meta) for name, meta in _out["animations"].items()}
 
 
 def save(image: Image.Image, name: str) -> None:
@@ -95,6 +127,102 @@ def save(image: Image.Image, name: str) -> None:
     folder.mkdir(parents=True, exist_ok=True)
     image.save(folder / f"{name}.png")
     _out["painted"].add(name)
+    _out["animations"].pop(name, None)
+
+
+def save_animation(frames, name: str, frametime: int = 2, interpolate: bool = False, order=None) -> None:
+    """Save an animated texture from a list of same-size square frames (16, 32 or 64 px,
+    2 to 32 of them). Faces use it by name like any texture (uv 0..16 covers one frame).
+
+    frametime    game ticks per frame (20 ticks = 1 second); 2-4 suits most loops
+    interpolate  True blends each frame into the next every tick: silky glows, pulses and
+                 colour shifts from few frames. Leave it off for movement (it smears)
+    order        optional frame indices to play, e.g. [0, 1, 2, 3, 2, 1], or a frame
+                 repeated to hold it
+    """
+    frames = [f.convert("RGBA") for f in frames]
+    if len(frames) < 2:
+        raise ValueError("an animation needs at least 2 frames")
+    size = frames[0].size
+    if any(f.size != size for f in frames) or size[0] != size[1]:
+        raise ValueError("animation frames must all be the same square size")
+    strip = Image.new("RGBA", (size[0], size[1] * len(frames)), (0, 0, 0, 0))
+    for i, f in enumerate(frames):
+        strip.paste(f, (0, i * size[1]))
+    save(strip, name)
+    meta: dict = {"frametime": int(frametime)}
+    if interpolate:
+        meta["interpolate"] = True
+    if order is not None:
+        meta["frames"] = [int(i) for i in order]
+    _out["animations"][name] = meta
+
+
+def animate(paint, count: int) -> list[Image.Image]:
+    """count frames from paint(t), t = 0, 1/count, 2/count ... (always below 1). A paint
+    that is periodic in t (sin(2*pi*t), wave(t), (t + offset) % 1) loops without a seam."""
+    return [paint(i / count) for i in range(count)]
+
+
+def wave(t: float, offset: float = 0.0) -> float:
+    """A smooth 0 -> 1 -> 0 over one loop of t (cosine), shifted by offset (0..1)."""
+    return 0.5 - 0.5 * math.cos(2 * math.pi * (t + offset))
+
+
+def shine(image: Image.Image, t: float, colour="#ffffff", width: float = 3.0, strength: float = 0.7,
+          angle: float = 35.0, pause: float = 0.45) -> Image.Image:
+    """A copy of image with a glossy band sweeping across its opaque pixels. The band
+    crosses during the first (1 - pause) of the loop and is gone for the rest, so it
+    reads as a periodic glint. angle tilts the band (degrees from vertical)."""
+    out = image.convert("RGBA").copy()
+    w, h = out.size
+    run = 1.0 - pause
+    if t >= run:
+        return out
+    a = math.radians(angle)
+    dx, dy = math.cos(a), math.sin(a)
+    lo = min(0.0, h * dy)
+    hi = w * dx + max(0.0, h * dy)
+    centre = lo - width * 2 + (hi - lo + width * 4) * (t / run)
+    c = rgba(colour)
+    px = out.load()
+    for y in range(h):
+        for x in range(w):
+            r, g, b, al = px[x, y]
+            if al == 0:
+                continue
+            d = abs((x + 0.5) * dx + (y + 0.5) * dy - centre)
+            k = max(0.0, 1.0 - d / (width / 2 + 0.5)) * strength
+            if k > 0:
+                px[x, y] = (round(r + (c[0] - r) * k), round(g + (c[1] - g) * k), round(b + (c[2] - b) * k), al)
+    return out
+
+
+def sparkle(image: Image.Image, x: int, y: int, amount: float, colour="#ffffff", reach: int = 2) -> None:
+    """Draw a 4-point twinkle centred on (x, y) in place; amount 0..1 grows it from a dot
+    to arms `reach` pixels long (0 draws nothing). Animate amount with wave()."""
+    if amount <= 0.02:
+        return
+    c = rgba(colour)
+    px = image.load()
+    w, h = image.size
+    arm = round(reach * amount)
+
+    def put(px_, py_, k):
+        if 0 <= px_ < w and 0 <= py_ < h:
+            r, g, b, a = px[px_, py_]
+            alpha = min(255, round(c[3] * k))
+            if a == 0:
+                px[px_, py_] = (c[0], c[1], c[2], alpha)
+            else:
+                px[px_, py_] = (round(r + (c[0] - r) * k), round(g + (c[1] - g) * k), round(b + (c[2] - b) * k),
+                                max(a, alpha))
+
+    put(x, y, min(1.0, 0.5 + amount))
+    for i in range(1, arm + 1):
+        k = amount * (1 - (i - 1) / (arm + 1))
+        for ddx, ddy in ((i, 0), (-i, 0), (0, i), (0, -i)):
+            put(x + ddx, y + ddy, k)
 
 
 def save_layer(image: Image.Image, layer: str) -> None:
@@ -131,7 +259,9 @@ def hexc(colour) -> str:
 
 
 def mix(a, b, t: float) -> str:
+    """Blend colour a toward b by t (clamped to 0..1)."""
     a, b = rgba(a), rgba(b)
+    t = max(0.0, min(1.0, float(t)))
     return hexc(tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(4)))
 
 
@@ -581,6 +711,26 @@ def prism(center, radius: float, length: float, tex: str, axis: str = "y", sides
     return slabs
 
 
+def lathe(center, profile, tex: str, axis: str = "y", sides: int = 8, cap: str | None = None,
+          **box_kwargs) -> list[dict]:
+    """A round solid turned on a lathe: eggs, coins, orbs, bottles, knobs, bells. profile is
+    [(height, radius), ...] from one end to the other, heights measured along `axis` from
+    `center`; each step becomes a prism() slice with the average radius of its two ends
+    (slices of radius <= 0 are skipped). Extra keyword arguments go to prism()/box()."""
+    parts = []
+    cx, cy, cz = center
+    i = "xyz".index(axis)
+    for (h0, r0), (h1, r1) in zip(profile, profile[1:]):
+        radius = (r0 + r1) / 2
+        length = abs(h1 - h0)
+        if radius <= 0 or length <= 1e-6:
+            continue
+        c = [cx, cy, cz]
+        c[i] += (h0 + h1) / 2
+        parts += prism(tuple(c), radius, length, tex, axis=axis, sides=sides, cap=cap, **box_kwargs)
+    return parts
+
+
 def corners(element: dict) -> list[tuple[float, float, float]]:
     """The 8 corners of an element after its rotation, in model units."""
     (x0, y0, z0), (x1, y1, z1) = element["from"], element["to"]
@@ -845,7 +995,7 @@ def display(kind: str, elements, grip=None, size: float = 1.0, gui_rotation=None
         out["ground"] = fit(elements, (0, 0, 0), 8.0, lift=2.0)
         out["fixed"] = fit(elements, (0, 180, 0), 14.0)
         out["on_shelf"] = fit(elements, (0, 180, 0), 12.0)
-    else:  # boots, elytra, food
+    else:  # boots, elytra, food, item, leggings
         out["thirdperson_righthand"] = place({"y": (0, 1, 0), "z": (0, 0, -1)}, grip or centre, "fist", 0.45 * size)
         out["firstperson_righthand"] = place({"y": (0, 1, 0), "z": (0.35, 0, 1)}, grip or centre,
                                              (0.5, -0.42, -0.85), 0.55 * size, pose=None)
@@ -922,6 +1072,10 @@ def item_definition(item_id: str, kind: str, names, oversized_gui: bool = False)
     elif kind == "shield":
         tree = {"type": "minecraft:condition", "property": "minecraft:using_item",
                 "on_false": ref("main"), "on_true": ref("blocking")}
+    elif kind == "cake":
+        tree = {"type": "minecraft:select", "property": "minecraft:custom_model_data", "index": 0,
+                "cases": [{"when": f"bite_{i}", "model": ref(f"bite_{i}")} for i in range(1, CAKE_SLICES)],
+                "fallback": ref("main")}
     elif kind == "elytra" and "broken" in names:
         tree = {"type": "minecraft:condition", "property": "minecraft:broken",
                 "on_false": ref("main"), "on_true": ref("broken")}

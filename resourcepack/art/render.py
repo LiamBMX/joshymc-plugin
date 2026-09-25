@@ -37,7 +37,12 @@ COUNTERPART = {
     "trident": ("item/trident", "generated"), "shield": (None, None),
     "helmet": ("item/golden_helmet", "generated"), "boots": ("item/diamond_boots", "generated"),
     "elytra": ("item/elytra", "generated"), "food": ("item/pumpkin_pie", "generated"),
+    "cake": ("item/cake", "generated"), "item": (None, None),
+    "leggings": ("item/diamond_leggings", "generated"),
 }
+WEAR_SLOTS = {"boots": ["feet"], "elytra": ["chest"], "helmet": ["head"], "leggings": ["legs"]}
+# Animated textures from the last load(): name -> (full strip array, mcmeta animation block).
+ANIMATED: dict = {}
 GENERATED = {
     "ground": ([0, 0, 0], [0, 2, 0], 0.5), "head": ([0, 180, 0], [0, 13, 7], 1.0),
     "thirdperson_righthand": ([0, 0, 0], [0, 3, 1], 0.55),
@@ -429,6 +434,22 @@ def wings(tex, spread=False, yaw=0.0):
     return quads
 
 
+
+def floor(size: float = 3.0, colour=(0.40, 0.58, 0.30)):
+    """A flat grass-coloured floor at y = 0 for placed-object previews."""
+    tex = np.ones((2, 2, 4), dtype=np.float32)
+    tex[..., :3] = colour
+    pts = np.array([(-size, 0, -size), (-size, 0, size), (size, 0, size), (size, 0, -size)], dtype=np.float64)
+    return [(pts, np.array([(0, 0), (0, 2), (2, 2), (2, 0)], dtype=np.float64), tex, True, True, 0)]
+
+
+def placed(model, textures, block=(0, 0, 0), yaw: float = 0.0):
+    """An ItemDisplay with no display transform on the block at `block` (its min corner):
+    model (8, 8, 8) sits at the block centre, so model y = 0 is the block's floor.
+    yaw turns it like the display entity's yaw (0 = model +Z faces +Z)."""
+    centre = T(block[0] + 0.5, block[1] + 0.5, block[2] + 0.5)
+    return model_quads(model, textures, centre @ R("y", -yaw) @ item_transform(None))
+
 def gui(model, textures, scale=4, background=(0.545, 0.545, 0.545)):
     size = 16 * scale
     cam = Camera(size, size, np.eye(4), ortho_scale=16 * scale)
@@ -514,8 +535,10 @@ def slot_strip(model, textures, ghost, scale):
     return strip.resize((strip.width * (8 // scale), strip.height * (8 // scale)), Image.NEAREST)
 
 
-def ghost_for(kind):
+def ghost_for(kind, override=None):
     sprite, display_set = COUNTERPART.get(kind, (None, None))
+    if override:
+        sprite, display_set = override, display_set or "generated"
     if not sprite:
         return None
     tex = vanilla(sprite)
@@ -530,7 +553,7 @@ def ghost_for(kind):
 
 def sheet(module, models: dict, textures: dict, layers: dict) -> list[Path]:
     kind = module.KIND
-    ghost = ghost_for(kind)
+    ghost = ghost_for(kind, getattr(module, "COUNTERPART", None))
     names = kit.KINDS[kind]
     main = models[names[0]]
     shown = models.get("gui", main)
@@ -546,7 +569,7 @@ def sheet(module, models: dict, textures: dict, layers: dict) -> list[Path]:
     if kind == "helmet":
         extra_wear = worn_head(main, textures)
     if "humanoid" in layers or "humanoid_leggings" in layers:
-        slots = {"boots": ["feet"], "elytra": ["chest"], "helmet": ["head"]}.get(kind, ["chest"])
+        slots = WEAR_SLOTS.get(kind, ["chest"])
         extra_wear = extra_wear + armour(layers, slots)
     if "wings" in layers:
         extra_wear = extra_wear + wings(layers["wings"])
@@ -567,7 +590,24 @@ def sheet(module, models: dict, textures: dict, layers: dict) -> list[Path]:
 
     # Second sheet: every other state, and wearables on the player.
     extra = []
-    for name in names[1:] + tuple(n for n in kit.OPTIONAL_MODELS if n in models and n != "gui"):
+    if kind == "cake":
+        # Placed on the floor like the plugin's ItemDisplay, slice 1 toward the camera (+Z).
+        cells = []
+        for name in names:
+            view = scene(floor() + placed(models[name], textures, (-0.5, 0, -0.5)), (0.0, 1.35, 1.9),
+                         (0, 0.35, 0), (260, 220), fov=45)
+            cells.append(label(view, "whole" if name == "main" else f"{name[5:]} of 8 slices eaten"))
+        extra.append(row(cells[:4]))
+        extra.append(row(cells[4:]))
+        scale_shot = scene(floor() + player({}) + placed(main, textures, (0.4, 0, 0.9)), (-1.6, 1.8, 3.6),
+                           (0.4, 0.8, 0.6), (420, 340))
+        night = scene(floor() + placed(main, textures, (-0.5, 0, -0.5)), (1.2, 1.2, 1.7), (0, 0.35, 0),
+                      (420, 340), night=True)
+        top_down = scene(floor() + placed(models[names[3]], textures, (-0.5, 0, -0.5)), (0.01, 2.6, 0.35),
+                         (0, 0, 0), (340, 340), fov=40)
+        extra.append(row([label(scale_shot, "placed next to a player"), label(night, "placed, at night"),
+                          label(top_down, "3 of 8 eaten, from above")]))
+    for name in (() if kind == "cake" else names[1:]) + tuple(n for n in kit.OPTIONAL_MODELS if n in models and n != "gui"):
         m = models[name]
         state_pose = kit.pose_for(kind, name)
         extra.append(row([label(gui(m, textures, 4).resize((128, 128), Image.NEAREST), f"{name}: GUI"),
@@ -576,12 +616,12 @@ def sheet(module, models: dict, textures: dict, layers: dict) -> list[Path]:
                           label(scene(player(state_pose) + held(m, textures, pose=state_pose), (-3.4, 1.5, 0.6),
                                       size=(300, 300)), f"{name}: right side"),
                           label(first_person(m, textures, width=400, height=225), f"{name}: first person")]))
-    if kind in ("helmet", "boots", "elytra"):
+    if kind in ("helmet", "boots", "elytra", "leggings"):
         idle = player({})
         wear = []
         if kind == "helmet":
             wear = worn_head(main, textures)
-        wear += armour(layers, {"boots": ["feet"], "elytra": ["chest"], "helmet": ["head"]}[kind])
+        wear += armour(layers, WEAR_SLOTS[kind])
         views = [label(scene(idle + wear, (1.8, 1.6, 2.6), (0, 1.1, 0), (300, 340)), "worn, front"),
                  label(scene(idle + wear, (-2.0, 1.7, -2.4), (0, 1.1, 0), (300, 340)), "worn, back")]
         if kind == "elytra" and "wings" in layers:
@@ -598,25 +638,109 @@ def sheet(module, models: dict, textures: dict, layers: dict) -> list[Path]:
             views.append(label(scene(idle + wear, (1.8, 1.6, 2.6), (0, 1.1, 0), (300, 340), night=True), "night"))
         elif kind == "boots":
             views.append(label(scene(idle + wear, (1.2, 0.5, 1.4), (0, 0.25, 0), (300, 300)), "close up"))
+        elif kind == "leggings":
+            views.append(label(scene(idle + wear, (1.3, 1.0, 1.6), (0, 0.7, 0), (300, 300)), "close up"))
+            views.append(label(scene(idle + wear, (1.8, 1.6, 2.6), (0, 1.1, 0), (300, 340), night=True), "night"))
         extra.append(row(views))
     if extra:
         second = column(extra)
         out2 = Path(tempfile.gettempdir()) / f"art_render_{module.ID}_more.png"
         second.save(out2)
         outputs.append(out2)
+    if ANIMATED:
+        outputs.append(animation_sheet(module, shown, main, textures))
     return outputs
 
 
+def frame_at(name: str, tick: int):
+    """The frame of an animated texture showing at game tick `tick` (no interpolation)."""
+    strip, meta = ANIMATED[name]
+    w = strip.shape[1]
+    count = strip.shape[0] // w
+    order = meta.get("frames") or list(range(count))
+    index = order[(tick // meta["frametime"]) % len(order)]
+    return strip[index * w:(index + 1) * w]
+
+
+def animation_sheet(module, shown, main, textures, samples: int = 8) -> Path:
+    """The inventory icon and the model through one loop of the longest animation, plus
+    every frame of each animated texture, so the motion can be judged from stills."""
+    def loop(meta, strip):
+        count = strip.shape[0] // strip.shape[1]
+        return len(meta.get("frames") or range(count)) * meta["frametime"]
+
+    longest = max(loop(meta, strip) for strip, meta in ANIMATED.values())
+    ticks = [round(i * longest / samples) for i in range(samples)]
+    icons, models_ = [], []
+    for tick in ticks:
+        frame = dict(textures)
+        for name in ANIMATED:
+            frame[name] = frame_at(name, tick)
+        icons.append(label(gui(shown, frame, 4).resize((128, 128), Image.NEAREST), f"tick {tick}"))
+        if main.get("elements"):
+            models_.append(label(turntable(main, frame, 35, 18, 160), f"tick {tick}"))
+    rows = [label(row(icons), f"inventory icon over one {longest}-tick loop ({longest / 20:.1f} s)")]
+    if models_:
+        rows.append(label(row(models_), "model, 3/4 view"))
+    for name, (strip, meta) in ANIMATED.items():
+        w = strip.shape[1]
+        count = strip.shape[0] // w
+        scale = max(1, 96 // w)
+        cells = [Image.fromarray((strip[i * w:(i + 1) * w] * 255).astype(np.uint8), "RGBA")
+                 .resize((w * scale, w * scale), Image.NEAREST) for i in range(min(count, 16))]
+        flat = []
+        for c in cells:  # show transparency on a checkerboard
+            bg = Image.new("RGBA", c.size, (70, 70, 78, 255))
+            check = Image.new("RGBA", c.size, (100, 100, 110, 255))
+            mask = Image.new("L", c.size, 0)
+            ImageDraw.Draw(mask).rectangle((0, 0, c.width, c.height), fill=0)
+            for yy in range(0, c.height, 8):
+                for xx in range(0, c.width, 8):
+                    if (xx // 8 + yy // 8) % 2:
+                        ImageDraw.Draw(mask).rectangle((xx, yy, xx + 7, yy + 7), fill=255)
+            bg.paste(check, (0, 0), mask)
+            bg.alpha_composite(c)
+            flat.append(bg.convert("RGB"))
+        info = f"{name}: {count} frames x {meta['frametime']} ticks" + (", interpolated" if meta.get("interpolate") else "")
+        rows.append(label(row(flat, gap=4), info + ("" if count <= 16 else " (first 16 shown)")))
+    out = Path(tempfile.gettempdir()) / f"art_render_{module.ID}_anim.png"
+    column(rows).save(out)
+    return out
+
+
+def _sprite_display(model: dict) -> dict:
+    """The display a flat sprite model inherits from item/generated or item/handheld."""
+    display = {k: {"rotation": r, "translation": t, "scale": [s] * 3} for k, (r, t, s) in GENERATED.items()}
+    if model.get("parent", "").endswith("handheld"):
+        for k, (r, t, s) in kit.VANILLA["handheld"].items():
+            display[k] = {"rotation": r, "translation": t, "scale": [s] * 3}
+    display.update(model.get("display", {}))
+    return display
+
+
 def load(item_id: str):
-    """Import an item module, paint its textures into a temp folder and load them."""
+    """Import an item module, paint its textures into a temp folder and load them.
+    Animated textures show their first frame (the strips are kept in ANIMATED)."""
     module = importlib.import_module(f"art.items.{item_id}")
     tmp = Path(tempfile.mkdtemp(prefix=f"art_{item_id}_"))
     kit.begin(item_id, tmp / "textures", tmp / "layers")
     module.textures()
-    textures = {p.stem: to_array(Image.open(p)) for p in (tmp / "textures").glob("*.png")}
+    animations = kit.animations()
+    ANIMATED.clear()
+    textures = {}
+    for p in (tmp / "textures").glob("*.png"):
+        array = to_array(Image.open(p))
+        if p.stem in animations:
+            ANIMATED[p.stem] = (array, animations[p.stem])
+            array = array[:array.shape[1]]
+        textures[p.stem] = array
     layers = {layer: to_array(Image.open(tmp / "layers" / layer / f"{item_id}.png"))
               for layer in kit.LAYERS if (tmp / "layers" / layer / f"{item_id}.png").exists()}
-    return module, module.models(), textures, layers
+    models = module.models()
+    for m in models.values():
+        if isinstance(m, dict) and "elements" not in m:
+            m["display"] = _sprite_display(m)
+    return module, models, textures, layers
 
 
 def main(argv) -> int:
