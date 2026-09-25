@@ -3,6 +3,7 @@ package com.liam.joshymc.manager
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.ShadowColor
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -133,7 +134,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val objective = board.registerNewObjective(
             "joshymc_sidebar",
             org.bukkit.scoreboard.Criteria.DUMMY,
-            plugin.commsManager.parseLegacy("&6&lJoshyMC")
+            logo(SIDEBAR_LOGO)
         )
         objective.displaySlot = DisplaySlot.SIDEBAR
         // Hide the red score numbers
@@ -207,6 +208,9 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val dateTime = java.time.ZonedDateTime.now(plugin.timezoneManager.zoneFor(player)).format(DATE_TIME_FMT)
 
         val lines = mutableListOf<Component>()
+        // The title logo hangs down over the top rows, inside the sidebar background.
+        // The client draws at most 15 lines, so there is no room for more rows below.
+        repeat(LOGO_ROWS) { lines.add(Component.empty()) }
         lines.add(plugin.commsManager.parseLegacy("&b${player.name} &7[&f$ping&7]"))
         lines.add(plugin.commsManager.parseLegacy("&f$dateTime"))
         lines.add(Component.empty())
@@ -253,11 +257,11 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val online = Bukkit.getOnlinePlayers().size
         val ping = player.ping
 
-        val logoChar = "\uE000"
+        // The logo hangs 36 px down from its line, so four blank lines keep the stats clear of it.
         val header = plugin.commsManager.parseLegacy("&6&m                                   &r\n")
-            .append(Component.text(logoChar, NamedTextColor.WHITE))
+            .append(logo(TAB_LOGO))
             .append(plugin.commsManager.parseLegacy(
-                "\n\n" +
+                "\n\n\n\n\n" +
                 "&7\u028F\u1D0F\u1D1C\u0280 \u1D18\u026A\u0274\u0262&6: $ping\n" +
                 "&7\u1D0F\u0274\u029F\u026A\u0274\u1D07 \u1D18\u029F\u1D00\u028F\u1D07\u0280\uA731&6: $online\n" +
                 "&7\u1D18\u1D07\u1D00\u1D0B \u1D18\u029F\u1D00\u028F\u1D07\u0280\uA731&6: $peakPlayers\n" +
@@ -443,8 +447,19 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    /** A logo string from the resource pack font, untinted and without the text shadow. */
+    private fun logo(glyphs: String): Component =
+        Component.text(glyphs, NamedTextColor.WHITE).shadowColor(ShadowColor.none())
+
     companion object {
         const val SCOREBOARD_SETTING_KEY = "scoreboard"
+
+        // JoshyMC logo glyphs (resourcepack/art/logo.py): two halves joined by a -1 space.
+        /** 36 px tall, hanging down from its line: the tab list header. */
+        private const val TAB_LOGO = "\uE001\uF801\uE002"
+        /** 32 px tall, hanging down from the sidebar title bar over [LOGO_ROWS] blank rows. */
+        private const val SIDEBAR_LOGO = "\uE003\uF801\uE004"
+        private const val LOGO_ROWS = 3
 
         /** e.g. "09/06/26 12:36 PM" — compact so the sidebar stays narrow. */
         private val DATE_TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MM/dd/yy hh:mm a")

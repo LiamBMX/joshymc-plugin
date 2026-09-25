@@ -1,1 +1,21 @@
-{"model":{"type":"minecraft:model","model":"joshymc:item/autumns_edge"}}
+{
+  "model": {
+    "type": "minecraft:select",
+    "property": "minecraft:display_context",
+    "cases": [
+      {
+        "when": [
+          "gui"
+        ],
+        "model": {
+          "type": "minecraft:model",
+          "model": "joshymc:item/autumns_edge/gui"
+        }
+      }
+    ],
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "joshymc:item/autumns_edge/main"
+    }
+  }
+}

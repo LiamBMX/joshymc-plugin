@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/harvest_key"
+    "model": "joshymc:item/harvest_key/main"
   }
 }

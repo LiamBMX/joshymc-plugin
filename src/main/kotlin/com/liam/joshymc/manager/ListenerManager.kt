@@ -32,6 +32,8 @@ import com.liam.joshymc.listener.WrittenBookListener
 import com.liam.joshymc.listener.ClaimProtectionListener
 import com.liam.joshymc.listener.BubbleButtListener
 import com.liam.joshymc.listener.CustomArmorListener
+import com.liam.joshymc.listener.GreatPumpkinPieListener
+import com.liam.joshymc.listener.ThrownTridentVisualListener
 import com.liam.joshymc.listener.AuctionBidListener
 import com.liam.joshymc.listener.StockTradeChatListener
 import com.liam.joshymc.listener.CustomArmorAnvilListener
@@ -50,6 +52,12 @@ import com.liam.joshymc.listener.enchant.WeaponEnchantListener
 class ListenerManager(private val plugin: Joshymc) {
 
     var passiveEnchantListener: PassiveEnchantListener? = null
+        private set
+
+    var thrownTridentVisualListener: ThrownTridentVisualListener? = null
+        private set
+
+    var greatPumpkinPieListener: GreatPumpkinPieListener? = null
         private set
 
     lateinit var welcomeListener: WelcomeListener
@@ -209,6 +217,14 @@ class ListenerManager(private val plugin: Joshymc) {
         armorListener.start()
         pm.registerEvents(armorListener, plugin)
         pm.registerEvents(BubbleButtListener(plugin), plugin)
+        thrownTridentVisualListener = ThrownTridentVisualListener(plugin).also {
+            it.start()
+            pm.registerEvents(it, plugin)
+        }
+        greatPumpkinPieListener = GreatPumpkinPieListener(plugin).also {
+            it.start()
+            pm.registerEvents(it, plugin)
+        }
 
         // Cosmetics
         pm.registerEvents(plugin.killEffectManager, plugin)

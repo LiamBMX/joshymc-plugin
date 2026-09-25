@@ -1,11 +1,14 @@
 package com.liam.joshymc.item.impl
 
+import com.liam.joshymc.Joshymc
 import com.liam.joshymc.item.CustomItem
 import com.liam.joshymc.util.LoreBuilder
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
+import org.bukkit.NamespacedKey
+import org.bukkit.inventory.meta.ItemMeta
 
 class FastHopper : CustomItem() {
 
@@ -22,4 +25,8 @@ class FastHopper : CustomItem() {
         description = listOf("Transfers 5 items per second."),
         usage = "Place like a normal hopper.",
     )
+
+    override fun applyMeta(meta: ItemMeta) {
+        meta.setItemModel(NamespacedKey(Joshymc.instance, "fast_hopper"))
+    }
 }

@@ -2,9 +2,6 @@ plugins {
     kotlin("jvm") version "2.3.20"
     id("com.gradleup.shadow") version "8.3.0"
     id("xyz.jpenilla.run-paper") version "2.3.1"
-    // paperweight-userdev gives us direct compile-time access to mojang-mapped NMS
-    // (no more reflection guessing for player NPCs / packet construction).
-    id("io.papermc.paperweight.userdev") version "2.0.0-beta.18"
 }
 
 group = "com.liam"
@@ -18,9 +15,8 @@ repositories {
 }
 
 dependencies {
-    // Replaces the old compileOnly paper-api dep — now we get the full
-    // mojang-mapped Paper server JAR for compile-time NMS access.
-    paperweight.paperDevBundle("1.21.11-R0.1-SNAPSHOT")
+    // Plain Paper API: the plugin has no NMS code left (NPCs use the Mannequin entity).
+    compileOnly("io.papermc.paper:paper-api:26.2.build.128-stable")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     implementation("net.dv8tion:JDA:5.2.3") {
         exclude(module = "opus-java") // not needed, saves ~2MB
@@ -32,13 +28,21 @@ tasks {
         // Configure the Minecraft version for our task.
         // This is the only required configuration besides applying the plugin.
         // Your plugin's jar (or shadowJar if present) will be used automatically.
-        minecraftVersion("1.21.11")
+        minecraftVersion("26.2")
+        // Paper 26.x runs on Java 25.
+        javaLauncher.set(project.javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(25)) })
     }
 }
 
 val targetJavaVersion = 21
 kotlin {
     jvmToolchain(targetJavaVersion)
+}
+
+java {
+    // paper-api 26.x is published for Java 25. We still emit Java 21 bytecode (it runs on
+    // Paper's Java 25), so let Gradle resolve the newer API instead of rejecting it.
+    disableAutoTargetJvm()
 }
 
 // Write final JARs into a top-level `jar/` directory so collaborators can grab
@@ -66,12 +70,21 @@ tasks.build {
     dependsOn("shadowJar")
 }
 
-// paperweight's reobfJar runs after the assembled JAR. We don't need it because
-// Paper 1.20.5+ runs mojang-mapped plugins natively via the plugin remapper.
-// If you ever need the reobfuscated jar (for older Paper or Spigot), uncomment:
-// tasks.assemble { dependsOn(tasks.reobfJar) }
+// Zip resourcepack/ into the JAR on every build so the served pack is never stale.
+// Run `py -m art.build` in resourcepack/ first when item art changes.
+val resourcePackZip by tasks.registering(Zip::class) {
+    from("resourcepack") {
+        include("pack.mcmeta", "assets/**")
+    }
+    archiveFileName.set("resourcepack.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("generated/resourcepack"))
+    // Same content -> same bytes -> same hash, so players only re-download real changes.
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}
 
 tasks.processResources {
+    from(resourcePackZip)
     val props = mapOf("version" to version)
     inputs.properties(props)
     filteringCharset = "UTF-8"

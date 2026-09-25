@@ -4,14 +4,15 @@
 A Paper MC plugin (Kotlin) for Joshy's Minecraft server. It replaces a stack of Spring/3rd-party plugins with a single custom plugin. As of v1.0.48 it owns: claims, combat, economy, market, auctions, sign shops, custom enchants, custom items, custom spawners, kits, warps/homes/RTP, TPA, vaults/storage, leaderboard holograms, NPCs, crates, arenas, portals, voting, ranks, teams, quests, talismans, fishing, skills, all cosmetics (trails/kill effects/join effects/glow/emote/gadget/chat tags/chat colors/nicks), AFK, anticheat (with Grim bridge), playtime, scoreboard sidebar, MOTD/welcome, announcements, multi-world, resource world, spawn world, settings GUI, lag cleaner, recipe blocker, and a 2-way Discord bridge. World/region protection flags (pvp, block break, potions, ender pearls, etc.) are no longer a custom JoshyMC system — that's WorldGuard's job now (see issue #673).
 
 ## Target Server
-- **Paper MC 1.21.11** — newer than the model's training cutoff. **Trust the user about API surface**; don't reach for `BlockFromToEvent` workarounds you remember from 1.16.
-- Java 21 toolchain
+- **Paper 26.2** (`paper-api 26.2.build.128-stable`, `api-version: '26.2'`) — newer than the model's training cutoff. **Trust the user about API surface**; check the jars with `javap` instead of guessing. Don't reach for `BlockFromToEvent` workarounds you remember from 1.16.
+- Kotlin compiled with a Java 21 toolchain to Java 21 bytecode; the server runs Java 25. `paper-api` is published for Java 25, so `build.gradle.kts` calls `java { disableAutoTargetJvm() }`.
+- No NMS and no paperweight: plain `compileOnly` Paper API.
 - Gradle + Shadow plugin for fat JAR, `run-paper` plugin for local testing
 - JDA 5.2.3 (shaded + relocated for Discord)
 
 ## Running locally
 ```bash
-./gradlew runServer    # Starts a Paper 1.21.11 test server with the plugin loaded
+./gradlew runServer    # Starts a Paper 26.2 test server (Java 25, fetched by the foojay resolver)
 ./gradlew build        # Builds the shadow JAR → jar/joshymc-1.0-SNAPSHOT-all.jar
 ```
 
@@ -74,7 +75,7 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 | **HopperPlusManager** | Upgraded hoppers with filters. |
 | **SpawnerManager** | Custom spawners loaded from `spawners.yml`. Each placed block is a `SpawnerBlock` (key, spawnerId, owner, stackCount, enabled, storage, **filteredOut: MutableSet\<Material\>** added v1.0.48). Drop generation uses `block.filteredOut` to discard at generation. **v1.0.48 GUI**: 54-slot storage view (45 storage + 9 buttons), per-spawner filter sub-GUI (`openFilterGui`), shorter title to avoid overflow, `openStorageGuis` map + per-second tick to refresh slots so hopper pulls show up live. |
 | **CrateManager** + **CrateEditorCommand** | Server crates with keys + animations. |
-| **NPCManager** | Static NPCs that run commands on click. |
+| **NPCManager** | Static NPCs that run commands on click. Each NPC is a `Mannequin` entity (player model, skin by player name via `ResolvableProfile`); no NMS. |
 | **HologramManager** | Floating text holograms. |
 | **LeaderboardManager** | (v1.0.45) 6 player + 6 team leaderboard hologram types via SQL aggregation joins. **v1.0.45 fix**: money leaderboard was rendering UUIDs as names — resolve via `nameOf(UUID.fromString(...))`. **v1.0.45 fix**: TEAM_MONEY SQL was joining `balances` but actual table is `economy`. |
 | **PunishmentManager** | Bans / mutes / kicks / warns + history. |
@@ -100,7 +101,7 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 | **FishingManager** | Custom fishing collection. |
 | **SkillManager** | XP/leveling skills. |
 | **TrailManager / KillEffectManager / JoinEffectManager / EmoteManager / GlowManager / GadgetManager** | Cosmetics. |
-| **ResourcePackManager** | Required resource pack on join. |
+| **ResourcePackManager** | Required resource pack on join. Serves the `resourcepack.zip` bundled in the JAR and replaces `plugins/Joshymc/resourcepack.zip` whenever the bundled one differs. |
 | **ItemManager → CustomItem** | Base class for all custom items; PDC-tagged. |
 | **CustomEnchantManager** | Custom enchants on gear (see `Joshymc.registerEnchants()`). |
 | **MobVisibilityListener** | (v1.0.43) Per-player mob hiding. **3 damage paths must all be closed**: (1) direct hit (`EntityDamageByEntityEvent` damager-is-LivingEntity), (2) projectile (`Projectile.shooter` resolution), (3) explosion AoE (`EntityDamageEvent` cause `ENTITY_EXPLOSION`/`BLOCK_EXPLOSION`/`WITHER`/`MAGIC`). |
@@ -130,7 +131,13 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 - `Joshymc.migrateConfig()` does the same for `config.yml` — backfills any keys that exist in the bundled `config.yml` but are missing from the player-edited file.
 
 ## Custom items (PDC tag: `joshymc:custom_item_id`)
-**v1.0.49 catalog cleanup (issue #708)**: the old RPG loot catalog (crafting-material weapons/tools/armor sets, consumables, legendary items, `void_bore`/`void_bore_5x5`/`void_bore_chunk`, `carrot_sword`, Bunny armor) was removed — those classes, recipes, resourcepack assets, and the `bunny` kit are gone. Surviving custom items: Void Drill (`void_drill`, `void_drill_5x5`), all eggs (`easter_egg`, `explosive_egg`, `freeze_egg`, `blindness_egg`, `teleport_egg`, `levitation_egg`, `knockback_egg`, `swap_egg`, `lightning_egg`, `cobweb_egg`, `confusion_egg`, `ender_egg`), the September Autumn collection (`autumns_edge`, `harvest_scythe`, `orchard_pickaxe`, `golden_crest`, `falling_leaf`), the October Halloween collection (`phantoms_grasp`, `gravedigger`, `jack_o_lantern_mask`, `bone_rattler`), `bubble_butt_leggings`, ModMode/TraineeMode staff tools (`item/impl/ModModeTools.kt`, `item/impl/TraineeModeTools.kt`), and two items kept as exceptions because a whole command/manager depends on them rather than them being catalog decoration: `sell_wand` (SellWandListener/SellWandCommand), `token` (`/tokens` economy).
+**v1.0.49 catalog cleanup (issue #708)**: the old RPG loot catalog (crafting-material weapons/tools/armor sets, consumables, legendary items, `void_bore`/`void_bore_5x5`/`void_bore_chunk`, `carrot_sword`, Bunny armor) was removed — those classes, recipes, resourcepack assets, and the `bunny` kit are gone. Surviving custom items: Void Drill (`void_drill`, `void_drill_5x5`), all eggs (`easter_egg`, `explosive_egg`, `freeze_egg`, `blindness_egg`, `teleport_egg`, `levitation_egg`, `knockback_egg`, `swap_egg`, `lightning_egg`, `cobweb_egg`, `confusion_egg`, `ender_egg`), the September Autumn collection (`autumns_edge`, `harvest_scythe`, `orchard_pickaxe`, `golden_crest`, `falling_leaf`), the October Halloween collection (`phantoms_grasp`, `gravedigger`, `jack_o_lantern_mask`, `bone_rattler`, `pumpkin_pummel`), the Woodland collection (`lumberjacks_legacy`, `woodland_hunter`, `maplefang`, `autumn_wanderer`, `hearthkeeper`), the Winter collection (`frostbite`, `glacier_breaker`, `ice_skates`, `wings_of_the_blizzard`, `winters_wrath`), `bubble_butt_leggings`, ModMode/TraineeMode staff tools (`item/impl/ModModeTools.kt`, `item/impl/TraineeModeTools.kt`), and two items kept as exceptions because a whole command/manager depends on them rather than them being catalog decoration: `sell_wand` (SellWandListener/SellWandCommand), `token` (`/tokens` economy).
+
+**Great Pumpkin Pie** (`great_pumpkin_pie`, `HalloweenItems.kt` + `listener/GreatPumpkinPieListener.kt`): a placeable pie eaten slice by slice. Placing goes through the vanilla `BlockPlaceEvent` of its CAKE base (so claims/WorldGuard apply), is cancelled, and spawns an `ItemDisplay` (transform NONE, yaw = placer's yaw so slice 1 faces them; item displays render turned 180 degrees) plus an `Interaction` hitbox holding the state in PDC. Right-click eats a slice (3 food, model swaps via custom model data `bite_N`, squash animation, rising chime), punching wobbles it, sneak-punch picks an untouched pie back up (owner, claim owner or `joshymc.admin`). Pies pop when their support block goes, block/liquid/piston intrusion into their space is refused, and lost models are restored.
+
+**Thrown Maplefang** (`listener/ThrownTridentVisualListener.kt`): the client always draws thrown tridents with the vanilla model, so custom tridents are hidden (`setVisibleByDefault(false)`) and a non-persistent `ItemDisplay` of the thrown item follows them each tick, pointed along the velocity. Plain tridents are untouched; add ids to `CUSTOM_TRIDENTS` with their tip distance.
+
+**Seasonal collections (Autumn, Halloween, Woodland, Winter)** are retextured vanilla gear with oversized 3D models built in `resourcepack/art/items/<id>.py` (see Resource Pack). Their classes (`AutumnCollection.kt`, `HalloweenItems.kt`, `WoodlandCollection.kt`, `WinterCollection.kt`) only set the item model and equippable: helmets clear the equipment asset (`equippable.model = null`) so the client draws the 3D model on the head, while boots and elytras point at `equipment/<id>.json` worn layers.
 
 **Issue #776**: the AFK Key (`afk_key`, `item/impl/AfkKey.kt`) was removed — it had no real crate/reward wiring (no crate type named `afk` was ever defined in `crates.yml`, and the default `afk.reward.items` config never referenced it), so it was pure catalog decoration despite the AFKManager dependency note above. The general AFK system (`AFKManager`, `/afk`, the AFK world, AFK rewards) is untouched — only the standalone key item is gone.
 
@@ -138,8 +145,14 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 
 ## Resource Pack
 - Required pack URL/hash in `config.yml > resource-pack`. `ResourcePackManager` enforces on join.
-- Skeleton at `resourcepack/` in repo root; zip + host externally.
+- Source lives in `resourcepack/` (pack format 88 for 26.2). Gradle's `resourcePackZip` task zips `pack.mcmeta` + `assets/` into the JAR on every build — never commit a zip.
+- **3D item art is code**: `resourcepack/art/items/<id>.py`, one module per item, built with `art/kit.py` (texture painters, `box`/`bar`/`arc`/`prism`/`turn`/`mirror` geometry with 26.2's free rotations, grip-aligned `display()` presets, worn layers via `save_layer`). Tools, run from `resourcepack/`: `py -m art.check <id>`, `py -m art.render <id>` (preview sheets copying 26.2's hand/head/wing transforms, vanilla item in the other hand for scale), `py -m art.build` (writes textures, models, item definitions and equipment assets). `_example.py` is the reference; modules starting with `_` never ship.
+- Wearables: helmets are 3D models on the head (equippable with **no** asset id, so the client draws the item model through its `head` transform); boots and elytras use `equipment/<id>.json` layers (`humanoid`, `wings`). Any chest item whose equipment asset has a `wings` layer renders wings.
+- For big art batches, fan out one agent per item (kit + checker + renderer, each agent owns one file), then review everything on one contact sheet. Sets that must match (the 19 crate keys, the 12 eggs, the 77 fish) get a pilot or a shared style guide first, and later agents copy the finished ones. Big runs can hit the account's usage limit: finished modules are safe on disk, and cut-off agents leave drafts, so relaunch them with a "resume from art/items/<id>.py" prompt instead of starting over.
 - Custom item models use `setItemModel(NamespacedKey)` — models live in `assets/joshymc/models/item/`.
+- **Animated textures**: `save_animation(frames, name, frametime=, interpolate=, order=)` writes a vertical strip plus `.png.mcmeta` (frames square 16/32/64 px, 2-32 of them); `animate()`, `wave()`, `shine()`, `sparkle()` paint seamless loops and `lathe()` turns round solids (eggs, coins, orbs). `art.render` adds an `*_anim.png` sheet (icon + model across one loop, every frame). Item textures animate everywhere (slot, hand, ground, thrown); worn equipment layers can't. `_example_animated.py` is the reference. Every legacy item (eggs, crate keys, fish, void drills, token, sell wand, fast hopper, Bubble Butt Leggings) is an animated art module; the 20 seasonal items are static.
+- Kinds beyond the gear: `item` (any object; `main` may be a flat `sprite()`), `leggings` (needs a `humanoid_leggings` layer) and `cake` (a placeable cake built in block space: `main` plus `bite_1`..`bite_7`, picked by custom model data strings; see the Great Pumpkin Pie). Module constants `MODEL_KEY` (item definition path when the game id differs, e.g. fish modules `fish_<id>` build `items/fish/<id>.json` because FishingManager uses `joshymc:fish/<id>`), `EQUIPMENT_KEY` (Bubble Butt keeps its live `bubble_butt` asset) and `COUNTERPART` (the vanilla sprite the preview shows beside it).
+- **Logo glyphs** (`py -m art.logo`, source `art/logo/joshymc_logo.webp`): the logo is two 192x128 halves in the default font joined by a `\uF801` -1 space. `\uE001\uF801\uE002` is 36 px tall hanging down from its line (tab header, followed by blank lines); `\uE003\uF801\uE004` is 32 px tall hanging down from the sidebar title bar over three blank rows (`ScoreboardManager.LOGO_ROWS`), so the sidebar background covers the whole logo; the client draws at most 15 sidebar lines, and with those rows the sidebar uses all 15. `\uE000` is the old logo, still used by the spawn hologram. Font glyphs must fit a 256x256 font page and advance `round(width * scale) + 1`, which is why the halves are 192 wide.
 
 ## Discord Integration
 - JDA 5.2.3 (shaded + relocated)
@@ -166,9 +179,10 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 - **`PlayerInventory.clear()` does NOT clear armor or off-hand** — must also `setArmorContents(arrayOfNulls(4))` + `setItemInOffHand(null)` for combat-log de-dupe. (v1.0.44 fix.)
 - **`event.inventory` in `InventoryClickEvent` is always the top inventory** — to know where the player actually clicked, use `event.clickedInventory`. (v1.0.48 GuiManager fix.)
 - **Bukkit chest GUI title overflows visually** — keep titles under ~28 chars. Don't append `(Page X/Y)` when there's only one page. (v1.0.48 spawner fix.)
-- **`Material.DO_TRADER_SPAWNING`** game rule shows a deprecation warning in 1.21.11. It still works; ignore for now.
+- **`GameRule.DO_TRADER_SPAWNING`** and the other old game-rule constants are deprecated (still work in 26.2).
+- **26.2 equipment getters are non-null** (`getHelmet()` returns an empty stack, not null), so Kotlin can't assign them as properties: use `setHelmet(...)` etc.
 - **GameRule import for `World.setGameRule`** — `org.bukkit.GameRule.DO_TRADER_SPAWNING`.
-- **`world.getCanGenerateStructures` is read-only on most Paper builds** — disabling structures requires the NMS reflection path in `Joshymc.disableStructureGeneration`. Three strategies: Bukkit setter → NMS WorldOptions record swap → log a manual instruction.
+- **`world.getCanGenerateStructures` is read-only on most Paper builds** — `Joshymc.disableStructureGeneration` tries a Bukkit setter, then an NMS WorldOptions reflection swap, then logs a manual instruction. On 26.2 the reflection path fails (`worldGenOptions()` is gone), so it falls through to the manual instruction.
 - **Generate-structures only takes effect on NEW chunks**; existing chunks keep their structure-gen settings. Worth saying so when the user asks why an old world still spawns villages.
 - **Polygon point-in-polygon uses ray-casting**; sub-block edge crossings can be missed if you compare blockX/blockZ. Use raw `from.x == to.x` checks for inside/outside transitions.
 - **Mob visibility = 3 damage paths** (direct, projectile, explosion). Closing only the first leaves creepers exploding through invisible walls.

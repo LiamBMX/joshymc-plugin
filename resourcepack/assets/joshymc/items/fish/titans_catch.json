@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/titans_catch"
+    "model": "joshymc:item/fish_titans_catch/main"
   }
 }

@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/walleye"
+    "model": "joshymc:item/fish_walleye/main"
   }
 }

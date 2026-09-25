@@ -2,6 +2,8 @@ package com.liam.joshymc.item.impl
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.item.CustomItem
+import com.liam.joshymc.listener.GreatPumpkinPieListener
+import com.liam.joshymc.util.LoreBuilder
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -66,7 +68,8 @@ class JackOLanternMask : CustomItem() {
         meta.setItemModel(NamespacedKey(Joshymc.instance, "jack_o_lantern_mask"))
         val equippable = meta.equippable
         equippable.slot = EquipmentSlot.HEAD
-        equippable.model = NamespacedKey(Joshymc.instance, "jack_o_lantern_mask")
+        // No equipment asset: the client draws the 3D item model on the head instead.
+        equippable.model = null
         meta.setEquippable(equippable)
     }
 }
@@ -86,5 +89,48 @@ class BoneRattler : CustomItem() {
     override fun applyMeta(meta: ItemMeta) {
         meta.isUnbreakable = true
         meta.setItemModel(NamespacedKey(Joshymc.instance, "bone_rattler"))
+    }
+}
+
+class PumpkinPummel : CustomItem() {
+
+    override val id = "pumpkin_pummel"
+    override val material = Material.PUMPKIN_PIE
+    override val hasGlint = true
+
+    override val displayName: Component = Component.text("Pumpkin Pummel", TextColor.color(0xE8751A))
+        .decoration(TextDecoration.ITALIC, false)
+        .decoration(TextDecoration.BOLD, true)
+
+    override val lore: List<Component> = emptyList()
+
+    override fun applyMeta(meta: ItemMeta) {
+        meta.setItemModel(NamespacedKey(Joshymc.instance, "pumpkin_pummel"))
+    }
+}
+
+/**
+ * A whole pie you place down and eat slice by slice. It is never a real block: placing it
+ * spawns the pie model and a hitbox (see GreatPumpkinPieListener), so the CAKE base item is
+ * only there because nothing crafts with cake and it already stacks to 1.
+ */
+class GreatPumpkinPie : CustomItem() {
+
+    override val id = GreatPumpkinPieListener.ITEM_ID
+    override val material = Material.CAKE
+    override val hasGlint = true
+
+    override val displayName: Component = Component.text("Great Pumpkin Pie", TextColor.color(0xF28C28))
+        .decoration(TextDecoration.ITALIC, false)
+        .decoration(TextDecoration.BOLD, true)
+
+    override val lore: List<Component> = LoreBuilder.build(
+        type = "Placeable Food",
+        description = listOf("Place it down to share.", "Has 8 slices."),
+        usage = "Right-click to eat a slice. Sneak + punch to pick it up.",
+    )
+
+    override fun applyMeta(meta: ItemMeta) {
+        meta.setItemModel(NamespacedKey(Joshymc.instance, id))
     }
 }

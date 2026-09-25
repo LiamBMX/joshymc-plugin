@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/crystal_bass"
+    "model": "joshymc:item/fish_crystal_bass/main"
   }
 }

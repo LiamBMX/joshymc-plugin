@@ -297,9 +297,9 @@ jobs:
           name: joshymc-${{ needs.build.outputs.version }}
           path: artifact
 
-      - name: Download latest stable Paper 1.21.11
+      - name: Download latest stable Paper 26.2
         env:
-          PAPER_VERSION: '1.21.11'
+          PAPER_VERSION: '26.2'
           USER_AGENT: 'JoshyMC-CI/1.0 (https://github.com/LiamBMX/joshymc-plugin)'
         run: |
           set -euo pipefail

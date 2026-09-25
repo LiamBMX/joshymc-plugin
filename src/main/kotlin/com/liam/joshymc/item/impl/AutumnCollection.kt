@@ -85,7 +85,8 @@ class GoldenCrest : CustomItem() {
         meta.setItemModel(NamespacedKey(Joshymc.instance, "golden_crest"))
         val equippable = meta.equippable
         equippable.slot = EquipmentSlot.HEAD
-        equippable.model = NamespacedKey(Joshymc.instance, "golden_crest")
+        // No equipment asset: the client draws the 3D item model on the head instead.
+        equippable.model = null
         meta.setEquippable(equippable)
     }
 }

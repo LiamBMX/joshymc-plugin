@@ -1,5 +1,10 @@
 {
   "layers": {
+    "humanoid": [
+      {
+        "texture": "joshymc:falling_leaf"
+      }
+    ],
     "wings": [
       {
         "texture": "joshymc:falling_leaf"

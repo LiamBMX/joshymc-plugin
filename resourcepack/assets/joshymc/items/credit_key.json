@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/credit_key"
+    "model": "joshymc:item/credit_key/main"
   }
 }

@@ -1,8 +1,8 @@
 # JoshyMC Plugin
 
-A single-JAR Paper plugin (Kotlin, Java 21) that powers Joshy's Minecraft server. Replaces a stack of third-party plugins with one custom implementation.
+A single-JAR Paper plugin (Kotlin) that powers Joshy's Minecraft server. Replaces a stack of third-party plugins with one custom implementation.
 
-Targets **Paper MC 1.21.11**.
+Targets **Paper 26.2** (Java 25 on the server).
 
 ---
 
@@ -30,7 +30,7 @@ See [`CLAUDE.md`](CLAUDE.md) for the full architectural tour — every manager, 
 3. Start the server. Default config writes itself to `plugins/Joshymc/config.yml`.
 4. Edit config to taste, then `/jmcreload` to apply most changes.
 
-Requires Paper 1.21.11+ and Java 21.
+Requires Paper 26.2 and Java 25.
 
 ---
 
@@ -38,10 +38,24 @@ Requires Paper 1.21.11+ and Java 21.
 
 ```bash
 ./gradlew build       # produces jar/joshymc-1.0-SNAPSHOT-all.jar (shaded fat JAR)
-./gradlew runServer   # starts a local Paper 1.21.11 test server with the plugin loaded
+./gradlew runServer   # starts a local Paper 26.2 test server with the plugin loaded (fetches Java 25 if needed)
 ```
 
-The Shadow plugin produces a single fat JAR with all dependencies (JDA, etc.) shaded and relocated.
+The Shadow plugin produces a single fat JAR with all dependencies (JDA, etc.) shaded and relocated. Building needs JDK 21 or newer; the plugin compiles to Java 21 bytecode, which Paper's Java 25 runs.
+
+### Resource pack and item models
+
+Every build zips `resourcepack/` into the JAR, and the plugin serves that pack on join (refreshing its copy whenever the JAR ships a new one).
+
+3D item models live in `resourcepack/art/`, one Python module per item (`art/items/<id>.py`) built with the shared toolkit in `art/kit.py`. From `resourcepack/` (Python 3 with Pillow and numpy):
+
+```bash
+py -m art.check <id>    # validate a model against what Minecraft 26.2 accepts
+py -m art.render <id>   # preview sheets: inventory slot, in hand next to a vanilla item, first person, worn views
+py -m art.build         # write every item's textures, models and item definitions into assets/
+```
+
+Run `py -m art.build` before `./gradlew build` whenever item art changes.
 
 ---
 

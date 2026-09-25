@@ -1,1 +1,14 @@
-{"model":{"type":"minecraft:model","model":"joshymc:item/falling_leaf"}}
+{
+  "model": {
+    "type": "minecraft:condition",
+    "property": "minecraft:broken",
+    "on_false": {
+      "type": "minecraft:model",
+      "model": "joshymc:item/falling_leaf/main"
+    },
+    "on_true": {
+      "type": "minecraft:model",
+      "model": "joshymc:item/falling_leaf/broken"
+    }
+  }
+}

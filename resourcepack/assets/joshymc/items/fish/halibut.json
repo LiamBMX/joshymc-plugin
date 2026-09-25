@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/halibut"
+    "model": "joshymc:item/fish_halibut/main"
   }
 }

@@ -40,12 +40,26 @@ class ItemManager(private val plugin: Joshymc) {
         register(Gravedigger())
         register(JackOLanternMask())
         register(BoneRattler())
+        register(PumpkinPummel())
+        register(GreatPumpkinPie())
         // September Autumn Collection
         register(AutumnsEdge())
         register(HarvestScythe())
         register(OrchardPickaxe())
         register(GoldenCrest())
         register(FallingLeaf())
+        // Woodland Collection
+        register(LumberjacksLegacy())
+        register(WoodlandHunter())
+        register(Maplefang())
+        register(AutumnWanderer())
+        register(Hearthkeeper())
+        // Winter Collection
+        register(Frostbite())
+        register(GlacierBreaker())
+        register(IceSkates())
+        register(WingsOfTheBlizzard())
+        register(WintersWrath())
 
         // Retextured Trial Keys
         register(JanuaryKey())

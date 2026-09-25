@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/channel_catfish"
+    "model": "joshymc:item/fish_channel_catfish/main"
   }
 }

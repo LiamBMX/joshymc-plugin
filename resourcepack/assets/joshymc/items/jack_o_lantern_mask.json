@@ -1,1 +1,6 @@
-{"model":{"type":"minecraft:model","model":"joshymc:item/jack_o_lantern_mask"}}
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "joshymc:item/jack_o_lantern_mask/main"
+  }
+}

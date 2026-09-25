@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/enchanted_koi"
+    "model": "joshymc:item/fish_enchanted_koi/main"
   }
 }

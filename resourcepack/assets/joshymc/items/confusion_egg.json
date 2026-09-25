@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/confusion_egg"
+    "model": "joshymc:item/confusion_egg/main"
   }
 }

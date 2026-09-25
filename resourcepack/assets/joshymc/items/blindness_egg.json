@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/blindness_egg"
+    "model": "joshymc:item/blindness_egg/main"
   }
 }

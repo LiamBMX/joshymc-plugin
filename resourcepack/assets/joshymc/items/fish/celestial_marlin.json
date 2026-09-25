@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/fish/celestial_marlin"
+    "model": "joshymc:item/fish_celestial_marlin/main"
   }
 }

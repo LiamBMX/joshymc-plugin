@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "joshymc:item/money_key"
+    "model": "joshymc:item/money_key/main"
   }
 }

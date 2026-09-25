@@ -182,10 +182,10 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 player.inventory.setItem(slot, item)
             }
         }
-        player.inventory.helmet = section.getItemStack("armor.helmet")
-        player.inventory.chestplate = section.getItemStack("armor.chestplate")
-        player.inventory.leggings = section.getItemStack("armor.leggings")
-        player.inventory.boots = section.getItemStack("armor.boots")
+        player.inventory.setHelmet(section.getItemStack("armor.helmet"))
+        player.inventory.setChestplate(section.getItemStack("armor.chestplate"))
+        player.inventory.setLeggings(section.getItemStack("armor.leggings"))
+        player.inventory.setBoots(section.getItemStack("armor.boots"))
         val offhand = section.getItemStack("armor.offhand")
         if (offhand != null) player.inventory.setItemInOffHand(offhand)
 
