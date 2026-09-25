@@ -173,11 +173,11 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         }
     }
 
-    private fun refreshEstimate(session: SellSession) {
+    private fun refreshEstimate(player: Player, session: SellSession) {
         var total = 0.0
         for (i in 0 until DEPOSIT_SLOTS) {
             val item = session.inventory.getItem(i) ?: continue
-            total += plugin.sellPriceManager.getStackValue(item)
+            total += plugin.sellPriceManager.getStackValue(item, player)
         }
         total = Math.round(total * 100.0) / 100.0
         session.inventory.setItem(49, buildValueItem(total))
@@ -207,7 +207,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         // Any other click that touches this GUI (deposit, shift-click, swap, etc.) may have
         // changed the deposit contents — recompute the estimate once the click resolves.
         Bukkit.getScheduler().runTask(plugin, Runnable {
-            if (openSellSessions[player.uniqueId] === session) refreshEstimate(session)
+            if (openSellSessions[player.uniqueId] === session) refreshEstimate(player, session)
         })
     }
 
@@ -223,7 +223,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         }
 
         Bukkit.getScheduler().runTask(plugin, Runnable {
-            if (openSellSessions[player.uniqueId] === session) refreshEstimate(session)
+            if (openSellSessions[player.uniqueId] === session) refreshEstimate(player, session)
         })
     }
 
@@ -264,7 +264,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             if (item.type == Material.AIR) continue
 
             if (plugin.sellPriceManager.isSellable(item)) {
-                totalEarned += plugin.sellPriceManager.getStackValue(item)
+                totalEarned += plugin.sellPriceManager.getStackValue(item, player)
                 soldCount += item.amount
                 breakdown[item.type] = (breakdown[item.type] ?: 0) + item.amount
             } else {
@@ -370,7 +370,8 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             return
         }
 
-        val price = plugin.serverShopManager.applyCropBonus(basePrice, material, player.uniqueId)
+        val price = plugin.serverShopManager.applyCropBonus(basePrice, material, player.uniqueId) *
+            plugin.rankManager.getSellMultiplier(player)
 
         var count = 0
         var totalEarned = 0.0
@@ -412,7 +413,8 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
 
         val material = handItem.type
         val basePrice = plugin.sellPriceManager.getPrice(material) ?: return
-        val price = plugin.serverShopManager.applyCropBonus(basePrice, material, player.uniqueId)
+        val price = plugin.serverShopManager.applyCropBonus(basePrice, material, player.uniqueId) *
+            plugin.rankManager.getSellMultiplier(player)
         val totalAmount: Int
         val totalEarned: Double
 

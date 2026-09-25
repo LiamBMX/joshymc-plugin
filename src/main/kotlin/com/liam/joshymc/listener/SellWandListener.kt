@@ -73,6 +73,10 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
         val chest = block.state as? Chest ?: return
         val inventory = chest.inventory
 
+        // Rank sell-multiplier stacks multiplicatively with the wand's own multiplier —
+        // resolved once per use so it reflects the player's current rank immediately.
+        val rankMult = plugin.rankManager.getSellMultiplier(player)
+
         var totalEarned = 0.0
         val breakdown = mutableMapOf<Material, Int>()
 
@@ -87,7 +91,7 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
 
             val price = plugin.serverShopManager.applyCropBonus(basePrice, slot.type, player.uniqueId)
             val mutMult = plugin.mutationsManager.getMutationMultiplier(slot)
-            totalEarned += price * multiplier * mutMult * slot.amount
+            totalEarned += price * multiplier * mutMult * rankMult * slot.amount
             breakdown[slot.type] = (breakdown[slot.type] ?: 0) + slot.amount
             inventory.setItem(i, null)
         }
