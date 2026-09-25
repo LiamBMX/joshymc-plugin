@@ -15,7 +15,9 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.PlayerDeathEvent
+import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryCloseEvent
+import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
@@ -57,6 +59,9 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     )
 
     private val openEchests = mutableMapOf<UUID, String>() // player UUID -> team name
+    // Identity set of inventories opened via openTeamEchestReadOnly (issue #976)
+    // — any InventoryClickEvent/InventoryDragEvent against one of these is cancelled.
+    private val readOnlyEchestViews = mutableSetOf<Inventory>()
     private val teamChatEnabled = mutableSetOf<UUID>()
 
     // Bounty GUI session state — AsyncChatEvent runs off the main thread, so these
@@ -546,6 +551,55 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         openEchests[player.uniqueId] = teamName
     }
 
+    /**
+     * Admin inspection view (issue #976) — a read-only snapshot of a team's
+     * Ender Chest, for `/team admin echest <team>`. Unlike [openTeamEchest],
+     * this never deletes the DB rows and never registers in [openEchests], so
+     * closing it can't overwrite a team member's live echest contents and it
+     * can't dupe the stored items. If a member currently has the real echest
+     * open, its rows are already pulled out of the DB (see [openTeamEchest]'s
+     * anti-dupe comment) and this snapshot will show it as empty until they
+     * close it.
+     */
+    fun openTeamEchestReadOnly(viewer: Player, teamName: String, displayName: String) {
+        val label = if (displayName.length > 16) displayName.take(15) + "…" else displayName
+        val title = Component.text("$label Chest (RO)", NamedTextColor.AQUA)
+        val inv = Bukkit.createInventory(null, 54, title)
+
+        val items = plugin.databaseManager.query(
+            "SELECT slot, item FROM team_echests WHERE team_name = ?", teamName
+        ) { rs ->
+            val slot = rs.getInt("slot")
+            val base64 = rs.getString("item")
+            val bytes = Base64.getDecoder().decode(base64)
+            val itemStack = ItemStack.deserializeBytes(bytes)
+            slot to itemStack
+        }
+
+        for ((slot, itemStack) in items) {
+            if (slot in 0 until 54) {
+                inv.setItem(slot, itemStack)
+            }
+        }
+
+        readOnlyEchestViews.add(inv)
+        viewer.openInventory(inv)
+    }
+
+    @EventHandler
+    fun onReadOnlyEchestClick(event: InventoryClickEvent) {
+        if (event.view.topInventory in readOnlyEchestViews) {
+            event.isCancelled = true
+        }
+    }
+
+    @EventHandler
+    fun onReadOnlyEchestDrag(event: InventoryDragEvent) {
+        if (event.view.topInventory in readOnlyEchestViews) {
+            event.isCancelled = true
+        }
+    }
+
     fun saveTeamEchest(teamName: String, inventory: Inventory) {
         plugin.databaseManager.transaction {
             plugin.databaseManager.execute(
@@ -568,6 +622,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler
     fun onEchestClose(event: InventoryCloseEvent) {
+        if (readOnlyEchestViews.remove(event.inventory)) return
         val player = event.player as? Player ?: return
         val teamName = openEchests.remove(player.uniqueId) ?: return
         saveTeamEchest(teamName, event.inventory)
@@ -578,6 +633,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         val player = event.player
         teamChatEnabled.remove(player.uniqueId)
         clearBountySession(player.uniqueId)
+        if (readOnlyEchestViews.remove(player.openInventory.topInventory)) return
         val teamName = openEchests.remove(player.uniqueId) ?: return
         val inv = player.openInventory.topInventory
         saveTeamEchest(teamName, inv)

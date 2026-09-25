@@ -70,6 +70,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "open" -> handleOpen(sender)
             "close" -> handleClose(sender)
             "join" -> handleJoin(sender, args)
+            "admin" -> handleTeamAdmin(sender, args)
             else -> sendUsage(sender)
         }
         return true
@@ -695,6 +696,34 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         plugin.teamManager.openTeamEchest(player, teamName)
     }
 
+    private fun handleTeamAdmin(player: Player, args: Array<out String>) {
+        if (!player.hasPermission("joshymc.team.admin.echest") && !player.isOp) {
+            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (args.size < 3 || args[1].lowercase() != "echest") {
+            plugin.commsManager.send(player, Component.text("Usage: /team admin echest <team>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        val teamName = args[2].lowercase()
+        val team = plugin.teamManager.getTeam(teamName)
+        if (team == null) {
+            plugin.commsManager.send(player, Component.text("Team '$teamName' not found.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        plugin.commsManager.send(
+            player,
+            Component.text("Viewing ", NamedTextColor.GRAY)
+                .append(Component.text(team.displayName, NamedTextColor.AQUA))
+                .append(Component.text("'s Ender Chest (read-only).", NamedTextColor.GRAY)),
+            CommunicationsManager.Category.DEFAULT
+        )
+        plugin.teamManager.openTeamEchestReadOnly(player, team.name, team.displayName)
+    }
+
     private fun handleSetHome(player: Player) {
         val teamName = plugin.teamManager.getPlayerTeam(player.uniqueId)
         if (teamName == null) {
@@ -965,9 +994,12 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return emptyList()
         }
 
+        val hasEchestAdmin = sender.hasPermission("joshymc.team.admin.echest") || sender.isOp
+
         if (args.size == 1) {
             val base = listOf("create", "invite", "accept", "kick", "leave", "promote", "demote", "transfer", "disband", "info", "list", "top", "chat", "deposit", "withdraw", "balance", "echest", "sethome", "home", "rename", "pvp", "open", "close", "join")
-            val all = if (isAdmin) base + "delete" else base
+            var all = if (isAdmin) base + "delete" else base
+            if (hasEchestAdmin) all = all + "admin"
             return all.filter { it.startsWith(args[0], ignoreCase = true) }
         }
 
@@ -987,6 +1019,10 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     }.filter { it.startsWith(args[1], ignoreCase = true) && !it.equals(sender.name, ignoreCase = true) }
                 }
                 "info", "delete" -> plugin.teamManager.getAllTeams().map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+                "admin" -> {
+                    if (!hasEchestAdmin) return emptyList()
+                    listOf("echest").filter { it.startsWith(args[1], ignoreCase = true) }
+                }
                 "join" -> plugin.teamManager.getAllTeams().filter { plugin.teamManager.isTeamOpen(it.name) }.map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
                 "chat", "pvp" -> listOf("on", "off").filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
@@ -995,6 +1031,11 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         if (args.size == 3 && args[0].lowercase() == "delete") {
             return listOf("confirm").filter { it.startsWith(args[2], ignoreCase = true) }
+        }
+
+        if (args.size == 3 && args[0].lowercase() == "admin" && args[1].lowercase() == "echest") {
+            if (!hasEchestAdmin) return emptyList()
+            return plugin.teamManager.getAllTeams().map { it.name }.filter { it.startsWith(args[2], ignoreCase = true) }
         }
 
         return emptyList()
