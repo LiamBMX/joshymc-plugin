@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 import random
 
-from art.kit import (arc, bar, box, canvas, display, display_for_state, fill, grain, mirror, mix, model, place,
+from art.kit import (arc, bar, bounds, box, canvas, display, display_for_state, fill, grain, mirror, mix, model, place,
                      prism, ramp, rgba, save, shade, speckle, turn)
 
 ID = "hearthkeeper"
@@ -955,7 +955,13 @@ def models() -> dict:
     main = display("shield", parts, grip=GRIP, gui_rotation=GUI_ROTATION, gui_span=15.5)
     blocking = display_for_state("shield", "blocking", parts, grip=GRIP)
     blocking["gui"] = main["gui"]
+    # First person is smaller than the default so the shield sits in the corner of the
+    # screen (it is usually held in the offhand); third person keeps the full size.
+    lo, hi = bounds(parts)
+    centre = tuple((lo[i] + hi[i]) / 2 for i in range(3))
+    main["firstperson_righthand"] = place({"y": (0, 1, 0), "z": (-0.35, 0, -1)}, centre, (0.6, -0.56, -1.0),
+                                          0.55, pose=None)
     # keep the crosshair clear while blocking in first person
-    blocking["firstperson_righthand"] = place({"y": (0, 1, 0), "z": (0, 0, 1)}, (8, 8, 8), (0.5, -0.6, -0.82),
-                                              0.68, pose=None)
+    blocking["firstperson_righthand"] = place({"y": (0, 1, 0), "z": (0, 0, 1)}, (8, 8, 8), (0.46, -0.58, -0.86),
+                                              0.5, pose=None)
     return {"main": model(parts, main), "blocking": model(parts, blocking)}

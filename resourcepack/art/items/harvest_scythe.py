@@ -763,12 +763,12 @@ def sheaf() -> list[dict]:
 def models() -> dict:
     parts = snath() + head() + blade() + sheaf()
     disp = display(KIND, parts, grip=GRIP)
-    # Third person: carried upright like a reaper's scythe, the snath leaning out past the
-    # head and the crescent sweeping outward over the shoulder.
-    disp["thirdperson_righthand"] = place({"y": (-0.6, 1, 0.25), "x": (1, 0.6, -0.1)}, GRIP, "fist", 0.85)
-    # First person: rising from the lower right, blade curling out to the right, clear of
-    # the crosshair, the wheat sheaf toward the middle.
-    disp["firstperson_righthand"] = place({"y": (-0.05, 1, -0.3), "x": (-1, 0, 0.35)}, GRIP,
-                                          (0.66, -0.78, -1.05), 0.55, pose=None)
+    # Third person: carried upright like a reaper's scythe, the crescent sweeping forward
+    # over the head (the blade points along model -X).
+    disp["thirdperson_righthand"] = place({"y": (0, 1, 0.15), "x": (0, 0, -1)}, GRIP, "fist", 0.85)
+    # First person: rising from the lower right, the crescent sweeping forward and left so
+    # its curve shows, with the tip staying right of the crosshair.
+    disp["firstperson_righthand"] = place({"y": (-0.1, 1, -0.2), "x": (0.5, 0, 0.85)}, GRIP,
+                                          (0.72, -0.8, -1.0), 0.5, pose=None)
     icon = snath(compact=True) + head() + blade(icon=True) + sheaf()
     return {"main": model(parts, disp), "gui": model(icon, display(KIND, icon, grip=GRIP))}
