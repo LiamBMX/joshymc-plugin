@@ -303,8 +303,6 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var staffChatManager: com.liam.joshymc.manager.StaffChatManager
         private set
-    lateinit var traineeModeManager: com.liam.joshymc.manager.TraineeModeManager
-        private set
 
     override fun onEnable() {
         instance = this
@@ -406,7 +404,6 @@ class Joshymc : JavaPlugin() {
         modModeManager = com.liam.joshymc.manager.ModModeManager(this)
         hideStaffManager = com.liam.joshymc.manager.HideStaffManager(this)
         staffChatManager = com.liam.joshymc.manager.StaffChatManager(this)
-        traineeModeManager = com.liam.joshymc.manager.TraineeModeManager(this)
         endManager = EndManager(this)
         chatManager = ChatManager(this)
         arenaManager = ArenaManager(this)
@@ -504,7 +501,6 @@ class Joshymc : JavaPlugin() {
         adminManager.start()
         modModeManager.start()
         hideStaffManager.start()
-        traineeModeManager.start()
         endManager.start()
         chatManager.start()
         // Start spawn world BEFORE arenas so the world exists when arena ticks begin
@@ -585,7 +581,6 @@ class Joshymc : JavaPlugin() {
         mutationsManager.stop()
         modModeManager.stop()
         hideStaffManager.stop()
-        traineeModeManager.stop()
         eventManager.shutdown()
         resourcePackManager.shutdown()
         discordManager.shutdown()

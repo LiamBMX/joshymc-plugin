@@ -283,7 +283,7 @@ class KitManager(private val plugin: Joshymc) {
                     )
                 }
             }
-            val staffMode = plugin.modModeManager.isModMode(player) || plugin.traineeModeManager.isTraineeMode(player)
+            val staffMode = plugin.modModeManager.isModMode(player)
             if (!staffMode && slot < player.inventory.size && player.inventory.getItem(slot) == null) {
                 player.inventory.setItem(slot, clone)
             } else {

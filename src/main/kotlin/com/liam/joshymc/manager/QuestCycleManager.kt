@@ -903,8 +903,8 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
 
     /**
      * Delivers any undelivered weekly crate key rewards for [player] via the authoritative
-     * staff-mode-aware item delivery path ([depositItemSafely] — routes into the ModMode/
-     * TraineeMode backup inventory while active, live inventory otherwise). A key that
+     * staff-mode-aware item delivery path ([depositItemSafely] — routes into the ModMode
+     * backup inventory while active, live inventory otherwise). A key that
      * doesn't fit anywhere stays `delivered = 0` and is retried here again on next join or
      * quest completion — it is never dropped on the ground or silently lost.
      */

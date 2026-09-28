@@ -363,10 +363,9 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             return
         }
         // Route into the saved backup inventory (not the temp staff loadout) while
-        // Moderator/Trainee Mode is active, same as every other reward delivery.
+        // Moderator Mode is active, same as every other reward delivery.
         val leftover = when {
             plugin.modModeManager.isModMode(buyer) -> items.mapNotNull { plugin.modModeManager.addItemToBackup(buyerUuid, it) }
-            plugin.traineeModeManager.isTraineeMode(buyer) -> items.mapNotNull { plugin.traineeModeManager.addItemToBackup(buyerUuid, it) }
             else -> buyer.inventory.addItem(*items.toTypedArray()).values.toList()
         }
         if (leftover.isNotEmpty()) {

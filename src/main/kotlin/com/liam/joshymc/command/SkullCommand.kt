@@ -72,7 +72,6 @@ class SkullCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
         val overflow = when {
             plugin.modModeManager.isModMode(player) -> plugin.modModeManager.addItemToBackup(player.uniqueId, head)
-            plugin.traineeModeManager.isTraineeMode(player) -> plugin.traineeModeManager.addItemToBackup(player.uniqueId, head)
             else -> player.inventory.addItem(head).values.firstOrNull()
         }
         if (overflow != null) {

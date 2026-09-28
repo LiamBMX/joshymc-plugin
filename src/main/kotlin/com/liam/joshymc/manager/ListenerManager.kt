@@ -12,7 +12,7 @@ import com.liam.joshymc.listener.GSitListener
 import com.liam.joshymc.listener.LinkGuiListener
 import com.liam.joshymc.listener.MinecraftChatListener
 import com.liam.joshymc.listener.ModModeListener
-import com.liam.joshymc.listener.TraineeModeListener
+import com.liam.joshymc.listener.TraineeModeBackupRestoreListener
 import com.liam.joshymc.listener.NightVisionListener
 import com.liam.joshymc.listener.RecipeBlockerListener
 import com.liam.joshymc.listener.AFKListener
@@ -206,8 +206,12 @@ class ListenerManager(private val plugin: Joshymc) {
         // Moderator Mode
         pm.registerEvents(ModModeListener(plugin), plugin)
 
-        // Trainee Mode
-        pm.registerEvents(TraineeModeListener(plugin), plugin)
+        // Trainee Mode was removed (issue #987) — this only restores any leftover
+        // legacy backup inventory, see TraineeModeBackupRestoreListener.
+        TraineeModeBackupRestoreListener(plugin).also {
+            it.start()
+            pm.registerEvents(it, plugin)
+        }
 
         // Mob stacking
         pm.registerEvents(plugin.mobStackManager, plugin)

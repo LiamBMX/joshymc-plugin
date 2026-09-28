@@ -920,14 +920,13 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     /**
      * Delivers [item] into the inventory the player will actually keep — their saved
-     * Moderator/Trainee Mode backup while one of those is active, their live inventory
-     * otherwise. Returns a single-element list with whatever didn't fit (for the caller's
-     * existing "drop overflow at feet" pass), or empty if it all fit.
+     * Moderator Mode backup while it's active, their live inventory otherwise. Returns
+     * a single-element list with whatever didn't fit (for the caller's existing "drop
+     * overflow at feet" pass), or empty if it all fit.
      */
     private fun deliverOne(player: Player, item: ItemStack): List<ItemStack> {
         val leftover = when {
             plugin.modModeManager.isModMode(player) -> plugin.modModeManager.addItemToBackup(player.uniqueId, item)
-            plugin.traineeModeManager.isTraineeMode(player) -> plugin.traineeModeManager.addItemToBackup(player.uniqueId, item)
             else -> player.inventory.addItem(item).values.firstOrNull()
         }
         return if (leftover != null) listOf(leftover) else emptyList()
