@@ -139,10 +139,39 @@ class ChatTagVoucherManager(private val plugin: Joshymc) {
                 return
             }
 
-            // Atomically reserve this voucher's unique id first, same anti-dupe idiom as
-            // CreditVoucherManager/RankVoucherManager — stops a duplicated physical item
-            // (same PDC uuid copied via an external exploit) from ever redeeming twice.
-            if (!reserveVoucherId(voucherUuid, player, tag.id)) {
+            // Reserve this voucher's unique id and unlock the tag as a single atomic
+            // DB transaction, and only remove the physical item once both writes are
+            // confirmed — this used to be reserve -> takeOne() -> unlock (with unlockTag()'s
+            // Boolean return value discarded), so a failed unlock left the reservation
+            // committed forever with the tag never granted and the voucher item already
+            // gone. On the very next attempt with a fresh, never-before-redeemed voucher
+            // that stale reservation was long gone too, but a retry of the SAME item
+            // (e.g. the player still holding it because takeOne() never even ran) hit
+            // reserveVoucherId() for a uuid that was already reserved and tripped the
+            // CRITICAL "already redeemed" anti-dupe alert despite no real duplication.
+            // Doing both writes in one transaction means any failure between them rolls
+            // the reservation back automatically instead of leaving it stranded.
+            var unlocked = false
+            var duplicate = false
+            try {
+                plugin.databaseManager.transaction {
+                    if (!reserveVoucherId(voucherUuid, player, tag.id)) {
+                        duplicate = true
+                        return@transaction
+                    }
+                    unlocked = plugin.chatTagManager.unlockTag(player.uniqueId, tag.id)
+                }
+            } catch (ex: Exception) {
+                plugin.logger.warning("[ChatTagVouchers] Redemption failed for ${player.name} (${tag.id}): ${ex.message}")
+                plugin.commsManager.send(
+                    player,
+                    Component.text("Redemption failed, try again.", NamedTextColor.RED),
+                    CommunicationsManager.Category.ECONOMY
+                )
+                return
+            }
+
+            if (duplicate) {
                 plugin.antiDupeManager.record(
                     player,
                     "Duplicate Voucher ID Redemption",
@@ -159,17 +188,21 @@ class ChatTagVoucherManager(private val plugin: Joshymc) {
                 return
             }
 
-            takeOne()
-
-            try {
-                plugin.chatTagManager.unlockTag(player.uniqueId, tag.id)
-            } catch (ex: Exception) {
-                plugin.logger.warning("[ChatTagVouchers] Unlock failed for ${player.name} (${tag.id}): ${ex.message}")
-                give(player, tag.id, 1)
-                releaseVoucherId(voucherUuid)
-                plugin.commsManager.send(player, Component.text("Redemption failed, your voucher has been returned.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            if (!unlocked) {
+                // The tag was granted through some other path between the ownership
+                // check above and now — leave this voucher untouched rather than
+                // consuming it for a tag the player already has.
+                plugin.commsManager.send(
+                    player,
+                    Component.text("You already own the ", NamedTextColor.YELLOW)
+                        .append(tagDisplay)
+                        .append(Component.text(" Chat Tag.", NamedTextColor.YELLOW)),
+                    CommunicationsManager.Category.ECONOMY
+                )
                 return
             }
+
+            takeOne()
 
             plugin.commsManager.send(
                 player,
@@ -189,10 +222,6 @@ class ChatTagVoucherManager(private val plugin: Joshymc) {
             voucherUuid, player.uniqueId.toString(), player.name, tagId, System.currentTimeMillis()
         )
         return rows > 0
-    }
-
-    private fun releaseVoucherId(voucherUuid: String) {
-        plugin.databaseManager.execute("DELETE FROM chattag_voucher_redemptions WHERE voucher_uuid = ?", voucherUuid)
     }
 
     companion object {
