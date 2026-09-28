@@ -1226,10 +1226,7 @@ permissions:
     description: Report players
     default: true
   joshymc.reports.view:
-    description: View reports
-    default: op
-  joshymc.reports.notify:
-    description: Receive report notifications
+    description: View reports and receive report notifications
     default: op
   joshymc.playtime:
     description: Check playtime

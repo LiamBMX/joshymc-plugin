@@ -106,7 +106,7 @@ class ReportCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             .append(Component.text(reason, NamedTextColor.YELLOW).decoration(TextDecoration.BOLD, false))
 
         for (online in Bukkit.getOnlinePlayers()) {
-            if (online.hasPermission("joshymc.reports.notify")) {
+            if (online.hasPermission("joshymc.reports.view")) {
                 online.sendMessage(staffMessage)
             }
         }
