@@ -16,6 +16,7 @@ class CombatManager(private val plugin: Joshymc) {
 
     companion object {
         const val PVP_SETTING_KEY = "pvp"
+        const val PVP_WORLD_NAME = "pvp"
         const val NPC_TAG = "joshymc_combat_npc"
         const val NPC_DURATION_TICKS = 60 * 20L // 60 seconds
     }
@@ -162,6 +163,9 @@ class CombatManager(private val plugin: Joshymc) {
     }
 
     fun canPvP(player: Player): Boolean {
+        // The "pvp" world forces PvP on for everyone, overriding personal
+        // preference — players can't opt out of it there.
+        if (player.world.name == PVP_WORLD_NAME) return true
         return plugin.settingsManager.getSetting(player, PVP_SETTING_KEY)
     }
 
