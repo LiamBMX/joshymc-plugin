@@ -66,6 +66,12 @@ class PvpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
+        // PvP is forced on in the "pvp" world — the toggle can't be used there.
+        if ((sub == "on" || sub == "off" || sub == null) && sender.world.name == CombatManager.PVP_WORLD_NAME) {
+            plugin.commsManager.send(sender, Component.text("You cannot toggle PvP in this world!", NamedTextColor.RED), CommunicationsManager.Category.COMBAT)
+            return true
+        }
+
         val newValue = when (sub) {
             "on" -> true
             "off" -> false
