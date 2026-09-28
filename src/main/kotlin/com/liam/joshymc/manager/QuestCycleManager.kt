@@ -6,6 +6,7 @@ import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.util.depositItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import net.kyori.adventure.title.Title
 import org.bukkit.Bukkit
@@ -97,19 +98,24 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
             "COCOA", "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES", "WEEPING_VINES"
         )
 
-        /** Daily Quest completion reward: exactly one of these keys, weighted. */
+        /**
+         * Daily Quest completion reward: exactly one real crate key, weighted. These are
+         * CrateManager crate type ids (see crates.yml / `/crate list`), delivered via
+         * [CrateManager.createKeyStack] — NOT ItemManager custom item ids. A custom item
+         * built from RetexturedKeys.kt looks like a key but carries no crate-key PDC tag,
+         * so it silently fails to open any crate (issue #986).
+         */
         private val DAILY_COMPLETION_KEY_WEIGHTS = listOf(
-            "harvest_key" to 70,
-            "stockpile_key" to 20,
-            "homestead_key" to 10
+            "harvest" to 70,
+            "stockpile" to 20,
+            "homestead" to 10
         )
 
-        // Weekly Quest completion reward (issue #969): exactly one of these custom items
-        // (registered in ItemManager, see item/impl/RetexturedKeys.kt), weighted by odds.
+        /** Weekly Quest completion reward (issue #969): exactly one real crate key, weighted. */
         private val WEEKLY_KEY_WEIGHTS = listOf(
-            "homestead_key" to 70,
-            "campfire_key" to 25,
-            "cabin_key" to 5
+            "homestead" to 70,
+            "campfire" to 25,
+            "cabin" to 5
         )
     }
 
@@ -811,9 +817,9 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
      * never dropped on the ground or silently lost.
      */
     private fun deliverDailyCompletionReward(player: Player, uuid: String, cycleId: String, keyId: String) {
-        val item = plugin.itemManager.getItem(keyId)?.createItemStack()
+        val item = plugin.crateManager.createKeyStack(keyId)
         if (item == null) {
-            plugin.logger.warning("[QuestCycle] Daily completion reward key '$keyId' is not a registered custom item — reward left pending.")
+            plugin.logger.warning("[QuestCycle] Daily completion reward key '$keyId' is not a registered crate type — reward left pending.")
             return
         }
         val leftover = plugin.depositItemSafely(player, item)
@@ -917,12 +923,13 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         if (pending.isEmpty()) return
 
         for ((rewardCycleId, keyId) in pending) {
-            val customItem = plugin.itemManager.getItem(keyId)
-            if (customItem == null) {
-                plugin.logger.warning("[QuestCycle] Unknown weekly key reward id '$keyId' for $uuid — skipping delivery.")
+            val crate = plugin.crateManager.getCrate(keyId)
+            val item = plugin.crateManager.createKeyStack(keyId)
+            if (crate == null || item == null) {
+                plugin.logger.warning("[QuestCycle] Unknown weekly key reward crate '$keyId' for $uuid — skipping delivery.")
                 continue
             }
-            val leftover = plugin.depositItemSafely(player, customItem.createItemStack(1))
+            val leftover = plugin.depositItemSafely(player, item)
             if (leftover != null) continue // still doesn't fit — stays pending for the next retry
 
             plugin.databaseManager.execute(
@@ -933,7 +940,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
                 player,
                 Component.text("★ Weekly Quest Reward! ", NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD)
                     .append(Component.text("You received a ", NamedTextColor.YELLOW))
-                    .append(customItem.displayName)
+                    .append(Component.text(crate.keyName, TextColor.color(0xFFAA00)))
                     .append(Component.text("!", NamedTextColor.YELLOW))
             )
             player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.3f)
