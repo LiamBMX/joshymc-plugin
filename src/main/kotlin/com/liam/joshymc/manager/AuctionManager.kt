@@ -259,10 +259,9 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         val player = Bukkit.getPlayer(uuid)
         val remaining = if (player != null) {
             // Route into the saved backup inventory (not the temp staff loadout) while
-            // Moderator/Trainee Mode is active, same as every other reward delivery.
+            // Moderator Mode is active, same as every other reward delivery.
             val leftover = when {
                 plugin.modModeManager.isModMode(player) -> plugin.modModeManager.addItemToBackup(uuid, item)
-                plugin.traineeModeManager.isTraineeMode(player) -> plugin.traineeModeManager.addItemToBackup(uuid, item)
                 else -> player.inventory.addItem(item).values.firstOrNull()
             }
             leftover ?: return

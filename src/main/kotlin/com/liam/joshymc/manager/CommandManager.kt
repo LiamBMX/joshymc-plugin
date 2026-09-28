@@ -286,12 +286,6 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
-        plugin.getCommand("traineemode")?.let {
-            val cmd = com.liam.joshymc.command.TraineeModeCommand(plugin)
-            it.setExecutor(cmd)
-            it.tabCompleter = cmd
-        }
-
         plugin.getCommand("holo")?.let {
             val cmd = HologramCommand(plugin)
             it.setExecutor(cmd)
@@ -782,7 +776,6 @@ class CommandManager(private val plugin: Joshymc) {
         "modmode" to "joshymc.modmode",
         "hidestaff" to "joshymc.hidestaff",
         "staffchat" to "joshymc.staffchat",
-        "traineemode" to "joshymc.traineemode",
         "holo" to "joshymc.holo",
         "npc" to "joshymc.npc",
         "crateeditor" to "joshymc.crateeditor",

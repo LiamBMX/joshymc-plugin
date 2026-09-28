@@ -415,15 +415,13 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         // pinpointing where a live delivery might diverge from the Gift path. Remove once
         // the reported live-server behavior is confirmed fixed or root-caused.
         val modMode = plugin.modModeManager.isModMode(player)
-        val traineeMode = plugin.traineeModeManager.isTraineeMode(player)
         val branch = when {
             modMode -> "MODMODE_BACKUP"
-            traineeMode -> "TRAINEEMODE_BACKUP"
             else -> "LIVE_INVENTORY"
         }
         plugin.logger.info(
             "[Giveaway][DEBUG] deliverPending start: player=${player.name} uuid=${player.uniqueId} " +
-                "pendingRows=${rows.size} modMode=$modMode traineeMode=$traineeMode branch=$branch"
+                "pendingRows=${rows.size} modMode=$modMode branch=$branch"
         )
 
         var delivered = 0
@@ -431,7 +429,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
             val item = deserializeItem(itemBase64)
             // Same authoritative staff-mode-aware routing GiftManager uses for every
             // delivery — routes into the saved backup inventory (not the temp staff
-            // loadout) while Moderator/Trainee Mode is active.
+            // loadout) while Moderator Mode is active.
             val leftover = plugin.depositItemSafely(player, item)
             plugin.logger.info(
                 "[Giveaway][DEBUG] row=$rowId item=${item.type} amount=${item.amount} branch=$branch " +
