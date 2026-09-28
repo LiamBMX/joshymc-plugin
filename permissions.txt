@@ -783,11 +783,8 @@ Allows reporting a player with `/report <player> <reason>`.
 Default: true
 
 joshymc.reports.view
-Allows viewing reports with `/reports [player]`.
-Default: OP
-
-joshymc.reports.notify
-Allows receiving report notifications.
+Allows viewing reports with `/reports [player]` and receiving live report
+notifications when a player submits `/report`.
 Default: OP
 
 
