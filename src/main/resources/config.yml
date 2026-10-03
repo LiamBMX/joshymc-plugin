@@ -408,28 +408,26 @@ modmode:
   tools:
     punish:
       material: MACE
-      name: "&cPunish"
+      name: "&cPunish Player"
     rtp:
       material: ENDER_PEARL
-      name: "&dRandom TP"
+      name: "&dRandom Teleport"
     freeze:
       material: PACKED_ICE
-      name: "&bFreeze / Unfreeze"
-    vanish:
-      material: SLIME_BALL
-      name: "&aVanish"
+      name: "&bFreeze Player"
+    # Vanish is always GREEN_DYE (vanished) / GRAY_DYE (visible); its name reflects the state.
     invsee:
       material: ENDER_CHEST
-      name: "&5Invsee"
+      name: "&5Player Inventory"
     spectator:
       material: ENDER_EYE
-      name: "&3Spectator"
+      name: "&3Spectate"
     ecsee:
       material: CHEST
-      name: "&6ECSee"
+      name: "&6Ender Chest See"
     vault:
       material: BARREL
-      name: "&2Player Vault"
+      name: "&2Player Vault See"
 
 # RTP — Random Teleport
 rtp:

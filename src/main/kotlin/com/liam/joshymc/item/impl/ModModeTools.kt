@@ -57,7 +57,7 @@ fun spectatorLore(active: Boolean): List<Component> {
 class ModModePunish(plugin: Joshymc) : CustomItem() {
     override val id = "modmode_punish"
     override val material = toolMaterial(plugin, "punish", Material.MACE)
-    override val displayName = toolName(plugin, "punish", "Punish", TextColor.color(0xFF5555))
+    override val displayName = toolName(plugin, "punish", "Punish Player",TextColor.color(0xFF5555))
     override val lore = LoreBuilder.build(
         type = "Moderator Mode Tool",
         description = listOf("Right-click a player to open the", "punishment panel for that player."),
@@ -68,7 +68,7 @@ class ModModePunish(plugin: Joshymc) : CustomItem() {
 class ModModeRandomTp(plugin: Joshymc) : CustomItem() {
     override val id = "modmode_rtp"
     override val material = toolMaterial(plugin, "rtp", Material.ENDER_PEARL)
-    override val displayName = toolName(plugin, "rtp", "Random TP", TextColor.color(0xDD55FF))
+    override val displayName = toolName(plugin, "rtp", "Random Teleport",TextColor.color(0xDD55FF))
     override val lore = LoreBuilder.build(
         type = "Moderator Mode Tool",
         description = listOf("Right-click to teleport to a", "random eligible online player."),
@@ -79,7 +79,7 @@ class ModModeRandomTp(plugin: Joshymc) : CustomItem() {
 class ModModeFreeze(plugin: Joshymc) : CustomItem() {
     override val id = "modmode_freeze"
     override val material = toolMaterial(plugin, "freeze", Material.PACKED_ICE)
-    override val displayName = toolName(plugin, "freeze", "Freeze / Unfreeze", TextColor.color(0x55FFFF))
+    override val displayName = toolName(plugin, "freeze", "Freeze Player",TextColor.color(0x55FFFF))
     override val lore = LoreBuilder.build(
         type = "Moderator Mode Tool",
         description = listOf("Right-click a player to toggle", "their frozen state."),
@@ -89,7 +89,8 @@ class ModModeFreeze(plugin: Joshymc) : CustomItem() {
 
 class ModModeVanish(plugin: Joshymc) : CustomItem() {
     override val id = "modmode_vanish"
-    override val material = toolMaterial(plugin, "vanish", Material.SLIME_BALL)
+    // Real material (green/gray dye) is picked per player state in ModModeManager.
+    override val material = Material.GRAY_DYE
     override val displayName = toolName(plugin, "vanish", "Vanish", TextColor.color(0x55FF55))
     override val lore = vanishLore(false)
 }
@@ -97,7 +98,7 @@ class ModModeVanish(plugin: Joshymc) : CustomItem() {
 class ModModeInvsee(plugin: Joshymc) : CustomItem() {
     override val id = "modmode_invsee"
     override val material = toolMaterial(plugin, "invsee", Material.ENDER_CHEST)
-    override val displayName = toolName(plugin, "invsee", "Invsee", TextColor.color(0xAA55FF))
+    override val displayName = toolName(plugin, "invsee", "Player Inventory",TextColor.color(0xAA55FF))
     override val lore = LoreBuilder.build(
         type = "Moderator Mode Tool",
         description = listOf("Right-click a player to inspect", "their inventory."),
@@ -108,14 +109,14 @@ class ModModeInvsee(plugin: Joshymc) : CustomItem() {
 class ModModeSpectator(plugin: Joshymc) : CustomItem() {
     override val id = "modmode_spectator"
     override val material = toolMaterial(plugin, "spectator", Material.ENDER_EYE)
-    override val displayName = toolName(plugin, "spectator", "Spectator", TextColor.color(0x55AAFF))
+    override val displayName = toolName(plugin, "spectator", "Spectate",TextColor.color(0x55AAFF))
     override val lore = spectatorLore(false)
 }
 
 class ModModeEcsee(plugin: Joshymc) : CustomItem() {
     override val id = "modmode_ecsee"
     override val material = toolMaterial(plugin, "ecsee", Material.CHEST)
-    override val displayName = toolName(plugin, "ecsee", "ECSee", TextColor.color(0xFFAA55))
+    override val displayName = toolName(plugin, "ecsee", "Ender Chest See",TextColor.color(0xFFAA55))
     override val lore = LoreBuilder.build(
         type = "Moderator Mode Tool",
         description = listOf("Right-click a player to inspect", "their Ender Chest."),
@@ -126,7 +127,7 @@ class ModModeEcsee(plugin: Joshymc) : CustomItem() {
 class ModModeVault(plugin: Joshymc) : CustomItem() {
     override val id = "modmode_vault"
     override val material = toolMaterial(plugin, "vault", Material.BARREL)
-    override val displayName = toolName(plugin, "vault", "Player Vault", TextColor.color(0x55FFAA))
+    override val displayName = toolName(plugin, "vault", "Player Vault See",TextColor.color(0x55FFAA))
     override val lore = LoreBuilder.build(
         type = "Moderator Mode Tool",
         description = listOf("Right-click a player to inspect", "their player vault(s)."),
