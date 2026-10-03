@@ -1,0 +1,55 @@
+# ============================================================
+# Event Quests — /eventquests (/eq)
+# ============================================================
+# Each event is a chain of 2-10 quests that must be completed IN ORDER.
+# Finishing the whole chain unlocks a one-time claim of the final reward.
+# Reloading (/eq admin reload) never touches player progress.
+#
+# Event fields:
+#   name / description / enabled
+#   display-item    - icon in the main GUI (defaults to the reward's material)
+#   start / end     - optional dates, "yyyy-MM-dd" or "yyyy-MM-dd HH:mm" (America/New_York)
+#   claim-after-end - allow claiming a finished chain after the event ends (default false)
+#   reward:
+#     source: custom-item   -> item-id is a JoshyMC custom item id (full metadata preserved)
+#     source: crate-key     -> item-id is a crate type from crates.yml
+#     amount: 1             -> informational; exactly one reward is ever delivered
+#   quests: numbered 1..N (no gaps), each with:
+#     type    - BREAK_BLOCK, MINE_ORE, PLACE_BLOCK, HARVEST_CROP, KILL_MOB, KILL_PLAYER,
+#               CATCH_FISH, CRAFT_ITEM, TRAVEL, SELL_ITEM, PLAY_TIME
+#     material / entity - optional filter (omit or ANY for everything)
+#     amount  - required, > 0 (TRAVEL = blocks, PLAY_TIME = minutes)
+#     name / description - optional display overrides
+event-quests:
+  enabled: true
+
+  events:
+    forgotten-blade:
+      name: "The Forgotten Blade"
+      description: "Complete five challenges."
+      enabled: true
+      display-item: DIAMOND_SWORD
+      reward:
+        source: custom-item
+        item-id: autumns_edge
+        amount: 1
+      quests:
+        1:
+          type: BREAK_BLOCK
+          material: STONE
+          amount: 250
+        2:
+          type: KILL_MOB
+          entity: ZOMBIE
+          amount: 50
+        3:
+          type: CATCH_FISH
+          amount: 25
+        4:
+          type: BREAK_BLOCK
+          material: OAK_LOG
+          amount: 100
+        5:
+          type: KILL_MOB
+          entity: SKELETON
+          amount: 10

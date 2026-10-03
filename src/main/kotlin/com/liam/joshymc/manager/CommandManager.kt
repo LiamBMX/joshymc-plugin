@@ -65,6 +65,7 @@ import com.liam.joshymc.command.MarketCommand
 import com.liam.joshymc.command.DailyCommand
 import com.liam.joshymc.command.DiscordCommand
 import com.liam.joshymc.command.QuestCycleCommand
+import com.liam.joshymc.command.EventQuestCommand
 import com.liam.joshymc.command.TagCommand
 import com.liam.joshymc.command.TalismanCommand
 import com.liam.joshymc.command.TimezoneCommand
@@ -474,6 +475,7 @@ class CommandManager(private val plugin: Joshymc) {
         // plain plugin.yml aliases (see aliases: list) that route into this same executor.
         plugin.getCommand("quests")?.let { val c = QuestCycleCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("daily")?.setExecutor(DailyCommand(plugin))
+        plugin.getCommand("eventquests")?.let { val c = EventQuestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Cosmetics ─────────────────────────────────
         plugin.getCommand("killeffect")?.let { val c = KillEffectCommand(plugin); it.setExecutor(c); it.tabCompleter = c }

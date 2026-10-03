@@ -29,6 +29,7 @@ import com.liam.joshymc.manager.ScoreboardManager
 import com.liam.joshymc.manager.ChatTagManager
 import com.liam.joshymc.manager.MarketManager
 import com.liam.joshymc.manager.QuestCycleManager
+import com.liam.joshymc.manager.EventQuestManager
 import com.liam.joshymc.manager.FishingManager
 import com.liam.joshymc.manager.KillEffectManager
 import com.liam.joshymc.manager.SpawnWorldManager
@@ -259,6 +260,8 @@ class Joshymc : JavaPlugin() {
     lateinit var sellCommand: com.liam.joshymc.command.SellCommand
     lateinit var questCycleManager: QuestCycleManager
         private set
+    lateinit var eventQuestManager: EventQuestManager
+        private set
     lateinit var talismanManager: TalismanManager
         private set
     lateinit var fishingManager: FishingManager
@@ -397,6 +400,8 @@ class Joshymc : JavaPlugin() {
         creditsManager = com.liam.joshymc.manager.CreditsManager(this)
         questCycleManager = QuestCycleManager(this)
         questCycleManager.createTables()
+        eventQuestManager = EventQuestManager(this)
+        eventQuestManager.createTables()
         talismanManager = TalismanManager(this)
         fishingManager = FishingManager(this)
         killEffectManager = KillEffectManager(this)
@@ -495,6 +500,7 @@ class Joshymc : JavaPlugin() {
 
         resurgeManager.start()
         if (isFeatureEnabled("quests")) questCycleManager.start()
+        if (isFeatureEnabled("event-quests")) eventQuestManager.start()
         if (isFeatureEnabled("talismans")) talismanManager.start()
         if (isFeatureEnabled("custom-fishing")) fishingManager.start()
         if (isFeatureEnabled("kill-effects")) killEffectManager.start()
@@ -573,6 +579,7 @@ class Joshymc : JavaPlugin() {
         loginStreakManager.stop()
         creditsManager.stop()
         questCycleManager.stop()
+        eventQuestManager.stop()
         resourceWorldManager.stop()
         buildPvpManager.stop()
         combatManager.stop()
@@ -626,6 +633,7 @@ class Joshymc : JavaPlugin() {
         safe("orderManager.stop") { orderManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
         safe("questCycleManager.stop") { questCycleManager.stop() }
+        safe("eventQuestManager.stop") { eventQuestManager.stop() }
         safe("spawnerManager.stop") { spawnerManager.stop() }
         safe("kitManager.stop") { kitManager.stop() }
         safe("afkManager.stop") { afkManager.stop() }
@@ -661,6 +669,7 @@ class Joshymc : JavaPlugin() {
         safe("hologramManager.start") { hologramManager.start() }
         if (isFeatureEnabled("npcs")) safe("npcManager.start") { npcManager.start() }
         if (isFeatureEnabled("quests")) safe("questCycleManager.start") { questCycleManager.start() }
+        if (isFeatureEnabled("event-quests")) safe("eventQuestManager.start") { eventQuestManager.start() }
         safe("crateManager.start") { crateManager.start() }
         safe("auctionManager.start") { auctionManager.start() }
         if (isFeatureEnabled("giveaways")) safe("giveawayManager.start") { giveawayManager.start() }

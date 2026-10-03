@@ -226,6 +226,10 @@ commands:
     description: Open the Daily / Weekly / Quest Master quest hub
     usage: /quests
     aliases: [quest, q, questboard, questbook]
+  eventquests:
+    description: Open the Event Quests hub
+    usage: /eventquests [admin reload|progress <player> <event>|reset <player> <event>]
+    aliases: [eq]
   daily:
     description: Open the Daily / Weekly / Quest Master quest hub (alias for /quests)
     usage: /daily
@@ -921,6 +925,12 @@ permissions:
     default: true
   joshymc.quests.admin:
     description: Force resets, view rotations, and edit quest progress (also available from console)
+    default: op
+  joshymc.eventquests:
+    description: Open the Event Quests GUI (/eventquests, /eq)
+    default: true
+  joshymc.eventquests.admin:
+    description: Reload Event Quests and view or reset player progress
     default: op
   joshymc.daily:
     description: Use the daily quest system
