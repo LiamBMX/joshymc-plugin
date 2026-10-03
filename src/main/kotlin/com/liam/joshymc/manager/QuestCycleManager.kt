@@ -88,6 +88,9 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
 
     companion object {
         private const val PLACED_META = "joshymc_quest_placed"
+
+        /** Multiplier on the money reward of every Daily/Weekly quest (issue #1008). */
+        private const val MONEY_REWARD_MULTIPLIER = 1.5
         private val ORE_PRODUCTS = setOf("IRON_INGOT", "GOLD_INGOT", "COPPER_INGOT")
         private val LOG_FAMILIES = setOf(
             "OAK", "SPRUCE", "BIRCH", "JUNGLE", "ACACIA", "DARK_OAK", "MANGROVE",
@@ -234,8 +237,10 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         val target = (s.getString("target") ?: "ANY").uppercase()
         val amount = s.getInt("amount", -1)
         if (amount <= 0) return invalid(id, "amount must be positive")
-        val reward = s.getDouble("reward", -1.0)
-        if (reward < 0) return invalid(id, "reward must be >= 0")
+        val baseReward = s.getDouble("reward", -1.0)
+        if (baseReward < 0) return invalid(id, "reward must be >= 0")
+        // Applied once, here, so the payout and every GUI/chat preview (all read quest.reward) agree.
+        val reward = baseReward * MONEY_REWARD_MULTIPLIER
         val icon = s.getString("icon")?.let { Material.matchMaterial(it) } ?: Material.STONE
         val enabled = s.getBoolean("enabled", true)
         return CycleQuest(id, name, description, category, questType, objective, target, amount, reward, icon, enabled)
