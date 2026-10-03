@@ -38,6 +38,10 @@ class DiscordManager(private val plugin: Joshymc) {
     private val punishmentSyncEnabled: Boolean get() = plugin.config.getBoolean("discord.punishments.enabled", false)
     private val punishmentForumChannelId: String get() = plugin.config.getString("discord.punishments.forum-channel-id") ?: ""
 
+    private val staffMonitoringEnabled: Boolean get() = plugin.config.getBoolean("discord.staff-monitoring.enabled", false)
+    private val staffAnticheatChannelId: String get() = plugin.config.getString("discord.staff-monitoring.anticheat-channel-id") ?: ""
+    private val staffReportsChannelId: String get() = plugin.config.getString("discord.staff-monitoring.reports-channel-id") ?: ""
+
     fun start() {
         val token = plugin.config.getString("discord.token") ?: ""
         if (token.isEmpty() || token == "YOUR_BOT_TOKEN_HERE") {
@@ -83,6 +87,8 @@ class DiscordManager(private val plugin: Joshymc) {
                     plugin.logger.warning("[Discord] Could not find guild to register slash commands.")
                 }
 
+                verifyStaffMonitoringChannels()
+
                 plugin.server.scheduler.runTask(plugin, Runnable {
                     startFlushTask()
                     startStatusUpdater()
@@ -123,6 +129,51 @@ class DiscordManager(private val plugin: Joshymc) {
     fun sendEmbedToChannel(targetChannelId: String, embed: MessageEmbed) {
         if (jda == null || targetChannelId.isEmpty()) return
         messageQueue.add(QueuedAction.Embed(embed, targetChannelId))
+    }
+
+    /**
+     * Staff-monitoring alert (anti-cheat, dupe, mining). Goes to the dedicated staff guild's
+     * anti-cheat channel, addressed by exact channel id so it works across guilds on the one
+     * bot connection. [alreadySentTo] is the channel the caller's own feature already posted
+     * this embed to; if it matches, the staff copy is skipped so nothing posts twice.
+     */
+    fun sendStaffAlert(embed: MessageEmbed, alreadySentTo: String? = null) {
+        val id = staffAnticheatChannelId
+        if (!staffMonitoringEnabled || id.isEmpty() || id == alreadySentTo) return
+        sendEmbedToChannel(id, embed)
+    }
+
+    /** Staff-monitoring player report embed, sent to the dedicated reports channel only. */
+    fun sendStaffReport(embed: MessageEmbed) {
+        val id = staffReportsChannelId
+        if (!staffMonitoringEnabled || id.isEmpty()) return
+        sendEmbedToChannel(id, embed)
+    }
+
+    /** Logs a concise warning for each staff-monitoring channel the bot cannot post embeds in. */
+    private fun verifyStaffMonitoringChannels() {
+        if (!staffMonitoringEnabled) return
+        for ((label, id) in listOf("anticheat-channel-id" to staffAnticheatChannelId, "reports-channel-id" to staffReportsChannelId)) {
+            if (id.isEmpty()) {
+                plugin.logger.warning("[Discord] staff-monitoring.$label is not set — those alerts will not be sent.")
+                continue
+            }
+            val channel = jda?.getTextChannelById(id)
+            if (channel == null) {
+                plugin.logger.warning("[Discord] staff-monitoring.$label ($id) not found — the bot is not in that server (authorize it with the bot + applications.commands scopes) or lacks View Channel.")
+                continue
+            }
+            val missing = listOf(
+                net.dv8tion.jda.api.Permission.VIEW_CHANNEL,
+                net.dv8tion.jda.api.Permission.MESSAGE_SEND,
+                net.dv8tion.jda.api.Permission.MESSAGE_EMBED_LINKS
+            ).filterNot { channel.guild.selfMember.hasPermission(channel, it) }
+            if (missing.isEmpty()) {
+                plugin.logger.info("[Discord] Staff monitoring $label bound to #${channel.name} (${channel.guild.name}).")
+            } else {
+                plugin.logger.warning("[Discord] staff-monitoring.$label (#${channel.name}) is missing bot permissions: ${missing.joinToString { it.getName() }}.")
+            }
+        }
     }
 
     fun sendChat(playerName: String, message: String) {

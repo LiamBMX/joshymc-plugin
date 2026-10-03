@@ -289,6 +289,8 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             }
             plugin.logger.info("[AntiCheat] ${player.name} failed ${check.displayName} VL=${"%.0f".format(newVL)} $detail")
 
+            sendStaffDiscordAlert(player, check, newVL, detail)
+
             // PvP cheat-detection Discord alert (issue #852) — same threshold/cooldown gate as
             // the staff chat alert above, restricted to combat-relevant checks only.
             if (check in combatAlertChecks) {
@@ -320,6 +322,30 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
                 }
             }
         }
+    }
+
+    /** Staff-monitoring Discord embed (issue #1016) — same gate as the staff chat alert. */
+    private fun sendStaffDiscordAlert(player: Player, check: CheckType, vl: Double, detail: String) {
+        val (label, color) = when {
+            vl >= kickVL * 0.5 -> "High priority" to 0xED4245
+            vl >= alertVL * 1.5 -> "Repeated violations" to 0xFFA500
+            else -> "Suspicious" to 0xFEE75C
+        }
+        val loc = player.location
+        plugin.discordManager.sendStaffAlert(
+            net.dv8tion.jda.api.EmbedBuilder()
+                .setTitle("Anti-Cheat: ${check.displayName}")
+                .setColor(color)
+                .addField("Player", "${player.name} (`${player.uniqueId}`)", false)
+                .addField("Check", check.displayName, true)
+                .addField("Violation Level", "%.0f".format(vl), true)
+                .addField("Severity", label, true)
+                .addField("Details", detail.ifBlank { "No additional details." }.take(1000), false)
+                .addField("World", loc.world?.name ?: "unknown", true)
+                .addField("Location", "X: ${loc.blockX}, Y: ${loc.blockY}, Z: ${loc.blockZ}", true)
+                .setTimestamp(java.time.Instant.now())
+                .build()
+        )
     }
 
     // ══════════════════════════════════════════════════════════

@@ -149,6 +149,7 @@ class AntiDupeManager(private val plugin: Joshymc) {
             .setTimestamp(Instant.ofEpochMilli(timestamp))
             .build()
         plugin.discordManager.sendEmbedToChannel(discordChannelId, embed)
+        plugin.discordManager.sendStaffAlert(embed, discordChannelId)
 
         if (rateLimitSeconds > 0) {
             plugin.server.scheduler.runTaskLater(plugin, Runnable {

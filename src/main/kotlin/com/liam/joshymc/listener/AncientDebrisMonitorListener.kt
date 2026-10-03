@@ -115,6 +115,7 @@ class AncientDebrisMonitorListener(private val plugin: Joshymc) : Listener {
             .build()
 
         plugin.discordManager.sendEmbedToChannel(channelId, embed)
+        plugin.discordManager.sendStaffAlert(embed, channelId)
     }
 
     private fun coords(m: Mined) = "X: ${m.x}, Y: ${m.y}, Z: ${m.z}"

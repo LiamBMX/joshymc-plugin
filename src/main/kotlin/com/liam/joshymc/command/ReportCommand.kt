@@ -93,6 +93,22 @@ class ReportCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
         cooldowns[player.uniqueId] = now
 
+        val reportId = plugin.databaseManager.queryFirst("SELECT last_insert_rowid()") { rs -> rs.getInt(1) }
+        val loc = player.location
+        plugin.discordManager.sendStaffReport(
+            net.dv8tion.jda.api.EmbedBuilder()
+                .setTitle("🚨 NEW PLAYER REPORT")
+                .setColor(0xED4245)
+                .addField("Reported Player", target.name, true)
+                .addField("Reported By", player.name, true)
+                .addField("Reason", reason.take(1000), false)
+                .addField("World", loc.world?.name ?: "unknown", true)
+                .addField("Coordinates", "X: ${loc.blockX}, Y: ${loc.blockY}, Z: ${loc.blockZ}", true)
+                .apply { if (reportId != null) addField("Report ID", "#$reportId", true) }
+                .setTimestamp(java.time.Instant.now())
+                .build()
+        )
+
         plugin.commsManager.send(player, Component.text("Report submitted for ", NamedTextColor.GRAY)
             .append(Component.text(target.name, NamedTextColor.WHITE))
             .append(Component.text(".", NamedTextColor.GRAY)), CommunicationsManager.Category.ADMIN)
