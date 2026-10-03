@@ -86,6 +86,7 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // Phase 2 — Combat
         pm.registerEvents(CombatListener(plugin), plugin)
+        pm.registerEvents(com.liam.joshymc.listener.ExplosionPvpListener(plugin), plugin)
         pm.registerEvents(PvpKillLogListener(plugin), plugin)
 
         // Phase 3 — Mining
