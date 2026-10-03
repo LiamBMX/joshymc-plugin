@@ -175,6 +175,17 @@ pvp-kill-logs:
   discord:
     channel-id: "1550719798760177734"
 
+# Ancient Debris Monitor — logs every Ancient Debris a player mines to Discord and raises a
+# one-shot alert when a player mines too many inside a rolling window (possible X-ray).
+# Monitoring only — never cancels mining or kicks/bans/punishes anyone. Reuses the Discord
+# bot above; set discord-channel-id to a channel the bot can post embeds in.
+ancient-debris-monitor:
+  enabled: true
+  discord-channel-id: "1554473331456090182"
+  window-minutes: 10
+  suspicious-threshold: 8
+  high-suspicion-threshold: 15
+
 # Recipe Blocker — block players from crafting specific items
 # Use material names from: https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Material.html
 recipe-blocker:
