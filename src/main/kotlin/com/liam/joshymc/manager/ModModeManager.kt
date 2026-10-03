@@ -10,6 +10,7 @@ import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.GameMode
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.Sound
 import org.bukkit.entity.Player
@@ -34,16 +35,20 @@ class ModModeManager(private val plugin: Joshymc) {
         /** Max gap between two sneak-presses, in ms, to count as a double-shift. */
         private const val SPECTATOR_DOUBLE_SNEAK_MS = 600L
 
-        val HOTBAR_ITEM_IDS = listOf(
+        /** Hotbar slots 1-9 in order; a null entry is a slot that stays empty (slot 6). */
+        val HOTBAR_LAYOUT: List<String?> = listOf(
             "modmode_punish",
-            "modmode_rtp",
-            "modmode_freeze",
-            "modmode_vanish",
             "modmode_invsee",
-            "modmode_spectator",
             "modmode_ecsee",
-            "modmode_vault"
+            "modmode_vault",
+            "modmode_spectator",
+            null,
+            "modmode_freeze",
+            "modmode_rtp",
+            "modmode_vanish"
         )
+
+        val HOTBAR_ITEM_IDS: List<String> = HOTBAR_LAYOUT.filterNotNull()
     }
 
     /** Players currently in Moderator Mode this session. */
@@ -75,7 +80,21 @@ class ModModeManager(private val plugin: Joshymc) {
             """.trimIndent()
         )
 
+        // Return location (where /modmode was enabled). SQLite throws if the column already exists.
+        for (column in listOf(
+            "return_world TEXT", "return_x REAL", "return_y REAL", "return_z REAL",
+            "return_yaw REAL", "return_pitch REAL"
+        )) {
+            try {
+                plugin.databaseManager.execute("ALTER TABLE modmode_backups ADD COLUMN " + column)
+            } catch (_: Exception) {
+            }
+        }
+
         plugin.logger.info("[ModMode] Moderator Mode manager started.")
+
+        // Staff already online (e.g. after /reload) never get a join event — re-enter them now.
+        for (online in Bukkit.getOnlinePlayers()) handleJoin(online)
     }
 
     fun stop() {
@@ -161,16 +180,51 @@ class ModModeManager(private val plugin: Joshymc) {
         restoreFromBackup(player, silent = false)
     }
 
-    /** Called on join to recover a moderator who disconnected/crashed while still in Moderator Mode. */
+    /**
+     * Called on join. A moderator who disconnected (or whose server restarted) while in
+     * Moderator Mode stays in it: the pending backup is left untouched and the tool
+     * loadout is re-applied. Only if they've since lost the permission is the backup restored.
+     */
     fun handleJoin(player: Player) {
         if (!hasPendingBackup(player.uniqueId)) return
-        active.remove(player.uniqueId)
+
+        if (!player.hasPermission(PERM_BASE)) {
+            active.remove(player.uniqueId)
+            Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                if (!player.isOnline) return@Runnable
+                restoreFromBackup(player, silent = true)
+                plugin.commsManager.send(
+                    player,
+                    Component.text("Moderator Mode was still active from your last session — your inventory has been restored.", NamedTextColor.YELLOW),
+                    CommunicationsManager.Category.ADMIN
+                )
+            }, 5L)
+            return
+        }
+
+        // Mark active right away so item deliveries go to the backup, not the tool hotbar.
+        active.add(player.uniqueId)
+        spectating.remove(player.uniqueId)
+        lastSpectatorSneak.remove(player.uniqueId)
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            if (!player.isOnline) return@Runnable
-            restoreFromBackup(player, silent = true)
+            if (!player.isOnline || !isModMode(player)) return@Runnable
+
+            // The real inventory lives in the backup; never save over it here.
+            player.inventory.clear()
+            player.inventory.setArmorContents(arrayOfNulls(4))
+            player.inventory.setItemInOffHand(null)
+            giveHotbar(player)
+            player.gameMode = GameMode.CREATIVE
+
+            plugin.hideStaffManager.onModModeChanged(player)
+            if (plugin.config.getBoolean("modmode.auto-vanish", true) && !plugin.vanishCommand.isVanished(player)) {
+                plugin.vanishCommand.vanish(player)
+            }
+            refreshTool(player, "modmode_vanish")
+
             plugin.commsManager.send(
                 player,
-                Component.text("Moderator Mode was still active from your last session — your inventory has been restored.", NamedTextColor.YELLOW),
+                Component.text("🛡 Moderator Mode is still active from your last session.", NamedTextColor.GREEN),
                 CommunicationsManager.Category.ADMIN
             )
         }, 5L)
@@ -192,12 +246,15 @@ class ModModeManager(private val plugin: Joshymc) {
         data class Backup(
             val inv: String, val armor: String, val offhand: String, val slot: Int,
             val xpLevel: Int, val xpProgress: Float, val gameMode: String,
-            val allowFlight: Boolean, val wasFlying: Boolean, val wasVanished: Boolean
+            val allowFlight: Boolean, val wasFlying: Boolean, val wasVanished: Boolean,
+            val returnWorld: String?, val returnX: Double, val returnY: Double, val returnZ: Double,
+            val returnYaw: Float, val returnPitch: Float
         )
 
         val backup = plugin.databaseManager.queryFirst(
             """SELECT inventory_data, armor_data, offhand_data, selected_slot, xp_level, xp_progress,
-                      game_mode, allow_flight, was_flying, was_vanished
+                      game_mode, allow_flight, was_flying, was_vanished,
+                      return_world, return_x, return_y, return_z, return_yaw, return_pitch
                FROM modmode_backups WHERE uuid = ?""",
             uuid
         ) { rs ->
@@ -205,7 +262,9 @@ class ModModeManager(private val plugin: Joshymc) {
                 rs.getString("inventory_data"), rs.getString("armor_data"), rs.getString("offhand_data"),
                 rs.getInt("selected_slot"), rs.getInt("xp_level"), rs.getFloat("xp_progress"),
                 rs.getString("game_mode"), rs.getInt("allow_flight") == 1, rs.getInt("was_flying") == 1,
-                rs.getInt("was_vanished") == 1
+                rs.getInt("was_vanished") == 1,
+                rs.getString("return_world"), rs.getDouble("return_x"), rs.getDouble("return_y"),
+                rs.getDouble("return_z"), rs.getFloat("return_yaw"), rs.getFloat("return_pitch")
             )
         }
 
@@ -247,6 +306,17 @@ class ModModeManager(private val plugin: Joshymc) {
         }
 
         plugin.databaseManager.execute("DELETE FROM modmode_backups WHERE uuid = ?", uuid)
+
+        // Send them back to where they entered Moderator Mode. A missing/unloaded world (or a
+        // row from before this was recorded) just leaves them where they are.
+        val returnWorld = backup.returnWorld?.let { Bukkit.getWorld(it) }
+        if (returnWorld != null) {
+            try {
+                player.teleport(Location(returnWorld, backup.returnX, backup.returnY, backup.returnZ, backup.returnYaw, backup.returnPitch))
+            } catch (e: Exception) {
+                plugin.logger.warning("[ModMode] Could not return " + player.name + " to their entry location: " + e.message)
+            }
+        }
 
         if (!silent) {
             plugin.commsManager.send(
@@ -290,13 +360,16 @@ class ModModeManager(private val plugin: Joshymc) {
         plugin.databaseManager.execute(
             """INSERT INTO modmode_backups
                (uuid, inventory_data, armor_data, offhand_data, selected_slot, xp_level, xp_progress,
-                game_mode, allow_flight, was_flying, was_vanished, timestamp)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                game_mode, allow_flight, was_flying, was_vanished, timestamp,
+                return_world, return_x, return_y, return_z, return_yaw, return_pitch)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             player.uniqueId.toString(), invData, armorData, offhandData, player.inventory.heldItemSlot,
             player.level, player.exp, player.gameMode.name,
             if (player.allowFlight) 1 else 0, if (player.isFlying) 1 else 0,
             if (plugin.vanishCommand.isVanished(player)) 1 else 0,
-            System.currentTimeMillis()
+            System.currentTimeMillis(),
+            player.world.name, player.location.x, player.location.y, player.location.z,
+            player.location.yaw, player.location.pitch
         )
     }
 
@@ -346,13 +419,13 @@ class ModModeManager(private val plugin: Joshymc) {
     // ---- Hotbar ----
 
     fun giveHotbar(player: Player) {
-        for ((slot, id) in HOTBAR_ITEM_IDS.withIndex()) {
-            player.inventory.setItem(slot, buildToolStack(player, id))
+        for ((slot, id) in HOTBAR_LAYOUT.withIndex()) {
+            player.inventory.setItem(slot, if (id == null) null else buildToolStack(player, id))
         }
     }
 
     fun refreshTool(player: Player, id: String) {
-        val slot = HOTBAR_ITEM_IDS.indexOf(id)
+        val slot = HOTBAR_LAYOUT.indexOf(id)
         if (slot < 0) return
         player.inventory.setItem(slot, buildToolStack(player, id))
     }
@@ -360,7 +433,19 @@ class ModModeManager(private val plugin: Joshymc) {
     private fun buildToolStack(player: Player, id: String): ItemStack {
         val stack = plugin.itemManager.getItem(id)?.createItemStack() ?: return ItemStack(Material.BARRIER)
         when (id) {
-            "modmode_vanish" -> stack.editMeta { it.lore(vanishLore(plugin.vanishCommand.isVanished(player))) }
+            "modmode_vanish" -> {
+                val vanished = plugin.vanishCommand.isVanished(player)
+                val dye = stack.withType(if (vanished) Material.GREEN_DYE else Material.GRAY_DYE)
+                dye.editMeta { meta ->
+                    meta.displayName(
+                        Component.text("Vanish: ", NamedTextColor.GRAY)
+                            .append(if (vanished) Component.text("ON", NamedTextColor.GREEN) else Component.text("OFF", NamedTextColor.RED))
+                            .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
+                    )
+                    meta.lore(vanishLore(vanished))
+                }
+                return dye
+            }
             "modmode_spectator" -> stack.editMeta { it.lore(spectatorLore(spectating.containsKey(player.uniqueId))) }
         }
         return stack
