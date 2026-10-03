@@ -1208,6 +1208,81 @@ permissions:
   joshymc.punish.unwarn:
     description: Remove warnings from players via /punish
     default: op
+  joshymc.staff.chat:
+    description: ALL STAFF bundle - /chat mute, unmute and clear
+    default: false
+    children:
+      joshymc.chat.admin: true
+  joshymc.staff.mute:
+    description: Mute bundle - /mute, /tempmute, /unmute and /punish tempmute/unmute
+    default: false
+    children:
+      joshymc.mute: true
+      joshymc.tempmute: true
+      joshymc.unmute: true
+      joshymc.punish.tempmute: true
+      joshymc.punish.unmute: true
+  joshymc.staff.warn:
+    description: Warn bundle - /warn, /unwarn and /punish warn/unwarn
+    default: false
+    children:
+      joshymc.warn: true
+      joshymc.unwarn: true
+      joshymc.punish.warn: true
+      joshymc.punish.unwarn: true
+  joshymc.staff.ban:
+    description: Ban bundle - /ban, /tempban and /punish ban/tempban
+    default: false
+    children:
+      joshymc.ban: true
+      joshymc.tempban: true
+      joshymc.punish.ban: true
+      joshymc.punish.tempban: true
+  joshymc.staff.unban:
+    description: Unban bundle - /unban and /punish unban
+    default: false
+    children:
+      joshymc.unban: true
+      joshymc.punish.unban: true
+  joshymc.staff.trainee:
+    description: Trainee rank - staff chat tools, mute, warn
+    default: false
+    children:
+      joshymc.staff.chat: true
+      joshymc.staff.mute: true
+      joshymc.staff.warn: true
+  joshymc.staff.helper:
+    description: Helper rank - staff chat tools, mute, warn
+    default: false
+    children:
+      joshymc.staff.chat: true
+      joshymc.staff.mute: true
+      joshymc.staff.warn: true
+  joshymc.staff.jrmod:
+    description: Jr Mod rank - staff chat tools, mute, warn, ban
+    default: false
+    children:
+      joshymc.staff.chat: true
+      joshymc.staff.mute: true
+      joshymc.staff.warn: true
+      joshymc.staff.ban: true
+  joshymc.staff.mod:
+    description: Mod rank - staff chat tools, mute, warn, unban
+    default: false
+    children:
+      joshymc.staff.chat: true
+      joshymc.staff.mute: true
+      joshymc.staff.warn: true
+      joshymc.staff.unban: true
+  joshymc.staff.leadmod:
+    description: Lead Mod rank - staff chat tools, mute, warn, ban, unban
+    default: false
+    children:
+      joshymc.staff.chat: true
+      joshymc.staff.mute: true
+      joshymc.staff.warn: true
+      joshymc.staff.ban: true
+      joshymc.staff.unban: true
   joshymc.playerdata:
     description: Base access to the /playerdata command
     default: op
