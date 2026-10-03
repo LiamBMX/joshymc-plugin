@@ -363,8 +363,19 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onFishEntity(event: PlayerFishEvent) {
         if (event.state != PlayerFishEvent.State.CAUGHT_ENTITY) return
-        if (event.caught !is TNTPrimed) return
-        event.isCancelled = true
+        val caught = event.caught
+        if (caught is TNTPrimed) {
+            event.isCancelled = true
+            return
+        }
+        // Hooking a player in a PvP-disabled claim: cancelling the event stops
+        // the pull, so rods can't drag them out of the claim.
+        if (caught is Player && caught != event.player) {
+            val claim = plugin.claimManager.getClaimAt(caught.location) ?: return
+            if (claim.pvpEnabled) return
+            event.isCancelled = true
+            denyWithMessage(event.player, Component.text("You cannot pull players from a PvP-protected claim.", NamedTextColor.RED))
+        }
     }
 
     // 21. Player movement — block denied players from entering a claim.
