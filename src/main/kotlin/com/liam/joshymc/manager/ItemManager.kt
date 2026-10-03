@@ -60,6 +60,11 @@ class ItemManager(private val plugin: Joshymc) {
         register(IceSkates())
         register(WingsOfTheBlizzard())
         register(WintersWrath())
+        // Shark Set
+        register(SharkHelmet())
+        register(SharkChestplate())
+        register(SharkLeggings())
+        register(SharkBoots())
 
         // Retextured Trial Keys
         register(JanuaryKey())

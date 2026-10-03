@@ -39,8 +39,9 @@ COUNTERPART = {
     "elytra": ("item/elytra", "generated"), "food": ("item/pumpkin_pie", "generated"),
     "cake": ("item/cake", "generated"), "item": (None, None),
     "leggings": ("item/diamond_leggings", "generated"),
+    "chestplate": ("item/diamond_chestplate", "generated"),
 }
-WEAR_SLOTS = {"boots": ["feet"], "elytra": ["chest"], "helmet": ["head"], "leggings": ["legs"]}
+WEAR_SLOTS = {"boots": ["feet"], "elytra": ["chest"], "chestplate": ["chest"], "helmet": ["head"], "leggings": ["legs"]}
 # Animated textures from the last load(): name -> (full strip array, mcmeta animation block).
 ANIMATED: dict = {}
 GENERATED = {
@@ -616,7 +617,7 @@ def sheet(module, models: dict, textures: dict, layers: dict) -> list[Path]:
                           label(scene(player(state_pose) + held(m, textures, pose=state_pose), (-3.4, 1.5, 0.6),
                                       size=(300, 300)), f"{name}: right side"),
                           label(first_person(m, textures, width=400, height=225), f"{name}: first person")]))
-    if kind in ("helmet", "boots", "elytra", "leggings"):
+    if kind in ("helmet", "boots", "elytra", "leggings", "chestplate"):
         idle = player({})
         wear = []
         if kind == "helmet":
@@ -624,7 +625,7 @@ def sheet(module, models: dict, textures: dict, layers: dict) -> list[Path]:
         wear += armour(layers, WEAR_SLOTS[kind])
         views = [label(scene(idle + wear, (1.8, 1.6, 2.6), (0, 1.1, 0), (300, 340)), "worn, front"),
                  label(scene(idle + wear, (-2.0, 1.7, -2.4), (0, 1.1, 0), (300, 340)), "worn, back")]
-        if kind == "elytra" and "wings" in layers:
+        if kind in ("elytra", "chestplate") and "wings" in layers:
             views = [label(scene(idle + wear + wings(layers["wings"]), (1.8, 1.6, 2.6), (0, 1.1, 0), (300, 340)),
                            "worn, front"),
                      label(scene(idle + wear + wings(layers["wings"]), (-2.0, 1.7, -2.6), (0, 1.1, 0), (300, 340)),
