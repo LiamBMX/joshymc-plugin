@@ -16,6 +16,7 @@ features:
   talismans: true
   custom-fishing: true
   quests: true
+  event-quests: true
   market: true
   kill-effects: true
   custom-enchants: true

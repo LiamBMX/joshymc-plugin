@@ -969,6 +969,7 @@ class ServerShopManager(private val plugin: Joshymc) {
 
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
             plugin.marketManager.recordTransaction(material, "SELL", totalCount)
+            plugin.eventQuestManager.recordSale(player, material, totalCount)
 
             plugin.commsManager.send(player,
                 Component.text("Sold ", NamedTextColor.YELLOW)
@@ -1013,6 +1014,7 @@ class ServerShopManager(private val plugin: Joshymc) {
 
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
             plugin.marketManager.recordTransaction(material, "SELL", amount)
+            plugin.eventQuestManager.recordSale(player, material, amount)
 
             plugin.commsManager.send(player,
                 Component.text("Sold ", NamedTextColor.YELLOW)
