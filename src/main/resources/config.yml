@@ -125,6 +125,14 @@ discord:
     enabled: true
     forum-channel-id: "1548796268099272864"
 
+  # Staff-monitoring server. Uses the same bot (it must be authorized in that server with
+  # View Channel, Send Messages and Embed Links). Anti-cheat/dupe/mining alerts and /report
+  # embeds are posted to these exact channel ids; nothing is posted publicly.
+  staff-monitoring:
+    enabled: true
+    anticheat-channel-id: "1554209031994998904"
+    reports-channel-id: "1554209119265751142"
+
 # Anti-Dupe — audit log + Discord alerts when a system catches a duplicate/replay
 # attempt (e.g. an auction bought twice, a voucher redeemed twice). Detection only —
 # never auto-bans, mutes, or reverses anything. Reuses the Discord bot above; set
