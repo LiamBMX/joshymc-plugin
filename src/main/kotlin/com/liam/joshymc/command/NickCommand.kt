@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gui.nick.NickRealNameGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.util.ProfanityFilter
 import net.kyori.adventure.text.Component
@@ -34,6 +35,14 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         when (args.getOrNull(0)?.lowercase()) {
+            "realname" -> {
+                if (sender !is Player) { sender.sendMessage("Players only."); return true }
+                if (!sender.hasPermission("joshymc.nick.realname")) {
+                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    return true
+                }
+                NickRealNameGui.open(plugin, sender)
+            }
             "set" -> {
                 if (sender !is Player) { sender.sendMessage("Players only."); return true }
                 if (!sender.hasPermission("joshymc.nick")) {
@@ -136,6 +145,8 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             else -> {
                 val help = Component.text("/nick set <name>", NamedTextColor.YELLOW)
                     .append(Component.text(" — set your nickname\n", NamedTextColor.GRAY))
+                    .append(Component.text("/nick realname", NamedTextColor.YELLOW))
+                    .append(Component.text(" — see real names of nicknamed players\n", NamedTextColor.GRAY))
                     .append(Component.text("/nick reset", NamedTextColor.YELLOW))
                     .append(Component.text(" — clear your nickname\n", NamedTextColor.GRAY))
                     .append(Component.text("/nick reset <player>", NamedTextColor.YELLOW))
@@ -151,7 +162,7 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
-            1 -> listOf("set", "reset", "other").filter { it.startsWith(args[0].lowercase()) }
+            1 -> listOf("set", "realname", "reset", "other").filter { it.startsWith(args[0].lowercase()) }
             2 -> when {
                 args[0].equals("other", true) && sender.hasPermission("joshymc.nick.others") ->
                     Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], true) }

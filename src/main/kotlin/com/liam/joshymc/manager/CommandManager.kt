@@ -823,7 +823,6 @@ class CommandManager(private val plugin: Joshymc) {
         "resurge" to "joshymc.resurge",
         "talisman" to "joshymc.talisman",
         "tag" to "joshymc.tag",
-        "nick" to "joshymc.nick",
         "announce" to "joshymc.announce",
         "back" to "joshymc.back",
         "gmc" to "joshymc.gamemode.creative",
