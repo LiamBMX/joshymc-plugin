@@ -319,6 +319,9 @@ commands:
   discord:
     description: Get the Discord invite link
     usage: /discord
+  ip:
+    description: Show the server IP address and port
+    usage: /ip
   live:
     description: Announce a clickable stream link in chat
     usage: /live <tiktok/twitch>

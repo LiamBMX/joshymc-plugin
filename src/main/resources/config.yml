@@ -103,6 +103,11 @@ chat:
   # Format for Staff Chat messages (/staffchat, /sc). Placeholders: {player}, {message}
   staffchat-format: "&8[&cStaff Chat&8] &f{player}&7: &f{message}"
 
+# Server connection info shown by /ip
+server-info:
+  ip: "play.joshymc.net"
+  port: 25565
+
 discord:
   # Bot token from https://discord.com/developers/applications
   token: "YOUR_BOT_TOKEN_HERE"
