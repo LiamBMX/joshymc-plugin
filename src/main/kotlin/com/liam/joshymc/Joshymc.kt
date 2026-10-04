@@ -246,6 +246,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var announcementManager: AnnouncementManager
         private set
+    lateinit var rotatingBossBarManager: com.liam.joshymc.manager.RotatingBossBarManager
+        private set
     lateinit var autoRestartManager: AutoRestartManager
         private set
     lateinit var playtimeManager: PlaytimeManager
@@ -402,6 +404,7 @@ class Joshymc : JavaPlugin() {
         timezoneManager.start()
         scoreboardManager = ScoreboardManager(this)
         announcementManager = AnnouncementManager(this)
+        rotatingBossBarManager = com.liam.joshymc.manager.RotatingBossBarManager(this)
         autoRestartManager = AutoRestartManager(this)
         playtimeManager = PlaytimeManager(this)
         creditsManager = com.liam.joshymc.manager.CreditsManager(this)
@@ -489,6 +492,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("resource-world")) resourceWorldManager.start()
         scoreboardManager.start()
         announcementManager.start()
+        rotatingBossBarManager.start()
         autoRestartManager.start()
         playtimeManager.start()
         creditsManager.start()
@@ -584,6 +588,7 @@ class Joshymc : JavaPlugin() {
         claimManager.stop()
         scoreboardManager.stop()
         announcementManager.stop()
+        rotatingBossBarManager.stop()
         autoRestartManager.stop()
         playtimeManager.stop()
         killStreakManager.stop()
@@ -654,6 +659,7 @@ class Joshymc : JavaPlugin() {
         safe("antiCheatManager.stop") { antiCheatManager.stop() }
         safe("combatManager.stop") { combatManager.stop() }
         safe("autoRestartManager.stop") { autoRestartManager.stop() }
+        safe("rotatingBossBarManager.stop") { rotatingBossBarManager.stop() }
         safe("lagCleanerManager.stop") { lagCleanerManager.stop() }
         safe("resourcePackManager.shutdown") { resourcePackManager.shutdown() }
         safe("discordManager.shutdown") { discordManager.shutdown() }
@@ -716,6 +722,7 @@ class Joshymc : JavaPlugin() {
         safe("lagCleanerManager.start") { lagCleanerManager.start() }
         safe("combatManager.start") { combatManager.start() }
         safe("autoRestartManager.start") { autoRestartManager.start() }
+        safe("rotatingBossBarManager.start") { rotatingBossBarManager.start() }
         safe("afkManager.start") { afkManager.start() }
         safe("antiCheatManager.start") { antiCheatManager.start() }
         safe("registerEnchants") { registerEnchants() }
