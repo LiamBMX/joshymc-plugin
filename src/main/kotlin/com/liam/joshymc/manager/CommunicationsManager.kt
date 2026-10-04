@@ -115,7 +115,7 @@ class CommunicationsManager(private val plugin: Joshymc) {
             player.name
         }
 
-        val tag = plugin.chatTagManager.getPlayerTagDisplay(player)
+        val tag = plugin.staffTagManager.getChatDisplay(player) ?: plugin.chatTagManager.getPlayerTagDisplay(player)
 
         // Build the prefix portion as legacy (rank, tag, name, separator)
         val prefixPart = chatFormat

@@ -279,11 +279,11 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         player.sendPlayerListHeaderAndFooter(header, footer)
     }
 
-    private fun updateTabName(player: Player) {
+    fun updateTabName(player: Player) {
         val prefix = plugin.rankManager.getPrefix(player)
         // TAB always shows the real username; nicknames are chat-only
         player.playerListName(
-            plugin.commsManager.parseLegacy("$prefix${player.name}")
+            plugin.commsManager.parseLegacy("$prefix${plugin.staffTagManager.getTabDisplay(player)}${player.name}")
         )
 
     }

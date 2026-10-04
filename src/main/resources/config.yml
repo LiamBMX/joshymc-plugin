@@ -1001,3 +1001,19 @@ punishments:
     - ""
     - "&#EBA338Think this was a mistake?"
     - "&#EBA338Appeal at &#D96320discord.gg/joshymc"
+
+# Temporary staff chat tags awarded with /stafftag (permission: joshymc.stafftag.admin)
+staff-tags:
+  sotm:
+    enabled: true
+    display: "&7[&#FFF08DS&#F5DF68O&#ECCF42T&#F5DF68M&7]&r"
+    default-duration: "30d"
+    allowed-durations:
+      - "1d"
+      - "7d"
+      - "14d"
+      - "21d"
+      - "30d"
+    auto-equip: true
+    show-in-chat: true
+    show-in-tab: true

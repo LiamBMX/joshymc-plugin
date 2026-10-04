@@ -293,6 +293,9 @@ commands:
     description: Browse and equip chat tags
     usage: /tag [remove|tagname]
     aliases: [tags, chattag]
+  stafftag:
+    description: Award or remove temporary staff chat tags (SOTM)
+    usage: /stafftag <add|remove> SOTM <player> [duration]
   nick:
     description: Set your nickname
     usage: /nick <set|realname|reset|other>
@@ -1133,6 +1136,9 @@ permissions:
     default: op
   joshymc.chat.profanity.bypass:
     description: Bypass the chat profanity filter (for staff who need to discuss reports, etc.)
+    default: op
+  joshymc.stafftag.admin:
+    description: Award or remove temporary staff chat tags (SOTM)
     default: op
   joshymc.admin:
     description: Full admin panel access (Owner/Admin)

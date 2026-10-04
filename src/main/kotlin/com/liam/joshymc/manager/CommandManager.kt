@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.command.CreateKitCommand
+import com.liam.joshymc.command.StaffTagCommand
 import com.liam.joshymc.command.EditKitCommand
 import com.liam.joshymc.command.AnnounceCommand
 import com.liam.joshymc.command.AdminCommand
@@ -501,6 +502,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("timezone")?.let { val c = TimezoneCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Chat Tags ────────────────────────────────
+        plugin.getCommand("stafftag")?.let { val c = StaffTagCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("tag")?.let { val c = TagCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Nickname ─────────────────────────────────
@@ -823,6 +825,7 @@ class CommandManager(private val plugin: Joshymc) {
         "resurge" to "joshymc.resurge",
         "talisman" to "joshymc.talisman",
         "tag" to "joshymc.tag",
+        "stafftag" to "joshymc.stafftag.admin",
         "announce" to "joshymc.announce",
         "back" to "joshymc.back",
         "gmc" to "joshymc.gamemode.creative",
