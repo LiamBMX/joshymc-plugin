@@ -114,6 +114,37 @@ class CreditsManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    /**
+     * Atomically moves [amount] credits from [from] to [to]. The debit is a guarded
+     * UPDATE (balance >= amount) inside one transaction with the credit, so either both
+     * balances change or neither does. Returns false if the amount is invalid, the
+     * accounts are the same, or the sender can't afford it.
+     */
+    @Synchronized
+    fun transfer(from: UUID, to: UUID, amount: Double): Boolean {
+        if (from == to || !amount.isFinite() || amount <= 0.0) return false
+        if (!(getBalance(to) + amount).isFinite()) return false
+        var ok = false
+        try {
+            plugin.databaseManager.transaction {
+                val debited = plugin.databaseManager.executeUpdate(
+                    "UPDATE credits SET balance = balance - ? WHERE uuid = ? AND balance >= ?",
+                    amount, from.toString(), amount
+                )
+                if (debited != 1) return@transaction
+                plugin.databaseManager.execute(
+                    "INSERT INTO credits (uuid, balance, credited_hours) VALUES (?, ?, 0) ON CONFLICT(uuid) DO UPDATE SET balance = balance + ?",
+                    to.toString(), amount, amount
+                )
+                ok = true
+            }
+        } catch (e: Exception) {
+            plugin.logger.warning("[Credits] Transfer failed: ${e.message}")
+            return false
+        }
+        return ok
+    }
+
     fun format(amount: Double): String {
         return formatter.format(amount)
     }

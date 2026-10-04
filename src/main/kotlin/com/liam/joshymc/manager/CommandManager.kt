@@ -716,6 +716,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("credits")?.let { val c = com.liam.joshymc.command.CreditsCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Credit Shop ───────────────────────────────────
+        plugin.getCommand("creditspay")?.let { val c = com.liam.joshymc.command.CreditsPayCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("cshop")?.let { val c = com.liam.joshymc.command.CreditShopCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         // ── Vouchers ──────────────────────────────────────
