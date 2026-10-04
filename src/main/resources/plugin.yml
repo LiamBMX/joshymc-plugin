@@ -295,7 +295,7 @@ commands:
     aliases: [tags, chattag]
   nick:
     description: Set your nickname
-    usage: /nick <set|reset|other>
+    usage: /nick <set|realname|reset|other>
     aliases: [nickname]
   announce:
     description: Broadcast an announcement
@@ -975,6 +975,9 @@ permissions:
   joshymc.nick:
     description: Set own nickname
     default: op
+  joshymc.nick.realname:
+    description: View the real usernames of nicknamed online players (read-only)
+    default: true
   joshymc.nick.others:
     description: Set other players' nicknames
     default: op
