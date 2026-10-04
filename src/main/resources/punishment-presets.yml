@@ -1,0 +1,76 @@
+# Punishment presets for the /punish <player> GUI.
+#
+# EVERYTHING BELOW IS AN EXAMPLE ONLY - NOT APPROVED PUNISHMENT POLICY.
+# Every example is disabled. Review the types/durations, then set enabled: true.
+# Apply edits without a restart with: /punish reload
+#
+# Per preset:
+#   enabled:    true/false - disabled presets never show in the GUI
+#   name:       reason text. Recorded in the punishment history as the reason, and
+#               used to count a player's previous offenses for escalation.
+#   material:   GUI icon (optional, default PAPER)
+#   type:       WARN | MUTE | TEMPBAN | BAN
+#               MUTE is a timed mute (/punish tempmute) so it needs a duration.
+#   duration:   required for MUTE and TEMPBAN (e.g. 30m, 12h, 1d, 7d, 1w, 1mo). Ignored for WARN/BAN.
+#   escalation: OPTIONAL. Keyed by offense number (1 = first offense). Each level has its own
+#               type/duration. Offenses past the highest level use the highest level.
+#               A level only has to list what differs; missing fields fall back to the preset's
+#               own type/duration. If omitted, every offense uses the preset's type/duration.
+#               Offenses are counted from the player's punishment history entries that used
+#               this preset's name as the reason, so don't rename a preset you want to keep counting.
+#
+# Permissions: the staff member needs joshymc.punish.<warn|tempmute|tempban|ban> for the
+# effective type; presets they can't use are hidden and re-checked on click.
+presets:
+  advertising:
+    enabled: false
+    name: "Advertising"
+    material: WRITABLE_BOOK
+    type: MUTE
+    duration: 1d
+  spamming:
+    enabled: false
+    name: "Spamming"
+    material: PAPER
+    type: MUTE
+    duration: 30m
+  harassment:
+    enabled: false
+    name: "Harassment"
+    material: BELL
+    type: TEMPBAN
+    duration: 3d
+    # Example escalation ladder (uncomment to use):
+    # escalation:
+    #   1: { type: WARN }
+    #   2: { type: TEMPBAN, duration: 3d }
+    #   3: { type: TEMPBAN, duration: 14d }
+  inappropriate-language:
+    enabled: false
+    name: "Inappropriate Language"
+    material: SKELETON_SKULL
+    type: WARN
+  cheating:
+    enabled: false
+    name: "Cheating"
+    material: DIAMOND_SWORD
+    type: TEMPBAN
+    duration: 30d
+  exploiting:
+    enabled: false
+    name: "Exploiting"
+    material: TNT
+    type: TEMPBAN
+    duration: 7d
+  alt-account-abuse:
+    enabled: false
+    name: "Alt Account Abuse"
+    material: PLAYER_HEAD
+    type: TEMPBAN
+    duration: 14d
+  staff-disrespect:
+    enabled: false
+    name: "Staff Disrespect"
+    material: IRON_HELMET
+    type: MUTE
+    duration: 6h

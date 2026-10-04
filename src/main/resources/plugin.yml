@@ -485,7 +485,7 @@ commands:
     usage: /history <player>
   punish:
     description: Unified moderation command (ban/tempban/tempmute/unban/unmute/warn/unwarn)
-    usage: /punish <player> <ban|tempban|tempmute|unban|unmute|warn|unwarn> [duration] <reason>
+    usage: /punish <player> [<ban|tempban|tempmute|unban|unmute|warn|unwarn> [duration] <reason>] | /punish reload
   playerdata:
     description: Reset a banned player's inventory, ender chest, vaults, claims, and homes
     usage: /playerdata reset <player> <reason>
@@ -1187,6 +1187,9 @@ permissions:
   joshymc.punish:
     description: Base access to the unified /punish command (each joshymc.punish.<type> permission is still checked independently)
     default: true
+  joshymc.punish.reload:
+    description: Reload punishment-presets.yml via /punish reload
+    default: op
   joshymc.punish.ban:
     description: Permanently ban players via /punish
     default: op
