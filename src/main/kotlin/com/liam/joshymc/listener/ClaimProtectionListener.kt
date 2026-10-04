@@ -8,9 +8,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.Material
-import org.bukkit.Tag
 import org.bukkit.block.Block
-import org.bukkit.block.BlockFace
 import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockExplodeEvent
@@ -19,7 +17,6 @@ import org.bukkit.event.block.BlockPistonExtendEvent
 import org.bukkit.event.block.BlockPistonRetractEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.block.BlockBurnEvent
-import org.bukkit.event.block.BlockRedstoneEvent
 import org.bukkit.event.block.BlockSpreadEvent
 import org.bukkit.event.entity.EntityChangeBlockEvent
 import org.bukkit.entity.FallingBlock
@@ -260,60 +257,9 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
         }
     }
 
-    // 16a. Redstone activation — block signals that originate from OUTSIDE a claim
-    //      from powering blocks inside it (cross-boundary "redstone tunnels").
-    //      Redstone entirely within a claim always works normally.
-    //
-    //      BlockRedstoneEvent isn't Cancellable; suppress the change by setting
-    //      newCurrent back to oldCurrent so vanilla treats it as a no-op tick.
-    //
-    //      Logic: only neutralize a rising edge if at least one currently-powered
-    //      neighbor is clearly outside this claim. If no powered neighbors are
-    //      detectable (common during in-claim propagation because block-state
-    //      updates lag a tick), the signal is internal — leave it alone.
-    @EventHandler(priority = EventPriority.HIGH)
-    fun onRedstone(event: BlockRedstoneEvent) {
-        if (event.newCurrent <= event.oldCurrent) return  // only inspect rising edges
-        val targetClaim = plugin.claimManager.getClaimAt(event.block.location) ?: return
-
-        // Intrinsic sources inside the claim are always self-powered — allow them.
-        if (isIntrinsicRedstoneSource(event.block)) return
-
-        // Neutralize only when a neighbor with confirmed power is from outside this
-        // claim. If no powered neighbor is found (stale state during propagation),
-        // the signal is internal and we let it through.
-        val faces = arrayOf(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST,
-            BlockFace.WEST, BlockFace.UP, BlockFace.DOWN)
-        val hasOutsideSource = faces.any { face ->
-            val n = event.block.getRelative(face)
-            if (n.blockPower <= 0) return@any false
-            val nClaim = plugin.claimManager.getClaimAt(n.location)
-            nClaim == null || nClaim.id != targetClaim.id
-        }
-        if (hasOutsideSource) event.newCurrent = event.oldCurrent
-    }
-
-    // Blocks whose rising-edge power change is driven by their own internal state
-    // (player interaction, light level, entity detection, block-state observation)
-    // rather than by adjacent redstone signal. These should always function normally
-    // when placed inside a claim; the boundary guard is enforced on the wires they
-    // power, not on the sources themselves.
-    private fun isIntrinsicRedstoneSource(block: Block): Boolean {
-        val t = block.type
-        return Tag.BUTTONS.isTagged(t)
-            || Tag.PRESSURE_PLATES.isTagged(t)
-            || t == Material.LEVER
-            || t == Material.COMPARATOR
-            || t == Material.DAYLIGHT_DETECTOR
-            || t == Material.OBSERVER
-            || t == Material.TRIPWIRE_HOOK
-            || t == Material.TARGET
-            || t == Material.SCULK_SENSOR
-            || t == Material.CALIBRATED_SCULK_SENSOR
-            || t == Material.LIGHTNING_ROD
-            || t == Material.REDSTONE_TORCH
-            || t == Material.REDSTONE_WALL_TORCH
-    }
+    // Redstone signals are deliberately NOT restricted by claims (#1042): dust,
+    // observers, etc. work normally and may cross claim boundaries. Griefing is
+    // covered by the break/place/interact checks and the piston boundary checks.
 
     // 16. Piston retract (sticky) — same boundary rule as extend.
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
