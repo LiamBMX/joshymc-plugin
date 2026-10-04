@@ -1358,6 +1358,20 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     )
                 }
             }
+            if (plugin.chatTagVoucherManager.isChatTagVoucher(serialized)) {
+                // Same template problem as credit vouchers: the snapshot carries the
+                // voucher_uuid of the item it was taken from, which is burned in
+                // chattag_voucher_redemptions after its first redemption. Mint a fresh
+                // id per delivery so every winner gets an independent single-use voucher.
+                serialized.amount = 1
+                serialized.editMeta { meta ->
+                    meta.persistentDataContainer.set(
+                        plugin.chatTagVoucherManager.voucherUuidKey,
+                        PersistentDataType.STRING,
+                        UUID.randomUUID().toString()
+                    )
+                }
+            }
             return serialized
         }
 
