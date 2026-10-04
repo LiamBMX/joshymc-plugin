@@ -32,6 +32,7 @@ class CreditsManager(private val plugin: Joshymc) : Listener {
                 credited_hours INTEGER NOT NULL DEFAULT 0
             )
         """.trimIndent())
+        plugin.databaseManager.createTable("CREATE INDEX IF NOT EXISTS idx_credits_balance ON credits (balance DESC, uuid ASC)")
 
         plugin.server.pluginManager.registerEvents(this, plugin)
 
@@ -96,6 +97,7 @@ class CreditsManager(private val plugin: Joshymc) : Listener {
     fun getBalance(player: Player): Double = getBalance(player.uniqueId)
 
     fun setBalance(uuid: UUID, amount: Double) {
+        topCache = null
         plugin.databaseManager.execute(
             "INSERT INTO credits (uuid, balance, credited_hours) VALUES (?, ?, 0) ON CONFLICT(uuid) DO UPDATE SET balance = ?",
             uuid.toString(), amount, amount
@@ -124,6 +126,7 @@ class CreditsManager(private val plugin: Joshymc) : Listener {
     fun transfer(from: UUID, to: UUID, amount: Double): Boolean {
         if (from == to || !amount.isFinite() || amount <= 0.0) return false
         if (!(getBalance(to) + amount).isFinite()) return false
+        topCache = null
         var ok = false
         try {
             plugin.databaseManager.transaction {
@@ -142,7 +145,30 @@ class CreditsManager(private val plugin: Joshymc) : Listener {
             plugin.logger.warning("[Credits] Transfer failed: ${e.message}")
             return false
         }
+        topCache = null
         return ok
+    }
+
+    @Volatile private var topCache: List<Pair<UUID, Double>>? = null
+    @Volatile private var topCacheAt: Long = 0L
+
+    /**
+     * Top [limit] current balances (highest first, ties broken by UUID so order is stable).
+     * Served from a short-lived cache that every balance write invalidates; the refresh is
+     * a single indexed LIMIT query. Zero/negative balances are excluded.
+     */
+    fun getTopBalances(limit: Int = 10): List<Pair<UUID, Double>> {
+        val cached = topCache
+        if (cached != null && System.currentTimeMillis() - topCacheAt < 30_000L && cached.size >= limit) {
+            return cached.take(limit)
+        }
+        val fresh = plugin.databaseManager.query(
+            "SELECT uuid, balance FROM credits WHERE balance > 0 ORDER BY balance DESC, uuid ASC LIMIT ?",
+            limit
+        ) { rs -> UUID.fromString(rs.getString("uuid")) to rs.getDouble("balance") }
+        topCache = fresh
+        topCacheAt = System.currentTimeMillis()
+        return fresh
     }
 
     fun format(amount: Double): String {

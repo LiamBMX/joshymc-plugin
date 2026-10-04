@@ -256,7 +256,7 @@ commands:
     usage: /tokens <give|sell|buy> [args...]
   credits:
     description: Check credits balance, pay other players, or manage player credits (admin)
-    usage: /credits <balance|bal|pay> [args...]
+    usage: /credits <balance|bal|baltop|pay> [args...]
     aliases: [credit]
   creditspay:
     description: Send Credits to another player
@@ -844,6 +844,9 @@ permissions:
     default: op
   joshymc.credits.balance:
     description: Check your own or another player's credits balance via /credits bal
+    default: true
+  joshymc.credits.baltop:
+    description: View the credits leaderboard via /credits baltop
     default: true
   joshymc.credits.pay:
     description: Pay other players credits via /credits pay
