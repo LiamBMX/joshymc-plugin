@@ -64,6 +64,7 @@ import com.liam.joshymc.command.FishCommand
 import com.liam.joshymc.command.MarketCommand
 import com.liam.joshymc.command.DailyCommand
 import com.liam.joshymc.command.DiscordCommand
+import com.liam.joshymc.command.IpCommand
 import com.liam.joshymc.command.QuestCycleCommand
 import com.liam.joshymc.command.EventQuestCommand
 import com.liam.joshymc.command.TagCommand
@@ -515,6 +516,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("tutorial")?.setExecutor(TutorialCommand(plugin))
         plugin.getCommand("media")?.setExecutor(MediaCommand(plugin))
         plugin.getCommand("discord")?.setExecutor(DiscordCommand(plugin))
+        plugin.getCommand("ip")?.setExecutor(IpCommand(plugin))
         plugin.getCommand("live")?.let { val c = LiveCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("promote")?.let { val c = PromoteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         PromoteCommand.createTable(plugin)
