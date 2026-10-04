@@ -58,6 +58,16 @@ class SignItemCommand(private val plugin: Joshymc) : CommandExecutor {
             return true
         }
 
+        val maxUses = plugin.config.getInt("signitem.max-uses-per-player", 5)
+        val used = getUses(sender)
+        if (!sender.hasPermission("joshymc.sign.item.bypass") && maxUses >= 0 && used >= maxUses) {
+            plugin.commsManager.send(
+                sender,
+                Component.text("You have reached your /signitem usage limit ($used/$maxUses).", NamedTextColor.RED)
+            )
+            return true
+        }
+
         val signedItem = itemInHand.clone()
         signedItem.amount = 1
         signedItem.editMeta { meta ->
@@ -89,9 +99,21 @@ class SignItemCommand(private val plugin: Joshymc) : CommandExecutor {
             sender.uniqueId.toString(), System.currentTimeMillis()
         )
 
+        plugin.databaseManager.execute(
+            "INSERT INTO signitem_uses (uuid, uses) VALUES (?, 1) " +
+                "ON CONFLICT(uuid) DO UPDATE SET uses = uses + 1",
+            sender.uniqueId.toString()
+        )
+
         plugin.commsManager.send(sender, Component.text("You signed your item!", NamedTextColor.GREEN))
         return true
     }
+
+    private fun getUses(player: Player): Int =
+        plugin.databaseManager.queryFirst(
+            "SELECT uses FROM signitem_uses WHERE uuid = ?",
+            player.uniqueId.toString()
+        ) { rs -> rs.getInt("uses") } ?: 0
 
     private fun getCooldownRemaining(player: Player): Long {
         if (player.hasPermission("joshymc.sign.item.bypass")) return 0L
@@ -124,6 +146,9 @@ class SignItemCommand(private val plugin: Joshymc) : CommandExecutor {
         fun createTable(plugin: Joshymc) {
             plugin.databaseManager.createTable(
                 "CREATE TABLE IF NOT EXISTS signitem_cooldowns (uuid TEXT PRIMARY KEY, last_signed_at INTEGER NOT NULL)"
+            )
+            plugin.databaseManager.createTable(
+                "CREATE TABLE IF NOT EXISTS signitem_uses (uuid TEXT PRIMARY KEY, uses INTEGER NOT NULL DEFAULT 0)"
             )
         }
     }

@@ -761,6 +761,12 @@ claims:
     - dungeon
 
 # Credits — secondary currency, passively earned from playtime
+# /signitem lifetime usage limit per player (never auto-resets).
+# -1 = unlimited, 0 = disabled, N = N signatures. Players with
+# joshymc.sign.item.bypass are exempt.
+signitem:
+  max-uses-per-player: 5
+
 credits:
   per-hour: 1.0  # Credits awarded per hour of playtime
 
