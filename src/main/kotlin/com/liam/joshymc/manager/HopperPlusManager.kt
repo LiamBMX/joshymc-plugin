@@ -198,6 +198,14 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
                 if (filterMat != null && item.type != filterMat) continue
             }
 
+            // Respect the destination hopper's filter (tick transfers bypass InventoryMoveItemEvent)
+            val destHolder = destination.holder
+            if (destHolder is Hopper) {
+                val destFilter = cache[key(destHolder.block.location)]?.filterItem
+                val destMat = destFilter?.let { try { Material.valueOf(it) } catch (_: Exception) { null } }
+                if (destMat != null && item.type != destMat) continue
+            }
+
             val transferAmount = minOf(maxTransfer, item.amount)
             val toTransfer = item.clone().apply { amount = transferAmount }
 
@@ -364,8 +372,14 @@ class HopperPlusManager(private val plugin: Joshymc) : Listener {
                 }
             }
 
-            // Cancel vanilla transfer — our tick task handles transfers for registered hoppers
-            event.isCancelled = true
+            // Only cancel the hopper's own output push — our tick task handles that at the
+            // configured speed. Other inventories pulling from it (e.g. a regular hopper
+            // underneath) must keep working through vanilla mechanics.
+            val hopperBlockData = srcHolder.block.blockData as? org.bukkit.block.data.type.Hopper ?: return
+            val outputTarget = (srcHolder.block.getRelative(hopperBlockData.facing).state as? org.bukkit.block.Container)?.inventory
+            if (outputTarget != null && outputTarget == event.destination) {
+                event.isCancelled = true
+            }
         }
     }
 
