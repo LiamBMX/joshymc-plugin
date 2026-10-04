@@ -65,7 +65,6 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 )
                 val display = renderNick(sender, nick)
                 sender.displayName(display)
-                sender.playerListName(display)
                 plugin.commsManager.send(sender, Component.text("Nickname set to ", NamedTextColor.GREEN).append(display))
             }
             "reset", "off", "clear" -> {
@@ -131,7 +130,6 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 )
                 val display = renderNick(target, nick)
                 target.displayName(display)
-                target.playerListName(display)
                 if (sender is Player) plugin.commsManager.send(sender, Component.text("Set ${target.name}'s nickname to ", NamedTextColor.GREEN).append(display))
                 else sender.sendMessage("Set ${target.name}'s nickname to ${nick}.")
             }
@@ -190,7 +188,6 @@ class NickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 Component.text("~", NamedTextColor.GRAY).append(core)
             }
             player.displayName(display)
-            player.playerListName(display)
         }
     }
 }

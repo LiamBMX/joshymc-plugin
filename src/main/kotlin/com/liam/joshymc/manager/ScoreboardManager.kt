@@ -281,14 +281,9 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
 
     private fun updateTabName(player: Player) {
         val prefix = plugin.rankManager.getPrefix(player)
-        val displayPlain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(player.displayName())
-        val name = if (displayPlain != player.name) {
-            net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().serialize(player.displayName())
-        } else {
-            player.name
-        }
+        // TAB always shows the real username; nicknames are chat-only
         player.playerListName(
-            plugin.commsManager.parseLegacy("$prefix$name")
+            plugin.commsManager.parseLegacy("$prefix${player.name}")
         )
 
     }
