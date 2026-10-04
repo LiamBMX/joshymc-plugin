@@ -3,7 +3,6 @@ package com.liam.joshymc.listener
 import com.liam.joshymc.Joshymc
 import org.bukkit.Bukkit
 import org.bukkit.entity.ArmorStand
-import org.bukkit.entity.EntityType
 import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Mob
 import org.bukkit.entity.Player
@@ -40,6 +39,23 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
         private const val SETTING_KEY = "mob_visibility"
 
         /**
+         * Entity types that stay visible when mob visibility is off (issue
+         * #1018). Matched by enum name so a type missing from the running API
+         * is ignored instead of breaking compilation. Neutral mobs (wolves,
+         * bees, polar bears, llamas, pandas, goats, foxes, dolphins, ...) are
+         * deliberately absent and stay hidden. IRON_GOLEM and SULFUR_CUBE are
+         * explicit exceptions to the passive-only rule.
+         */
+        private val ALWAYS_VISIBLE_TYPES = setOf(
+            "IRON_GOLEM", "SULFUR_CUBE",
+            "VILLAGER", "WANDERING_TRADER", "ALLAY", "ARMADILLO", "AXOLOTL", "BAT",
+            "CAMEL", "CAT", "CHICKEN", "COD", "COW", "DONKEY", "FROG", "GLOW_SQUID",
+            "HAPPY_GHAST", "HORSE", "MOOSHROOM", "MULE", "OCELOT", "PARROT", "PIG",
+            "RABBIT", "SALMON", "SHEEP", "SNIFFER", "SNOW_GOLEM", "SQUID", "STRIDER",
+            "TADPOLE", "TROPICAL_FISH", "TURTLE", "COPPER_GOLEM"
+        )
+
+        /**
          * Returns true for entities that the mob-hide setting should manage.
          * ArmorStands are LivingEntities but not mobs — always keep them visible.
          * Xray shulkers (tagged "joshymc_xray") are helper entities for the
@@ -50,8 +66,7 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
         private fun shouldHide(entity: LivingEntity): Boolean {
             if (entity is ArmorStand) return false
             if (entity is Villager) return false
-            if (entity.type == EntityType.AXOLOTL) return false
-            if (entity.type == EntityType.IRON_GOLEM) return false
+            if (entity.type.name in ALWAYS_VISIBLE_TYPES) return false
             if (entity.scoreboardTags.contains("joshymc_xray")) return false
             return true
         }
