@@ -161,7 +161,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         if (!sender.hasPermission("joshymc.credits.pay")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            plugin.commsManager.send(sender, Component.text("You don't have permission to pay credits.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return true
         }
 
@@ -225,9 +225,14 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         val sub = args.getOrNull(0)?.lowercase()
         return when (args.size) {
-            1 -> listOf("balance", "bal", "pay", "give", "take", "reset").filter { it.startsWith(args[0].lowercase()) }
+            1 -> buildList {
+                add("balance"); add("bal")
+                if (sender.hasPermission("joshymc.credits.pay")) add("pay")
+                if (sender.hasPermission("joshymc.credits")) addAll(listOf("give", "take", "reset"))
+            }.filter { it.startsWith(args[0].lowercase()) }
             2 -> {
                 if (sub == "pay") {
+                    if (!sender.hasPermission("joshymc.credits.pay")) return emptyList()
                     listOf("1", "5", "10", "100").filter { it.startsWith(args[1]) }
                 } else {
                     Bukkit.getOnlinePlayers().map { it.name }.filter { it.lowercase().startsWith(args[1].lowercase()) }
@@ -235,6 +240,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             }
             3 -> {
                 if (sub == "pay") {
+                    if (!sender.hasPermission("joshymc.credits.pay")) return emptyList()
                     Bukkit.getOnlinePlayers().map { it.name }
                         .filter { it != sender.name }
                         .filter { it.lowercase().startsWith(args[2].lowercase()) }

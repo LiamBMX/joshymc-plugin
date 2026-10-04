@@ -844,7 +844,7 @@ permissions:
     default: true
   joshymc.credits.pay:
     description: Pay other players credits via /credits pay
-    default: true
+    default: false
   joshymc.cshop:
     description: Access the credits-only shop
     default: true
