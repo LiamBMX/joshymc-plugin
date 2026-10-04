@@ -14,7 +14,7 @@ import org.bukkit.inventory.meta.ItemMeta
 class Token : CustomItem() {
 
     override val id = "token"
-    override val material = Material.RESIN_CLUMP
+    override val material = Material.DISC_FRAGMENT_5
     override val hasGlint = true
 
     override val displayName: Component = Component.text("Token", TextColor.color(0xFFD700))

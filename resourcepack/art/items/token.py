@@ -25,7 +25,7 @@ from art.kit import (animate, box, canvas, display, model, place, rgba, save, sa
 ID = "token"
 NAME = "Token"
 KIND = "item"
-COUNTERPART = "item/resin_clump"
+COUNTERPART = "item/disc_fragment_5"
 
 # --------------------------------------------------------------------------------------
 # Palettes (darkest -> lightest), hand-tuned hue shifts
