@@ -682,6 +682,20 @@ announcements:
     - "&fPROTECT YOUR BUILDS WITH &6/CLAIM WAND&f!"
     - "&fSELL ITEMS QUICKLY WITH &6/SELL&f!"
 
+# Rotating BossBar — one shared bar that cycles through messages and drains over each interval
+# color: PINK, BLUE, RED, GREEN, YELLOW, PURPLE, WHITE
+# style: SOLID, SEGMENTED_6, SEGMENTED_10, SEGMENTED_12, SEGMENTED_20
+rotating-bossbar:
+  enabled: true
+  interval-seconds: 10
+  countdown-enabled: true
+  color: YELLOW
+  style: SOLID
+  messages:
+    - "&6&lJOSHYMC STORE &8» &fGet exclusive items at &estore.joshymc.net"
+    - "&b&lJOIN OUR DISCORD &8» &fJoin our community at &bdiscord.gg/joshymc"
+    - "&a&lINVITE YOUR FRIENDS &8» &fIP: &eplay.joshymc.net &7| &fPort: &e25565"
+
 # Welcome / MOTD — join/leave messages
 welcome:
   # Type "welcome" in chat within 30 seconds of a new player's first join to
