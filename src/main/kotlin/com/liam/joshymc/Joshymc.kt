@@ -27,6 +27,7 @@ import com.liam.joshymc.manager.PunishmentManager
 import com.liam.joshymc.manager.ResourceWorldManager
 import com.liam.joshymc.manager.ScoreboardManager
 import com.liam.joshymc.manager.ChatTagManager
+import com.liam.joshymc.manager.StaffTagManager
 import com.liam.joshymc.manager.MarketManager
 import com.liam.joshymc.manager.QuestCycleManager
 import com.liam.joshymc.manager.EventQuestManager
@@ -258,6 +259,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var chatTagManager: ChatTagManager
         private set
+    lateinit var staffTagManager: StaffTagManager
+        private set
     lateinit var marketManager: MarketManager
         private set
     lateinit var chatGamesManager: com.liam.joshymc.manager.ChatGamesManager
@@ -339,6 +342,9 @@ class Joshymc : JavaPlugin() {
 
         chatTagManager = ChatTagManager(this)
         chatTagManager.start()
+
+        staffTagManager = StaffTagManager(this)
+        staffTagManager.start()
 
         commsManager = CommunicationsManager(this)
         commsManager.start()
@@ -718,6 +724,7 @@ class Joshymc : JavaPlugin() {
 
         // 9. Restart lag cleaner, combat manager, chat manager, and AFK manager with new config
         safe("rankManager.start") { rankManager.start() }
+        safe("staffTagManager.start") { staffTagManager.start() }
         safe("commsManager.start") { commsManager.start() }
         safe("lagCleanerManager.start") { lagCleanerManager.start() }
         safe("combatManager.start") { combatManager.start() }
