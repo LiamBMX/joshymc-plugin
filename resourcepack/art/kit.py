@@ -70,6 +70,7 @@ KINDS: dict[str, tuple[str, ...]] = {
     "crossbow": ("idle", "pull_0", "pull_1", "pull_2", "arrow", "firework"),
     "shield": ("main", "blocking"),
     "helmet": ("main",),
+    "chestplate": ("main",),
     "boots": ("main",),
     "elytra": ("main",),
     "food": ("main",),
@@ -83,7 +84,8 @@ OPTIONAL_MODELS = ("gui", "broken")
 HANDHELD = ("sword", "pickaxe", "axe", "shovel", "hoe", "mace", "trident")
 # Worn looks painted with save_layer(). Helmets are 3D models on the head instead.
 LAYERS = ("humanoid", "humanoid_leggings", "wings")
-REQUIRED_LAYERS = {"boots": ("humanoid",), "elytra": ("wings",), "leggings": ("humanoid_leggings",)}
+REQUIRED_LAYERS = {"boots": ("humanoid",), "elytra": ("wings",), "leggings": ("humanoid_leggings",),
+                   "chestplate": ("humanoid",)}
 NAMESPACE = "joshymc"
 # Animated frames are re-uploaded to the GPU as they play, so keep them modest.
 ANIMATION_SIZES = (16, 32, 64)
@@ -995,7 +997,7 @@ def display(kind: str, elements, grip=None, size: float = 1.0, gui_rotation=None
         out["ground"] = fit(elements, (0, 0, 0), 8.0, lift=2.0)
         out["fixed"] = fit(elements, (0, 180, 0), 14.0)
         out["on_shelf"] = fit(elements, (0, 180, 0), 12.0)
-    else:  # boots, elytra, food, item, leggings
+    else:  # chestplate, boots, elytra, food, item, leggings
         out["thirdperson_righthand"] = place({"y": (0, 1, 0), "z": (0, 0, -1)}, grip or centre, "fist", 0.45 * size)
         out["firstperson_righthand"] = place({"y": (0, 1, 0), "z": (0.35, 0, 1)}, grip or centre,
                                              (0.5, -0.42, -0.85), 0.55 * size, pose=None)
