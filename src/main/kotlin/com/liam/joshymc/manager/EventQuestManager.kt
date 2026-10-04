@@ -66,7 +66,9 @@ data class EventDef(
     val start: ZonedDateTime?,
     val end: ZonedDateTime?,
     val claimAfterEnd: Boolean,
-    val quests: List<EventQuestDef>
+    val quests: List<EventQuestDef>,
+    /** Exact reward stack for admin-created questlines (rewardSource "held-item"). */
+    val rewardItem: ItemStack? = null
 )
 
 /**
@@ -92,6 +94,9 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
 
     companion object {
         private const val PLACED_META = "joshymc_eventquest_placed"
+        private const val HELD_ITEM = "held-item"
+        private const val CUSTOM_FILE = "event-quests-custom.yml"
+        private val QUESTLINE_ID = Regex("[a-z0-9_-]{1,32}")
         private const val MIN_QUESTS = 2
         private const val MAX_QUESTS = 10
         private const val RESET_CONFIRM_MS = 30_000L
@@ -103,7 +108,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             "MELON", "PUMPKIN", "SUGAR_CANE", "CACTUS", "BAMBOO", "NETHER_WART",
             "COCOA", "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES", "WEEPING_VINES"
         )
-        private val REWARD_SOURCES = setOf("custom-item", "existing-custom-item", "crate-key")
+        private val REWARD_SOURCES = setOf("custom-item", "existing-custom-item", "crate-key", HELD_ITEM)
     }
 
     // ── State ───────────────────────────────────────────────────
@@ -182,20 +187,27 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         }
 
         systemEnabled = cfg.getBoolean("event-quests.enabled", true)
+        val loaded = LinkedHashMap<String, EventDef>()
         val section = cfg.getConfigurationSection("event-quests.events")
         if (section == null) {
-            plugin.logger.warning("[EventQuests] event-quests.yml has no 'event-quests.events' section — no events loaded.")
-            events = emptyMap()
-            byObjective = emptyMap()
-            return
+            plugin.logger.warning("[EventQuests] event-quests.yml has no 'event-quests.events' section — only admin-created questlines are loaded.")
+        } else {
+            for (rawId in section.getKeys(false)) {
+                val id = rawId.lowercase()
+                val s = section.getConfigurationSection(rawId)
+                if (s == null) { eventError(rawId, "is not a section"); continue }
+                if (!s.getBoolean("enabled", true)) continue
+                if (id in loaded) { eventError(rawId, "duplicate event id"); continue }
+                parseEvent(id, s)?.let { loaded[id] = it }
+            }
         }
 
-        val loaded = LinkedHashMap<String, EventDef>()
-        for (rawId in section.getKeys(false)) {
+        // Admin-created questlines (/eq admin create). Drafts missing a reward or 2+ quests stay unloaded.
+        val custom = customConfig().getConfigurationSection("questlines")
+        for (rawId in custom?.getKeys(false) ?: emptySet()) {
             val id = rawId.lowercase()
-            val s = section.getConfigurationSection(rawId)
-            if (s == null) { eventError(rawId, "is not a section"); continue }
-            if (!s.getBoolean("enabled", true)) continue
+            val s = custom?.getConfigurationSection(rawId) ?: continue
+            if (!s.getBoolean("enabled", true) || !isComplete(s)) continue
             if (id in loaded) { eventError(rawId, "duplicate event id"); continue }
             parseEvent(id, s)?.let { loaded[id] = it }
         }
@@ -218,14 +230,20 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         if (rewardSection == null) { eventError(id, "missing 'reward' section"); return null }
         val source = (rewardSection.getString("source") ?: "custom-item").lowercase()
         if (source !in REWARD_SOURCES) { eventError(id, "unknown reward source '$source'"); return null }
-        val itemId = rewardSection.getString("item-id")
+        val heldItem = if (source == HELD_ITEM) decodeItem(rewardSection.getString("item")) else null
+        if (source == HELD_ITEM && heldItem == null) { eventError(id, "held-item reward is missing or unreadable"); return null }
+        val itemId = if (source == HELD_ITEM) HELD_ITEM else rewardSection.getString("item-id")
         if (itemId.isNullOrBlank()) { eventError(id, "reward is missing 'item-id'"); return null }
-        if (source != "crate-key" && plugin.itemManager.getItem(itemId) == null) {
+        if (source != "crate-key" && source != HELD_ITEM && plugin.itemManager.getItem(itemId) == null) {
             eventError(id, "reward custom item '$itemId' does not exist")
             return null
         }
 
-        val rewardMaterial = if (source != "crate-key") plugin.itemManager.getItem(itemId)?.material else null
+        val rewardMaterial = when (source) {
+            HELD_ITEM -> heldItem?.type
+            "crate-key" -> null
+            else -> plugin.itemManager.getItem(itemId)?.material
+        }
         val displayItem = s.getString("display-item")?.let { Material.matchMaterial(it) }
             ?: rewardMaterial
             ?: Material.NETHER_STAR
@@ -258,12 +276,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
 
             val raw = (q.getString("material") ?: q.getString("entity"))?.uppercase()?.takeIf { it != "ANY" }
             if (raw != null) {
-                val valid = when (type) {
-                    EventObjective.KILL_MOB -> org.bukkit.entity.EntityType.entries.any { it.name == raw }
-                    EventObjective.KILL_PLAYER, EventObjective.TRAVEL, EventObjective.PLAY_TIME -> true
-                    else -> Material.matchMaterial(raw) != null
-                }
-                if (!valid) { eventError(id, "quest $n has unknown material/entity '$raw'"); return null }
+                if (!validTarget(type, raw)) { eventError(id, "quest $n has unknown material/entity '$raw'"); return null }
             }
             quests += EventQuestDef(n - 1, type, raw, amount, q.getString("name"), q.getString("description"))
         }
@@ -279,8 +292,20 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             start = start,
             end = end,
             claimAfterEnd = s.getBoolean("claim-after-end", false),
-            quests = quests
+            quests = quests,
+            rewardItem = heldItem
         )
+    }
+
+    private fun validTarget(type: EventObjective, raw: String): Boolean = when (type) {
+        EventObjective.KILL_MOB -> org.bukkit.entity.EntityType.entries.any { it.name == raw }
+        EventObjective.KILL_PLAYER, EventObjective.TRAVEL, EventObjective.PLAY_TIME -> true
+        else -> Material.matchMaterial(raw) != null
+    }
+
+    private fun decodeItem(raw: String?): ItemStack? {
+        if (raw.isNullOrBlank()) return null
+        return try { ItemStack.deserializeBytes(java.util.Base64.getDecoder().decode(raw)) } catch (e: Exception) { null }
     }
 
     /** Returns null for absent *or* invalid input; the caller distinguishes via `s.contains`. */
@@ -652,6 +677,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     /** Builds the reward from the existing custom item system, preserving all of its metadata. */
     fun buildReward(event: EventDef): ItemStack? {
         val stack = when (event.rewardSource) {
+            HELD_ITEM -> event.rewardItem?.clone()
             "crate-key" -> plugin.crateManager.createKeyStack(event.rewardItemId, 1)
             else -> plugin.itemManager.getItem(event.rewardItemId)?.createItemStack(1)
         }
@@ -736,6 +762,100 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             )
             comms.send(player, Component.text("Your inventory is full — free a slot and click the reward again (or rejoin) to receive it.", NamedTextColor.YELLOW))
         }
+    }
+
+    // ── Admin questline creation ────────────────────────────────
+
+    private fun customConfig(): YamlConfiguration {
+        val file = plugin.configFile(CUSTOM_FILE)
+        return if (file.exists()) YamlConfiguration.loadConfiguration(file) else YamlConfiguration()
+    }
+
+    private fun isComplete(s: ConfigurationSection): Boolean =
+        s.contains("reward.item") && (s.getConfigurationSection("quests")?.getKeys(false)?.size ?: 0) >= MIN_QUESTS
+
+    /** Questline ids created in-game (complete or draft). */
+    fun customQuestlineIds(): List<String> =
+        customConfig().getConfigurationSection("questlines")?.getKeys(false)?.toList() ?: emptyList()
+
+    /** Objective filter suggestions for tab completion. */
+    fun targetSuggestions(type: EventObjective): List<String> = when (type) {
+        EventObjective.KILL_MOB -> org.bukkit.entity.EntityType.entries
+            .filter { it != org.bukkit.entity.EntityType.UNKNOWN && it != org.bukkit.entity.EntityType.PLAYER }
+            .map { it.name } + "ANY"
+        EventObjective.KILL_PLAYER, EventObjective.TRAVEL, EventObjective.PLAY_TIME -> emptyList()
+        else -> Material.entries.filter { !it.isLegacy && it.isItem }.map { it.name } + "ANY"
+    }
+
+    private fun saveCustom(cfg: YamlConfiguration) {
+        val file = plugin.configFile(CUSTOM_FILE)
+        file.parentFile?.mkdirs()
+        cfg.save(file)
+        loadEvents()
+    }
+
+    /** Status line for admins: quest count, whether a reward is set, and whether the questline is live. */
+    fun questlineStatus(id: String): String {
+        val s = customConfig().getConfigurationSection("questlines.${id.lowercase()}") ?: return "Unknown questline '$id'."
+        val count = s.getConfigurationSection("quests")?.getKeys(false)?.size ?: 0
+        val reward = if (s.contains("reward.item")) "reward set" else "no reward yet"
+        val live = if (isComplete(s)) "LIVE in /eq" else "draft (needs $MIN_QUESTS-$MAX_QUESTS quests and a reward)"
+        return "$count/$MAX_QUESTS quests, $reward — $live"
+    }
+
+    /** Returns an error message, or null on success. */
+    fun createQuestline(rawId: String): String? {
+        val id = rawId.lowercase()
+        if (!QUESTLINE_ID.matches(id)) return "Name must be 1-32 characters: letters, digits, '-' or '_'."
+        val cfg = customConfig()
+        val mainFile = plugin.configFile("event-quests.yml")
+        val inMain = mainFile.exists() && YamlConfiguration.loadConfiguration(mainFile).contains("event-quests.events.$id")
+        if (cfg.contains("questlines.$id") || id in events || inMain) return "A quest set named '$id' already exists."
+        cfg.set("questlines.$id.name", rawId)
+        cfg.set("questlines.$id.enabled", true)
+        saveCustom(cfg)
+        return null
+    }
+
+    private fun anyProgress(id: String, column: String): Boolean {
+        var found = false
+        plugin.databaseManager.query(
+            "SELECT 1 FROM event_quest_progress WHERE event_id = ? AND $column = 1 LIMIT 1", id
+        ) { _ -> found = true }
+        return found
+    }
+
+    /** Stores an exact copy of [stack] (components, enchants, model data, amount) as the reward. */
+    fun setQuestlineReward(rawId: String, stack: ItemStack): String? {
+        val id = rawId.lowercase()
+        val cfg = customConfig()
+        if (!cfg.contains("questlines.$id")) return "Unknown questline '$rawId'. Create it with /eq admin create first."
+        if (stack.type == Material.AIR) return "Hold the item you want to use as the reward."
+        if (anyProgress(id, "claimed")) return "Players have already claimed this reward, so it can't be changed."
+        cfg.set("questlines.$id.reward.source", HELD_ITEM)
+        cfg.set("questlines.$id.reward.item", java.util.Base64.getEncoder().encodeToString(stack.serializeAsBytes()))
+        saveCustom(cfg)
+        return null
+    }
+
+    /** Appends an objective. [rawTarget] null/ANY = no filter. Returns an error message, or null on success. */
+    fun addQuestlineQuest(rawId: String, type: EventObjective, rawTarget: String?, amount: Int): String? {
+        val id = rawId.lowercase()
+        val cfg = customConfig()
+        if (!cfg.contains("questlines.$id")) return "Unknown questline '$rawId'. Create it with /eq admin create first."
+        if (amount <= 0) return "Amount must be a positive number."
+        val target = rawTarget?.uppercase()?.takeIf { it != "ANY" }
+        val key = if (type == EventObjective.KILL_MOB) "entity" else "material"
+        if (target != null && !validTarget(type, target)) return "Unknown $key '$rawTarget' for ${type.name}."
+        val count = cfg.getConfigurationSection("questlines.$id.quests")?.getKeys(false)?.size ?: 0
+        if (count >= MAX_QUESTS) return "A questline can have at most $MAX_QUESTS quests."
+        if (anyProgress(id, "completed")) return "Players have already completed this questline, so quests can't be added."
+        val path = "questlines.$id.quests.${count + 1}"
+        cfg.set("$path.type", type.name)
+        if (target != null) cfg.set("$path.$key", target)
+        cfg.set("$path.amount", amount)
+        saveCustom(cfg)
+        return null
     }
 
     // ── Admin ───────────────────────────────────────────────────
