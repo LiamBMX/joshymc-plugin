@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -21,6 +22,10 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
         if (args[0].equals("pay", ignoreCase = true)) {
             return handlePay(sender, args)
+        }
+
+        if (args[0].equals("baltop", ignoreCase = true)) {
+            return handleBaltop(sender)
         }
 
         if (!sender.hasPermission("joshymc.credits")) {
@@ -147,6 +152,34 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         return true
     }
 
+    private fun handleBaltop(sender: CommandSender): Boolean {
+        fun reply(c: Component) {
+            if (sender is Player) plugin.commsManager.send(sender, c, CommunicationsManager.Category.ECONOMY) else sender.sendMessage(c)
+        }
+        if (!sender.hasPermission("joshymc.credits.baltop")) {
+            reply(Component.text("You don't have permission to view the credits leaderboard.", NamedTextColor.RED))
+            return true
+        }
+        val top = plugin.creditsManager.getTopBalances(10)
+        reply(Component.text("CREDITS LEADERBOARD", NamedTextColor.AQUA, TextDecoration.BOLD))
+        reply(Component.text("Top 10 Players by Credits", NamedTextColor.GRAY))
+        if (top.isEmpty()) {
+            reply(Component.text("No one has any credits yet.", NamedTextColor.GRAY))
+            return true
+        }
+        top.forEachIndexed { i, (uuid, bal) ->
+            val name = Bukkit.getOfflinePlayer(uuid).name ?: uuid.toString().take(8)
+            val rankColor = if (i % 2 == 0) NamedTextColor.GOLD else NamedTextColor.GRAY
+            reply(
+                Component.text("#${i + 1} ", rankColor)
+                    .append(Component.text(name, NamedTextColor.WHITE))
+                    .append(Component.text(" - ", NamedTextColor.DARK_GRAY))
+                    .append(Component.text("${plugin.creditsManager.format(bal)} Credits", NamedTextColor.AQUA))
+            )
+        }
+        return true
+    }
+
     private fun resolveTarget(name: String): Pair<String, UUID>? {
         val online = Bukkit.getPlayerExact(name)
         if (online != null) return online.name to online.uniqueId
@@ -227,6 +260,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         return when (args.size) {
             1 -> buildList {
                 add("balance"); add("bal")
+                if (sender.hasPermission("joshymc.credits.baltop")) add("baltop")
                 if (sender.hasPermission("joshymc.credits.pay")) add("pay")
                 if (sender.hasPermission("joshymc.credits")) addAll(listOf("give", "take", "reset"))
             }.filter { it.startsWith(args[0].lowercase()) }
