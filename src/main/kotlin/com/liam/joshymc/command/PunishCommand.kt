@@ -26,6 +26,26 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        if (args.size == 1 && args[0].equals("reload", ignoreCase = true) && sender.hasPermission("joshymc.punish.reload")) {
+            val count = plugin.punishPresetManager.reload()
+            sender.sendMessage(Component.text("Reloaded punishment-presets.yml ($count enabled preset${if (count == 1) "" else "s"}).", NamedTextColor.GREEN))
+            return true
+        }
+
+        if (args.size == 1 && sender is Player) {
+            val target = resolveOfflinePlayer(args[0])
+            if (target == null) {
+                sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+                return true
+            }
+            if (sender.uniqueId == target.first) {
+                sender.sendMessage(Component.text("You cannot punish yourself.", NamedTextColor.RED))
+                return true
+            }
+            plugin.punishGui.open(sender, target.first, target.second)
+            return true
+        }
+
         if (args.size < 2) {
             sender.sendMessage(Component.text("Usage: /punish <player> <${TYPES.joinToString("|")}> [duration] <reason>", NamedTextColor.RED))
             return true
@@ -265,7 +285,8 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
-            1 -> onlinePlayerNames(args[0])
+            1 -> onlinePlayerNames(args[0]) +
+                if (sender.hasPermission("joshymc.punish.reload") && "reload".startsWith(args[0], ignoreCase = true)) listOf("reload") else emptyList()
             2 -> TYPES.filter { sender.hasPermission("joshymc.punish.$it") && it.startsWith(args[1], ignoreCase = true) }
             3 -> {
                 val type = args[1].lowercase()
