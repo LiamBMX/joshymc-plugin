@@ -508,6 +508,10 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Nickname ─────────────────────────────────
         NickCommand.createTable(plugin)
         plugin.getCommand("nick")?.let { val c = NickCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        // Another plugin (e.g. an Essentials-style /nick) may have claimed the bare
+        // names, which silently sends `/nick realname` to the wrong plugin.
+        // Re-claim them once every plugin has finished loading (issue #1052).
+        plugin.server.scheduler.runTask(plugin, Runnable { reclaimCommand("nick", "nickname") })
 
         // ── Announce ─────────────────────────────────
         plugin.getCommand("announce")?.let { val c = AnnounceCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
@@ -906,6 +910,22 @@ class CommandManager(private val plugin: Joshymc) {
      * plugin's identically-named command can take the unprefixed slot. Used when
      * a feature is disabled to avoid hijacking commands like `/vote`.
      */
+    private fun reclaimCommand(vararg names: String) {
+        val ours = plugin.getCommand("nick") ?: return
+        try {
+            val known = plugin.server.commandMap.knownCommands
+            for (name in names) {
+                val current = known[name]
+                if (current != null && current !== ours) {
+                    plugin.logger.warning("[CommandManager] /$name was owned by another plugin ($current) — reclaiming for JoshyMC.")
+                    known[name] = ours
+                }
+            }
+        } catch (e: Exception) {
+            plugin.logger.warning("[CommandManager] Could not reclaim ${names.joinToString { "/$it" }}: ${e.message}")
+        }
+    }
+
     private fun unregisterCommand(name: String) {
         val pluginCommand = plugin.getCommand(name) ?: return
         try {
