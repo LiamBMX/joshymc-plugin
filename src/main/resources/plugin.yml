@@ -258,6 +258,9 @@ commands:
     description: Check credits balance, pay other players, or manage player credits (admin)
     usage: /credits <balance|bal|pay> [args...]
     aliases: [credit]
+  creditspay:
+    description: Send Credits to another player
+    usage: /creditspay <amount> <player>
   cshop:
     description: Browse or manage the credits-only shop
     usage: /cshop [additem|removeitem|category|list] [args...]
