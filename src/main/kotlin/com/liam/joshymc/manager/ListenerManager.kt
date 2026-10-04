@@ -160,6 +160,9 @@ class ListenerManager(private val plugin: Joshymc) {
         // Coinflip create-amount chat input + quit cleanup
         pm.registerEvents(com.liam.joshymc.listener.CoinflipChatListener(plugin), plugin)
 
+        // Credits Coinflip wager chat input + quit cleanup
+        pm.registerEvents(com.liam.joshymc.listener.CreditsCoinflipChatListener(plugin), plugin)
+
         // Casino bet-amount chat input + disconnect safety (Mines/Towers auto-cashout) + quit cleanup
         pm.registerEvents(com.liam.joshymc.listener.CasinoChatListener(plugin), plugin)
 

@@ -343,6 +343,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("ccoinflip")?.let {
+            val cmd = com.liam.joshymc.command.CreditsCoinflipCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
         plugin.getCommand("casino")?.let {
             it.setExecutor(com.liam.joshymc.command.CasinoCommand(plugin))
         }

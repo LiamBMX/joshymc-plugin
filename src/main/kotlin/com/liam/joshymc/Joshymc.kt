@@ -186,6 +186,7 @@ class Joshymc : JavaPlugin() {
         private set
 
     lateinit var creditsManager: com.liam.joshymc.manager.CreditsManager
+    lateinit var creditsCoinflipManager: com.liam.joshymc.manager.CreditsCoinflipManager
         private set
     lateinit var stockMarketManager: StockMarketManager
         private set
@@ -404,6 +405,7 @@ class Joshymc : JavaPlugin() {
         autoRestartManager = AutoRestartManager(this)
         playtimeManager = PlaytimeManager(this)
         creditsManager = com.liam.joshymc.manager.CreditsManager(this)
+        creditsCoinflipManager = com.liam.joshymc.manager.CreditsCoinflipManager(this)
         questCycleManager = QuestCycleManager(this)
         questCycleManager.createTables()
         eventQuestManager = EventQuestManager(this)
@@ -457,6 +459,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("npcs")) npcManager.start()
         crateManager.start()
         if (isFeatureEnabled("coinflip")) coinflipManager.start()
+        if (isFeatureEnabled("coinflip")) creditsCoinflipManager.start()
         if (isFeatureEnabled("casino")) {
             casinoManager.start()
             casinoMinesManager.start()
@@ -560,6 +563,7 @@ class Joshymc : JavaPlugin() {
         giveawayManager.stop()
         giftManager.stop()
         coinflipManager.stop()
+        creditsCoinflipManager.stop()
         casinoMinesManager.stop()
         casinoRouletteManager.stop()
         casinoCrashManager.stop()
@@ -632,6 +636,7 @@ class Joshymc : JavaPlugin() {
         safe("giveawayManager.stop") { giveawayManager.stop() }
         safe("giftManager.stop") { giftManager.stop() }
         safe("coinflipManager.stop") { coinflipManager.stop() }
+        safe("creditsCoinflipManager.stop") { creditsCoinflipManager.stop() }
         safe("casinoMinesManager.stop") { casinoMinesManager.stop() }
         safe("casinoRouletteManager.stop") { casinoRouletteManager.stop() }
         safe("casinoCrashManager.stop") { casinoCrashManager.stop() }
@@ -682,6 +687,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("giveaways")) safe("giveawayManager.start") { giveawayManager.start() }
         if (isFeatureEnabled("gift")) safe("giftManager.start") { giftManager.start() }
         if (isFeatureEnabled("coinflip")) safe("coinflipManager.start") { coinflipManager.start() }
+        if (isFeatureEnabled("coinflip")) safe("creditsCoinflipManager.start") { creditsCoinflipManager.start() }
         if (isFeatureEnabled("casino")) {
             safe("casinoManager.start") { casinoManager.start() }
             safe("casinoMinesManager.start") { casinoMinesManager.start() }

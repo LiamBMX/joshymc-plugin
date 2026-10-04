@@ -142,6 +142,10 @@ commands:
     description: Open the Player-vs-Player Coinflip GUI, or create/manage a Coinflip
     usage: /coinflip [create <amount>] [notify <on/off>] [admin cancel <id>]
     aliases: [cf]
+  ccoinflip:
+    description: Open the Credits Coinflip GUI, or create a Credits Coinflip
+    usage: /ccoinflip [create <amount>]
+    aliases: [ccf]
   casino:
     description: Open the Casino GUI (Mines, Roulette, Crash, Towers, Statistics)
     usage: /casino
@@ -812,6 +816,9 @@ permissions:
   joshymc.coinflip.admin:
     description: Cancel any waiting Coinflip and refund the creator
     default: op
+  joshymc.credits.coinflip:
+    description: Play Credits Coinflip via /ccoinflip (grants no admin Credits access)
+    default: true
   joshymc.casino:
     description: Open the Casino GUI and play Mines, Roulette, Crash and Towers
     default: true
