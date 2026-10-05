@@ -134,3 +134,38 @@ class GreatPumpkinPie : CustomItem() {
         meta.setItemModel(NamespacedKey(Joshymc.instance, id))
     }
 }
+
+// ── Haunted Hollow armor set ────────────────────────────────────────────────
+// Worn with the Jack-o'-Lantern Mask. Plain Netherite underneath: vanilla stats and
+// durability, no enchantments, attributes or abilities, so players enchant them normally.
+abstract class HauntedHollowPiece(
+    override val id: String,
+    override val material: Material,
+    name: String,
+    private val slot: EquipmentSlot,
+) : CustomItem() {
+
+    override val displayName: Component = Component.text(name, TextColor.color(0xFF7518))
+        .decoration(TextDecoration.ITALIC, false)
+        .decoration(TextDecoration.BOLD, true)
+
+    override val lore: List<Component> = emptyList()
+
+    override fun applyMeta(meta: ItemMeta) {
+        meta.setItemModel(NamespacedKey(Joshymc.instance, id))
+        val equippable = meta.equippable
+        equippable.slot = slot
+        // Worn layer: equipment/<id>.json (humanoid or humanoid_leggings).
+        equippable.model = NamespacedKey(Joshymc.instance, id)
+        meta.setEquippable(equippable)
+    }
+}
+
+class HauntedHollowChestplate : HauntedHollowPiece(
+    "haunted_hollow_chestplate", Material.NETHERITE_CHESTPLATE, "Haunted Hollow Chestplate", EquipmentSlot.CHEST)
+
+class HauntedHollowLeggings : HauntedHollowPiece(
+    "haunted_hollow_leggings", Material.NETHERITE_LEGGINGS, "Haunted Hollow Leggings", EquipmentSlot.LEGS)
+
+class HauntedHollowBoots : HauntedHollowPiece(
+    "haunted_hollow_boots", Material.NETHERITE_BOOTS, "Haunted Hollow Boots", EquipmentSlot.FEET)
