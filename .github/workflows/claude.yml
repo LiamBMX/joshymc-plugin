@@ -40,6 +40,8 @@ jobs:
       )) ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'claude/'))
     runs-on: ubuntu-latest
+    # Art issues run many render/critique rounds on Opus; cap a run at three hours.
+    timeout-minutes: 180
     permissions:
       contents: write
       issues: write
@@ -66,13 +68,57 @@ jobs:
 
       - run: pip install pillow numpy
 
+      # Images attached to the issue (concept art, screenshots) are saved to
+      # .issue-images/ so Claude can open them with Read. The action only
+      # downloads images itself in tag mode, and this workflow passes a prompt
+      # (agent mode). For PRs on claude/issue-N branches the linked issue's
+      # images are fetched too. body_html carries short-lived signed image URLs.
+      - name: Download images attached to the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set +e
+          dir="$GITHUB_WORKSPACE/.issue-images"
+          mkdir -p "$dir"
+          echo ".issue-images/" >> .git/info/exclude
+          numbers="$NUMBER"
+          linked=$(echo "${HEAD_REF:-}" | sed -nE 's|^claude/issue-([0-9]+)$|\1|p')
+          [ -n "$linked" ] && numbers="$linked $numbers"
+          urls="$RUNNER_TEMP/image-urls.txt"
+          : > "$urls"
+          for n in $numbers; do
+            { gh api -H "Accept: application/vnd.github.full+json" "repos/$REPO/issues/$n" --jq '.body_html // ""'
+              gh api -H "Accept: application/vnd.github.full+json" --paginate "repos/$REPO/issues/$n/comments" --jq '.[].body_html // ""'
+            } | grep -oE '<img [^>]*src="https://[^"]+"' | sed -E 's/.*src="([^"]+)".*/\1/; s/&amp;/\&/g' \
+              | grep -v 'githubassets.com/images/icons/emoji' >> "$urls"
+          done
+          i=0
+          awk '!seen[$0]++' "$urls" | head -20 | while read -r url; do
+            i=$((i + 1))
+            tmp="$dir/download-$i"
+            if ! curl -sSfL --max-time 60 --max-filesize 25000000 "$url" -o "$tmp"; then rm -f "$tmp"; continue; fi
+            case "$(file -b --mime-type "$tmp")" in
+              image/png) mv "$tmp" "$dir/image-$i.png" ;;
+              image/jpeg) mv "$tmp" "$dir/image-$i.jpg" ;;
+              image/gif) mv "$tmp" "$dir/image-$i.gif" ;;
+              image/webp) mv "$tmp" "$dir/image-$i.webp" ;;
+              *) rm -f "$tmp" ;;
+            esac
+          done
+          echo "Images saved for Claude:"
+          ls -la "$dir"
+          exit 0
+
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Allow the Claude GitHub App itself to trigger this workflow, so
           # issues Claude opens during triage cascade-fix without manual nudge.
           allowed_bots: 'claude'
-          claude_args: '--allowed-tools "Bash(./gradlew:*),Bash(python3:*),Bash(python:*),Bash(git:*),Bash(gh:*),Bash(cp:*),Bash(ls:*),Bash(cat:*),Bash(mkdir:*),Edit,Write,Read,Glob,Grep"'
+          claude_args: '--model opus --max-turns 400 --allowed-tools "Bash(./gradlew:*),Bash(python3:*),Bash(python:*),Bash(git:*),Bash(gh:*),Bash(cp:*),Bash(ls:*),Bash(cat:*),Bash(mkdir:*),Edit,Write,Read,Glob,Grep,Task,Agent"'
           prompt: |
             You are working on the JoshyMC Paper plugin repo. The project's
             CLAUDE.md describes the codebase, conventions, and the established
@@ -83,6 +129,15 @@ jobs:
             `python3 -m art.build <id> ...` (CLAUDE.md's `py` is the Windows
             launcher). Pillow and numpy are installed. Commit the art modules
             together with the files art.build generates.
+
+            Reference images: images attached to this issue and its comments
+            (and, for a PR, to the linked issue) are saved in `.issue-images/`;
+            it is empty when there are none. Open every one with the Read tool
+            before you start. Concept art is the visual target: match its
+            silhouette, palette and key details as closely as Minecraft can
+            render them, and say in the PR how you followed it and where the
+            game forced a change. Screenshots show what is being reported.
+            Never commit `.issue-images/`.
 
             Trigger context:
               event:        ${{ github.event_name }}
@@ -123,6 +178,11 @@ jobs:
                  commsManager.send / Adventure API but used legacy ChatColor,
                  Bukkit gotchas listed in CLAUDE.md (hand-filtering events,
                  mutual-exclusivity of teams, etc.).
+               - If the PR adds or changes item art (`resourcepack/art/` or
+                 `resourcepack/assets/`), also run `python3 -m art.check` and
+                 `python3 -m art.render` on the changed modules, open the
+                 renders and the reference images in `.issue-images/`, and
+                 judge the art against the ART WORK bar below.
                - Post ONE consolidated review comment summarizing findings.
                  If the PR is good, post a short "looks good" review.
                  If there's a real problem, request changes and describe
@@ -143,6 +203,35 @@ jobs:
                    * `git tag v1.0.<N> && git push origin v1.0.<N>`
                  Only release from `main` (or right after merging a PR to
                  main). Never release from an unmerged feature branch.
+
+            ART WORK (whenever the task adds or changes item art, textures or
+            models, whatever the trigger):
+              - The bar is the existing premium items: the limited-edition
+                sets (e.g. `art/items/frostbite.py`, `pumpkin_pummel.py`) and
+                the animated items (fish, eggs, crate keys). Bold silhouettes,
+                real 3D depth (layered parts, bevels, ornaments; usually
+                60-300 elements per model), hand-painted hue-shifted pixel
+                textures, glow on accents only, and animated textures where
+                CLAUDE.md says the item type animates. Follow CLAUDE.md's
+                Resource Pack section, and if the item belongs to a set, read
+                a finished item of that set first and match it.
+              - Iterate before opening the PR. For each item: run
+                `python3 -m art.check <id>`, then `python3 -m art.render <id>`,
+                open EVERY PNG it prints with Read, critique it like a
+                demanding art director (silhouette, theme, palette, depth,
+                animation loop, inventory/held/worn views, the reference
+                image), and improve it. Do at least three render-critique-
+                improve rounds per item.
+              - Then get an independent review: launch a subagent (the
+                Task/Agent tool) as a strict art reviewer with fresh context.
+                Give it the issue text, the `.issue-images/` paths, the module
+                paths and the render PNG paths, and ask for a verdict (approve
+                or changes) with concrete fixes. Apply the fixes, re-render,
+                and review again until it approves, at most three review
+                rounds.
+              - Only then run `python3 -m art.build <ids>`, `./gradlew build`,
+                commit, and open the PR. Summarize the reviewer's final verdict
+                and how the reference images were used in the PR body.
 
             Hard rules:
               - Never force-push, never bypass hooks, never commit secrets.
