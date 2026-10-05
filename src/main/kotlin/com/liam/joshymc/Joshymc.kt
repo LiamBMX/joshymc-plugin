@@ -1135,6 +1135,18 @@ class Joshymc : JavaPlugin() {
             hidden = true
         ))
 
+        // Owned by /serverbar (issue #1059); default on so new players see the bar.
+        settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.RotatingBossBarManager.SETTING_KEY,
+            displayName = "Server Bar",
+            description = "Show the rotating server info BossBar",
+            material = org.bukkit.Material.NAME_TAG,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = true,
+            permission = "joshymc.serverbar",
+            hidden = true
+        ))
+
         // Active /settings toggles (issue #501)
         settingsManager.register(SettingsManager.SettingDef(
             key = com.liam.joshymc.manager.ScoreboardManager.SCOREBOARD_SETTING_KEY,

@@ -3,6 +3,7 @@ package com.liam.joshymc.manager
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.bossbar.BossBar
 import org.bukkit.Bukkit
+import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.HandlerList
 import org.bukkit.event.Listener
@@ -15,6 +16,7 @@ import org.bukkit.scheduler.BukkitTask
  * optionally, drains from full to empty over each message's display interval.
  * A single repeating task drives it; every online player is a viewer of the same bar,
  * so joiners see the current message at its current progress.
+ * Players who turned it off with `/serverbar off` (setting [SETTING_KEY]) just aren't viewers.
  */
 class RotatingBossBarManager(private val plugin: Joshymc) : Listener {
 
@@ -45,7 +47,9 @@ class RotatingBossBarManager(private val plugin: Joshymc) : Listener {
         cycleStartMs = System.currentTimeMillis()
         val created = BossBar.bossBar(render(0), 1.0f, color, overlay)
         bar = created
-        for (player in Bukkit.getOnlinePlayers()) player.showBossBar(created)
+        for (player in Bukkit.getOnlinePlayers()) {
+            if (wantsBar(player)) player.showBossBar(created)
+        }
 
         plugin.server.pluginManager.registerEvents(this, plugin)
         task = plugin.server.scheduler.runTaskTimer(plugin, Runnable { tick() }, 2L, 2L)
@@ -75,11 +79,22 @@ class RotatingBossBarManager(private val plugin: Joshymc) : Listener {
         b.progress(progress.coerceIn(0.0f, 1.0f))
     }
 
+    /**
+     * Applies a player's `/serverbar` choice to the shared bar. Re-showing attaches them
+     * to the same bar, so they see the current message at its current progress.
+     */
+    fun setVisible(player: Player, visible: Boolean) {
+        val b = bar ?: return
+        if (visible) player.showBossBar(b) else player.hideBossBar(b)
+    }
+
+    private fun wantsBar(player: Player) = plugin.settingsManager.getSetting(player, SETTING_KEY)
+
     private fun render(i: Int) = plugin.commsManager.parseLegacy(messages[i])
 
     @EventHandler
     fun onJoin(event: PlayerJoinEvent) {
-        bar?.let { event.player.showBossBar(it) }
+        bar?.let { if (wantsBar(event.player)) event.player.showBossBar(it) }
     }
 
     @EventHandler
@@ -106,5 +121,9 @@ class RotatingBossBarManager(private val plugin: Joshymc) : Listener {
             plugin.logger.warning("[RotatingBossBar] Unknown style: $name")
             BossBar.Overlay.PROGRESS
         }
+    }
+
+    companion object {
+        const val SETTING_KEY = "serverbar"
     }
 }

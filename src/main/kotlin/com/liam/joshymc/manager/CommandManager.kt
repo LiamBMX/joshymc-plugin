@@ -106,6 +106,7 @@ import com.liam.joshymc.command.SetHomeCommand
 import com.liam.joshymc.command.SetSpawnCommand
 import com.liam.joshymc.command.SetWarpCommand
 import com.liam.joshymc.command.ScoreboardCommand
+import com.liam.joshymc.command.ServerBarCommand
 import com.liam.joshymc.command.SettingsCommand
 import com.liam.joshymc.command.SitCommand
 import com.liam.joshymc.command.SpawnCommand
@@ -178,6 +179,12 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("scoreboard")?.let {
             val cmd = ScoreboardCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("serverbar")?.let {
+            val cmd = ServerBarCommand(plugin)
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
