@@ -32,6 +32,10 @@ commands:
     description: Toggle your own sidebar scoreboard
     usage: /scoreboard [on|off]
     aliases: [sb]
+  serverbar:
+    description: Show or hide the rotating server info BossBar for yourself
+    usage: /serverbar <on|off>
+    permission: joshymc.serverbar
   sit:
     description: Sit down where you are
     usage: /sit
@@ -665,6 +669,9 @@ permissions:
     default: true
   joshymc.scoreboard:
     description: Allows toggling your own sidebar scoreboard
+    default: true
+  joshymc.serverbar:
+    description: Allows toggling the rotating server info BossBar for yourself
     default: true
   joshymc.sit:
     description: Allows using /sit
