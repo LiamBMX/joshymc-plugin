@@ -123,9 +123,14 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         // Load nickname if set
         com.liam.joshymc.command.NickCommand.loadNickname(plugin, player)
 
-        // Replace vanilla join message
-        val formattedJoin = joinFormat.replace("{player}", name)
-        event.joinMessage(plugin.commsManager.parseLegacy(formattedJoin))
+        // Replace vanilla join message (hidden for vanished / joshymc.silentjoin staff)
+        val silent = plugin.vanishCommand.hidesJoinLeave(player)
+        if (silent) {
+            event.joinMessage(null)
+        } else {
+            val formattedJoin = joinFormat.replace("{player}", name)
+            event.joinMessage(plugin.commsManager.parseLegacy(formattedJoin))
+        }
 
         val isFirstJoin = !player.hasPlayedBefore()
 
@@ -145,27 +150,31 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
                 )
             }
 
-            // Open a 30-second window during which other players can type
-            // "welcome" in chat to claim the reward. Reconnecting during (or
-            // after) this window never re-opens it — it's keyed off this join.
-            recentNewPlayers[player.uniqueId] = WelcomeEntry(name, now)
-            plugin.server.scheduler.runTaskLater(plugin, Runnable {
-                recentNewPlayers.remove(player.uniqueId)
-            }, WELCOME_WINDOW_TICKS)
+            // A silent join isn't announced through the first-join broadcasts
+            // or the "welcome" reward either (the join number is still recorded).
+            if (!silent) {
+                // Open a 30-second window during which other players can type
+                // "welcome" in chat to claim the reward. Reconnecting during (or
+                // after) this window never re-opens it — it's keyed off this join.
+                recentNewPlayers[player.uniqueId] = WelcomeEntry(name, now)
+                plugin.server.scheduler.runTaskLater(plugin, Runnable {
+                    recentNewPlayers.remove(player.uniqueId)
+                }, WELCOME_WINDOW_TICKS)
 
-            // Broadcast the numbered first-join welcome
-            if (joinNumberBroadcast) {
-                val formattedNumber = String.format(Locale.US, "%,d", joinNumber)
-                val numberedText = joinNumberMessage
-                    .replace("{player}", name)
-                    .replace("{join_number}", formattedNumber)
-                plugin.server.broadcast(plugin.commsManager.parseLegacy(numberedText))
-            }
+                // Broadcast the numbered first-join welcome
+                if (joinNumberBroadcast) {
+                    val formattedNumber = String.format(Locale.US, "%,d", joinNumber)
+                    val numberedText = joinNumberMessage
+                        .replace("{player}", name)
+                        .replace("{join_number}", formattedNumber)
+                    plugin.server.broadcast(plugin.commsManager.parseLegacy(numberedText))
+                }
 
-            // Broadcast the welcome-reward call-to-action
-            if (firstJoinBroadcast) {
-                val welcomeText = firstJoinMessage.replace("{player}", name)
-                plugin.server.broadcast(plugin.commsManager.parseLegacy(welcomeText))
+                // Broadcast the welcome-reward call-to-action
+                if (firstJoinBroadcast) {
+                    val welcomeText = firstJoinMessage.replace("{player}", name)
+                    plugin.server.broadcast(plugin.commsManager.parseLegacy(welcomeText))
+                }
             }
 
             // Teleport first-time joiners to the configured spawn so they
@@ -213,7 +222,11 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
     fun onQuit(event: PlayerQuitEvent) {
         val name = event.player.name
 
-        // Replace vanilla leave message
+        // Replace vanilla leave message (hidden for vanished / joshymc.silentjoin staff)
+        if (plugin.vanishCommand.hidesJoinLeave(event.player)) {
+            event.quitMessage(null)
+            return
+        }
         val formattedLeave = leaveFormat.replace("{player}", name)
         event.quitMessage(plugin.commsManager.parseLegacy(formattedLeave))
     }

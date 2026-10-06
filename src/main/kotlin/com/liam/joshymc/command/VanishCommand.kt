@@ -15,16 +15,26 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
-import org.bukkit.event.player.PlayerQuitEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, TabCompleter {
 
+    companion object {
+        const val SILENT_JOIN_PERMISSION = "joshymc.silentjoin"
+    }
+
     private val vanished: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
     private var actionBarTaskId: Int = -1
 
     fun isVanished(player: Player): Boolean = vanished.contains(player.uniqueId)
+
+    /**
+     * The one check for whether [player]'s join/leave stays out of public chat
+     * and Discord: vanished, or staff with `joshymc.silentjoin`.
+     */
+    fun hidesJoinLeave(player: Player): Boolean =
+        isVanished(player) || player.hasPermission(SILENT_JOIN_PERMISSION)
 
     fun start() {
         // Action bar reminder every 2 seconds (40 ticks)
@@ -108,9 +118,9 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val joiner = event.player
 
-        // If the joiner is vanished, suppress join message and hide from non-staff
+        // If the joiner is vanished, hide from non-staff. The join message
+        // itself is handled by WelcomeListener via hidesJoinLeave().
         if (vanished.contains(joiner.uniqueId)) {
-            event.joinMessage(null)
             for (online in Bukkit.getOnlinePlayers()) {
                 if (online == joiner) continue
                 if (online.hasPermission("joshymc.vanish")) continue
@@ -124,16 +134,6 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
                 val vanishedPlayer = Bukkit.getPlayer(uuid) ?: continue
                 joiner.hidePlayer(plugin, vanishedPlayer)
             }
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    fun onPlayerQuit(event: PlayerQuitEvent) {
-        val quitter = event.player
-
-        // Suppress quit message if vanished
-        if (vanished.contains(quitter.uniqueId)) {
-            event.quitMessage(null)
         }
     }
 
