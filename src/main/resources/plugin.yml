@@ -1339,6 +1339,9 @@ permissions:
   joshymc.vanish:
     description: Toggle vanish mode
     default: op
+  joshymc.silentjoin:
+    description: Join and leave without a public join/leave message (automatic, no toggle)
+    default: false
   joshymc.hidestaff:
     description: Hide staff currently in active Moderator Mode from yourself (Admin+)
     default: op

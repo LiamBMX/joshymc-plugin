@@ -52,11 +52,13 @@ class MinecraftChatListener(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onJoin(event: PlayerJoinEvent) {
+        if (plugin.vanishCommand.hidesJoinLeave(event.player)) return
         plugin.discordManager.sendPlayerJoin(event.player.name, event.player.uniqueId.toString())
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onQuit(event: PlayerQuitEvent) {
+        if (plugin.vanishCommand.hidesJoinLeave(event.player)) return
         plugin.discordManager.sendPlayerLeave(event.player.name, event.player.uniqueId.toString())
     }
 
