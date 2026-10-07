@@ -1422,7 +1422,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
                 .append(Component.text(if (requireWeeklyCompletion) (if (qm.weeklyComplete) "3 / 3 ✔" else "in progress") else "not required", weeklyColor))
             lore += Component.empty()
             lore += Component.text("  Reward: ", NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false)
-                .append(Component.text("100 Credits", NamedTextColor.GOLD))
+                .append(Component.text(questMasterRewardLabel(), NamedTextColor.GOLD))
             lore += Component.empty()
             lore += when {
                 qm.rewarded -> Component.text("  ✔ REWARDED", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
@@ -1435,6 +1435,15 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
             if (qm.rewarded) meta.setEnchantmentGlintOverride(true)
         }
         return item
+    }
+
+    /** GUI reward text, read from the configured `credits give {player} N` commands so it always matches the payout. */
+    private fun questMasterRewardLabel(): String {
+        val credits = questMasterCommands.sumOf { cmd ->
+            Regex("""^/?credits\s+give\s+\{player}\s+(\d+)\s*$""", RegexOption.IGNORE_CASE)
+                .find(cmd.trim())?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+        }
+        return if (credits > 0) "%,d Credits".format(java.util.Locale.US, credits) else "Special Reward"
     }
 
     private fun infoItem(): ItemStack {
