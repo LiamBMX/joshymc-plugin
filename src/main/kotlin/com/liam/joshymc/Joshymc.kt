@@ -1272,6 +1272,14 @@ class Joshymc : JavaPlugin() {
             }
         }
 
+        // Issue #1065: the Quest Master reward went from 100 to 1,000 Credits. Backfill never
+        // touches existing keys, so rewrite the old default only if the admin left it untouched.
+        val questMasterRewardKey = "quests.quest-master.reward.commands"
+        if (config.getStringList(questMasterRewardKey) == listOf("credits give {player} 100")) {
+            config.set(questMasterRewardKey, listOf("credits give {player} 1000"))
+            changed++
+        }
+
         if (changed > 0) {
             ConfigUtil.backup(configFile, logger, "ConfigMigrator")
             saveConfig()
