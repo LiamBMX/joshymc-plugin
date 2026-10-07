@@ -107,6 +107,7 @@ import com.liam.joshymc.command.SetSpawnCommand
 import com.liam.joshymc.command.SetWarpCommand
 import com.liam.joshymc.command.ScoreboardCommand
 import com.liam.joshymc.command.ServerBarCommand
+import com.liam.joshymc.command.SilentJoinCommand
 import com.liam.joshymc.command.SettingsCommand
 import com.liam.joshymc.command.SitCommand
 import com.liam.joshymc.command.SpawnCommand
@@ -185,6 +186,12 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("serverbar")?.let {
             val cmd = ServerBarCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("sj")?.let {
+            val cmd = SilentJoinCommand(plugin)
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
@@ -881,6 +888,7 @@ class CommandManager(private val plugin: Joshymc) {
         "history" to "joshymc.history",
         "alts" to "joshymc.alts",
         "vanish" to "joshymc.vanish",
+        "sj" to "joshymc.silentjoin",
         "report" to "joshymc.report",
         "reports" to "joshymc.reports.view",
         "resource" to "joshymc.resource",

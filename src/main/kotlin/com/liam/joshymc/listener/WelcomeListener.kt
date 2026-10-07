@@ -2,6 +2,7 @@ package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.command.TutorialCommand
+import com.liam.joshymc.command.VanishCommand
 import io.papermc.paper.event.player.AsyncChatEvent
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.entity.Player
@@ -127,6 +128,7 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         val silent = plugin.vanishCommand.hidesJoinLeave(player)
         if (silent) {
             event.joinMessage(null)
+            notifySilentStaff(player, "&8[&bSilent Join&8] &f$name joined the server.")
         } else {
             val formattedJoin = joinFormat.replace("{player}", name)
             event.joinMessage(plugin.commsManager.parseLegacy(formattedJoin))
@@ -225,10 +227,26 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         // Replace vanilla leave message (hidden for vanished / joshymc.silentjoin staff)
         if (plugin.vanishCommand.hidesJoinLeave(event.player)) {
             event.quitMessage(null)
+            notifySilentStaff(event.player, "&8[&bSilent Leave&8] &f$name left the server.")
             return
         }
         val formattedLeave = leaveFormat.replace("{player}", name)
         event.quitMessage(plugin.commsManager.parseLegacy(formattedLeave))
+    }
+
+    /**
+     * Sends a hidden join/leave to the other online `joshymc.silentjoin` staff
+     * who have `/sj on` (the default). Never sent to [subject] or to anyone
+     * without the permission; the preference comes from the settings cache.
+     */
+    private fun notifySilentStaff(subject: Player, legacyMessage: String) {
+        val message = plugin.commsManager.parseLegacy(legacyMessage)
+        for (online in plugin.server.onlinePlayers) {
+            if (online.uniqueId == subject.uniqueId) continue
+            if (!online.hasPermission(VanishCommand.SILENT_JOIN_PERMISSION)) continue
+            if (!plugin.settingsManager.getSetting(online, VanishCommand.SILENT_JOIN_NOTIFY_SETTING_KEY)) continue
+            plugin.commsManager.sendRaw(online, message)
+        }
     }
 
     /**

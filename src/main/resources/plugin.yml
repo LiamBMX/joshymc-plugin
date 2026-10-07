@@ -36,6 +36,10 @@ commands:
     description: Show or hide the rotating server info BossBar for yourself
     usage: /serverbar <on|off>
     permission: joshymc.serverbar
+  sj:
+    description: Show or hide other silent staff's join/leave notifications for yourself
+    usage: /sj <on|off>
+    permission: joshymc.silentjoin
   sit:
     description: Sit down where you are
     usage: /sit
@@ -1340,7 +1344,7 @@ permissions:
     description: Toggle vanish mode
     default: op
   joshymc.silentjoin:
-    description: Join and leave without a public join/leave message (automatic, no toggle)
+    description: Join and leave without a public join/leave message, and see other silent staff join/leave (toggle with /sj)
     default: false
   joshymc.hidestaff:
     description: Hide staff currently in active Moderator Mode from yourself (Admin+)

@@ -22,6 +22,8 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
 
     companion object {
         const val SILENT_JOIN_PERMISSION = "joshymc.silentjoin"
+        /** Hidden setting owned by `/sj`: whether silent-join staff see other silent joins/leaves. */
+        const val SILENT_JOIN_NOTIFY_SETTING_KEY = "silentjoin_notify"
     }
 
     private val vanished: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
