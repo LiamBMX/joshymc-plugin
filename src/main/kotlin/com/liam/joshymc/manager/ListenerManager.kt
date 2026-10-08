@@ -220,6 +220,12 @@ class ListenerManager(private val plugin: Joshymc) {
             pm.registerEvents(it, plugin)
         }
 
+        // Upgrades pre-#1070 Haunted Hollow / Shark armor copies to unbreakable
+        com.liam.joshymc.listener.UnbreakableArmorUpgradeListener(plugin).also {
+            it.start()
+            pm.registerEvents(it, plugin)
+        }
+
         // Mob stacking
         pm.registerEvents(plugin.mobStackManager, plugin)
 
