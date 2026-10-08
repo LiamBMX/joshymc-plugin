@@ -13,7 +13,9 @@ import org.bukkit.entity.Entity
 import org.bukkit.entity.Item
 import org.bukkit.entity.Mob
 import org.bukkit.entity.Monster
+import org.bukkit.entity.Tameable
 import org.bukkit.entity.Villager
+import org.bukkit.entity.Warden
 
 class LagCleanerManager(private val plugin: Joshymc) {
 
@@ -234,15 +236,19 @@ class LagCleanerManager(private val plugin: Joshymc) {
      * the automatic clear, and manual `/admin lagclear` so counting and removal
      * never disagree on what's actually eligible.
      *
-     * Per Joshy (issue #1077): every mob goes (passive, hostile, neutral, ambient,
-     * water, tamed, leashed) except villagers, name-tagged mobs and bosses. Players,
+     * Per Joshy (issues #1077, #1079): every mob goes (passive, hostile, neutral,
+     * ambient, water, leashed) except villagers, name-tagged mobs, tamed/owned pets
+     * and bosses (Ender Dragon, Wither, Warden). Wandering traders are not
+     * [Villager]s and are cleared. Players,
      * armor stands, item frames, projectiles, vehicles and other non-mob entities
      * are never [Mob]s.
      */
     private fun isEligibleMobForLagClear(entity: Entity): Boolean {
         if (entity !is Mob) return false
         if (entity is Villager) return false
-        if (entity is Boss) return false
+        if (entity is Boss || entity is Warden) return false
+        // Wolves, cats, parrots, horses, donkeys, mules, llamas, etc. are protected even without a name tag
+        if (entity is Tameable && (entity.isTamed || entity.ownerUniqueId != null)) return false
         if (isNameTagged(entity)) return false
         // Mobs JoshyMC spawns itself (combat-log NPCs, relic pets, NPCs, decorations)
         if (entity.scoreboardTags.any { it.startsWith("joshymc") }) return false
