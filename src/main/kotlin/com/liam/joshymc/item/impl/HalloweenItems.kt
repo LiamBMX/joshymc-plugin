@@ -136,8 +136,9 @@ class GreatPumpkinPie : CustomItem() {
 }
 
 // ── Haunted Hollow armor set ────────────────────────────────────────────────
-// Worn with the Jack-o'-Lantern Mask. Plain Netherite underneath: vanilla stats and
-// durability, no enchantments, attributes or abilities, so players enchant them normally.
+// Worn with the Jack-o'-Lantern Mask. Plain Netherite underneath: vanilla stats, no
+// enchantments, attributes or abilities, so players enchant them normally. Unbreakable
+// like the mask (issue #1070).
 abstract class HauntedHollowPiece(
     override val id: String,
     override val material: Material,
@@ -152,6 +153,7 @@ abstract class HauntedHollowPiece(
     override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
+        meta.isUnbreakable = true
         meta.setItemModel(NamespacedKey(Joshymc.instance, id))
         val equippable = meta.equippable
         equippable.slot = slot

@@ -11,8 +11,8 @@ import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.inventory.meta.ItemMeta
 
 // ── Shark Set ───────────────────────────────────────────────────────────────
-// Visual-only retextured Netherite armor: vanilla stats, durability and enchanting,
-// no attribute modifiers, no glint, not unbreakable. Only the look is custom.
+// Retextured Netherite armor: vanilla stats and enchanting, no attribute modifiers,
+// no glint. Unbreakable (issue #1070); otherwise only the look is custom.
 
 private val SHARK_BLUE = TextColor.color(0x3E8FB0)
 
@@ -27,6 +27,7 @@ class SharkHelmet : CustomItem() {
     override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
+        meta.isUnbreakable = true
         meta.setItemModel(NamespacedKey(Joshymc.instance, "shark_helmet"))
         val equippable = meta.equippable
         equippable.slot = EquipmentSlot.HEAD
@@ -44,6 +45,7 @@ class SharkChestplate : CustomItem() {
     override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
+        meta.isUnbreakable = true
         meta.setItemModel(NamespacedKey(Joshymc.instance, "shark_chestplate"))
         val equippable = meta.equippable
         equippable.slot = EquipmentSlot.CHEST
@@ -60,6 +62,7 @@ class SharkLeggings : CustomItem() {
     override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
+        meta.isUnbreakable = true
         meta.setItemModel(NamespacedKey(Joshymc.instance, "shark_leggings"))
         val equippable = meta.equippable
         equippable.slot = EquipmentSlot.LEGS
@@ -76,6 +79,7 @@ class SharkBoots : CustomItem() {
     override val lore: List<Component> = emptyList()
 
     override fun applyMeta(meta: ItemMeta) {
+        meta.isUnbreakable = true
         meta.setItemModel(NamespacedKey(Joshymc.instance, "shark_boots"))
         val equippable = meta.equippable
         equippable.slot = EquipmentSlot.FEET
