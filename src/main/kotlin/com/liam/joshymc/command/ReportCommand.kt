@@ -102,6 +102,7 @@ class ReportCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
                 .addField("Reported Player", target.name, true)
                 .addField("Reported By", player.name, true)
                 .addField("Reason", reason.take(1000), false)
+                .addField("Time", "<t:${now / 1000}:F>", false)
                 .addField("World", loc.world?.name ?: "unknown", true)
                 .addField("Coordinates", "X: ${loc.blockX}, Y: ${loc.blockY}, Z: ${loc.blockZ}", true)
                 .apply { if (reportId != null) addField("Report ID", "#$reportId", true) }

@@ -42,6 +42,9 @@ class DiscordManager(private val plugin: Joshymc) {
     private val staffAnticheatChannelId: String get() = plugin.config.getString("discord.staff-monitoring.anticheat-channel-id") ?: ""
     private val staffReportsChannelId: String get() = plugin.config.getString("discord.staff-monitoring.reports-channel-id") ?: ""
 
+    /** The chat bridge is optional: staff monitoring keeps working without it (issue #1068). */
+    private val chatChannelConfigured: Boolean get() = channelId.isNotEmpty() && channelId != "000000000000000000"
+
     fun start() {
         val token = plugin.config.getString("discord.token") ?: ""
         if (token.isEmpty() || token == "YOUR_BOT_TOKEN_HERE") {
@@ -50,9 +53,12 @@ class DiscordManager(private val plugin: Joshymc) {
         }
 
         val configuredChannelId = channelId
-        if (configuredChannelId.isEmpty() || configuredChannelId == "000000000000000000") {
-            plugin.logger.warning("[Discord] Channel ID not set in config.yml — integration disabled.")
-            return
+        if (!chatChannelConfigured) {
+            if (!staffMonitoringEnabled) {
+                plugin.logger.warning("[Discord] Channel ID not set in config.yml — integration disabled.")
+                return
+            }
+            plugin.logger.warning("[Discord] Channel ID not set in config.yml — chat bridge disabled, staff monitoring only.")
         }
 
         plugin.logger.info("[Discord] Connecting bot...")
@@ -67,13 +73,14 @@ class DiscordManager(private val plugin: Joshymc) {
 
                 plugin.logger.info("[Discord] Bot connected as ${jda?.selfUser?.name}")
 
+                // A missing chat channel only disables the chat bridge; staff alerts and
+                // reports still go to their own channels.
                 val channel = getChannel()
-                if (channel == null) {
+                if (channel != null) {
+                    plugin.logger.info("[Discord] Bound to channel #${channel.name} (${channel.id})")
+                } else if (chatChannelConfigured) {
                     plugin.logger.severe("[Discord] Could not find channel with ID: $configuredChannelId — check your config!")
-                    return@Runnable
                 }
-
-                plugin.logger.info("[Discord] Bound to channel #${channel.name} (${channel.id})")
 
                 // Register slash commands for the guild
                 val guild = jda?.getGuildById("1284630112234508330")
@@ -112,12 +119,12 @@ class DiscordManager(private val plugin: Joshymc) {
     }
 
     fun send(content: String) {
-        if (jda == null || channelId.isEmpty()) return
+        if (jda == null || !chatChannelConfigured) return
         messageQueue.add(QueuedAction.Text(content))
     }
 
     fun sendEmbed(embed: MessageEmbed) {
-        if (jda == null || channelId.isEmpty()) return
+        if (jda == null || !chatChannelConfigured) return
         messageQueue.add(QueuedAction.Embed(embed))
     }
 
@@ -158,7 +165,7 @@ class DiscordManager(private val plugin: Joshymc) {
                 plugin.logger.warning("[Discord] staff-monitoring.$label is not set — those alerts will not be sent.")
                 continue
             }
-            val channel = jda?.getTextChannelById(id)
+            val channel = textChannel(id)
             if (channel == null) {
                 plugin.logger.warning("[Discord] staff-monitoring.$label ($id) not found — the bot is not in that server (authorize it with the bot + applications.commands scopes) or lacks View Channel.")
                 continue
@@ -203,7 +210,11 @@ class DiscordManager(private val plugin: Joshymc) {
         sendEmbed(embed)
     }
 
-    fun getChannel(): TextChannel? = jda?.getTextChannelById(channelId)
+    fun getChannel(): TextChannel? = if (chatChannelConfigured) textChannel(channelId) else null
+
+    /** Channel lookup that treats a malformed id in config as "not found" instead of throwing. */
+    private fun textChannel(id: String): TextChannel? =
+        try { jda?.getTextChannelById(id) } catch (_: NumberFormatException) { null }
 
     private fun getPunishmentForumChannel(): ForumChannel? = jda?.getForumChannelById(punishmentForumChannelId)
 
@@ -339,36 +350,45 @@ class DiscordManager(private val plugin: Joshymc) {
         plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
             if (messageQueue.isEmpty()) return@Runnable
 
+            // A missing chat channel only drops chat-bridge messages; embeds addressed to
+            // their own channel (anti-cheat alerts, reports, ...) are still delivered.
             val channel = getChannel()
-            if (channel == null) {
-                messageQueue.clear()
-                plugin.logger.warning("[Discord] Channel not found, dropping messages.")
-                return@Runnable
-            }
+            var droppedChat = 0
 
             // Batch text messages together, but embeds must be sent individually
             val textBatch = mutableListOf<String>()
 
             while (messageQueue.isNotEmpty()) {
                 when (val action = messageQueue.poll() ?: break) {
-                    is QueuedAction.Text -> textBatch.add(action.content)
+                    is QueuedAction.Text -> if (channel != null) textBatch.add(action.content) else droppedChat++
                     is QueuedAction.Embed -> {
                         // Flush any pending text first
-                        flushText(channel, textBatch)
-                        val target = if (action.channelId != null) jda?.getTextChannelById(action.channelId) else channel
+                        if (channel != null) flushText(channel, textBatch)
+                        val target = if (action.channelId != null) textChannel(action.channelId) else channel
                         if (target == null) {
-                            plugin.logger.warning("[Discord] Target channel not found for embed (${action.channelId ?: "default"}).")
+                            if (action.channelId != null) {
+                                plugin.logger.warning("[Discord] Target channel not found for embed (${action.channelId}).")
+                            } else {
+                                droppedChat++
+                            }
                         } else {
-                            target.sendMessageEmbeds(action.embed).queue(
-                                null,
-                                { err -> plugin.logger.warning("[Discord] Failed to send embed: ${err.message}") }
-                            )
+                            // JDA throws synchronously on missing permissions; catch it so one
+                            // bad channel can't cost the rest of this batch.
+                            try {
+                                target.sendMessageEmbeds(action.embed).queue(
+                                    null,
+                                    { err -> plugin.logger.warning("[Discord] Failed to send embed to #${target.name} (${target.id}): ${err.message}") }
+                                )
+                            } catch (e: Exception) {
+                                plugin.logger.warning("[Discord] Failed to send embed to #${target.name} (${target.id}): ${e.message}")
+                            }
                         }
                     }
                 }
             }
 
-            flushText(channel, textBatch)
+            if (channel != null) flushText(channel, textBatch)
+            if (droppedChat > 0) plugin.logger.warning("[Discord] Chat channel not found, dropped $droppedChat message(s).")
         }, 2L, 2L)
     }
 
@@ -376,10 +396,14 @@ class DiscordManager(private val plugin: Joshymc) {
         if (batch.isEmpty()) return
         val combined = batch.joinToString("\n")
         for (chunk in combined.chunked(1990)) {
-            channel.sendMessage(chunk).queue(
-                null,
-                { err -> plugin.logger.warning("[Discord] Failed to send message: ${err.message}") }
-            )
+            try {
+                channel.sendMessage(chunk).queue(
+                    null,
+                    { err -> plugin.logger.warning("[Discord] Failed to send message: ${err.message}") }
+                )
+            } catch (e: Exception) {
+                plugin.logger.warning("[Discord] Failed to send message: ${e.message}")
+            }
         }
         batch.clear()
     }

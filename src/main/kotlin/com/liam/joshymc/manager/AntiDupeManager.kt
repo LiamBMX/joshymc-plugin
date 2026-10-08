@@ -95,7 +95,8 @@ class AntiDupeManager(private val plugin: Joshymc) {
             )
         }
 
-        if (!discordEnabled || discordChannelId.isEmpty() || !alertAllowed(risk)) return
+        // The staff anti-cheat channel gets its copy even if this feature's own channel is off.
+        if (!alertAllowed(risk)) return
         queueDiscordAlert(player, detectionType, risk, item, amount, source, destination, transactionId, world, location, now)
     }
 
@@ -148,8 +149,9 @@ class AntiDupeManager(private val plugin: Joshymc) {
             }
             .setTimestamp(Instant.ofEpochMilli(timestamp))
             .build()
-        plugin.discordManager.sendEmbedToChannel(discordChannelId, embed)
-        plugin.discordManager.sendStaffAlert(embed, discordChannelId)
+        val ownChannel = if (discordEnabled) discordChannelId else ""
+        plugin.discordManager.sendEmbedToChannel(ownChannel, embed)
+        plugin.discordManager.sendStaffAlert(embed, ownChannel)
 
         if (rateLimitSeconds > 0) {
             plugin.server.scheduler.runTaskLater(plugin, Runnable {
@@ -169,6 +171,6 @@ class AntiDupeManager(private val plugin: Joshymc) {
             .addField("UUID", uuid.toString(), true)
             .setTimestamp(Instant.now())
             .build()
-        plugin.discordManager.sendEmbedToChannel(discordChannelId, embed)
+        if (discordEnabled) plugin.discordManager.sendEmbedToChannel(discordChannelId, embed)
     }
 }
