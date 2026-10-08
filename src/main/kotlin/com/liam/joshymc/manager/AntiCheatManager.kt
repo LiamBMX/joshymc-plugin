@@ -331,12 +331,21 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             vl >= alertVL * 1.5 -> "Repeated violations" to 0xFFA500
             else -> "Suspicious" to 0xFEE75C
         }
+        // Detection category (issue #1068) so staff can tell PvP / movement / exploit alerts apart.
+        val category = when (check) {
+            in combatAlertChecks -> "PvP Cheat Detection"
+            CheckType.FLIGHT, CheckType.SPEED, CheckType.NO_FALL, CheckType.JESUS,
+            CheckType.PHASE, CheckType.TIMER -> "Movement Cheat Detection"
+            CheckType.FAST_BREAK, CheckType.FAST_PLACE, CheckType.SCAFFOLD, CheckType.NUKER -> "Block Cheat Detection"
+            else -> "Exploit Detection"
+        }
         val loc = player.location
         plugin.discordManager.sendStaffAlert(
             net.dv8tion.jda.api.EmbedBuilder()
-                .setTitle("Anti-Cheat: ${check.displayName}")
+                .setTitle("$category: ${check.displayName}")
                 .setColor(color)
                 .addField("Player", "${player.name} (`${player.uniqueId}`)", false)
+                .addField("Detection", category, true)
                 .addField("Check", check.displayName, true)
                 .addField("Violation Level", "%.0f".format(vl), true)
                 .addField("Severity", label, true)

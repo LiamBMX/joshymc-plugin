@@ -49,7 +49,8 @@ class AncientDebrisMonitorListener(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onBreak(event: BlockBreakEvent) {
         if (event.block.type != Material.ANCIENT_DEBRIS) return
-        if (!enabled || channelId.isEmpty()) return
+        // No early return on an empty channelId: the X-ray alert still goes to the staff anti-cheat channel.
+        if (!enabled) return
 
         val player = event.player
         val block = event.block
@@ -106,6 +107,7 @@ class AncientDebrisMonitorListener(private val plugin: Joshymc) : Listener {
         val embed = EmbedBuilder()
             .setTitle(if (high) "🚨 HIGH: Suspicious Ancient Debris Mining" else "⚠️ Suspicious Ancient Debris Mining")
             .setColor(if (high) 0xED4245 else 0xFEE75C)
+            .addField("Detection", "X-ray (Ancient Debris)", true)
             .addField("Player", playerName, true)
             .addField("World", worlds, true)
             .addField("Count", "$count Ancient Debris in $minutes minutes", false)
