@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.item.impl.spectatorLore
 import com.liam.joshymc.item.impl.vanishLore
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -312,7 +313,7 @@ class ModModeManager(private val plugin: Joshymc) {
         val returnWorld = backup.returnWorld?.let { Bukkit.getWorld(it) }
         if (returnWorld != null) {
             try {
-                player.teleport(Location(returnWorld, backup.returnX, backup.returnY, backup.returnZ, backup.returnYaw, backup.returnPitch))
+                PvpTeleportGuard.forced { player.teleport(Location(returnWorld, backup.returnX, backup.returnY, backup.returnZ, backup.returnYaw, backup.returnPitch)) }
             } catch (e: Exception) {
                 plugin.logger.warning("[ModMode] Could not return " + player.name + " to their entry location: " + e.message)
             }
@@ -470,7 +471,7 @@ class ModModeManager(private val plugin: Joshymc) {
         }
 
         val target = eligible.random()
-        moderator.teleport(target.location)
+        PvpTeleportGuard.forced { moderator.teleport(target.location) }
         plugin.commsManager.send(moderator, Component.text("Teleported to ${target.name}.", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
         moderator.playSound(moderator.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.6f, 1.2f)
     }

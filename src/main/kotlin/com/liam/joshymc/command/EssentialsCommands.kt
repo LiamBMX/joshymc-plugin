@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -492,7 +493,7 @@ class TpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     return true
                 }
                 BackCommand.lastLocations[sender.uniqueId] = sender.location
-                sender.teleport(target)
+                PvpTeleportGuard.forced { sender.teleport(target) }
                 plugin.commsManager.send(sender, Component.text("Teleported to ${target.name}.", NamedTextColor.GREEN))
             }
             2 -> {
@@ -508,7 +509,7 @@ class TpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     return true
                 }
                 BackCommand.lastLocations[p1.uniqueId] = p1.location
-                p1.teleport(p2)
+                PvpTeleportGuard.forced { p1.teleport(p2) }
                 plugin.commsManager.send(sender, Component.text("Teleported ${p1.name} to ${p2.name}.", NamedTextColor.GREEN))
             }
             3 -> {
@@ -559,7 +560,7 @@ class TpHereCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return true
         }
         BackCommand.lastLocations[target.uniqueId] = target.location
-        target.teleport(sender)
+        PvpTeleportGuard.forced { target.teleport(sender) }
         plugin.commsManager.send(sender, Component.text("Teleported ${target.name} to you.", NamedTextColor.GREEN))
         plugin.commsManager.send(target, Component.text("You were teleported to ${sender.name}.", NamedTextColor.GREEN))
         return true
@@ -1057,10 +1058,13 @@ object TeleportChecks {
      * Bypass warmup with joshymc.tp.nocooldown permission.
      */
     fun teleportWithWarmup(player: Player, destination: Location, plugin: com.liam.joshymc.Joshymc, onComplete: (() -> Unit)? = null) {
+        if (PvpTeleportGuard.blocks(plugin, player, destination)) return
+
         // Bypass warmup for staff
         if (player.hasPermission("joshymc.tp.nocooldown")) {
-            BackCommand.lastLocations[player.uniqueId] = player.location
-            player.teleport(destination)
+            val from = player.location
+            if (!player.teleport(destination)) return
+            BackCommand.lastLocations[player.uniqueId] = from
             teleportCooldowns[player.uniqueId] = System.currentTimeMillis()
             onComplete?.invoke()
             return
@@ -1093,9 +1097,12 @@ object TeleportChecks {
                 plugin.commsManager.send(player, Component.text("Teleport cancelled — you entered combat!", NamedTextColor.RED))
                 return@scheduleSyncDelayedTask
             }
+            // Re-check: the player (or a /tpa partner) may have crossed into the PvP world during the warmup.
+            if (PvpTeleportGuard.blocks(plugin, player, destination)) return@scheduleSyncDelayedTask
 
-            BackCommand.lastLocations[player.uniqueId] = player.location
-            player.teleport(destination)
+            val from = player.location
+            if (!player.teleport(destination)) return@scheduleSyncDelayedTask
+            BackCommand.lastLocations[player.uniqueId] = from
             teleportCooldowns[player.uniqueId] = System.currentTimeMillis()
             plugin.commsManager.send(player, Component.text("Teleported!", NamedTextColor.GREEN))
             player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.2f)

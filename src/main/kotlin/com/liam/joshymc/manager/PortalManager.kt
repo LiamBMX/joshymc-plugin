@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -295,37 +296,40 @@ class PortalManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    // Admin-built portals are a sanctioned way in/out of the PvP world (issue #1075).
     private fun executeAction(player: Player, portal: Portal) {
-        when (portal.action.lowercase()) {
-            "command" -> {
-                if (portal.actionData.isBlank()) return
-                val cmd = portal.actionData.replace("{player}", player.name)
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd)
-            }
-            "tp" -> {
-                val parts = portal.actionData.split(",")
-                if (parts.size < 4) return
-                val world = Bukkit.getWorld(parts[0].trim()) ?: return
-                val x = parts[1].trim().toDoubleOrNull() ?: return
-                val y = parts[2].trim().toDoubleOrNull() ?: return
-                val z = parts[3].trim().toDoubleOrNull() ?: return
-                player.teleport(Location(world, x, y, z, player.location.yaw, player.location.pitch))
-            }
-            "rtp" -> {
-                // Optional action data: world name to RTP in; blank = main overworld.
-                // skipWarmup=true because the player is walking through the portal —
-                // requiring stand-still would immediately cancel the teleport.
-                val worldName = portal.actionData.trim()
-                val world = if (worldName.isEmpty()) null else Bukkit.getWorld(worldName)
-                plugin.rtpCommand.startForPlayer(player, world, skipWarmup = true)
-            }
-            "world" -> {
-                val world = Bukkit.getWorld(portal.actionData.trim()) ?: return
-                player.teleport(world.spawnLocation)
-            }
-            "warp" -> {
-                val warpLoc = plugin.warpManager.getWarp(portal.actionData.trim()) ?: return
-                player.teleport(warpLoc)
+        PvpTeleportGuard.forced {
+            when (portal.action.lowercase()) {
+                "command" -> {
+                    if (portal.actionData.isBlank()) return
+                    val cmd = portal.actionData.replace("{player}", player.name)
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd)
+                }
+                "tp" -> {
+                    val parts = portal.actionData.split(",")
+                    if (parts.size < 4) return
+                    val world = Bukkit.getWorld(parts[0].trim()) ?: return
+                    val x = parts[1].trim().toDoubleOrNull() ?: return
+                    val y = parts[2].trim().toDoubleOrNull() ?: return
+                    val z = parts[3].trim().toDoubleOrNull() ?: return
+                    player.teleport(Location(world, x, y, z, player.location.yaw, player.location.pitch))
+                }
+                "rtp" -> {
+                    // Optional action data: world name to RTP in; blank = main overworld.
+                    // skipWarmup=true because the player is walking through the portal —
+                    // requiring stand-still would immediately cancel the teleport.
+                    val worldName = portal.actionData.trim()
+                    val world = if (worldName.isEmpty()) null else Bukkit.getWorld(worldName)
+                    plugin.rtpCommand.startForPlayer(player, world, skipWarmup = true)
+                }
+                "world" -> {
+                    val world = Bukkit.getWorld(portal.actionData.trim()) ?: return
+                    player.teleport(world.spawnLocation)
+                }
+                "warp" -> {
+                    val warpLoc = plugin.warpManager.getWarp(portal.actionData.trim()) ?: return
+                    player.teleport(warpLoc)
+                }
             }
         }
     }

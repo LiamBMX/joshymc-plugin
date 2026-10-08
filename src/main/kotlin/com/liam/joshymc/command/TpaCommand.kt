@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.format.NamedTextColor
@@ -89,6 +90,8 @@ class TpaCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
+        if (PvpTeleportGuard.blocks(plugin, sender, target.location)) return true
+
         if (!plugin.settingsManager.getSetting(target, "tpa")) {
             plugin.commsManager.send(sender, Component.text("${target.name} has TPA requests disabled.", NamedTextColor.RED))
             return true
@@ -158,6 +161,8 @@ class TpaHereCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
             return true
         }
+
+        if (PvpTeleportGuard.blocks(plugin, target, sender.location, notify = sender)) return true
 
         if (!plugin.settingsManager.getSetting(target, "tpahere")) {
             plugin.commsManager.send(sender, Component.text("${target.name} has TPAHere requests disabled.", NamedTextColor.RED))
@@ -244,6 +249,7 @@ class TpAcceptCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         when (request.type) {
             TpaType.TPA -> {
                 // Requester teleports to target (sender)
+                if (PvpTeleportGuard.blocks(plugin, requester, sender.location, notify = sender)) return true
                 if (TeleportChecks.checkAndApply(requester, plugin)) {
                     plugin.commsManager.send(sender, Component.text("${requester.name} could not teleport (combat/cooldown/frozen).", NamedTextColor.RED))
                     return true
@@ -253,6 +259,7 @@ class TpAcceptCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             }
             TpaType.TPAHERE -> {
                 // Target (sender) teleports to requester
+                if (PvpTeleportGuard.blocks(plugin, sender, requester.location)) return true
                 if (TeleportChecks.checkAndApply(sender, plugin)) return true
                 plugin.commsManager.send(requester, Component.text("${sender.name} is teleporting to you...", NamedTextColor.GREEN))
                 TeleportChecks.teleportWithWarmup(sender, requester.location, plugin)

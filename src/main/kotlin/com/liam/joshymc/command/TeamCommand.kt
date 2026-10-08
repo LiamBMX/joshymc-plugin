@@ -6,6 +6,7 @@ import com.liam.joshymc.gui.team.TeamMainGui
 import com.liam.joshymc.gui.team.TeamTopGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.TeamManager
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -753,7 +754,8 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        player.teleport(home)
+        if (PvpTeleportGuard.blocks(plugin, player, home)) return
+        if (!player.teleport(home)) return
         plugin.commsManager.send(player, Component.text("Teleported to team home.", NamedTextColor.GREEN), CommunicationsManager.Category.DEFAULT)
     }
 

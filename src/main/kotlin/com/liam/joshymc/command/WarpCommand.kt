@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -51,6 +52,7 @@ class WarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 plugin.commsManager.send(sender, Component.text("Warp '$name' not found.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
                 return true
             }
+            if (PvpTeleportGuard.blocks(plugin, sender, location)) return true
             if (TeleportChecks.checkAndApply(sender, plugin)) return true
             sender.teleport(location)
             plugin.commsManager.send(sender, Component.text("Teleported to warp '$name'.", NamedTextColor.GREEN), CommunicationsManager.Category.WARP)
@@ -107,7 +109,7 @@ class WarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     return@setItem
                 }
 
-                if (TeleportChecks.checkAndApply(p, plugin)) {
+                if (PvpTeleportGuard.blocks(plugin, p, location) || TeleportChecks.checkAndApply(p, plugin)) {
                     p.closeInventory()
                     return@setItem
                 }
