@@ -222,6 +222,12 @@ combat:
   # Whether players can throw ender pearls while combat-tagged (toggle via /pvp enderpearl <on|off>)
   allow-enderpearl: false
 
+# PvP world — the "pvp" world is isolated from player teleports (/spawn, /home,
+# /warp, /tpa, /back, /rtp, ... and any other plugin's teleports in or out).
+# Staff/console force teleports, JoshyMC portals and joshymc.pvp.teleport.bypass still work.
+pvp:
+  block-player-teleports: true
+
 # PvP Kill Streaks — consecutive kills without dying. Milestones pay out cash,
 # and once a player's streak reaches the bounty threshold, killing them
 # transfers a % of their money to whoever ends their streak.

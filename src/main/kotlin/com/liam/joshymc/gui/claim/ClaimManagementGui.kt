@@ -3,6 +3,7 @@ package com.liam.joshymc.gui.claim
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.ClaimManager
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -69,7 +70,7 @@ object ClaimManagementGui {
         gui.setItem(14, ClaimGuiUtil.item(
             Material.ENDER_PEARL, Component.text("Teleport to Claim", NamedTextColor.LIGHT_PURPLE),
             listOf(Component.empty(), Component.text("Teleport to this claim's center.", NamedTextColor.GRAY))
-        )) { p, _ -> teleportToClaim(p, claim) }
+        )) { p, _ -> teleportToClaim(plugin, p, claim) }
 
         gui.setItem(40, ClaimGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> ClaimMainGui.open(plugin, p) }
 
@@ -96,13 +97,15 @@ object ClaimManagementGui {
         plugin.guiManager.open(player, gui)
     }
 
-    private fun teleportToClaim(player: Player, claim: ClaimManager.Claim) {
+    private fun teleportToClaim(plugin: Joshymc, player: Player, claim: ClaimManager.Claim) {
         val world = Bukkit.getWorld(claim.world) ?: run { player.closeInventory(); return }
         val cx = (claim.minX + claim.maxX) / 2
         val cz = (claim.minZ + claim.maxZ) / 2
         val y = world.getHighestBlockYAt(cx, cz) + 1
+        val destination = Location(world, cx + 0.5, y.toDouble(), cz + 0.5)
         player.closeInventory()
-        player.teleport(Location(world, cx + 0.5, y.toDouble(), cz + 0.5))
+        if (PvpTeleportGuard.blocks(plugin, player, destination)) return
+        player.teleport(destination)
     }
 
     private fun openTrustPicker(plugin: Joshymc, player: Player, claimId: Int) {

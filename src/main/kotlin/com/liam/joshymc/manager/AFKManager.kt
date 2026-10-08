@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.util.giveItemSafely
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -324,7 +325,7 @@ class AFKManager(private val plugin: Joshymc) {
             if (afkWorld != null) {
                 teleporting.add(player.uniqueId)
                 val spawnLoc = Location(afkWorld, 0.5, 65.0, 0.5, 0f, 0f)
-                player.teleport(spawnLoc)
+                PvpTeleportGuard.forced { player.teleport(spawnLoc) }
                 // Remove teleport flag after a tick
                 plugin.server.scheduler.runTaskLater(plugin, Runnable {
                     teleporting.remove(player.uniqueId)
@@ -386,7 +387,7 @@ class AFKManager(private val plugin: Joshymc) {
             clearPersistedPreAfkLocation(player.uniqueId)
             if (previousLocation != null) {
                 teleporting.add(player.uniqueId)
-                player.teleport(previousLocation)
+                PvpTeleportGuard.forced { player.teleport(previousLocation) }
                 plugin.server.scheduler.runTaskLater(plugin, Runnable {
                     teleporting.remove(player.uniqueId)
                 }, 3L)
@@ -409,7 +410,7 @@ class AFKManager(private val plugin: Joshymc) {
             // Teleport back before quit data is saved so they rejoin at their original location
             val prev = preAfkLocations.remove(player.uniqueId)
             if (prev != null) {
-                player.teleport(prev)
+                PvpTeleportGuard.forced { player.teleport(prev) }
             }
             afkPlayers.remove(player.uniqueId)
             nextRewardTime.remove(player.uniqueId)
@@ -440,7 +441,7 @@ class AFKManager(private val plugin: Joshymc) {
                 plugin.server.scheduler.runTaskLater(plugin, Runnable {
                     if (player.isOnline) {
                         teleporting.add(player.uniqueId)
-                        player.teleport(target)
+                        PvpTeleportGuard.forced { player.teleport(target) }
                         plugin.server.scheduler.runTaskLater(plugin, Runnable {
                             teleporting.remove(player.uniqueId)
                         }, 3L)

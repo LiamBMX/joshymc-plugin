@@ -3,6 +3,7 @@ package com.liam.joshymc.manager
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.command.notifyStaff
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.PvpTeleportGuard
 import io.papermc.paper.event.player.AsyncChatEvent
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -895,7 +896,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             gui.setItem(11, buildItem(Material.YELLOW_WOOL, "Teleport To", NamedTextColor.YELLOW, "Teleport to this player")) { p, _ ->
                 val tp = target.player
                 if (tp == null) { notOnline(p); return@setItem }
-                p.teleport(tp.location)
+                PvpTeleportGuard.forced { p.teleport(tp.location) }
                 plugin.commsManager.send(p, Component.text("Teleported to ${tp.name}", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 logAction(p, "TELEPORT_TO", target)
                 if (restricted) {
@@ -910,7 +911,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             gui.setItem(12, buildItem(Material.ORANGE_WOOL, "Teleport Here", NamedTextColor.GOLD, "Teleport this player to you")) { p, _ ->
                 val tp = target.player
                 if (tp == null) { notOnline(p); return@setItem }
-                tp.teleport(p.location)
+                PvpTeleportGuard.forced { tp.teleport(p.location) }
                 plugin.commsManager.send(p, Component.text("Teleported ${tp.name} to you", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 logAction(p, "TELEPORT_HERE", target)
                 p.closeInventory()

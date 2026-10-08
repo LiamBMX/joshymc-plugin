@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -250,7 +251,7 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         // Teleport all players in that world to the main world spawn
         val mainWorld = Bukkit.getWorlds().first()
         for (player in world.players) {
-            player.teleport(mainWorld.spawnLocation)
+            PvpTeleportGuard.forced { player.teleport(mainWorld.spawnLocation) }
             player.sendMessage(Component.text("You were moved to the main world because '$name' is being deleted.", NamedTextColor.YELLOW))
         }
 
@@ -316,7 +317,7 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             sender
         }
 
-        target.teleport(world.spawnLocation)
+        PvpTeleportGuard.forced { target.teleport(world.spawnLocation) }
         target.sendMessage(Component.text("Teleported to world '${world.name}'.", NamedTextColor.GREEN))
         if (sender != target) {
             sender.sendMessage(Component.text("Teleported ${target.name} to world '${world.name}'.", NamedTextColor.GREEN))

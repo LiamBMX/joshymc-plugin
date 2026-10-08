@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.home.HomeGui
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -33,6 +34,7 @@ class HomeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
+        if (PvpTeleportGuard.blocks(plugin, sender, location)) return true
         if (TeleportChecks.checkAndApply(sender, plugin)) return true
 
         sender.teleport(location)

@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -42,6 +43,7 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
+        if (PvpTeleportGuard.blocks(plugin, sender, null)) return true
         if (TeleportChecks.checkAndApply(sender, plugin)) return true
 
         if (sender.world.environment == World.Environment.THE_END) {
@@ -311,11 +313,13 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         // Portals (and other auto-triggered contexts) can't require stand-still,
         // since the player is already moving through the trigger region.
         if (skipWarmup) {
-            player.teleport(destination)
+            // Admin-built portals are a sanctioned way in/out of the PvP world.
+            PvpTeleportGuard.forced { player.teleport(destination) }
             plugin.commsManager.sendActionBar(player, Component.text("Teleported!", NamedTextColor.GREEN))
             cooldowns[player.uniqueId] = System.currentTimeMillis()
             return
         }
+        if (PvpTeleportGuard.blocks(plugin, player, destination)) return
 
         val startLoc = player.location.clone()
 
@@ -342,10 +346,10 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 }
 
                 if (ticks >= 60) {
-                    player.teleport(destination)
+                    cancel()
+                    if (PvpTeleportGuard.blocks(plugin, player, destination) || !player.teleport(destination)) return
                     plugin.commsManager.sendActionBar(player, Component.text("Teleported!", NamedTextColor.GREEN))
                     cooldowns[player.uniqueId] = System.currentTimeMillis()
-                    cancel()
                     return
                 }
 

@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -248,7 +249,7 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         val x = (portal.x1 + portal.x2) / 2.0 + 0.5
         val y = portal.y1.toDouble()
         val z = (portal.z1 + portal.z2) / 2.0 + 0.5
-        sender.teleport(org.bukkit.Location(world, x, y, z, sender.location.yaw, sender.location.pitch))
+        PvpTeleportGuard.forced { sender.teleport(org.bukkit.Location(world, x, y, z, sender.location.yaw, sender.location.pitch)) }
         plugin.commsManager.send(sender,
             Component.text("Teleported to portal ", NamedTextColor.GREEN)
                 .append(Component.text(portal.name, NamedTextColor.YELLOW))

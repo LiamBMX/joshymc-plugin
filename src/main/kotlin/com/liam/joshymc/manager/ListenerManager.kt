@@ -24,6 +24,7 @@ import com.liam.joshymc.listener.VeinminerListener
 import com.liam.joshymc.listener.UnknownCommandListener
 import com.liam.joshymc.listener.PvpKillLogListener
 import com.liam.joshymc.listener.AncientDebrisMonitorListener
+import com.liam.joshymc.listener.PvpTeleportListener
 import com.liam.joshymc.listener.PvpWorldFlightListener
 import com.liam.joshymc.listener.TradeInteractListener
 import com.liam.joshymc.command.BackLocationListener
@@ -206,6 +207,9 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // PvP world flight restriction (joshymc.fly.pvp)
         pm.registerEvents(PvpWorldFlightListener(plugin), plugin)
+
+        // PvP world teleport lock (issue #1075)
+        pm.registerEvents(PvpTeleportListener(plugin), plugin)
 
         // Admin panel
         pm.registerEvents(plugin.adminManager, plugin)

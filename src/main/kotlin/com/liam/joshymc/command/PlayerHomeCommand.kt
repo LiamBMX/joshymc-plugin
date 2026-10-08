@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -46,7 +47,7 @@ class PlayerHomeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         }
 
         BackCommand.lastLocations[sender.uniqueId] = sender.location
-        sender.teleport(location)
+        PvpTeleportGuard.forced { sender.teleport(location) }
         plugin.commsManager.send(sender, Component.text("Teleported to ${offline.name ?: targetName}'s home '$homeName'.", NamedTextColor.GREEN), CommunicationsManager.Category.HOME)
         return true
     }

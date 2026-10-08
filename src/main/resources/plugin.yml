@@ -1040,6 +1040,9 @@ permissions:
   joshymc.fly.pvp:
     description: Allows flight in the PvP world
     default: op
+  joshymc.pvp.teleport.bypass:
+    description: Bypass the PvP world teleport lock (staff only)
+    default: false
   joshymc.spawn.fly:
     description: Allows flight in the spawn world
     default: op
