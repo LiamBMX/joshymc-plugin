@@ -6,17 +6,14 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
-import org.bukkit.entity.Animals
-import org.bukkit.entity.ArmorStand
+import org.bukkit.NamespacedKey
+import org.bukkit.World
+import org.bukkit.entity.Boss
 import org.bukkit.entity.Entity
-import org.bukkit.entity.EnderDragon
 import org.bukkit.entity.Item
+import org.bukkit.entity.Mob
 import org.bukkit.entity.Monster
-import org.bukkit.entity.NPC
-import org.bukkit.entity.Player
-import org.bukkit.entity.Shulker
 import org.bukkit.entity.Villager
-import org.bukkit.entity.Wither
 
 class LagCleanerManager(private val plugin: Joshymc) {
 
@@ -62,12 +59,12 @@ class LagCleanerManager(private val plugin: Joshymc) {
         var itemTotal = 0
 
         for (world in plugin.server.worlds) {
+            itemTotal += world.getEntitiesByClass(Item::class.java).size
+        }
+        for (world in lagClearWorlds()) {
             for (entity in world.entities) {
-                when {
-                    entity is Item -> itemTotal++
-                    isEligibleHostileForLagClear(entity) -> hostileTotal++
-                    isEligiblePassiveForLagClear(entity) -> passiveTotal++
-                }
+                if (!isEligibleMobForLagClear(entity)) continue
+                if (entity is Monster) hostileTotal++ else passiveTotal++
             }
         }
 
@@ -127,43 +124,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
     }
 
     private fun executeClear() {
-        var itemCount = 0
-        var mobCount = 0
-
-        // Re-count eligible hostile/passive mobs at execution time to decide which
-        // categories still warrant a clear (population may have shifted during the countdown).
-        var hostileTotal = 0
-        var passiveTotal = 0
-        for (world in plugin.server.worlds) {
-            for (entity in world.entities) {
-                when {
-                    isEligibleHostileForLagClear(entity) -> hostileTotal++
-                    isEligiblePassiveForLagClear(entity) -> passiveTotal++
-                }
-            }
-        }
-        val clearHostile = hostileTotal >= entityThreshold
-        val clearPassive = passiveTotal >= passiveMobThreshold
-
-        for (world in plugin.server.worlds) {
-            for (entity in world.entities) {
-                when {
-                    // Clear ground items (shulker boxes are preserved)
-                    entity is Item && !isShulkerBox(entity) -> {
-                        entity.remove()
-                        itemCount++
-                    }
-                    clearHostile && isEligibleHostileForLagClear(entity) -> {
-                        entity.remove()
-                        mobCount++
-                    }
-                    clearPassive && isEligiblePassiveForLagClear(entity) -> {
-                        entity.remove()
-                        mobCount++
-                    }
-                }
-            }
-        }
+        val (itemCount, mobCount) = clearItemsAndMobs()
 
         plugin.commsManager.broadcast(
             Component.text("\u2714 ", NamedTextColor.GREEN)
@@ -176,7 +137,35 @@ class LagCleanerManager(private val plugin: Joshymc) {
     }
 
     /**
-     * Manually trigger a ground item + hostile mob clear with a 10-second countdown.
+     * Removes ground items (every world, shulker boxes kept) and every eligible mob in
+     * the Overworld, Nether and End. Returns how many items and mobs were actually
+     * removed, not just how many were found.
+     */
+    private fun clearItemsAndMobs(): Pair<Int, Int> {
+        var itemCount = 0
+        var mobCount = 0
+
+        for (world in plugin.server.worlds) {
+            for (item in world.getEntitiesByClass(Item::class.java)) {
+                if (isShulkerBox(item)) continue
+                item.remove()
+                if (!item.isValid) itemCount++
+            }
+        }
+
+        for (world in lagClearWorlds()) {
+            for (entity in world.entities) {
+                if (!isEligibleMobForLagClear(entity)) continue
+                entity.remove()
+                if (!entity.isValid) mobCount++
+            }
+        }
+
+        return itemCount to mobCount
+    }
+
+    /**
+     * Manually trigger a ground item + mob clear with a 10-second countdown.
      */
     fun triggerManualClear() {
         if (isClearingInProgress) return
@@ -189,7 +178,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
             CommunicationsManager.Category.ADMIN
         )
         plugin.commsManager.broadcast(
-            Component.text("  Items and hostile mobs clearing in ", NamedTextColor.YELLOW)
+            Component.text("  Items and mobs clearing in ", NamedTextColor.YELLOW)
                 .append(Component.text("10 seconds", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
             CommunicationsManager.Category.ADMIN
         )
@@ -216,28 +205,13 @@ class LagCleanerManager(private val plugin: Joshymc) {
 
         // Execute clear at 10 seconds
         plugin.server.scheduler.scheduleSyncDelayedTask(plugin, {
-            var itemCount = 0
-            var mobCount = 0
-            for (world in plugin.server.worlds) {
-                for (entity in world.entities) {
-                    when {
-                        entity is Item && !isShulkerBox(entity) -> {
-                            entity.remove()
-                            itemCount++
-                        }
-                        isEligibleHostileForLagClear(entity) -> {
-                            entity.remove()
-                            mobCount++
-                        }
-                    }
-                }
-            }
+            val (itemCount, mobCount) = clearItemsAndMobs()
             plugin.commsManager.broadcast(
                 Component.text("\u2714 ", NamedTextColor.GREEN)
                     .append(Component.text("Cleared ", NamedTextColor.GREEN))
                     .append(Component.text("$itemCount items", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true))
                     .append(Component.text(" and ", NamedTextColor.GREEN))
-                    .append(Component.text("$mobCount hostile mobs", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
+                    .append(Component.text("$mobCount mobs", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
                 CommunicationsManager.Category.ADMIN
             )
             isClearingInProgress = false
@@ -248,35 +222,43 @@ class LagCleanerManager(private val plugin: Joshymc) {
         item.itemStack.type.name.endsWith("SHULKER_BOX")
 
     /**
-     * Centralized eligibility checks shared by the automatic threshold counters,
-     * the automatic clear, and manual `/admin lagclear` so counting and removal
-     * never disagree on what's actually eligible.
+     * Only the server's own Overworld, Nether and End (the vanilla dimension keys).
+     * PvP, event, staff, build, resource, spawn, AFK and every other custom world is
+     * left alone.
      */
-    private fun isEligibleHostileForLagClear(entity: Entity): Boolean =
-        entity is Monster && !isProtected(entity)
-
-    private fun isEligiblePassiveForLagClear(entity: Entity): Boolean =
-        entity is Animals && entity !is Player && !isProtected(entity)
+    private fun lagClearWorlds(): List<World> =
+        plugin.server.worlds.filter { it.key in LAG_CLEAR_WORLD_KEYS }
 
     /**
-     * Per Joshy's request: keep nametagged, tamed, villagers, and shulkers.
-     * Plus an unavoidable safety set: bosses, plugin NPCs/entities, leashed,
-     * and ArmorStands (not really mobs).
+     * Centralized eligibility check shared by the automatic threshold counters,
+     * the automatic clear, and manual `/admin lagclear` so counting and removal
+     * never disagree on what's actually eligible.
+     *
+     * Per Joshy (issue #1077): every mob goes (passive, hostile, neutral, ambient,
+     * water, tamed, leashed) except villagers, name-tagged mobs and bosses. Players,
+     * armor stands, item frames, projectiles, vehicles and other non-mob entities
+     * are never [Mob]s.
      */
-    private fun isProtected(entity: org.bukkit.entity.Entity): Boolean {
-        if (entity.customName() != null) return true
-        if (entity.scoreboardTags.any { it.startsWith("joshymc") }) return true
+    private fun isEligibleMobForLagClear(entity: Entity): Boolean {
+        if (entity !is Mob) return false
+        if (entity is Villager) return false
+        if (entity is Boss) return false
+        if (isNameTagged(entity)) return false
+        // Mobs JoshyMC spawns itself (combat-log NPCs, relic pets, NPCs, decorations)
+        if (entity.scoreboardTags.any { it.startsWith("joshymc") }) return false
+        return true
+    }
 
-        return when (entity) {
-            is Villager -> true
-            is Shulker -> true
-            is NPC -> true
-            is EnderDragon -> true
-            is Wither -> true
-            is ArmorStand -> true
-            is org.bukkit.entity.Tameable -> (entity as org.bukkit.entity.Tameable).isTamed
-            else -> entity is org.bukkit.entity.LivingEntity && entity.isLeashed
-        }
+    /** A custom name counts as a name tag unless it's only the mob-stacking "Cow x5" label. */
+    private fun isNameTagged(entity: Mob): Boolean =
+        entity.customName() != null && !plugin.mobStackManager.hasOnlyStackLabel(entity)
+
+    companion object {
+        private val LAG_CLEAR_WORLD_KEYS = setOf(
+            NamespacedKey.minecraft("overworld"),
+            NamespacedKey.minecraft("the_nether"),
+            NamespacedKey.minecraft("the_end"),
+        )
     }
 
 }

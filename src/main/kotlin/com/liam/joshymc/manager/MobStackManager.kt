@@ -3,6 +3,7 @@ package com.liam.joshymc.manager
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.ArmorStand
 import org.bukkit.entity.Boss
@@ -118,12 +119,26 @@ class MobStackManager(private val plugin: Joshymc) : Listener {
         updateNametag(entity, count)
     }
 
+    private fun stackLabel(entity: LivingEntity): String =
+        entity.type.name.lowercase()
+            .replace('_', ' ')
+            .split(' ')
+            .joinToString(" ") { word -> word.replaceFirstChar(Char::uppercaseChar) }
+
+    /**
+     * True when the entity's custom name is just the "Cow x5" stack label this manager
+     * wrote, i.e. nobody put a real name tag on it.
+     */
+    fun hasOnlyStackLabel(entity: LivingEntity): Boolean {
+        val count = getCount(entity)
+        if (count <= 1) return false
+        val name = entity.customName() ?: return false
+        return PlainTextComponentSerializer.plainText().serialize(name) == "${stackLabel(entity)} x$count"
+    }
+
     private fun updateNametag(entity: LivingEntity, count: Int) {
         if (count > 1) {
-            val label = entity.type.name.lowercase()
-                .replace('_', ' ')
-                .split(' ')
-                .joinToString(" ") { word -> word.replaceFirstChar(Char::uppercaseChar) }
+            val label = stackLabel(entity)
             entity.customName(
                 Component.text(label, NamedTextColor.WHITE)
                     .append(Component.text(" x$count", NamedTextColor.YELLOW))
