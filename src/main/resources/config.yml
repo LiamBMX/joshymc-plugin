@@ -123,12 +123,20 @@ discord:
   # Placeholders: {name}, {message}
   minecraft-format: "&9[Discord] &f{name} &7» &f{message}"
 
+  channels:
+    # Forum channel for punishment history: every warn/unwarn/mute/unmute/kick/ban/unban
+    # is posted as an embed in that player's ONE forum post, matched by UUID (so name
+    # changes reuse it). The bot needs View Channel, Create Posts, Send Messages in
+    # Threads, Embed Links and Read Message History there, plus Manage Threads to reopen
+    # locked posts.
+    punishments-forum: "1557517197738250332"
+
   punishments:
-    # Post every issued punishment (ban/tempban/mute/tempmute/warn) as its own
-    # Discord Forum post. Requires the bot to have View Channel, Create Posts,
-    # Send Messages and Embed Links on the forum channel below.
+    # Toggles the punishment history forum above.
     enabled: true
-    forum-channel-id: "1548796268099272864"
+    # Tag for new posts (by name). Leave empty for none; if the forum requires a tag,
+    # one named like "punish" (or else the first tag) is used.
+    forum-tag: ""
 
   # Staff-monitoring server. Uses the same bot (it must be authorized in that server with
   # View Channel, Send Messages and Embed Links). Anti-cheat/dupe/mining alerts and /report

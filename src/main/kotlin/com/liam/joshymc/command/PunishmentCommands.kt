@@ -132,7 +132,7 @@ class UnbanCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return true
         }
 
-        plugin.punishmentManager.unban(target.first)
+        plugin.punishmentManager.unban(target.first, sender.name, (sender as? Player)?.uniqueId)
         val msg = Component.text("${target.second} has been unbanned.", NamedTextColor.GREEN)
         sender.sendMessage(msg)
         notifyStaff(sender, msg)
@@ -272,7 +272,7 @@ class UnmuteCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return true
         }
 
-        plugin.punishmentManager.unmute(target.first)
+        plugin.punishmentManager.unmute(target.first, sender.name, (sender as? Player)?.uniqueId)
         val msg = Component.text("${target.second} has been unmuted.", NamedTextColor.GREEN)
         sender.sendMessage(msg)
         notifyStaff(sender, msg)
@@ -372,7 +372,7 @@ class UnwarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             parsed
         } else null
 
-        val removed = plugin.punishmentManager.unwarn(target.first, warnId)
+        val removed = plugin.punishmentManager.unwarn(target.first, warnId, sender.name, (sender as? Player)?.uniqueId)
         if (!removed) {
             val detail = if (warnId != null) "Warning #$warnId not found for ${target.second}." else "${target.second} has no active warnings."
             sender.sendMessage(Component.text(detail, NamedTextColor.RED))

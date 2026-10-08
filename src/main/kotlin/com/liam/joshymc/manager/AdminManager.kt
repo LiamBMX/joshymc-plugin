@@ -1127,7 +1127,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                 meta.lore(lore)
             }
             gui.setItem(index, head) { p, _ ->
-                plugin.punishmentManager.unban(ban.uuid)
+                plugin.punishmentManager.unban(ban.uuid, p.name, p.uniqueId)
                 logAction(p, "UNBAN", Bukkit.getOfflinePlayer(ban.uuid))
                 plugin.commsManager.send(p, Component.text("Unbanned ${ban.name}", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 p.playSound(p.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.0f)
@@ -1210,7 +1210,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                 meta.lore(lore)
             }
             gui.setItem(index, head) { p, _ ->
-                plugin.punishmentManager.unmute(mute.uuid)
+                plugin.punishmentManager.unmute(mute.uuid, p.name, p.uniqueId)
                 logAction(p, "UNMUTE", Bukkit.getOfflinePlayer(mute.uuid))
                 plugin.commsManager.send(p, Component.text("Unmuted ${mute.name}", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 p.playSound(p.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.0f)

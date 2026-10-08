@@ -10,11 +10,16 @@ import net.dv8tion.jda.api.interactions.commands.build.Commands
 import net.dv8tion.jda.api.entities.MessageEmbed
 import net.dv8tion.jda.api.entities.channel.concrete.ForumChannel
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
+import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel
+import net.dv8tion.jda.api.entities.channel.forums.ForumTag
 import net.dv8tion.jda.api.requests.GatewayIntent
 import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class DiscordManager(private val plugin: Joshymc) {
 
@@ -36,7 +41,17 @@ class DiscordManager(private val plugin: Joshymc) {
     val minecraftFormat: String get() = plugin.config.getString("discord.minecraft-format") ?: "&9[Discord] &f{name} &7» &f{message}"
 
     private val punishmentSyncEnabled: Boolean get() = plugin.config.getBoolean("discord.punishments.enabled", false)
-    private val punishmentForumChannelId: String get() = plugin.config.getString("discord.punishments.forum-channel-id") ?: ""
+    /** `discord.channels.punishments-forum`, falling back to the pre-#1069 `discord.punishments.forum-channel-id`. */
+    private val punishmentForumChannelId: String get() =
+        plugin.config.getString("discord.channels.punishments-forum")?.takeIf { it.isNotBlank() }
+            ?: plugin.config.getString("discord.punishments.forum-channel-id")
+            ?: ""
+
+    private val punishmentLogLock = Any()
+    private var punishmentLogExecutor: ExecutorService? = null
+    private val pendingPunishmentLogs = ConcurrentLinkedQueue<PunishmentManager.PunishmentLog>()
+    /** True while the bot is connecting, so punishments issued meanwhile are held instead of dropped. */
+    private var connecting = false
 
     private val staffMonitoringEnabled: Boolean get() = plugin.config.getBoolean("discord.staff-monitoring.enabled", false)
     private val staffAnticheatChannelId: String get() = plugin.config.getString("discord.staff-monitoring.anticheat-channel-id") ?: ""
@@ -56,6 +71,7 @@ class DiscordManager(private val plugin: Joshymc) {
         }
 
         plugin.logger.info("[Discord] Connecting bot...")
+        synchronized(punishmentLogLock) { connecting = true }
 
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             try {
@@ -66,6 +82,7 @@ class DiscordManager(private val plugin: Joshymc) {
                     .awaitReady()
 
                 plugin.logger.info("[Discord] Bot connected as ${jda?.selfUser?.name}")
+                startPunishmentLogging()
 
                 val channel = getChannel()
                 if (channel == null) {
@@ -97,6 +114,7 @@ class DiscordManager(private val plugin: Joshymc) {
 
                 send(":green_circle: **Server started**")
             } catch (e: Exception) {
+                stopPunishmentLogging()
                 plugin.logger.severe("[Discord] Failed to connect: ${e.message}")
                 e.printStackTrace()
             }
@@ -104,6 +122,7 @@ class DiscordManager(private val plugin: Joshymc) {
     }
 
     fun shutdown() {
+        stopPunishmentLogging()
         if (jda != null) {
             getChannel()?.sendMessage(":red_circle: **Server stopped**")?.complete()
         }
@@ -208,111 +227,226 @@ class DiscordManager(private val plugin: Joshymc) {
     private fun getPunishmentForumChannel(): ForumChannel? = jda?.getForumChannelById(punishmentForumChannelId)
 
     /**
-     * Fired right after a punishment is persisted (never before) so a Discord failure can
-     * never roll back or block the Minecraft-side punishment. Runs off the JDA gateway
-     * thread via .queue() so the caller (main thread) never blocks on network I/O.
+     * Logs a moderation action into the punished player's own forum thread (issue #1069).
+     * Called right after the punishment is stored, so a Discord failure can never roll it back.
+     * Delivery runs on a single background thread: the main thread never waits on Discord, and
+     * two quick punishments for the same player can never both decide to create a thread.
+     * Entries issued while the bot is still connecting wait in memory and go out once it is ready.
      */
-    fun syncPunishmentCreated(
-        punishmentId: Int,
-        type: String,
-        targetUuid: UUID,
-        targetName: String,
-        punisherName: String,
-        reason: String?,
-        durationMs: Long?,
-        expiresAt: Long?,
-        createdAt: Long
-    ) {
-        if (!punishmentSyncEnabled || jda == null) return
-
-        // Duplicate-safety: a thread already stored for this id means it was already synced.
-        val existingThread = plugin.databaseManager.queryFirst(
-            "SELECT discord_thread_id FROM punishments WHERE id = ?", punishmentId
-        ) { rs -> rs.getString("discord_thread_id") }
-        if (existingThread != null) return
-
-        val forum = getPunishmentForumChannel()
-        if (forum == null) {
-            plugin.logger.warning("[Discord] Punishment forum channel not found ($punishmentForumChannelId) — skipping sync for #$punishmentId.")
-            return
+    fun logPunishment(entry: PunishmentManager.PunishmentLog) {
+        if (!punishmentSyncEnabled || punishmentForumChannelId.isEmpty()) return
+        synchronized(punishmentLogLock) {
+            val executor = punishmentLogExecutor
+            when {
+                jda != null && executor != null -> executor.execute { deliverPunishmentLog(entry) }
+                connecting -> pendingPunishmentLogs.add(entry)
+                else -> plugin.logger.severe("[Discord] Bot is not connected - ${actionLabel(entry.action)} for ${entry.targetName} (${entry.targetUuid}) was not logged to Discord.")
+            }
         }
+    }
 
-        val typeLabel = punishmentTypeLabel(type)
-        val staff = if (punisherName.equals("CONSOLE", ignoreCase = true)) "Console" else punisherName
-        val durationText = when {
-            type == "WARN" -> "N/A"
-            durationMs == null -> "Permanent"
-            else -> PunishmentManager.formatDuration(durationMs)
+    /** Called once the bot is ready: opens the logging thread and sends anything issued while connecting. */
+    private fun startPunishmentLogging() {
+        synchronized(punishmentLogLock) {
+            val executor = Executors.newSingleThreadExecutor { r -> Thread(r, "JoshyMC-PunishmentLog").apply { isDaemon = true } }
+            punishmentLogExecutor = executor
+            connecting = false
+            while (pendingPunishmentLogs.isNotEmpty()) {
+                val entry = pendingPunishmentLogs.poll() ?: break
+                executor.execute { deliverPunishmentLog(entry) }
+            }
         }
+    }
 
-        val embed = EmbedBuilder()
-            .setTitle("JoshyMC Punishment")
-            .setColor(punishmentColor(type))
-            .setThumbnail(headUrl(targetUuid.toString()))
-            .addField("Player", targetName, true)
-            .addField("Punishment", typeLabel, true)
-            .addField("Duration", durationText, true)
-            .addField("Punished By", staff, true)
-            .addField("Reason", reason?.takeIf { it.isNotBlank() } ?: "No reason specified", false)
-            .addField("Punishment ID", "#$punishmentId", true)
-            .addField("UUID", targetUuid.toString(), true)
-            .setTimestamp(Instant.ofEpochMilli(createdAt))
-            .build()
+    private fun stopPunishmentLogging() {
+        val executor = synchronized(punishmentLogLock) {
+            connecting = false
+            if (pendingPunishmentLogs.isNotEmpty()) {
+                plugin.logger.severe("[Discord] ${pendingPunishmentLogs.size} punishment log(s) were issued before the bot connected and were not sent to Discord.")
+                pendingPunishmentLogs.clear()
+            }
+            punishmentLogExecutor.also { punishmentLogExecutor = null }
+        } ?: return
+        executor.shutdown()
+        try {
+            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                plugin.logger.warning("[Discord] Timed out sending queued punishment logs to Discord during shutdown.")
+                executor.shutdownNow()
+            }
+        } catch (_: InterruptedException) {
+            executor.shutdownNow()
+            Thread.currentThread().interrupt()
+        }
+    }
 
-        val postTitle = "#$punishmentId • $targetName • $typeLabel".take(100)
-        val message = MessageCreateBuilder().setEmbeds(embed).build()
+    /** Runs on the punishment-log thread only, so blocking .complete() calls are fine here. */
+    private fun deliverPunishmentLog(entry: PunishmentManager.PunishmentLog) {
+        val who = "${entry.targetName} (${entry.targetUuid})"
+        try {
+            val forum = getPunishmentForumChannel()
+            if (forum == null) {
+                plugin.logger.severe("[Discord] Punishment forum channel $punishmentForumChannelId not found (or the bot lacks View Channel) - ${actionLabel(entry.action)} for $who was not logged.")
+                return
+            }
 
-        forum.createForumPost(postTitle, message).queue(
-            { post ->
-                plugin.databaseManager.execute(
-                    "UPDATE punishments SET discord_thread_id = ? WHERE id = ?",
-                    post.threadChannel.id, punishmentId
-                )
-            },
-            { err -> plugin.logger.warning("[Discord] Failed to create punishment forum post for #$punishmentId: ${err.message}") }
-        )
+            val embed = buildPunishmentEmbed(entry)
+            val title = "${entry.targetName} - Punishment History".take(100)
+
+            val mappedId = plugin.databaseManager.queryFirst(
+                "SELECT thread_id FROM punishment_discord_threads WHERE player_uuid = ?", entry.targetUuid.toString()
+            ) { rs -> rs.getString("thread_id") }
+
+            if (mappedId != null) {
+                val thread = findPunishmentThread(forum, mappedId)
+                if (thread != null) {
+                    reopenPunishmentThread(thread, title, who)
+                    thread.sendMessageEmbeds(embed).complete()
+                    if (thread.name != title) {
+                        plugin.databaseManager.execute(
+                            "UPDATE punishment_discord_threads SET player_name = ? WHERE player_uuid = ?",
+                            entry.targetName, entry.targetUuid.toString()
+                        )
+                    }
+                    return
+                }
+                plugin.logger.warning("[Discord] Punishment thread $mappedId for $who no longer exists in the forum - creating a new one.")
+            }
+
+            val action = forum.createForumPost(title, MessageCreateBuilder().setEmbeds(embed).build())
+            val tags = punishmentForumTags(forum)
+            if (tags.isNotEmpty()) action.setTags(tags)
+            val post = action.complete()
+
+            // Stored straight away so the next punishment for this player reuses the thread.
+            plugin.databaseManager.execute(
+                "INSERT OR REPLACE INTO punishment_discord_threads (player_uuid, thread_id, player_name, created_at) VALUES (?, ?, ?, ?)",
+                entry.targetUuid.toString(), post.threadChannel.id, entry.targetName, System.currentTimeMillis()
+            )
+        } catch (e: Exception) {
+            plugin.logger.severe("[Discord] Failed to log ${actionLabel(entry.action)} for $who to the punishment forum: ${e.message}")
+        }
     }
 
     /**
-     * Replies inside the punishment's existing forum thread instead of creating a new post -
-     * unban/unmute/unwarn are administrative removals, not new punishments.
+     * The mapped thread, whether active (cached) or archived (looked up in the forum's archive).
+     * Returns null only when the thread is really gone from this forum; lookup errors propagate so
+     * a Discord hiccup never leads to a duplicate thread.
      */
-    fun syncPunishmentRevoked(threadId: String, revokerName: String, revokeReason: String?) {
-        if (!punishmentSyncEnabled || jda == null) return
+    private fun findPunishmentThread(forum: ForumChannel, threadId: String): ThreadChannel? {
+        jda?.getThreadChannelById(threadId)?.let { return it.takeIf { t -> t.parentChannel.id == forum.id } }
+        for (thread in forum.retrieveArchivedPublicThreadChannels()) {
+            if (thread.id == threadId) return thread
+        }
+        return null
+    }
 
-        val thread = jda?.getThreadChannelById(threadId)
-        if (thread == null) {
-            plugin.logger.warning("[Discord] Could not find punishment thread $threadId to post revocation.")
-            return
+    /** Unarchives the thread and follows a username change. Failures are logged; the entry is still posted. */
+    private fun reopenPunishmentThread(thread: ThreadChannel, title: String, who: String) {
+        if (thread.isArchived) {
+            try {
+                thread.manager.setArchived(false).complete()
+            } catch (e: Exception) {
+                plugin.logger.warning("[Discord] Could not unarchive punishment thread ${thread.id} for $who (needs Manage Threads if it is locked): ${e.message}")
+            }
+        }
+        if (thread.name != title) {
+            try {
+                thread.manager.setName(title).complete()
+            } catch (e: Exception) {
+                plugin.logger.warning("[Discord] Could not rename punishment thread ${thread.id} for $who: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Tags for a new post: the configured `discord.punishments.forum-tag` if it exists, otherwise
+     * none - unless the forum requires a tag, then one named like "punish" or else the first one.
+     */
+    private fun punishmentForumTags(forum: ForumChannel): List<ForumTag> {
+        val available = forum.availableTags
+        val configured = plugin.config.getString("discord.punishments.forum-tag")?.trim().orEmpty()
+        if (configured.isNotEmpty()) {
+            available.firstOrNull { it.name.equals(configured, ignoreCase = true) }?.let { return listOf(it) }
+            plugin.logger.warning("[Discord] discord.punishments.forum-tag \"$configured\" is not a tag on #${forum.name}.")
+        }
+        if (!forum.isTagRequired) return emptyList()
+        val fallback = available.firstOrNull { it.name.contains("punish", ignoreCase = true) } ?: available.firstOrNull()
+        if (fallback == null) {
+            plugin.logger.warning("[Discord] #${forum.name} requires a tag but has none - post creation will likely fail.")
+            return emptyList()
+        }
+        return listOf(fallback)
+    }
+
+    private fun buildPunishmentEmbed(entry: PunishmentManager.PunishmentLog): MessageEmbed {
+        val staff = if (entry.staffName.equals("CONSOLE", ignoreCase = true)) "Console" else entry.staffName
+        val builder = EmbedBuilder()
+            .setTitle("${actionEmoji(entry.action)} ${actionLabel(entry.action)}")
+            .setColor(actionColor(entry.action))
+            .setThumbnail(headUrl(entry.targetUuid.toString()))
+            .addField("Player", entry.targetName, true)
+            .addField("Staff", staff, true)
+
+        entry.punishmentId?.let { builder.addField("Punishment ID", "#$it", true) }
+
+        builder.addField("Reason", (entry.reason?.takeIf { it.isNotBlank() } ?: "No reason provided").take(1024), false)
+
+        when (entry.action) {
+            "BAN", "MUTE" -> builder.addField("Duration", "Permanent", true)
+            "TEMPBAN", "TEMPMUTE" -> {
+                builder.addField("Duration", entry.durationMs?.let { PunishmentManager.formatDuration(it) } ?: "Unknown", true)
+                entry.expiresAt?.let { builder.addField("Expires", discordTime(it, "F"), true) }
+            }
         }
 
-        val embed = EmbedBuilder()
-            .setColor(0x57F287)
-            .setDescription("**Punishment revoked by $revokerName**")
-            .apply { if (!revokeReason.isNullOrBlank()) addField("Reason", revokeReason, false) }
-            .setTimestamp(Instant.now())
+        if (entry.reversed.isNotEmpty()) {
+            val lines = entry.reversed.joinToString("\n") { record ->
+                val reason = record.reason?.takeIf { it.isNotBlank() } ?: "No reason provided"
+                "#${record.id} ${actionLabel(record.type)} by ${record.punisherName} on ${discordTime(record.createdAt, "d")} - $reason"
+            }
+            builder.addField("Reverses", lines.take(1024), false)
+        }
+
+        builder.addField("Issued", discordTime(entry.timestamp, "F"), true)
+        entry.previousCount?.let { builder.addField("Previous Punishments", it.toString(), true) }
+
+        return builder
+            .setFooter("UUID: ${entry.targetUuid}")
+            .setTimestamp(Instant.ofEpochMilli(entry.timestamp))
             .build()
-
-        thread.sendMessageEmbeds(embed).queue(
-            null,
-            { err -> plugin.logger.warning("[Discord] Failed to post revocation to thread $threadId: ${err.message}") }
-        )
     }
 
-    private fun punishmentTypeLabel(type: String): String = when (type) {
-        "BAN" -> "Permanent Ban"
-        "TEMPBAN" -> "Temporary Ban"
+    /** Discord renders `<t:..>` in each viewer's own timezone. */
+    private fun discordTime(epochMs: Long, style: String): String = "<t:${epochMs / 1000}:$style>"
+
+    private fun actionLabel(action: String): String = when (action) {
+        "WARN" -> "Warn"
+        "UNWARN" -> "Unwarn"
         "MUTE" -> "Permanent Mute"
-        "TEMPMUTE" -> "Temporary Mute"
-        "WARN" -> "Warning"
-        else -> type.lowercase().replaceFirstChar { it.uppercase() }
+        "TEMPMUTE" -> "Temp Mute"
+        "UNMUTE" -> "Unmute"
+        "KICK" -> "Kick"
+        "BAN" -> "Permanent Ban"
+        "TEMPBAN" -> "Temp Ban"
+        "UNBAN" -> "Unban"
+        else -> action.lowercase().replaceFirstChar { it.uppercase() }
     }
 
-    private fun punishmentColor(type: String): Int = when (type) {
-        "BAN" -> 0xED4245
-        "TEMPBAN" -> 0xFF4500
-        "MUTE", "TEMPMUTE" -> 0xFFA500
-        "WARN" -> 0xFEE75C
+    private fun actionEmoji(action: String): String = when (action) {
+        "WARN" -> "⚠️"
+        "MUTE", "TEMPMUTE" -> "🔇"
+        "KICK" -> "👢"
+        "BAN", "TEMPBAN" -> "⛔"
+        else -> "✅"
+    }
+
+    private fun actionColor(action: String): Int = when (action) {
+        "WARN" -> 0xF1C40F
+        "MUTE", "TEMPMUTE" -> 0xE67E22
+        "KICK" -> 0xF0785A
+        "TEMPBAN" -> 0xED4245
+        "BAN" -> 0x992D22
+        "UNWARN", "UNMUTE", "UNBAN" -> 0x57F287
         else -> 0x5865F2
     }
 
