@@ -24,6 +24,10 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
         const val SILENT_JOIN_PERMISSION = "joshymc.silentjoin"
         /** Hidden setting owned by `/sj`: whether silent-join staff see other silent joins/leaves. */
         const val SILENT_JOIN_NOTIFY_SETTING_KEY = "silentjoin_notify"
+        /** Lets `/sj <on|off> <public|private>` change the sender's own join visibility. */
+        const val SILENT_JOIN_VISIBILITY_PERMISSION = "joshymc.silentjoin.visibility"
+        /** Hidden setting owned by `/sj`: true = own join/leave is private (the default). */
+        const val SILENT_JOIN_PRIVATE_SETTING_KEY = "silentjoin_private"
     }
 
     private val vanished: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
@@ -33,10 +37,12 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
 
     /**
      * The one check for whether [player]'s join/leave stays out of public chat
-     * and Discord: vanished, or staff with `joshymc.silentjoin`.
+     * and Discord: vanished, or `joshymc.silentjoin` staff whose join visibility
+     * is private (the default; `/sj ... public` makes it public).
      */
     fun hidesJoinLeave(player: Player): Boolean =
-        isVanished(player) || player.hasPermission(SILENT_JOIN_PERMISSION)
+        isVanished(player) || (player.hasPermission(SILENT_JOIN_PERMISSION) &&
+            plugin.settingsManager.getSetting(player, SILENT_JOIN_PRIVATE_SETTING_KEY))
 
     fun start() {
         // Action bar reminder every 2 seconds (40 ticks)

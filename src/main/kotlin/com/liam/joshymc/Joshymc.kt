@@ -1159,6 +1159,18 @@ class Joshymc : JavaPlugin() {
             hidden = true
         ))
 
+        // Owned by /sj <on|off> <public|private> (issue #1067); default private.
+        settingsManager.register(SettingsManager.SettingDef(
+            key = VanishCommand.SILENT_JOIN_PRIVATE_SETTING_KEY,
+            displayName = "Private Join/Leave",
+            description = "Hide your own join and leave from public chat",
+            material = org.bukkit.Material.ENDER_EYE,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = true,
+            permission = VanishCommand.SILENT_JOIN_VISIBILITY_PERMISSION,
+            hidden = true
+        ))
+
         // Active /settings toggles (issue #501)
         settingsManager.register(SettingsManager.SettingDef(
             key = com.liam.joshymc.manager.ScoreboardManager.SCOREBOARD_SETTING_KEY,
