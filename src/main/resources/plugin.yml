@@ -38,7 +38,7 @@ commands:
     permission: joshymc.serverbar
   sj:
     description: Show or hide other silent staff's join/leave notifications for yourself
-    usage: /sj <on|off>
+    usage: /sj <on|off> [public|private]
     permission: joshymc.silentjoin
   sit:
     description: Sit down where you are
@@ -1345,6 +1345,9 @@ permissions:
     default: op
   joshymc.silentjoin:
     description: Join and leave without a public join/leave message, and see other silent staff join/leave (toggle with /sj)
+    default: false
+  joshymc.silentjoin.visibility:
+    description: Choose whether your own join/leave is public or private with /sj <on|off> <public|private>
     default: false
   joshymc.hidestaff:
     description: Hide staff currently in active Moderator Mode from yourself (Admin+)
