@@ -19,10 +19,12 @@ import org.bukkit.entity.Player
  * Reset needs the same command repeated within 30s to confirm.
  *   /eq admin create <set> | additem hand <set> | setquest <set> <type> [target] <amount>
  * builds a 2-10 quest questline in-game (stored in event-quests-custom.yml).
+ *   /eq admin repeatable <set> <true|false> [days] | cooldown <set> <days>
+ * makes a set repeatable after a real-time cooldown (default 30 days), or one-time again.
  */
 class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
-    private val adminSubs = listOf("reload", "progress", "reset", "create", "additem", "setquest")
+    private val adminSubs = listOf("reload", "progress", "reset", "create", "additem", "setquest", "repeatable", "cooldown")
 
     private fun msg(sender: CommandSender, text: String, color: NamedTextColor) {
         val c = Component.text(text, color)
@@ -116,7 +118,23 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 if (err != null) msg(sender, err, NamedTextColor.RED)
                 else msg(sender, "Added ${type.name} x$amount${target?.let { " ($it)" } ?: ""} to '${args[2].lowercase()}'. ${mgr.questlineStatus(args[2])}", NamedTextColor.GREEN)
             }
-            else -> msg(sender, "Usage: /eq admin <reload|progress|reset|create|additem|setquest>", NamedTextColor.RED)
+            "repeatable" -> {
+                val usage = "Usage: /eq admin repeatable <quest-set-name> <true|false> [cooldown-days]"
+                val repeatable = args.getOrNull(3)?.lowercase()?.toBooleanStrictOrNull()
+                val days = args.getOrNull(4)?.toIntOrNull()
+                if (args.size !in 4..5 || repeatable == null || (args.size == 5 && days == null)) { msg(sender, usage, NamedTextColor.RED); return }
+                val err = mgr.setRepeatable(args[2], repeatable, days)
+                if (err != null) msg(sender, err, NamedTextColor.RED)
+                else msg(sender, "'${args[2].lowercase()}' is now ${mgr.repeatSummary(args[2])}. Player progress was not changed.", NamedTextColor.GREEN)
+            }
+            "cooldown" -> {
+                val days = args.getOrNull(3)?.toIntOrNull()
+                if (args.size != 4 || days == null) { msg(sender, "Usage: /eq admin cooldown <quest-set-name> <days>", NamedTextColor.RED); return }
+                val err = mgr.setRepeatable(args[2], null, days)
+                if (err != null) msg(sender, err, NamedTextColor.RED)
+                else msg(sender, "'${args[2].lowercase()}' cooldown set to $days day(s); it is ${mgr.repeatSummary(args[2])}.", NamedTextColor.GREEN)
+            }
+            else -> msg(sender, "Usage: /eq admin <reload|progress|reset|create|additem|setquest|repeatable|cooldown>", NamedTextColor.RED)
         }
     }
 
@@ -142,6 +160,10 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 if (type == null) emptyList() else mgr.targetSuggestions(type).map { it.lowercase() } + "<amount>"
             }
             sub == "setquest" && args.size == 6 -> listOf("<amount>")
+            (sub == "repeatable" || sub == "cooldown") && args.size == 3 -> (mgr.eventIds() + mgr.customQuestlineIds()).distinct()
+            sub == "repeatable" && args.size == 4 -> listOf("true", "false")
+            sub == "repeatable" && args.size == 5 -> listOf("30")
+            sub == "cooldown" && args.size == 4 -> listOf("30")
             else -> emptyList()
         }
         return options.filter { it.startsWith(last, true) }.take(50)

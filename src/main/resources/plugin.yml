@@ -240,7 +240,7 @@ commands:
     aliases: [quest, q, questboard, questbook]
   eventquests:
     description: Open the Event Quests hub
-    usage: /eventquests [admin reload|progress <player> <event>|reset <player> <event>]
+    usage: /eventquests [admin reload|progress <player> <event>|reset <player> <event>|repeatable <set> <true|false> [days]|cooldown <set> <days>]
     aliases: [eq]
   daily:
     description: Open the Daily / Weekly / Quest Master quest hub (alias for /quests)
