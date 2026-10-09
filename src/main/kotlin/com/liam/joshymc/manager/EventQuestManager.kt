@@ -69,7 +69,10 @@ data class EventDef(
     val claimAfterEnd: Boolean,
     val quests: List<EventQuestDef>,
     /** Exact reward stack for admin-created questlines (rewardSource "held-item"). */
-    val rewardItem: ItemStack? = null
+    val rewardItem: ItemStack? = null,
+    /** Repeatable sets reset for the player [repeatCooldownDays] real days after each completion. */
+    val repeatable: Boolean = false,
+    val repeatCooldownDays: Int = 30
 )
 
 /**
@@ -81,7 +84,9 @@ data class EventProgress(
     val progress: Int = 0,
     val completed: Boolean = false,
     val claimed: Boolean = false,
-    val delivered: Boolean = false
+    val delivered: Boolean = false,
+    /** Epoch millis of the completion that started the current cycle; null while incomplete. */
+    val completedAt: Long? = null
 )
 
 /**
@@ -103,6 +108,9 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         private const val RESET_CONFIRM_MS = 30_000L
         private const val KILL_PLAYER_COOLDOWN_MS = 10 * 60_000L
         private const val PLACE_REPEAT_MS = 10_000L
+        private const val DAY_MS = 86_400_000L
+        const val DEFAULT_COOLDOWN_DAYS = 30
+        const val MAX_COOLDOWN_DAYS = 3650
         private val ZONE: ZoneId = ZoneId.of("America/New_York")
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy")
         private val ALWAYS_HARVESTABLE = setOf(
@@ -139,9 +147,18 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
                 completed INTEGER NOT NULL DEFAULT 0,
                 claimed INTEGER NOT NULL DEFAULT 0,
                 delivered INTEGER NOT NULL DEFAULT 0,
+                completed_at INTEGER,
                 PRIMARY KEY (uuid, event_id)
             )
             """.trimIndent()
+        )
+        try { plugin.databaseManager.execute("ALTER TABLE event_quest_progress ADD COLUMN completed_at INTEGER") } catch (_: Exception) {}
+        // Completions recorded before timestamps existed have no reliable date. Stamp them with "now" so a
+        // set later switched to repeatable gives them a full cooldown from the upgrade instead of an
+        // immediate reset (a late repeat, never an early or duplicate reward).
+        plugin.databaseManager.execute(
+            "UPDATE event_quest_progress SET completed_at = ? WHERE completed = 1 AND completed_at IS NULL",
+            System.currentTimeMillis()
         )
     }
 
@@ -287,7 +304,9 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             end = end,
             claimAfterEnd = s.getBoolean("claim-after-end", false),
             quests = quests,
-            rewardItem = heldItem
+            rewardItem = heldItem,
+            repeatable = s.getBoolean("repeatable", false),
+            repeatCooldownDays = s.getInt("repeat-cooldown-days", DEFAULT_COOLDOWN_DAYS).coerceIn(1, MAX_COOLDOWN_DAYS)
         )
     }
 
@@ -341,6 +360,40 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         return cache.getOrPut(uuid) { loadPlayer(uuid) }[id] ?: EventProgress()
     }
 
+    /** Milliseconds until a repeatable set's cooldown ends, or null when it isn't cooling down. */
+    fun cooldownRemaining(event: EventDef, s: EventProgress, now: Long = System.currentTimeMillis()): Long? {
+        if (!event.repeatable || !s.completed || !s.claimed || !s.delivered) return null
+        val at = s.completedAt ?: return null
+        return (at + event.repeatCooldownDays * DAY_MS - now).coerceAtLeast(0L)
+    }
+
+    /**
+     * [getProgress], but first starts a new cycle for a repeatable set whose cooldown has run out.
+     * Only a claimed AND delivered completion resets, so an unclaimed reward is never lost; the
+     * reset is one conditional UPDATE keyed on the cycle's completion timestamp, so it happens
+     * exactly once per cycle no matter how many callers race it. Only this set's row is touched.
+     */
+    private fun currentState(uuid: UUID, event: EventDef): EventProgress {
+        val s = getProgress(uuid, event.id)
+        val remaining = cooldownRemaining(event, s) ?: return s
+        if (remaining > 0) return s
+        val reset = plugin.databaseManager.executeUpdate(
+            "UPDATE event_quest_progress SET quest_index = 0, progress = 0, completed = 0, claimed = 0, delivered = 0, completed_at = NULL " +
+                "WHERE uuid = ? AND event_id = ? AND completed = 1 AND claimed = 1 AND delivered = 1 AND completed_at = ?",
+            uuid.toString(), event.id, s.completedAt
+        )
+        if (reset == 0) {
+            // The database moved on without us (admin reset, a concurrent reset) — resync from it.
+            cache.remove(uuid)
+            return getProgress(uuid, event.id)
+        }
+        dirty.remove(uuid to event.id)
+        val fresh = EventProgress()
+        setState(uuid, event.id, fresh)
+        plugin.logger.info("[EventQuests] Repeatable event '${event.id}' is available again for $uuid.")
+        return fresh
+    }
+
     private fun setState(uuid: UUID, eventId: String, state: EventProgress) {
         cache.getOrPut(uuid) { loadPlayer(uuid) }[eventId] = state
     }
@@ -350,12 +403,13 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     private fun loadPlayer(uuid: UUID): MutableMap<String, EventProgress> {
         val map = ConcurrentHashMap<String, EventProgress>()
         plugin.databaseManager.query(
-            "SELECT event_id, quest_index, progress, completed, claimed, delivered FROM event_quest_progress WHERE uuid = ?",
+            "SELECT event_id, quest_index, progress, completed, claimed, delivered, completed_at FROM event_quest_progress WHERE uuid = ?",
             uuid.toString()
         ) { rs ->
+            val completedAt = rs.getLong("completed_at").takeUnless { rs.wasNull() }
             map[rs.getString("event_id")] = EventProgress(
                 rs.getInt("quest_index"), rs.getInt("progress"),
-                rs.getInt("completed") == 1, rs.getInt("claimed") == 1, rs.getInt("delivered") == 1
+                rs.getInt("completed") == 1, rs.getInt("claimed") == 1, rs.getInt("delivered") == 1, completedAt
             )
         }
         return map
@@ -401,7 +455,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         val now = ZonedDateTime.now(ZONE)
         for (event in candidates) {
             if (!isOpen(event, now)) continue
-            val state = getProgress(player.uniqueId, event.id)
+            val state = currentState(player.uniqueId, event)
             if (state.completed || state.index >= event.quests.size) continue
             val quest = event.quests[state.index]
             if (quest.type != type || !matches(quest.target)) continue
@@ -426,15 +480,16 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         // Quest done: unlock the next one. Overflow is discarded so a locked quest never gets a head start.
         val nextIndex = quest.index + 1
         val allDone = nextIndex >= event.quests.size
-        val next = state.copy(index = nextIndex, progress = 0, completed = allDone)
+        val completedAt = if (allDone) System.currentTimeMillis() else null
+        val next = state.copy(index = nextIndex, progress = 0, completed = allDone, completedAt = completedAt)
         setState(uuid, event.id, next)
         dirty.remove(uuid to event.id)
         plugin.databaseManager.execute(
             "INSERT OR IGNORE INTO event_quest_progress (uuid, event_id) VALUES (?, ?)", uuid.toString(), event.id
         )
         plugin.databaseManager.execute(
-            "UPDATE event_quest_progress SET quest_index = ?, progress = 0, completed = ? WHERE uuid = ? AND event_id = ? AND claimed = 0",
-            nextIndex, if (allDone) 1 else 0, uuid.toString(), event.id
+            "UPDATE event_quest_progress SET quest_index = ?, progress = 0, completed = ?, completed_at = ? WHERE uuid = ? AND event_id = ? AND claimed = 0",
+            nextIndex, if (allDone) 1 else 0, completedAt, uuid.toString(), event.id
         )
         notifyAdvance(player, event, quest, allDone)
     }
@@ -692,11 +747,15 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     private fun claim(player: Player, event: EventDef) {
         val comms = plugin.commsManager
         val uuid = player.uniqueId
-        val state = getProgress(uuid, event.id)
+        val state = currentState(uuid, event)
 
         if (state.claimed) {
             if (!state.delivered) deliverReward(player, event)
-            else comms.send(player, Component.text("You already claimed this reward.", NamedTextColor.RED))
+            else comms.send(player, Component.text(
+                cooldownRemaining(event, state)?.let { "You already claimed this reward. Available again in ${formatDuration(it)}." }
+                    ?: "You already claimed this reward.",
+                NamedTextColor.RED
+            ))
             return
         }
         if (!state.completed) {
@@ -852,11 +911,56 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         return null
     }
 
+    /**
+     * Sets `repeatable` (and optionally `repeat-cooldown-days`) on a quest set, in whichever file
+     * defines it: event-quests-custom.yml for in-game questlines, event-quests.yml otherwise.
+     * Player progress is untouched. Returns an error message, or null on success.
+     */
+    fun setRepeatable(rawId: String, repeatable: Boolean?, cooldownDays: Int?): String? {
+        val id = rawId.lowercase()
+        if (cooldownDays != null && cooldownDays !in 1..MAX_COOLDOWN_DAYS) return "Cooldown must be between 1 and $MAX_COOLDOWN_DAYS days."
+        val custom = customConfig()
+        if (custom.contains("questlines.$id")) {
+            repeatable?.let { custom.set("questlines.$id.repeatable", it) }
+            cooldownDays?.let { custom.set("questlines.$id.repeat-cooldown-days", it) }
+            saveCustom(custom)
+            return null
+        }
+        val file = plugin.configFile("event-quests.yml")
+        val main = if (file.exists()) YamlConfiguration.loadConfiguration(file) else return "Unknown quest set '$rawId'."
+        val key = main.getConfigurationSection("event-quests.events")?.getKeys(false)?.firstOrNull { it.lowercase() == id }
+            ?: return "Unknown quest set '$rawId'."
+        repeatable?.let { main.set("event-quests.events.$key.repeatable", it) }
+        cooldownDays?.let { main.set("event-quests.events.$key.repeat-cooldown-days", it) }
+        main.save(file)
+        loadEvents()
+        return null
+    }
+
+    /** "repeatable every 30 days" / "one-time" for admin feedback. */
+    fun repeatSummary(id: String): String {
+        val event = getEvent(id) ?: return "not loaded (draft or disabled)"
+        return if (event.repeatable) "repeatable every ${event.repeatCooldownDays} day(s)" else "one-time"
+    }
+
+    /** "12d 4h", "3h 20m" or "5m" — remaining real time, rounded up to the minute. */
+    fun formatDuration(ms: Long): String {
+        val totalMinutes = ((ms + 59_999L) / 60_000L).coerceAtLeast(1L)
+        val d = totalMinutes / 1440
+        val h = (totalMinutes % 1440) / 60
+        val m = totalMinutes % 60
+        return when {
+            d > 0 -> "${d}d ${h}h"
+            h > 0 -> "${h}h ${m}m"
+            else -> "${m}m"
+        }
+    }
+
     // ── Admin ───────────────────────────────────────────────────
 
     fun describeProgress(uuid: UUID, event: EventDef): List<String> {
         if (Bukkit.getPlayer(uuid) != null) flushPlayer(uuid)
-        val s = if (Bukkit.getPlayer(uuid) != null) getProgress(uuid, event.id) else loadPlayer(uuid)[event.id] ?: EventProgress()
+        val s = if (Bukkit.getPlayer(uuid) != null) currentState(uuid, event) else loadPlayer(uuid)[event.id] ?: EventProgress()
         val lines = mutableListOf<String>()
         if (s.completed) {
             lines += "All ${event.quests.size} quests completed."
@@ -869,6 +973,14 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             s.claimed -> "claimed, awaiting delivery"
             s.completed -> "unlocked, unclaimed"
             else -> "locked"
+        }
+        lines += "Repeat: " + if (!event.repeatable) "one-time" else {
+            val remaining = cooldownRemaining(event, s)
+            "every ${event.repeatCooldownDays} day(s)" + when {
+                remaining == null -> ""
+                remaining > 0 -> ", available again in ${formatDuration(remaining)}"
+                else -> ", cooldown over (resets when they next play or open /eq)"
+            }
         }
         return lines
     }
@@ -926,7 +1038,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun eventIcon(player: Player, event: EventDef): ItemStack {
-        val s = getProgress(player.uniqueId, event.id)
+        val s = currentState(player.uniqueId, event)
         val pct = percent(event, s)
         // The icon is the real reward stack (fresh from buildReward, never a shared template), so custom
         // armor keeps its item model instead of looking like plain Netherite. A display-item override only
@@ -954,11 +1066,26 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
                 },
                 if (s.claimed) NamedTextColor.DARK_GREEN else if (s.completed) NamedTextColor.GREEN else NamedTextColor.GRAY
             )
+            lore += repeatStatus(event, s)
             lore += Component.empty()
             lore += plain("Click to view", NamedTextColor.YELLOW)
             m.lore(lore)
         }
         return item
+    }
+
+    /**
+     * Cycle status: "Available", "Available again in: 12d 4h" while a repeatable set cools down,
+     * "Completed" for a finished one-time set. Recomputed on every GUI open, so it flips to
+     * Available on its own once the cooldown ends.
+     */
+    private fun repeatStatus(event: EventDef, s: EventProgress): Component {
+        val remaining = cooldownRemaining(event, s)
+        return when {
+            remaining != null -> plain("Available again in: ", NamedTextColor.RED).append(plain(formatDuration(remaining), NamedTextColor.WHITE))
+            s.completed -> plain("Completed", NamedTextColor.GRAY)
+            else -> plain("Available", NamedTextColor.GREEN)
+        }
     }
 
     private fun rewardName(event: EventDef): String =
@@ -969,7 +1096,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     fun openEventGui(player: Player, event: EventDef) {
         val gui = CustomGui(plain(event.name.take(26), NamedTextColor.GOLD, true), 54)
         gui.fill(FILLER)
-        val s = getProgress(player.uniqueId, event.id)
+        val s = currentState(player.uniqueId, event)
 
         // Reward preview / claim button
         val reward = buildReward(event) ?: ItemStack(Material.BARRIER)
@@ -978,7 +1105,10 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             val lore = (m.lore() ?: emptyList()).toMutableList()
             lore += Component.empty()
             when {
-                s.claimed && s.delivered -> lore += plain("Already claimed", NamedTextColor.DARK_GREEN, true)
+                s.claimed && s.delivered -> {
+                    lore += plain("Already claimed", NamedTextColor.DARK_GREEN, true)
+                    if (event.repeatable) lore += repeatStatus(event, s)
+                }
                 s.claimed -> lore += plain("Click to receive your reward", NamedTextColor.YELLOW, true)
                 canClaim(event, s) -> lore += plain("Click to claim!", NamedTextColor.GREEN, true)
                 s.completed -> lore += plain("Event ended - reward can't be claimed", NamedTextColor.RED)
@@ -1023,7 +1153,12 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
                 it.displayName(plain("${percent(event, s)}% complete", NamedTextColor.YELLOW, true))
                 it.lore(listOf(
                     plain(availability(event), if (isOpen(event)) NamedTextColor.GREEN else NamedTextColor.RED),
-                    plain("Quests must be completed in order.", NamedTextColor.GRAY)
+                    plain("Quests must be completed in order.", NamedTextColor.GRAY),
+                    plain(
+                        if (event.repeatable) "Repeatable: every ${event.repeatCooldownDays} day(s) after completion" else "One-time reward",
+                        NamedTextColor.GRAY
+                    ),
+                    repeatStatus(event, s)
                 ))
             }
         }

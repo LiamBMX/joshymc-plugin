@@ -10,6 +10,14 @@
 #   display-item    - icon in the main GUI (defaults to the reward item itself, custom model included)
 #   start / end     - optional dates, "yyyy-MM-dd" or "yyyy-MM-dd HH:mm" (America/New_York)
 #   claim-after-end - allow claiming a finished chain after the event ends (default false)
+#   repeatable      - default false (one-time). true = once the reward is claimed, the chain resets
+#                     for that player repeat-cooldown-days REAL days after they completed it
+#                     (offline time counts), and the reward can be earned again. Each completion
+#                     starts a new cooldown. Only that set's progress resets.
+#   repeat-cooldown-days - default 30. Also settable in-game: /eq admin repeatable <set> <true|false> [days]
+#                     and /eq admin cooldown <set> <days>.
+#                     Completions recorded before this feature had no timestamp; their cooldown
+#                     counts from the first startup on the new version (never an early repeat).
 #   reward:
 #     source: custom-item   -> item-id is a JoshyMC custom item id (full metadata preserved)
 #     source: crate-key     -> item-id is a crate type from crates.yml
@@ -29,6 +37,7 @@ event-quests:
       description: "Complete five challenges."
       enabled: true
       display-item: DIAMOND_SWORD
+      repeatable: false
       reward:
         source: custom-item
         item-id: autumns_edge
