@@ -59,7 +59,8 @@ data class EventDef(
     val id: String,
     val name: String,
     val description: String,
-    val displayItem: Material,
+    /** Explicit `display-item` icon override; null = show the reward item itself. */
+    val displayItem: Material?,
     val rewardSource: String,
     val rewardItemId: String,
     val rewardAmount: Int,
@@ -239,14 +240,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             return null
         }
 
-        val rewardMaterial = when (source) {
-            HELD_ITEM -> heldItem?.type
-            "crate-key" -> null
-            else -> plugin.itemManager.getItem(itemId)?.material
-        }
         val displayItem = s.getString("display-item")?.let { Material.matchMaterial(it) }
-            ?: rewardMaterial
-            ?: Material.NETHER_STAR
 
         val start = parseDate(id, s.getString("start"), false) ?: if (s.contains("start")) return null else null
         val end = parseDate(id, s.getString("end"), true) ?: if (s.contains("end")) return null else null
@@ -934,7 +928,15 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     private fun eventIcon(player: Player, event: EventDef): ItemStack {
         val s = getProgress(player.uniqueId, event.id)
         val pct = percent(event, s)
-        val item = ItemStack(event.displayItem)
+        // The icon is the real reward stack (fresh from buildReward, never a shared template), so custom
+        // armor keeps its item model instead of looking like plain Netherite. A display-item override only
+        // wins when it's a different material; one naming the reward's own base material would hide the model.
+        val reward = buildReward(event)
+        val item = when {
+            reward != null && (event.displayItem == null || event.displayItem == reward.type) -> reward
+            event.displayItem != null -> ItemStack(event.displayItem)
+            else -> ItemStack(Material.NETHER_STAR)
+        }
         item.editMeta { m ->
             m.displayName(plain(event.name, NamedTextColor.GOLD, true))
             val lore = mutableListOf<Component>()

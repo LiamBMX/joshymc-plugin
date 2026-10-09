@@ -7,7 +7,7 @@
 #
 # Event fields:
 #   name / description / enabled
-#   display-item    - icon in the main GUI (defaults to the reward's material)
+#   display-item    - icon in the main GUI (defaults to the reward item itself, custom model included)
 #   start / end     - optional dates, "yyyy-MM-dd" or "yyyy-MM-dd HH:mm" (America/New_York)
 #   claim-after-end - allow claiming a finished chain after the event ends (default false)
 #   reward:
