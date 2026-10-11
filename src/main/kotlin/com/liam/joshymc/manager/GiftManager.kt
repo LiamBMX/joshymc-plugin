@@ -571,7 +571,7 @@ class GiftManager(private val plugin: Joshymc) : Listener {
     private fun playerHead(uuid: UUID, name: String, displayName: Component, lore: List<Component>): ItemStack {
         val head = ItemStack(Material.PLAYER_HEAD)
         head.editMeta(SkullMeta::class.java) { meta ->
-            meta.owningPlayer = Bukkit.getOfflinePlayer(uuid)
+            plugin.playerHeadManager.applyHead(meta, Bukkit.getOfflinePlayer(uuid))
             meta.displayName(displayName.decoration(TextDecoration.ITALIC, false))
             meta.lore(lore)
         }

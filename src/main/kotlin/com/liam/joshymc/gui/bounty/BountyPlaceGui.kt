@@ -102,7 +102,7 @@ object BountyPlaceGui {
 
         val item = ItemStack(Material.PLAYER_HEAD)
         item.editMeta { meta ->
-            if (meta is SkullMeta) meta.owningPlayer = target
+            if (meta is SkullMeta) plugin.playerHeadManager.applyHead(meta, target)
             meta.displayName(Component.text(target.name, NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false))
             val lore = mutableListOf(Component.empty())
             if (currentBounty > 0) {
@@ -142,7 +142,7 @@ object BountyPlaceGui {
 
         val display = ItemStack(Material.PLAYER_HEAD)
         display.editMeta { meta ->
-            if (meta is SkullMeta) meta.owningPlayer = target
+            if (meta is SkullMeta) plugin.playerHeadManager.applyHead(meta, target)
             meta.displayName(Component.text(target.name, NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false))
             meta.lore(
                 listOf(
@@ -247,7 +247,7 @@ object BountyPlaceGui {
 
         val display = ItemStack(Material.PLAYER_HEAD)
         display.editMeta { meta ->
-            if (meta is SkullMeta) meta.owningPlayer = target
+            if (meta is SkullMeta) plugin.playerHeadManager.applyHead(meta, target)
             meta.displayName(Component.text("Target: ${target.name}", NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false))
             meta.lore(
                 listOf(

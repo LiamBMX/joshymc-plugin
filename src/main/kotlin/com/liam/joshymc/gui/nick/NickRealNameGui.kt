@@ -74,8 +74,8 @@ object NickRealNameGui {
 
         val item = ItemStack(Material.PLAYER_HEAD)
         item.editMeta { meta ->
-            // Online player's already-resolved profile — no Mojang lookup.
-            if (meta is SkullMeta) meta.playerProfile = target.playerProfile
+            // Online player's own textures; Bedrock players without one get the generic head.
+            if (meta is SkullMeta) plugin.playerHeadManager.applyHead(meta, target)
             meta.displayName(Component.text(target.name, NamedTextColor.GOLD, TextDecoration.BOLD)
                 .decoration(TextDecoration.ITALIC, false))
             meta.lore(listOf(

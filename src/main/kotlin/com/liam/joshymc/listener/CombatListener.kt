@@ -231,7 +231,7 @@ class CombatListener(private val plugin: Joshymc) : Listener {
 
         val head = ItemStack(Material.PLAYER_HEAD)
         head.editMeta { meta ->
-            if (meta is SkullMeta) meta.owningPlayer = victim
+            if (meta is SkullMeta) plugin.playerHeadManager.applyHead(meta, victim)
             meta.displayName(
                 Component.text("${victim.name}'s Head", NamedTextColor.YELLOW)
                     .decoration(TextDecoration.ITALIC, false)

@@ -75,7 +75,7 @@ object TeamPlayerPickerGui {
     private fun buildHead(entry: Entry): ItemStack {
         val stack = ItemStack(Material.PLAYER_HEAD)
         stack.editMeta { meta ->
-            if (meta is SkullMeta) meta.owningPlayer = entry.player
+            if (meta is SkullMeta) Joshymc.instance.playerHeadManager.applyHead(meta, entry.player)
             meta.displayName(Component.text(entry.player.name ?: "Unknown", NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false))
             meta.lore(entry.lore.map { it.decoration(TextDecoration.ITALIC, false) })
         }

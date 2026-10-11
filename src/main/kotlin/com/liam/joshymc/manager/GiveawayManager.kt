@@ -807,7 +807,7 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
 
         val head = ItemStack(Material.PLAYER_HEAD)
         head.editMeta(SkullMeta::class.java) { meta ->
-            meta.owningPlayer = Bukkit.getOfflinePlayer(giveaway.creatorUuid)
+            plugin.playerHeadManager.applyHead(meta, Bukkit.getOfflinePlayer(giveaway.creatorUuid))
             meta.displayName(
                 Component.text(giveaway.title ?: "Giveaway #$id", NamedTextColor.GOLD)
                     .decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, true)

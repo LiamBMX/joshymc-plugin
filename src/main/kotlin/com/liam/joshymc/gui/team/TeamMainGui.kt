@@ -211,7 +211,7 @@ object TeamMainGui {
                 val owner = Bukkit.getOfflinePlayer(UUID.fromString(team.ownerUuid))
                 val head = ItemStack(Material.PLAYER_HEAD)
                 head.editMeta { meta ->
-                    (meta as? SkullMeta)?.owningPlayer = owner
+                    (meta as? SkullMeta)?.let { plugin.playerHeadManager.applyHead(it, owner) }
                     meta.displayName(Component.text(team.displayName, NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
                     meta.lore(listOf(
                         Component.text("Owner: ", NamedTextColor.GRAY).append(Component.text(owner.name ?: "Unknown", NamedTextColor.WHITE)),

@@ -96,7 +96,7 @@ object KillTopGui {
 
         val stack = ItemStack(Material.PLAYER_HEAD)
         stack.editMeta { meta ->
-            if (meta is SkullMeta) meta.owningPlayer = owner
+            if (meta is SkullMeta) Joshymc.instance.playerHeadManager.applyHead(meta, owner)
             meta.displayName(
                 Component.text("#$rank ", NamedTextColor.YELLOW)
                     .append(Component.text(name, nameColor))

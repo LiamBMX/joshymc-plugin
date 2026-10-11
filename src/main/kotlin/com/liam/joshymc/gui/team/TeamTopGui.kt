@@ -108,7 +108,7 @@ object TeamTopGui {
 
         val item = ItemStack(material)
         item.editMeta { meta ->
-            if (meta is SkullMeta) meta.owningPlayer = owner
+            if (meta is SkullMeta) Joshymc.instance.playerHeadManager.applyHead(meta, owner)
             meta.displayName(
                 Component.text("#$rank ", NamedTextColor.YELLOW)
                     .append(Component.text(ranking.displayName, nameColor))

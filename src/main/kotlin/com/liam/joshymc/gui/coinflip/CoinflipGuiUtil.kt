@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.coinflip
 
+import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
@@ -27,7 +28,7 @@ object CoinflipGuiUtil {
     fun skull(owner: OfflinePlayer, name: Component, lore: List<Component> = emptyList()): ItemStack {
         val stack = ItemStack(Material.PLAYER_HEAD)
         stack.editMeta { meta ->
-            if (meta is SkullMeta) meta.owningPlayer = owner
+            if (meta is SkullMeta) Joshymc.instance.playerHeadManager.applyHead(meta, owner)
             meta.displayName(name.decoration(TextDecoration.ITALIC, false))
             if (lore.isNotEmpty()) {
                 meta.lore(lore.map { it.decoration(TextDecoration.ITALIC, false) })

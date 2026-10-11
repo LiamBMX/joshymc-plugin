@@ -63,7 +63,7 @@ class SkullCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             if (profile != null) {
                 meta.playerProfile = profile
             } else {
-                meta.owningPlayer = offline
+                plugin.playerHeadManager.applyHead(meta, offline)
             }
             meta.displayName(
                 Component.text("$resolvedName's Head", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)
