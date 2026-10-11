@@ -109,6 +109,7 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
 
         for ((material, amount) in breakdown) {
             plugin.marketManager.recordTransaction(material, "SELL", amount)
+            plugin.eventQuestManager.recordSale(player, material, amount)
         }
 
         val formatted = plugin.economyManager.format(totalEarned)
