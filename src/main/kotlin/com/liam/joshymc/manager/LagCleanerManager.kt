@@ -22,9 +22,16 @@ class LagCleanerManager(private val plugin: Joshymc) {
     private var checkTaskId: Int = -1
     private var isClearingInProgress = false
 
+    /** Countdown warnings + the clear itself, so a reload/stop can cancel them and they never overlap. */
+    private val pendingTaskIds = mutableListOf<Int>()
+
+    /** When the last clear (automatic or manual) finished, in epoch ms. 0 = never. */
+    private var lastClearFinishedAt: Long = 0L
+
     private var entityThreshold: Int = 500
     private var itemThreshold: Int = 200
     private var checkIntervalSeconds: Int = 30
+    private var minimumTriggerIntervalSeconds: Int = 300
 
     fun start() {
         val enabled = plugin.config.getBoolean("lag-cleaner.enabled", true)
@@ -33,16 +40,18 @@ class LagCleanerManager(private val plugin: Joshymc) {
         entityThreshold = plugin.config.getInt("lag-cleaner.entity-threshold", 1500)
         itemThreshold = plugin.config.getInt("lag-cleaner.item-threshold", 800)
         checkIntervalSeconds = plugin.config.getInt("lag-cleaner.check-interval-seconds", 60)
+        minimumTriggerIntervalSeconds = plugin.config.getInt("lag-cleaner.minimum-trigger-interval-seconds", 300)
 
         val checkTicks = checkIntervalSeconds * 20L
 
         // Periodically check entity counts
         checkTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
             if (isClearingInProgress) return@Runnable
+            if (isOnCooldown()) return@Runnable
             checkAndClear()
         }, checkTicks, checkTicks)
 
-        plugin.logger.info("[LagCleaner] Monitoring entities (thresholds: $entityThreshold hostile mobs, $itemThreshold items, checking every ${checkIntervalSeconds}s).")
+        plugin.logger.info("[LagCleaner] Monitoring entities (thresholds: $entityThreshold hostile mobs, $itemThreshold items, checking every ${checkIntervalSeconds}s, at most one clear every ${minimumTriggerIntervalSeconds}s).")
     }
 
     fun stop() {
@@ -50,19 +59,34 @@ class LagCleanerManager(private val plugin: Joshymc) {
             plugin.server.scheduler.cancelTask(checkTaskId)
             checkTaskId = -1
         }
+        cancelPendingTasks()
+        isClearingInProgress = false
+    }
+
+    private fun isOnCooldown(): Boolean =
+        System.currentTimeMillis() - lastClearFinishedAt < minimumTriggerIntervalSeconds * 1000L
+
+    private fun schedule(delayTicks: Long, task: () -> Unit) {
+        val id = plugin.server.scheduler.scheduleSyncDelayedTask(plugin, task, delayTicks)
+        if (id != -1) pendingTaskIds.add(id)
+    }
+
+    private fun cancelPendingTasks() {
+        for (id in pendingTaskIds) plugin.server.scheduler.cancelTask(id)
+        pendingTaskIds.clear()
+    }
+
+    /** Ends a clear: drops the countdown task ids, starts the cooldown and lets the next check run. */
+    private fun finishClear() {
+        pendingTaskIds.clear()
+        lastClearFinishedAt = System.currentTimeMillis()
         isClearingInProgress = false
     }
 
     private fun checkAndClear() {
-        var hostileTotal = 0
-        var itemTotal = 0
-
-        for (world in plugin.server.worlds) {
-            itemTotal += world.getEntitiesByClass(Item::class.java).size
-        }
-        for (world in lagClearWorlds()) {
-            hostileTotal += world.entities.count { isEligibleMobForLagClear(it) }
-        }
+        // Fresh counts every check, using the same filter the clear itself uses
+        val hostileTotal = lagClearWorlds().sumOf { world -> world.entities.count(::isEligibleForLagClear) }
+        val itemTotal = plugin.server.worlds.sumOf { world -> world.getEntitiesByClass(Item::class.java).count { !isShulkerBox(it) } }
 
         val hostileExceeded = hostileTotal >= entityThreshold
         val itemExceeded = itemTotal >= itemThreshold
@@ -72,13 +96,13 @@ class LagCleanerManager(private val plugin: Joshymc) {
         isClearingInProgress = true
 
         val reasonParts = mutableListOf<String>()
-        if (hostileExceeded) reasonParts.add("$hostileTotal hostile mobs")
-        if (itemExceeded) reasonParts.add("$itemTotal dropped items")
-        val reason = "${reasonParts.joinToString(" and ")} detected"
+        if (hostileExceeded) reasonParts.add("High hostile mob count detected: $hostileTotal")
+        if (itemExceeded) reasonParts.add("High dropped item count detected: $itemTotal")
+        val reason = reasonParts.joinToString(", ")
 
         // 30 second warning
         plugin.commsManager.broadcast(
-            Component.text("\u26A0 ", TextColor.color(0xFFAA00))
+            Component.text("⚠ ", TextColor.color(0xFFAA00))
                 .append(Component.text("Lag clear scheduled ", NamedTextColor.YELLOW))
                 .append(Component.text("— $reason", NamedTextColor.GRAY))
                 .decoration(TextDecoration.ITALIC, false),
@@ -91,48 +115,54 @@ class LagCleanerManager(private val plugin: Joshymc) {
         )
 
         // 10 second warning
-        plugin.server.scheduler.scheduleSyncDelayedTask(plugin, {
+        schedule(20L * 20) { // 20 seconds after first = 10 seconds remaining
             plugin.commsManager.broadcast(
-                Component.text("\u26A0 ", TextColor.color(0xFF5500))
+                Component.text("⚠ ", TextColor.color(0xFF5500))
                     .append(Component.text("Clearing in ", NamedTextColor.YELLOW))
                     .append(Component.text("10 seconds", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
                 CommunicationsManager.Category.ADMIN
             )
-        }, 20L * 20) // 20 seconds after first = 10 seconds remaining
+        }
 
         // 3 second final warning
-        plugin.server.scheduler.scheduleSyncDelayedTask(plugin, {
+        schedule(27L * 20) { // 27 seconds after first = 3 seconds remaining
             plugin.commsManager.broadcast(
-                Component.text("\u26A0 ", NamedTextColor.RED)
+                Component.text("⚠ ", NamedTextColor.RED)
                     .append(Component.text("Clearing in ", NamedTextColor.RED))
                     .append(Component.text("3 seconds!", NamedTextColor.RED).decoration(TextDecoration.BOLD, true)),
                 CommunicationsManager.Category.ADMIN
             )
-        }, 27L * 20) // 27 seconds after first = 3 seconds remaining
+        }
 
         // Execute clear
-        plugin.server.scheduler.scheduleSyncDelayedTask(plugin, {
-            executeClear()
-            isClearingInProgress = false
-        }, 30L * 20)
+        schedule(30L * 20) {
+            try {
+                executeClear()
+            } finally {
+                finishClear()
+            }
+        }
     }
 
     private fun executeClear() {
         val (itemCount, mobCount) = clearItemsAndMobs()
+        broadcastCleared(itemCount, mobCount)
+    }
 
+    private fun broadcastCleared(itemCount: Int, mobCount: Int) {
         plugin.commsManager.broadcast(
-            Component.text("\u2714 ", NamedTextColor.GREEN)
+            Component.text("✔ ", NamedTextColor.GREEN)
                 .append(Component.text("Cleared ", NamedTextColor.GREEN))
                 .append(Component.text("$itemCount items", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true))
                 .append(Component.text(" and ", NamedTextColor.GREEN))
-                .append(Component.text("$mobCount mobs", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
+                .append(Component.text("$mobCount hostile mobs", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
             CommunicationsManager.Category.ADMIN
         )
     }
 
     /**
-     * Removes ground items (every world, shulker boxes kept) and every eligible mob in
-     * the Overworld, Nether and End. Returns how many items and mobs were actually
+     * Removes ground items (every world, shulker boxes kept) and every eligible hostile
+     * mob in the Overworld, Nether and End. Returns how many items and mobs were actually
      * removed, not just how many were found.
      */
     private fun clearItemsAndMobs(): Pair<Int, Int> {
@@ -149,7 +179,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
 
         for (world in lagClearWorlds()) {
             for (entity in world.entities) {
-                if (!isEligibleMobForLagClear(entity)) continue
+                if (!isEligibleForLagClear(entity)) continue
                 entity.remove()
                 if (!entity.isValid) mobCount++
             }
@@ -159,57 +189,53 @@ class LagCleanerManager(private val plugin: Joshymc) {
     }
 
     /**
-     * Manually trigger a ground item + mob clear with a 10-second countdown.
+     * Manually trigger a ground item + hostile mob clear with a 10-second countdown.
+     * Ignores the automatic cooldown, but still starts it once the clear finishes.
      */
     fun triggerManualClear() {
         if (isClearingInProgress) return
         isClearingInProgress = true
 
         plugin.commsManager.broadcast(
-            Component.text("\u26A0 ", TextColor.color(0xFFAA00))
+            Component.text("⚠ ", TextColor.color(0xFFAA00))
                 .append(Component.text("Manual lag clear triggered", NamedTextColor.YELLOW))
                 .decoration(TextDecoration.ITALIC, false),
             CommunicationsManager.Category.ADMIN
         )
         plugin.commsManager.broadcast(
-            Component.text("  Items and mobs clearing in ", NamedTextColor.YELLOW)
+            Component.text("  Items and hostile mobs clearing in ", NamedTextColor.YELLOW)
                 .append(Component.text("10 seconds", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
             CommunicationsManager.Category.ADMIN
         )
 
         // 5 second warning
-        plugin.server.scheduler.scheduleSyncDelayedTask(plugin, {
+        schedule(5L * 20) { // 5 seconds
             plugin.commsManager.broadcast(
-                Component.text("\u26A0 ", TextColor.color(0xFF5500))
+                Component.text("⚠ ", TextColor.color(0xFF5500))
                     .append(Component.text("Clearing in ", NamedTextColor.YELLOW))
                     .append(Component.text("5 seconds", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
                 CommunicationsManager.Category.ADMIN
             )
-        }, 5L * 20) // 5 seconds
+        }
 
         // 3 second final warning
-        plugin.server.scheduler.scheduleSyncDelayedTask(plugin, {
+        schedule(7L * 20) { // 7 seconds
             plugin.commsManager.broadcast(
-                Component.text("\u26A0 ", NamedTextColor.RED)
+                Component.text("⚠ ", NamedTextColor.RED)
                     .append(Component.text("Clearing in ", NamedTextColor.RED))
                     .append(Component.text("3 seconds!", NamedTextColor.RED).decoration(TextDecoration.BOLD, true)),
                 CommunicationsManager.Category.ADMIN
             )
-        }, 7L * 20) // 7 seconds
+        }
 
         // Execute clear at 10 seconds
-        plugin.server.scheduler.scheduleSyncDelayedTask(plugin, {
-            val (itemCount, mobCount) = clearItemsAndMobs()
-            plugin.commsManager.broadcast(
-                Component.text("\u2714 ", NamedTextColor.GREEN)
-                    .append(Component.text("Cleared ", NamedTextColor.GREEN))
-                    .append(Component.text("$itemCount items", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true))
-                    .append(Component.text(" and ", NamedTextColor.GREEN))
-                    .append(Component.text("$mobCount mobs", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true)),
-                CommunicationsManager.Category.ADMIN
-            )
-            isClearingInProgress = false
-        }, 10L * 20) // 10 seconds
+        schedule(10L * 20) { // 10 seconds
+            try {
+                executeClear()
+            } finally {
+                finishClear()
+            }
+        }
     }
 
     private fun isShulkerBox(item: Item): Boolean =
@@ -224,20 +250,19 @@ class LagCleanerManager(private val plugin: Joshymc) {
         plugin.server.worlds.filter { it.key in LAG_CLEAR_WORLD_KEYS }
 
     /**
-     * Centralized eligibility check shared by the automatic threshold counter,
-     * the automatic clear, and manual `/admin lagclear` so counting and removal
-     * never disagree on what's actually eligible.
+     * The one eligibility check shared by the automatic threshold counter, the
+     * automatic clear and manual `/admin lagclear`, so the "detected" count and the
+     * "cleared" count are always the same class of mob.
      *
-     * Per Joshy (issue #1085): only ordinary hostile mobs ([Enemy]: zombies,
-     * skeletons, creepers, slimes, ghasts, phantoms, piglins, hoglins, ...) are
-     * cleared. Citizens NPCs, bosses (Ender Dragon, Wither, Warden), name-tagged
-     * mobs, tamed/owned pets, villagers and wandering traders, golems and the
-     * protected neutral mobs are always kept, and passive animals, ambient and
-     * water mobs never qualify because they aren't [Enemy]s. Players, armor
-     * stands, item frames, projectiles, vehicles and other non-mob entities are
-     * never [Mob]s.
+     * Per issue #1087: only hostile mobs ([Enemy]: zombies, skeletons, creepers,
+     * spiders, drowned, husks, strays, bogged, witches, phantoms, blazes, ghasts,
+     * slimes, magma cubes, silverfish, endermites, ...). Passive mobs, villagers,
+     * golems (iron, snow, copper) and neutral mobs like bees, dolphins, foxes,
+     * llamas, nautiluses, pandas, polar bears and wolves are never [Enemy]s. On
+     * top of that, bosses (Ender Dragon, Wither, Warden), tamed/owned mobs,
+     * name-tagged mobs, Citizens NPCs and JoshyMC's own mobs are kept.
      */
-    private fun isEligibleMobForLagClear(entity: Entity): Boolean {
+    private fun isEligibleForLagClear(entity: Entity): Boolean {
         // Citizens marks every NPC entity (any type, PLAYER included) with "NPC" metadata
         if (entity.hasMetadata("NPC") || entity.scoreboardTags.contains("NPC")) return false
         if (entity !is Mob) return false
