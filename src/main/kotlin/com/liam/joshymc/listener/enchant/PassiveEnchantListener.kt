@@ -28,6 +28,10 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
     private val xrayTasks = mutableMapOf<UUID, BukkitTask>()
     private val overloadPlayers = mutableSetOf<UUID>()
 
+    // Gears / Springs — players whose SPEED / JUMP_BOOST currently comes from these enchants
+    private val gearsPlayers = mutableSetOf<UUID>()
+    private val springsPlayers = mutableSetOf<UUID>()
+
     // Crab Claw — track which players have extended reach active
     private val crabClawActive = mutableSetOf<UUID>()
     private val DEFAULT_BLOCK_RANGE = 4.5
@@ -118,6 +122,8 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
             Bukkit.getPlayer(uuid)?.getAttribute(Attribute.BLOCK_INTERACTION_RANGE)?.baseValue = DEFAULT_BLOCK_RANGE
         }
         crabClawActive.clear()
+        gearsPlayers.clear()
+        springsPlayers.clear()
         saturationProgress.clear()
         absorbRepairTimestamps.clear()
     }
@@ -138,7 +144,7 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
             )
         } else {
             val effect = player.getPotionEffect(PotionEffectType.NIGHT_VISION)
-            if (effect != null && effect.duration <= 300 && effect.isAmbient) {
+            if (effect != null && effect.duration <= 300 && effect.isAmbient && !effect.hasParticles()) {
                 player.removePotionEffect(PotionEffectType.NIGHT_VISION)
             }
         }
@@ -348,13 +354,13 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
                 player.addPotionEffect(
                     PotionEffect(PotionEffectType.SPEED, 100, level - 1, true, false)
                 )
+                gearsPlayers.add(player.uniqueId)
                 return
             }
         }
 
-        val effect = player.getPotionEffect(PotionEffectType.SPEED)
-        if (effect != null && effect.isAmbient) {
-            player.removePotionEffect(PotionEffectType.SPEED)
+        if (gearsPlayers.remove(player.uniqueId)) {
+            removeOwnEffect(player, PotionEffectType.SPEED)
         }
     }
 
@@ -369,13 +375,25 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
                 player.addPotionEffect(
                     PotionEffect(PotionEffectType.JUMP_BOOST, 100, level - 1, true, false)
                 )
+                springsPlayers.add(player.uniqueId)
                 return
             }
         }
 
-        val effect = player.getPotionEffect(PotionEffectType.JUMP_BOOST)
-        if (effect != null && effect.isAmbient) {
-            player.removePotionEffect(PotionEffectType.JUMP_BOOST)
+        if (springsPlayers.remove(player.uniqueId)) {
+            removeOwnEffect(player, PotionEffectType.JUMP_BOOST)
+        }
+    }
+
+    /**
+     * Removes a Gears/Springs effect only if it is still the one this listener applied
+     * (ambient, no particles, at most the 100-tick refresh duration). Beacon effects and
+     * potions are ambient too, but show particles and/or last longer, so they survive.
+     */
+    private fun removeOwnEffect(player: Player, type: PotionEffectType) {
+        val effect = player.getPotionEffect(type) ?: return
+        if (effect.isAmbient && !effect.hasParticles() && effect.duration in 0..100) {
+            player.removePotionEffect(type)
         }
     }
 
