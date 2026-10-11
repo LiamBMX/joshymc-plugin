@@ -285,11 +285,10 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             val amount = q.getInt("amount", 0)
             if (amount <= 0) { eventError(id, "quest $n needs a positive 'amount'"); return null }
 
-            val raw = (q.getString("material") ?: q.getString("entity"))?.uppercase()?.takeIf { it != "ANY" }
-            if (raw != null) {
-                if (!validTarget(type, raw)) { eventError(id, "quest $n has unknown material/entity '$raw'"); return null }
-            }
-            quests += EventQuestDef(n - 1, type, raw, amount, q.getString("name"), q.getString("description"))
+            val rawTarget = (q.getString("material") ?: q.getString("entity"))?.takeIf { !it.equals("ANY", ignoreCase = true) }
+            val target = rawTarget?.let { canonicalTarget(type, it) }
+            if (rawTarget != null && target == null) { eventError(id, "quest $n has unknown material/entity '$rawTarget'"); return null }
+            quests += EventQuestDef(n - 1, type, target, amount, q.getString("name"), q.getString("description"))
         }
 
         return EventDef(
@@ -310,10 +309,16 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         )
     }
 
-    private fun validTarget(type: EventObjective, raw: String): Boolean = when (type) {
-        EventObjective.KILL_MOB -> org.bukkit.entity.EntityType.entries.any { it.name == raw }
-        EventObjective.KILL_PLAYER, EventObjective.TRAVEL, EventObjective.PLAY_TIME -> true
-        else -> Material.matchMaterial(raw) != null
+    /**
+     * Resolves a configured filter to the exact name the progress hooks compare against
+     * (`Material.name` / `EntityType.name`), or null if it's unknown. Material filters go through
+     * `Material.matchMaterial`, so `prismarine_shard`, `minecraft:prismarine_shard` and
+     * `prismarine shard` all become `PRISMARINE_SHARD` instead of a string that never matches.
+     */
+    private fun canonicalTarget(type: EventObjective, raw: String): String? = when (type) {
+        EventObjective.KILL_MOB -> raw.uppercase().let { r -> org.bukkit.entity.EntityType.entries.firstOrNull { it.name == r }?.name }
+        EventObjective.KILL_PLAYER, EventObjective.TRAVEL, EventObjective.PLAY_TIME -> raw.uppercase()
+        else -> Material.matchMaterial(raw.trim())?.name
     }
 
     private fun decodeItem(raw: String?): ItemStack? {
@@ -656,7 +661,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         forActive(player, EventObjective.CRAFT_ITEM, { it == null || it == name }) { ev, q -> advance(player, ev, q, amount) }
     }
 
-    /** Called by the server shop when a player sells items. */
+    /** Called once per completed sale by every sell path (/shop, /sell, /sellall, sell GUI, Sell Wands, market). */
     fun recordSale(player: Player, material: Material, amount: Int) {
         if (amount <= 0 || isExempt(player)) return
         val name = material.name
@@ -897,9 +902,10 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         val cfg = customConfig()
         if (!cfg.contains("questlines.$id")) return "Unknown questline '$rawId'. Create it with /eq admin create first."
         if (amount <= 0) return "Amount must be a positive number."
-        val target = rawTarget?.uppercase()?.takeIf { it != "ANY" }
+        val filter = rawTarget?.takeIf { !it.equals("ANY", ignoreCase = true) }
+        val target = filter?.let { canonicalTarget(type, it) }
         val key = if (type == EventObjective.KILL_MOB) "entity" else "material"
-        if (target != null && !validTarget(type, target)) return "Unknown $key '$rawTarget' for ${type.name}."
+        if (filter != null && target == null) return "Unknown $key '$rawTarget' for ${type.name}."
         val count = cfg.getConfigurationSection("questlines.$id.quests")?.getKeys(false)?.size ?: 0
         if (count >= MAX_QUESTS) return "A questline can have at most $MAX_QUESTS quests."
         if (anyProgress(id, "completed")) return "Players have already completed this questline, so quests can't be added."

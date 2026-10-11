@@ -287,6 +287,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
             for ((material, amount) in breakdown) {
                 plugin.marketManager.recordTransaction(material, "SELL", amount)
+                plugin.eventQuestManager.recordSale(player, material, amount)
             }
             player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         }
@@ -348,6 +349,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
         for ((material, amount) in breakdown) {
             plugin.marketManager.recordTransaction(material, "SELL", amount)
+            plugin.eventQuestManager.recordSale(player, material, amount)
         }
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         sendSellSummary(player, totalEarned, breakdown)
@@ -391,6 +393,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         }
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
         plugin.marketManager.recordTransaction(material, "SELL", count)
+        plugin.eventQuestManager.recordSale(player, material, count)
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         sendSellSummary(player, totalEarned, mapOf(material to count))
     }
@@ -440,6 +443,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
 
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
         plugin.marketManager.recordTransaction(material, "SELL", totalAmount)
+        plugin.eventQuestManager.recordSale(player, material, totalAmount)
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         sendSellSummary(player, totalEarned, mapOf(material to totalAmount))
     }
