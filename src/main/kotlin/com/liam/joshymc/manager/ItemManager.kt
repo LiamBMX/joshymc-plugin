@@ -60,9 +60,13 @@ class ItemManager(private val plugin: Joshymc) {
         // Winter Collection
         register(Frostbite())
         register(GlacierBreaker())
-        register(IceSkates())
         register(WingsOfTheBlizzard())
         register(WintersWrath())
+        // Snowveil set (Winter Collection armor; the skates keep the ice_skates id)
+        register(SnowveilHood())
+        register(SnowveilGuard())
+        register(SnowveilLeggings())
+        register(SnowveilSkates())
         // Shark Set
         register(SharkHelmet())
         register(SharkChestplate())

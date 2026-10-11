@@ -49,28 +49,6 @@ class GlacierBreaker : CustomItem() {
     }
 }
 
-class IceSkates : CustomItem() {
-
-    override val id = "ice_skates"
-    override val material = Material.NETHERITE_BOOTS
-    override val hasGlint = true
-
-    override val displayName: Component = Component.text("Ice Skates", TextColor.color(0xE8F6FF))
-        .decoration(TextDecoration.ITALIC, false)
-        .decoration(TextDecoration.BOLD, true)
-
-    override val lore: List<Component> = emptyList()
-
-    override fun applyMeta(meta: ItemMeta) {
-        meta.isUnbreakable = true
-        meta.setItemModel(NamespacedKey(Joshymc.instance, "ice_skates"))
-        val equippable = meta.equippable
-        equippable.slot = EquipmentSlot.FEET
-        equippable.model = NamespacedKey(Joshymc.instance, "ice_skates")
-        meta.setEquippable(equippable)
-    }
-}
-
 class WingsOfTheBlizzard : CustomItem() {
 
     override val id = "wings_of_the_blizzard"
@@ -110,3 +88,46 @@ class WintersWrath : CustomItem() {
         meta.setItemModel(NamespacedKey(Joshymc.instance, "winters_wrath"))
     }
 }
+
+// ── Snowveil set ────────────────────────────────────────────────────────────
+// The Winter Collection's armor set (issue #1098). Plain Netherite underneath: vanilla
+// stats, no attributes or abilities, unbreakable like the rest of the collection. The
+// boots are the old Ice Skates, renamed: their id stays "ice_skates" so existing copies
+// keep working (UnbreakableArmorUpgradeListener renames copies still called Ice Skates).
+
+private val SNOWVEIL_BLUE = TextColor.color(0xCFEBFF)
+
+abstract class SnowveilPiece(
+    override val id: String,
+    override val material: Material,
+    name: String,
+    private val slot: EquipmentSlot,
+) : CustomItem() {
+
+    override val hasGlint = true
+
+    override val displayName: Component = Component.text(name, SNOWVEIL_BLUE)
+        .decoration(TextDecoration.ITALIC, false)
+        .decoration(TextDecoration.BOLD, true)
+
+    override val lore: List<Component> = emptyList()
+
+    override fun applyMeta(meta: ItemMeta) {
+        meta.isUnbreakable = true
+        meta.setItemModel(NamespacedKey(Joshymc.instance, id))
+        val equippable = meta.equippable
+        equippable.slot = slot
+        // Helmet: no equipment asset, so the client draws the 3D item model on the head.
+        // Other pieces: worn layer equipment/<id>.json (humanoid or humanoid_leggings).
+        equippable.model = if (slot == EquipmentSlot.HEAD) null else NamespacedKey(Joshymc.instance, id)
+        meta.setEquippable(equippable)
+    }
+}
+
+class SnowveilHood : SnowveilPiece("snowveil_hood", Material.NETHERITE_HELMET, "Snowveil Hood", EquipmentSlot.HEAD)
+
+class SnowveilGuard : SnowveilPiece("snowveil_guard", Material.NETHERITE_CHESTPLATE, "Snowveil Guard", EquipmentSlot.CHEST)
+
+class SnowveilLeggings : SnowveilPiece("snowveil_leggings", Material.NETHERITE_LEGGINGS, "Snowveil Leggings", EquipmentSlot.LEGS)
+
+class SnowveilSkates : SnowveilPiece("ice_skates", Material.NETHERITE_BOOTS, "Snowveil Skates", EquipmentSlot.FEET)
