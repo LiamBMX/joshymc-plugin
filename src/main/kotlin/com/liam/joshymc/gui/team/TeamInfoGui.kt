@@ -71,7 +71,7 @@ object TeamInfoGui {
             }
             val head = org.bukkit.inventory.ItemStack(Material.PLAYER_HEAD)
             head.editMeta { meta ->
-                (meta as? SkullMeta)?.owningPlayer = memberPlayer
+                (meta as? SkullMeta)?.let { plugin.playerHeadManager.applyHead(it, memberPlayer) }
                 meta.displayName(Component.text(memberPlayer.name ?: "Unknown", NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false))
                 meta.lore(listOf(
                     Component.text("Role: ", NamedTextColor.GRAY)

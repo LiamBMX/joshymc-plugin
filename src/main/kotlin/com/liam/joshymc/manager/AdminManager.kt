@@ -806,7 +806,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         // Slot 4: Player info head
         val infoHead = ItemStack(Material.PLAYER_HEAD)
         infoHead.editMeta(SkullMeta::class.java) { meta ->
-            meta.owningPlayer = target
+            plugin.playerHeadManager.applyHead(meta, target)
             meta.displayName(
                 Component.text(targetName, NamedTextColor.AQUA)
                     .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
@@ -1949,7 +1949,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
     private fun buildPlayerHead(player: Player): ItemStack {
         val head = ItemStack(Material.PLAYER_HEAD)
         head.editMeta(SkullMeta::class.java) { meta ->
-            meta.owningPlayer = player
+            plugin.playerHeadManager.applyHead(meta, player)
             meta.displayName(
                 Component.text(player.name, NamedTextColor.WHITE)
                     .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)

@@ -26,7 +26,35 @@ object BedrockUtil {
         }
     }
 
+    private val isFloodgateIdMethod by lazy {
+        floodgateApi?.let {
+            try {
+                it.javaClass.getMethod("isFloodgateId", UUID::class.java)
+            } catch (e: Throwable) {
+                null
+            }
+        }
+    }
+
     private val resultCache = ConcurrentHashMap<UUID, Boolean>()
+
+    /**
+     * True if [uuid] is a Floodgate-issued (Bedrock) id, whether or not that player is
+     * online (issue #1091). Unlike [isBedrockPlayer] this works for offline players, which
+     * is what profile/skin lookups need. Floodgate ids have zero most-significant bits
+     * (`00000000-0000-0000-xxxx-xxxxxxxxxxxx`), used as the fallback when Floodgate is absent.
+     */
+    fun isFloodgateUuid(uuid: UUID): Boolean {
+        val api = floodgateApi
+        val method = isFloodgateIdMethod
+        if (api != null && method != null) {
+            try {
+                if (method.invoke(api, uuid) as? Boolean == true) return true
+            } catch (_: Throwable) {
+            }
+        }
+        return uuid.mostSignificantBits == 0L
+    }
 
     private fun resolveFloodgateApi(): Any? {
         if (Bukkit.getPluginManager().getPlugin("floodgate") == null) return null

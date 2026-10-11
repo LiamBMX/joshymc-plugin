@@ -46,7 +46,7 @@ object BountyDetailGui {
         val target = Bukkit.getOfflinePlayer(UUID.fromString(bounty.targetUuid))
         val head = org.bukkit.inventory.ItemStack(Material.PLAYER_HEAD)
         head.editMeta { meta ->
-            (meta as? SkullMeta)?.owningPlayer = target
+            (meta as? SkullMeta)?.let { plugin.playerHeadManager.applyHead(it, target) }
             meta.displayName(Component.text(bounty.targetName, NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
             meta.lore(
                 listOf(

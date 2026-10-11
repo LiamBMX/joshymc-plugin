@@ -88,7 +88,7 @@ object TeamListGui {
 
         val item = ItemStack(Material.PLAYER_HEAD)
         item.editMeta { meta ->
-            if (meta is SkullMeta) meta.owningPlayer = owner
+            if (meta is SkullMeta) plugin.playerHeadManager.applyHead(meta, owner)
             meta.displayName(Component.text(team.displayName, nameColor).decoration(TextDecoration.ITALIC, false))
             val lore = listOf(
                 Component.empty(),

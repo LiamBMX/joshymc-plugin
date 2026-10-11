@@ -84,7 +84,7 @@ object BountyMyGui {
 
         val item = ItemStack(Material.PLAYER_HEAD)
         item.editMeta { meta ->
-            if (meta is SkullMeta) meta.owningPlayer = target
+            if (meta is SkullMeta) plugin.playerHeadManager.applyHead(meta, target)
             meta.displayName(Component.text(bounty.targetName, NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
             val lore = listOf(
                 Component.empty(),

@@ -427,7 +427,7 @@ class LoginStreakManager(private val plugin: Joshymc) : Listener {
     private fun playerInfoItem(player: Player, state: StreakState): ItemStack {
         val head = ItemStack(Material.PLAYER_HEAD)
         head.editMeta(SkullMeta::class.java) { meta ->
-            meta.owningPlayer = player
+            plugin.playerHeadManager.applyHead(meta, player)
             meta.displayName(
                 noItalic(Component.text("${player.name}'s Login Streak", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true))
             )
