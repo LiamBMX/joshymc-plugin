@@ -638,7 +638,8 @@ class ServerShopManager(private val plugin: Joshymc) {
         item.editMeta { meta ->
             val potionMeta = meta as PotionMeta
             potionMeta.basePotionType = PotionType.WATER
-            potionMeta.addCustomEffect(PotionEffect(effect, durationTicks, shopItem.potionAmplifier), true)
+            // ambient = false like a brewed potion (the 3-arg constructor defaults to ambient)
+            potionMeta.addCustomEffect(PotionEffect(effect, durationTicks, shopItem.potionAmplifier, false), true)
         }
         return item
     }
