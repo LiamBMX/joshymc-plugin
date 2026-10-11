@@ -8,13 +8,13 @@ import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.NamespacedKey
 import org.bukkit.World
+import org.bukkit.entity.AbstractVillager
 import org.bukkit.entity.Boss
+import org.bukkit.entity.Enemy
 import org.bukkit.entity.Entity
 import org.bukkit.entity.Item
 import org.bukkit.entity.Mob
-import org.bukkit.entity.Monster
 import org.bukkit.entity.Tameable
-import org.bukkit.entity.Villager
 import org.bukkit.entity.Warden
 
 class LagCleanerManager(private val plugin: Joshymc) {
@@ -25,7 +25,6 @@ class LagCleanerManager(private val plugin: Joshymc) {
     private var entityThreshold: Int = 500
     private var itemThreshold: Int = 200
     private var checkIntervalSeconds: Int = 30
-    private var passiveMobThreshold: Int = 700
 
     fun start() {
         val enabled = plugin.config.getBoolean("lag-cleaner.enabled", true)
@@ -34,7 +33,6 @@ class LagCleanerManager(private val plugin: Joshymc) {
         entityThreshold = plugin.config.getInt("lag-cleaner.entity-threshold", 1500)
         itemThreshold = plugin.config.getInt("lag-cleaner.item-threshold", 800)
         checkIntervalSeconds = plugin.config.getInt("lag-cleaner.check-interval-seconds", 60)
-        passiveMobThreshold = plugin.config.getInt("lag-cleaner.passive-mob-threshold", 700)
 
         val checkTicks = checkIntervalSeconds * 20L
 
@@ -44,7 +42,7 @@ class LagCleanerManager(private val plugin: Joshymc) {
             checkAndClear()
         }, checkTicks, checkTicks)
 
-        plugin.logger.info("[LagCleaner] Monitoring entities (thresholds: $entityThreshold hostile mobs, $passiveMobThreshold passive mobs, $itemThreshold items, checking every ${checkIntervalSeconds}s).")
+        plugin.logger.info("[LagCleaner] Monitoring entities (thresholds: $entityThreshold hostile mobs, $itemThreshold items, checking every ${checkIntervalSeconds}s).")
     }
 
     fun stop() {
@@ -57,30 +55,24 @@ class LagCleanerManager(private val plugin: Joshymc) {
 
     private fun checkAndClear() {
         var hostileTotal = 0
-        var passiveTotal = 0
         var itemTotal = 0
 
         for (world in plugin.server.worlds) {
             itemTotal += world.getEntitiesByClass(Item::class.java).size
         }
         for (world in lagClearWorlds()) {
-            for (entity in world.entities) {
-                if (!isEligibleMobForLagClear(entity)) continue
-                if (entity is Monster) hostileTotal++ else passiveTotal++
-            }
+            hostileTotal += world.entities.count { isEligibleMobForLagClear(it) }
         }
 
         val hostileExceeded = hostileTotal >= entityThreshold
-        val passiveExceeded = passiveTotal >= passiveMobThreshold
         val itemExceeded = itemTotal >= itemThreshold
 
-        if (!hostileExceeded && !passiveExceeded && !itemExceeded) return
+        if (!hostileExceeded && !itemExceeded) return
 
         isClearingInProgress = true
 
         val reasonParts = mutableListOf<String>()
         if (hostileExceeded) reasonParts.add("$hostileTotal hostile mobs")
-        if (passiveExceeded) reasonParts.add("$passiveTotal passive mobs")
         if (itemExceeded) reasonParts.add("$itemTotal dropped items")
         val reason = "${reasonParts.joinToString(" and ")} detected"
 
@@ -232,27 +224,33 @@ class LagCleanerManager(private val plugin: Joshymc) {
         plugin.server.worlds.filter { it.key in LAG_CLEAR_WORLD_KEYS }
 
     /**
-     * Centralized eligibility check shared by the automatic threshold counters,
+     * Centralized eligibility check shared by the automatic threshold counter,
      * the automatic clear, and manual `/admin lagclear` so counting and removal
      * never disagree on what's actually eligible.
      *
-     * Per Joshy (issues #1077, #1079): every mob goes (passive, hostile, neutral,
-     * ambient, water, leashed) except villagers, name-tagged mobs, tamed/owned pets
-     * and bosses (Ender Dragon, Wither, Warden). Wandering traders are not
-     * [Villager]s and are cleared. Players,
-     * armor stands, item frames, projectiles, vehicles and other non-mob entities
-     * are never [Mob]s.
+     * Per Joshy (issue #1085): only ordinary hostile mobs ([Enemy]: zombies,
+     * skeletons, creepers, slimes, ghasts, phantoms, piglins, hoglins, ...) are
+     * cleared. Citizens NPCs, bosses (Ender Dragon, Wither, Warden), name-tagged
+     * mobs, tamed/owned pets, villagers and wandering traders, golems and the
+     * protected neutral mobs are always kept, and passive animals, ambient and
+     * water mobs never qualify because they aren't [Enemy]s. Players, armor
+     * stands, item frames, projectiles, vehicles and other non-mob entities are
+     * never [Mob]s.
      */
     private fun isEligibleMobForLagClear(entity: Entity): Boolean {
+        // Citizens marks every NPC entity (any type, PLAYER included) with "NPC" metadata
+        if (entity.hasMetadata("NPC") || entity.scoreboardTags.contains("NPC")) return false
         if (entity !is Mob) return false
-        if (entity is Villager) return false
         if (entity is Boss || entity is Warden) return false
+        if (isNameTagged(entity)) return false
         // Wolves, cats, parrots, horses, donkeys, mules, llamas, etc. are protected even without a name tag
         if (entity is Tameable && (entity.isTamed || entity.ownerUniqueId != null)) return false
-        if (isNameTagged(entity)) return false
         // Mobs JoshyMC spawns itself (combat-log NPCs, relic pets, NPCs, decorations)
         if (entity.scoreboardTags.any { it.startsWith("joshymc") }) return false
-        return true
+        // Villagers and wandering traders
+        if (entity is AbstractVillager) return false
+        if (entity.type.name in PROTECTED_TYPES) return false
+        return entity is Enemy
     }
 
     /** A custom name counts as a name tag unless it's only the mob-stacking "Cow x5" label. */
@@ -264,6 +262,17 @@ class LagCleanerManager(private val plugin: Joshymc) {
             NamespacedKey.minecraft("overworld"),
             NamespacedKey.minecraft("the_nether"),
             NamespacedKey.minecraft("the_end"),
+        )
+
+        /**
+         * Golems and neutral mobs that are always kept, by [org.bukkit.entity.EntityType]
+         * name so the list never breaks the build on an API that lacks one of them.
+         * Most aren't [Enemy]s anyway; this keeps them safe if that ever changes.
+         */
+        private val PROTECTED_TYPES = setOf(
+            "IRON_GOLEM", "SNOW_GOLEM", "COPPER_GOLEM",
+            "BEE", "DOLPHIN", "FOX", "LLAMA", "NAUTILUS", "PANDA",
+            "POLAR_BEAR", "TRADER_LLAMA", "WOLF",
         )
     }
 

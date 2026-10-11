@@ -341,7 +341,9 @@ crates:
 # Lag Cleaner — entity-threshold-based, only clears when needed
 # Checks entity counts every check-interval-seconds
 # Triggers a 30s countdown (with warnings at 30s, 10s, 3s) when thresholds are exceeded
-# Protected entities: villagers, NPCs, ender dragon, wither, armor stands, named/leashed mobs
+# Only unnamed hostile mobs in the Overworld, Nether and End are cleared. Passive
+# and protected neutral mobs, golems, villagers/traders, named mobs, pets, bosses
+# and Citizens NPCs are always kept.
 #
 # Defaults are intentionally generous — most servers only run into lag at much
 # higher counts. Lower these if your server has < 1GB heap or you see TPS drops
@@ -351,7 +353,6 @@ lag-cleaner:
   entity-threshold: 1500
   item-threshold: 800
   check-interval-seconds: 60
-  passive-mob-threshold: 700
 
 # Mining — Veinminer, Auto Smelt, Tree Feller
 mining:
