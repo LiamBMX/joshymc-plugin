@@ -1,10 +1,13 @@
-"""Ice Skates - Winter Limited Edition boots.
+"""Snowveil Skates - the boots of the Snowveil set (Winter Limited Edition; the item id is
+still ice_skates so existing copies keep working).
 
-Classic figure skates: frosted white leather boots with crimson laces criss-crossing
-through silver eyelets and speed hooks, big fluffy white pompoms on the bows, a quilted
-collar trimmed with glowing aurora piping, navy stacked heels, and mirror-polished blades
+Classic figure skates: frosted white leather boots with ice-blue laces criss-crossing
+through silver eyelets and speed hooks, big fluffy white pompoms on the bows, a snow-fur
+collar trimmed with glowing pale-blue piping, navy stacked heels, and mirror-polished blades
 that sweep forward into a curled, serrated toe pick capped with an ice crystal. Frost
-runes glow along the blades and an ice snowflake medallion glows on each ankle.
+runes glow along the blades, and the Snowveil sigil (a frosted-silver diamond holding an
+ice snowflake, as on the Hood, the Guard and the Leggings) glows on each ankle. The ice,
+pale-blue and lace colours come from the set's palette in snowveil_guard.py.
 
 The item model is the pair hanging from their knotted laces. Worn, the blade cannot
 stick out below the boot, so the runner is painted as a bright silver band along the
@@ -18,11 +21,15 @@ from __future__ import annotations
 import math
 import random
 
-from art.kit import (FIST, HUMANOID, bar, bounds, box, canvas, display, fill, hand_frame, mix, model, move, place,
-                     ramp, region, rgba, save, save_layer, turn)
+from art.items.snowveil_guard import ICE as SV_ICE
+from art.items.snowveil_guard import NAVY as SV_NAVY
+from art.items.snowveil_guard import PALE as SV_PALE
+from art.items.snowveil_guard import SNOW as SV_SNOW
+from art.kit import (FIST, HUMANOID, animate, bar, bounds, box, canvas, display, fill, hand_frame, mix, model, move,
+                     place, ramp, region, rgba, save, save_animation, save_layer, shine, turn)
 
 ID = "ice_skates"
-NAME = "Ice Skates"
+NAME = "Snowveil Skates"
 KIND = "boots"
 
 # --------------------------------------------------------------------------------------
@@ -31,10 +38,10 @@ KIND = "boots"
 
 LEATHER = ["#4a5890", "#7d90bf", "#aebfdd", "#d2def0", "#edf3fa", "#ffffff"]   # frosted white
 STEEL = ["#18203f", "#3d4a72", "#71829f", "#a9b8cf", "#d9e3ee", "#ffffff"]     # polished silver
-LACE = ramp("#c81f3e", 6, 0.75, 0.1)                                             # crimson laces
+LACE = ["#0b1130", "#1a2452", "#2a376e", "#3a4d8c", "#5f7fba", "#a3c1e8"]       # Snowveil navy laces
 NAVY = ramp("#2a3870", 6, 0.75, 0.08)                                            # sole, heel, lining
-ICE = ramp("#56d8e8", 6, 0.75)                                                   # frost glow
-VIOLET = ramp("#8f6df0", 6, 0.8)                                                 # aurora accent
+ICE = SV_ICE                                                                     # frost glow
+SKY = ["#3f5f9a"] + SV_PALE + ["#eef6ff"]                                        # pale-blue piping
 POM = ["#8499cc", "#a9bfe6", "#cadcf3", "#e6f0fc", "#ffffff"]                    # frosted wool
 FROST = "#cdeefa"
 FROST_HI = "#f2fbff"
@@ -259,11 +266,30 @@ def tex_boot_side():
         _line(img, (x0, y0), (x1, y1), L[3])
         _line(img, (x0 + 1, y0), (x1 + 1, y1), L[5])
     # Embroidered ice snowflakes scattered over the quarter (clear of the medallion).
-    for cx, cy in ((19, 11), (28, 12), (24, 22)):
+    for cx, cy in ((27, 16), (24, 22)):
         _flake(img, cx, cy, *EMBROIDERY)
     # Frost creeping up from the welt: an uneven pale-ice band with bright crystal glints.
     _frost_band(img, 0, 31, 29, seed=7)
+    _navy_band(img)
     save(img, "boot_side")
+
+
+def _navy_band(img, top=7, bottom=10):
+    """The Snowveil ankle band round the upper shaft (rows top..bottom, y 12.5 .. 10.5): the
+    set's navy quilting (diamonds 2 units across, lit at their upper left, dotted seams),
+    pale-blue piping under it and a soft shadow on the leather below."""
+    N = SV_NAVY
+    for ty in range(top, bottom + 1):
+        for tx in range(32):
+            s, t = (tx + ty) % 4, (tx - ty) % 4
+            c = N[5] if s == 1 else N[3] if s == 3 else N[4]
+            if s == 0 or t == 0:
+                c = N[6] if tx % 2 == 0 else N[1]
+            _put(img, tx, ty, c)
+    _hline(img, 0, 31, top, N[6])
+    _hline(img, 0, 31, bottom + 1, SKY[4])
+    _hline(img, 0, 31, bottom + 2, SKY[2])
+    _hline(img, 0, 31, bottom + 3, LEATHER[3])
 
 
 def tex_boot_top():
@@ -288,6 +314,7 @@ def tex_boot_front():
     fill(img, (8, 0, 9, 31), L[3])
     fill(img, (22, 0, 23, 31), L[3])
     fill(img, (0, 30, 31, 31), L[3])
+    _navy_band(img)
     save(img, "boot_front")
 
 
@@ -300,23 +327,29 @@ def tex_boot_back():
         _put(img, 16, ty, L[2] if ty % 2 else L[3])
     fill(img, (13, 20, 18, 29), L[4])
     _hline(img, 13, 18, 20, L[3])
+    _navy_band(img)
     save(img, "boot_back")
 
 
 def tex_collar():
-    """Rows 4-7: the quilted roll (row 7 sits under the aurora piping). Top (cols 14-31,
-    rows 9-22): the padded rim around the dark opening."""
-    L, N = LEATHER, NAVY
+    """Rows 4-7: the Snowveil snow-fur roll in 2x2 tufts (row 7 sits under the piping). Top
+    (cols 14-31, rows 9-22): the fur rim around the dark opening."""
+    L, N, F = LEATHER, NAVY, SV_SNOW
     img = canvas(32, fill=L[5])
-    _hline(img, 0, 31, 4, L[5])
-    _hline(img, 0, 31, 5, L[5])
-    _hline(img, 0, 31, 6, L[4])
-    _hline(img, 0, 31, 7, L[3])
-    for tx in range(1, 32, 3):
-        _put(img, tx, 5, L[4])                    # quilting dimples
-        _put(img, tx, 6, L[3])
+    rng = random.Random(19)
+    for ty in range(0, 32, 2):
+        for tx in range(0, 32, 2):
+            c = rng.choice((F[5], F[6], F[6], F[7]))
+            fill(img, (tx, ty, tx + 1, ty + 1), c)
+    for tx in range(32):                          # the roll's shaded underside
+        _put(img, tx, 6, F[4] if tx % 3 else F[3])
+        _put(img, tx, 7, F[3])
+    for _ in range(6):
+        _put(img, rng.randrange(32), rng.randrange(4, 6), ICE[4])
     # Top of the collar: rim and opening.
-    fill(img, (13, 8, 31, 23), L[5])
+    for ty in range(8, 24, 2):
+        for tx in range(13, 32, 2):
+            fill(img, (tx, ty, tx + 1, ty + 1), rng.choice((F[5], F[6], F[7])))
     fill(img, (17, 11, 30, 20), N[1])
     fill(img, (18, 12, 30, 19), N[0])
     _hline(img, 17, 30, 11, N[2])
@@ -326,14 +359,14 @@ def tex_collar():
 
 
 def tex_piping():
-    """Aurora piping along the collar edge: teal fading to violet (row 7)."""
+    """The set's piping along the collar edge: ice blue fading to pale blue (row 7)."""
     img = canvas(32)
     for tx in range(32):
         t = tx / 31
-        c = mix(ICE[3], VIOLET[3], t)
+        c = mix(ICE[3], SKY[3], t)
         _put(img, tx, 7, c)
         if tx % 3 == 0:
-            _put(img, tx, 7, mix(ICE[5], VIOLET[5], t))
+            _put(img, tx, 7, mix(ICE[5], SKY[5], t))
     save(img, "piping")
 
 
@@ -514,7 +547,7 @@ def tex_runes():
     _put(img, cx, cy, "#ffffff")
     row = int(math.floor((4 - RUNNER[1]) * 2)) + 3
     for i, tx in enumerate(range(12, 42, 5)):
-        c0, c1 = (ICE[4], ICE[3]) if i % 2 else (VIOLET[4], VIOLET[3])
+        c0, c1 = (ICE[4], ICE[3]) if i % 2 else (SKY[4], SKY[3])
         _put(img, tx, row, c0)
         _put(img, tx + 1, row, c1)
     save(img, "runes")
@@ -559,39 +592,43 @@ def tex_pompom():
 
 
 def tex_gem():
+    """The toe-pick crystal, with the set's periodic glint sweeping across it (the same
+    loop as the Snowveil sigil crystals: 12 frames x 3 ticks)."""
     img = canvas(32, fill=ICE[3])
     fill(img, (0, 0, 31, 0), ICE[5])
     fill(img, (0, 0, 0, 31), ICE[4])
     fill(img, (1, 1, 1, 1), "#ffffff")
     fill(img, (2, 2, 31, 31), ICE[3])
     fill(img, (0, 2, 1, 2), ICE[2])
-    save(img, "gem")
+    save_animation(animate(lambda t: shine(img, t, width=8.0, strength=0.85, pause=0.5), 12), "gem", frametime=3)
 
 
 def tex_medal():
-    """Ankle medallion (cols 0-6, rows 0-6): silver bezel, navy enamel."""
-    S, N = STEEL, NAVY
+    """Ankle sigil plate (cols 0-6, rows 0-6, turned 45 degrees on the boot so it sits as
+    the set's diamond): silver bezel, an ice field brightening toward the centre."""
+    S = STEEL
     img = canvas(32, fill=S[3])
     fill(img, (0, 0, 6, 6), S[3])
-    _hline(img, 1, 5, 0, S[5])
-    _vline(img, 0, 1, 5, S[4])
-    _vline(img, 6, 1, 5, S[1])
-    _hline(img, 1, 5, 6, S[1])
-    for x, y in ((0, 0), (6, 0), (0, 6), (6, 6)):
-        _put(img, x, y, (0, 0, 0, 0))
-    fill(img, (1, 1, 5, 5), N[1])
+    _hline(img, 0, 6, 0, S[5])
+    _vline(img, 0, 0, 6, S[4])
+    _vline(img, 6, 1, 6, S[1])
+    _hline(img, 1, 6, 6, S[1])
+    fill(img, (1, 1, 5, 5), ICE[1])
+    fill(img, (2, 2, 4, 4), ICE[2])
     save(img, "medal")
 
 
 def tex_glowflake():
+    """The sigil's snowflake, drawn diagonally so it stands upright once the plate is
+    turned into a diamond."""
     img = canvas(32)
     c = 3
-    for d in range(-2, 3):
-        _put(img, c + d, c, ICE[3])
-        _put(img, c, c + d, ICE[3])
+    for d in (-2, -1, 1, 2):
+        _put(img, c + d, c + d, ICE[5] if abs(d) == 1 else ICE[4])
+        _put(img, c + d, c - d, ICE[5] if abs(d) == 1 else ICE[4])
     for d in (-1, 1):
-        _put(img, c + d, c + d, ICE[4])
-        _put(img, c + d, c - d, ICE[4])
+        _put(img, c + d, c, ICE[4])
+        _put(img, c, c + d, ICE[4])
     _put(img, c, c, "#ffffff")
     save(img, "glowflake")
 
@@ -602,7 +639,7 @@ def tex_glowflake():
 
 def worn_layer():
     """The worn skates on the 4x humanoid layout. Rows: pompoms and bow hang over the top
-    (95-101), collar 98-100, aurora cord 101, white upper 102-114, navy welt 115-116,
+    (95-101), collar 98-100, piping cord 101, white upper 102-114, navy welt 115-116,
     blade zone 117-119, bright runner 120-124. Rows below ~124.6 sit under the ground
     when the player stands, so the runner ends there."""
     S4 = 4
@@ -611,16 +648,25 @@ def worn_layer():
     faces = {n: region(HUMANOID, n, S4) for n in ("leg_outer", "leg_front", "leg_inner", "leg_back", "leg_sole")}
     TOP, CORD, UP, WELT, GAP, RUN = 98, 101, 102, 115, 117, 120
     AIR = mix(N[2], S[1], 0.5)
-    cord = (ICE[3], ICE[4], VIOLET[4], VIOLET[3])
+    cord = (ICE[3], ICE[4], SKY[4], SKY[3])
     runner = ("#ffffff", S[4], S[3], S[3], S[2], S[1], S[1], S[1])
+
+    fur_rng = random.Random(23)
 
     def band(x0):
         for i, x in enumerate(range(x0, x0 + 16)):
-            _put(img, x, TOP, L[5])
-            _put(img, x, TOP + 1, L[5] if i % 3 else L[4])
-            _put(img, x, TOP + 2, L[3])
+            # the Snowveil fur cuff, then the navy quilted ankle band over pale piping
+            _put(img, x, TOP, fur_rng.choice((SV_SNOW[6], SV_SNOW[7], SV_SNOW[7])))
+            _put(img, x, TOP + 1, fur_rng.choice((SV_SNOW[5], SV_SNOW[6], SV_SNOW[7])))
+            _put(img, x, TOP + 2, SV_SNOW[4] if i % 3 else SV_SNOW[3])
             _put(img, x, CORD, cord[x % 4])
             _vline(img, x, UP, WELT - 1, L[5])
+            for y in range(UP, UP + 3):
+                s, t = (x + y) % 4, (x - y) % 4
+                c = SV_NAVY[5] if s == 1 else SV_NAVY[3] if s == 3 else SV_NAVY[4]
+                _put(img, x, y, (SV_NAVY[6] if x % 2 == 0 else SV_NAVY[1]) if s == 0 or t == 0 else c)
+            _put(img, x, UP + 3, SKY[3])
+            _put(img, x, UP + 4, L[3])
             _put(img, x, WELT, N[4])
             _put(img, x, WELT + 1, N[2])
             _vline(img, x, GAP, RUN - 1, AIR)
@@ -634,7 +680,7 @@ def worn_layer():
         band(x0)
         # heel counter
         for c in range(0, 7):
-            h = 105 + (c * c) // 5
+            h = 107 + (c * c) // 6
             for y in range(h + 1, WELT - 2):
                 _put(img, col(c), y, L[4])
             _put(img, col(c), h, L[2])
@@ -665,23 +711,24 @@ def worn_layer():
         _put(img, col(14), GAP + 2, AIR)
         # frost runes along the runner
         for c in range(2, 15, 3):
-            _put(img, col(c), RUN + 2, ICE[4] if c % 2 else VIOLET[4])
+            _put(img, col(c), RUN + 2, ICE[4] if c % 2 else SKY[4])
         if medallion:
-            cx, cy = col(8), 107
-            for dy in range(-3, 4):
-                w = 3 if abs(dy) < 3 else 2
-                _hline(img, cx - w, cx + w, cy + dy, S[3])
-            _hline(img, cx - 2, cx + 2, cy - 3, S[5])
-            _hline(img, cx - 2, cx + 2, cy + 3, S[1])
-            _vline(img, cx - 3, cy - 2, cy + 2, S[4])
-            _vline(img, cx + 3, cy - 2, cy + 2, S[2])
-            fill(img, (cx - 2, cy - 2, cx + 2, cy + 2), N[1])
-            for d in (-2, -1, 0, 1, 2):
-                _put(img, cx + d, cy, ICE[3])
-                _put(img, cx, cy + d, ICE[3])
+            # the Snowveil sigil: a silver diamond with an ice field and snowflake
+            cx, cy = col(8), 110
+            for dy in range(-4, 5):
+                for dx in range(-4, 5):
+                    d = abs(dx) + abs(dy)
+                    if d > 4:
+                        continue
+                    lit = dx + dy < 0
+                    c = (S[4] if lit else S[2]) if d == 4 else (S[5] if lit else S[1]) if d == 3 else \
+                        ICE[1] if d == 2 else ICE[2]
+                    _put(img, cx + dx, cy + dy, c)
             for d in (-1, 1):
-                _put(img, cx + d, cy + d, ICE[4])
-                _put(img, cx + d, cy - d, ICE[4])
+                _put(img, cx + d, cy, ICE[4])
+                _put(img, cx, cy + d, ICE[5])
+            _put(img, cx, cy - 2, ICE[4])
+            _put(img, cx, cy + 2, ICE[4])
             _put(img, cx, cy, "#ffffff")
 
     paint_side(faces["leg_outer"][0], front_right=True, medallion=True)
@@ -738,7 +785,7 @@ def worn_layer():
     for y in range(UP, WELT):
         _put(img, bx + 7, y, L[2] if y % 2 else L[3])
     fill(img, (bx + 6, TOP - 3, bx + 9, TOP + 2), L[5])
-    fill(img, (bx + 7, TOP - 2, bx + 8, TOP + 1), N[2])
+    fill(img, (bx + 7, TOP - 2, bx + 8, TOP + 1), SV_NAVY[4])
     _hline(img, bx, bx + 15, GAP, N[2])
     fill(img, (bx + 6, GAP + 1, bx + 9, RUN + 4), S[3])
     _vline(img, bx + 6, GAP + 1, RUN + 4, S[5])
@@ -890,7 +937,7 @@ def boot(outer: int) -> list[dict]:
         pbox((15.0, 0.5, -2.4), (16.0, 5.2, 2.4), sides, skip=("down",)),        # heel cup
         pbox((7.3, 12.2, -3.25), (15.7, 14.0, 3.25), "collar", skip=("down",)),  # quilted collar
     ]
-    # glowing aurora piping along both flanks of the collar
+    # glowing pale-blue piping along both flanks of the collar
     for z, side in ((3.28, "south"), (-3.28, "north")):
         p.append(plane((7.3, 12.2, z), (15.7, 12.7, z), "piping", side, glow=10))
     # tongue, leaning forward out of the collar, and a pull tab at the back
@@ -901,16 +948,17 @@ def boot(outer: int) -> list[dict]:
     p.append(tab)
     p += lacing_panel(*LACE_LOWER, 3.2, 0.5, hooks=False)
     p += lacing_panel(*LACE_UPPER, 2.4, 8.0, hooks=True)
-    # ankle medallion on the outer side
+    # the Snowveil sigil on the outer ankle: the plate turned 45 degrees into a diamond
     s = outer
     zf = s * 2.9
-    p.append(box((10.2, 7.4, min(zf, zf + s * 0.4)), (13.4, 10.6, max(zf, zf + s * 0.4)), "medal",
+    medal = [box((10.6, 7.8, min(zf, zf + s * 0.4)), (13.0, 10.2, max(zf, zf + s * 0.4)), "medal",
                  uv={"north": [0, 0, 3.5, 3.5], "south": [0, 0, 3.5, 3.5], "east": [0, 1, 0.4, 3],
-                     "west": [0, 1, 0.4, 3], "up": [1, 0, 3, 0.4], "down": [1, 0, 3, 0.4]}))
+                     "west": [0, 1, 0.4, 3], "up": [1, 0, 3, 0.4], "down": [1, 0, 3, 0.4]})]
     face = "south" if s > 0 else "north"
     zg = zf + s * 0.43
-    p.append(box((10.2, 7.4, zg), (13.4, 10.6, zg), "glowflake", uv={face: [0, 0, 3.5, 3.5]},
-                 skip=tuple(x for x in SIDES if x != face), glow=12))
+    medal.append(box((10.6, 7.8, zg), (13.0, 10.2, zg), "glowflake", uv={face: [0, 0, 3.5, 3.5]},
+                     skip=tuple(x for x in SIDES if x != face), glow=12))
+    p += turn(medal, 45, "z", (11.8, 9.0, 0))
     return p
 
 
