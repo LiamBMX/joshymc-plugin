@@ -1,9 +1,14 @@
-"""Autumn Wanderer - Woodland Limited Edition boots.
+"""Nordic Treads: the boots of the Nordic set (November crate). They are the old Autumn
+Wanderer boots restyled; the item id is still autumn_wanderer so existing copies keep
+working.
 
 Rugged traveller's boots: worn saddle-brown leather on a chunky stacked sole, fold-down
-cuffs with cream wool rolling out of the collar, red twine criss-cross laces through
-bronze eyelets and speed hooks, glossy stitched toe caps, a bronze maple-leaf buckle on
-each cuff, buffalo-plaid pull loops, and a tiny maple-leaf charm on the right boot.
+cuffs with the set's grey wolf fur rolling out of the collar, madder-red laces
+criss-crossing through bronze eyelets and speed hooks, glossy stitched toe caps, the
+Nordic boss (bronze knotwork round a glowing amber stone) on a strap across each cuff,
+tablet-woven pull loops, iron hobnails in the heels, and a small bronze Mjolnir pendant
+with an amber bead on the right boot. The fur, madder, ochre, bronze, iron and amber
+come from the set's palette in nordic_plate.py; the leather was already the set's.
 
 Frame: the pair stands on y = 0 with the toes toward -Z; the right boot sits on +X.
 Every big face is painted on its own patch of an atlas sheet at 2 texels per unit
@@ -16,32 +21,39 @@ import math
 import random
 import zlib
 
+import numpy as np
 from art import kit
+from art.items.nordic_plate import AMBER as N_AMBER
+from art.items.nordic_plate import BRONZE as N_BRONZE
+from art.items.nordic_plate import FUR as N_FUR
+from art.items.nordic_plate import IRON as N_IRON
+from art.items.nordic_plate import LEATHER as N_LEATHER
+from art.items.nordic_plate import STRAP as N_STRAP
+from art.items.nordic_plate import MADDER, OCHRE, amber_frame
+from art.items.nordic_plate import boss as n_boss
+from art.items.snowveil_guard import to_image
 from art.kit import (HUMANOID, arc, art, bar, box, canvas, display, fill, mirror, mix, model, move, place,
-                     ramp, region, rgba, save, save_layer, turn)
+                     ramp, region, rgba, save, save_animation, save_layer, turn)
 
 ID = "autumn_wanderer"
-NAME = "Autumn Wanderer"
+NAME = "Nordic Treads"
 KIND = "boots"
 
 # --------------------------------------------------------------------------------------
 # Palettes (hue-shifted ramps, darkest first)
 # --------------------------------------------------------------------------------------
 
-LEATHER = ramp("#8e5a34", 7, 0.8)      # worn saddle-brown upper
-CAP = ramp("#5e3522", 7, 0.8)          # darker polished leather: toe caps, heel cups, cuffs
-TAN = ramp("#c39061", 6, 0.7)          # hickory: welt, thread, strap, scuffs
+LEATHER = N_LEATHER                    # the set's oiled brown leather: the upper
+CAP = N_STRAP                          # its darker leather: heel cups, cuffs
+TOE = N_IRON[:7]                       # blackened iron-shod toe caps
+TAN = N_LEATHER[:6]                    # welt, thread, the cuff strap, scuffs
 WALNUT = ramp("#5a3a26", 6, 0.75)      # stacked heel
 SOLE = ramp("#3b2c26", 6, 0.6)         # lug sole
-WOOL = ["#7a6450", "#a68e70", "#cdb795", "#e4d4b3", "#f2e7cf", "#fbf6e8"]
-TWINE = ramp("#b8352a", 5, 0.7)        # red twine laces
-BRONZE = ramp("#c08a45", 6, 0.85)      # buckle, eyelets, hooks
-COPPER = ramp("#c0673a", 5, 0.8)
-PLAID_R = ramp("#b0271f", 5, 0.7)
-PLAID_K = ["#120a0b", "#231417", "#3a2226"]
-GREEN = ramp("#3f6a3a", 5, 0.75)
-LEAF = ramp("#e07a26", 5, 0.75)        # autumn-orange charm leaf
-AMBER = ramp("#f0a030", 5, 0.7)
+WOOL = N_FUR[2:]                       # the set's grey wolf fur lining
+TWINE = MADDER[:3] + MADDER[2:3] * 2   # madder-red laces (the deeper shades only)
+BRONZE = N_BRONZE[1:]                  # eyelets, hooks, the boss
+IRON = N_IRON
+AMBER = N_AMBER
 MUD = ["#5f4d3b", "#7d6a51", "#9a8667"]
 BAYER = (0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5)
 
@@ -472,9 +484,9 @@ def p_opening(img, x, y, w, h, key="p_opening"):
                 put(img, xx, yy, "#170d09")
 
 
-def p_toe(img, x, y, w, h, key="p_toe", part="side", back=None, tone=0):
-    """Glossy toe cap. The tiers are shaded as one dome: the lowest tier is darkest and the
-    crown carries the specular streak. Stitched along its back edge."""
+def p_toe(img, x, y, w, h, key="p_toe", part="side", back=None, tone=0, CAP=TOE):
+    """Iron-shod toe cap. The tiers are shaded as one dome: the lowest tier is darkest and
+    the crown carries the specular streak. Riveted along its back edge."""
     rng = _rng(key)
     x1, y1 = x + w - 1, y + h - 1
     fill(img, (x, y, x1, y1), CAP[3 + min(tone, 1)])
@@ -550,9 +562,9 @@ def p_tongue(img, x, y, w, h, key="p_tongue", label=True):
     hline(img, x, x1, y1, LEATHER[3])
     if label and w >= 4 and h >= 5:
         lx, ly = x + (w - 2) // 2, y + 2
-        fill(img, (lx, ly, lx + 1, ly + 1), WOOL[4])
-        put(img, lx, ly, GREEN[3])
-        put(img, lx + 1, ly + 1, GREEN[2])
+        fill(img, (lx, ly, lx + 1, ly + 1), OCHRE[3])
+        put(img, lx, ly, MADDER[3])
+        put(img, lx + 1, ly + 1, MADDER[2])
         hline(img, lx, lx + 1, ly + 2, LEATHER[3])
 
 
@@ -590,9 +602,10 @@ def p_heel(img, x, y, w, h, key="p_heel", nails=False):
     for r in range(h):
         hline(img, x, x1, y + r, rows[min(r, len(rows) - 1)])
     stitches_h(img, x, x1, y + 1, WALNUT[2], step=4, phase=2)
-    if nails:
+    if nails:   # iron hobnails round the heel
         for xx in range(x + 1, x1, 2):
-            put(img, xx, y + h - 1, BRONZE[3])
+            put(img, xx, y + h - 1, IRON[6])
+            put(img, xx + 1, y + h - 1, IRON[3])
 
 
 def p_tread(img, x, y, w, h, key="p_tread"):
@@ -621,46 +634,8 @@ def p_strap_edge(img, x, y, w, h, key="p_strap_edge"):
 # Small textures (not atlas panels)
 # --------------------------------------------------------------------------------------
 
-MAPLE_ROWS = [
-    "......a......",
-    ".....aba.....",
-    "....abbba....",
-    ".a..abbba..a.",
-    ".aa.abbba.aa.",
-    ".abaabbbaaba.",
-    "aabbbbbbbbbaa",
-    ".abbbbbbbbba.",
-    "..abbbbbbba..",
-    ".aabbbbbbbaa.",
-    ".abbaacaabba.",
-    "..aa..c..aa..",
-    "......c......",
-]
-LEAF_PX = 13
-
-
-def leaf_image(outline, body, light, dark, stem, vein=None):
-    """A 13x13 maple leaf: five lobes and a stem, lit from the top-left, with veins."""
-    img = art(MAPLE_ROWS, {"a": outline, "b": body, "c": stem})
-    px = img.load()
-    for y in range(LEAF_PX):
-        for x in range(LEAF_PX):
-            if px[x, y][3] and px[x, y][:3] == rgba(body)[:3]:
-                if x + y < 10:
-                    px[x, y] = rgba(light)
-                elif x + y > 15:
-                    px[x, y] = rgba(dark)
-    if vein:
-        veins = [(6, y) for y in range(3, 10)] + [(5, 6), (4, 5), (3, 4), (7, 6), (8, 5), (9, 4), (5, 8), (4, 9),
-                                                  (7, 8), (8, 9)]
-        for x, y in veins:
-            if px[x, y][3] and px[x, y][:3] != rgba(outline)[:3]:
-                px[x, y] = rgba(vein)
-    return img
-
-
 def paint_small() -> None:
-    # red twine: a twisted cord at 2 texels per unit
+    # madder laces: a twisted cord at 2 texels per unit
     tw = canvas(32)
     for y in range(32):
         for x in range(32):
@@ -678,37 +653,82 @@ def paint_small() -> None:
                 br.putpixel((x, y), rgba(BRONZE[4]))
     save(br, "bronze")
 
-    # maple-leaf buckle: polished bronze leaf with a dark rim, veins and two glints
-    buckle = canvas(16)
-    leaf = leaf_image(BRONZE[1], BRONZE[3], BRONZE[5], BRONZE[2], BRONZE[1], vein=BRONZE[2])
-    buckle.paste(leaf, (0, 0), leaf)
-    buckle.putpixel((5, 3), rgba("#fff4d6"))
-    buckle.putpixel((2, 6), rgba("#fff4d6"))
-    save(buckle, "buckle")
+    # the Nordic boss: a bronze disc with a beaded knotwork ring round an amber stone
+    boss = canvas(16)
+    for (x, y), c in lit_silhouette(BOSS_ROWS, BRONZE).items():
+        put(boss, x, y, c)
+    for x, y in BOSS_BEADS:
+        put(boss, x, y, BRONZE[1])
+    for (x, y), c in lit_silhouette(STONE_ROWS, AMBER[1:]).items():
+        put(boss, 4 + x, 4 + y, c)
+    put(boss, 5, 5, AMBER[6])
+    save(boss, "buckle")
 
-    # charm: an autumn-orange enamel maple leaf in a copper setting
+    # Mjolnir pendant: a bronze hammer hanging head-down from a little ring
     charm = canvas(16)
-    leaf = leaf_image(COPPER[1], LEAF[2], LEAF[4], LEAF[1], COPPER[2], vein=LEAF[1])
-    charm.paste(leaf, (0, 0), leaf)
-    charm.putpixel((5, 3), rgba("#fff0d0"))
+    for (x, y), c in lit_silhouette(HAMMER_ROWS, BRONZE).items():
+        put(charm, x, y, c)
+    for x in (2, 4, 6, 8):
+        put(charm, x, 9, BRONZE[1])
     save(charm, "charm")
 
-    # buffalo plaid pull loop (a strap with a hole near the top)
-    plaid = canvas(16)
+    # tablet-woven pull loop (a strap with a hole near the top): madder and ochre diamonds
+    loop = canvas(16)
     for y in range(12):
         for x in range(6):
-            red, dark_row = (x // 2) % 2 == 0, (y // 2) % 2 == 0
-            c = (PLAID_R[1] if dark_row else PLAID_R[2]) if red else (PLAID_K[0] if dark_row else PLAID_K[2])
-            plaid.putpixel((x, y), rgba(c))
+            if x in (0, 5):
+                c = MADDER[1]
+            else:
+                k = int((y + abs(x - 2.5) * 2) // 2) % 3
+                c = (OCHRE[3], MADDER[3], MADDER[2])[k]
+            loop.putpixel((x, y), rgba(c))
     for y in range(1, 5):
         for x in range(2, 4):
-            plaid.putpixel((x, y), (0, 0, 0, 0))
-    save(plaid, "plaid")
+            loop.putpixel((x, y), (0, 0, 0, 0))
+    save(loop, "plaid")
 
-    amber = canvas(16, fill=AMBER[3])
-    fill(amber, (0, 0, 0, 0), AMBER[4])
-    fill(amber, (1, 0, 1, 1), AMBER[2])
-    save(amber, "amber")
+    # the set's amber, with its warm glint (animated)
+    save_animation([amber_frame(i / 12) for i in range(12)], "amber", frametime=3)
+
+
+BOSS_ROWS = [
+    "....#####....",
+    "..#########..",
+    ".###########.",
+    ".###########.",
+    "#############",
+    "#############",
+    "#############",
+    "#############",
+    "#############",
+    ".###########.",
+    ".###########.",
+    "..#########..",
+    "....#####....",
+]
+BOSS_BEADS = [(6, 1), (9, 2), (11, 6), (10, 10), (6, 11), (2, 10), (1, 6), (3, 2)]
+STONE_ROWS = [
+    ".###.",
+    "#####",
+    "#####",
+    "#####",
+    ".###.",
+]
+HAMMER_ROWS = [
+    "....###....",
+    "....#.#....",
+    "....###....",
+    ".....#.....",
+    ".....#.....",
+    ".....#.....",
+    ".....#.....",
+    "....###....",
+    "###########",
+    "###########",
+    ".#########.",
+    "..#######..",
+    "..##...##..",
+]
 
 
 # --------------------------------------------------------------------------------------
@@ -946,7 +966,7 @@ def bow_parts(top):
 
 
 def buckle_parts():
-    """A hickory strap across the outer cuff, fastened by a bronze maple-leaf buckle."""
+    """A hickory strap across the outer cuff carrying the Nordic boss."""
     x = SX1 + 0.38
     strap = Pn("leather", "strap", p_strap)
     se = Pn("leather", "strap_e", p_strap_edge)
@@ -958,11 +978,16 @@ def buckle_parts():
                 faces={"east": ("buckle", [0, 0, 13, 13]), "west": ("buckle", [13, 0, 0, 13])},
                 skip=("up", "down", "north", "south"))
     parts.append(plate)
+    # the boss's amber stone, domed and glowing
+    parts.append(box((x + 0.44, yc - 0.42, zc - 0.42), (x + 0.68, yc + 0.42, zc + 0.42), "amber", uv="full",
+                     glow=11))
+    parts.append(box((x + 0.68, yc - 0.24, zc - 0.24), (x + 0.8, yc + 0.24, zc + 0.24), "amber", uv="full",
+                     glow=11))
     return parts
 
 
 def pull_loop():
-    """A buffalo-plaid pull loop standing up at the back of the collar."""
+    """A tablet-woven pull loop standing up at the back of the collar."""
     z = SZ1 + 0.62
     loop = box((XC - 0.75, 11.2, z), (XC + 0.75, 14.2, z + 0.22), "plaid",
                faces={"south": ("plaid", [0, 0, 6, 12]), "north": ("plaid", [6, 0, 0, 12])},
@@ -971,7 +996,8 @@ def pull_loop():
 
 
 def charm_parts():
-    """A tiny maple-leaf charm hanging from the outer top speed hook of the right boot."""
+    """A small bronze Mjolnir pendant hanging from the outer top speed hook of the right
+    boot, an amber bead on its cord."""
     hx, hy, hz = EYE_X[1], HOOK_Y[-1], SZ0 - STAY - 0.5
     ring = box((hx - 0.16, hy - 0.5, hz - 0.16), (hx + 0.16, hy - 0.1, hz + 0.16), "bronze")
     cord_end = (hx + 0.75, hy - 1.3, hz - 0.2)
@@ -982,7 +1008,7 @@ def charm_parts():
     cx, cy, cz = cord_end[0] + 0.15, cord_end[1] - 0.2 - size / 2, cord_end[2]
     leaf = box((cx - size / 2, cy - size / 2, cz - 0.1), (cx + size / 2, cy + size / 2, cz + 0.1), "charm",
                faces={"north": ("charm", [0, 0, 13, 13]), "south": ("charm", [13, 0, 0, 13])},
-               skip=("up", "down", "east", "west"), glow=6)
+               skip=("up", "down", "east", "west"))
     turn(leaf, -40, "y", (cx, cy, cz))
     turn(leaf, 10, "z", (cx, cy + size / 2, cz))
     return [ring, cord, bead, leaf]
@@ -1015,19 +1041,6 @@ def build() -> list[dict]:
 # --------------------------------------------------------------------------------------
 
 S = 4
-SMALL_MAPLE = [
-    ".....#.....",
-    "....###....",
-    ".#..###..#.",
-    ".##.###.##.",
-    "..#######..",
-    "###########",
-    ".#########.",
-    "..#######..",
-    "...##.##...",
-    ".....#.....",
-    ".....#.....",
-]
 
 
 def lit_silhouette(rows, pal):
@@ -1168,7 +1181,7 @@ def worn_layer():
     P(f, 11, 17, CAP[3])
     for x in range(6, 10):  # woven tag: cream over forest green
         P(f, x, 18, WOOL[5] if x == 6 else WOOL[4])
-        P(f, x, 19, GREEN[2] if x in (7, 8) else GREEN[1])
+        P(f, x, 19, MADDER[3] if x in (7, 8) else MADDER[2])
     for y in range(26, 36):  # eyestays with stitched outer edges
         P(f, 2, y, TAN[4] if y % 2 else CAP[2])
         P(f, 3, y, CAP[4])
@@ -1198,28 +1211,30 @@ def worn_layer():
         P(f, x, y, TWINE[t])
     P(f, 5, 27, BRONZE[4])
     P(f, 10, 27, BRONZE[4])
-    # toe cap with a stitched rounded seam and a polish glint
+    # iron toe cap with a riveted rounded edge and a polish glint
     for x in range(16):
         top = 36 if 2 <= x <= 13 else (37 if x in (1, 14) else 38)
         for y in range(top, 39):
-            P(f, x, y, CAP[3])
-        P(f, x, top, CAP[1])
-        if x % 2 == 0 and top < 38:
-            P(f, x, top + 1, TAN[4])
+            P(f, x, y, TOE[3])
+        P(f, x, top, TOE[1])
+        if x % 3 == 1 and top < 38:
+            P(f, x, top + 1, TOE[6])
     for x in range(5, 11):
-        P(f, x, 38, CAP[4])
-    P(f, 6, 38, CAP[5])
-    P(f, 7, 38, CAP[6])
+        P(f, x, 38, TOE[4])
+    P(f, 6, 37, TOE[5])
+    P(f, 7, 37, TOE[6])
 
-    # ---- outer side: strap and maple-leaf buckle, heel cup, stacked heel -------------
+    # ---- outer side: strap and the Nordic boss, heel cup, stacked heel ---------------
     f = "leg_outer"
     for x in range(1, 16):
         P(f, x, 28, TAN[4])
         P(f, x, 29, TAN[3])
         P(f, x, 30, TAN[1])
-    for (x, y), c in lit_silhouette(SMALL_MAPLE, BRONZE).items():
-        P(f, 3 + x, 23 + y, c)
-    P(f, 8, 24, "#fff4d6")
+    # the Nordic boss, painted with the set's own boss() so it matches the Plate's
+    x0, y0, x1, y1 = faces[f]
+    face = np.asarray(img.crop((x0, y0, x1 + 1, y1 + 1)), dtype=np.float32)
+    n_boss(face, 8.5, 28.5, 5)
+    img.paste(to_image(face), (x0, y0))
     heel_cup(f, 0, 1)
     P(f, 11, 35, TAN[3])
     P(f, 12, 35, TAN[3])
@@ -1228,21 +1243,21 @@ def worn_layer():
         P(f, 6, y, SOLE[0])
         P(f, 7, y, SOLE[0])
 
-    # ---- inner side: strap with a copper rivet, heel cup, stacked heel ---------------
+    # ---- inner side: strap with a bronze rivet, heel cup, stacked heel ---------------
     f = "leg_inner"
     for x in range(0, 15):
         P(f, x, 28, TAN[4])
         P(f, x, 29, TAN[3])
         P(f, x, 30, TAN[1])
-    P(f, 11, 29, COPPER[3])
-    P(f, 11, 28, COPPER[4])
+    P(f, 11, 29, BRONZE[3])
+    P(f, 11, 28, BRONZE[5])
     heel_cup(f, 15, -1)
     heel_stack(f, range(10, 16))
     for y in range(42, 46):
         P(f, 8, y, SOLE[0])
         P(f, 9, y, SOLE[0])
 
-    # ---- back: plaid pull loop, backstay, heel cup, stacked heel ---------------------
+    # ---- back: woven pull loop, backstay, heel cup, stacked heel ---------------------
     f = "leg_back"
     for y in range(17, 29):
         for x in range(6, 10):
@@ -1250,8 +1265,8 @@ def worn_layer():
                 continue
             if y == 17 and x in (6, 9):
                 continue
-            red, dark = (x // 2) % 2 == 1, ((y - 17) // 2) % 2 == 0
-            P(f, x, y, (PLAID_R[1] if dark else PLAID_R[2]) if red else (PLAID_K[0] if dark else PLAID_K[2]))
+            k = int((y + abs(x - 7.5) * 2) // 2) % 3
+            P(f, x, y, MADDER[1] if x in (6, 9) else (OCHRE[3], MADDER[3], MADDER[2])[k])
     for y in range(33, 39):
         for x in range(16):
             P(f, x, y, CAP[4] if y == 33 else (CAP[2] if y == 38 else CAP[3]))

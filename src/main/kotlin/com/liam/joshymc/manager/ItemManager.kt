@@ -55,8 +55,12 @@ class ItemManager(private val plugin: Joshymc) {
         register(LumberjacksLegacy())
         register(WoodlandHunter())
         register(Maplefang())
-        register(AutumnWanderer())
         register(Hearthkeeper())
+        // Nordic set (November crate armor; the treads keep the autumn_wanderer id)
+        register(NordicHelm())
+        register(NordicPlate())
+        register(NordicGreaves())
+        register(NordicTreads())
         // Winter Collection
         register(Frostbite())
         register(GlacierBreaker())

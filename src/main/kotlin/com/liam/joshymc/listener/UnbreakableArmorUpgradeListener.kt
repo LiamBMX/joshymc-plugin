@@ -17,9 +17,10 @@ import org.bukkit.inventory.Inventory
  *  - The Haunted Hollow armor and the Shark set became unbreakable in issue #1070, but
  *    copies handed out before that are plain breakable Netherite: the unbreakable flag is
  *    flipped on.
- *  - The Ice Skates were renamed Snowveil Skates in issue #1098 (same `ice_skates` id):
- *    copies still showing the old name get the new one. Copies renamed on an anvil keep
- *    their custom name.
+ *  - The Ice Skates were renamed Snowveil Skates in issue #1098 (same `ice_skates` id),
+ *    and the Autumn Wanderer boots Nordic Treads in issue #1097 (same `autumn_wanderer`
+ *    id): copies still showing the old name get the new one. Copies renamed on an anvil
+ *    keep their custom name.
  *
  * Matched by the `custom_item_id` PDC tag only; nothing else on the item (model,
  * equippable, enchants, trims, PDC, damage already taken) is touched, and no item is
@@ -95,6 +96,7 @@ class UnbreakableArmorUpgradeListener(private val plugin: Joshymc) : Listener {
         /** Custom item id -> the display name its older copies carry. */
         val RENAMED = mapOf(
             "ice_skates" to "Ice Skates",
+            "autumn_wanderer" to "Autumn Wanderer",
         )
     }
 }
