@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -30,7 +31,7 @@ class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         // Other subcommands require admin permission
         // (joshymc.spawner.admin is the legacy singular form, kept for backward compatibility)
         if (!sender.hasPermission("joshymc.spawner.admin") && !sender.hasPermission("joshymc.spawners.admin")) {
-            sendMsg(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return true
         }
 
@@ -46,7 +47,7 @@ class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     private fun handleGive(sender: CommandSender, args: Array<out String>) {
         // /spawner give <id> [player] [amount]
         if (args.size < 2) {
-            sendMsg(sender, Component.text("Usage: /spawner give <id> [player|@a] [amount]", NamedTextColor.RED))
+            Msg.usage(sender, "/spawner give <id> [player|@a] [amount]", CommunicationsManager.Category.ADMIN)
             return
         }
 

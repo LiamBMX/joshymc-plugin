@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.EventObjective
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -34,7 +35,7 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isNotEmpty() && args[0].equals("admin", true)) {
             if (!sender.hasPermission("joshymc.eventquests.admin")) {
-                msg(sender, "No permission.", NamedTextColor.RED)
+                Msg.noPermission(sender)
                 return true
             }
             handleAdmin(sender, args)
@@ -42,11 +43,11 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         }
 
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
         if (!sender.hasPermission("joshymc.eventquests")) {
-            msg(sender, "No permission.", NamedTextColor.RED)
+            Msg.noPermission(sender)
             return true
         }
         plugin.eventQuestManager.openGui(sender)
@@ -63,7 +64,7 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             "progress", "reset" -> {
                 val sub = args[1].lowercase()
                 if (args.size < 4) {
-                    msg(sender, "Usage: /eq admin $sub <player> <event>", NamedTextColor.RED)
+                    Msg.usage(sender, "/eq admin $sub <player> <event>")
                     return
                 }
                 val target = plugin.playerResolver.resolve(args[2])
@@ -88,14 +89,14 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             }
             "create" -> {
                 val name = args.getOrNull(2)
-                if (name == null) { msg(sender, "Usage: /eq admin create <quest-set-name>", NamedTextColor.RED); return }
+                if (name == null) { Msg.usage(sender, "/eq admin create <quest-set-name>"); return }
                 val err = mgr.createQuestline(name)
                 if (err != null) msg(sender, err, NamedTextColor.RED)
                 else msg(sender, "Created quest set '${name.lowercase()}'. Add 2-10 quests with /eq admin setquest and a reward with /eq admin additem hand.", NamedTextColor.GREEN)
             }
             "additem" -> {
                 if (args.size != 4 || !args[2].equals("hand", true)) {
-                    msg(sender, "Usage: /eq admin additem hand <quest-set-name>", NamedTextColor.RED)
+                    Msg.usage(sender, "/eq admin additem hand <quest-set-name>")
                     return
                 }
                 if (sender !is Player) { msg(sender, "Players only.", NamedTextColor.RED); return }
@@ -129,12 +130,12 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             }
             "cooldown" -> {
                 val days = args.getOrNull(3)?.toIntOrNull()
-                if (args.size != 4 || days == null) { msg(sender, "Usage: /eq admin cooldown <quest-set-name> <days>", NamedTextColor.RED); return }
+                if (args.size != 4 || days == null) { Msg.usage(sender, "/eq admin cooldown <quest-set-name> <days>"); return }
                 val err = mgr.setRepeatable(args[2], null, days)
                 if (err != null) msg(sender, err, NamedTextColor.RED)
                 else msg(sender, "'${args[2].lowercase()}' cooldown set to $days day(s); it is ${mgr.repeatSummary(args[2])}.", NamedTextColor.GREEN)
             }
-            else -> msg(sender, "Usage: /eq admin <reload|progress|reset|create|additem|setquest|repeatable|cooldown>", NamedTextColor.RED)
+            else -> Msg.usage(sender, "/eq admin <reload|progress|reset|create|additem|setquest|repeatable|cooldown>")
         }
     }
 

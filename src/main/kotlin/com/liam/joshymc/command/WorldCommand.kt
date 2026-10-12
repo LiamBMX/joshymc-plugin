@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -120,7 +121,7 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.world")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -163,7 +164,7 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleCreate(sender: CommandSender, args: Array<out String>) {
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /world create <name> [normal|flat|void|nether|end]", NamedTextColor.RED))
+            Msg.usage(sender, "/world create <name> [normal|flat|void|nether|end]")
             return
         }
 
@@ -171,13 +172,13 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         val typeName = args.getOrNull(2)?.lowercase() ?: "normal"
 
         if (Bukkit.getWorld(name) != null) {
-            sender.sendMessage(Component.text("World '$name' already exists and is loaded.", NamedTextColor.RED))
+            Msg.error(sender, "World '$name' already exists and is loaded.")
             return
         }
 
         val worldFolder = File(Bukkit.getWorldContainer(), name)
         if (worldFolder.exists()) {
-            sender.sendMessage(Component.text("A world folder '$name' already exists. Use /world import to load it.", NamedTextColor.RED))
+            Msg.error(sender, "A world folder '$name' already exists. Use /world import to load it.")
             return
         }
 
@@ -209,14 +210,14 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                 creator.environment(World.Environment.THE_END)
             }
             else -> {
-                sender.sendMessage(Component.text("Unknown type '$typeName'. Use: normal, flat, void, nether, end", NamedTextColor.RED))
+                Msg.error(sender, "Unknown type '$typeName'. Use: normal, flat, void, nether, end")
                 return
             }
         }
 
         val world = creator.createWorld()
         if (world == null) {
-            sender.sendMessage(Component.text("Failed to create world '$name'.", NamedTextColor.RED))
+            Msg.error(sender, "Failed to create world '$name'.")
             return
         }
 
@@ -226,25 +227,25 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             world.setSpawnLocation(0, 65, 0)
         }
 
-        sender.sendMessage(Component.text("World '$name' created successfully!", NamedTextColor.GREEN))
+        Msg.success(sender, "World '$name' created successfully!")
     }
 
     private fun handleDelete(sender: CommandSender, args: Array<out String>) {
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /world delete <name>", NamedTextColor.RED))
+            Msg.usage(sender, "/world delete <name>")
             return
         }
 
         val name = args[1].lowercase()
 
         if (name in PROTECTED_WORLDS) {
-            sender.sendMessage(Component.text("Cannot delete default world '$name'.", NamedTextColor.RED))
+            Msg.error(sender, "Cannot delete default world '$name'.")
             return
         }
 
         val world = Bukkit.getWorld(name)
         if (world == null) {
-            sender.sendMessage(Component.text("World '$name' is not loaded.", NamedTextColor.RED))
+            Msg.error(sender, "World '$name' is not loaded.")
             return
         }
 
@@ -257,7 +258,7 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
         // Unload the world
         if (!Bukkit.unloadWorld(world, false)) {
-            sender.sendMessage(Component.text("Failed to unload world '$name'.", NamedTextColor.RED))
+            Msg.error(sender, "Failed to unload world '$name'.")
             return
         }
 
@@ -267,7 +268,7 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             worldFolder.deleteRecursively()
         }
 
-        sender.sendMessage(Component.text("World '$name' deleted.", NamedTextColor.GREEN))
+        Msg.success(sender, "World '$name' deleted.")
     }
 
     private fun handleList(sender: CommandSender) {
@@ -293,25 +294,25 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleTp(sender: CommandSender, args: Array<out String>) {
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /world tp <name> [player]", NamedTextColor.RED))
+            Msg.usage(sender, "/world tp <name> [player]")
             return
         }
 
         val worldName = args[1].lowercase()
         val world = Bukkit.getWorld(worldName)
         if (world == null) {
-            sender.sendMessage(Component.text("World '$worldName' is not loaded.", NamedTextColor.RED))
+            Msg.error(sender, "World '$worldName' is not loaded.")
             return
         }
 
         val target: Player = if (args.size >= 3) {
             Bukkit.getPlayer(args[2]) ?: run {
-                sender.sendMessage(Component.text("Player '${args[2]}' not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender, args[2])
                 return
             }
         } else {
             if (sender !is Player) {
-                sender.sendMessage(Component.text("Specify a player when using from console.", NamedTextColor.RED))
+                Msg.error(sender, "Specify a player when using from console.")
                 return
             }
             sender
@@ -320,13 +321,13 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         PvpTeleportGuard.forced { target.teleport(world.spawnLocation) }
         target.sendMessage(Component.text("Teleported to world '${world.name}'.", NamedTextColor.GREEN))
         if (sender != target) {
-            sender.sendMessage(Component.text("Teleported ${target.name} to world '${world.name}'.", NamedTextColor.GREEN))
+            Msg.success(sender, "Teleported ${target.name} to world '${world.name}'.")
         }
     }
 
     private fun handleSetSpawn(sender: CommandSender) {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return
         }
 
@@ -340,27 +341,27 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleImport(sender: CommandSender, args: Array<out String>) {
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /world import <name>", NamedTextColor.RED))
+            Msg.usage(sender, "/world import <name>")
             return
         }
 
         val name = args[1]
 
         if (Bukkit.getWorld(name) != null) {
-            sender.sendMessage(Component.text("World '$name' is already loaded.", NamedTextColor.RED))
+            Msg.error(sender, "World '$name' is already loaded.")
             return
         }
 
         val worldFolder = File(Bukkit.getWorldContainer(), name)
         if (!worldFolder.exists() || !worldFolder.isDirectory) {
-            sender.sendMessage(Component.text("No world folder '$name' found.", NamedTextColor.RED))
+            Msg.error(sender, "No world folder '$name' found.")
             return
         }
 
         // Check for level.dat to confirm it's a valid world
         val levelDat = File(worldFolder, "level.dat")
         if (!levelDat.exists()) {
-            sender.sendMessage(Component.text("Folder '$name' does not contain a level.dat — not a valid world.", NamedTextColor.RED))
+            Msg.error(sender, "Folder '$name' does not contain a level.dat — not a valid world.")
             return
         }
 
@@ -369,16 +370,16 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         val creator = WorldCreator(name)
         val world = creator.createWorld()
         if (world == null) {
-            sender.sendMessage(Component.text("Failed to import world '$name'.", NamedTextColor.RED))
+            Msg.error(sender, "Failed to import world '$name'.")
             return
         }
 
-        sender.sendMessage(Component.text("World '$name' imported and loaded!", NamedTextColor.GREEN))
+        Msg.success(sender, "World '$name' imported and loaded!")
     }
 
     private fun handleInfo(sender: CommandSender) {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return
         }
 

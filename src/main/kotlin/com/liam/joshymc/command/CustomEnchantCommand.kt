@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.enchant.CustomEnchantManager
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -21,12 +22,12 @@ class CustomEnchantCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
         val sub = args.getOrNull(0)?.lowercase() ?: "help"
 
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.customenchant")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -51,7 +52,7 @@ class CustomEnchantCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
 
         val enchantId = args.getOrNull(1)?.lowercase()
         if (enchantId == null) {
-            plugin.commsManager.send(player, Component.text("Usage: /ce add <enchant> [level]", NamedTextColor.RED))
+            Msg.usage(player, "/ce add <enchant> [level]")
             return
         }
 
@@ -90,7 +91,7 @@ class CustomEnchantCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
 
         val enchantId = args.getOrNull(1)?.lowercase()
         if (enchantId == null) {
-            plugin.commsManager.send(player, Component.text("Usage: /ce remove <enchant>", NamedTextColor.RED))
+            Msg.usage(player, "/ce remove <enchant>")
             return
         }
 
@@ -136,7 +137,7 @@ class CustomEnchantCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
     private fun handleInfo(player: Player, args: Array<out String>) {
         val enchantId = args.getOrNull(1)?.lowercase()
         if (enchantId == null) {
-            plugin.commsManager.send(player, Component.text("Usage: /ce info <enchant>", NamedTextColor.RED))
+            Msg.usage(player, "/ce info <enchant>")
             return
         }
 

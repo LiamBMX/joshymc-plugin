@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.ChatGamesManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -22,7 +23,7 @@ class ChatGameCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.chatgame")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 

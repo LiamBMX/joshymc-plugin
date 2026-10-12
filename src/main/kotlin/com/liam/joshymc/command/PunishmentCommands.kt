@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.PunishmentManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -22,17 +23,17 @@ class BanCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.ban")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty()) {
-            sender.sendMessage(Component.text("Usage: /ban <player> [reason]", NamedTextColor.RED))
+            Msg.usage(sender, "/ban <player> [reason]")
             return true
         }
 
         val target = resolveOfflinePlayer(args[0])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            Msg.playerNotFound(sender, args[0])
             return true
         }
 
@@ -48,7 +49,7 @@ class BanCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val msg = Component.text("${target.second} has been permanently banned", NamedTextColor.RED)
             .let { if (reason != null) it.append(Component.text(" - $reason", NamedTextColor.GRAY)) else it }
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         return true
@@ -65,23 +66,23 @@ class TempbanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.tempban")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /tempban <player> <duration> [reason]", NamedTextColor.RED))
+            Msg.usage(sender, "/tempban <player> <duration> [reason]")
             return true
         }
 
         val target = resolveOfflinePlayer(args[0])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            Msg.playerNotFound(sender, args[0])
             return true
         }
 
         val durationMs = PunishmentManager.parseDuration(args[1])
         if (durationMs == null) {
-            sender.sendMessage(Component.text("Invalid duration: ${args[1]} (e.g. 1d, 2h30m, 7d)", NamedTextColor.RED))
+            Msg.error(sender, "Invalid duration: ${args[1]} (e.g. 1d, 2h30m, 7d)")
             return true
         }
 
@@ -97,7 +98,7 @@ class TempbanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val durationStr = PunishmentManager.formatDuration(durationMs)
         val msg = Component.text("${target.second} has been banned for $durationStr", NamedTextColor.RED)
             .let { if (reason != null) it.append(Component.text(" - $reason", NamedTextColor.GRAY)) else it }
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         return true
@@ -118,23 +119,23 @@ class UnbanCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.unban")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty()) {
-            sender.sendMessage(Component.text("Usage: /unban <player>", NamedTextColor.RED))
+            Msg.usage(sender, "/unban <player>")
             return true
         }
 
         val target = resolveOfflinePlayer(args[0])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            Msg.playerNotFound(sender, args[0])
             return true
         }
 
         plugin.punishmentManager.unban(target.first, sender.name, (sender as? Player)?.uniqueId)
         val msg = Component.text("${target.second} has been unbanned.", NamedTextColor.GREEN)
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         return true
@@ -151,17 +152,17 @@ class MuteCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.mute")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty()) {
-            sender.sendMessage(Component.text("Usage: /mute <player> [reason]", NamedTextColor.RED))
+            Msg.usage(sender, "/mute <player> [reason]")
             return true
         }
 
         val target = resolveOfflinePlayer(args[0])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            Msg.playerNotFound(sender, args[0])
             return true
         }
 
@@ -173,7 +174,7 @@ class MuteCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val msg = Component.text("${target.second} has been permanently muted", NamedTextColor.RED)
             .let { if (reason != null) it.append(Component.text(" - $reason", NamedTextColor.GRAY)) else it }
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         // Notify target if online
@@ -199,23 +200,23 @@ class TempmuteCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.tempmute")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /tempmute <player> <duration> [reason]", NamedTextColor.RED))
+            Msg.usage(sender, "/tempmute <player> <duration> [reason]")
             return true
         }
 
         val target = resolveOfflinePlayer(args[0])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            Msg.playerNotFound(sender, args[0])
             return true
         }
 
         val durationMs = PunishmentManager.parseDuration(args[1])
         if (durationMs == null) {
-            sender.sendMessage(Component.text("Invalid duration: ${args[1]} (e.g. 1d, 2h30m, 7d)", NamedTextColor.RED))
+            Msg.error(sender, "Invalid duration: ${args[1]} (e.g. 1d, 2h30m, 7d)")
             return true
         }
 
@@ -228,7 +229,7 @@ class TempmuteCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         val durationStr = PunishmentManager.formatDuration(durationMs)
         val msg = Component.text("${target.second} has been muted for $durationStr", NamedTextColor.RED)
             .let { if (reason != null) it.append(Component.text(" - $reason", NamedTextColor.GRAY)) else it }
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         // Notify target if online
@@ -258,23 +259,23 @@ class UnmuteCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.unmute")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty()) {
-            sender.sendMessage(Component.text("Usage: /unmute <player>", NamedTextColor.RED))
+            Msg.usage(sender, "/unmute <player>")
             return true
         }
 
         val target = resolveOfflinePlayer(args[0])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            Msg.playerNotFound(sender, args[0])
             return true
         }
 
         plugin.punishmentManager.unmute(target.first, sender.name, (sender as? Player)?.uniqueId)
         val msg = Component.text("${target.second} has been unmuted.", NamedTextColor.GREEN)
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         // Notify target if online
@@ -299,17 +300,17 @@ class WarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.warn")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty()) {
-            sender.sendMessage(Component.text("Usage: /warn <player> [reason]", NamedTextColor.RED))
+            Msg.usage(sender, "/warn <player> [reason]")
             return true
         }
 
         val target = resolveOfflinePlayer(args[0])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            Msg.playerNotFound(sender, args[0])
             return true
         }
 
@@ -323,7 +324,7 @@ class WarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         val msg = Component.text("${target.second} has been warned", NamedTextColor.YELLOW)
             .append(Component.text(" ($activeWarns active)", NamedTextColor.GRAY))
             .let { if (reason != null) it.append(Component.text(" - $reason", NamedTextColor.GRAY)) else it }
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         // Notify target if online
@@ -349,24 +350,24 @@ class UnwarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.unwarn")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty()) {
-            sender.sendMessage(Component.text("Usage: /unwarn <player> [id]", NamedTextColor.RED))
+            Msg.usage(sender, "/unwarn <player> [id]")
             return true
         }
 
         val target = resolveOfflinePlayer(args[0])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            Msg.playerNotFound(sender, args[0])
             return true
         }
 
         val warnId = if (args.size > 1) {
             val parsed = args[1].toIntOrNull()
             if (parsed == null) {
-                sender.sendMessage(Component.text("Invalid warning ID: ${args[1]}", NamedTextColor.RED))
+                Msg.error(sender, "Invalid warning ID: ${args[1]}")
                 return true
             }
             parsed
@@ -382,7 +383,7 @@ class UnwarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         val remaining = plugin.punishmentManager.getWarnings(target.first).count { it.active }
         val msg = Component.text("Warning removed from ${target.second}", NamedTextColor.GREEN)
             .append(Component.text(" ($remaining remaining)", NamedTextColor.GRAY))
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         // Notify target if online
@@ -407,17 +408,17 @@ class KickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.kick")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty()) {
-            sender.sendMessage(Component.text("Usage: /kick <player> [reason]", NamedTextColor.RED))
+            Msg.usage(sender, "/kick <player> [reason]")
             return true
         }
 
         val online = Bukkit.getPlayer(args[0])
         if (online == null) {
-            sender.sendMessage(Component.text("Player not online: ${args[0]}", NamedTextColor.RED))
+            Msg.error(sender, "Player not online: ${args[0]}")
             return true
         }
 
@@ -439,7 +440,7 @@ class KickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val msg = Component.text("${online.name} has been kicked", NamedTextColor.RED)
             .let { if (reason != null) it.append(Component.text(" - $reason", NamedTextColor.GRAY)) else it }
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         return true
@@ -458,17 +459,17 @@ class HistoryCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.history")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty()) {
-            sender.sendMessage(Component.text("Usage: /history <player>", NamedTextColor.RED))
+            Msg.usage(sender, "/history <player>")
             return true
         }
 
         val target = resolveOfflinePlayer(args[0])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            Msg.playerNotFound(sender, args[0])
             return true
         }
 

@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -16,17 +17,17 @@ class PlayerHomeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.phome")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.HOME)
+            Msg.noPermission(sender, CommunicationsManager.Category.HOME)
             return true
         }
 
         if (args.size < 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /phome <player> <home>", NamedTextColor.RED), CommunicationsManager.Category.HOME)
+            Msg.usage(sender, "/phome <player> <home>", CommunicationsManager.Category.HOME)
             return true
         }
 

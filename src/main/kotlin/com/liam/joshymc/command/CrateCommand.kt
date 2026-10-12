@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -40,7 +41,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
      */
     private fun handleForceOpen(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.crate.admin")) {
-            if (sender is Player) plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
         if (args.size < 2) {
@@ -76,11 +77,11 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
      */
     private fun handleDiagnose(sender: CommandSender) {
         if (!sender.hasPermission("joshymc.crate.admin")) {
-            if (sender is Player) plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
         val player = sender as? Player ?: run {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return
         }
 
@@ -144,7 +145,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
      */
     private fun handleLocations(sender: CommandSender) {
         if (!sender.hasPermission("joshymc.crate.admin")) {
-            if (sender is Player) plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
         val locations = plugin.crateManager.getAllLocations()
@@ -163,7 +164,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleSetLocation(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.crate.admin")) {
-            plugin.commsManager.send(sender as? Player ?: return, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 
@@ -173,7 +174,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /crate setlocation <type>", NamedTextColor.RED))
+            Msg.usage(player, "/crate setlocation <type>")
             return
         }
 
@@ -239,7 +240,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleRemoveLocation(sender: CommandSender) {
         if (!sender.hasPermission("joshymc.crate.admin")) {
-            plugin.commsManager.send(sender as? Player ?: return, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 
@@ -266,9 +267,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleGiveKey(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.crate.admin")) {
-            if (sender is Player) {
-                plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
-            }
+            Msg.noPermission(sender)
             return
         }
 
@@ -348,12 +347,12 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         if (!player.hasPermission("joshymc.crate.use")) {
-            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(player)
             return
         }
 
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /crate preview <type>", NamedTextColor.RED))
+            Msg.usage(player, "/crate preview <type>")
             return
         }
 

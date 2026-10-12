@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.claim.ClaimMainGui
 import com.liam.joshymc.gui.claim.ClaimSettingsGui
 import com.liam.joshymc.manager.ClaimManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -26,7 +27,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (sub == "addblocks" || sub == "setblocks") {
             if (sender is Player) {
                 if (!sender.hasPermission("joshymc.claim.admin")) {
-                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    Msg.noPermission(sender)
                     return true
                 }
             }
@@ -34,9 +35,9 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return true
         }
 
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.claim")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -141,7 +142,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     private fun handleTrust(player: Player, args: Array<out String>) {
         val targetName = args.getOrNull(1)
         if (targetName == null) {
-            plugin.commsManager.send(player, Component.text("Usage: /claim trust <player>", NamedTextColor.RED))
+            Msg.usage(player, "/claim trust <player>")
             return
         }
         val claim = plugin.claimManager.getClaimAt(player.location)
@@ -150,7 +151,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED)); return
         }
         val target = plugin.playerResolver.resolve(targetName)
-        if (target == null) { plugin.commsManager.send(player, Component.text("Player not found: $targetName", NamedTextColor.RED)); return }
+        if (target == null) { Msg.playerNotFound(player, targetName); return }
         if (plugin.claimManager.trustPlayer(claim, target.uniqueId)) {
             plugin.commsManager.send(player, Component.text("Trusted $targetName on this claim.", NamedTextColor.GREEN))
         } else {
@@ -161,7 +162,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     private fun handleUntrust(player: Player, args: Array<out String>) {
         val targetName = args.getOrNull(1)
         if (targetName == null) {
-            plugin.commsManager.send(player, Component.text("Usage: /claim untrust <player>", NamedTextColor.RED))
+            Msg.usage(player, "/claim untrust <player>")
             return
         }
         val claim = plugin.claimManager.getClaimAt(player.location)
@@ -170,7 +171,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED)); return
         }
         val target = plugin.playerResolver.resolve(targetName)
-        if (target == null) { plugin.commsManager.send(player, Component.text("Player not found: $targetName", NamedTextColor.RED)); return }
+        if (target == null) { Msg.playerNotFound(player, targetName); return }
         if (plugin.claimManager.untrustPlayer(claim, target.uniqueId)) {
             plugin.commsManager.send(player, Component.text("Untrusted $targetName from this claim.", NamedTextColor.GREEN))
         } else {
@@ -193,7 +194,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     private fun handleDeny(player: Player, args: Array<out String>) {
         val targetName = args.getOrNull(1)
         if (targetName == null) {
-            plugin.commsManager.send(player, Component.text("Usage: /claim deny <player>", NamedTextColor.RED))
+            Msg.usage(player, "/claim deny <player>")
             return
         }
         val claim = plugin.claimManager.getClaimAt(player.location)
@@ -202,7 +203,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED)); return
         }
         val target = plugin.playerResolver.resolve(targetName)
-        if (target == null) { plugin.commsManager.send(player, Component.text("Player not found: $targetName", NamedTextColor.RED)); return }
+        if (target == null) { Msg.playerNotFound(player, targetName); return }
         if (target.uniqueId == claim.ownerUuid) {
             plugin.commsManager.send(player, Component.text("You cannot deny the claim owner.", NamedTextColor.RED)); return
         }
@@ -222,7 +223,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     private fun handleUndeny(player: Player, args: Array<out String>) {
         val targetName = args.getOrNull(1)
         if (targetName == null) {
-            plugin.commsManager.send(player, Component.text("Usage: /claim undeny <player>", NamedTextColor.RED))
+            Msg.usage(player, "/claim undeny <player>")
             return
         }
         val claim = plugin.claimManager.getClaimAt(player.location)
@@ -231,7 +232,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED)); return
         }
         val target = plugin.playerResolver.resolve(targetName)
-        if (target == null) { plugin.commsManager.send(player, Component.text("Player not found: $targetName", NamedTextColor.RED)); return }
+        if (target == null) { Msg.playerNotFound(player, targetName); return }
         if (plugin.claimManager.undenyPlayer(claim, target.uniqueId)) {
             plugin.commsManager.send(player, Component.text("$targetName can now enter this claim.", NamedTextColor.GREEN))
         } else {
@@ -359,11 +360,11 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                     .append(Component.text(" total", NamedTextColor.GRAY))
             ); return
         }
-        if (!player.hasPermission("joshymc.claim.admin")) { plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED)); return }
+        if (!player.hasPermission("joshymc.claim.admin")) { Msg.noPermission(player); return }
         val targetName = args.getOrNull(2); val amount = args.getOrNull(3)?.toIntOrNull()
-        if (targetName == null || amount == null || amount <= 0) { plugin.commsManager.send(player, Component.text("Usage: /claim blocks give <player> <amount>", NamedTextColor.RED)); return }
+        if (targetName == null || amount == null || amount <= 0) { Msg.usage(player, "/claim blocks give <player> <amount>"); return }
         val target = plugin.playerResolver.resolve(targetName)
-        if (target == null) { plugin.commsManager.send(player, Component.text("Player not found: $targetName", NamedTextColor.RED)); return }
+        if (target == null) { Msg.playerNotFound(player, targetName); return }
         plugin.claimManager.addBlocks(target.uniqueId, amount)
         plugin.commsManager.send(player, Component.text("Gave $amount claim blocks to $targetName.", NamedTextColor.GREEN))
     }
@@ -402,7 +403,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
         val (direction, amount) = parseDirectionAmount(player, args, 1)
         if (direction == null || amount == null) {
-            plugin.commsManager.send(player, Component.text("Usage: /claim expand [north|south|east|west] <amount>", NamedTextColor.RED)); return
+            Msg.usage(player, "/claim expand [north|south|east|west] <amount>"); return
         }
         when (val result = plugin.claimManager.expandClaim(player, claim, direction, amount)) {
             is ClaimManager.ClaimResizeResult.Success -> {
@@ -427,7 +428,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
         val (direction, amount) = parseDirectionAmount(player, args, 1)
         if (direction == null || amount == null) {
-            plugin.commsManager.send(player, Component.text("Usage: /claim shrink [north|south|east|west] <amount>", NamedTextColor.RED)); return
+            Msg.usage(player, "/claim shrink [north|south|east|west] <amount>"); return
         }
         when (val result = plugin.claimManager.shrinkClaim(player, claim, direction, amount)) {
             is ClaimManager.ClaimResizeResult.Success -> {
@@ -457,7 +458,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
         val toggle = args.getOrNull(1)?.lowercase()
         if (toggle != "on" && toggle != "off") {
-            plugin.commsManager.send(player, Component.text("Usage: /claim pvp <on|off>", NamedTextColor.RED))
+            Msg.usage(player, "/claim pvp <on|off>")
             return
         }
         val enabled = toggle == "on"
@@ -482,7 +483,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
         val toggle = args.getOrNull(1)?.lowercase()
         if (toggle != "on" && toggle != "off") {
-            plugin.commsManager.send(player, Component.text("Usage: /claim tnt <on|off>", NamedTextColor.RED))
+            Msg.usage(player, "/claim tnt <on|off>")
             return
         }
         val enabled = toggle == "on"

@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.RankVoucherManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -23,7 +24,7 @@ class RankVoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.rankvoucher.admin")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -87,7 +88,7 @@ class RankVoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
     }
 
     private fun sendUsage(sender: CommandSender) {
-        sender.sendMessage(Component.text("Usage: /rankvoucher give <player> <rank> [quantity]", NamedTextColor.RED))
+        Msg.usage(sender, "/rankvoucher give <player> <rank> [quantity]")
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {

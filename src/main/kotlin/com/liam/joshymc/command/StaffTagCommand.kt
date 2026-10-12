@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.StaffTagManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -21,13 +22,13 @@ class StaffTagCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.stafftag.admin")) {
-            msg(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         val mgr = plugin.staffTagManager
         val sub = args.getOrNull(0)?.lowercase()
         if ((sub != "add" && sub != "remove") || args.size < 3) {
-            msg(sender, Component.text("Usage: /stafftag <add|remove> SOTM <player> [duration]", NamedTextColor.RED))
+            Msg.usage(sender, "/stafftag <add|remove> SOTM <player> [duration]")
             return true
         }
         if (!args[1].equals(StaffTagManager.SOTM, ignoreCase = true)) {

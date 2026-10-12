@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -18,12 +19,12 @@ class OrdersCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.orders")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -33,12 +34,12 @@ class OrdersCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleAdmin(sender: CommandSender, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.orders.admin")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /orders admin <view|info|cancel|remove|reload> ...", NamedTextColor.RED))
+            Msg.usage(sender, "/orders admin <view|info|cancel|remove|reload> ...")
             return true
         }
 
@@ -50,7 +51,7 @@ class OrdersCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
             "view" -> {
                 if (args.size < 3) {
-                    sender.sendMessage(Component.text("Usage: /orders admin view <player>", NamedTextColor.RED))
+                    Msg.usage(sender, "/orders admin view <player>")
                     return true
                 }
                 val target = Bukkit.getPlayer(args[2])
@@ -75,7 +76,7 @@ class OrdersCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             "info" -> {
                 val id = args.getOrNull(2)?.toIntOrNull()
                 if (id == null) {
-                    sender.sendMessage(Component.text("Usage: /orders admin info <id>", NamedTextColor.RED))
+                    Msg.usage(sender, "/orders admin info <id>")
                     return true
                 }
                 val order = plugin.orderManager.getOrderById(id)
@@ -94,7 +95,7 @@ class OrdersCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             "cancel", "remove" -> {
                 val id = args.getOrNull(2)?.toIntOrNull()
                 if (id == null) {
-                    sender.sendMessage(Component.text("Usage: /orders admin ${args[1].lowercase()} <id>", NamedTextColor.RED))
+                    Msg.usage(sender, "/orders admin ${args[1].lowercase()} <id>")
                     return true
                 }
                 val order = plugin.orderManager.adminForceCancel(sender.name, id)
@@ -107,7 +108,7 @@ class OrdersCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
                 )
             }
 
-            else -> sender.sendMessage(Component.text("Usage: /orders admin <view|info|cancel|remove|reload> ...", NamedTextColor.RED))
+            else -> Msg.usage(sender, "/orders admin <view|info|cancel|remove|reload> ...")
         }
 
         return true

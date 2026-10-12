@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -18,12 +19,12 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.holo")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return true
         }
 
@@ -53,7 +54,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleCreate(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /holo create <id> <line...>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/holo create <id> <line...>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -70,7 +71,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleDelete(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /holo delete <id>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/holo delete <id>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -86,7 +87,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleAddLine(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /holo addline <id> <text...>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/holo addline <id> <text...>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -103,7 +104,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleRemoveLine(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /holo removeline <id> <lineNumber>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/holo removeline <id> <lineNumber>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -125,7 +126,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleSetLine(player: Player, args: Array<out String>) {
         if (args.size < 4) {
-            plugin.commsManager.send(player, Component.text("Usage: /holo setline <id> <lineNumber> <text...>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/holo setline <id> <lineNumber> <text...>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -149,7 +150,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleMove(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /holo move <id>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/holo move <id>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -165,7 +166,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleCenter(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /holo center <id>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/holo center <id>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -220,7 +221,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleScale(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /holo scale <id> <size>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/holo scale <id> <size>", CommunicationsManager.Category.ADMIN)
             plugin.commsManager.send(player, Component.text("  e.g. /holo scale logo 2.5  (1.0 = normal, 0.5 = half, 3.0 = triple)", NamedTextColor.GRAY), CommunicationsManager.Category.ADMIN)
             return
         }
@@ -239,7 +240,7 @@ class HologramCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleRotation(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /holo rotation <id> <degrees|unlock>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/holo rotation <id> <degrees|unlock>", CommunicationsManager.Category.ADMIN)
             plugin.commsManager.send(player, Component.text("  Yaw degrees: 0=south, 90=west, 180=north, 270=east", NamedTextColor.GRAY), CommunicationsManager.Category.ADMIN)
             plugin.commsManager.send(player, Component.text("  Use 'unlock' to make it face the player again.", NamedTextColor.GRAY), CommunicationsManager.Category.ADMIN)
             return

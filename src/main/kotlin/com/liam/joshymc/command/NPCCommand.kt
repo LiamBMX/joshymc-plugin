@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -20,12 +21,12 @@ class NPCCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.npc")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return true
         }
 
@@ -50,7 +51,7 @@ class NPCCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleCreate(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /npc create <id> <name...>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/npc create <id> <name...>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -72,7 +73,7 @@ class NPCCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleDelete(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /npc delete <id>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/npc delete <id>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -86,7 +87,7 @@ class NPCCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleSetCommand(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /npc setcommand <id> <command...>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/npc setcommand <id> <command...>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -102,7 +103,7 @@ class NPCCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleSetName(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /npc setname <id> <name...>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/npc setname <id> <name...>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -118,7 +119,7 @@ class NPCCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleSetSkin(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /npc setskin <id> <playerName>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/npc setskin <id> <playerName>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -134,7 +135,7 @@ class NPCCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleMove(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /npc move <id>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/npc move <id>", CommunicationsManager.Category.ADMIN)
             return
         }
 

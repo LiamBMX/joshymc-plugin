@@ -176,6 +176,7 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 - **Kotlin only**, no Java files.
 - **Adventure API** for all text — never legacy `ChatColor`. Use `Component.text("...", NamedTextColor.X)` and `commsManager.parseLegacy("&7...")` when reading from config.
 - **Send messages via `commsManager.send(...)`** so the prefix and chat-color rules apply uniformly.
+- **Common command feedback goes through `util/Msg`** (issue #1124): `Msg.noPermission(sender)`, `Msg.playersOnly(sender)`, `Msg.usage(sender, "/cmd <required> [optional]")`, `Msg.playerNotFound(sender, name)`, `Msg.error`/`Msg.success`/`Msg.reply`. They take any `CommandSender` (prefixed for players, bare for console) and an optional `CommunicationsManager.Category`. Don't hand-write "No permission." / "Players only." / "Usage: ..." again.
 - **NamespacedKey-based PDC** for item identification.
 - Managers handle registration; `Joshymc.kt` only initializes them.
 - **Lore is simple and unified** via `LoreBuilder` (type, description, usage). Joshy doesn't want backstories or flavor text. The user has explicitly course-corrected on this.

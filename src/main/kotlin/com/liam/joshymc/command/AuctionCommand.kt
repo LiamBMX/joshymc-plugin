@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.AuctionManager
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -15,23 +16,23 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.ah")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.noPermission(sender)
             return true
         }
 
         if (args.isNotEmpty() && args[0].equals("sell", ignoreCase = true)) {
             if (!sender.hasPermission("joshymc.ah.sell")) {
-                plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                Msg.noPermission(sender)
                 return true
             }
 
             if (args.size < 2) {
-                plugin.commsManager.send(sender, Component.text("Usage: /ah sell <price> [money/credits]", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                Msg.usage(sender, "/ah sell <price> [money/credits]")
                 return true
             }
 
@@ -53,12 +54,12 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
         if (args.isNotEmpty() && args[0].equals("bid", ignoreCase = true)) {
             if (!sender.hasPermission("joshymc.ah.sell")) {
-                plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                Msg.noPermission(sender)
                 return true
             }
 
             if (args.size < 3) {
-                plugin.commsManager.send(sender, Component.text("Usage: /ah bid <starting price> <time>  (e.g. 5m, 30m, 1h, 2h)", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                Msg.usage(sender, "/ah bid <starting price> <time>  (e.g. 5m, 30m, 1h, 2h)")
                 return true
             }
 
@@ -88,7 +89,7 @@ class AuctionCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
         if (args.isNotEmpty() && args[0].equals("notify", ignoreCase = true)) {
             if (args.size < 2 || !args[1].equals("on", ignoreCase = true) && !args[1].equals("off", ignoreCase = true)) {
-                plugin.commsManager.send(sender, Component.text("Usage: /ah notify <on|off>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                Msg.usage(sender, "/ah notify <on|off>")
                 return true
             }
             plugin.auctionManager.setNotifications(sender, args[1].equals("on", ignoreCase = true))

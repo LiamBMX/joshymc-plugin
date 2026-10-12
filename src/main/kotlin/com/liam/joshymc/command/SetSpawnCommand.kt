@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -13,12 +14,12 @@ class SetSpawnCommand(private val plugin: Joshymc) : CommandExecutor {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.setspawn")) {
-            plugin.commsManager.send(sender, Component.text("You don't have permission to do that.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return true
         }
 

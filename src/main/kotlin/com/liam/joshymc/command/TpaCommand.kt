@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
@@ -73,20 +74,20 @@ class TpaCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.tpa")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
         if (args.isEmpty()) {
-            plugin.commsManager.send(sender, Component.text("Usage: /tpa <player>", NamedTextColor.RED))
+            Msg.usage(sender, "/tpa <player>")
             return true
         }
 
         val target = Bukkit.getPlayer(args[0])
         if (target == null || target == sender) {
-            plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender)
             return true
         }
 
@@ -145,20 +146,20 @@ class TpaCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 class TpaHereCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.tpa")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
         if (args.isEmpty()) {
-            plugin.commsManager.send(sender, Component.text("Usage: /tpahere <player>", NamedTextColor.RED))
+            Msg.usage(sender, "/tpahere <player>")
             return true
         }
 
         val target = Bukkit.getPlayer(args[0])
         if (target == null || target == sender) {
-            plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender)
             return true
         }
 
@@ -215,13 +216,13 @@ class TpaHereCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 class TpAcceptCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
 
         // Find the request to accept
         val request: TpaRequest? = if (args.isNotEmpty()) {
             val requester = Bukkit.getPlayer(args[0])
             if (requester == null) {
-                plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender)
                 return true
             }
             TpaRequests.getRequestFrom(sender.uniqueId, requester.uniqueId)
@@ -287,12 +288,12 @@ class TpAcceptCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 class TpDenyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
 
         val request: TpaRequest? = if (args.isNotEmpty()) {
             val requester = Bukkit.getPlayer(args[0])
             if (requester == null) {
-                plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender)
                 return true
             }
             TpaRequests.getRequestFrom(sender.uniqueId, requester.uniqueId)
@@ -334,7 +335,7 @@ class TpDenyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 class TpaCancelCommand(private val plugin: Joshymc) : CommandExecutor {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
 
         // Find and remove any outgoing request from this player
         var found = false

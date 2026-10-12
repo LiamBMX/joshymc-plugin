@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -33,7 +34,7 @@ class TokensCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleGive(sender: CommandSender, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.tokens.give")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.size < 3) {
@@ -78,7 +79,7 @@ class TokensCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return true
         }
         if (!sender.hasPermission("joshymc.tokens.sell")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.size < 2) {
@@ -119,7 +120,7 @@ class TokensCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return true
         }
         if (!sender.hasPermission("joshymc.tokens.buy")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.size < 2) {

@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -36,7 +37,7 @@ class ReportCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
@@ -50,12 +51,12 @@ class ReportCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleReport(player: Player, args: Array<out String>): Boolean {
         if (!player.hasPermission("joshymc.report")) {
-            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(player, CommunicationsManager.Category.ADMIN)
             return true
         }
 
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /report <player> <reason>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(player, "/report <player> <reason>", CommunicationsManager.Category.ADMIN)
             return true
         }
 
@@ -133,7 +134,7 @@ class ReportCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleReports(player: Player, args: Array<out String>): Boolean {
         if (!player.hasPermission("joshymc.reports.view")) {
-            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(player, CommunicationsManager.Category.ADMIN)
             return true
         }
 

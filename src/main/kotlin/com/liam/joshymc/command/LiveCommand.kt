@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
@@ -21,13 +22,13 @@ class LiveCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.live")) {
-            sender.sendMessage(Component.text("You do not have permission to use this command.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
         val platform = args.getOrNull(0)?.let { arg -> Platform.entries.find { it.name.equals(arg, ignoreCase = true) } }
         if (args.size != 1 || platform == null) {
-            sender.sendMessage(Component.text("Usage: /live <tiktok/twitch>", NamedTextColor.RED))
+            Msg.usage(sender, "/live <tiktok/twitch>")
             return true
         }
 

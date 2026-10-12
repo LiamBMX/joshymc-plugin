@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -37,9 +38,9 @@ class BackCommand(private val plugin: Joshymc) : CommandExecutor {
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.back")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -86,7 +87,7 @@ class GamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
                 // /gamemode <mode> [player]
                 val modeArg = args.getOrNull(0)?.lowercase()
                 parseGameMode(modeArg) ?: run {
-                    sender.sendMessage(Component.text("Usage: /gamemode <c|s|a|sp> [player]", NamedTextColor.RED))
+                    Msg.usage(sender, "/gamemode <c|s|a|sp> [player]")
                     return true
                 }
             }
@@ -100,7 +101,7 @@ class GamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             else -> "joshymc.gamemode"
         }
         if (!sender.hasPermission(requiredPermission)) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -112,17 +113,17 @@ class GamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
         val target: Player = if (targetName != null) {
             if (!sender.hasPermission("joshymc.gamemode.others")) {
-                sender.sendMessage(Component.text("No permission to change others' gamemode.", NamedTextColor.RED))
+                Msg.noPermission(sender)
                 return true
             }
             Bukkit.getPlayer(targetName) ?: run {
-                sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender)
                 return true
             }
         } else if (sender is Player) {
             sender
         } else {
-            sender.sendMessage(Component.text("Specify a player.", NamedTextColor.RED))
+            Msg.error(sender, "Specify a player.")
             return true
         }
 
@@ -172,23 +173,23 @@ class GamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.fly")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
         val target = if (args.isNotEmpty()) {
             Bukkit.getPlayer(args[0]) ?: run {
-                sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender)
                 return true
             }
         } else if (sender is Player) sender else {
-            sender.sendMessage(Component.text("Specify a player.", NamedTextColor.RED))
+            Msg.error(sender, "Specify a player.")
             return true
         }
 
         val targetingOther = target != sender
         if (targetingOther && !sender.hasPermission("joshymc.fly.others")) {
-            sender.sendMessage(Component.text("You don't have permission to toggle flight for other players.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -263,7 +264,7 @@ class HealCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.heal")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -338,7 +339,7 @@ class FeedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.feed")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -384,7 +385,7 @@ class GodCommand(private val plugin: Joshymc) : CommandExecutor, Listener, TabCo
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.god")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -427,15 +428,15 @@ class GodCommand(private val plugin: Joshymc) : CommandExecutor, Listener, TabCo
 
 class SpeedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.speed")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
         val speedVal = args.getOrNull(0)?.toFloatOrNull()
         if (speedVal == null || speedVal < 0 || speedVal > 10) {
-            plugin.commsManager.send(sender, Component.text("Usage: /speed <0-10> [fly|walk]", NamedTextColor.RED))
+            Msg.usage(sender, "/speed <0-10> [fly|walk]")
             return true
         }
 
@@ -479,9 +480,9 @@ class SpeedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
 class TpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.tp")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -489,7 +490,7 @@ class TpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             1 -> {
                 // /tp <player>
                 val target = Bukkit.getPlayer(args[0]) ?: run {
-                    plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+                    Msg.playerNotFound(sender)
                     return true
                 }
                 BackCommand.lastLocations[sender.uniqueId] = sender.location
@@ -499,13 +500,13 @@ class TpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             2 -> {
                 // /tp <player1> <player2>
                 if (!sender.hasPermission("joshymc.tp.others")) {
-                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    Msg.noPermission(sender)
                     return true
                 }
                 val p1 = Bukkit.getPlayer(args[0])
                 val p2 = Bukkit.getPlayer(args[1])
                 if (p1 == null || p2 == null) {
-                    plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+                    Msg.playerNotFound(sender)
                     return true
                 }
                 BackCommand.lastLocations[p1.uniqueId] = p1.location
@@ -526,7 +527,7 @@ class TpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 plugin.commsManager.send(sender, Component.text("Teleported to ${"%.0f".format(x)}, ${"%.0f".format(y)}, ${"%.0f".format(z)}.", NamedTextColor.GREEN))
             }
             else -> {
-                plugin.commsManager.send(sender, Component.text("Usage: /tp <player> | /tp <x> <y> <z>", NamedTextColor.RED))
+                Msg.usage(sender, "/tp <player> | /tp <x> <y> <z>")
             }
         }
         return true
@@ -546,17 +547,17 @@ class TpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
 class TpHereCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.tphere")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty()) {
-            plugin.commsManager.send(sender, Component.text("Usage: /tphere <player>", NamedTextColor.RED))
+            Msg.usage(sender, "/tphere <player>")
             return true
         }
         val target = Bukkit.getPlayer(args[0]) ?: run {
-            plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender)
             return true
         }
         BackCommand.lastLocations[target.uniqueId] = target.location
@@ -578,13 +579,13 @@ class TpHereCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
 class InvseeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.invsee")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty()) {
-            plugin.commsManager.send(sender, Component.text("Usage: /invsee <player>", NamedTextColor.RED))
+            Msg.usage(sender, "/invsee <player>")
             return true
         }
         val online = Bukkit.getPlayer(args[0])
@@ -594,7 +595,7 @@ class InvseeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
         val offline = plugin.playerResolver.resolve(args[0])
         if (offline == null || !offline.hasPlayedBefore()) {
-            plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender)
             return true
         }
         plugin.adminManager.openOfflineInvsee(sender, offline.uniqueId, offline.name ?: args[0])
@@ -613,15 +614,15 @@ class InvseeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
 class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.enderchest")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
         if (args.size >= 2 && args[1].equals("clear", ignoreCase = true)) {
             if (!sender.hasPermission("joshymc.enderchest.clear")) {
-                plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                Msg.noPermission(sender)
                 return true
             }
             val online = Bukkit.getPlayer(args[0])
@@ -629,7 +630,7 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             val targetUuid = online?.uniqueId ?: offline?.uniqueId
             val targetName = online?.name ?: offline?.name
             if (targetUuid == null || targetName == null) {
-                plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender)
                 return true
             }
 
@@ -648,7 +649,7 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             }
             val offline = plugin.playerResolver.resolve(args[0])
             if (offline == null || !offline.hasPlayedBefore()) {
-                plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender)
                 return true
             }
             plugin.adminManager.openOfflineEnderchest(sender, offline.uniqueId, offline.name ?: args[0])
@@ -674,9 +675,9 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
 class HatCommand(private val plugin: Joshymc) : CommandExecutor {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.hat")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         val item = sender.inventory.itemInMainHand
@@ -698,9 +699,9 @@ class HatCommand(private val plugin: Joshymc) : CommandExecutor {
 
 class CraftCommand(private val plugin: Joshymc) : CommandExecutor {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.craft")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         sender.openWorkbench(null, true)
@@ -714,9 +715,9 @@ class CraftCommand(private val plugin: Joshymc) : CommandExecutor {
 
 class AnvilCommand(private val plugin: Joshymc) : CommandExecutor {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.anvil")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         sender.openAnvil(null, true)
@@ -730,9 +731,9 @@ class AnvilCommand(private val plugin: Joshymc) : CommandExecutor {
 
 class SmithingCommand(private val plugin: Joshymc) : CommandExecutor {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.smithing")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         // Bukkit doesn't expose openSmithingTable directly; use the inventory
@@ -751,9 +752,9 @@ class SmithingCommand(private val plugin: Joshymc) : CommandExecutor {
 
 class StonecutterCommand(private val plugin: Joshymc) : CommandExecutor {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.stonecutter")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         // Bukkit doesn't expose openStonecutter directly; use the inventory
@@ -777,7 +778,7 @@ class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
 
         // Combat-tagged players can't use /repair to fix gear mid-fight.
         if (plugin.combatManager.isTagged(sender)) {
@@ -789,7 +790,7 @@ class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         when (mode) {
             "hand" -> {
                 if (!sender.hasPermission("joshymc.repair.hand")) {
-                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    Msg.noPermission(sender)
                     return true
                 }
                 val balance = plugin.economyManager.getBalance(sender.uniqueId)
@@ -808,7 +809,7 @@ class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             }
             "all" -> {
                 if (!sender.hasPermission("joshymc.repair.all")) {
-                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    Msg.noPermission(sender)
                     return true
                 }
                 val balance = plugin.economyManager.getBalance(sender.uniqueId)
@@ -833,7 +834,7 @@ class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
                 }
             }
             else -> {
-                plugin.commsManager.send(sender, Component.text("Usage: /repair [hand|all]", NamedTextColor.RED))
+                Msg.usage(sender, "/repair [hand|all]")
             }
         }
         return true
@@ -863,18 +864,18 @@ class RepairCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 class SmiteCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.smite")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty()) {
             // Strike at sender's crosshair
-            if (sender !is Player) { sender.sendMessage("Specify a player."); return true }
+            if (sender !is Player) { Msg.error(sender, "Specify a player."); return true }
             val target = sender.getTargetBlockExact(100)
             if (target != null) sender.world.strikeLightning(target.location)
             return true
         }
         val target = Bukkit.getPlayer(args[0]) ?: run {
-            sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender)
             return true
         }
         target.world.strikeLightning(target.location)
@@ -894,9 +895,9 @@ class SmiteCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
 class TopCommand(private val plugin: Joshymc) : CommandExecutor {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.top")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (TeleportChecks.checkAndApply(sender, plugin)) return true
@@ -915,15 +916,15 @@ class TopCommand(private val plugin: Joshymc) : CommandExecutor {
 class SudoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.sudo")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /sudo <player> <command...>", NamedTextColor.RED))
+            Msg.usage(sender, "/sudo <player> <command...>")
             return true
         }
         val target = Bukkit.getPlayer(args[0]) ?: run {
-            sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender)
             return true
         }
         val cmd = args.drop(1).joinToString(" ")
@@ -949,13 +950,13 @@ class MsgCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (args.size < 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /msg <player> <message>", NamedTextColor.RED))
+            Msg.usage(sender, "/msg <player> <message>")
             return true
         }
         val target = Bukkit.getPlayer(args[0]) ?: run {
-            plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender)
             return true
         }
         if (IgnoreCommand.isIgnoring(target.uniqueId, sender.uniqueId)) {
@@ -982,9 +983,9 @@ class MsgCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
 class ReplyCommand(private val plugin: Joshymc) : CommandExecutor {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (args.isEmpty()) {
-            plugin.commsManager.send(sender, Component.text("Usage: /r <message>", NamedTextColor.RED))
+            Msg.usage(sender, "/r <message>")
             return true
         }
         val targetUuid = MsgCommand.lastMessaged[sender.uniqueId]
@@ -1136,9 +1137,9 @@ class TrashCommand(private val plugin: Joshymc) : CommandExecutor, Listener {
     private val trashTitle: Component by lazy { plugin.commsManager.parseLegacy(TRASH_TITLE) }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.trash")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -1172,13 +1173,13 @@ private fun formatRemaining(ms: Long): String {
 private fun resolveTarget(sender: CommandSender, args: Array<out String>): Player? {
     return if (args.isNotEmpty()) {
         Bukkit.getPlayer(args[0]) ?: run {
-            sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender)
             null
         }
     } else if (sender is Player) {
         sender
     } else {
-        sender.sendMessage(Component.text("Specify a player.", NamedTextColor.RED))
+        Msg.error(sender, "Specify a player.")
         null
     }
 }

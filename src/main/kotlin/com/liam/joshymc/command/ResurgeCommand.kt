@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
@@ -17,12 +18,12 @@ class ResurgeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.resurge")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -57,10 +58,14 @@ class ResurgeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         plugin.commsManager.send(player, Component.text("  • Quest difficulty +20% per Resurge", NamedTextColor.RED))
         plugin.commsManager.send(player, Component.text(" ", NamedTextColor.GRAY))
         plugin.commsManager.send(player, Component.text("─── Commands ───", TextColor.color(0xFFAA00)))
-        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  §e/resurge §7— check your status & requirements"))
-        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  §e/resurge confirm §7— confirm & perform the Resurge"))
-        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  §e/resurge top §7— view the leaderboard"))
+        plugin.commsManager.send(player, helpLine("/resurge", "check your status & requirements"))
+        plugin.commsManager.send(player, helpLine("/resurge confirm", "confirm & perform the Resurge"))
+        plugin.commsManager.send(player, helpLine("/resurge top", "view the leaderboard"))
     }
+
+    private fun helpLine(command: String, description: String): Component =
+        Component.text("  $command", NamedTextColor.YELLOW)
+            .append(Component.text(" — $description", NamedTextColor.GRAY))
 
     private fun showBalance(player: Player) {
         val count = plugin.resurgeManager.getCount(player.uniqueId)
@@ -80,13 +85,19 @@ class ResurgeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return
         }
         top.forEachIndexed { i, (name, count) ->
-            val medal = when (i) {
-                0 -> "§6#1 "
-                1 -> "§7#2 "
-                2 -> "§c#3 "
-                else -> "§8#${i + 1} "
+            val medalColor = when (i) {
+                0 -> NamedTextColor.GOLD
+                1 -> NamedTextColor.GRAY
+                2 -> NamedTextColor.RED
+                else -> NamedTextColor.DARK_GRAY
             }
-            plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  ${medal}§f$name §7— §6$count Resurges"))
+            plugin.commsManager.send(
+                player,
+                Component.text("  #${i + 1} ", medalColor)
+                    .append(Component.text(name, NamedTextColor.WHITE))
+                    .append(Component.text(" — ", NamedTextColor.GRAY))
+                    .append(Component.text("$count Resurges", NamedTextColor.GOLD))
+            )
         }
     }
 

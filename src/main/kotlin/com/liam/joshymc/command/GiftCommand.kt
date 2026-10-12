@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -14,12 +15,12 @@ class GiftCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.gift")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -31,7 +32,7 @@ class GiftCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         when (args.getOrNull(0)?.lowercase()) {
             "mailbox" -> {
                 if (!sender.hasPermission("joshymc.gift.mailbox")) {
-                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    Msg.noPermission(sender)
                     return true
                 }
                 plugin.giftManager.openMailboxGui(sender)
@@ -39,12 +40,12 @@ class GiftCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "sent" -> plugin.giftManager.openSentGui(sender)
             "send" -> {
                 if (!sender.hasPermission("joshymc.gift.send")) {
-                    plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                    Msg.noPermission(sender)
                     return true
                 }
                 val name = args.getOrNull(1)
                 if (name == null) {
-                    plugin.commsManager.send(sender, Component.text("Usage: /gift send <player>", NamedTextColor.RED))
+                    Msg.usage(sender, "/gift send <player>")
                     return true
                 }
                 val target = plugin.giftManager.resolveKnownPlayer(name)

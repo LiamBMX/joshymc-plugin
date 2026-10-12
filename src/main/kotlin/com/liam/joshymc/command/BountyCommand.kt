@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.bounty.BountyListGui
 import com.liam.joshymc.gui.bounty.BountyMainGui
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -17,12 +18,12 @@ class BountyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.bounty")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.noPermission(sender)
             return true
         }
 
@@ -57,13 +58,13 @@ class BountyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleSet(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /bounty set <player> <amount>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/bounty set <player> <amount>")
             return
         }
 
         val target = Bukkit.getPlayer(args[1])
         if (target == null) {
-            plugin.commsManager.send(player, Component.text("Player not found.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.playerNotFound(player)
             return
         }
 
@@ -96,12 +97,12 @@ class BountyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleCancel(player: Player, args: Array<out String>) {
         if (!player.hasPermission("joshymc.bounty.cancel")) {
-            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.noPermission(player)
             return
         }
 
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /bounty cancel <id>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/bounty cancel <id>")
             return
         }
 

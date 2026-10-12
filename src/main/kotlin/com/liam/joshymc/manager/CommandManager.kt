@@ -640,9 +640,9 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Resource World ──────────────────────────────
         plugin.getCommand("resource")?.setExecutor(object : org.bukkit.command.CommandExecutor {
             override fun onCommand(sender: org.bukkit.command.CommandSender, cmd: org.bukkit.command.Command, label: String, args: Array<out String>): Boolean {
-                if (sender !is org.bukkit.entity.Player) { sender.sendMessage("Players only."); return true }
+                if (sender !is org.bukkit.entity.Player) { com.liam.joshymc.util.Msg.playersOnly(sender); return true }
                 if (!sender.hasPermission("joshymc.resource")) {
-                    plugin.commsManager.send(sender, net.kyori.adventure.text.Component.text("No permission.", net.kyori.adventure.text.format.NamedTextColor.RED))
+                    com.liam.joshymc.util.Msg.noPermission(sender)
                     return true
                 }
                 plugin.resourceWorldManager.teleportToResource(sender)

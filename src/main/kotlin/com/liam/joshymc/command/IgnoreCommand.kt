@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -54,12 +55,12 @@ class IgnoreCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (args.isEmpty()) {
-            plugin.commsManager.send(sender, Component.text("Usage: /ignore <player> | /ignore list", NamedTextColor.RED))
+            Msg.usage(sender, "/ignore <player> | /ignore list")
             return true
         }
 
@@ -79,7 +80,7 @@ class IgnoreCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
         val targetName = args[0]
         val target = Bukkit.getPlayer(targetName) ?: run {
-            plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender)
             return true
         }
 

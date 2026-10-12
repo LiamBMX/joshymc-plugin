@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Material
@@ -15,7 +16,7 @@ class HopperPlusCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
@@ -36,7 +37,7 @@ class HopperPlusCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleFilter(player: Player, args: Array<out String>) {
         if (!player.hasPermission("joshymc.hopper.upgrade")) {
-            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.noPermission(player)
             return
         }
 
@@ -85,7 +86,7 @@ class HopperPlusCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleInfo(player: Player) {
         if (!player.hasPermission("joshymc.hopper")) {
-            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.noPermission(player)
             return
         }
 
@@ -131,7 +132,7 @@ class HopperPlusCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleReset(player: Player) {
         if (!player.hasPermission("joshymc.hopper.admin")) {
-            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.noPermission(player)
             return
         }
 

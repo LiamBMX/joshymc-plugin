@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.ChatTagManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -25,7 +26,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.vouchers")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -74,7 +75,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         if (price <= 0) {
-            sender.sendMessage(Component.text("Invalid price.", NamedTextColor.RED))
+            Msg.error(sender, "Invalid price.")
             return
         }
         if (args.size < 5) {
@@ -86,7 +87,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
         val voucher = plugin.voucherManager.createVoucher(id, price, category, rewardCommand)
         if (voucher == null) {
-            sender.sendMessage(Component.text("A voucher with id '$id' already exists.", NamedTextColor.RED))
+            Msg.error(sender, "A voucher with id '$id' already exists.")
             return
         }
 
@@ -108,7 +109,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
         val tag = plugin.chatTagManager.createVoucherTag(id, display)
         if (tag == null) {
-            sender.sendMessage(Component.text("Could not create Chat Tag voucher '$id' — the id is invalid or already in use.", NamedTextColor.RED))
+            Msg.error(sender, "Could not create Chat Tag voucher '$id' — the id is invalid or already in use.")
             return
         }
 
@@ -123,20 +124,20 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     }
 
     private fun sendCreateUsage(sender: CommandSender) {
-        sender.sendMessage(Component.text("Usage: /voucher create <id> <price> <category> <rewardCommand...>", NamedTextColor.RED))
-        sender.sendMessage(Component.text("   or: /voucher create <id> <chat tag display...> (e.g. &5[Haunted])", NamedTextColor.RED))
+        Msg.usage(sender, "/voucher create <id> <price> <category> <rewardCommand...>")
+        Msg.error(sender, "   or: /voucher create <id> <chat tag display...> (e.g. &5[Haunted])")
     }
 
     private fun handleDelete(sender: CommandSender, args: Array<out String>) {
         val id = args.getOrNull(1)?.lowercase()
         if (id == null) {
-            sender.sendMessage(Component.text("Usage: /voucher delete <id>", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher delete <id>")
             return
         }
         if (plugin.voucherManager.deleteVoucher(id)) {
-            sender.sendMessage(Component.text("Deleted voucher $id.", NamedTextColor.GREEN))
+            Msg.success(sender, "Deleted voucher $id.")
         } else {
-            sender.sendMessage(Component.text("No voucher found with id $id.", NamedTextColor.RED))
+            Msg.error(sender, "No voucher found with id $id.")
         }
     }
 
@@ -144,7 +145,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         when (args.getOrNull(1)?.lowercase()) {
             "delete" -> handleTagDelete(sender, args)
             "debug" -> handleTagDebug(sender, args)
-            else -> sender.sendMessage(Component.text("Usage: /voucher tag <delete|debug> <name>", NamedTextColor.RED))
+            else -> Msg.usage(sender, "/voucher tag <delete|debug> <name>")
         }
     }
 
@@ -158,19 +159,19 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     private fun handleTagDebug(sender: CommandSender, args: Array<out String>) {
         val id = args.getOrNull(2)?.lowercase()
         if (id == null) {
-            sender.sendMessage(Component.text("Usage: /voucher tag debug <name> [player]", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher tag debug <name> [player]")
             return
         }
 
         val target: Player? = args.getOrNull(3)?.let { Bukkit.getPlayerExact(it) } ?: (sender as? Player)
         if (target == null) {
-            sender.sendMessage(Component.text("Usage: /voucher tag debug <name> <player> (console must specify a player).", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher tag debug <name> <player> (console must specify a player).")
             return
         }
 
         val tag = plugin.chatTagManager.getTag(id)
         if (tag == null) {
-            sender.sendMessage(Component.text("No Chat Tag with id '$id' is currently loaded.", NamedTextColor.RED))
+            Msg.error(sender, "No Chat Tag with id '$id' is currently loaded.")
             return
         }
 
@@ -195,17 +196,17 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     private fun handleTagDelete(sender: CommandSender, args: Array<out String>) {
         val id = args.getOrNull(2)?.lowercase()
         if (id == null) {
-            sender.sendMessage(Component.text("Usage: /voucher tag delete <name>", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher tag delete <name>")
             return
         }
 
         val tag = plugin.chatTagManager.getTag(id)
         if (tag == null) {
-            sender.sendMessage(Component.text("Custom Chat Tag '$id' does not exist.", NamedTextColor.RED))
+            Msg.error(sender, "Custom Chat Tag '$id' does not exist.")
             return
         }
         if (!plugin.chatTagManager.isVoucherTag(tag)) {
-            sender.sendMessage(Component.text("That Chat Tag cannot be deleted with this command.", NamedTextColor.RED))
+            Msg.error(sender, "That Chat Tag cannot be deleted with this command.")
             return
         }
 
@@ -224,52 +225,52 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
         when (plugin.chatTagManager.deleteVoucherTag(id)) {
             ChatTagManager.DeleteVoucherTagResult.DELETED ->
-                sender.sendMessage(Component.text("Deleted custom Chat Tag '$id' and its voucher.", NamedTextColor.GREEN))
+                Msg.success(sender, "Deleted custom Chat Tag '$id' and its voucher.")
             ChatTagManager.DeleteVoucherTagResult.NOT_VOUCHER_TAG ->
-                sender.sendMessage(Component.text("That Chat Tag cannot be deleted with this command.", NamedTextColor.RED))
+                Msg.error(sender, "That Chat Tag cannot be deleted with this command.")
             ChatTagManager.DeleteVoucherTagResult.NOT_FOUND ->
-                sender.sendMessage(Component.text("Custom Chat Tag '$id' does not exist.", NamedTextColor.RED))
+                Msg.error(sender, "Custom Chat Tag '$id' does not exist.")
         }
     }
 
     private fun handleSetEnabled(sender: CommandSender, args: Array<out String>, enabled: Boolean) {
         val id = args.getOrNull(1)?.lowercase()
         if (id == null) {
-            sender.sendMessage(Component.text("Usage: /voucher ${args[0].lowercase()} <id>", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher ${args[0].lowercase()} <id>")
             return
         }
         if (plugin.voucherManager.setEnabled(id, enabled)) {
-            sender.sendMessage(Component.text("Voucher $id is now ${if (enabled) "enabled" else "disabled"}.", NamedTextColor.GREEN))
+            Msg.success(sender, "Voucher $id is now ${if (enabled) "enabled" else "disabled"}.")
         } else {
-            sender.sendMessage(Component.text("No voucher found with id $id.", NamedTextColor.RED))
+            Msg.error(sender, "No voucher found with id $id.")
         }
     }
 
     private fun handleSetName(sender: CommandSender, args: Array<out String>) {
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /voucher setname <id> <name...>", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher setname <id> <name...>")
             return
         }
         val id = args[1].lowercase()
         val name = args.drop(2).joinToString(" ")
         if (plugin.voucherManager.setName(id, name)) {
-            sender.sendMessage(Component.text("Updated display name for $id.", NamedTextColor.GREEN))
+            Msg.success(sender, "Updated display name for $id.")
         } else {
-            sender.sendMessage(Component.text("No voucher found with id $id.", NamedTextColor.RED))
+            Msg.error(sender, "No voucher found with id $id.")
         }
     }
 
     private fun handleSetCategory(sender: CommandSender, args: Array<out String>) {
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /voucher setcategory <id> <category...>", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher setcategory <id> <category...>")
             return
         }
         val id = args[1].lowercase()
         val category = args.drop(2).joinToString(" ")
         if (plugin.voucherManager.setCategory(id, category)) {
-            sender.sendMessage(Component.text("Moved $id to $category.", NamedTextColor.GREEN))
+            Msg.success(sender, "Moved $id to $category.")
         } else {
-            sender.sendMessage(Component.text("No voucher found with id $id.", NamedTextColor.RED))
+            Msg.error(sender, "No voucher found with id $id.")
         }
     }
 
@@ -277,13 +278,13 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val id = args.getOrNull(1)?.lowercase()
         val price = args.getOrNull(2)?.toDoubleOrNull()
         if (id == null || price == null || price <= 0) {
-            sender.sendMessage(Component.text("Usage: /voucher setprice <id> <price>", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher setprice <id> <price>")
             return
         }
         if (plugin.voucherManager.setPrice(id, price)) {
-            sender.sendMessage(Component.text("Updated price for $id to ${plugin.creditsManager.format(price)} credits.", NamedTextColor.GREEN))
+            Msg.success(sender, "Updated price for $id to ${plugin.creditsManager.format(price)} credits.")
         } else {
-            sender.sendMessage(Component.text("No voucher found with id $id.", NamedTextColor.RED))
+            Msg.error(sender, "No voucher found with id $id.")
         }
     }
 
@@ -291,17 +292,17 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val id = args.getOrNull(1)?.lowercase()
         val rankArg = args.getOrNull(2)?.lowercase()
         if (id == null || rankArg == null) {
-            sender.sendMessage(Component.text("Usage: /voucher setrank <id> <rankId|none>", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher setrank <id> <rankId|none>")
             return
         }
         if (plugin.voucherManager.getVoucher(id) == null) {
-            sender.sendMessage(Component.text("No voucher found with id $id.", NamedTextColor.RED))
+            Msg.error(sender, "No voucher found with id $id.")
             return
         }
 
         val rankId = if (rankArg == "none") null else rankArg
         if (rankId != null && plugin.rankManager.getRank(rankId) == null) {
-            sender.sendMessage(Component.text("Unknown rank: $rankId. Use /rank list to see available ranks.", NamedTextColor.RED))
+            Msg.error(sender, "Unknown rank: $rankId. Use /rank list to see available ranks.")
             return
         }
 
@@ -314,51 +315,51 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     private fun handleSetCommand(sender: CommandSender, args: Array<out String>) {
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /voucher setcommand <id> <command...>", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher setcommand <id> <command...>")
             return
         }
         val id = args[1].lowercase()
         val rewardCommand = args.drop(2).joinToString(" ")
         if (plugin.voucherManager.setRewardCommand(id, rewardCommand)) {
-            sender.sendMessage(Component.text("Updated reward command for $id.", NamedTextColor.GREEN))
+            Msg.success(sender, "Updated reward command for $id.")
         } else {
-            sender.sendMessage(Component.text("No voucher found with id $id.", NamedTextColor.RED))
+            Msg.error(sender, "No voucher found with id $id.")
         }
     }
 
     private fun handleSetDescription(sender: CommandSender, args: Array<out String>) {
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /voucher setdescription <id> <description...>", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher setdescription <id> <description...>")
             return
         }
         val id = args[1].lowercase()
         val description = args.drop(2).joinToString(" ")
         if (plugin.voucherManager.setDescription(id, description)) {
-            sender.sendMessage(Component.text("Updated description for $id.", NamedTextColor.GREEN))
+            Msg.success(sender, "Updated description for $id.")
         } else {
-            sender.sendMessage(Component.text("No voucher found with id $id.", NamedTextColor.RED))
+            Msg.error(sender, "No voucher found with id $id.")
         }
     }
 
     private fun handleSetIcon(sender: CommandSender, args: Array<out String>) {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only (hold the icon item).", NamedTextColor.RED))
+            Msg.error(sender, "Players only (hold the icon item).")
             return
         }
         val id = args.getOrNull(1)?.lowercase()
         if (id == null) {
-            sender.sendMessage(Component.text("Usage: /voucher seticon <id> (hold the item)", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher seticon <id> (hold the item)")
             return
         }
         val held = sender.inventory.itemInMainHand
         if (held.type == Material.AIR) {
-            sender.sendMessage(Component.text("Hold the item you want to use as the icon.", NamedTextColor.RED))
+            Msg.error(sender, "Hold the item you want to use as the icon.")
             return
         }
         if (plugin.voucherManager.setIcon(id, held.type)) {
-            sender.sendMessage(Component.text("Updated icon for $id to ${held.type.name}.", NamedTextColor.GREEN))
+            Msg.success(sender, "Updated icon for $id to ${held.type.name}.")
         } else {
-            sender.sendMessage(Component.text("No voucher found with id $id.", NamedTextColor.RED))
+            Msg.error(sender, "No voucher found with id $id.")
         }
     }
 
@@ -371,7 +372,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         if (vouchers.isEmpty()) {
-            sender.sendMessage(Component.text("No vouchers found.", NamedTextColor.RED))
+            Msg.error(sender, "No vouchers found.")
             return
         }
 
@@ -389,7 +390,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val id = args.getOrNull(1)?.lowercase()
         val voucher = id?.let { plugin.voucherManager.getVoucher(it) }
         if (voucher == null) {
-            sender.sendMessage(Component.text("Usage: /voucher info <id>", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher info <id>")
             return
         }
 
@@ -407,19 +408,19 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val targetName = args.getOrNull(1)
         val voucherId = args.getOrNull(2)?.lowercase()
         if (targetName == null || voucherId == null) {
-            sender.sendMessage(Component.text("Usage: /voucher give <player> <voucher-id> [amount]", NamedTextColor.RED))
+            Msg.usage(sender, "/voucher give <player> <voucher-id> [amount]")
             return
         }
 
         val target = Bukkit.getPlayerExact(targetName)
         if (target == null) {
-            sender.sendMessage(Component.text("Player '$targetName' is not online.", NamedTextColor.RED))
+            Msg.error(sender, "Player '$targetName' is not online.")
             return
         }
 
         val amount = args.getOrNull(3)?.toIntOrNull() ?: 1
         if (amount <= 0) {
-            sender.sendMessage(Component.text("Amount must be a positive number.", NamedTextColor.RED))
+            Msg.error(sender, "Amount must be a positive number.")
             return
         }
 
@@ -430,7 +431,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
         val voucher = plugin.physicalVoucherManager.getVoucher(voucherId)
         if (voucher == null) {
-            sender.sendMessage(Component.text("No physical voucher found with id $voucherId.", NamedTextColor.RED))
+            Msg.error(sender, "No physical voucher found with id $voucherId.")
             return
         }
 
@@ -458,7 +459,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     private fun handleGiveChatTagVoucher(sender: CommandSender, target: Player, tagId: String, amount: Int) {
         val tag = plugin.chatTagManager.getVoucherTag(tagId)
         if (tag == null) {
-            sender.sendMessage(Component.text("No Chat Tag voucher found with id $CHAT_TAG_VOUCHER_PREFIX$tagId.", NamedTextColor.RED))
+            Msg.error(sender, "No Chat Tag voucher found with id $CHAT_TAG_VOUCHER_PREFIX$tagId.")
             return
         }
 
@@ -487,12 +488,12 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         // Voucher data is read live from the database on every access — there is
         // no in-memory cache to reload, so this just confirms the current state.
         val count = plugin.voucherManager.getAllVouchers().size
-        sender.sendMessage(Component.text("Vouchers are loaded live from the database. $count voucher(s) currently configured.", NamedTextColor.GREEN))
+        Msg.success(sender, "Vouchers are loaded live from the database. $count voucher(s) currently configured.")
     }
 
     private fun sendUsage(sender: CommandSender) {
-        sender.sendMessage(Component.text("Usage: /voucher <create|delete|tag|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload|give> [args...]", NamedTextColor.RED))
-        sender.sendMessage(Component.text("  /voucher tag <delete|debug> <name> [player]", NamedTextColor.RED))
+        Msg.usage(sender, "/voucher <create|delete|tag|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload|give> [args...]")
+        Msg.error(sender, "  /voucher tag <delete|debug> <name> [player]")
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
