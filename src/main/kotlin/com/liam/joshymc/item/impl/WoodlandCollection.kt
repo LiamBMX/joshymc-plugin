@@ -67,28 +67,6 @@ class Maplefang : CustomItem() {
     }
 }
 
-class AutumnWanderer : CustomItem() {
-
-    override val id = "autumn_wanderer"
-    override val material = Material.NETHERITE_BOOTS
-    override val hasGlint = true
-
-    override val displayName: Component = Component.text("Autumn Wanderer", TextColor.color(0xB5793C))
-        .decoration(TextDecoration.ITALIC, false)
-        .decoration(TextDecoration.BOLD, true)
-
-    override val lore: List<Component> = emptyList()
-
-    override fun applyMeta(meta: ItemMeta) {
-        meta.isUnbreakable = true
-        meta.setItemModel(NamespacedKey(Joshymc.instance, "autumn_wanderer"))
-        val equippable = meta.equippable
-        equippable.slot = EquipmentSlot.FEET
-        equippable.model = NamespacedKey(Joshymc.instance, "autumn_wanderer")
-        meta.setEquippable(equippable)
-    }
-}
-
 class Hearthkeeper : CustomItem() {
 
     override val id = "hearthkeeper"

@@ -225,7 +225,7 @@ class ListenerManager(private val plugin: Joshymc) {
         }
 
         // Upgrades pre-#1070 Haunted Hollow / Shark armor copies to unbreakable and
-        // renames pre-#1098 Ice Skates copies to Snowveil Skates
+        // renames pre-#1098 Ice Skates / pre-#1097 Autumn Wanderer copies to their set names
         com.liam.joshymc.listener.UnbreakableArmorUpgradeListener(plugin).also {
             it.start()
             pm.registerEvents(it, plugin)
