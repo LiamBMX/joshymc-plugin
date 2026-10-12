@@ -172,7 +172,8 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         createTables()
         loadEvents()
         tasks += Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickPlaytime() }, 1200L, 1200L)
-        tasks += Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, Runnable { flushAll() }, 6000L, 6000L)
+        // Snapshot on the main thread (the cached maps are mutated there); the writes are queued on the DB thread.
+        tasks += Bukkit.getScheduler().runTaskTimer(plugin, Runnable { flushAll() }, 6000L, 6000L)
         plugin.logger.info("[EventQuests] Started with ${events.size} event(s).")
     }
 
@@ -443,11 +444,19 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         )
     }
 
+    /** Snapshots dirty progress on the calling thread and queues the writes on the DB thread (issue #1112). */
     private fun flushPlayer(uuid: UUID) {
         val map = cache[uuid] ?: return
+        val writes = mutableListOf<Pair<String, EventProgress>>()
         for (key in dirty.filter { it.first == uuid }) {
             dirty.remove(key)
-            map[key.second]?.let { persistPosition(uuid, key.second, it) }
+            map[key.second]?.let { writes += key.second to it }
+        }
+        if (writes.isEmpty()) return
+        plugin.databaseManager.async("event quest flush for $uuid") {
+            plugin.databaseManager.transaction {
+                for ((eventId, state) in writes) persistPosition(uuid, eventId, state)
+            }
         }
     }
 

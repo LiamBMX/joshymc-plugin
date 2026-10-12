@@ -5,6 +5,8 @@ import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * Separate SQLite database (playerdata.db) for clearly player-owned data,
@@ -15,6 +17,11 @@ import java.sql.ResultSet
 class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
 
     private lateinit var connection: Connection
+
+    /** Owns [connection]: every use holds it, so threads never share it mid-statement or mid-transaction. */
+    private val lock = ReentrantLock()
+    /** Transaction nesting depth; only touched while holding [lock]. */
+    private var transactionDepth = 0
 
     fun start() {
         val dbFile = File(plugin.dataFolder, "playerdata.db")
@@ -35,7 +42,7 @@ class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
         plugin.logger.info("[Database] Loaded player database: ${dbFile.name}")
     }
 
-    fun shutdown() {
+    fun shutdown() = lock.withLock {
         if (::connection.isInitialized && !connection.isClosed) {
             try {
                 connection.createStatement().use { it.execute("PRAGMA wal_checkpoint(TRUNCATE)") }
@@ -64,20 +71,22 @@ class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
     }
 
     override fun execute(sql: String, vararg params: Any?) {
+        lock.withLock {
+            connection.prepareStatement(sql).use { stmt ->
+                params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    override fun executeUpdate(sql: String, vararg params: Any?): Int = lock.withLock {
         connection.prepareStatement(sql).use { stmt ->
             params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
             stmt.executeUpdate()
         }
     }
 
-    override fun executeUpdate(sql: String, vararg params: Any?): Int {
-        return connection.prepareStatement(sql).use { stmt ->
-            params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
-            stmt.executeUpdate()
-        }
-    }
-
-    override fun <T> query(sql: String, vararg params: Any?, mapper: (ResultSet) -> T): List<T> {
+    override fun <T> query(sql: String, vararg params: Any?, mapper: (ResultSet) -> T): List<T> = lock.withLock {
         val results = mutableListOf<T>()
         connection.prepareStatement(sql).use { stmt ->
             params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
@@ -87,27 +96,51 @@ class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
                 }
             }
         }
-        return results
+        results
     }
 
     override fun <T> queryFirst(sql: String, vararg params: Any?, mapper: (ResultSet) -> T): T? {
         return query(sql, *params, mapper = mapper).firstOrNull()
     }
 
+    /** Holds [lock] for the whole block; a nested call joins the outer transaction (see DatabaseManager). */
     override fun transaction(block: () -> Unit) {
-        connection.autoCommit = false
-        try {
-            block()
-            connection.commit()
-        } catch (e: Exception) {
-            connection.rollback()
-            throw e
-        } finally {
-            connection.autoCommit = true
+        lock.withLock {
+            if (transactionDepth > 0) {
+                transactionDepth++
+                try {
+                    block()
+                } finally {
+                    transactionDepth--
+                }
+                return
+            }
+            connection.autoCommit = false
+            transactionDepth = 1
+            try {
+                block()
+                connection.commit()
+            } catch (e: Throwable) {
+                try {
+                    connection.rollback()
+                } catch (rollbackError: Exception) {
+                    plugin.logger.warning("[Database] Rollback failed: ${rollbackError.message}")
+                }
+                throw e
+            } finally {
+                transactionDepth = 0
+                try {
+                    connection.autoCommit = true
+                } catch (e: Exception) {
+                    plugin.logger.warning("[Database] Could not restore autoCommit: ${e.message}")
+                }
+            }
         }
     }
 
     override fun createTable(sql: String) {
-        connection.createStatement().use { it.execute(sql) }
+        lock.withLock {
+            connection.createStatement().use { it.execute(sql) }
+        }
     }
 }
