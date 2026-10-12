@@ -181,8 +181,12 @@ class EnderChestManager(private val plugin: Joshymc) : Listener {
         val uuid = event.player.uniqueId
         val inv = sessions[uuid] ?: return
         persist(uuid, inv)
-        if (inv.viewers.none { it.uniqueId != uuid }) {
-            sessions.remove(uuid)
+        sessions.remove(uuid)
+        // Staff still viewing it can't edit it any further: with the owner offline, changes to
+        // slots 0-26 can't reach their vanilla Ender Chest, so an item taken out now would still
+        // be there when they log back in.
+        for (viewer in inv.viewers.toList()) {
+            if (viewer.uniqueId != uuid) viewer.closeInventory()
         }
     }
 }

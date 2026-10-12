@@ -170,6 +170,10 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
 
     fun openOverflow(player: Player, type: OverflowType) {
         val uuid = player.uniqueId
+        // Settle a storage that's still open before loading from the DB, so its items are
+        // written back (and can't be lost or loaded twice) when this one replaces it.
+        openOverflow.remove(uuid)?.let { saveOverflow(uuid, it.first, it.second) }
+
         val title = Component.text(type.label).decoration(TextDecoration.ITALIC, false)
         val inv = Bukkit.createInventory(null, type.size, title)
 
@@ -256,8 +260,12 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onClose(event: InventoryCloseEvent) {
         val player = event.player as? Player ?: return
-        val entry = openOverflow.remove(player.uniqueId) ?: return
-        saveOverflow(player.uniqueId, entry.first, event.inventory)
+        val entry = openOverflow[player.uniqueId] ?: return
+        // Only the storage's own window counts: openInventory() closes whatever was open
+        // before it, and saving THAT inventory would write its contents into Overflow.
+        if (event.inventory !== entry.second) return
+        if (!openOverflow.remove(player.uniqueId, entry)) return
+        saveOverflow(player.uniqueId, entry.first, entry.second)
     }
 
     @EventHandler

@@ -1087,6 +1087,8 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         for (slot in 0 until rewardSlotCount) {
             val item = inv.getItem(slot) ?: continue
             if (item.type == Material.AIR) continue
+            // Take it out of the editor so a window that stays open can't hand it out a second time.
+            inv.setItem(slot, null)
             if (pending != null) {
                 pending.items.add(item.clone())
             } else {
@@ -1191,8 +1193,11 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onItemEditorClose(event: InventoryCloseEvent) {
         val player = event.player as? Player ?: return
-        val inv = itemEditorInventories.remove(player.uniqueId) ?: return
+        val inv = itemEditorInventories[player.uniqueId] ?: return
+        // Check BEFORE untracking: opening the editor closes the Create GUI first, and dropping
+        // the entry on that close left the editor untracked (buttons dead, control row takeable).
         if (event.inventory != inv) return
+        itemEditorInventories.remove(player.uniqueId)
         // A bare close (ESC, clicking outside the window, etc.) never goes through Save &
         // Return, so it must behave like Back — hand the staged items straight back to the
         // player instead of folding them into the creation draft. Without this, closing the

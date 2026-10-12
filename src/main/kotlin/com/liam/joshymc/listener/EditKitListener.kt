@@ -21,6 +21,13 @@ class EditKitListener(private val plugin: Joshymc) : Listener {
         val session = plugin.kitManager.getEditSession(player) ?: return
         if (event.view.topInventory != session.inventory) return
 
+        // Double-click "collect similar" scans the top inventory too, wherever it lands, so it
+        // could scoop a matching item off the control row — block it on either side.
+        if (event.click == ClickType.DOUBLE_CLICK) {
+            event.isCancelled = true
+            return
+        }
+
         val clickedTop = event.clickedInventory == session.inventory
         if (!clickedTop) return // moving items in/out of the player's own inventory is fine
 
@@ -35,12 +42,7 @@ class EditKitListener(private val plugin: Joshymc) : Listener {
             }
             return
         }
-
-        // Content slot: allow free editing, but block double-click "collect similar" so it
-        // can't scoop a matching item off of the (occupied) control row by coincidence.
-        if (event.click == ClickType.DOUBLE_CLICK) {
-            event.isCancelled = true
-        }
+        // Content slot: free editing.
     }
 
     @EventHandler(priority = EventPriority.LOWEST)

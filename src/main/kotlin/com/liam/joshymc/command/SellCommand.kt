@@ -105,6 +105,9 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
     // ══════════════════════════════════════════════════════════
 
     private fun openSellGui(player: Player) {
+        // Settle a sell window that's somehow still open so its deposits are sold/returned once.
+        openSellSessions.remove(player.uniqueId)?.let { processSellSession(player, it) }
+
         val title = Component.text("Sell Items", NamedTextColor.GOLD)
             .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false)
@@ -230,7 +233,11 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
     @EventHandler(priority = EventPriority.HIGH)
     fun onSellGuiClose(event: InventoryCloseEvent) {
         val player = event.player as? Player ?: return
-        val session = openSellSessions.remove(player.uniqueId) ?: return
+        val session = openSellSessions[player.uniqueId] ?: return
+        // Only the sell window's own close settles it — openInventory() also closes whatever
+        // was open before, and dropping the session then would leave the sell window untracked.
+        if (event.inventory !== session.inventory) return
+        if (!openSellSessions.remove(player.uniqueId, session)) return
         processSellSession(player, session)
     }
 

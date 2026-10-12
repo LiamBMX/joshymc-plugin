@@ -42,6 +42,9 @@ class StorageManager(private val plugin: Joshymc) : Listener {
     /** Tracks admins viewing another player's vault (adminUUID -> (targetUUID, vaultNumber)). */
     private val adminViewingVaults = mutableMapOf<UUID, Pair<UUID, Int>>()
 
+    /** The live vault window each viewer (owner or admin) has open, so only closing THAT window saves it. */
+    private val vaultInventories = mutableMapOf<UUID, Inventory>()
+
 
     private var maxVaults: Int = 10
 
@@ -65,19 +68,23 @@ class StorageManager(private val plugin: Joshymc) : Listener {
      * Save any currently open vaults. Called on server shutdown.
      */
     fun saveOpenVaults() {
-        for ((uuid, vaultNumber) in openVaults.toMap()) {
-            val player = Bukkit.getPlayer(uuid) ?: continue
-            val inv = player.openInventory.topInventory
-            saveVault(player, vaultNumber, inv)
+        for ((viewerUuid, inv) in vaultInventories.toMap()) {
+            settleOpenVault(viewerUuid, inv)
         }
+        vaultInventories.clear()
         openVaults.clear()
-
-        for ((adminUuid, view) in adminViewingVaults.toMap()) {
-            val admin = Bukkit.getPlayer(adminUuid) ?: continue
-            val inv = admin.openInventory.topInventory
-            saveVaultByUuid(view.first, view.second, inv)
-        }
         adminViewingVaults.clear()
+    }
+
+    /** Writes back the vault [viewerUuid] has open (their own, or one they view as admin) and stops tracking it. */
+    private fun settleOpenVault(viewerUuid: UUID, inv: Inventory) {
+        val adminView = adminViewingVaults.remove(viewerUuid)
+        if (adminView != null) {
+            saveVaultByUuid(adminView.first, adminView.second, inv)
+            return
+        }
+        val vaultNumber = openVaults.remove(viewerUuid) ?: return
+        saveVaultByUuid(viewerUuid, vaultNumber, inv)
     }
 
     // ---- Permission-based vault count ----
@@ -102,6 +109,20 @@ class StorageManager(private val plugin: Joshymc) : Listener {
             )
             return
         }
+
+        // An admin view has already pulled this vault's rows out of the DB; opening it now would
+        // show it empty, and whichever window closed last would overwrite the other's items.
+        if (adminViewingVaults.values.any { it.first == player.uniqueId && it.second == number }) {
+            plugin.commsManager.send(
+                player,
+                Component.text("Vault #$number is being inspected by staff. Try again shortly.", NamedTextColor.RED),
+                CommunicationsManager.Category.DEFAULT
+            )
+            return
+        }
+
+        // Save a vault that's still open before loading, so its items are written back first.
+        vaultInventories.remove(player.uniqueId)?.let { settleOpenVault(player.uniqueId, it) }
 
         val title = Component.text("$VAULT_TITLE_PREFIX$number")
             .decoration(TextDecoration.ITALIC, false)
@@ -135,6 +156,7 @@ class StorageManager(private val plugin: Joshymc) : Listener {
         )
 
         openVaults[player.uniqueId] = number
+        vaultInventories[player.uniqueId] = inv
         player.openInventory(inv)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
@@ -146,6 +168,7 @@ class StorageManager(private val plugin: Joshymc) : Listener {
             plugin.commsManager.send(admin, Component.text("Vault number must be at least 1.", NamedTextColor.RED))
             return
         }
+        vaultInventories.remove(admin.uniqueId)?.let { settleOpenVault(admin.uniqueId, it) }
         if (openVaults[targetUuid] == number) {
             plugin.commsManager.send(admin, Component.text("$targetName currently has vault #$number open.", NamedTextColor.RED))
             return
@@ -179,6 +202,7 @@ class StorageManager(private val plugin: Joshymc) : Listener {
         )
 
         adminViewingVaults[admin.uniqueId] = Pair(targetUuid, number)
+        vaultInventories[admin.uniqueId] = inv
         admin.openInventory(inv)
         admin.playSound(admin.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
         plugin.commsManager.send(admin, Component.text("Viewing $targetName's vault #$number.", NamedTextColor.GRAY))
@@ -334,33 +358,17 @@ class StorageManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onClose(event: InventoryCloseEvent) {
         val player = event.player as? Player ?: return
-
-        // Admin viewing someone else's vault
-        val adminView = adminViewingVaults.remove(player.uniqueId)
-        if (adminView != null) {
-            saveVaultByUuid(adminView.first, adminView.second, event.inventory)
-            return
-        }
-
-        // Save own vault if one is open
-        val vaultNumber = openVaults.remove(player.uniqueId) ?: return
-        saveVault(player, vaultNumber, event.inventory)
+        // Only the vault's own window counts: openInventory() closes whatever was open before
+        // it, and saving THAT inventory would write its contents into the vault.
+        if (vaultInventories[player.uniqueId] !== event.inventory) return
+        vaultInventories.remove(player.uniqueId)
+        settleOpenVault(player.uniqueId, event.inventory)
     }
 
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
-        val player = event.player
-
-        val adminView = adminViewingVaults.remove(player.uniqueId)
-        if (adminView != null) {
-            val inv = player.openInventory.topInventory
-            saveVaultByUuid(adminView.first, adminView.second, inv)
-            return
-        }
-
-        val vaultNumber = openVaults.remove(player.uniqueId) ?: return
-        val inv = player.openInventory.topInventory
-        saveVault(player, vaultNumber, inv)
+        val inv = vaultInventories.remove(event.player.uniqueId) ?: return
+        settleOpenVault(event.player.uniqueId, inv)
     }
 
 }
