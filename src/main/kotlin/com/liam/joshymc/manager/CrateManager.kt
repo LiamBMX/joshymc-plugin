@@ -1199,9 +1199,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         gui.inventory.setItem(9, glass.clone())
         gui.inventory.setItem(17, glass.clone())
 
-        // Fill middle reward slots with random rewards initially
-        for (slot in 10..16) {
-            gui.inventory.setItem(slot, buildRewardDisplay(selectWeightedReward(crate)))
+        // Fill middle reward slots with random rewards initially. The reel keeps the
+        // CrateReward behind each of slots 10..16 so the payout is the exact reward that
+        // lands in slot 13, never one reconstructed from the GUI item.
+        val reel = MutableList(7) { selectWeightedReward(crate) }
+        for ((i, reward) in reel.withIndex()) {
+            gui.inventory.setItem(10 + i, buildRewardDisplay(reward))
         }
 
         // Point arrows at the winning slot (13) from top-middle (4) and bottom-middle (22)
@@ -1210,13 +1213,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         plugin.guiManager.open(player, gui)
 
-        scheduleAnimationStep(player, gui.inventory, crate, 2L, 0, 40)
+        scheduleAnimationStep(player, gui.inventory, crate, reel, 2L, 0, 40)
     }
 
     private fun scheduleAnimationStep(
         player: Player,
         inv: org.bukkit.inventory.Inventory,
         crate: CrateDef,
+        reel: MutableList<CrateReward>,
         delay: Long,
         step: Int,
         maxSteps: Int
@@ -1232,16 +1236,18 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             for (slot in 10..15) {
                 inv.setItem(slot, inv.getItem(slot + 1))
             }
-            inv.setItem(16, buildRewardDisplay(selectWeightedReward(crate)))
+            val incoming = selectWeightedReward(crate)
+            reel.removeAt(0)
+            reel.add(incoming)
+            inv.setItem(16, buildRewardDisplay(incoming))
 
             player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f, 1.0f + (step.toFloat() / maxSteps))
 
             val nextStep = step + 1
 
             if (nextStep >= maxSteps) {
-                // Animation complete - center slot 13 is the winner
-                val winnerItem = inv.getItem(13)
-                val winnerReward = findRewardForDisplay(crate, winnerItem)
+                // Animation complete - the reward in center slot 13 (reel index 3) is the winner
+                val winnerReward = reel[3]
 
                 Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
                     if (!player.isOnline) {
@@ -1253,18 +1259,16 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
 
                     // Give reward
-                    if (winnerReward != null) {
-                        val rewardItem = buildRewardItem(winnerReward)
-                        plugin.giveItemSafely(player, rewardItem)
+                    val rewardItem = buildRewardItem(winnerReward)
+                    plugin.giveItemSafely(player, rewardItem)
 
-                        plugin.commsManager.send(
-                            player,
-                            Component.text("You won ", NamedTextColor.GREEN)
-                                .append(Component.text(winnerReward.displayName, TextColor.color(0xFFAA00)))
-                                .append(Component.text(" x${winnerReward.amount}", NamedTextColor.GREEN))
-                                .append(Component.text("!", NamedTextColor.GREEN))
-                        )
-                    }
+                    plugin.commsManager.send(
+                        player,
+                        Component.text("You won ", NamedTextColor.GREEN)
+                            .append(Component.text(winnerReward.displayName, TextColor.color(0xFFAA00)))
+                            .append(Component.text(" x${winnerReward.amount}", NamedTextColor.GREEN))
+                            .append(Component.text("!", NamedTextColor.GREEN))
+                    )
 
                     // Close after short delay
                     Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
@@ -1281,7 +1285,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     else -> 8L
                 }
 
-                scheduleAnimationStep(player, inv, crate, newDelay, nextStep, maxSteps)
+                scheduleAnimationStep(player, inv, crate, reel, newDelay, nextStep, maxSteps)
             }
         }, delay)
     }
@@ -1425,19 +1429,6 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         } catch (_: Exception) {
             null
         }
-    }
-
-    private fun findRewardForDisplay(crate: CrateDef, displayItem: ItemStack?): CrateReward? {
-        if (displayItem == null) return crate.rewards.firstOrNull()
-        // Match by display name stored in lore to handle duplicate materials
-        val displayName = displayItem.itemMeta?.displayName()
-        if (displayName != null) {
-            val plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(displayName)
-            val match = crate.rewards.firstOrNull { it.displayName == plain }
-            if (match != null) return match
-        }
-        return crate.rewards.firstOrNull { it.material == displayItem.type }
-            ?: crate.rewards.firstOrNull()
     }
 
     private fun spawnWinParticles(player: Player, crate: CrateDef) {

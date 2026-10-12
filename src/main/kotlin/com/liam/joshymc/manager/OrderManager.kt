@@ -311,6 +311,7 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     /** Same-material + same-metadata match (enchants, custom item PDC tag, model data, etc.), ignoring stack size. */
     private fun itemsMatch(requested: ItemStack, candidate: ItemStack?): Boolean {
         if (candidate == null || candidate.type == Material.AIR) return false
+        if (plugin.modModeManager.isModTool(candidate)) return false
         return candidate.isSimilar(requested)
     }
 
@@ -941,6 +942,7 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     }
 
     fun executeFulfill(seller: Player, orderId: Int, requestedQty: Int) {
+        if (plugin.modModeManager.denyEconomyIfRestricted(seller)) return
         val now = System.currentTimeMillis()
         val order = plugin.databaseManager.queryFirst(
             "SELECT * FROM buy_orders WHERE id = ? AND remaining_qty > 0 AND expires_at > ?",

@@ -115,6 +115,24 @@ class ModModeManager(private val plugin: Joshymc) {
         return id in HOTBAR_ITEM_IDS
     }
 
+    /**
+     * Creative and Moderator Mode players can spawn items, so they can't put items into
+     * the player economy (Auction House listings, bid listings, Buy Order fulfillment).
+     * Staff in normal gameplay modes are unaffected. Issue #1129.
+     */
+    fun isEconomyRestricted(player: Player): Boolean =
+        player.gameMode == GameMode.CREATIVE || isModMode(player)
+
+    /** Tells [player] economy transactions are disabled and returns true if they're restricted. */
+    fun denyEconomyIfRestricted(player: Player): Boolean {
+        if (!isEconomyRestricted(player)) return false
+        plugin.commsManager.send(
+            player,
+            Component.text("Economy transactions are disabled while in Creative or Moderator Mode.", NamedTextColor.RED)
+        )
+        return true
+    }
+
     private fun hasPendingBackup(uuid: UUID): Boolean {
         return plugin.databaseManager.queryFirst(
             "SELECT 1 FROM modmode_backups WHERE uuid = ?", uuid.toString()

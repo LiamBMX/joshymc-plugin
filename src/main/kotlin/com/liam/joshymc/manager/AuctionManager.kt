@@ -361,9 +361,14 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
     // ---- Core methods ----
 
     fun listItem(player: Player, price: Double, currency: Currency = Currency.MONEY) {
+        if (plugin.modModeManager.denyEconomyIfRestricted(player)) return
         val held = player.inventory.itemInMainHand
         if (held.type == Material.AIR) {
             plugin.commsManager.send(player, Component.text("Hold the item you want to sell.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+        if (plugin.modModeManager.isModTool(held)) {
+            plugin.commsManager.send(player, Component.text("You can't list that item.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
 
@@ -576,9 +581,14 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
     }
 
     fun listBidItem(player: Player, startingPrice: Double, durationMs: Long = bidDurationHours * 3_600_000L) {
+        if (plugin.modModeManager.denyEconomyIfRestricted(player)) return
         val held = player.inventory.itemInMainHand
         if (held.type == Material.AIR) {
             plugin.commsManager.send(player, Component.text("Hold the item you want to bid out.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+        if (plugin.modModeManager.isModTool(held)) {
+            plugin.commsManager.send(player, Component.text("You can't list that item.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
 
@@ -771,64 +781,99 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             now
         ) { rs -> mapBidListing(rs) }
 
-        if (expired.isEmpty()) return
+        // Each listing settles on its own: a failure on one can never roll back (and so
+        // resurrect) a listing that was already settled and delivered earlier in the pass.
+        for (listing in expired) {
+            try {
+                settleExpiredBid(listing, now)
+            } catch (e: Exception) {
+                plugin.logger.severe("[Auction] Failed to settle expired bid listing #${listing.id}: ${e.message}")
+            }
+        }
+    }
 
-        plugin.databaseManager.transaction {
-            for (listing in expired) {
-                plugin.databaseManager.execute("DELETE FROM auction_bid_listings WHERE id = ?", listing.id)
+    /**
+     * Settles one expired bid listing exactly once. The listing row is atomically claimed
+     * (conditional DELETE matching the state we read) before any money or item moves; a
+     * repeated or stale pass sees 0 affected rows and skips it.
+     */
+    private fun settleExpiredBid(listing: BidListing, now: Long) {
+        val claimSql = "DELETE FROM auction_bid_listings WHERE id = ? AND expires_at <= ? AND current_bidder_uuid IS ? AND current_bid = ?"
+        val claimParams = arrayOf<Any?>(listing.id, now, listing.currentBidderUuid?.toString(), listing.currentBid)
 
-                if (listing.currentBidderUuid != null) {
-                    // Winner gets the item; seller gets paid
-                    val tax = listing.currentBid * (taxPercent / 100.0)
-                    val sellerPayout = listing.currentBid - tax
-                    plugin.economyManager.deposit(listing.sellerUuid, sellerPayout)
-
-                    // Give item to winner, falling back to /overflow (then expired items) if full/offline
-                    deliverOrHold(listing.currentBidderUuid, listing.item)
-                    val winner = Bukkit.getPlayer(listing.currentBidderUuid)
-                    if (winner != null) {
-                        plugin.commsManager.send(
-                            winner,
-                            Component.text("You won the bid on ", NamedTextColor.GREEN)
-                                .append(listing.item.displayName())
-                                .append(Component.text(" for ", NamedTextColor.GREEN))
-                                .append(Component.text(plugin.economyManager.format(listing.currentBid), NamedTextColor.GOLD))
-                                .append(Component.text("!", NamedTextColor.GREEN)),
-                            CommunicationsManager.Category.DEFAULT
-                        )
-                    }
-
-                    val seller = Bukkit.getPlayer(listing.sellerUuid)
-                    if (seller != null) {
-                        plugin.commsManager.send(
-                            seller,
-                            Component.text("Your bid listing was won by ", NamedTextColor.GREEN)
-                                .append(Component.text(listing.currentBidderName ?: "Unknown", NamedTextColor.WHITE))
-                                .append(Component.text(" for ", NamedTextColor.GREEN))
-                                .append(Component.text(plugin.economyManager.format(listing.currentBid), NamedTextColor.GOLD))
-                                .append(Component.text(" (${plugin.economyManager.format(tax)} tax).", NamedTextColor.GRAY)),
-                            CommunicationsManager.Category.DEFAULT
-                        )
-                    }
-                } else {
-                    // No bids — return item to seller
+        if (listing.currentBidderUuid == null) {
+            // No bids — return item to seller. Claim and the expired-items insert are pure DB
+            // writes, so they share a transaction: if the insert fails, the claim rolls back
+            // and the listing is retried next pass instead of being lost.
+            var claimed = false
+            plugin.databaseManager.transaction {
+                if (plugin.databaseManager.executeUpdate(claimSql, *claimParams) == 1) {
                     plugin.databaseManager.execute(
                         "INSERT INTO auction_expired (owner_uuid, item, expired_at) VALUES (?, ?, ?)",
                         listing.sellerUuid.toString(), serializeItem(listing.item), now
                     )
-
-                    val seller = Bukkit.getPlayer(listing.sellerUuid)
-                    if (seller != null) {
-                        plugin.commsManager.send(
-                            seller,
-                            Component.text("Your bid listing received no bids. Use ", NamedTextColor.YELLOW)
-                                .append(Component.text("/ah", NamedTextColor.GOLD))
-                                .append(Component.text(" to claim it back.", NamedTextColor.YELLOW)),
-                            CommunicationsManager.Category.DEFAULT
-                        )
-                    }
+                    claimed = true
                 }
             }
+            if (!claimed) return
+
+            val seller = Bukkit.getPlayer(listing.sellerUuid)
+            if (seller != null) {
+                plugin.commsManager.send(
+                    seller,
+                    Component.text("Your bid listing received no bids. Use ", NamedTextColor.YELLOW)
+                        .append(Component.text("/ah", NamedTextColor.GOLD))
+                        .append(Component.text(" to claim it back.", NamedTextColor.YELLOW)),
+                    CommunicationsManager.Category.DEFAULT
+                )
+            }
+            return
+        }
+
+        // Claim outside any transaction so it commits before the item is delivered.
+        if (plugin.databaseManager.executeUpdate(claimSql, *claimParams) != 1) return
+
+        // Winner gets the item; seller gets paid. Each side effect runs even if the other
+        // fails, so a payout error can't swallow the winner's item (or vice versa).
+        val tax = listing.currentBid * (taxPercent / 100.0)
+        val sellerPayout = listing.currentBid - tax
+        try {
+            plugin.economyManager.deposit(listing.sellerUuid, sellerPayout)
+        } catch (e: Exception) {
+            plugin.logger.severe("[Auction] Bid listing #${listing.id}: failed to pay seller ${listing.sellerUuid} $sellerPayout: ${e.message}")
+        }
+
+        // Give item to winner, falling back to /overflow (then expired items) if full/offline
+        try {
+            deliverOrHold(listing.currentBidderUuid, listing.item)
+        } catch (e: Exception) {
+            plugin.logger.severe("[Auction] Bid listing #${listing.id}: failed to deliver item to winner ${listing.currentBidderUuid}: ${e.message}")
+        }
+
+        val winner = Bukkit.getPlayer(listing.currentBidderUuid)
+        if (winner != null) {
+            plugin.commsManager.send(
+                winner,
+                Component.text("You won the bid on ", NamedTextColor.GREEN)
+                    .append(listing.item.displayName())
+                    .append(Component.text(" for ", NamedTextColor.GREEN))
+                    .append(Component.text(plugin.economyManager.format(listing.currentBid), NamedTextColor.GOLD))
+                    .append(Component.text("!", NamedTextColor.GREEN)),
+                CommunicationsManager.Category.DEFAULT
+            )
+        }
+
+        val seller = Bukkit.getPlayer(listing.sellerUuid)
+        if (seller != null) {
+            plugin.commsManager.send(
+                seller,
+                Component.text("Your bid listing was won by ", NamedTextColor.GREEN)
+                    .append(Component.text(listing.currentBidderName ?: "Unknown", NamedTextColor.WHITE))
+                    .append(Component.text(" for ", NamedTextColor.GREEN))
+                    .append(Component.text(plugin.economyManager.format(listing.currentBid), NamedTextColor.GOLD))
+                    .append(Component.text(" (${plugin.economyManager.format(tax)} tax).", NamedTextColor.GRAY)),
+                CommunicationsManager.Category.DEFAULT
+            )
         }
     }
 
