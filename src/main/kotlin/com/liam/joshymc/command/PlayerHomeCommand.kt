@@ -33,8 +33,8 @@ class PlayerHomeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         val targetName = args[0]
         val homeName = args[1].lowercase()
 
-        val offline = Bukkit.getOfflinePlayer(targetName)
-        if (!offline.hasPlayedBefore()) {
+        val offline = plugin.playerResolver.resolve(targetName)
+        if (offline == null || !offline.hasPlayedBefore()) {
             plugin.commsManager.send(sender, Component.text("Player '$targetName' has never played on this server.", NamedTextColor.RED), CommunicationsManager.Category.HOME)
             return true
         }
@@ -63,8 +63,8 @@ class PlayerHomeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         if (args.size == 2) {
             val targetName = args[0]
             val prefix = args[1].lowercase()
-            val offline = Bukkit.getOfflinePlayer(targetName)
-            if (!offline.hasPlayedBefore()) return emptyList()
+            val offline = plugin.playerResolver.resolve(targetName)
+            if (offline == null || !offline.hasPlayedBefore()) return emptyList()
             return plugin.warpManager.getHomes(offline.uniqueId.toString()).filter { it.startsWith(prefix) }
         }
 

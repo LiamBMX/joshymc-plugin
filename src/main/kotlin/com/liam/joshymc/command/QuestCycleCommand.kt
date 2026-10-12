@@ -67,7 +67,8 @@ class QuestCycleCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             }
             "progress" -> {
                 if (args.size < 2) { sender.sendMessage(Component.text("Usage: /quests progress <player>", NamedTextColor.RED)); return }
-                val target = Bukkit.getOfflinePlayer(args[1])
+                val target = plugin.playerResolver.resolve(args[1])
+                if (target == null) { sender.sendMessage(Component.text("Player not found: ${args[1]}", NamedTextColor.RED)); return }
                 val uuid = target.uniqueId
                 sender.sendMessage(Component.text("--- Quest Progress: ${target.name ?: args[1]} ---", NamedTextColor.GOLD))
                 for (q in mgr.getDailyPool()) {
@@ -83,7 +84,8 @@ class QuestCycleCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             }
             "setprogress" -> {
                 if (args.size < 4) { sender.sendMessage(Component.text("Usage: /quests setprogress <player> <quest_id> <amount>", NamedTextColor.RED)); return }
-                val target = Bukkit.getOfflinePlayer(args[1])
+                val target = plugin.playerResolver.resolve(args[1])
+                if (target == null) { sender.sendMessage(Component.text("Player not found: ${args[1]}", NamedTextColor.RED)); return }
                 val amount = args[3].toIntOrNull()
                 if (amount == null) { sender.sendMessage(Component.text("Amount must be a number.", NamedTextColor.RED)); return }
                 if (mgr.setProgress(target.uniqueId, args[2], amount)) {

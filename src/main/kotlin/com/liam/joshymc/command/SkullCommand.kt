@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.destroystokyo.paper.profile.PlayerProfile
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.BedrockUtil
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -34,6 +35,13 @@ class SkullCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
         val targetName = args[0]
 
+        // Bedrock (Floodgate) players have no Mojang profile; skin them from local data instead.
+        val known = plugin.playerResolver.resolve(targetName)
+        if (known != null && BedrockUtil.isFloodgateUuid(known.uniqueId)) {
+            giveSkull(sender, targetName, null)
+            return true
+        }
+
         Bukkit.getScheduler().runTaskAsynchronously(plugin, Runnable {
             val profile = try {
                 Bukkit.createProfile(targetName).takeIf { it.complete(true) }
@@ -51,18 +59,18 @@ class SkullCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     }
 
     private fun giveSkull(player: Player, targetName: String, profile: PlayerProfile?) {
-        val offline: OfflinePlayer = Bukkit.getOfflinePlayer(targetName)
-        if (profile == null && !offline.hasPlayedBefore() && !offline.isOnline) {
+        val offline: OfflinePlayer? = plugin.playerResolver.resolve(targetName)
+        if (profile == null && (offline == null || (!offline.hasPlayedBefore() && !offline.isOnline))) {
             player.sendMessage(Component.text("Could not find a player named '$targetName'.", NamedTextColor.RED))
             return
         }
 
-        val resolvedName = profile?.name ?: offline.name ?: targetName
+        val resolvedName = profile?.name ?: offline?.name ?: targetName
         val head = ItemStack(Material.PLAYER_HEAD)
         head.editMeta(SkullMeta::class.java) { meta ->
             if (profile != null) {
                 meta.playerProfile = profile
-            } else {
+            } else if (offline != null) {
                 plugin.playerHeadManager.applyHead(meta, offline)
             }
             meta.displayName(

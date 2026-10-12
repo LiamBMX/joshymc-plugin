@@ -214,10 +214,9 @@ class VoteManager(private val plugin: Joshymc) : Listener {
             uuid = player.uniqueId
             resolvedName = player.name
         } else {
-            // Try to resolve offline player
-            @Suppress("DEPRECATION")
-            val offlinePlayer = Bukkit.getOfflinePlayer(username)
-            if (!offlinePlayer.hasPlayedBefore() && !offlinePlayer.isOnline) {
+            // Try to resolve offline player (local data only, no Mojang lookup)
+            val offlinePlayer = plugin.playerResolver.resolve(username)
+            if (offlinePlayer == null || (!offlinePlayer.hasPlayedBefore() && !offlinePlayer.isOnline)) {
                 plugin.logger.warning("[Vote] Unknown player: $username")
                 return
             }

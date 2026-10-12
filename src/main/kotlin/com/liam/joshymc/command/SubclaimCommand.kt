@@ -150,8 +150,8 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             return
         }
 
-        val target = Bukkit.getOfflinePlayer(args[2])
-        if (!target.hasPlayedBefore() && !target.isOnline) {
+        val target = plugin.playerResolver.resolve(args[2])
+        if (target == null || (!target.hasPlayedBefore() && !target.isOnline)) {
             plugin.commsManager.send(player, Component.text("Player not found: ${args[2]}", NamedTextColor.RED))
             return
         }
@@ -190,7 +190,11 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             return
         }
 
-        val target = Bukkit.getOfflinePlayer(args[2])
+        val target = plugin.playerResolver.resolve(args[2])
+        if (target == null) {
+            plugin.commsManager.send(player, Component.text("Player not found: ${args[2]}", NamedTextColor.RED))
+            return
+        }
         val removed = plugin.claimManager.removeSubclaimAccess(id, target.uniqueId)
         if (removed) {
             plugin.commsManager.send(

@@ -216,7 +216,8 @@ class TalismanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         if (args.size < 3) {
             plugin.commsManager.send(sender, Component.text("Usage: /talisman grant <player> <id>", NamedTextColor.RED)); return
         }
-        val target = Bukkit.getOfflinePlayer(args[1])
+        val target = plugin.playerResolver.resolve(args[1])
+        if (target == null) { plugin.commsManager.send(sender, Component.text("Player not found: ${args[1]}", NamedTextColor.RED)); return }
         val def = plugin.talismanManager.getTalisman(args[2].lowercase())
         if (def == null) { plugin.commsManager.send(sender, Component.text("Unknown talisman.", NamedTextColor.RED)); return }
         plugin.talismanManager.grantAccess(target.uniqueId, def.id)
@@ -230,7 +231,8 @@ class TalismanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         if (args.size < 3) {
             plugin.commsManager.send(sender, Component.text("Usage: /talisman revoke <player> <id>", NamedTextColor.RED)); return
         }
-        val target = Bukkit.getOfflinePlayer(args[1])
+        val target = plugin.playerResolver.resolve(args[1])
+        if (target == null) { plugin.commsManager.send(sender, Component.text("Player not found: ${args[1]}", NamedTextColor.RED)); return }
         val def = plugin.talismanManager.getTalisman(args[2].lowercase())
         if (def == null) { plugin.commsManager.send(sender, Component.text("Unknown talisman.", NamedTextColor.RED)); return }
         plugin.talismanManager.revokeAccess(target.uniqueId, def.id)

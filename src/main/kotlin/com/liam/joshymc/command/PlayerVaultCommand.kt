@@ -36,8 +36,8 @@ class PlayerVaultCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
                 return true
             }
             val targetName = args[1]
-            val target = Bukkit.getOfflinePlayer(targetName)
-            if (!target.hasPlayedBefore()) {
+            val target = plugin.playerResolver.resolve(targetName)
+            if (target == null || !target.hasPlayedBefore()) {
                 plugin.commsManager.send(sender, Component.text("Player '$targetName' not found.", NamedTextColor.RED))
                 return true
             }

@@ -84,7 +84,7 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        val target = resolveTarget(playerName)
+        val target = resolveTarget(sender, playerName) ?: return
         val displayName = target.name ?: playerName
         val current = currentStaffRank(target.uniqueId)
         val currentIndex = current?.let { STAFF_LADDER.indexOf(it) } ?: -1
@@ -142,7 +142,7 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        val target = resolveTarget(playerName)
+        val target = resolveTarget(sender, playerName) ?: return
         val displayName = target.name ?: playerName
         val current = currentStaffRank(target.uniqueId)
 
@@ -207,7 +207,7 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        val target = resolveTarget(playerName)
+        val target = resolveTarget(sender, playerName) ?: return
         val displayName = target.name ?: playerName
         val rank = plugin.rankManager.getRank(rankId)
         if (rank == null) {
@@ -262,7 +262,7 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        val target = resolveTarget(playerName)
+        val target = resolveTarget(sender, playerName) ?: return
         val displayName = target.name ?: playerName
         val rank = plugin.rankManager.getRank(rankId)
         if (rank == null) {
@@ -342,7 +342,7 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        val target = resolveTarget(playerName)
+        val target = resolveTarget(sender, playerName) ?: return
         val displayName = target.name ?: playerName
         val assignedIds = plugin.rankManager.getPlayerRankIds(target.uniqueId)
 
@@ -365,9 +365,12 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         reply(sender, msg.build())
     }
 
-    /** Online players resolve directly; offline lookups fall back to name-based lookup like the rest of the plugin's admin commands. */
-    private fun resolveTarget(playerName: String): OfflinePlayer =
-        Bukkit.getPlayer(playerName) ?: Bukkit.getOfflinePlayer(playerName)
+    /** Resolves [playerName] locally (no Mojang lookup); replies "Player not found" and returns null for unknown names. */
+    private fun resolveTarget(sender: CommandSender, playerName: String): OfflinePlayer? {
+        val target = Bukkit.getPlayer(playerName) ?: plugin.playerResolver.resolve(playerName)
+        if (target == null) reply(sender, Component.text("Player not found: $playerName", NamedTextColor.RED))
+        return target
+    }
 
     /** Sends via commsManager (prefix + chat rules) for players; plain for console. */
     private fun reply(sender: CommandSender, message: Component) {
@@ -428,8 +431,8 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             3 -> when (args[0].lowercase()) {
                 "add" -> plugin.rankManager.getRankIds().filter { it.startsWith(args[2].lowercase()) }.toList()
                 "remove" -> {
-                    val targetUuid = Bukkit.getPlayer(args[1])?.uniqueId ?: Bukkit.getOfflinePlayer(args[1]).uniqueId
-                    val assigned = plugin.rankManager.getPlayerRankIds(targetUuid)
+                    val targetUuid = (Bukkit.getPlayer(args[1]) ?: plugin.playerResolver.resolve(args[1]))?.uniqueId
+                    val assigned = targetUuid?.let { plugin.rankManager.getPlayerRankIds(it) }.orEmpty()
                     val pool = assigned.ifEmpty { plugin.rankManager.getRankIds() }
                     pool.filter { it.startsWith(args[2].lowercase()) }.toList()
                 }

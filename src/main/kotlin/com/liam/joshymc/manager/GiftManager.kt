@@ -240,7 +240,7 @@ class GiftManager(private val plugin: Joshymc) : Listener {
 
     /** Resolves a previously-seen player by name. Never allows a name that has never joined the server. */
     fun resolveKnownPlayer(name: String): OfflinePlayer? {
-        val target = Bukkit.getOfflinePlayer(name)
+        val target = plugin.playerResolver.resolve(name) ?: return null
         return if (target.hasPlayedBefore() || target.isOnline) target else null
     }
 

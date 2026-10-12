@@ -592,8 +592,8 @@ class InvseeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             sender.openInventory(online.inventory)
             return true
         }
-        val offline = Bukkit.getOfflinePlayer(args[0])
-        if (!offline.hasPlayedBefore()) {
+        val offline = plugin.playerResolver.resolve(args[0])
+        if (offline == null || !offline.hasPlayedBefore()) {
             plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
             return true
         }
@@ -625,7 +625,7 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 return true
             }
             val online = Bukkit.getPlayer(args[0])
-            val offline = online ?: Bukkit.getOfflinePlayer(args[0]).takeIf { it.hasPlayedBefore() }
+            val offline = online ?: plugin.playerResolver.resolve(args[0])?.takeIf { it.hasPlayedBefore() }
             val targetUuid = online?.uniqueId ?: offline?.uniqueId
             val targetName = online?.name ?: offline?.name
             if (targetUuid == null || targetName == null) {
@@ -646,8 +646,8 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 plugin.enderChestManager.open(sender, online)
                 return true
             }
-            val offline = Bukkit.getOfflinePlayer(args[0])
-            if (!offline.hasPlayedBefore()) {
+            val offline = plugin.playerResolver.resolve(args[0])
+            if (offline == null || !offline.hasPlayedBefore()) {
                 plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED))
                 return true
             }

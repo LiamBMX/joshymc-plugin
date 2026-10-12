@@ -302,6 +302,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var playerHeadManager: com.liam.joshymc.manager.PlayerHeadManager
         private set
+    lateinit var playerResolver: com.liam.joshymc.manager.PlayerResolver
+        private set
     lateinit var eventManager: com.liam.joshymc.manager.EventManager
         private set
     lateinit var resurgeManager: com.liam.joshymc.manager.ResurgeManager
@@ -412,6 +414,8 @@ class Joshymc : JavaPlugin() {
         timezoneManager.start()
         playerHeadManager = com.liam.joshymc.manager.PlayerHeadManager(this)
         playerHeadManager.start()
+        playerResolver = com.liam.joshymc.manager.PlayerResolver(this)
+        playerResolver.start()
         scoreboardManager = ScoreboardManager(this)
         announcementManager = AnnouncementManager(this)
         rotatingBossBarManager = com.liam.joshymc.manager.RotatingBossBarManager(this)

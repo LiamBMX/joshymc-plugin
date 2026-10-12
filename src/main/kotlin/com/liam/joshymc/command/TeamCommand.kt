@@ -248,7 +248,11 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        val target = Bukkit.getOfflinePlayer(args[1])
+        val target = plugin.playerResolver.resolve(args[1])
+        if (target == null) {
+            plugin.commsManager.send(player, Component.text("Player not found: ${args[1]}", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
         val targetUuid = target.uniqueId
 
         // Admins cannot kick other admins or the owner
@@ -332,7 +336,11 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        val target = Bukkit.getOfflinePlayer(args[1])
+        val target = plugin.playerResolver.resolve(args[1])
+        if (target == null) {
+            plugin.commsManager.send(player, Component.text("Player not found: ${args[1]}", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
         if (plugin.teamManager.promoteToAdmin(teamName, target.uniqueId)) {
             plugin.commsManager.send(
                 player,
@@ -368,7 +376,11 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        val target = Bukkit.getOfflinePlayer(args[1])
+        val target = plugin.playerResolver.resolve(args[1])
+        if (target == null) {
+            plugin.commsManager.send(player, Component.text("Player not found: ${args[1]}", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
         if (plugin.teamManager.demoteToMember(teamName, target.uniqueId)) {
             plugin.commsManager.send(
                 player,
@@ -404,7 +416,11 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        val target = Bukkit.getOfflinePlayer(args[1])
+        val target = plugin.playerResolver.resolve(args[1])
+        if (target == null) {
+            plugin.commsManager.send(player, Component.text("Player not found: ${args[1]}", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
         if (plugin.teamManager.transferOwnership(teamName, target.uniqueId)) {
             plugin.commsManager.send(
                 player,

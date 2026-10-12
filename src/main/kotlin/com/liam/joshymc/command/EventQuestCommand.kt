@@ -66,8 +66,8 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                     msg(sender, "Usage: /eq admin $sub <player> <event>", NamedTextColor.RED)
                     return
                 }
-                val target = Bukkit.getOfflinePlayer(args[2])
-                if (!target.isOnline && !target.hasPlayedBefore()) {
+                val target = plugin.playerResolver.resolve(args[2])
+                if (target == null || (!target.isOnline && !target.hasPlayedBefore())) {
                     msg(sender, "Unknown player '${args[2]}'.", NamedTextColor.RED)
                     return
                 }

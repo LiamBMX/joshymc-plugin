@@ -91,8 +91,8 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             reply(sender, Component.text("Usage: /claim addblocks <player> <amount>", NamedTextColor.RED))
             return
         }
-        val target = Bukkit.getOfflinePlayer(targetName)
-        if (!target.hasPlayedBefore() && target.player == null) {
+        val target = plugin.playerResolver.resolve(targetName)
+        if (target == null || (!target.hasPlayedBefore() && target.player == null)) {
             reply(sender, Component.text("Unknown player: $targetName", NamedTextColor.RED))
             return
         }
@@ -124,8 +124,8 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             reply(sender, Component.text("Usage: /claim setblocks <player> <amount>", NamedTextColor.RED))
             return
         }
-        val target = Bukkit.getOfflinePlayer(targetName)
-        if (!target.hasPlayedBefore() && target.player == null) {
+        val target = plugin.playerResolver.resolve(targetName)
+        if (target == null || (!target.hasPlayedBefore() && target.player == null)) {
             reply(sender, Component.text("Unknown player: $targetName", NamedTextColor.RED))
             return
         }
@@ -149,7 +149,8 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) {
             plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED)); return
         }
-        val target = Bukkit.getOfflinePlayer(targetName)
+        val target = plugin.playerResolver.resolve(targetName)
+        if (target == null) { plugin.commsManager.send(player, Component.text("Player not found: $targetName", NamedTextColor.RED)); return }
         if (plugin.claimManager.trustPlayer(claim, target.uniqueId)) {
             plugin.commsManager.send(player, Component.text("Trusted $targetName on this claim.", NamedTextColor.GREEN))
         } else {
@@ -168,7 +169,8 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) {
             plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED)); return
         }
-        val target = Bukkit.getOfflinePlayer(targetName)
+        val target = plugin.playerResolver.resolve(targetName)
+        if (target == null) { plugin.commsManager.send(player, Component.text("Player not found: $targetName", NamedTextColor.RED)); return }
         if (plugin.claimManager.untrustPlayer(claim, target.uniqueId)) {
             plugin.commsManager.send(player, Component.text("Untrusted $targetName from this claim.", NamedTextColor.GREEN))
         } else {
@@ -199,7 +201,8 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) {
             plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED)); return
         }
-        val target = Bukkit.getOfflinePlayer(targetName)
+        val target = plugin.playerResolver.resolve(targetName)
+        if (target == null) { plugin.commsManager.send(player, Component.text("Player not found: $targetName", NamedTextColor.RED)); return }
         if (target.uniqueId == claim.ownerUuid) {
             plugin.commsManager.send(player, Component.text("You cannot deny the claim owner.", NamedTextColor.RED)); return
         }
@@ -227,7 +230,8 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) {
             plugin.commsManager.send(player, Component.text("You must own this claim.", NamedTextColor.RED)); return
         }
-        val target = Bukkit.getOfflinePlayer(targetName)
+        val target = plugin.playerResolver.resolve(targetName)
+        if (target == null) { plugin.commsManager.send(player, Component.text("Player not found: $targetName", NamedTextColor.RED)); return }
         if (plugin.claimManager.undenyPlayer(claim, target.uniqueId)) {
             plugin.commsManager.send(player, Component.text("$targetName can now enter this claim.", NamedTextColor.GREEN))
         } else {
@@ -358,7 +362,9 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (!player.hasPermission("joshymc.claim.admin")) { plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED)); return }
         val targetName = args.getOrNull(2); val amount = args.getOrNull(3)?.toIntOrNull()
         if (targetName == null || amount == null || amount <= 0) { plugin.commsManager.send(player, Component.text("Usage: /claim blocks give <player> <amount>", NamedTextColor.RED)); return }
-        plugin.claimManager.addBlocks(Bukkit.getOfflinePlayer(targetName).uniqueId, amount)
+        val target = plugin.playerResolver.resolve(targetName)
+        if (target == null) { plugin.commsManager.send(player, Component.text("Player not found: $targetName", NamedTextColor.RED)); return }
+        plugin.claimManager.addBlocks(target.uniqueId, amount)
         plugin.commsManager.send(player, Component.text("Gave $amount claim blocks to $targetName.", NamedTextColor.GREEN))
     }
 

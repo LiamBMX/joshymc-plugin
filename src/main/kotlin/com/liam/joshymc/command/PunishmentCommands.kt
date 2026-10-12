@@ -530,16 +530,15 @@ class HistoryCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
 /**
  * Resolve a player name to UUID + last known name.
- * Tries online first, then falls back to Bukkit's offline player cache.
+ * Tries online first, then falls back to the local-only [com.liam.joshymc.manager.PlayerResolver].
  */
 internal fun resolveOfflinePlayer(name: String): Pair<UUID, String>? {
     // Try online first
     val online = Bukkit.getPlayer(name)
     if (online != null) return online.uniqueId to online.name
 
-    // Fallback to offline player cache (will have UUID if they've joined before)
-    @Suppress("DEPRECATION")
-    val offline = Bukkit.getOfflinePlayer(name)
+    // Fallback to locally known players (will have UUID if they've joined before)
+    val offline = Joshymc.instance.playerResolver.resolve(name) ?: return null
     if (offline.hasPlayedBefore() || offline.isOnline) {
         return offline.uniqueId to (offline.name ?: name)
     }
