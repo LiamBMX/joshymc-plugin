@@ -2,7 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
-import com.liam.joshymc.util.giveItemSafely
+import com.liam.joshymc.util.depositItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -437,20 +437,40 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         }
 
         var claimed = 0
+        var stillPending = 0
         for (delivery in deliveries) {
+            // Claim the row first so it can only ever be handed out once.
             val rowsDeleted = plugin.databaseManager.executeUpdate(
                 "DELETE FROM order_pending_deliveries WHERE id = ?", delivery.id
             )
             if (rowsDeleted == 0) continue
 
-            plugin.giveItemSafely(player, delivery.item)
-            claimed++
+            // Never drop on the ground: whatever doesn't fit goes straight back into the
+            // queue (same id and timestamp), and only the part that fit counts as delivered.
+            val originalAmount = delivery.item.amount
+            val leftover = plugin.depositItemSafely(player, delivery.item)
+            if (leftover != null && leftover.amount > 0) {
+                plugin.databaseManager.execute(
+                    "INSERT INTO order_pending_deliveries (id, owner_uuid, item, created_at) VALUES (?, ?, ?, ?)",
+                    delivery.id, player.uniqueId.toString(), serializeItem(leftover), delivery.createdAt
+                )
+                stillPending++
+                if (leftover.amount < originalAmount) claimed++
+            } else {
+                claimed++
+            }
         }
 
         if (claimed > 0) {
             player.playSound(player.location, Sound.ENTITY_ITEM_PICKUP, 0.5f, 1f)
             plugin.commsManager.send(player, Component.text("Claimed $claimed pending item stack(s).", NamedTextColor.GREEN))
-        } else {
+        }
+        if (stillPending > 0) {
+            plugin.commsManager.send(
+                player,
+                Component.text("Your inventory is full. $stillPending item stack(s) are still safely stored; free up space and claim again.", NamedTextColor.YELLOW)
+            )
+        } else if (claimed == 0) {
             plugin.commsManager.send(player, Component.text("You have no pending items to claim.", NamedTextColor.YELLOW))
         }
     }

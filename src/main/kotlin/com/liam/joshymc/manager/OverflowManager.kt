@@ -20,6 +20,7 @@ import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
+import org.bukkit.scheduler.BukkitTask
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -42,13 +43,20 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
             .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false)
 
-        private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
+        /** How often changed open storages are written back to the DB (1 second). */
+        private const val FLUSH_TICKS = 20L
+
+        private val FILLER =ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
             editMeta { it.displayName(Component.empty()) }
         }
     }
 
     /** uuid -> (type, live inventory) for whoever currently has an Overflow storage open. */
     private val openOverflow = ConcurrentHashMap<UUID, Pair<OverflowType, Inventory>>()
+
+    /** Players whose open storage changed since its last write to the DB. */
+    private val dirty = ConcurrentHashMap.newKeySet<UUID>()
+    private var flushTask: BukkitTask? = null
 
     fun start() {
         plugin.databaseManager.createTable("""
@@ -60,6 +68,10 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
                 PRIMARY KEY (uuid, type, slot)
             )
         """.trimIndent())
+        // The DB stays the authoritative copy while a storage is open: changes are written
+        // back within a second, so a hard crash loses at most that last second of clicks.
+        flushTask?.cancel()
+        flushTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { flushDirty() }, FLUSH_TICKS, FLUSH_TICKS)
         plugin.logger.info("[Overflow] OverflowManager started.")
     }
 
@@ -69,6 +81,19 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
             saveOverflow(uuid, entry.first, entry.second)
         }
         openOverflow.clear()
+        dirty.clear()
+    }
+
+    /** Writes every open storage that changed since its last save. */
+    private fun flushDirty() {
+        for (uuid in dirty.toList()) {
+            val entry = openOverflow[uuid]
+            if (entry == null) {
+                dirty.remove(uuid)
+                continue
+            }
+            saveOverflow(uuid, entry.first, entry.second)
+        }
     }
 
     // ---- Item serialization ----
@@ -91,7 +116,10 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
         // inventory instead of the DB, so we don't clobber what they're looking at right now.
         val open = openOverflow[uuid]
         if (open != null && open.first == type) {
-            return open.second.addItem(item).isEmpty()
+            val fitted = open.second.addItem(item).isEmpty()
+            // Save right away: a committed delivery must never live only in memory.
+            if (fitted) saveOverflow(uuid, type, open.second)
+            return fitted
         }
 
         val usedSlots = plugin.databaseManager.query(
@@ -186,19 +214,16 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
             if (slot in 0 until type.size) inv.setItem(slot, item)
         }
 
-        // Anti-dupe: clear the DB immediately after loading — the only copy of these items
-        // now lives in this inventory. It gets written back on close or quit.
-        plugin.databaseManager.execute(
-            "DELETE FROM overflow_storage WHERE uuid = ? AND type = ?",
-            uuid.toString(), type.name
-        )
-
+        // The rows stay in the DB while the storage is open. Every save replaces the whole
+        // storage in one transaction, so the DB always holds exactly one copy (the last saved
+        // contents of this inventory), never the old rows plus the live items.
         openOverflow[uuid] = type to inv
         player.openInventory(inv)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
     private fun saveOverflow(uuid: UUID, type: OverflowType, inventory: Inventory) {
+        dirty.remove(uuid)
         plugin.databaseManager.transaction {
             plugin.databaseManager.execute(
                 "DELETE FROM overflow_storage WHERE uuid = ? AND type = ?",
@@ -245,6 +270,23 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
         if (event.isShiftClick) {
             event.isCancelled = true
         }
+    }
+
+    // Clicks and drags that got through may have withdrawn items: mark the storage for the
+    // next flush instead of writing to the DB on every click.
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onClickMonitor(event: InventoryClickEvent) {
+        val player = event.whoClicked as? Player ?: return
+        val entry = openOverflow[player.uniqueId] ?: return
+        if (event.view.topInventory === entry.second) dirty.add(player.uniqueId)
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onDragMonitor(event: InventoryDragEvent) {
+        val player = event.whoClicked as? Player ?: return
+        val entry = openOverflow[player.uniqueId] ?: return
+        if (event.view.topInventory === entry.second) dirty.add(player.uniqueId)
     }
 
     @EventHandler(priority = EventPriority.LOWEST)

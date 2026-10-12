@@ -3,6 +3,7 @@ package com.liam.joshymc.manager
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.util.MinecraftColors
+import com.liam.joshymc.util.depositItemSafely
 import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -23,6 +24,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockBreakEvent
+import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.inventory.ItemFlag
 import org.bukkit.inventory.ItemStack
@@ -181,7 +183,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     private val crateLocations = mutableListOf<CrateLocation>()
     private val activeAnimations = mutableSetOf<UUID>()
     private val select3Sessions = mutableMapOf<UUID, Select3Session>()
+    /**
+     * player -> id of the `crate_pending_rewards` row their running SPIN/PULSE animation will
+     * pay out. The animation only pays while its id is still here; every other delivery path
+     * (join, retry, shutdown) skips rows that are in flight.
+     */
+    private val inFlightRewards = mutableMapOf<UUID, String>()
     private var particleTask: BukkitTask? = null
+    private var pendingRetryTask: BukkitTask? = null
     private lateinit var cratesFile: File
     private lateinit var cratesConfig: YamlConfiguration
 
@@ -207,9 +216,26 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }
         cratesConfig = YamlConfiguration.loadConfiguration(cratesFile)
 
+        // A RANDOM crate's animated reward is written here the moment its key is consumed and
+        // removed when it is delivered, so an interrupted animation (quit, reload, shutdown,
+        // crash) never eats it. Rewards that didn't fit in the inventory wait here too.
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS crate_pending_rewards (
+                id TEXT PRIMARY KEY,
+                owner_uuid TEXT NOT NULL,
+                item TEXT NOT NULL,
+                label TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+        """.trimIndent())
+
         loadCrates()
         loadLocations()
         startParticleTask()
+
+        // Retry held rewards for online players (inventory was full, or a reload interrupted them).
+        pendingRetryTask?.cancel()
+        pendingRetryTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { retryPendingRewards() }, 100L, 600L)
 
         plugin.logger.info("[Crates] Started with ${crates.size} crate type(s) and ${crateLocations.size} location(s).")
         if (crateLocations.isNotEmpty()) {
@@ -225,6 +251,20 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     fun stop() {
         particleTask?.cancel()
         particleTask = null
+        pendingRetryTask?.cancel()
+        pendingRetryTask = null
+        // Settle every animation that's still running instead of dropping it: pay it out now.
+        // Anything that can't be delivered stays in crate_pending_rewards for the next login.
+        for ((uuid, pendingId) in inFlightRewards.toMap()) {
+            inFlightRewards.remove(uuid)
+            val player = Bukkit.getPlayer(uuid) ?: continue
+            try {
+                claimPendingReward(player, pendingId)
+            } catch (e: Exception) {
+                plugin.logger.warning("[Crates] Could not settle pending reward $pendingId for ${player.name} on shutdown (kept for next login): ${e.message}")
+            }
+        }
+        inFlightRewards.clear()
         activeAnimations.clear()
         select3Sessions.clear()
     }
@@ -1108,10 +1148,11 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         plugin.guiManager.open(player, gui)
 
-        // The winner is pre-selected
+        // The winner is pre-selected and stored before the animation starts
         val winnerReward = selectWeightedReward(crate)
+        val pendingId = registerPendingReward(player, winnerReward)
 
-        schedulePulseStep(player, gui.inventory, crate, displayRewards.toMutableList(), winnerReward, 0, 12)
+        schedulePulseStep(player, gui.inventory, crate, displayRewards.toMutableList(), winnerReward, pendingId, 0, 12)
     }
 
     private fun schedulePulseStep(
@@ -1120,6 +1161,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         crate: CrateDef,
         displayRewards: MutableList<CrateReward>,
         winner: CrateReward,
+        pendingId: String,
         step: Int,
         maxSteps: Int
     ) {
@@ -1130,10 +1172,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }
 
         Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
-            if (!activeAnimations.contains(player.uniqueId) || !player.isOnline) {
-                activeAnimations.remove(player.uniqueId)
-                return@scheduleSyncDelayedTask
-            }
+            // Interrupted (quit, reload): the reward is still pending and gets delivered elsewhere.
+            if (inFlightRewards[player.uniqueId] != pendingId || !player.isOnline) return@scheduleSyncDelayedTask
 
             val glass = ItemStack(crate.animationGlass)
             glass.editMeta { it.displayName(Component.empty()) }
@@ -1148,15 +1188,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_BELL, 1.0f, 2.0f)
 
                 Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
-                    if (!player.isOnline) { activeAnimations.remove(player.uniqueId); return@scheduleSyncDelayedTask }
+                    if (!finishInFlight(player, pendingId)) return@scheduleSyncDelayedTask
                     spawnWinParticles(player, crate)
                     player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
-                    val rewardItem = buildRewardItem(winner)
-                    plugin.giveItemSafely(player, rewardItem)
-                    plugin.commsManager.send(player,
-                        Component.text("You won ", NamedTextColor.GREEN)
-                            .append(Component.text(winner.displayName, TextColor.color(0xFFAA00)))
-                            .append(Component.text(" x${winner.amount}!", NamedTextColor.GREEN)))
 
                     Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
                         activeAnimations.remove(player.uniqueId)
@@ -1174,7 +1208,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f, 0.8f + (step.toFloat() / maxSteps))
             }
 
-            schedulePulseStep(player, inv, crate, displayRewards, winner, step + 1, maxSteps)
+            schedulePulseStep(player, inv, crate, displayRewards, winner, pendingId, step + 1, maxSteps)
         }, delay)
     }
 
@@ -1213,7 +1247,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         plugin.guiManager.open(player, gui)
 
-        scheduleAnimationStep(player, gui.inventory, crate, reel, 2L, 0, 40)
+        // The winner is drawn and stored now (the key is already gone), then fed into the reel
+        // so it stops in slot 13 on the last step. Same single weighted draw as before.
+        val winner = selectWeightedReward(crate)
+        val pendingId = registerPendingReward(player, winner)
+
+        scheduleAnimationStep(player, gui.inventory, crate, reel, winner, pendingId, 2L, 0, 40)
     }
 
     private fun scheduleAnimationStep(
@@ -1221,22 +1260,23 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         inv: org.bukkit.inventory.Inventory,
         crate: CrateDef,
         reel: MutableList<CrateReward>,
+        winner: CrateReward,
+        pendingId: String,
         delay: Long,
         step: Int,
         maxSteps: Int
     ) {
         Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
-            if (!activeAnimations.contains(player.uniqueId)) return@scheduleSyncDelayedTask
-            if (!player.isOnline) {
-                activeAnimations.remove(player.uniqueId)
-                return@scheduleSyncDelayedTask
-            }
+            // Interrupted (quit, reload): the reward is still pending and gets delivered elsewhere.
+            if (inFlightRewards[player.uniqueId] != pendingId || !player.isOnline) return@scheduleSyncDelayedTask
 
             // Shift rewards left: move 11->10, 12->11, ..., 16->15, new->16
             for (slot in 10..15) {
                 inv.setItem(slot, inv.getItem(slot + 1))
             }
-            val incoming = selectWeightedReward(crate)
+            // A reward entering at slot 16 sits in slot 13 three shifts later, so the winner
+            // enters four steps before the end and stops in the center.
+            val incoming = if (step == maxSteps - 4) winner else selectWeightedReward(crate)
             reel.removeAt(0)
             reel.add(incoming)
             inv.setItem(16, buildRewardDisplay(incoming))
@@ -1246,29 +1286,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val nextStep = step + 1
 
             if (nextStep >= maxSteps) {
-                // Animation complete - the reward in center slot 13 (reel index 3) is the winner
-                val winnerReward = reel[3]
-
+                // Animation complete - center slot 13 (reel index 3) shows the stored winner
                 Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
-                    if (!player.isOnline) {
-                        activeAnimations.remove(player.uniqueId)
-                        return@scheduleSyncDelayedTask
-                    }
+                    if (!finishInFlight(player, pendingId)) return@scheduleSyncDelayedTask
 
                     spawnWinParticles(player, crate)
                     player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
-
-                    // Give reward
-                    val rewardItem = buildRewardItem(winnerReward)
-                    plugin.giveItemSafely(player, rewardItem)
-
-                    plugin.commsManager.send(
-                        player,
-                        Component.text("You won ", NamedTextColor.GREEN)
-                            .append(Component.text(winnerReward.displayName, TextColor.color(0xFFAA00)))
-                            .append(Component.text(" x${winnerReward.amount}", NamedTextColor.GREEN))
-                            .append(Component.text("!", NamedTextColor.GREEN))
-                    )
 
                     // Close after short delay
                     Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
@@ -1285,9 +1308,110 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     else -> 8L
                 }
 
-                scheduleAnimationStep(player, inv, crate, reel, newDelay, nextStep, maxSteps)
+                scheduleAnimationStep(player, inv, crate, reel, winner, pendingId, newDelay, nextStep, maxSteps)
             }
         }, delay)
+    }
+
+    // --- Pending rewards (SPIN / PULSE) ---
+
+    /**
+     * Stores [reward] for [player] before its animation starts. The item is built once here,
+     * so a voucher id minted for it is the one the player ends up holding.
+     */
+    private fun registerPendingReward(player: Player, reward: CrateReward): String {
+        val id = UUID.randomUUID().toString()
+        plugin.databaseManager.execute(
+            "INSERT INTO crate_pending_rewards (id, owner_uuid, item, label, created_at) VALUES (?, ?, ?, ?, ?)",
+            id, player.uniqueId.toString(), serializeItem(buildRewardItem(reward)),
+            "${reward.displayName} x${reward.amount}", System.currentTimeMillis()
+        )
+        inFlightRewards[player.uniqueId] = id
+        return id
+    }
+
+    /**
+     * Pays out the animation that owns [pendingId]. Returns false (and pays nothing) if the
+     * animation was interrupted in the meantime; that reward is delivered by another path.
+     */
+    private fun finishInFlight(player: Player, pendingId: String): Boolean {
+        if (!player.isOnline || inFlightRewards[player.uniqueId] != pendingId) return false
+        inFlightRewards.remove(player.uniqueId)
+        claimPendingReward(player, pendingId)
+        return true
+    }
+
+    /**
+     * Delivers one pending reward row exactly once: the row is deleted first, and only the
+     * caller whose DELETE removed it hands the item over. Whatever doesn't fit is written back
+     * under the same id and retried later, never dropped on the ground.
+     */
+    private fun claimPendingReward(player: Player, pendingId: String): Boolean {
+        val row = plugin.databaseManager.queryFirst(
+            "SELECT item, label, created_at FROM crate_pending_rewards WHERE id = ? AND owner_uuid = ?",
+            pendingId, player.uniqueId.toString()
+        ) { rs -> Triple(rs.getString("item"), rs.getString("label"), rs.getLong("created_at")) } ?: return false
+        val (itemBase64, label, createdAt) = row
+        val item = deserializeItem(itemBase64)
+        if (item == null) {
+            plugin.logger.warning("[Crates] Pending reward $pendingId for ${player.name} could not be read; left in crate_pending_rewards.")
+            return false
+        }
+
+        val claimed = plugin.databaseManager.executeUpdate(
+            "DELETE FROM crate_pending_rewards WHERE id = ?", pendingId
+        )
+        if (claimed == 0) return false
+
+        val originalAmount = item.amount
+        val leftover = plugin.depositItemSafely(player, item)
+        if (leftover != null && leftover.amount > 0) {
+            plugin.databaseManager.execute(
+                "INSERT INTO crate_pending_rewards (id, owner_uuid, item, label, created_at) VALUES (?, ?, ?, ?, ?)",
+                pendingId, player.uniqueId.toString(), serializeItem(leftover), label, createdAt
+            )
+            plugin.commsManager.send(
+                player,
+                Component.text("Your inventory is full. Your crate reward ", NamedTextColor.YELLOW)
+                    .append(Component.text(label, TextColor.color(0xFFAA00)))
+                    .append(Component.text(" is safely held and will be delivered once you have space.", NamedTextColor.YELLOW))
+            )
+            if (leftover.amount >= originalAmount) return true
+        }
+
+        plugin.commsManager.send(
+            player,
+            Component.text("You won ", NamedTextColor.GREEN)
+                .append(Component.text(label, TextColor.color(0xFFAA00)))
+                .append(Component.text("!", NamedTextColor.GREEN))
+        )
+        return true
+    }
+
+    /** Delivers every held crate reward of [player] that isn't owned by a running animation. */
+    fun deliverPendingRewards(player: Player) {
+        val inFlight = inFlightRewards[player.uniqueId]
+        val ids = plugin.databaseManager.query(
+            "SELECT id FROM crate_pending_rewards WHERE owner_uuid = ? ORDER BY created_at ASC",
+            player.uniqueId.toString()
+        ) { rs -> rs.getString("id") }
+        for (id in ids) {
+            if (id == inFlight) continue
+            claimPendingReward(player, id)
+        }
+    }
+
+    private fun retryPendingRewards() {
+        val owners = plugin.databaseManager.query(
+            "SELECT DISTINCT owner_uuid FROM crate_pending_rewards"
+        ) { rs -> rs.getString("owner_uuid") }
+        for (owner in owners) {
+            val uuid = try { UUID.fromString(owner) } catch (_: Exception) { continue }
+            val player = Bukkit.getPlayer(uuid) ?: continue
+            // Don't re-send "inventory full" every 30s: only retry once a slot is free.
+            if (!plugin.modModeManager.isModMode(player) && player.inventory.firstEmpty() == -1) continue
+            deliverPendingRewards(player)
+        }
     }
 
     /** How many rewards one key yields — the number of picks the crate's manual selection allows. */
@@ -1369,36 +1493,19 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val serialized = deserializeItem(reward.itemBase64)
         if (serialized != null) {
             serialized.amount = reward.amount
-            if (plugin.creditVoucherManager.isCreditVoucher(serialized)) {
-                // The stored reward template is a Base64 snapshot of whatever voucher was
-                // held when the reward was configured — including that voucher's unique
-                // voucher_uuid. Handing out the same snapshot verbatim would give every
-                // winner an item with an IDENTICAL voucher_uuid, so only the first person
-                // to redeem it would succeed; everyone else would hit the "already
-                // redeemed" duplicate-id check. Mint a fresh id (and force amount back to
-                // 1, since a legitimate voucher never stacks) on every delivery.
-                serialized.amount = 1
-                serialized.editMeta { meta ->
-                    meta.persistentDataContainer.set(
-                        plugin.creditVoucherManager.voucherUuidKey,
-                        PersistentDataType.STRING,
-                        UUID.randomUUID().toString()
-                    )
-                }
-            }
-            if (plugin.chatTagVoucherManager.isChatTagVoucher(serialized)) {
-                // Same template problem as credit vouchers: the snapshot carries the
-                // voucher_uuid of the item it was taken from, which is burned in
-                // chattag_voucher_redemptions after its first redemption. Mint a fresh
-                // id per delivery so every winner gets an independent single-use voucher.
-                serialized.amount = 1
-                serialized.editMeta { meta ->
-                    meta.persistentDataContainer.set(
-                        plugin.chatTagVoucherManager.voucherUuidKey,
-                        PersistentDataType.STRING,
-                        UUID.randomUUID().toString()
-                    )
-                }
+            // The stored reward template is a Base64 snapshot of whatever voucher was held
+            // when the reward was configured — including that voucher's unique voucher_uuid.
+            // Handing out the same snapshot verbatim would give every winner an item with an
+            // IDENTICAL voucher_uuid, so only the first person to redeem it would succeed;
+            // everyone else would hit the "already redeemed" duplicate-id check. Credit,
+            // chat-tag and rank vouchers each burn that id in their own redemptions table.
+            when {
+                plugin.creditVoucherManager.isCreditVoucher(serialized) ->
+                    mintFreshVoucherId(serialized, plugin.creditVoucherManager.voucherUuidKey)
+                plugin.chatTagVoucherManager.isChatTagVoucher(serialized) ->
+                    mintFreshVoucherId(serialized, plugin.chatTagVoucherManager.voucherUuidKey)
+                plugin.rankVoucherManager.isRankVoucher(serialized) ->
+                    mintFreshVoucherId(serialized, plugin.rankVoucherManager.voucherUuidKey)
             }
             return serialized
         }
@@ -1412,6 +1519,19 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             }
         }
         return item
+    }
+
+    /**
+     * Gives a voucher copied from a reward template its own redemption id, so every delivered
+     * voucher redeems independently. Only the id changes (rank, display, lore, model and the
+     * rest of the PDC stay as configured), and the amount goes back to 1 since a legitimate
+     * voucher never stacks.
+     */
+    private fun mintFreshVoucherId(voucher: ItemStack, voucherUuidKey: NamespacedKey) {
+        voucher.amount = 1
+        voucher.editMeta { meta ->
+            meta.persistentDataContainer.set(voucherUuidKey, PersistentDataType.STRING, UUID.randomUUID().toString())
+        }
     }
 
     /** Serialize an ItemStack to a Base64 string (preserves all NBT/PDC/trims). */
@@ -1974,5 +2094,18 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onPlayerQuit(event: org.bukkit.event.player.PlayerQuitEvent) {
         select3Sessions.remove(event.player.uniqueId)
+        // A running animation stops here; its reward stays in crate_pending_rewards and is
+        // delivered when they log back in.
+        inFlightRewards.remove(event.player.uniqueId)
+        activeAnimations.remove(event.player.uniqueId)
+    }
+
+    @EventHandler
+    fun onPlayerJoin(event: PlayerJoinEvent) {
+        val player = event.player
+        // Short delay so other join handlers (Mod Mode restore, etc.) settle the inventory first.
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            if (player.isOnline) deliverPendingRewards(player)
+        }, 40L)
     }
 }
