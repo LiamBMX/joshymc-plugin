@@ -516,7 +516,8 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
 
         tasks += Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickCycles() }, 600L, 600L)
         tasks += Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickOpenGuis() }, 100L, 100L)
-        tasks += Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, Runnable { flushAllProgress() }, 6000L, 6000L)
+        // Snapshot on the main thread (the cached maps are mutated there); the write is queued on the DB thread.
+        tasks += Bukkit.getScheduler().runTaskTimer(plugin, Runnable { flushAllProgress() }, 6000L, 6000L)
 
         plugin.logger.info(
             "[QuestCycle] Started. Daily cycle=$dailyCycleIdState (${dailyQuestIdsState.size} quests), " +
@@ -675,20 +676,29 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    /**
+     * Snapshots the player's cached progress on the calling thread and queues the batch
+     * upsert on the DB thread, so quit/periodic flushes never wait on disk (issue #1112).
+     */
     private fun flushProgress(uuid: UUID) {
         val map = progressCache[uuid] ?: return
-        plugin.databaseManager.transaction {
-            for ((questId, entry) in map) {
-                val quest = questsById[questId] ?: continue
-                val cycleId = cycleIdFor(quest)
-                val completedInt = if (entry.completed) 1 else 0
-                plugin.databaseManager.execute(
-                    """INSERT INTO quest_cycle_progress (uuid, quest_id, cycle_id, progress, completed, reward_claimed)
-                       VALUES (?, ?, ?, ?, ?, ?)
-                       ON CONFLICT(uuid, quest_id, cycle_id) DO UPDATE SET progress = ?, completed = ?""",
-                    uuid.toString(), questId, cycleId, entry.progress, completedInt, if (entry.rewardClaimed) 1 else 0,
-                    entry.progress, completedInt
-                )
+        val rows = map.mapNotNull { (questId, entry) ->
+            val quest = questsById[questId] ?: return@mapNotNull null
+            Triple(questId, cycleIdFor(quest), entry)
+        }
+        if (rows.isEmpty()) return
+        plugin.databaseManager.async("quest progress flush for $uuid") {
+            plugin.databaseManager.transaction {
+                for ((questId, cycleId, entry) in rows) {
+                    val completedInt = if (entry.completed) 1 else 0
+                    plugin.databaseManager.execute(
+                        """INSERT INTO quest_cycle_progress (uuid, quest_id, cycle_id, progress, completed, reward_claimed)
+                           VALUES (?, ?, ?, ?, ?, ?)
+                           ON CONFLICT(uuid, quest_id, cycle_id) DO UPDATE SET progress = ?, completed = ?""",
+                        uuid.toString(), questId, cycleId, entry.progress, completedInt, if (entry.rewardClaimed) 1 else 0,
+                        entry.progress, completedInt
+                    )
+                }
             }
         }
     }
