@@ -683,7 +683,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         forActive(player, EventObjective.CRAFT_ITEM, { it == null || it == name }) { ev, q -> advance(player, ev, q, amount) }
     }
 
-    /** Called once per completed sale by every sell path (/shop, /sell, /sellall, sell GUI, Sell Wands, market). */
+    /** Called once per sold material of every completed sale, via [SaleManager]. Sell paths report there, not here. */
     fun recordSale(player: Player, material: Material, amount: Int) {
         if (amount <= 0 || isExempt(player)) return
         val name = material.name

@@ -217,6 +217,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var sellPriceManager: com.liam.joshymc.manager.SellPriceManager
         private set
+    lateinit var saleManager: com.liam.joshymc.manager.SaleManager
+        private set
     lateinit var creditShopManager: com.liam.joshymc.manager.CreditShopManager
         private set
     lateinit var voucherManager: com.liam.joshymc.manager.VoucherManager
@@ -460,6 +462,7 @@ class Joshymc : JavaPlugin() {
         mutationsManager.start()
         sellPriceManager = com.liam.joshymc.manager.SellPriceManager(this)
         sellPriceManager.start()
+        saleManager = com.liam.joshymc.manager.SaleManager(this)
 
         itemManager.registerAll()
         recipeManager.registerAll()

@@ -3,6 +3,7 @@ package com.liam.joshymc.listener
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.command.SellWandCommand
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.manager.SaleManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Material
@@ -107,10 +108,7 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
 
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
 
-        for ((material, amount) in breakdown) {
-            plugin.marketManager.recordTransaction(material, "SELL", amount)
-            plugin.eventQuestManager.recordSale(player, material, amount)
-        }
+        plugin.saleManager.recordSales(player, breakdown, SaleManager.Source.SELL_WAND)
 
         val formatted = plugin.economyManager.format(totalEarned)
         val multiplierText = if (multiplier != 1.0) " (${multiplier}x)" else ""

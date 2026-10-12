@@ -634,8 +634,7 @@ class MarketManager(private val plugin: Joshymc) {
 
             val totalEarned = price * totalCount
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
-            recordTransaction(material, "SELL", totalCount)
-            plugin.eventQuestManager.recordSale(player, material, totalCount)
+            plugin.saleManager.recordSale(player, material, totalCount, SaleManager.Source.MARKET)
 
             plugin.commsManager.send(player,
                 Component.text("Sold ", NamedTextColor.YELLOW)
@@ -674,8 +673,7 @@ class MarketManager(private val plugin: Joshymc) {
 
             val totalEarned = price * amount
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
-            recordTransaction(material, "SELL", amount)
-            plugin.eventQuestManager.recordSale(player, material, amount)
+            plugin.saleManager.recordSale(player, material, amount, SaleManager.Source.MARKET)
 
             plugin.commsManager.send(player,
                 Component.text("Sold ", NamedTextColor.YELLOW)
