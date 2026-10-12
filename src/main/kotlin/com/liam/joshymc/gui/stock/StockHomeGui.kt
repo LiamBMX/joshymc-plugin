@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.stock
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
@@ -14,11 +15,11 @@ object StockHomeGui {
 
     fun build(plugin: Joshymc, player: Player): CustomGui {
         val gui = CustomGui(Component.text("Stock Market", NamedTextColor.GOLD), 27)
-        gui.border(StockGuiUtil.filler(Material.BLACK_STAINED_GLASS_PANE))
+        gui.border(GuiStyle.filler())
 
         gui.setItem(
             11,
-            StockGuiUtil.item(
+            GuiStyle.item(
                 Material.GOLD_INGOT,
                 Component.text("Trade", NamedTextColor.YELLOW),
                 listOf(
@@ -32,7 +33,7 @@ object StockHomeGui {
 
         gui.setItem(
             13,
-            StockGuiUtil.item(
+            GuiStyle.item(
                 Material.ANVIL,
                 Component.text("Create Your Own", NamedTextColor.AQUA),
                 listOf(
@@ -47,7 +48,7 @@ object StockHomeGui {
 
         gui.setItem(
             15,
-            StockGuiUtil.item(
+            GuiStyle.item(
                 Material.CHEST,
                 Component.text("My Investments", NamedTextColor.LIGHT_PURPLE),
                 listOf(
@@ -58,6 +59,8 @@ object StockHomeGui {
                 )
             )
         ) { p, _ -> plugin.guiManager.open(p, StockPortfolioGui.build(plugin, p, 0)) }
+
+        gui.setItem(GuiStyle.closeSlot(27), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         return gui
     }

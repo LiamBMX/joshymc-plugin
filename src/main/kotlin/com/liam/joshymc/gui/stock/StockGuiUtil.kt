@@ -1,28 +1,13 @@
 package com.liam.joshymc.gui.stock
 
 import com.liam.joshymc.manager.StockPricingEngine
-import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextDecoration
-import org.bukkit.Material
-import org.bukkit.inventory.ItemStack
 
-/** Small shared helpers for building the /invest stock market GUIs. */
+/**
+ * Stock-market-only formatting for the /invest GUIs. Shared items, navigation
+ * and filler live in [com.liam.joshymc.gui.GuiStyle] (issue #1120).
+ */
 object StockGuiUtil {
-
-    fun item(material: Material, name: Component, lore: List<Component> = emptyList()): ItemStack {
-        val stack = ItemStack(material)
-        val meta = stack.itemMeta
-        meta?.displayName(name.decoration(TextDecoration.ITALIC, false))
-        if (lore.isNotEmpty()) {
-            meta?.lore(lore.map { it.decoration(TextDecoration.ITALIC, false) })
-        }
-        stack.itemMeta = meta
-        return stack
-    }
-
-    fun filler(material: Material = Material.GRAY_STAINED_GLASS_PANE): ItemStack =
-        item(material, Component.text(" "))
 
     fun trendColor(trend: StockPricingEngine.TrendLevel): NamedTextColor = when (trend) {
         StockPricingEngine.TrendLevel.GROWING -> NamedTextColor.GREEN

@@ -1,8 +1,8 @@
 package com.liam.joshymc.gui.casino.roulette
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
-import com.liam.joshymc.gui.casino.CasinoGuiUtil
 import com.liam.joshymc.gui.casino.CasinoMainGui
 import com.liam.joshymc.manager.CasinoRouletteManager
 import com.liam.joshymc.manager.CommunicationsManager
@@ -10,7 +10,6 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
 import org.bukkit.Material
-import org.bukkit.Sound
 import org.bukkit.entity.Player
 import org.bukkit.scheduler.BukkitTask
 import java.security.SecureRandom
@@ -48,15 +47,15 @@ object RouletteGui {
         val presetBet = selectedAmount[player.uniqueId]
 
         val gui = CustomGui(Component.text("Roulette", NamedTextColor.DARK_RED), 54)
-        gui.border(CasinoGuiUtil.filler())
-        for (slot in 10..16) gui.setItem(slot, CasinoGuiUtil.filler())
-        for (slot in 19..25) gui.setItem(slot, CasinoGuiUtil.filler())
-        for (slot in 28..34) gui.setItem(slot, CasinoGuiUtil.filler())
-        for (slot in 37..43) gui.setItem(slot, CasinoGuiUtil.filler())
+        gui.border(GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
+        for (slot in 10..16) gui.setItem(slot, GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
+        for (slot in 19..25) gui.setItem(slot, GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
+        for (slot in 28..34) gui.setItem(slot, GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
+        for (slot in 37..43) gui.setItem(slot, GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
 
         gui.setItem(
             4,
-            CasinoGuiUtil.item(
+            GuiStyle.item(
                 Material.CLOCK,
                 Component.text("Roulette", NamedTextColor.DARK_RED),
                 listOf(Component.text("Pick a bet type — you'll be asked for an amount.", NamedTextColor.GRAY))
@@ -75,18 +74,18 @@ object RouletteGui {
         betTypeButton(gui, plugin, 25, Material.GOLD_INGOT, "High (19-36)", NamedTextColor.AQUA, CasinoRouletteManager.BetType.HIGH)
 
         // Third row — exact-number picker, spread evenly across the row.
-        gui.setItem(28, CasinoGuiUtil.item(Material.RED_DYE, Component.text("-1", NamedTextColor.RED))) { p, _ ->
+        gui.setItem(28, GuiStyle.item(Material.RED_DYE, Component.text("-1", NamedTextColor.RED))) { p, _ ->
             selectedNumber[p.uniqueId] = ((number - 1) % 37 + 37) % 37
             open(plugin, p)
         }
-        gui.setItem(30, CasinoGuiUtil.item(Material.NAME_TAG, Component.text("Number: $number", NamedTextColor.WHITE)))
-        gui.setItem(32, CasinoGuiUtil.item(Material.LIME_DYE, Component.text("+1", NamedTextColor.GREEN))) { p, _ ->
+        gui.setItem(30, GuiStyle.item(Material.NAME_TAG, Component.text("Number: $number", NamedTextColor.WHITE)))
+        gui.setItem(32, GuiStyle.item(Material.LIME_DYE, Component.text("+1", NamedTextColor.GREEN))) { p, _ ->
             selectedNumber[p.uniqueId] = (number + 1) % 37
             open(plugin, p)
         }
         gui.setItem(
             34,
-            CasinoGuiUtil.item(
+            GuiStyle.item(
                 Material.EMERALD,
                 Component.text("Bet on Exact Number", NamedTextColor.GREEN),
                 listOf(Component.text("Pays approximately 36x.", NamedTextColor.GRAY))
@@ -96,7 +95,7 @@ object RouletteGui {
         // Fourth row — payout reference, centered.
         gui.setItem(
             40,
-            CasinoGuiUtil.item(
+            GuiStyle.item(
                 Material.BOOK,
                 Component.text("Payouts", NamedTextColor.AQUA),
                 listOf(
@@ -109,7 +108,7 @@ object RouletteGui {
         if (presetBet != null) {
             gui.setItem(
                 47,
-                CasinoGuiUtil.item(
+                GuiStyle.item(
                     Material.GOLD_INGOT,
                     Component.text("Bet: ${plugin.economyManager.format(presetBet)}", NamedTextColor.GOLD),
                     listOf(
@@ -125,17 +124,17 @@ object RouletteGui {
             }
         }
 
-        gui.setItem(45, CasinoGuiUtil.backButton()) { p, _ -> CasinoMainGui.open(plugin, p) }
-        gui.setItem(49, CasinoGuiUtil.closeButton()) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.backSlot(54), GuiStyle.back()) { p, _ -> CasinoMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
-        player.playSound(player.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.2f)
+        GuiStyle.clickSound(player)
     }
 
     private fun betTypeButton(gui: CustomGui, plugin: Joshymc, slot: Int, material: Material, name: String, color: NamedTextColor, betType: CasinoRouletteManager.BetType) {
         gui.setItem(
             slot,
-            CasinoGuiUtil.item(
+            GuiStyle.item(
                 material,
                 Component.text(name, color),
                 listOf(Component.text("Click to bet ${name}.", NamedTextColor.GRAY))
@@ -167,8 +166,8 @@ object RouletteGui {
 
     private fun playSpinAnimation(plugin: Joshymc, player: Player, bet: CasinoRouletteManager.Bet) {
         val gui = CustomGui(Component.text("Roulette — Spinning...", NamedTextColor.DARK_RED), 9)
-        for (slot in listOf(0, 1, 2, 6, 7, 8)) gui.setItem(slot, CasinoGuiUtil.filler())
-        gui.setItem(4, CasinoGuiUtil.item(Material.CLOCK, Component.text("...", NamedTextColor.WHITE)))
+        for (slot in listOf(0, 1, 2, 6, 7, 8)) gui.setItem(slot, GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
+        gui.setItem(4, GuiStyle.item(Material.CLOCK, Component.text("...", NamedTextColor.WHITE)))
         plugin.guiManager.open(player, gui)
 
         var ticks = 0
@@ -179,7 +178,7 @@ object RouletteGui {
                 task?.cancel()
                 gui.setItem(
                     4,
-                    CasinoGuiUtil.item(
+                    GuiStyle.item(
                         if (bet.result == 0) Material.LIME_WOOL else if (bet.result in CasinoRouletteManager.RED_NUMBERS) Material.RED_WOOL else Material.BLACK_WOOL,
                         Component.text("${bet.result}", CasinoRouletteManager.colorOf(bet.result))
                     )
@@ -191,7 +190,7 @@ object RouletteGui {
                 return@Runnable
             }
             val spin = animRandom.nextInt(37)
-            gui.setItem(4, CasinoGuiUtil.item(Material.CLOCK, Component.text("$spin", CasinoRouletteManager.colorOf(spin))))
+            gui.setItem(4, GuiStyle.item(Material.CLOCK, Component.text("$spin", CasinoRouletteManager.colorOf(spin))))
         }, 2L, 2L)
     }
 }

@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.team
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
@@ -22,15 +23,15 @@ object TeamBankGui {
         val balance = plugin.teamManager.getTeamBalance(teamName)
 
         val gui = CustomGui(Component.text("Team Bank", NamedTextColor.GOLD), 27)
-        for (slot in 0..26) gui.setItem(slot, TeamGuiUtil.filler())
+        for (slot in 0..26) gui.setItem(slot, GuiStyle.filler())
 
-        gui.setItem(13, TeamGuiUtil.item(
+        gui.setItem(13, GuiStyle.item(
             Material.GOLD_INGOT,
             Component.text("Team Balance", NamedTextColor.YELLOW),
             listOf(Component.empty(), Component.text(plugin.economyManager.format(balance), NamedTextColor.GREEN))
         ))
 
-        gui.setItem(11, TeamGuiUtil.item(
+        gui.setItem(11, GuiStyle.item(
             Material.LIME_DYE,
             Component.text("Deposit", NamedTextColor.GREEN),
             listOf(Component.empty(), Component.text("Click to deposit money from your wallet.", NamedTextColor.GRAY))
@@ -47,7 +48,7 @@ object TeamBankGui {
         }
 
         if (canWithdraw) {
-            gui.setItem(15, TeamGuiUtil.item(
+            gui.setItem(15, GuiStyle.item(
                 Material.RED_DYE,
                 Component.text("Withdraw", NamedTextColor.RED),
                 listOf(Component.empty(), Component.text("Click to withdraw money to your wallet.", NamedTextColor.GRAY))
@@ -63,14 +64,15 @@ object TeamBankGui {
                 )
             }
         } else {
-            gui.setItem(15, TeamGuiUtil.item(
+            gui.setItem(15, GuiStyle.item(
                 Material.GRAY_DYE,
                 Component.text("Withdraw", NamedTextColor.DARK_GRAY),
                 listOf(Component.empty(), Component.text("You do not have permission to use this.", NamedTextColor.RED))
             ))
         }
 
-        gui.setItem(22, TeamGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> TeamMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.backSlot(27), GuiStyle.back()) { p, _ -> TeamMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(27), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
     }

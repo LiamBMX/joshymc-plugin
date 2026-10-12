@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.claim
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.ClaimManager
@@ -32,10 +33,10 @@ object ClaimManagementGui {
         }
 
         val gui = CustomGui(Component.text("Manage Claim #${claim.id}", NamedTextColor.GOLD), 45)
-        for (slot in 0..44) gui.setItem(slot, ClaimGuiUtil.filler())
+        for (slot in 0..44) gui.setItem(slot, GuiStyle.filler())
 
         val ownerName = Bukkit.getOfflinePlayer(claim.ownerUuid).name ?: "Unknown"
-        gui.setItem(4, ClaimGuiUtil.item(
+        gui.setItem(4, GuiStyle.item(
             Material.GRASS_BLOCK,
             Component.text("Claim #${claim.id}", NamedTextColor.GOLD),
             listOf(
@@ -47,34 +48,35 @@ object ClaimManagementGui {
             )
         ))
 
-        gui.setItem(10, ClaimGuiUtil.item(
+        gui.setItem(10, GuiStyle.item(
             Material.MAP, Component.text("Claim Info", NamedTextColor.YELLOW),
             listOf(Component.empty(), Component.text("View full details.", NamedTextColor.GRAY))
         )) { p, _ -> ClaimInfoGui.open(plugin, p, claim.id) { pl, viewer -> open(pl, viewer, claim.id) } }
 
-        gui.setItem(11, ClaimGuiUtil.item(
+        gui.setItem(11, GuiStyle.item(
             Material.LIME_DYE, Component.text("Trust Player", NamedTextColor.GREEN),
             listOf(Component.empty(), Component.text("Give another player full access.", NamedTextColor.GRAY))
         )) { p, _ -> openTrustPicker(plugin, p, claim.id) }
 
-        gui.setItem(12, ClaimGuiUtil.item(
+        gui.setItem(12, GuiStyle.item(
             Material.RED_DYE, Component.text("Untrust Player", NamedTextColor.RED),
             listOf(Component.empty(), Component.text("Remove a trusted player's access.", NamedTextColor.GRAY))
         )) { p, _ -> openUntrustPicker(plugin, p, claim.id) }
 
-        gui.setItem(13, ClaimGuiUtil.item(
+        gui.setItem(13, GuiStyle.item(
             Material.COMPARATOR, Component.text("Claim Settings", NamedTextColor.YELLOW),
             listOf(Component.empty(), Component.text("Public permissions, PvP, TNT, team sharing.", NamedTextColor.GRAY))
         )) { p, _ -> ClaimSettingsGui.open(plugin, p, claim.id) }
 
-        gui.setItem(14, ClaimGuiUtil.item(
+        gui.setItem(14, GuiStyle.item(
             Material.ENDER_PEARL, Component.text("Teleport to Claim", NamedTextColor.LIGHT_PURPLE),
             listOf(Component.empty(), Component.text("Teleport to this claim's center.", NamedTextColor.GRAY))
         )) { p, _ -> teleportToClaim(plugin, p, claim) }
 
-        gui.setItem(40, ClaimGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> ClaimMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.backSlot(45), GuiStyle.back()) { p, _ -> ClaimMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(45), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
-        gui.setItem(44, ClaimGuiUtil.item(
+        gui.setItem(44, GuiStyle.item(
             Material.BARRIER, Component.text("Delete Claim", NamedTextColor.DARK_RED),
             listOf(Component.empty(), Component.text("Permanently delete this claim.", NamedTextColor.GRAY))
         )) { p, _ ->

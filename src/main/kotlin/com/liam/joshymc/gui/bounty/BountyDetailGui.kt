@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.bounty
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
@@ -41,7 +42,7 @@ object BountyDetailGui {
         }
 
         val gui = CustomGui(Component.text("Bounty #${bounty.id}", NamedTextColor.GOLD), 27)
-        for (slot in 0..26) gui.setItem(slot, BountyGuiUtil.filler())
+        for (slot in 0..26) gui.setItem(slot, GuiStyle.filler())
 
         val target = Bukkit.getOfflinePlayer(UUID.fromString(bounty.targetUuid))
         val head = org.bukkit.inventory.ItemStack(Material.PLAYER_HEAD)
@@ -61,14 +62,14 @@ object BountyDetailGui {
         gui.setItem(13, head)
 
         val backLabel = if (origin == Origin.MINE) "Back to My Bounties" else "Back to Bounty List"
-        gui.setItem(18, BountyGuiUtil.item(Material.ARROW, Component.text(backLabel, NamedTextColor.YELLOW))) { p, _ ->
+        gui.setItem(GuiStyle.backSlot(27), GuiStyle.back(backLabel)) { p, _ ->
             returnToOrigin(plugin, p, backPage, origin)
         }
 
         if (player.hasPermission("joshymc.bounty.cancel")) {
             gui.setItem(
                 26,
-                BountyGuiUtil.item(
+                GuiStyle.item(
                     Material.BARRIER,
                     Component.text("Cancel Bounty", NamedTextColor.RED),
                     listOf(Component.empty(), Component.text("Click to cancel and refund this bounty.", NamedTextColor.GRAY))

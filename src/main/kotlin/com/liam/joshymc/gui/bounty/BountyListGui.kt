@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.bounty
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.TeamManager
@@ -32,9 +33,9 @@ object BountyListGui {
 
     private fun build(plugin: Joshymc, page: Int): CustomGui {
         val gui = CustomGui(Component.text("Active Bounties", NamedTextColor.GOLD), 54)
-        for (slot in 0..8) gui.setItem(slot, BountyGuiUtil.filler())
-        for (slot in 45..53) gui.setItem(slot, BountyGuiUtil.filler())
-        gui.setItem(4, BountyGuiUtil.item(Material.GOLD_INGOT, Component.text("Active Bounties", NamedTextColor.YELLOW)))
+        for (slot in 0..8) gui.setItem(slot, GuiStyle.filler())
+        for (slot in 45..53) gui.setItem(slot, GuiStyle.filler())
+        gui.setItem(4, GuiStyle.item(Material.GOLD_INGOT, Component.text("Active Bounties", NamedTextColor.YELLOW)))
 
         // getBounties() is already ORDER BY amount DESC, id ASC — highest bounty
         // first, stable across refreshes when amounts tie.
@@ -43,13 +44,13 @@ object BountyListGui {
         if (bounties.isEmpty()) {
             gui.setItem(
                 22,
-                BountyGuiUtil.item(
+                GuiStyle.item(
                     Material.BARRIER,
                     Component.text("No Active Bounties", NamedTextColor.RED),
                     listOf(Component.empty(), Component.text("There are currently no active bounties.", NamedTextColor.GRAY))
                 )
             )
-            gui.setItem(49, BountyGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+            gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
             return gui
         }
 
@@ -64,16 +65,17 @@ object BountyListGui {
         }
 
         if (clampedPage > 0) {
-            gui.setItem(45, BountyGuiUtil.item(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.prevSlot(54), GuiStyle.previousPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, clampedPage - 1)
             }
         }
 
-        gui.setItem(47, BountyGuiUtil.item(Material.PAPER, Component.text("Page ${clampedPage + 1}/$totalPages", NamedTextColor.WHITE)))
-        gui.setItem(49, BountyGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         if (clampedPage < totalPages - 1) {
-            gui.setItem(53, BountyGuiUtil.item(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.nextSlot(54), GuiStyle.nextPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, clampedPage + 1)
             }
         }

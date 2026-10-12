@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.team
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.TeamManager
@@ -30,9 +31,9 @@ object TeamListGui {
 
     private fun build(plugin: Joshymc, page: Int): CustomGui {
         val gui = CustomGui(Component.text("Team Browser", NamedTextColor.GOLD), 54)
-        for (slot in 0..8) gui.setItem(slot, TeamGuiUtil.filler())
-        for (slot in 45..53) gui.setItem(slot, TeamGuiUtil.filler())
-        gui.setItem(4, TeamGuiUtil.item(Material.PAPER, Component.text("Browse Teams", NamedTextColor.YELLOW)))
+        for (slot in 0..8) gui.setItem(slot, GuiStyle.filler())
+        for (slot in 45..53) gui.setItem(slot, GuiStyle.filler())
+        gui.setItem(4, GuiStyle.item(Material.PAPER, Component.text("Browse Teams", NamedTextColor.YELLOW)))
 
         // Same ranking query /team top uses (kills desc, then balance desc,
         // then name asc) so ordering stays predictable and reuses one query.
@@ -41,13 +42,13 @@ object TeamListGui {
         if (teams.isEmpty()) {
             gui.setItem(
                 22,
-                TeamGuiUtil.item(
+                GuiStyle.item(
                     Material.BARRIER,
                     Component.text("No Teams Available", NamedTextColor.RED),
                     listOf(Component.empty(), Component.text("There are currently no teams to display.", NamedTextColor.GRAY))
                 )
             )
-            gui.setItem(49, TeamGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+            gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
             return gui
         }
 
@@ -65,16 +66,16 @@ object TeamListGui {
         }
 
         if (clampedPage > 0) {
-            gui.setItem(45, TeamGuiUtil.item(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.prevSlot(54), GuiStyle.previousPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, clampedPage - 1)
             }
         }
-
-        gui.setItem(47, TeamGuiUtil.item(Material.PAPER, Component.text("Page ${clampedPage + 1}/$totalPages", NamedTextColor.WHITE)))
-        gui.setItem(49, TeamGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         if (clampedPage < totalPages - 1) {
-            gui.setItem(53, TeamGuiUtil.item(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.nextSlot(54), GuiStyle.nextPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, clampedPage + 1)
             }
         }

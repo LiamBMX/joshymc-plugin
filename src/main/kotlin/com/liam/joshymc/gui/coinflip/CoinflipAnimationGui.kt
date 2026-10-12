@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.coinflip
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CoinflipManager
@@ -42,7 +43,7 @@ object CoinflipAnimationGui {
         val challenger = Bukkit.getOfflinePlayer(challengerUuid)
 
         val gui = CustomGui(TITLE, 27)
-        for (i in 0 until 27) gui.inventory.setItem(i, CoinflipGuiUtil.filler(org.bukkit.Material.YELLOW_STAINED_GLASS_PANE))
+        for (i in 0 until 27) gui.inventory.setItem(i, GuiStyle.filler(org.bukkit.Material.YELLOW_STAINED_GLASS_PANE))
         gui.inventory.setItem(LEFT_SLOT, sideSkull(creator, cf.creatorName, cf.betAmount, plugin))
         gui.inventory.setItem(RIGHT_SLOT, sideSkull(challenger, cf.challengerName ?: "Unknown", cf.betAmount, plugin))
 
@@ -112,7 +113,7 @@ object CoinflipAnimationGui {
 
         gui.inventory.setItem(
             CENTER_SLOT,
-            CoinflipGuiUtil.skull(
+            GuiStyle.skull(
                 winnerOffline,
                 Component.text("WINNER!", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true),
                 listOf(
@@ -141,13 +142,13 @@ object CoinflipAnimationGui {
         }, plugin.coinflipManager.resultDisplayTicks)
     }
 
-    private fun sideSkull(owner: OfflinePlayer, name: String, bet: Double, plugin: Joshymc) = CoinflipGuiUtil.skull(
+    private fun sideSkull(owner: OfflinePlayer, name: String, bet: Double, plugin: Joshymc) = GuiStyle.skull(
         owner,
         Component.text(name, NamedTextColor.AQUA),
         listOf(Component.text("Bet: ", NamedTextColor.GRAY).append(Component.text("$${plugin.economyManager.formatShort(bet)}", NamedTextColor.GREEN)))
     )
 
-    private fun flippingSkull(owner: OfflinePlayer, name: String) = CoinflipGuiUtil.skull(
+    private fun flippingSkull(owner: OfflinePlayer, name: String) = GuiStyle.skull(
         owner,
         Component.text(name, NamedTextColor.YELLOW)
     )

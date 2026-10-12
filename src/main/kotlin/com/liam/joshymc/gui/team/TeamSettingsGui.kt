@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.team
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
@@ -27,10 +28,10 @@ object TeamSettingsGui {
         val teamChat = plugin.teamManager.isTeamChatEnabled(player.uniqueId)
 
         val gui = CustomGui(Component.text("Team Settings", NamedTextColor.GOLD), 27)
-        for (slot in 0..26) gui.setItem(slot, TeamGuiUtil.filler())
+        for (slot in 0..26) gui.setItem(slot, GuiStyle.filler())
 
         if (isOwner || isAdmin) {
-            gui.setItem(10, TeamGuiUtil.item(
+            gui.setItem(10, GuiStyle.item(
                 if (friendlyFire) Material.LIME_DYE else Material.GRAY_DYE,
                 Component.text("Friendly Fire", NamedTextColor.YELLOW),
                 listOf(
@@ -46,7 +47,7 @@ object TeamSettingsGui {
         }
 
         if (isOwner) {
-            gui.setItem(12, TeamGuiUtil.item(
+            gui.setItem(12, GuiStyle.item(
                 if (teamOpen) Material.LIME_DYE else Material.GRAY_DYE,
                 Component.text("Team Access", NamedTextColor.YELLOW),
                 listOf(
@@ -58,7 +59,7 @@ object TeamSettingsGui {
                 )
             )) { p, _ -> Bukkit.dispatchCommand(p, if (teamOpen) "team close" else "team open"); open(plugin, p) }
 
-            gui.setItem(14, TeamGuiUtil.item(
+            gui.setItem(14, GuiStyle.item(
                 Material.NAME_TAG,
                 Component.text("Rename Team", NamedTextColor.YELLOW),
                 listOf(Component.empty(), Component.text("Click to rename your team.", NamedTextColor.GRAY))
@@ -75,7 +76,7 @@ object TeamSettingsGui {
             gui.setItem(14, disabledItem("Rename Team"))
         }
 
-        gui.setItem(16, TeamGuiUtil.item(
+        gui.setItem(16, GuiStyle.item(
             if (teamChat) Material.LIME_DYE else Material.GRAY_DYE,
             Component.text("Team Chat", NamedTextColor.YELLOW),
             listOf(
@@ -87,12 +88,13 @@ object TeamSettingsGui {
             )
         )) { p, _ -> Bukkit.dispatchCommand(p, "team chat ${if (teamChat) "off" else "on"}"); open(plugin, p) }
 
-        gui.setItem(22, TeamGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> TeamMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.backSlot(27), GuiStyle.back()) { p, _ -> TeamMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(27), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
     }
 
-    private fun disabledItem(label: String) = TeamGuiUtil.item(
+    private fun disabledItem(label: String) = GuiStyle.item(
         Material.GRAY_DYE,
         Component.text(label, NamedTextColor.DARK_GRAY),
         listOf(Component.empty(), Component.text("You do not have permission to use this.", NamedTextColor.RED))

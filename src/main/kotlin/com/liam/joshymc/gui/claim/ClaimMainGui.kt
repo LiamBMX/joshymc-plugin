@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.claim
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
@@ -23,11 +24,11 @@ object ClaimMainGui {
         val canManage = claim != null && plugin.claimManager.canManageClaim(player, claim)
 
         val gui = CustomGui(Component.text("Claim Panel", NamedTextColor.GOLD), 45)
-        for (slot in 0..44) gui.setItem(slot, ClaimGuiUtil.filler())
+        for (slot in 0..44) gui.setItem(slot, GuiStyle.filler())
 
         val total = plugin.claimManager.getTotalBlocks(player.uniqueId)
         val used = plugin.claimManager.getUsedBlocks(player.uniqueId)
-        gui.setItem(4, ClaimGuiUtil.item(
+        gui.setItem(4, GuiStyle.item(
             Material.GRASS_BLOCK,
             Component.text("Claim Blocks", NamedTextColor.GOLD),
             listOf(
@@ -41,7 +42,7 @@ object ClaimMainGui {
         ))
 
         when {
-            claim != null && canManage -> gui.setItem(10, ClaimGuiUtil.item(
+            claim != null && canManage -> gui.setItem(10, GuiStyle.item(
                 Material.GOLDEN_SHOVEL,
                 Component.text("Current Claim", NamedTextColor.GREEN),
                 listOf(
@@ -51,7 +52,7 @@ object ClaimMainGui {
                 )
             )) { p, _ -> ClaimManagementGui.open(plugin, p, claim.id) }
 
-            claim != null -> gui.setItem(10, ClaimGuiUtil.item(
+            claim != null -> gui.setItem(10, GuiStyle.item(
                 Material.MAP,
                 Component.text("This Land", NamedTextColor.YELLOW),
                 listOf(
@@ -62,14 +63,14 @@ object ClaimMainGui {
                 )
             )) { p, _ -> ClaimInfoGui.open(plugin, p, claim.id) { pl, viewer -> open(pl, viewer) } }
 
-            else -> gui.setItem(10, ClaimGuiUtil.item(
+            else -> gui.setItem(10, GuiStyle.item(
                 Material.BARRIER,
                 Component.text("Not In A Claim", NamedTextColor.DARK_GRAY),
                 listOf(Component.empty(), Component.text("You are not standing in any claim.", NamedTextColor.GRAY))
             ))
         }
 
-        gui.setItem(12, ClaimGuiUtil.item(
+        gui.setItem(12, GuiStyle.item(
             Material.GOLDEN_SHOVEL,
             Component.text("Create Claim", NamedTextColor.GREEN),
             listOf(
@@ -83,7 +84,7 @@ object ClaimMainGui {
             Bukkit.dispatchCommand(p, "claim wand")
         }
 
-        gui.setItem(14, ClaimGuiUtil.item(
+        gui.setItem(14, GuiStyle.item(
             Material.CHEST,
             Component.text("My Claims", NamedTextColor.AQUA),
             if (myClaims.isEmpty())
@@ -96,7 +97,7 @@ object ClaimMainGui {
                 )
         )) { p, _ -> ClaimListGui.open(plugin, p) }
 
-        gui.setItem(16, ClaimGuiUtil.item(
+        gui.setItem(16, GuiStyle.item(
             Material.SPYGLASS,
             Component.text("Toggle Claim Borders", NamedTextColor.LIGHT_PURPLE),
             listOf(Component.empty(), Component.text("Show/hide nearby claim borders.", NamedTextColor.GRAY))
@@ -105,7 +106,7 @@ object ClaimMainGui {
             open(plugin, p)
         }
 
-        gui.setItem(22, ClaimGuiUtil.item(
+        gui.setItem(22, GuiStyle.item(
             Material.WRITTEN_BOOK,
             Component.text("Help", NamedTextColor.WHITE),
             listOf(Component.empty(), Component.text("View all /claim commands in chat.", NamedTextColor.GRAY))
@@ -114,7 +115,7 @@ object ClaimMainGui {
             Bukkit.dispatchCommand(p, "claim help")
         }
 
-        gui.setItem(40, ClaimGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.closeSlot(45), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
     }

@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.coinflip
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CoinflipManager
@@ -26,8 +27,8 @@ object CoinflipMainGui {
 
     fun open(plugin: Joshymc, player: Player, page: Int = 0) {
         val gui = CustomGui(Component.text("Coinflip", NamedTextColor.GOLD), 54)
-        for (slot in 0..8) gui.setItem(slot, CoinflipGuiUtil.filler())
-        for (slot in 45..53) gui.setItem(slot, CoinflipGuiUtil.filler())
+        for (slot in 0..8) gui.setItem(slot, GuiStyle.filler())
+        for (slot in 45..53) gui.setItem(slot, GuiStyle.filler())
 
         val coinflips = plugin.coinflipManager.getWaitingCoinflips(page)
         val total = plugin.coinflipManager.getTotalWaiting()
@@ -36,7 +37,7 @@ object CoinflipMainGui {
 
         gui.setItem(
             4,
-            CoinflipGuiUtil.item(
+            GuiStyle.item(
                 Material.GOLD_INGOT,
                 Component.text("Active Coinflips", NamedTextColor.YELLOW),
                 listOf(Component.text("  $total waiting for an opponent", NamedTextColor.GRAY))
@@ -46,7 +47,7 @@ object CoinflipMainGui {
         if (coinflips.isEmpty()) {
             gui.setItem(
                 22,
-                CoinflipGuiUtil.item(
+                GuiStyle.item(
                     Material.BARRIER,
                     Component.text("No Active Coinflips", NamedTextColor.RED),
                     listOf(Component.empty(), Component.text("There are currently no active Coinflips.", NamedTextColor.GRAY))
@@ -61,7 +62,8 @@ object CoinflipMainGui {
         }
 
         if (clampedPage > 0) {
-            gui.setItem(45, CoinflipGuiUtil.item(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.prevSlot(54), GuiStyle.previousPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, clampedPage - 1)
             }
         }
@@ -73,24 +75,27 @@ object CoinflipMainGui {
             myWaiting > 0 -> listOf(Component.text("  You have $myWaiting Coinflip(s) waiting.", NamedTextColor.GRAY), Component.text("  Click your listing above to cancel.", NamedTextColor.DARK_GRAY))
             else -> listOf(Component.text("  You have no active Coinflip.", NamedTextColor.GRAY))
         }
+        // No parent menu, so the Back slot holds the player's own status and
+        // Create sits in the bottom-right corner, clear of the page arrows.
         gui.setItem(
-            47,
-            CoinflipGuiUtil.item(Material.PLAYER_HEAD, Component.text("My Coinflip", NamedTextColor.AQUA), myStatusLore)
+            45,
+            GuiStyle.item(Material.PLAYER_HEAD, Component.text("My Coinflip", NamedTextColor.AQUA), myStatusLore)
         )
 
         gui.setItem(
-            49,
-            CoinflipGuiUtil.item(
+            53,
+            GuiStyle.item(
                 Material.EMERALD,
                 Component.text("Create Coinflip", NamedTextColor.GREEN),
                 listOf(Component.empty(), Component.text("  Click to create a new Coinflip.", NamedTextColor.GRAY))
             )
         ) { p, _ -> promptCreate(plugin, p) }
 
-        gui.setItem(51, CoinflipGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         if (clampedPage < totalPages - 1) {
-            gui.setItem(53, CoinflipGuiUtil.item(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.nextSlot(54), GuiStyle.nextPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, clampedPage + 1)
             }
         }
@@ -134,7 +139,7 @@ object CoinflipMainGui {
             else Component.text("Click to join.", NamedTextColor.GREEN)
         )
 
-        return CoinflipGuiUtil.skull(
+        return GuiStyle.skull(
             creator,
             Component.text(cf.creatorName, if (isOwn) NamedTextColor.AQUA else NamedTextColor.GOLD),
             lore
