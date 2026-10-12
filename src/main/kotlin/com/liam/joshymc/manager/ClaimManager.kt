@@ -49,7 +49,9 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         val trusted: MutableSet<UUID> = mutableSetOf(),
         val denied: MutableSet<UUID> = mutableSetOf(),
         var pvpEnabled: Boolean = false,
-        var tntEnabled: Boolean = false
+        var tntEnabled: Boolean = false,
+        /** Actions this claim lets untrusted players do (issue #1106). Shared across copy() like trusted/denied. */
+        val publicFlags: MutableSet<PublicFlag> = mutableSetOf()
     ) {
         val minX get() = min(x1, x2)
         val maxX get() = max(x1, x2)
@@ -87,6 +89,20 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     }
 
     data class SubclaimSelection(var pos1: Location? = null, var pos2: Location? = null)
+
+    /**
+     * Per-claim public permissions (issue #1106): what players WITHOUT normal
+     * claim access (owner, trusted, team) may still do inside a claim. Every
+     * flag is off by default, which is the claim protection that existed
+     * before. PvP stays the claim-wide [Claim.pvpEnabled] toggle.
+     */
+    enum class PublicFlag {
+        BUILD, BREAK, MOB_COMBAT, PROJECTILES, FLY, DOORS, SWITCHES, CONTAINERS, VILLAGER_TRADING, VEHICLES, BUCKETS;
+
+        companion object {
+            fun from(name: String): PublicFlag? = entries.find { it.name == name }
+        }
+    }
 
     // ══════════════════════════════════════════════════════════
     //  STATE
@@ -200,6 +216,26 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
+        val hadPublicFlagsTable = plugin.databaseManager.queryFirst(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'claim_public_flags'"
+        ) { it.getString("name") } != null
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS claim_public_flags (
+                claim_id INTEGER NOT NULL,
+                flag TEXT NOT NULL,
+                PRIMARY KEY (claim_id, flag)
+            )
+        """.trimIndent())
+        if (!hadPublicFlagsTable) {
+            // Claims that already had PvP on let visitors shoot each other; keep
+            // bows working there now that launching is gated by PROJECTILES.
+            plugin.databaseManager.execute(
+                "INSERT OR IGNORE INTO claim_public_flags (claim_id, flag) SELECT id, ? FROM claims_v2 WHERE pvp_enabled = 1",
+                PublicFlag.PROJECTILES.name
+            )
+        }
+        plugin.databaseManager.execute("DELETE FROM claim_public_flags WHERE claim_id NOT IN (SELECT id FROM claims_v2)")
+
         plugin.databaseManager.createTable("""
             CREATE TABLE IF NOT EXISTS claim_blocks (
                 uuid TEXT PRIMARY KEY,
@@ -243,6 +279,9 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
             val deniedUuids = plugin.databaseManager.query(
                 "SELECT player_uuid FROM claim_denied WHERE claim_id = ?", id
             ) { dr -> UUID.fromString(dr.getString("player_uuid")) }
+            val publicFlags = plugin.databaseManager.query(
+                "SELECT flag FROM claim_public_flags WHERE claim_id = ?", id
+            ) { fr -> PublicFlag.from(fr.getString("flag")) }.filterNotNull()
             Claim(
                 id = id, world = rs.getString("world"),
                 x1 = rs.getInt("x1"), z1 = rs.getInt("z1"),
@@ -253,7 +292,8 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
                 trusted = trustedUuids.toMutableSet(),
                 denied = deniedUuids.toMutableSet(),
                 pvpEnabled = rs.getInt("pvp_enabled") == 1,
-                tntEnabled = rs.getInt("tnt_enabled") == 1
+                tntEnabled = rs.getInt("tnt_enabled") == 1,
+                publicFlags = publicFlags.toMutableSet()
             )
         })
     }
@@ -360,6 +400,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
                 plugin.databaseManager.execute("DELETE FROM claim_trusted WHERE claim_id = ?", claim.id)
                 plugin.databaseManager.execute("DELETE FROM claim_denied WHERE claim_id = ?", claim.id)
+                plugin.databaseManager.execute("DELETE FROM claim_public_flags WHERE claim_id = ?", claim.id)
                 getSnapshotFile(claim).let { if (it.exists()) it.delete() }
                 plugin.databaseManager.execute("DELETE FROM claims_v2 WHERE id = ?", claim.id)
                 purgedClaims++
@@ -465,6 +506,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         // Remove trusted and denied players
         plugin.databaseManager.execute("DELETE FROM claim_trusted WHERE claim_id = ?", claim.id)
         plugin.databaseManager.execute("DELETE FROM claim_denied WHERE claim_id = ?", claim.id)
+        plugin.databaseManager.execute("DELETE FROM claim_public_flags WHERE claim_id = ?", claim.id)
 
         // Restore terrain only when an admin force-deletes someone else's claim.
         // When the owner voluntarily unclims, skip restore so legitimately mined
@@ -613,6 +655,23 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
             "UPDATE claims_v2 SET tnt_enabled = ? WHERE id = ?",
             if (enabled) 1 else 0, claimId
         )
+    }
+
+    fun setPublicFlag(claimId: Int, flag: PublicFlag, enabled: Boolean) {
+        val claim = claims.find { it.id == claimId } ?: return
+        if (enabled) {
+            claim.publicFlags.add(flag)
+            plugin.databaseManager.execute(
+                "INSERT OR IGNORE INTO claim_public_flags (claim_id, flag) VALUES (?, ?)",
+                claimId, flag.name
+            )
+        } else {
+            claim.publicFlags.remove(flag)
+            plugin.databaseManager.execute(
+                "DELETE FROM claim_public_flags WHERE claim_id = ? AND flag = ?",
+                claimId, flag.name
+            )
+        }
     }
 
     // ══════════════════════════════════════════════════════════
@@ -849,6 +908,31 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         }
 
         return false
+    }
+
+    /**
+     * The shared claim-action check (issue #1106): bypass, owner, trusted and
+     * team access first ([canAccess]), then the claim's public flag. Public
+     * flags never open a subclaim, which stays limited to its access list.
+     * FLY and PROJECTILES are claim-wide rules about the airspace, so
+     * subclaims don't take them away from players with claim access.
+     */
+    fun canPerform(player: Player, location: Location, flag: PublicFlag): Boolean {
+        if (canAccess(player, location)) return true
+        val claim = getClaimAt(location) ?: return true
+        if (flag == PublicFlag.FLY || flag == PublicFlag.PROJECTILES) {
+            return hasClaimAccess(player, claim) || flag in claim.publicFlags
+        }
+        if (getSubclaimAt(location) != null) return false
+        return flag in claim.publicFlags
+    }
+
+    /** Bypass, owner, trusted or team member of [claim], ignoring subclaims. */
+    private fun hasClaimAccess(player: Player, claim: Claim): Boolean {
+        if (player.hasPermission("joshymc.claim.bypass")) return true
+        if (claim.ownerUuid == player.uniqueId) return true
+        if (claim.trusted.contains(player.uniqueId)) return true
+        return claim.teamName != null && plugin.teamManager.getPlayerTeam(player.uniqueId) == claim.teamName
     }
 
     fun canManageClaim(player: Player, claim: Claim): Boolean {
