@@ -1286,6 +1286,30 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }, delay)
     }
 
+    /** How many rewards one key yields — the number of picks the crate's manual selection allows. */
+    private fun rewardsPerOpen(crate: CrateDef): Int = if (crate.mode == CrateMode.SELECT_3) 3 else 1
+
+    /**
+     * Weighted draw of [count] distinct rewards (no repeats, matching the Select 3 picker,
+     * which can't select the same reward twice). Capped at the pool size.
+     */
+    private fun selectDistinctWeightedRewards(crate: CrateDef, count: Int): List<CrateReward> {
+        if (count <= 1) return listOf(selectWeightedReward(crate))
+        val pool = crate.rewards.toMutableList()
+        val picked = mutableListOf<CrateReward>()
+        while (picked.size < count && pool.isNotEmpty()) {
+            val totalWeight = pool.sumOf { it.weight }
+            var random = (Math.random() * totalWeight).toInt()
+            var index = pool.lastIndex
+            for ((i, reward) in pool.withIndex()) {
+                random -= reward.weight
+                if (random < 0) { index = i; break }
+            }
+            picked.add(pool.removeAt(index))
+        }
+        return picked
+    }
+
     private fun selectWeightedReward(crate: CrateDef): CrateReward {
         val totalWeight = crate.rewards.sumOf { it.weight }
         var random = (Math.random() * totalWeight).toInt()
@@ -1607,10 +1631,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             // (Partial stacks can still top up existing stacks, but firstEmpty == -1 is our hard stop.)
             if (player.inventory.firstEmpty() == -1) break
 
-            val reward = selectWeightedReward(crate)
-            val rewardItem = buildRewardItem(reward)
-            plugin.giveItemSafely(player, rewardItem)
-            rewardSummary[reward.displayName] = (rewardSummary[reward.displayName] ?: 0) + reward.amount
+            // One key = one open: a Select 3 crate grants 3 distinct rewards, like its manual pick.
+            for (reward in selectDistinctWeightedRewards(crate, rewardsPerOpen(crate))) {
+                val rewardItem = buildRewardItem(reward)
+                plugin.giveItemSafely(player, rewardItem)
+                rewardSummary[reward.displayName] = (rewardSummary[reward.displayName] ?: 0) + reward.amount
+            }
             keysUsed++
         }
 
