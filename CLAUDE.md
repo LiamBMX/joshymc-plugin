@@ -72,6 +72,7 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 | **PlayerResolver** | (issue #1110) Name → player lookup for commands. **Never call `Bukkit.getOfflinePlayer(String)`**: it blocks the main thread on a Mojang lookup for unknown names, fabricates a UUID when that fails, and sends Floodgate names to Mojang. Use `playerResolver.resolve(name)` (online → Paper user cache → JoshyMC's `player_names` table, recorded on join and backfilled once from player data); it returns null for names the server has never seen. |
 | **MarketManager** | Dynamic stock market (per-material price drift). |
 | **ServerShopManager** | `/shop` GUI buy/sell. |
+| **SaleManager** | (issue #1118) The one place completed item sales are reported. Every sell path (`/sell` GUI/hand/all, `/shop`, `/market`, Sell Wand) takes the items, pays, then calls `saleManager.recordSale(player, material, amount, source)` / `recordSales(player, map, source)` with what was actually sold. It fans out to the market transaction log and Event Quest SELL progress (each consumer try/caught). **Never call `marketManager.recordTransaction(…, "SELL", …)` or `eventQuestManager.recordSale` from a sell path**; add new consumers in `SaleManager.dispatch`. |
 | **AuctionManager** | `/ah` auction house. |
 | **SignShopManager** | Sign-based chest shops. |
 | **HopperPlusManager** | Upgraded hoppers with filters. |

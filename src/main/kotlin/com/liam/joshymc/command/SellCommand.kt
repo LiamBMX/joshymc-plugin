@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.manager.SaleManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -292,10 +293,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
 
         if (totalEarned > 0) {
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
-            for ((material, amount) in breakdown) {
-                plugin.marketManager.recordTransaction(material, "SELL", amount)
-                plugin.eventQuestManager.recordSale(player, material, amount)
-            }
+            plugin.saleManager.recordSales(player, breakdown, SaleManager.Source.SELL_GUI)
             player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         }
 
@@ -354,10 +352,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         }
 
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
-        for ((material, amount) in breakdown) {
-            plugin.marketManager.recordTransaction(material, "SELL", amount)
-            plugin.eventQuestManager.recordSale(player, material, amount)
-        }
+        plugin.saleManager.recordSales(player, breakdown, SaleManager.Source.SELL_COMMAND)
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         sendSellSummary(player, totalEarned, breakdown)
     }
@@ -399,8 +394,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             return
         }
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
-        plugin.marketManager.recordTransaction(material, "SELL", count)
-        plugin.eventQuestManager.recordSale(player, material, count)
+        plugin.saleManager.recordSale(player, material, count, SaleManager.Source.SELL_COMMAND)
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         sendSellSummary(player, totalEarned, mapOf(material to count))
     }
@@ -449,8 +443,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         }
 
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
-        plugin.marketManager.recordTransaction(material, "SELL", totalAmount)
-        plugin.eventQuestManager.recordSale(player, material, totalAmount)
+        plugin.saleManager.recordSale(player, material, totalAmount, SaleManager.Source.SELL_COMMAND)
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         sendSellSummary(player, totalEarned, mapOf(material to totalAmount))
     }
