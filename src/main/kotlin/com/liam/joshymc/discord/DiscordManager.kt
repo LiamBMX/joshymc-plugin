@@ -33,6 +33,8 @@ class DiscordManager(private val plugin: Joshymc) {
 
     private val messageQueue = ConcurrentLinkedQueue<QueuedAction>()
 
+    private val updateHighlights = UpdateHighlightsAnnouncer(plugin)
+
     val channelId: String get() =
         plugin.config.getString("discord.channel-id")
             ?: plugin.config.getString("discord.chat-channel-id")
@@ -112,6 +114,7 @@ class DiscordManager(private val plugin: Joshymc) {
                 }
 
                 verifyStaffMonitoringChannels()
+                jda?.let { updateHighlights.announce(it) }
 
                 plugin.server.scheduler.runTask(plugin, Runnable {
                     startFlushTask()

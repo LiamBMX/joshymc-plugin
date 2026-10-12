@@ -1,0 +1,19 @@
+# Update highlights for the next release, posted to Discord once (see
+# config.yml > update-highlights). This file ships inside the JAR and is never copied
+# to the server, so edit it here before tagging a release.
+#
+# Only list changes players or staff will notice: new features, important fixes,
+# GUI and quality-of-life improvements, gameplay changes, new commands. Leave out
+# refactors, class names, build or dependency changes.
+#
+# A set of highlights posts once: restarts never repost it, and a later release that
+# leaves this file unchanged posts nothing. Leave `highlights` empty to post nothing.
+#
+# Example:
+#   summary: "Shops and quests got a round of fixes."
+#   highlights:
+#     - "New /claim settings menu"
+#     - "Fixed quest progress not saving after a restart"
+
+summary: ""
+highlights: []
