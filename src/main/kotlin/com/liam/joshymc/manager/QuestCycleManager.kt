@@ -34,7 +34,6 @@ import org.bukkit.event.player.PlayerExpChangeEvent
 import org.bukkit.event.player.PlayerFishEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerLevelChangeEvent
-import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.metadata.FixedMetadataValue
@@ -1221,19 +1220,12 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    fun onMove(event: PlayerMoveEvent) {
-        val from = event.from
-        val to = event.to ?: return
-        if (from.world != to.world) return
-        val player = event.player
+    /**
+     * Horizontal walking distance of one move, measured once by [com.liam.joshymc.listener.TravelTrackingListener]
+     * (already same-world, on foot and over 0.01 blocks). No upper cap here, unlike Event Quests.
+     */
+    fun recordTravel(player: Player, dist: Double) {
         if (isExempt(player)) return
-        if (player.isFlying || player.isGliding || player.isInsideVehicle) return
-
-        val dx = to.x - from.x
-        val dz = to.z - from.z
-        val dist = Math.sqrt(dx * dx + dz * dz)
-        if (dist < 0.01) return
         val uuid = player.uniqueId
 
         val acc = travelAcc.getOrDefault(uuid, 0.0) + dist

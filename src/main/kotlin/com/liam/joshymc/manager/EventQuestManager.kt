@@ -25,7 +25,6 @@ import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.event.inventory.CraftItemEvent
 import org.bukkit.event.player.PlayerFishEvent
 import org.bukkit.event.player.PlayerJoinEvent
-import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.metadata.FixedMetadataValue
@@ -690,21 +689,15 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         forActive(player, EventObjective.SELL_ITEM, { it == null || it == name }) { ev, q -> advance(player, ev, q, amount) }
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    fun onMove(event: PlayerMoveEvent) {
+    /**
+     * Horizontal walking distance of one move, measured once by [com.liam.joshymc.listener.TravelTrackingListener]
+     * (already same-world, on foot and over 0.01 blocks).
+     */
+    fun recordTravel(player: Player, dist: Double) {
         if (byObjective[EventObjective.TRAVEL] == null) return
-        val from = event.from
-        val to = event.to ?: return
-        if (from.world != to.world) return
-        val player = event.player
+        // Ignore teleport-like jumps.
+        if (dist > 8.0) return
         if (isExempt(player)) return
-        if (player.isFlying || player.isGliding || player.isInsideVehicle) return
-
-        val dx = to.x - from.x
-        val dz = to.z - from.z
-        val dist = Math.sqrt(dx * dx + dz * dz)
-        // Ignore stationary jitter and teleport-like jumps.
-        if (dist < 0.01 || dist > 8.0) return
 
         val uuid = player.uniqueId
         val acc = travelAcc.getOrDefault(uuid, 0.0) + dist
