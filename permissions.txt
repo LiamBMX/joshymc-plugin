@@ -865,8 +865,8 @@ joshymc.smite
 Allows striking lightning with `/smite [player]`.
 Default: OP
 
-joshymc.restart
-Allows scheduling and cancelling a server restart with `/restart`.
+joshymc.jrestart
+Allows starting the automatic restart countdown immediately with `/jrestart`.
 Default: OP
 
 joshymc.tutorial.reload

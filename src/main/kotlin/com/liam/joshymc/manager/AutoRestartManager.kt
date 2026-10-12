@@ -12,6 +12,8 @@ class AutoRestartManager(private val plugin: Joshymc) {
     private var scheduleTaskId = -1
     private var countdownTaskId = -1
     private var secondsRemaining = 0
+    // Set once the countdown hits zero, covering the few ticks before the server goes down
+    private var restarting = false
 
     // Warning broadcasts at these times before restart (seconds)
     private val warningPoints = setOf(3600, 1800, 900, 600, 300, 120, 60, 30, 10, 5, 4, 3, 2, 1)
@@ -24,7 +26,7 @@ class AutoRestartManager(private val plugin: Joshymc) {
         val intervalTicks = (intervalHours * 3600 * 20).toLong()
 
         scheduleTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, Runnable {
-            if (countdownTaskId == -1) {
+            if (!isRestartInProgress) {
                 initiateCountdown()
             }
         }, intervalTicks, intervalTicks)
@@ -38,6 +40,20 @@ class AutoRestartManager(private val plugin: Joshymc) {
             scheduleTaskId = -1
         }
         cancelCountdown()
+    }
+
+    /** True from the first countdown broadcast until the server goes down. */
+    val isRestartInProgress: Boolean
+        get() = countdownTaskId != -1 || restarting
+
+    /**
+     * Starts the restart countdown now (`/jrestart`, issue #1102), running the same
+     * sequence as the scheduled restart. Returns false if a restart is already in progress.
+     */
+    fun triggerRestart(): Boolean {
+        if (isRestartInProgress) return false
+        initiateCountdown()
+        return true
     }
 
     private fun initiateCountdown() {
@@ -55,6 +71,7 @@ class AutoRestartManager(private val plugin: Joshymc) {
                 }
                 secondsRemaining <= 0 -> {
                     cancelCountdown()
+                    restarting = true
                     broadcastAll(restartMessage("Server is restarting now. See you soon!"))
                     Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
                         val kickMessage = restartMessage("Server is restarting. Back in a moment!")

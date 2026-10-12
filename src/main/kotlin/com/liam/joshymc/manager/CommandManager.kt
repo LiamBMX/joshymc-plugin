@@ -135,7 +135,7 @@ import com.liam.joshymc.command.PayCommand
 import com.liam.joshymc.command.PortalCommand
 import com.liam.joshymc.command.VoteCommand
 import com.liam.joshymc.command.WorldCommand
-import com.liam.joshymc.command.RestartCommand
+import com.liam.joshymc.command.JRestartCommand
 import com.liam.joshymc.command.InvestCommand
 import com.liam.joshymc.command.StockCommand
 import com.liam.joshymc.command.ResurgeCommand
@@ -589,7 +589,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("smite")?.let { val c = SmiteCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("top")?.setExecutor(TopCommand(plugin))
         plugin.getCommand("sudo")?.let { val c = SudoCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
-        plugin.getCommand("restart")?.let { val c = RestartCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        plugin.getCommand("jrestart")?.let { val c = JRestartCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
         val msgCmd = MsgCommand(plugin)
         plugin.getCommand("msg")?.let { it.setExecutor(msgCmd); it.tabCompleter = msgCmd }
@@ -874,7 +874,7 @@ class CommandManager(private val plugin: Joshymc) {
         "smite" to "joshymc.smite",
         "top" to "joshymc.top",
         "sudo" to "joshymc.sudo",
-        "restart" to "joshymc.restart",
+        "jrestart" to "joshymc.jrestart",
         "tpa" to "joshymc.tpa",
         "ban" to "joshymc.ban",
         "tempban" to "joshymc.tempban",

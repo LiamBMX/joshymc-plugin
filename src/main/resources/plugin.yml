@@ -312,9 +312,9 @@ commands:
     description: Broadcast an announcement
     usage: /announce <message>
     aliases: [broadcast, bc]
-  restart:
-    description: Schedule a server restart with a countdown
-    usage: /restart [seconds|cancel]
+  jrestart:
+    description: Start the automatic restart countdown now
+    usage: /jrestart
   help:
     description: Open the help menu GUI
     usage: /help
@@ -1004,8 +1004,8 @@ permissions:
   joshymc.announce:
     description: Send custom announcements
     default: op
-  joshymc.restart:
-    description: Schedule and cancel server restarts
+  joshymc.jrestart:
+    description: Manually start the automatic restart countdown
     default: op
   joshymc.tutorial.reload:
     description: Reload tutorial.yml
