@@ -114,8 +114,14 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         private val ZONE: ZoneId = ZoneId.of("America/New_York")
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy")
         private val ALWAYS_HARVESTABLE = setOf(
-            "MELON", "PUMPKIN", "SUGAR_CANE", "CACTUS", "BAMBOO", "NETHER_WART",
-            "COCOA", "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES", "WEEPING_VINES"
+            "MELON", "PUMPKIN", "SUGAR_CANE", "CACTUS", "BAMBOO",
+            "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES", "WEEPING_VINES"
+        )
+        /** HARVEST_CROP filters name the crop block; admins often type the item it drops instead. */
+        private val HARVEST_ITEM_TO_BLOCK = mapOf(
+            "CARROT" to "CARROTS", "POTATO" to "POTATOES", "BEETROOT" to "BEETROOTS",
+            "WHEAT_SEEDS" to "WHEAT", "BEETROOT_SEEDS" to "BEETROOTS", "COCOA_BEANS" to "COCOA",
+            "MELON_SLICE" to "MELON", "SWEET_BERRIES" to "SWEET_BERRY_BUSH", "PITCHER_POD" to "PITCHER_CROP"
         )
         private val REWARD_SOURCES = setOf("custom-item", "existing-custom-item", "crate-key", HELD_ITEM)
     }
@@ -318,6 +324,8 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     private fun canonicalTarget(type: EventObjective, raw: String): String? = when (type) {
         EventObjective.KILL_MOB -> raw.uppercase().let { r -> org.bukkit.entity.EntityType.entries.firstOrNull { it.name == r }?.name }
         EventObjective.KILL_PLAYER, EventObjective.TRAVEL, EventObjective.PLAY_TIME -> raw.uppercase()
+        EventObjective.HARVEST_CROP -> Material.matchMaterial(raw.trim())?.name
+            ?.let { normalizeHarvestName(HARVEST_ITEM_TO_BLOCK[it] ?: it) }
         else -> Material.matchMaterial(raw.trim())?.name
     }
 
@@ -578,20 +586,25 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         val name = block.type.name
         val playerPlaced = block.hasMetadata(PLACED_META)
         block.removeMetadata(PLACED_META, plugin)
+
+        if (harvestCheck) {
+            val normalized = normalizeHarvestName(name)
+            val data = block.blockData
+            // Planting seeds is a BlockPlaceEvent, so every farmed crop is "player placed". A crop only
+            // reaches its maximum age by growing, so the place-then-break guard applies to the
+            // always-harvestable blocks (melons, cane, cactus...) but not to grown age-based crops.
+            val eligible = if (normalized in ALWAYS_HARVESTABLE) !playerPlaced
+                else data is Ageable && data.age == data.maximumAge
+            if (eligible) {
+                forActive(player, EventObjective.HARVEST_CROP, { it == null || it == normalized }) { ev, q -> advance(player, ev, q, 1) }
+            }
+        }
+
         // Anti-farm: blocks the player placed themselves never count (place-then-break loops).
         if (playerPlaced) return
 
         forActive(player, EventObjective.BREAK_BLOCK, { it == null || it == name }) { ev, q -> advance(player, ev, q, 1) }
         forActive(player, EventObjective.MINE_ORE, { it == null || it in oreVariants(name) }) { ev, q -> advance(player, ev, q, 1) }
-
-        if (harvestCheck) {
-            val normalized = normalizeHarvestName(name)
-            val data = block.blockData
-            val eligible = (data is Ageable && data.age == data.maximumAge) || normalized in ALWAYS_HARVESTABLE
-            if (eligible) {
-                forActive(player, EventObjective.HARVEST_CROP, { it == null || it == normalized }) { ev, q -> advance(player, ev, q, 1) }
-            }
-        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
