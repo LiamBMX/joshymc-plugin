@@ -146,6 +146,15 @@ discord:
     anticheat-channel-id: "1554209031994998904"
     reports-channel-id: "1554209119265751142"
 
+# Update Highlights: once the Discord bot above connects, a release build posts the
+# player-facing highlights bundled in the JAR (src/main/resources/update-highlights.yml)
+# as a "JoshyMC Update" embed. Each set of highlights posts once; restarts and reloads
+# never repost it. Dev (-SNAPSHOT) builds never post. The bot needs View Channel, Send
+# Messages and Embed Links in this channel.
+update-highlights:
+  enabled: true
+  discord-channel: "1503533331340591134"
+
 # Anti-Dupe — audit log + Discord alerts when a system catches a duplicate/replay
 # attempt (e.g. an auction bought twice, a voucher redeemed twice). Detection only —
 # never auto-bans, mutes, or reverses anything. Reuses the Discord bot above; set

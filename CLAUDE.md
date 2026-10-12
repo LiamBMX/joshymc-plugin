@@ -169,6 +169,7 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 - 2-way chat bridge + join/leave/death/start/stop forwarding
 - @everyone/@here escaped automatically
 - `/link` ↔ `/unlink` for account linking, persisted via `LinkManager`
+- **Update highlights (issue #1121)**: before tagging a release with player-visible changes, fill in `src/main/resources/update-highlights.yml` (summary + bullets, no dev details). Once the bot connects, `UpdateHighlightsAnnouncer` posts it to `update-highlights.discord-channel` as a "JoshyMC Update vX" embed. It posts once per content hash (`update_highlights_posted` table), so unchanged files never repost, and `-SNAPSHOT` builds never post.
 
 ## Style conventions
 - **Kotlin only**, no Java files.
