@@ -53,9 +53,9 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
         val targetName = args[1]
         // Try online first, then offline
-        val target = Bukkit.getPlayer(targetName) ?: Bukkit.getOfflinePlayer(targetName)
+        val target = Bukkit.getPlayer(targetName) ?: plugin.playerResolver.resolve(targetName)
 
-        if (!target.hasPlayedBefore() && !target.isOnline) {
+        if (target == null || (!target.hasPlayedBefore() && !target.isOnline)) {
             plugin.commsManager.send(sender, Component.text("Player not found: $targetName", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
             return
         }
@@ -67,8 +67,8 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (args.size >= 2) {
             // Logs for a specific player
             val targetName = args[1]
-            val target = Bukkit.getOfflinePlayer(targetName)
-            if (!target.hasPlayedBefore() && !target.isOnline) {
+            val target = plugin.playerResolver.resolve(targetName)
+            if (target == null || (!target.hasPlayedBefore() && !target.isOnline)) {
                 plugin.commsManager.send(sender, Component.text("Player not found: $targetName", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
                 return
             }
@@ -146,8 +146,8 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         val targetName = args[1]
-        val target = Bukkit.getOfflinePlayer(targetName)
-        if (!target.hasPlayedBefore() && !target.isOnline) {
+        val target = plugin.playerResolver.resolve(targetName)
+        if (target == null || (!target.hasPlayedBefore() && !target.isOnline)) {
             plugin.commsManager.send(sender, Component.text("Player not found: $targetName", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
             return
         }
