@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -19,7 +20,7 @@ class LoginStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.loginstreak")) {
-            reply(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender, CommunicationsManager.Category.ECONOMY)
             return true
         }
         if (!plugin.loginStreakManager.enabled) {
@@ -35,7 +36,7 @@ class LoginStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
 
         if (sub == "info") {
             if (sender !is Player) {
-                sender.sendMessage(Component.text("Usage: /loginstreak info", NamedTextColor.RED))
+                Msg.usage(sender, "/loginstreak info")
                 return true
             }
             showInfo(sender, sender.name, sender.uniqueId)
@@ -44,7 +45,7 @@ class LoginStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
 
         if (sub != null) {
             val target = resolveTarget(args[0]) ?: run {
-                reply(sender, Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender, category = CommunicationsManager.Category.ECONOMY)
                 return true
             }
             showInfo(sender, target.first, target.second)
@@ -52,7 +53,7 @@ class LoginStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
         }
 
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Usage: /loginstreak [player|info|set|reset|complete|playtime|grace|reload]", NamedTextColor.RED))
+            Msg.usage(sender, "/loginstreak [player|info|set|reset|complete|playtime|grace|reload]")
             return true
         }
         plugin.loginStreakManager.openGui(sender)
@@ -75,7 +76,7 @@ class LoginStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
 
     private fun handleAdmin(sender: CommandSender, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.loginstreak.admin")) {
-            reply(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender, CommunicationsManager.Category.ECONOMY)
             return true
         }
 
@@ -88,14 +89,14 @@ class LoginStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
         }
 
         if (args.size < 2) {
-            reply(sender, Component.text("Usage: /loginstreak $sub <player>${usageSuffix(sub)}", NamedTextColor.RED))
+            Msg.usage(sender, "/loginstreak $sub <player>${usageSuffix(sub)}", CommunicationsManager.Category.ECONOMY)
             return true
         }
 
         val targetPlayer = Bukkit.getPlayerExact(args[1])
         val targetOffline = resolveTarget(args[1])
         if (targetOffline == null) {
-            reply(sender, Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender, category = CommunicationsManager.Category.ECONOMY)
             return true
         }
         val (targetName, targetUuid) = targetOffline
@@ -104,7 +105,7 @@ class LoginStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
             "set" -> {
                 val amount = args.getOrNull(2)?.toIntOrNull()
                 if (amount == null || amount < 0) {
-                    reply(sender, Component.text("Usage: /loginstreak set <player> <days>", NamedTextColor.RED))
+                    Msg.usage(sender, "/loginstreak set <player> <days>", CommunicationsManager.Category.ECONOMY)
                     return true
                 }
                 plugin.loginStreakManager.setCurrentStreak(targetUuid, amount)
@@ -133,7 +134,7 @@ class LoginStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
                 }
                 val minutes = args.getOrNull(2)?.toIntOrNull()
                 if (minutes == null || minutes < 0) {
-                    reply(sender, Component.text("Usage: /loginstreak playtime <player> <minutes>", NamedTextColor.RED))
+                    Msg.usage(sender, "/loginstreak playtime <player> <minutes>", CommunicationsManager.Category.ECONOMY)
                     return true
                 }
                 plugin.loginStreakManager.setTodayPlaytimeMinutes(targetPlayer, minutes)
@@ -142,7 +143,7 @@ class LoginStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
             "grace" -> {
                 val state = args.getOrNull(2)?.lowercase()
                 if (state != "available" && state != "used") {
-                    reply(sender, Component.text("Usage: /loginstreak grace <player> <available|used>", NamedTextColor.RED))
+                    Msg.usage(sender, "/loginstreak grace <player> <available|used>", CommunicationsManager.Category.ECONOMY)
                     return true
                 }
                 plugin.loginStreakManager.setGrace(targetUuid, state == "available")

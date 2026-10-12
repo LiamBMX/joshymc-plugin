@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.coinflip.CreditsCoinflipGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.CreditsCoinflipManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -21,17 +22,17 @@ class CreditsCoinflipCommand(private val plugin: Joshymc) : CommandExecutor, Tab
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
         if (!sender.hasPermission(CreditsCoinflipManager.PERMISSION)) {
-            reply(sender, "No permission.", NamedTextColor.RED)
+            Msg.noPermission(sender)
             return true
         }
 
         if (args.isNotEmpty() && args[0].equals("create", ignoreCase = true)) {
             if (args.size < 2) {
-                reply(sender, "Usage: /ccoinflip create <amount>", NamedTextColor.RED)
+                Msg.usage(sender, "/ccoinflip create <amount>")
                 return true
             }
             val wager = CreditsCoinflipManager.parseWager(args[1])

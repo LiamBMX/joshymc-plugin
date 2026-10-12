@@ -5,6 +5,7 @@ import com.liam.joshymc.gui.casino.mines.MinesBoardGui
 import com.liam.joshymc.gui.casino.mines.MinesSetupGui
 import com.liam.joshymc.manager.CasinoManager
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -29,11 +30,11 @@ class MinesCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
         if (!sender.hasPermission("joshymc.casino")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.CASINO)
+            Msg.noPermission(sender, CommunicationsManager.Category.CASINO)
             return true
         }
         if (!plugin.isFeatureEnabled("casino") || !plugin.casinoManager.enabled) {
@@ -52,7 +53,7 @@ class MinesCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             }
             val mines = args[0].toIntOrNull()
             if (mines == null) {
-                plugin.commsManager.send(sender, Component.text("Usage: /mines <mines> <amount>", NamedTextColor.RED), CommunicationsManager.Category.CASINO)
+                Msg.usage(sender, "/mines <mines> <amount>", CommunicationsManager.Category.CASINO)
                 return true
             }
             val betResult = plugin.casinoManager.parseCommandBet(sender, CasinoManager.Game.MINES, args[1])

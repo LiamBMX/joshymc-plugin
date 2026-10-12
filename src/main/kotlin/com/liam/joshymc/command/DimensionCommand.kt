@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -22,14 +23,14 @@ class DimensionCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         when (args.getOrNull(0)?.lowercase()) {
             "end" -> handleEnd(sender, args)
-            else -> sendMessage(sender, Component.text("Usage: /dimension end <open|close>", NamedTextColor.RED))
+            else -> Msg.usage(sender, "/dimension end <open|close>", CommunicationsManager.Category.ADMIN)
         }
         return true
     }
 
     private fun handleEnd(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.end.admin")) {
-            sendMessage(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -37,7 +38,7 @@ class DimensionCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
             "open" -> true
             "close" -> false
             else -> {
-                sendMessage(sender, Component.text("Usage: /dimension end <open|close>", NamedTextColor.RED))
+                Msg.usage(sender, "/dimension end <open|close>", CommunicationsManager.Category.ADMIN)
                 return
             }
         }

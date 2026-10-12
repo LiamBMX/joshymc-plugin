@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -37,7 +38,7 @@ class ViolationBridgeCommand(private val plugin: Joshymc) : CommandExecutor {
         }
 
         if (args.size < 2 || !args[0].equals("log", ignoreCase = true)) {
-            sender.sendMessage(Component.text("Usage: /jmc-violation log <player> <check> [vl] [source]", NamedTextColor.RED))
+            Msg.usage(sender, "/jmc-violation log <player> <check> [vl] [source]")
             return true
         }
 

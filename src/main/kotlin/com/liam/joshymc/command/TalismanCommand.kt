@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.TalismanRarity
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -21,12 +22,12 @@ class TalismanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
                 handleGive(sender, args)
                 return true
             }
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.talisman")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -52,7 +53,7 @@ class TalismanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleEquip(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /talisman equip <id>", NamedTextColor.RED))
+            Msg.usage(player, "/talisman equip <id>")
             return
         }
 
@@ -156,18 +157,18 @@ class TalismanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleGive(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.talisman.admin")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /talisman give <player> <id>", NamedTextColor.RED))
+            Msg.usage(sender, "/talisman give <player> <id>")
             return
         }
 
         val target = Bukkit.getPlayer(args[1])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found: ${args[1]}", NamedTextColor.RED))
+            Msg.playerNotFound(sender, args[1])
             return
         }
 
@@ -211,13 +212,13 @@ class TalismanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleGrant(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.talisman.admin")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED)); return
+            Msg.noPermission(sender); return
         }
         if (args.size < 3) {
-            plugin.commsManager.send(sender, Component.text("Usage: /talisman grant <player> <id>", NamedTextColor.RED)); return
+            Msg.usage(sender, "/talisman grant <player> <id>"); return
         }
         val target = plugin.playerResolver.resolve(args[1])
-        if (target == null) { plugin.commsManager.send(sender, Component.text("Player not found: ${args[1]}", NamedTextColor.RED)); return }
+        if (target == null) { Msg.playerNotFound(sender, args[1]); return }
         val def = plugin.talismanManager.getTalisman(args[2].lowercase())
         if (def == null) { plugin.commsManager.send(sender, Component.text("Unknown talisman.", NamedTextColor.RED)); return }
         plugin.talismanManager.grantAccess(target.uniqueId, def.id)
@@ -226,13 +227,13 @@ class TalismanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleRevoke(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.talisman.admin")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED)); return
+            Msg.noPermission(sender); return
         }
         if (args.size < 3) {
-            plugin.commsManager.send(sender, Component.text("Usage: /talisman revoke <player> <id>", NamedTextColor.RED)); return
+            Msg.usage(sender, "/talisman revoke <player> <id>"); return
         }
         val target = plugin.playerResolver.resolve(args[1])
-        if (target == null) { plugin.commsManager.send(sender, Component.text("Player not found: ${args[1]}", NamedTextColor.RED)); return }
+        if (target == null) { Msg.playerNotFound(sender, args[1]); return }
         val def = plugin.talismanManager.getTalisman(args[2].lowercase())
         if (def == null) { plugin.commsManager.send(sender, Component.text("Unknown talisman.", NamedTextColor.RED)); return }
         plugin.talismanManager.revokeAccess(target.uniqueId, def.id)

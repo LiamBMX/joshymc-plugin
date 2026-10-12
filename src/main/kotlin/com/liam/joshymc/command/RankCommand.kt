@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -36,7 +37,7 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.rank")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -74,13 +75,13 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handlePromote(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.rank.staff")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 
         val playerName = args.getOrNull(1)
         if (playerName == null) {
-            sender.sendMessage(Component.text("Usage: /rank promote <player>", NamedTextColor.RED))
+            Msg.usage(sender, "/rank promote <player>")
             return
         }
 
@@ -131,14 +132,14 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleDemote(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.rank.staff")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 
         val playerName = args.getOrNull(1)
         val reason = args.drop(2).joinToString(" ").trim()
         if (playerName == null || reason.isEmpty()) {
-            sender.sendMessage(Component.text("Usage: /rank demote <player> <reason>", NamedTextColor.RED))
+            Msg.usage(sender, "/rank demote <player> <reason>")
             return
         }
 
@@ -196,14 +197,14 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleAdd(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.rank.add")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 
         val playerName = args.getOrNull(1)
         val rankId = args.getOrNull(2)?.lowercase()
         if (playerName == null || rankId == null) {
-            sender.sendMessage(Component.text("Usage: /rank add <player> <rank>", NamedTextColor.RED))
+            Msg.usage(sender, "/rank add <player> <rank>")
             return
         }
 
@@ -251,14 +252,14 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleRemove(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.rank.remove")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 
         val playerName = args.getOrNull(1)
         val rankId = args.getOrNull(2)?.lowercase()
         if (playerName == null || rankId == null) {
-            sender.sendMessage(Component.text("Usage: /rank remove <player> <rank>", NamedTextColor.RED))
+            Msg.usage(sender, "/rank remove <player> <rank>")
             return
         }
 
@@ -332,13 +333,13 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleCheck(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.rank.check")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 
         val playerName = args.getOrNull(1) ?: (sender as? Player)?.name
         if (playerName == null) {
-            sender.sendMessage(Component.text("Usage: /rank check <player>", NamedTextColor.RED))
+            Msg.usage(sender, "/rank check <player>")
             return
         }
 

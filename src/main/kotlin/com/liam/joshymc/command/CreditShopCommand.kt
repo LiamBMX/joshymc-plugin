@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.team.TeamConfirmGui
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Material
@@ -26,7 +27,7 @@ class CreditShopCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
@@ -48,11 +49,11 @@ class CreditShopCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleAddItem(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.cshop.admin")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return
         }
         if (args.size != 4 || args[1].lowercase() != "hand") {
-            plugin.commsManager.send(sender, Component.text("Usage: /cshop additem hand <price> <category>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(sender, "/cshop additem hand <price> <category>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -94,11 +95,11 @@ class CreditShopCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleRemoveItem(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.cshop.admin")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return
         }
         if (args.size != 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /cshop removeitem <id>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(sender, "/cshop removeitem <id>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -117,24 +118,24 @@ class CreditShopCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleCategory(sender: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /cshop category <create|remove> ...", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(sender, "/cshop category <create|remove> ...", CommunicationsManager.Category.ADMIN)
             return
         }
 
         when (args[1].lowercase()) {
             "create" -> handleCategoryCreate(sender, args)
             "remove" -> handleCategoryRemove(sender, args)
-            else -> plugin.commsManager.send(sender, Component.text("Usage: /cshop category <create|remove> ...", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            else -> Msg.usage(sender, "/cshop category <create|remove> ...", CommunicationsManager.Category.ADMIN)
         }
     }
 
     private fun handleCategoryCreate(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.cshop.admin")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return
         }
         if (args.size < 3) {
-            plugin.commsManager.send(sender, Component.text("Usage: /cshop category create <name>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(sender, "/cshop category create <name>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -161,11 +162,11 @@ class CreditShopCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleCategoryRemove(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.cshop.category.remove")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return
         }
         if (args.size != 3) {
-            plugin.commsManager.send(sender, Component.text("Usage: /cshop category remove <category>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(sender, "/cshop category remove <category>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -207,7 +208,7 @@ class CreditShopCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleList(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.cshop.admin")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -241,7 +242,7 @@ class CreditShopCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
     }
 
     private fun sendUsage(sender: Player) {
-        plugin.commsManager.send(sender, Component.text("Usage: /cshop [additem|removeitem|category|list] [args...]", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+        Msg.usage(sender, "/cshop [additem|removeitem|category|list] [args...]", CommunicationsManager.Category.ADMIN)
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {

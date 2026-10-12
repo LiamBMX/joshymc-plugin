@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -21,7 +22,7 @@ class PlayerDataCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
@@ -35,7 +36,7 @@ class PlayerDataCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         }
 
         if (!sender.hasPermission("joshymc.playerdata.reset")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return true
         }
 
@@ -50,7 +51,7 @@ class PlayerDataCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
         val target = resolveOfflinePlayer(args[1])
         if (target == null) {
-            plugin.commsManager.send(sender, Component.text("Player not found: ${args[1]}", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.playerNotFound(sender, args[1], CommunicationsManager.Category.ADMIN)
             return true
         }
         val (targetUuid, targetName) = target

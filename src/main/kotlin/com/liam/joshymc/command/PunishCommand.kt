@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.PunishmentManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -28,18 +29,18 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.size == 1 && args[0].equals("reload", ignoreCase = true) && sender.hasPermission("joshymc.punish.reload")) {
             val count = plugin.punishPresetManager.reload()
-            sender.sendMessage(Component.text("Reloaded punishment-presets.yml ($count enabled preset${if (count == 1) "" else "s"}).", NamedTextColor.GREEN))
+            Msg.success(sender, "Reloaded punishment-presets.yml ($count enabled preset${if (count == 1) "" else "s"}).")
             return true
         }
 
         if (args.size == 1 && sender is Player) {
             val target = resolveOfflinePlayer(args[0])
             if (target == null) {
-                sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+                Msg.playerNotFound(sender, args[0])
                 return true
             }
             if (sender.uniqueId == target.first) {
-                sender.sendMessage(Component.text("You cannot punish yourself.", NamedTextColor.RED))
+                Msg.error(sender, "You cannot punish yourself.")
                 return true
             }
             plugin.punishGui.open(sender, target.first, target.second)
@@ -47,30 +48,30 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /punish <player> <${TYPES.joinToString("|")}> [duration] <reason>", NamedTextColor.RED))
+            Msg.usage(sender, "/punish <player> <${TYPES.joinToString("|")}> [duration] <reason>")
             return true
         }
 
         val type = args[1].lowercase()
         if (type !in TYPES) {
-            sender.sendMessage(Component.text("Unknown punishment type: ${args[1]}. Valid: ${TYPES.joinToString(", ")}", NamedTextColor.RED))
+            Msg.error(sender, "Unknown punishment type: ${args[1]}. Valid: ${TYPES.joinToString(", ")}")
             return true
         }
 
         if (!sender.hasPermission("joshymc.punish.$type")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
         val target = resolveOfflinePlayer(args[0])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found: ${args[0]}", NamedTextColor.RED))
+            Msg.playerNotFound(sender, args[0])
             return true
         }
         val (targetUuid, targetName) = target
 
         if (sender is Player && sender.uniqueId == targetUuid) {
-            sender.sendMessage(Component.text("You cannot punish yourself.", NamedTextColor.RED))
+            Msg.error(sender, "You cannot punish yourself.")
             return true
         }
 
@@ -78,7 +79,7 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             val senderWeight = plugin.rankManager.getPlayerRankById(sender.uniqueId)?.weight ?: 0
             val targetWeight = plugin.rankManager.getPlayerRankById(targetUuid)?.weight ?: 0
             if (targetWeight > senderWeight) {
-                sender.sendMessage(Component.text("You cannot punish a player with a higher rank than you.", NamedTextColor.RED))
+                Msg.error(sender, "You cannot punish a player with a higher rank than you.")
                 return true
             }
         }
@@ -103,7 +104,7 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     private fun handleBan(sender: CommandSender, args: Array<out String>, targetUuid: java.util.UUID, targetName: String, punisherUuid: java.util.UUID?, punisherName: String): Boolean {
         val reason = args.drop(2).joinToString(" ").trim()
         if (reason.isBlank()) {
-            sender.sendMessage(Component.text("Usage: /punish <player> ban <reason>", NamedTextColor.RED))
+            Msg.usage(sender, "/punish <player> ban <reason>")
             return true
         }
 
@@ -113,24 +114,24 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         )
 
         val msg = Component.text("$targetName has been permanently banned - $reason", NamedTextColor.RED)
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
         return true
     }
 
     private fun handleTempban(sender: CommandSender, args: Array<out String>, targetUuid: java.util.UUID, targetName: String, punisherUuid: java.util.UUID?, punisherName: String): Boolean {
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /punish <player> tempban <duration> <reason>", NamedTextColor.RED))
+            Msg.usage(sender, "/punish <player> tempban <duration> <reason>")
             return true
         }
         val durationMs = PunishmentManager.parseDuration(args[2])
         if (durationMs == null) {
-            sender.sendMessage(Component.text("Invalid duration: ${args[2]} (e.g. 1d, 2h30m, 7d, 1w, 1mo)", NamedTextColor.RED))
+            Msg.error(sender, "Invalid duration: ${args[2]} (e.g. 1d, 2h30m, 7d, 1w, 1mo)")
             return true
         }
         val reason = args.drop(3).joinToString(" ").trim()
         if (reason.isBlank()) {
-            sender.sendMessage(Component.text("Usage: /punish <player> tempban <duration> <reason>", NamedTextColor.RED))
+            Msg.usage(sender, "/punish <player> tempban <duration> <reason>")
             return true
         }
 
@@ -141,24 +142,24 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
         val durationStr = PunishmentManager.formatDuration(durationMs)
         val msg = Component.text("$targetName has been banned for $durationStr - $reason", NamedTextColor.RED)
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
         return true
     }
 
     private fun handleTempmute(sender: CommandSender, args: Array<out String>, targetUuid: java.util.UUID, targetName: String, punisherUuid: java.util.UUID?, punisherName: String): Boolean {
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /punish <player> tempmute <duration> <reason>", NamedTextColor.RED))
+            Msg.usage(sender, "/punish <player> tempmute <duration> <reason>")
             return true
         }
         val durationMs = PunishmentManager.parseDuration(args[2])
         if (durationMs == null) {
-            sender.sendMessage(Component.text("Invalid duration: ${args[2]} (e.g. 1d, 2h30m, 7d, 1w, 1mo)", NamedTextColor.RED))
+            Msg.error(sender, "Invalid duration: ${args[2]} (e.g. 1d, 2h30m, 7d, 1w, 1mo)")
             return true
         }
         val reason = args.drop(3).joinToString(" ").trim()
         if (reason.isBlank()) {
-            sender.sendMessage(Component.text("Usage: /punish <player> tempmute <duration> <reason>", NamedTextColor.RED))
+            Msg.usage(sender, "/punish <player> tempmute <duration> <reason>")
             return true
         }
 
@@ -166,7 +167,7 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
         val durationStr = PunishmentManager.formatDuration(durationMs)
         val msg = Component.text("$targetName has been muted for $durationStr - $reason", NamedTextColor.RED)
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         Bukkit.getPlayer(targetUuid)?.let { online ->
@@ -182,17 +183,17 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     private fun handleUnban(sender: CommandSender, args: Array<out String>, targetUuid: java.util.UUID, targetName: String, punisherUuid: java.util.UUID?, punisherName: String): Boolean {
         val reason = args.drop(2).joinToString(" ").trim()
         if (reason.isBlank()) {
-            sender.sendMessage(Component.text("Usage: /punish <player> unban <reason>", NamedTextColor.RED))
+            Msg.usage(sender, "/punish <player> unban <reason>")
             return true
         }
         if (plugin.punishmentManager.isBanned(targetUuid) == null) {
-            sender.sendMessage(Component.text("$targetName is not currently banned.", NamedTextColor.RED))
+            Msg.error(sender, "$targetName is not currently banned.")
             return true
         }
 
         plugin.punishmentManager.unban(targetUuid, punisherName, punisherUuid, reason)
         val msg = Component.text("$targetName has been unbanned.", NamedTextColor.GREEN)
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
         return true
     }
@@ -200,17 +201,17 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     private fun handleUnmute(sender: CommandSender, args: Array<out String>, targetUuid: java.util.UUID, targetName: String, punisherUuid: java.util.UUID?, punisherName: String): Boolean {
         val reason = args.drop(2).joinToString(" ").trim()
         if (reason.isBlank()) {
-            sender.sendMessage(Component.text("Usage: /punish <player> unmute <reason>", NamedTextColor.RED))
+            Msg.usage(sender, "/punish <player> unmute <reason>")
             return true
         }
         if (plugin.punishmentManager.isMuted(targetUuid) == null) {
-            sender.sendMessage(Component.text("$targetName is not currently muted.", NamedTextColor.RED))
+            Msg.error(sender, "$targetName is not currently muted.")
             return true
         }
 
         plugin.punishmentManager.unmute(targetUuid, punisherName, punisherUuid, reason)
         val msg = Component.text("$targetName has been unmuted.", NamedTextColor.GREEN)
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         Bukkit.getPlayer(targetUuid)?.let { online ->
@@ -222,7 +223,7 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     private fun handleWarn(sender: CommandSender, args: Array<out String>, targetUuid: java.util.UUID, targetName: String, punisherUuid: java.util.UUID?, punisherName: String): Boolean {
         val reason = args.drop(2).joinToString(" ").trim()
         if (reason.isBlank()) {
-            sender.sendMessage(Component.text("Usage: /punish <player> warn <reason>", NamedTextColor.RED))
+            Msg.usage(sender, "/punish <player> warn <reason>")
             return true
         }
 
@@ -230,7 +231,7 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         val activeWarns = plugin.punishmentManager.getActiveWarnings(targetUuid).size
 
         val msg = Component.text("$targetName has been warned ($activeWarns active) - $reason", NamedTextColor.YELLOW)
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         Bukkit.getPlayer(targetUuid)?.let { online ->
@@ -254,25 +255,25 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         if (reason.isBlank()) {
-            sender.sendMessage(Component.text("Usage: /punish <player> unwarn [id] <reason>", NamedTextColor.RED))
+            Msg.usage(sender, "/punish <player> unwarn [id] <reason>")
             return true
         }
 
         if (activeWarnings.isEmpty()) {
-            sender.sendMessage(Component.text("$targetName has no active warnings.", NamedTextColor.RED))
+            Msg.error(sender, "$targetName has no active warnings.")
             return true
         }
 
         val warnId = explicitId ?: activeWarnings.first().id
         val removed = plugin.punishmentManager.unwarn(targetUuid, warnId, punisherName, punisherUuid, reason)
         if (!removed) {
-            sender.sendMessage(Component.text("Warning #$warnId not found for $targetName.", NamedTextColor.RED))
+            Msg.error(sender, "Warning #$warnId not found for $targetName.")
             return true
         }
 
         val remaining = plugin.punishmentManager.getActiveWarnings(targetUuid).size
         val msg = Component.text("Warning removed from $targetName ($remaining remaining)", NamedTextColor.GREEN)
-        sender.sendMessage(msg)
+        Msg.reply(sender, msg)
         notifyStaff(sender, msg)
 
         Bukkit.getPlayer(targetUuid)?.let { online ->

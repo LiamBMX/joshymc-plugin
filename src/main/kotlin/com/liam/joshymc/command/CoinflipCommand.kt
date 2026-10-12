@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.coinflip.CoinflipMainGui
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -16,11 +17,11 @@ class CoinflipCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isNotEmpty() && args[0].equals("admin", ignoreCase = true)) {
             if (!sender.hasPermission("joshymc.coinflip.admin")) {
-                sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+                Msg.noPermission(sender)
                 return true
             }
             if (args.size < 3 || !args[1].equals("cancel", ignoreCase = true)) {
-                sender.sendMessage(Component.text("Usage: /coinflip admin cancel <id>", NamedTextColor.RED))
+                Msg.usage(sender, "/coinflip admin cancel <id>")
                 return true
             }
             val id = args[2].toIntOrNull()
@@ -33,19 +34,19 @@ class CoinflipCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         }
 
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.coinflip")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.noPermission(sender)
             return true
         }
 
         if (args.isNotEmpty() && args[0].equals("notify", ignoreCase = true)) {
             val choice = args.getOrNull(1)
             if (choice == null || (!choice.equals("on", ignoreCase = true) && !choice.equals("off", ignoreCase = true))) {
-                plugin.commsManager.send(sender, Component.text("Usage: /cf notify <on/off>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                Msg.usage(sender, "/cf notify <on/off>")
                 return true
             }
             val enabled = choice.equals("on", ignoreCase = true)
@@ -57,7 +58,7 @@ class CoinflipCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
         if (args.isNotEmpty() && args[0].equals("create", ignoreCase = true)) {
             if (args.size < 2) {
-                plugin.commsManager.send(sender, Component.text("Usage: /coinflip create <amount>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+                Msg.usage(sender, "/coinflip create <amount>")
                 return true
             }
             val amount = plugin.economyManager.parseAmount(args[1])

@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -17,9 +18,9 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     private val validActions = listOf("command", "tp", "rtp", "world", "warp")
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { sender.sendMessage("Players only."); return true }
+        if (sender !is Player) { Msg.playersOnly(sender); return true }
         if (!sender.hasPermission("joshymc.portal")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -44,21 +45,13 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     }
 
     private fun handleWand(sender: Player) {
-        if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
-            return
-        }
         portalManager.giveWand(sender)
         plugin.commsManager.send(sender, Component.text("Portal wand given.", NamedTextColor.GREEN))
     }
 
     private fun handleCreate(sender: Player, args: Array<out String>) {
-        if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
-            return
-        }
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /portal create <name>", NamedTextColor.RED))
+            Msg.usage(sender, "/portal create <name>")
             return
         }
         val name = args[1]
@@ -94,7 +87,7 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleDelete(sender: Player, args: Array<out String>) {
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /portal delete <name>", NamedTextColor.RED))
+            Msg.usage(sender, "/portal delete <name>")
             return
         }
         val name = args[1]
@@ -107,14 +100,14 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleAction(sender: Player, args: Array<out String>) {
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /portal action <name> <command|tp|rtp|world|warp> [data]", NamedTextColor.RED))
+            Msg.usage(sender, "/portal action <name> <command|tp|rtp|world|warp> [data]")
             return
         }
         val name = args[1]
         val action = args[2].lowercase()
 
         if (action !in validActions) {
-            sender.sendMessage(Component.text("Invalid action. Use: ${validActions.joinToString(", ")}", NamedTextColor.RED))
+            Msg.error(sender, "Invalid action. Use: ${validActions.joinToString(", ")}")
             return
         }
 
@@ -135,13 +128,13 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleCooldown(sender: Player, args: Array<out String>) {
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /portal cooldown <name> <seconds>", NamedTextColor.RED))
+            Msg.usage(sender, "/portal cooldown <name> <seconds>")
             return
         }
         val name = args[1]
         val seconds = args[2].toIntOrNull()
         if (seconds == null || seconds < 0) {
-            sender.sendMessage(Component.text("Cooldown must be a non-negative number.", NamedTextColor.RED))
+            Msg.error(sender, "Cooldown must be a non-negative number.")
             return
         }
 
@@ -159,7 +152,7 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleMessage(sender: Player, args: Array<out String>) {
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /portal message <name> <text>", NamedTextColor.RED))
+            Msg.usage(sender, "/portal message <name> <text>")
             return
         }
         val name = args[1]
@@ -199,7 +192,7 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleInfo(sender: Player, args: Array<out String>) {
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /portal info <name>", NamedTextColor.RED))
+            Msg.usage(sender, "/portal info <name>")
             return
         }
         val portal = portalManager.getPortal(args[1])
@@ -226,12 +219,8 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     }
 
     private fun handleTp(sender: Player, args: Array<out String>) {
-        if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
-            return
-        }
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /portal tp <name>", NamedTextColor.RED))
+            Msg.usage(sender, "/portal tp <name>")
             return
         }
         val portal = portalManager.getPortal(args[1])

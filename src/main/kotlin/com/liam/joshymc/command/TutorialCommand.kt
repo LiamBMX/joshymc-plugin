@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -75,12 +76,12 @@ class TutorialCommand(private val plugin: Joshymc) : CommandExecutor {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage("Players only.")
+            Msg.playersOnly(sender)
             return true
         }
         if (args.isNotEmpty() && args[0].equals("reload", ignoreCase = true)) {
             if (!sender.hasPermission("joshymc.tutorial.reload")) {
-                plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                Msg.noPermission(sender)
                 return true
             }
             loadSteps()

@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.destroystokyo.paper.profile.PlayerProfile
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.util.BedrockUtil
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -25,7 +26,7 @@ class SkullCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return true
         }
         if (!sender.isOp && !sender.hasPermission("joshymc.skull")) {
-            sender.sendMessage(Component.text("You do not have permission to use this command.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.size != 1) {

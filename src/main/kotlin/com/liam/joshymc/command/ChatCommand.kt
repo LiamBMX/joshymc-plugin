@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.ChatManager
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -21,7 +22,7 @@ class ChatCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         if (!sender.hasPermission("joshymc.chat.admin")) {
-            sendMessage(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return true
         }
 
@@ -29,19 +30,19 @@ class ChatCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             "mute" -> setMuted(sender, true)
             "unmute" -> setMuted(sender, false)
             "clear" -> clearChat(sender)
-            else -> sendMessage(sender, Component.text("Usage: /chat <mute|unmute|clear|clearing <on|off>>", NamedTextColor.RED))
+            else -> Msg.usage(sender, "/chat <mute|unmute|clear|clearing <on|off>>", CommunicationsManager.Category.ADMIN)
         }
         return true
     }
 
     private fun handleClearing(sender: CommandSender, args: Array<out String>) {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return
         }
 
         if (!sender.hasPermission(ChatManager.PERM_CLEARING)) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -54,7 +55,7 @@ class ChatCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 plugin.chatManager.setClearingEnabled(sender, false)
                 plugin.commsManager.send(sender, Component.text("Chat clearing is now disabled.", NamedTextColor.GRAY), CommunicationsManager.Category.ADMIN)
             }
-            else -> plugin.commsManager.send(sender, Component.text("Usage: /chat clearing <on|off>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            else -> Msg.usage(sender, "/chat clearing <on|off>", CommunicationsManager.Category.ADMIN)
         }
     }
 

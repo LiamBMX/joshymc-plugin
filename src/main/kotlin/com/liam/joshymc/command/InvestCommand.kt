@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.stock.StockHomeGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.StockMarketManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -28,12 +29,12 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.invest")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            Msg.noPermission(sender, CommunicationsManager.Category.ECONOMY)
             return true
         }
 
@@ -61,7 +62,7 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun handleAdmin(sender: CommandSender, label: String, args: Array<out String>): Boolean {
         if (args.size < 2) {
-            reply(sender, Component.text("Usage: /$label admin <reset|delete|confirm|cancel> ...", NamedTextColor.RED))
+            Msg.usage(sender, "/$label admin <reset|delete|confirm|cancel> ...", CommunicationsManager.Category.ADMIN)
             return true
         }
 
@@ -71,7 +72,7 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
             "confirm" -> {
                 if (!hasAnyAdminPerm(sender)) {
-                    reply(sender, Component.text("No permission.", NamedTextColor.RED))
+                    Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
                     return true
                 }
                 when (val result = plugin.stockMarketManager.confirmAdminAction(adminKey(sender), sender.name)) {
@@ -89,7 +90,7 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
             "cancel" -> {
                 if (!hasAnyAdminPerm(sender)) {
-                    reply(sender, Component.text("No permission.", NamedTextColor.RED))
+                    Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
                     return true
                 }
                 val pending = plugin.stockMarketManager.cancelAdminAction(adminKey(sender))
@@ -100,7 +101,7 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
                 }
             }
 
-            else -> reply(sender, Component.text("Usage: /$label admin <reset|delete|confirm|cancel> ...", NamedTextColor.RED))
+            else -> Msg.usage(sender, "/$label admin <reset|delete|confirm|cancel> ...", CommunicationsManager.Category.ADMIN)
         }
 
         return true
@@ -109,13 +110,13 @@ class InvestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     private fun handleResetOrDelete(sender: CommandSender, label: String, args: Array<out String>, actionType: StockMarketManager.AdminActionType) {
         val permission = "joshymc.invest.admin.${actionType.verb}"
         if (!hasAdminPerm(sender, permission)) {
-            reply(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return
         }
 
         val stockInput = args.getOrNull(2)
         if (stockInput == null) {
-            reply(sender, Component.text("Usage: /$label admin ${actionType.verb} <stock>", NamedTextColor.RED))
+            Msg.usage(sender, "/$label admin ${actionType.verb} <stock>", CommunicationsManager.Category.ADMIN)
             return
         }
 

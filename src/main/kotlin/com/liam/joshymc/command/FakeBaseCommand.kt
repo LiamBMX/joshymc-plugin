@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -13,15 +14,15 @@ class FakeBaseCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage("Players only.")
+            Msg.playersOnly(sender)
             return true
         }
         if (!sender.hasPermission("joshymc.fakebase.create")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         if (args.isEmpty() || !args[0].equals("create", ignoreCase = true)) {
-            plugin.commsManager.send(sender, Component.text("Usage: /fakebase create", NamedTextColor.RED))
+            Msg.usage(sender, "/fakebase create")
             return true
         }
 

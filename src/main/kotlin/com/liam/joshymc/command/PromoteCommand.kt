@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
@@ -44,7 +45,7 @@ class PromoteCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         if (!sender.hasPermission("joshymc.promote.live")) {
-            plugin.commsManager.send(sender, Component.text("You do not have permission to use this command.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 

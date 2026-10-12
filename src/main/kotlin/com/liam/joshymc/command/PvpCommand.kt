@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CombatManager
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -19,7 +20,7 @@ class PvpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         // /pvp elytra <on|off> and /pvp enderpearl <on|off> — ops/console only
         if (sub == "elytra" || sub == "enderpearl") {
             if (sender is Player && !sender.isOp) {
-                plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.COMBAT)
+                Msg.noPermission(sender, CommunicationsManager.Category.COMBAT)
                 return true
             }
             val onOff = args.getOrNull(1)?.lowercase()
@@ -51,12 +52,12 @@ class PvpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         // /pvp [on|off] — player-only PvP toggle
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.pvp")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.COMBAT)
+            Msg.noPermission(sender, CommunicationsManager.Category.COMBAT)
             return true
         }
 

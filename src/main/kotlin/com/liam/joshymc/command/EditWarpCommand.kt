@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -14,17 +15,17 @@ class EditWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.editwarp")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            Msg.noPermission(sender, CommunicationsManager.Category.WARP)
             return true
         }
 
         if (args.isEmpty()) {
-            plugin.commsManager.send(sender, Component.text("Usage: /editwarp <name>", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            Msg.usage(sender, "/editwarp <name>", CommunicationsManager.Category.WARP)
             plugin.commsManager.send(sender, Component.text("Hold the item you want as the warp icon.", NamedTextColor.GRAY), CommunicationsManager.Category.WARP)
             return true
         }

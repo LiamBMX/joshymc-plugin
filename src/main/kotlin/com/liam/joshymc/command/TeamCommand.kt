@@ -6,6 +6,7 @@ import com.liam.joshymc.gui.team.TeamMainGui
 import com.liam.joshymc.gui.team.TeamTopGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.TeamManager
+import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -32,12 +33,12 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.team")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.noPermission(sender)
             return true
         }
 
@@ -115,7 +116,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleCreate(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team create <name> [display name]", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team create <name> [display name]")
             return
         }
 
@@ -143,7 +144,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleInvite(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team invite <player>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team invite <player>")
             return
         }
 
@@ -161,7 +162,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val target = Bukkit.getPlayer(args[1])
         if (target == null) {
-            plugin.commsManager.send(player, Component.text("Player not found.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.playerNotFound(player)
             return
         }
 
@@ -198,7 +199,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleAccept(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team accept <team>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team accept <team>")
             return
         }
 
@@ -232,7 +233,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleKick(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team kick <player>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team kick <player>")
             return
         }
 
@@ -250,7 +251,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val target = plugin.playerResolver.resolve(args[1])
         if (target == null) {
-            plugin.commsManager.send(player, Component.text("Player not found: ${args[1]}", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.playerNotFound(player, args[1])
             return
         }
         val targetUuid = target.uniqueId
@@ -321,7 +322,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handlePromote(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team promote <player>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team promote <player>")
             return
         }
 
@@ -338,7 +339,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val target = plugin.playerResolver.resolve(args[1])
         if (target == null) {
-            plugin.commsManager.send(player, Component.text("Player not found: ${args[1]}", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.playerNotFound(player, args[1])
             return
         }
         if (plugin.teamManager.promoteToAdmin(teamName, target.uniqueId)) {
@@ -361,7 +362,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleDemote(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team demote <player>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team demote <player>")
             return
         }
 
@@ -378,7 +379,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val target = plugin.playerResolver.resolve(args[1])
         if (target == null) {
-            plugin.commsManager.send(player, Component.text("Player not found: ${args[1]}", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.playerNotFound(player, args[1])
             return
         }
         if (plugin.teamManager.demoteToMember(teamName, target.uniqueId)) {
@@ -401,7 +402,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleTransfer(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team transfer <player>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team transfer <player>")
             return
         }
 
@@ -418,7 +419,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val target = plugin.playerResolver.resolve(args[1])
         if (target == null) {
-            plugin.commsManager.send(player, Component.text("Player not found: ${args[1]}", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.playerNotFound(player, args[1])
             return
         }
         if (plugin.teamManager.transferOwnership(teamName, target.uniqueId)) {
@@ -440,12 +441,12 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleDelete(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.team.admin") && !sender.isOp) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /team delete <team> [confirm]", NamedTextColor.RED))
+            Msg.usage(sender, "/team delete <team> [confirm]")
             return
         }
 
@@ -583,7 +584,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleChat(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team chat <on/off>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team chat <on/off>")
             return
         }
 
@@ -601,13 +602,13 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 plugin.teamManager.setTeamChat(player.uniqueId, false)
                 plugin.commsManager.send(player, Component.text("Team chat disabled.", NamedTextColor.GRAY), CommunicationsManager.Category.DEFAULT)
             }
-            else -> plugin.commsManager.send(player, Component.text("Usage: /team chat <on/off>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            else -> Msg.usage(player, "/team chat <on/off>")
         }
     }
 
     private fun handleDeposit(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team deposit <amount>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team deposit <amount>")
             return
         }
 
@@ -642,7 +643,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleWithdraw(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team withdraw <amount>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team withdraw <amount>")
             return
         }
 
@@ -715,12 +716,12 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleTeamAdmin(player: Player, args: Array<out String>) {
         if (!player.hasPermission("joshymc.team.admin.echest") && !player.isOp) {
-            plugin.commsManager.send(player, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.noPermission(player)
             return
         }
 
         if (args.size < 3 || args[1].lowercase() != "echest") {
-            plugin.commsManager.send(player, Component.text("Usage: /team admin echest <team>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team admin echest <team>")
             return
         }
 
@@ -777,7 +778,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleRename(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team rename <new name>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team rename <new name>")
             return
         }
 
@@ -834,7 +835,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handlePvp(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team pvp <on/off>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team pvp <on/off>")
             return
         }
 
@@ -881,7 +882,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     }
                 }
             }
-            else -> plugin.commsManager.send(player, Component.text("Usage: /team pvp <on/off>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            else -> Msg.usage(player, "/team pvp <on/off>")
         }
     }
 
@@ -951,7 +952,7 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private fun handleJoin(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /team join <team>", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            Msg.usage(player, "/team join <team>")
             return
         }
 

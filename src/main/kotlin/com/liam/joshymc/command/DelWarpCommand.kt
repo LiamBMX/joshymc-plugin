@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -14,17 +15,17 @@ class DelWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.delwarp")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            Msg.noPermission(sender, CommunicationsManager.Category.WARP)
             return true
         }
 
         if (args.isEmpty()) {
-            plugin.commsManager.send(sender, Component.text("Usage: /delwarp <name>", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            Msg.usage(sender, "/delwarp <name>", CommunicationsManager.Category.WARP)
             return true
         }
 

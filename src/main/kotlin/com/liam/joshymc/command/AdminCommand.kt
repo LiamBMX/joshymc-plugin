@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.PunishmentManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -22,7 +23,7 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         if (!plugin.adminManager.hasAnyAdminPermission(sender)) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -47,7 +48,7 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handlePlayer(sender: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /admin player <name>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(sender, "/admin player <name>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -56,7 +57,7 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         val target = Bukkit.getPlayer(targetName) ?: plugin.playerResolver.resolve(targetName)
 
         if (target == null || (!target.hasPlayedBefore() && !target.isOnline)) {
-            plugin.commsManager.send(sender, Component.text("Player not found: $targetName", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.playerNotFound(sender, targetName, CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -69,7 +70,7 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             val targetName = args[1]
             val target = plugin.playerResolver.resolve(targetName)
             if (target == null || (!target.hasPlayedBefore() && !target.isOnline)) {
-                plugin.commsManager.send(sender, Component.text("Player not found: $targetName", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+                Msg.playerNotFound(sender, targetName, CommunicationsManager.Category.ADMIN)
                 return
             }
 
@@ -100,7 +101,7 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleFreeze(sender: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /admin freeze <player>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(sender, "/admin freeze <player>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -124,7 +125,7 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleSnapshot(sender: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /admin snapshot <player>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(sender, "/admin snapshot <player>", CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -141,14 +142,14 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleRollback(sender: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /admin rollback <player>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.usage(sender, "/admin rollback <player>", CommunicationsManager.Category.ADMIN)
             return
         }
 
         val targetName = args[1]
         val target = plugin.playerResolver.resolve(targetName)
         if (target == null || (!target.hasPlayedBefore() && !target.isOnline)) {
-            plugin.commsManager.send(sender, Component.text("Player not found: $targetName", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.playerNotFound(sender, targetName, CommunicationsManager.Category.ADMIN)
             return
         }
 
@@ -157,7 +158,7 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleLagClear(sender: Player) {
         if (!sender.hasPermission("joshymc.admin")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return
         }
         plugin.lagCleanerManager.triggerManualClear()

@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.ClaimManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -35,12 +36,12 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.claim")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -128,7 +129,7 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleAdd(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /subclaim add <id> <player>", NamedTextColor.RED))
+            Msg.usage(player, "/subclaim add <id> <player>")
             return
         }
 
@@ -152,7 +153,7 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
         val target = plugin.playerResolver.resolve(args[2])
         if (target == null || (!target.hasPlayedBefore() && !target.isOnline)) {
-            plugin.commsManager.send(player, Component.text("Player not found: ${args[2]}", NamedTextColor.RED))
+            Msg.playerNotFound(player, args[2])
             return
         }
 
@@ -169,7 +170,7 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleRemove(player: Player, args: Array<out String>) {
         if (args.size < 3) {
-            plugin.commsManager.send(player, Component.text("Usage: /subclaim remove <id> <player>", NamedTextColor.RED))
+            Msg.usage(player, "/subclaim remove <id> <player>")
             return
         }
 
@@ -192,7 +193,7 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
         val target = plugin.playerResolver.resolve(args[2])
         if (target == null) {
-            plugin.commsManager.send(player, Component.text("Player not found: ${args[2]}", NamedTextColor.RED))
+            Msg.playerNotFound(player, args[2])
             return
         }
         val removed = plugin.claimManager.removeSubclaimAccess(id, target.uniqueId)
@@ -208,7 +209,7 @@ class SubclaimCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     private fun handleDelete(player: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(player, Component.text("Usage: /subclaim delete <id>", NamedTextColor.RED))
+            Msg.usage(player, "/subclaim delete <id>")
             return
         }
 

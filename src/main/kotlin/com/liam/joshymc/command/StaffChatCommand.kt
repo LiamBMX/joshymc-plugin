@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.StaffChatManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -15,18 +16,18 @@ class StaffChatCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission(StaffChatManager.PERM)) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return true
         }
 
         if (args.isNotEmpty() && args[0].equals("view", ignoreCase = true)) {
             if (!sender.hasPermission(StaffChatManager.PERM_VIEW)) {
-                plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+                Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
                 return true
             }
 
@@ -40,7 +41,7 @@ class StaffChatCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
                     plugin.commsManager.send(sender, Component.text("Staff Chat viewing is now disabled.", NamedTextColor.GRAY), CommunicationsManager.Category.ADMIN)
                 }
                 else -> {
-                    plugin.commsManager.send(sender, Component.text("Usage: /staffchat view <on/off>", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+                    Msg.usage(sender, "/staffchat view <on/off>", CommunicationsManager.Category.ADMIN)
                 }
             }
             return true

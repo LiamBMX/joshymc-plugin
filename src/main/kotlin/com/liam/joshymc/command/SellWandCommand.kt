@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -126,13 +127,13 @@ class SellWandCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.sellwand.give")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
         // /sellwand <multiplier> <uses> [player]
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /sellwand <multiplier> <uses> [player]", NamedTextColor.RED))
+            Msg.usage(sender, "/sellwand <multiplier> <uses> [player]")
             return true
         }
 
@@ -150,7 +151,7 @@ class SellWandCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
         val target: Player = if (args.size >= 3) {
             Bukkit.getPlayer(args[2]) ?: run {
-                sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender)
                 return true
             }
         } else if (sender is Player) {

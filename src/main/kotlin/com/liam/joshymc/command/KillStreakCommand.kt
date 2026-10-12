@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -19,7 +20,7 @@ class KillStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.killstreak")) {
-            reply(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender, CommunicationsManager.Category.COMBAT)
             return true
         }
 
@@ -34,12 +35,12 @@ class KillStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
         val target = if (args.isNotEmpty()) {
             resolveTarget(args[0]) ?: run {
-                reply(sender, Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender, category = CommunicationsManager.Category.COMBAT)
                 return true
             }
         } else {
             if (sender !is Player) {
-                sender.sendMessage(Component.text("Usage: /killstreak <player>", NamedTextColor.RED))
+                Msg.usage(sender, "/killstreak <player>")
                 return true
             }
             sender.name to sender.uniqueId
@@ -90,20 +91,20 @@ class KillStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleAdmin(sender: CommandSender, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.killstreak.admin")) {
-            reply(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender, CommunicationsManager.Category.COMBAT)
             return true
         }
 
         val sub = args[0].lowercase()
         if (args.size < 2) {
             val usage = if (sub == "reset") "/killstreak reset <player>" else "/killstreak $sub <player> <amount>"
-            reply(sender, Component.text("Usage: $usage", NamedTextColor.RED))
+            Msg.usage(sender, usage,CommunicationsManager.Category.COMBAT)
             return true
         }
 
         val target = resolveTarget(args[1])
         if (target == null) {
-            reply(sender, Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender, category = CommunicationsManager.Category.COMBAT)
             return true
         }
         val (targetName, targetUuid) = target
@@ -116,7 +117,7 @@ class KillStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             "set" -> {
                 val amount = args.getOrNull(2)?.toIntOrNull()
                 if (amount == null || amount < 0) {
-                    reply(sender, Component.text("Usage: /killstreak set <player> <amount>", NamedTextColor.RED))
+                    Msg.usage(sender, "/killstreak set <player> <amount>", CommunicationsManager.Category.COMBAT)
                     return true
                 }
                 plugin.killStreakManager.setCurrentStreak(targetUuid, amount)
@@ -125,7 +126,7 @@ class KillStreakCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             "sethighest" -> {
                 val amount = args.getOrNull(2)?.toIntOrNull()
                 if (amount == null || amount < 0) {
-                    reply(sender, Component.text("Usage: /killstreak sethighest <player> <amount>", NamedTextColor.RED))
+                    Msg.usage(sender, "/killstreak sethighest <player> <amount>", CommunicationsManager.Category.COMBAT)
                     return true
                 }
                 plugin.killStreakManager.setHighestStreak(targetUuid, amount)

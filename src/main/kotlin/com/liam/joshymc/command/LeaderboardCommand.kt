@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.LeaderboardManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -21,7 +22,7 @@ class LeaderboardCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.leaderboard")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -44,7 +45,7 @@ class LeaderboardCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
         val typeArg = args.getOrNull(2)
         val count = args.getOrNull(3)?.toIntOrNull() ?: 10
         if (id == null || typeArg == null) {
-            sender.sendMessage(Component.text("Usage: /leaderboard create <id> <type> [count]", NamedTextColor.RED))
+            Msg.usage(sender, "/leaderboard create <id> <type> [count]")
             return
         }
         val type = LeaderboardManager.Type.entries.firstOrNull { it.name.equals(typeArg, ignoreCase = true) }
@@ -62,7 +63,7 @@ class LeaderboardCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
 
     private fun handleDelete(sender: CommandSender, args: Array<out String>) {
         val id = args.getOrNull(1) ?: run {
-            sender.sendMessage(Component.text("Usage: /leaderboard delete <id>", NamedTextColor.RED))
+            Msg.usage(sender, "/leaderboard delete <id>")
             return
         }
         val ok = plugin.leaderboardManager.delete(id)

@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -34,12 +35,12 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleGive(sender: CommandSender, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.give")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 
         if (args.size < 2) {
-            sender.sendMessage(Component.text("Usage: /joshymc give <item_id> <amount> [player]", NamedTextColor.RED))
+            Msg.usage(sender, "/joshymc give <item_id> <amount> [player]")
             return
         }
 
@@ -58,7 +59,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (itemId.equals("eggs", ignoreCase = true)) {
             val target: Player = if (args.size >= 4) {
                 plugin.server.getPlayer(args[3]) ?: run {
-                    sender.sendMessage(Component.text("Player not found: ${args[3]}", NamedTextColor.RED))
+                    Msg.playerNotFound(sender, args[3])
                     return
                 }
             } else if (sender is Player) {
@@ -88,7 +89,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
         val target: Player = if (args.size >= 4) {
             plugin.server.getPlayer(args[3]) ?: run {
-                sender.sendMessage(Component.text("Player not found: ${args[3]}", NamedTextColor.RED))
+                Msg.playerNotFound(sender, args[3])
                 return
             }
         } else if (sender is Player) {
@@ -108,7 +109,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleReload(sender: CommandSender) {
         if (!sender.hasPermission("joshymc.reload")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 
@@ -133,7 +134,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     private fun handleHardReload(sender: CommandSender) {
         if (!sender.hasPermission("joshymc.reload")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return
         }
 

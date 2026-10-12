@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.CreditVoucherManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -21,7 +22,7 @@ class CreditVoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.creditvoucher.admin")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -80,7 +81,7 @@ class CreditVoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
     }
 
     private fun sendUsage(sender: CommandSender) {
-        sender.sendMessage(Component.text("Usage: /creditvoucher give <player> <amount> [quantity]", NamedTextColor.RED))
+        Msg.usage(sender, "/creditvoucher give <player> <amount> [quantity]")
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {

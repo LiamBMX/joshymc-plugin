@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -25,7 +26,7 @@ class QuestCycleCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isNotEmpty() && args[0].lowercase() in adminSubs) {
             if (sender is Player && !sender.hasPermission("joshymc.quests.admin")) {
-                plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+                Msg.noPermission(sender)
                 return true
             }
             handleAdmin(sender, args)
@@ -33,11 +34,11 @@ class QuestCycleCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         }
 
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
         if (!sender.hasPermission("joshymc.quests")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
         plugin.questCycleManager.openGui(sender)
@@ -66,9 +67,9 @@ class QuestCycleCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 for (q in mgr.getWeeklyPool()) sender.sendMessage(Component.text("  ${q.id}: ${q.name}", NamedTextColor.GRAY))
             }
             "progress" -> {
-                if (args.size < 2) { sender.sendMessage(Component.text("Usage: /quests progress <player>", NamedTextColor.RED)); return }
+                if (args.size < 2) { Msg.usage(sender, "/quests progress <player>"); return }
                 val target = plugin.playerResolver.resolve(args[1])
-                if (target == null) { sender.sendMessage(Component.text("Player not found: ${args[1]}", NamedTextColor.RED)); return }
+                if (target == null) { Msg.playerNotFound(sender, args[1]); return }
                 val uuid = target.uniqueId
                 sender.sendMessage(Component.text("--- Quest Progress: ${target.name ?: args[1]} ---", NamedTextColor.GOLD))
                 for (q in mgr.getDailyPool()) {
@@ -83,9 +84,9 @@ class QuestCycleCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 sender.sendMessage(Component.text("  [Quest Master] Daily Sets: ${qm.dailySets}, Weekly Complete: ${qm.weeklyComplete}, Rewarded: ${qm.rewarded}", NamedTextColor.LIGHT_PURPLE))
             }
             "setprogress" -> {
-                if (args.size < 4) { sender.sendMessage(Component.text("Usage: /quests setprogress <player> <quest_id> <amount>", NamedTextColor.RED)); return }
+                if (args.size < 4) { Msg.usage(sender, "/quests setprogress <player> <quest_id> <amount>"); return }
                 val target = plugin.playerResolver.resolve(args[1])
-                if (target == null) { sender.sendMessage(Component.text("Player not found: ${args[1]}", NamedTextColor.RED)); return }
+                if (target == null) { Msg.playerNotFound(sender, args[1]); return }
                 val amount = args[3].toIntOrNull()
                 if (amount == null) { sender.sendMessage(Component.text("Amount must be a number.", NamedTextColor.RED)); return }
                 if (mgr.setProgress(target.uniqueId, args[2], amount)) {
@@ -95,7 +96,7 @@ class QuestCycleCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 }
             }
             "complete" -> {
-                if (args.size < 3) { sender.sendMessage(Component.text("Usage: /quests complete <player> <quest_id>", NamedTextColor.RED)); return }
+                if (args.size < 3) { Msg.usage(sender, "/quests complete <player> <quest_id>"); return }
                 val target = Bukkit.getPlayer(args[1])
                 if (target == null) { sender.sendMessage(Component.text("Player must be online.", NamedTextColor.RED)); return }
                 if (mgr.completeQuest(target, args[2])) {

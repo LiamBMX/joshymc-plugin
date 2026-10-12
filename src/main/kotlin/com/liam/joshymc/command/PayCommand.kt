@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -15,23 +16,23 @@ class PayCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.pay")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            Msg.noPermission(sender, CommunicationsManager.Category.ECONOMY)
             return true
         }
 
         if (args.size < 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /pay <player> <amount>", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            Msg.usage(sender, "/pay <player> <amount>", CommunicationsManager.Category.ECONOMY)
             return true
         }
 
         val target = Bukkit.getPlayer(args[0])
         if (target == null) {
-            plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            Msg.playerNotFound(sender, category = CommunicationsManager.Category.ECONOMY)
             return true
         }
 

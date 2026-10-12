@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -15,14 +16,14 @@ class EcoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.eco")) {
             plugin.commsManager.send(sender as? org.bukkit.entity.Player ?: run {
-                sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+                Msg.noPermission(sender)
                 return true
             }, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
             return true
         }
 
         if (args.isEmpty()) {
-            sender.sendMessage(Component.text("Usage: /eco <give|take|set|reset> <player> <amount>", NamedTextColor.RED))
+            Msg.usage(sender, "/eco <give|take|set|reset> <player> <amount>")
             return true
         }
 
@@ -30,12 +31,12 @@ class EcoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         if (sub == "reset") {
             if (args.size < 2) {
-                sender.sendMessage(Component.text("Usage: /eco reset <player>", NamedTextColor.RED))
+                Msg.usage(sender, "/eco reset <player>")
                 return true
             }
             val target = Bukkit.getPlayer(args[1])
             if (target == null) {
-                sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender)
                 return true
             }
             plugin.economyManager.setBalance(target.uniqueId, 0.0)
@@ -49,13 +50,13 @@ class EcoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /eco $sub <player> <amount>", NamedTextColor.RED))
+            Msg.usage(sender, "/eco $sub <player> <amount>")
             return true
         }
 
         val target = Bukkit.getPlayer(args[1])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender)
             return true
         }
 
@@ -101,7 +102,7 @@ class EcoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 )
             }
             else -> {
-                sender.sendMessage(Component.text("Usage: /eco <give|take|set|reset> <player> <amount>", NamedTextColor.RED))
+                Msg.usage(sender, "/eco <give|take|set|reset> <player> <amount>")
             }
         }
 

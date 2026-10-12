@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -29,7 +30,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         if (!sender.hasPermission("joshymc.credits")) {
-            sender.sendMessage(Component.text("No permission.", NamedTextColor.RED))
+            Msg.noPermission(sender)
             return true
         }
 
@@ -37,12 +38,12 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
         if (sub == "reset") {
             if (args.size < 2) {
-                sender.sendMessage(Component.text("Usage: /credits reset <player>", NamedTextColor.RED))
+                Msg.usage(sender, "/credits reset <player>")
                 return true
             }
             val target = Bukkit.getPlayer(args[1])
             if (target == null) {
-                sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender)
                 return true
             }
             plugin.creditsManager.setBalance(target.uniqueId, 0.0)
@@ -56,13 +57,13 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         if (args.size < 3) {
-            sender.sendMessage(Component.text("Usage: /credits $sub <player> <amount>", NamedTextColor.RED))
+            Msg.usage(sender, "/credits $sub <player> <amount>")
             return true
         }
 
         val target = Bukkit.getPlayer(args[1])
         if (target == null) {
-            sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED))
+            Msg.playerNotFound(sender)
             return true
         }
 
@@ -99,7 +100,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 }
             }
             else -> {
-                sender.sendMessage(Component.text("Usage: /credits <balance|bal|pay|give|take|reset> [player] [amount]", NamedTextColor.RED))
+                Msg.usage(sender, "/credits <balance|bal|pay|give|take|reset> [player] [amount]")
             }
         }
 
@@ -121,7 +122,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             if (targetName == null) {
                 sender.sendMessage(Component.text("Console must specify a player: /credits balance <player>", NamedTextColor.RED))
             } else {
-                sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED))
+                Msg.playerNotFound(sender)
             }
             return true
         }
@@ -189,7 +190,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     private fun handlePay(sender: CommandSender, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
@@ -199,7 +200,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         if (args.size < 3) {
-            plugin.commsManager.send(sender, Component.text("Usage: /credits pay <amount> <player>", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            Msg.usage(sender, "/credits pay <amount> <player>", CommunicationsManager.Category.ECONOMY)
             return true
         }
 
@@ -211,7 +212,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
         val target = Bukkit.getPlayer(args[2])
         if (target == null) {
-            plugin.commsManager.send(sender, Component.text("Player not found.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            Msg.playerNotFound(sender, category = CommunicationsManager.Category.ECONOMY)
             return true
         }
 

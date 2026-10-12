@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -37,12 +38,12 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission("joshymc.pwarp")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            Msg.noPermission(sender, CommunicationsManager.Category.WARP)
             return true
         }
 
@@ -89,12 +90,12 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleSet(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.pwarp.set")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            Msg.noPermission(sender, CommunicationsManager.Category.WARP)
             return
         }
 
         if (args.size < 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /pwarp set <name>", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            Msg.usage(sender, "/pwarp set <name>", CommunicationsManager.Category.WARP)
             return
         }
 
@@ -141,12 +142,12 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleSetIcon(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.pwarp.set")) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            Msg.noPermission(sender, CommunicationsManager.Category.WARP)
             return
         }
 
         if (args.size < 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /pwarp seticon <name>", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            Msg.usage(sender, "/pwarp seticon <name>", CommunicationsManager.Category.WARP)
             return
         }
 
@@ -166,7 +167,7 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
     private fun handleDelete(sender: Player, args: Array<out String>) {
         if (args.size < 2) {
-            plugin.commsManager.send(sender, Component.text("Usage: /pwarp delete <name>", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            Msg.usage(sender, "/pwarp delete <name>", CommunicationsManager.Category.WARP)
             return
         }
 

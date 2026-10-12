@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.ModModeManager
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -15,12 +16,12 @@ class ModModeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED))
+            Msg.playersOnly(sender)
             return true
         }
 
         if (!sender.hasPermission(ModModeManager.PERM_BASE)) {
-            plugin.commsManager.send(sender, Component.text("No permission.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return true
         }
 
@@ -29,7 +30,7 @@ class ModModeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             "off" -> plugin.modModeManager.disable(sender)
             null -> plugin.modModeManager.toggle(sender)
             else -> {
-                plugin.commsManager.send(sender, Component.text("Usage: /modmode [on|off]", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+                Msg.usage(sender, "/modmode [on|off]", CommunicationsManager.Category.ADMIN)
             }
         }
         return true
