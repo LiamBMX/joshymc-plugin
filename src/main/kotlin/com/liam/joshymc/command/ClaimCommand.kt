@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.claim.ClaimMainGui
+import com.liam.joshymc.gui.claim.ClaimSettingsGui
 import com.liam.joshymc.manager.ClaimManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -67,6 +68,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "shrink" -> handleShrink(sender, args)
             "pvp" -> handlePvp(sender, args)
             "tnt" -> handleTnt(sender, args)
+            "settings" -> handleSettings(sender)
             else -> showHelp(sender)
         }
         return true
@@ -487,6 +489,19 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         )
     }
 
+    private fun handleSettings(player: Player) {
+        val claim = plugin.claimManager.getClaimAt(player.location)
+        if (claim == null) {
+            plugin.commsManager.send(player, Component.text("You must be standing inside one of your claims.", NamedTextColor.RED))
+            return
+        }
+        if (!plugin.claimManager.canManageClaim(player, claim)) {
+            plugin.commsManager.send(player, Component.text("You can only change the settings of your own claim.", NamedTextColor.RED))
+            return
+        }
+        ClaimSettingsGui.open(plugin, player, claim.id)
+    }
+
     private fun showHelp(player: Player) {
         val gold = TextColor.color(0xFFD700)
         val msg = Component.text()
@@ -509,6 +524,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             .append(Component.text("  /claim undeny <player>", NamedTextColor.YELLOW)).append(Component.text(" — remove entry ban\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim pvp <on|off>", NamedTextColor.YELLOW)).append(Component.text(" — toggle PvP in your claim\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim tnt <on|off>", NamedTextColor.YELLOW)).append(Component.text(" — toggle TNT explosions in your claim\n", NamedTextColor.GRAY))
+            .append(Component.text("  /claim settings", NamedTextColor.YELLOW)).append(Component.text(" — what untrusted players may do here\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim team", NamedTextColor.YELLOW)).append(Component.text(" — share with team\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim personal", NamedTextColor.YELLOW)).append(Component.text(" — un-share\n", NamedTextColor.GRAY))
             .append(Component.text("  /claim map", NamedTextColor.YELLOW)).append(Component.text(" — nearby claims\n", NamedTextColor.GRAY))
@@ -522,7 +538,7 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (alias.equals("unclaim", true)) return emptyList()
         val directions = listOf("north", "south", "east", "west")
         return when (args.size) {
-            1 -> listOf("wand", "trust", "untrust", "trusted", "deny", "undeny", "denied", "show", "team", "personal", "map", "info", "list", "blocks", "expand", "shrink", "pvp", "tnt", "help").filter { it.startsWith(args[0].lowercase()) }
+            1 -> listOf("wand", "trust", "untrust", "trusted", "deny", "undeny", "denied", "show", "team", "personal", "map", "info", "list", "blocks", "expand", "shrink", "pvp", "tnt", "settings", "help").filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
                 "blocks" -> listOf("give").filter { it.startsWith(args[1].lowercase()) }
                 "trust", "untrust", "deny", "undeny" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], true) }

@@ -64,7 +64,7 @@ object ClaimManagementGui {
 
         gui.setItem(13, ClaimGuiUtil.item(
             Material.COMPARATOR, Component.text("Claim Settings", NamedTextColor.YELLOW),
-            listOf(Component.empty(), Component.text("PvP, TNT, team sharing.", NamedTextColor.GRAY))
+            listOf(Component.empty(), Component.text("Public permissions, PvP, TNT, team sharing.", NamedTextColor.GRAY))
         )) { p, _ -> ClaimSettingsGui.open(plugin, p, claim.id) }
 
         gui.setItem(14, ClaimGuiUtil.item(
