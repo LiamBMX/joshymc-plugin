@@ -70,6 +70,7 @@ class ServerShopManager(private val plugin: Joshymc) {
     }
 
     private val ITEMS_PER_PAGE = 28 // rows 1-4, columns 1-7
+    private val CENTERED_GRID_SIZE = 9 // 3x3 grid used by the End and Nether pages
 
     fun start() {
         categories.clear()
@@ -355,7 +356,12 @@ class ServerShopManager(private val plugin: Joshymc) {
     // ── Category Page ───────────────────────────────────────────────────
 
     fun openCategory(player: Player, categoryId: String, page: Int) {
-        val category = getCategory(categoryId) ?: return
+        val category = getCategory(categoryId)
+        if (category == null) {
+            plugin.logger.warning("[Shop] Tried to open unknown or disabled shop category '$categoryId'")
+            plugin.commsManager.send(player, Component.text("That shop category is unavailable.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            return
+        }
 
         val title = Component.text(category.name, NamedTextColor.AQUA)
             .decoration(TextDecoration.BOLD, true)
@@ -382,9 +388,10 @@ class ServerShopManager(private val plugin: Joshymc) {
         val endIndex = (startIndex + ITEMS_PER_PAGE).coerceAtMost(category.items.size)
         val pageItems = if (startIndex < category.items.size) category.items.subList(startIndex, endIndex) else emptyList()
 
-        // Item slots: rows 1-4, columns 1-7. The End and Nether categories have exactly
-        // 9 items and are displayed as a centered 3x3 grid instead of the usual top-left flow.
-        val itemSlots = if (categoryId == "end" || categoryId == "nether") {
+        // Item slots: rows 1-4, columns 1-7. The End and Nether categories ship with 9 items
+        // and are displayed as a centered 3x3 grid instead of the usual top-left flow, but only
+        // while the page fits in it: an admin-edited shop.yml can give them more (issue #1104).
+        val itemSlots = if ((categoryId == "end" || categoryId == "nether") && pageItems.size <= CENTERED_GRID_SIZE) {
             val centeredRows = listOf(1, 2, 3)
             val centeredCols = listOf(3, 4, 5)
             centeredRows.flatMap { row -> centeredCols.map { col -> row * 9 + col } }
@@ -399,7 +406,11 @@ class ServerShopManager(private val plugin: Joshymc) {
         }
 
         for ((index, shopItem) in pageItems.withIndex()) {
-            val slot = itemSlots[index]
+            val slot = itemSlots.getOrNull(index)
+            if (slot == null) {
+                plugin.logger.warning("[Shop] Category '$categoryId' page $page has ${pageItems.size} items but only ${itemSlots.size} slots; skipping the rest")
+                break
+            }
             val icon = buildShopItemIcon(shopItem)
 
             gui.setItem(slot, icon) { p, event ->
