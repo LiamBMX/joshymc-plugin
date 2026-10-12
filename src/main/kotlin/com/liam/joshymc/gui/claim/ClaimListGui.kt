@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.claim
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.ClaimManager
@@ -20,16 +21,17 @@ object ClaimListGui {
         val claims = plugin.claimManager.getClaimsByPlayer(player.uniqueId).sortedBy { it.id }
 
         val gui = CustomGui(Component.text("My Claims", NamedTextColor.GOLD), 54)
-        for (slot in 0..8) gui.setItem(slot, ClaimGuiUtil.filler())
-        for (slot in 45..53) gui.setItem(slot, ClaimGuiUtil.filler())
+        for (slot in 0..8) gui.setItem(slot, GuiStyle.filler())
+        for (slot in 45..53) gui.setItem(slot, GuiStyle.filler())
 
         if (claims.isEmpty()) {
-            gui.setItem(22, ClaimGuiUtil.item(
+            gui.setItem(22, GuiStyle.item(
                 Material.BARRIER,
                 Component.text("You Have No Claims", NamedTextColor.RED),
                 listOf(Component.empty(), Component.text("Use a claim wand to create one.", NamedTextColor.GRAY))
             ))
-            gui.setItem(49, ClaimGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> ClaimMainGui.open(plugin, p) }
+            gui.setItem(GuiStyle.backSlot(54), GuiStyle.back()) { p, _ -> ClaimMainGui.open(plugin, p) }
+            gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
             plugin.guiManager.open(player, gui)
             return
         }
@@ -45,16 +47,18 @@ object ClaimListGui {
         }
 
         if (clampedPage > 0) {
-            gui.setItem(45, ClaimGuiUtil.item(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.prevSlot(54), GuiStyle.previousPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, clampedPage - 1)
             }
         }
 
-        gui.setItem(47, ClaimGuiUtil.item(Material.PAPER, Component.text("Page ${clampedPage + 1}/$totalPages", NamedTextColor.WHITE)))
-        gui.setItem(49, ClaimGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> ClaimMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.backSlot(54), GuiStyle.back()) { p, _ -> ClaimMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         if (clampedPage < totalPages - 1) {
-            gui.setItem(53, ClaimGuiUtil.item(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.nextSlot(54), GuiStyle.nextPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, clampedPage + 1)
             }
         }
@@ -74,6 +78,6 @@ object ClaimListGui {
             add(Component.empty())
             add(Component.text("Click to manage.", NamedTextColor.YELLOW))
         }
-        return ClaimGuiUtil.item(Material.GRASS_BLOCK, Component.text("Claim #${claim.id}", NamedTextColor.GREEN), lore)
+        return GuiStyle.item(Material.GRASS_BLOCK, Component.text("Claim #${claim.id}", NamedTextColor.GREEN), lore)
     }
 }

@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.team
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
@@ -40,7 +41,7 @@ object TeamInfoGui {
         }
 
         val gui = CustomGui(Component.text(team.displayName, NamedTextColor.GOLD), 45)
-        for (slot in 0..44) gui.setItem(slot, TeamGuiUtil.filler())
+        for (slot in 0..44) gui.setItem(slot, GuiStyle.filler())
 
         val members = plugin.teamManager.getTeamMembers(teamName)
         val owner = Bukkit.getOfflinePlayer(UUID.fromString(team.ownerUuid))
@@ -59,7 +60,7 @@ object TeamInfoGui {
             ),
             Component.text("Created: ", NamedTextColor.GRAY).append(Component.text(dateFormat.format(Date(team.createdAt)), NamedTextColor.WHITE))
         )
-        gui.setItem(4, TeamGuiUtil.item(Material.WHITE_BANNER, Component.text(team.displayName, NamedTextColor.GOLD), infoLore))
+        gui.setItem(4, GuiStyle.item(Material.WHITE_BANNER, Component.text(team.displayName, NamedTextColor.GOLD), infoLore))
 
         val memberSlots = 9..18
         for ((slot, member) in memberSlots.zip(members)) {
@@ -82,9 +83,10 @@ object TeamInfoGui {
             gui.setItem(slot, head)
         }
 
-        gui.setItem(40, TeamGuiUtil.item(Material.ARROW, backLabel)) { p, _ ->
+        gui.setItem(GuiStyle.backSlot(45), GuiStyle.item(Material.ARROW, backLabel)) { p, _ ->
             onBack(plugin, p)
         }
+        gui.setItem(GuiStyle.closeSlot(45), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         gui.setItem(42, buildJoinItem(plugin, player, teamName, isOpen)) { p, _ ->
             handleJoinClick(plugin, p, teamName, backLabel, onBack)
@@ -96,25 +98,25 @@ object TeamInfoGui {
     private fun buildJoinItem(plugin: Joshymc, player: Player, teamName: String, isOpen: Boolean) =
         when {
             plugin.teamManager.getPlayerTeam(player.uniqueId) != null ->
-                TeamGuiUtil.item(
+                GuiStyle.item(
                     Material.BARRIER,
                     Component.text("You Are Already On A Team", NamedTextColor.RED),
                     listOf(Component.empty(), Component.text("Leave your current team to join another.", NamedTextColor.GRAY))
                 )
             isOpen ->
-                TeamGuiUtil.item(
+                GuiStyle.item(
                     Material.LIME_DYE,
                     Component.text("Join Team", NamedTextColor.GREEN),
                     listOf(Component.empty(), Component.text("Click to join this team.", NamedTextColor.GRAY))
                 )
             plugin.teamManager.getPendingInvites(player.uniqueId).contains(teamName) ->
-                TeamGuiUtil.item(
+                GuiStyle.item(
                     Material.LIME_DYE,
                     Component.text("Accept Invite", NamedTextColor.GREEN),
                     listOf(Component.empty(), Component.text("Click to accept your invite to this team.", NamedTextColor.GRAY))
                 )
             else ->
-                TeamGuiUtil.item(
+                GuiStyle.item(
                     Material.BARRIER,
                     Component.text("Invite Only", NamedTextColor.YELLOW),
                     listOf(Component.empty(), Component.text("You need an invitation from this team to join.", NamedTextColor.GRAY))

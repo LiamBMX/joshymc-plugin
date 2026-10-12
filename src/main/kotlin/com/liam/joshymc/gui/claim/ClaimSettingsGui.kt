@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.claim
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.ClaimManager
@@ -42,9 +43,9 @@ object ClaimSettingsGui {
         }
 
         val gui = CustomGui(Component.text("Claim Settings", NamedTextColor.GOLD), 54)
-        for (slot in 0..53) gui.setItem(slot, ClaimGuiUtil.filler())
+        for (slot in 0..53) gui.setItem(slot, GuiStyle.filler())
 
-        gui.setItem(4, ClaimGuiUtil.item(
+        gui.setItem(4, GuiStyle.item(
             Material.OAK_SIGN, Component.text("Public Permissions", NamedTextColor.GOLD),
             listOf(
                 Component.empty(),
@@ -72,7 +73,7 @@ object ClaimSettingsGui {
         val isOwner = claim.ownerUuid == player.uniqueId
         val onTeam = plugin.teamManager.getPlayerTeam(player.uniqueId) != null
         if (isOwner && onTeam) {
-            gui.setItem(32, ClaimGuiUtil.item(
+            gui.setItem(32, GuiStyle.item(
                 if (claim.teamName != null) Material.LIME_DYE else Material.GRAY_DYE,
                 Component.text("Team Sharing", NamedTextColor.YELLOW),
                 listOf(
@@ -88,13 +89,14 @@ object ClaimSettingsGui {
                 }
             }
         } else {
-            gui.setItem(32, ClaimGuiUtil.item(
+            gui.setItem(32, GuiStyle.item(
                 Material.GRAY_DYE, Component.text("Team Sharing", NamedTextColor.DARK_GRAY),
                 listOf(Component.empty(), Component.text("Only the owner (while on a team) can toggle this.", NamedTextColor.RED))
             ))
         }
 
-        gui.setItem(49, ClaimGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> ClaimManagementGui.open(plugin, p, claimId) }
+        gui.setItem(GuiStyle.backSlot(54), GuiStyle.back()) { p, _ -> ClaimManagementGui.open(plugin, p, claimId) }
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
     }
@@ -115,16 +117,14 @@ object ClaimSettingsGui {
     }
 
     private fun toggleItem(icon: Material, name: String, description: String, enabled: Boolean): ItemStack {
-        val item = ClaimGuiUtil.item(
+        val item = GuiStyle.item(
             icon,
-            Component.text(name, if (enabled) NamedTextColor.GREEN else NamedTextColor.RED),
+            Component.text(name, GuiStyle.stateColor(enabled)),
             listOf(
                 Component.empty(),
                 Component.text(description, NamedTextColor.GRAY),
                 Component.empty(),
-                Component.text("Status: ", NamedTextColor.GRAY).append(
-                    if (enabled) Component.text("Enabled", NamedTextColor.GREEN) else Component.text("Disabled", NamedTextColor.RED)
-                ),
+                Component.text("Status: ", NamedTextColor.GRAY).append(GuiStyle.stateLine(enabled)),
                 Component.text(if (enabled) "Click to disable." else "Click to enable.", NamedTextColor.YELLOW)
             )
         )

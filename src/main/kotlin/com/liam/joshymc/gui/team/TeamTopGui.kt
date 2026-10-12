@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.team
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.TeamManager
@@ -32,21 +33,22 @@ object TeamTopGui {
     private fun build(plugin: Joshymc, sort: TeamManager.TeamSort, page: Int): CustomGui {
         val categoryName = if (sort == TeamManager.TeamSort.KILLS) "Top Kills" else "Top Balance"
         val gui = CustomGui(Component.text("Team Leaderboard", NamedTextColor.GOLD), 54)
-        for (slot in 0..8) gui.setItem(slot, TeamGuiUtil.filler())
-        for (slot in 45..53) gui.setItem(slot, TeamGuiUtil.filler())
-        gui.setItem(4, TeamGuiUtil.item(Material.PAPER, Component.text("Ranking by: $categoryName", NamedTextColor.YELLOW)))
+        for (slot in 0..8) gui.setItem(slot, GuiStyle.filler())
+        for (slot in 45..53) gui.setItem(slot, GuiStyle.filler())
+        gui.setItem(4, GuiStyle.item(Material.PAPER, Component.text("Ranking by: $categoryName", NamedTextColor.YELLOW)))
 
         val rankings = plugin.teamManager.getTeamRankings(sort)
 
         if (rankings.isEmpty()) {
             gui.setItem(
                 22,
-                TeamGuiUtil.item(
+                GuiStyle.item(
                     Material.BARRIER,
                     Component.text("No Teams Available", NamedTextColor.RED),
                     listOf(Component.empty(), Component.text("There are currently no teams to rank.", NamedTextColor.GRAY))
                 )
             )
+            gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
             return gui
         }
 
@@ -62,18 +64,18 @@ object TeamTopGui {
         }
 
         if (clampedPage > 0) {
-            gui.setItem(45, TeamGuiUtil.item(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.prevSlot(54), GuiStyle.previousPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, sort, clampedPage - 1)
             }
         }
 
-        gui.setItem(47, TeamGuiUtil.item(Material.PAPER, Component.text("Page ${clampedPage + 1}/$totalPages", NamedTextColor.WHITE)))
-
         val otherSort = if (sort == TeamManager.TeamSort.KILLS) TeamManager.TeamSort.BALANCE else TeamManager.TeamSort.KILLS
         val otherName = if (otherSort == TeamManager.TeamSort.KILLS) "Top Kills" else "Top Balance"
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
         gui.setItem(
-            49,
-            TeamGuiUtil.item(
+            53,
+            GuiStyle.item(
                 Material.NETHER_STAR,
                 Component.text("Category: $categoryName", NamedTextColor.AQUA),
                 listOf(Component.empty(), Component.text("Click to switch to $otherName", NamedTextColor.GRAY))
@@ -81,7 +83,8 @@ object TeamTopGui {
         ) { p, _ -> open(plugin, p, otherSort, 0) }
 
         if (clampedPage < totalPages - 1) {
-            gui.setItem(53, TeamGuiUtil.item(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.nextSlot(54), GuiStyle.nextPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, sort, clampedPage + 1)
             }
         }

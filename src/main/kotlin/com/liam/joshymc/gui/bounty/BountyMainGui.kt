@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.bounty
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
@@ -18,11 +19,11 @@ object BountyMainGui {
         plugin.teamManager.clearBountySession(player.uniqueId)
 
         val gui = CustomGui(Component.text("Bounties", NamedTextColor.GOLD), 27)
-        for (slot in 0..26) gui.setItem(slot, BountyGuiUtil.filler())
+        for (slot in 0..26) gui.setItem(slot, GuiStyle.filler())
 
         gui.setItem(
             11,
-            BountyGuiUtil.item(
+            GuiStyle.item(
                 Material.EMERALD,
                 Component.text("Place Bounty", NamedTextColor.GREEN),
                 listOf(Component.empty(), Component.text("Place a bounty on another player.", NamedTextColor.GRAY))
@@ -31,7 +32,7 @@ object BountyMainGui {
 
         gui.setItem(
             13,
-            BountyGuiUtil.item(
+            GuiStyle.item(
                 Material.GOLD_INGOT,
                 Component.text("Active Bounties", NamedTextColor.YELLOW),
                 listOf(Component.empty(), Component.text("Browse every active bounty.", NamedTextColor.GRAY))
@@ -40,14 +41,14 @@ object BountyMainGui {
 
         gui.setItem(
             15,
-            BountyGuiUtil.item(
+            GuiStyle.item(
                 Material.PLAYER_HEAD,
                 Component.text("My Bounties", NamedTextColor.AQUA),
                 listOf(Component.empty(), Component.text("View bounties you've placed.", NamedTextColor.GRAY))
             )
         ) { p, _ -> BountyMyGui.open(plugin, p) }
 
-        gui.setItem(22, BountyGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.closeSlot(27), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
     }

@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.coinflip
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CoinflipManager
@@ -19,7 +20,7 @@ import kotlin.math.ceil
 
 /**
  * Browse / detail / animation GUIs for Credits Coinflip (issue #1031). Mirrors the
- * Money Coinflip screens (reusing [CoinflipGuiUtil]) but every amount is labelled
+ * Money Coinflip screens (reusing [com.liam.joshymc.gui.GuiStyle]) but every amount is labelled
  * "Credits" and read from [CreditsCoinflipManager] — never the Money economy.
  */
 object CreditsCoinflipGui {
@@ -34,8 +35,8 @@ object CreditsCoinflipGui {
 
     fun openMain(plugin: Joshymc, player: Player, page: Int = 0) {
         val gui = CustomGui(Component.text("Credits Coinflip", NamedTextColor.AQUA), 54)
-        for (slot in 0..8) gui.setItem(slot, CoinflipGuiUtil.filler())
-        for (slot in 45..53) gui.setItem(slot, CoinflipGuiUtil.filler())
+        for (slot in 0..8) gui.setItem(slot, GuiStyle.filler())
+        for (slot in 45..53) gui.setItem(slot, GuiStyle.filler())
 
         val total = mgr(plugin).getTotalWaiting()
         val totalPages = maxOf(1, ceil(total / PAGE_SIZE.toDouble()).toInt())
@@ -44,7 +45,7 @@ object CreditsCoinflipGui {
 
         gui.setItem(
             4,
-            CoinflipGuiUtil.item(
+            GuiStyle.item(
                 Material.AMETHYST_SHARD,
                 Component.text("Active Credits Coinflips", NamedTextColor.YELLOW),
                 listOf(
@@ -57,7 +58,7 @@ object CreditsCoinflipGui {
         if (flips.isEmpty()) {
             gui.setItem(
                 22,
-                CoinflipGuiUtil.item(
+                GuiStyle.item(
                     Material.BARRIER,
                     Component.text("No Active Coinflips", NamedTextColor.RED),
                     listOf(Component.empty(), Component.text("There are no active Credits Coinflips.", NamedTextColor.GRAY))
@@ -72,7 +73,8 @@ object CreditsCoinflipGui {
         }
 
         if (clampedPage > 0) {
-            gui.setItem(45, CoinflipGuiUtil.item(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.prevSlot(54), GuiStyle.previousPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 openMain(plugin, p, clampedPage - 1)
             }
         }
@@ -86,11 +88,12 @@ object CreditsCoinflipGui {
             )
             else -> listOf(Component.text("  You have no active Coinflip.", NamedTextColor.GRAY))
         }
-        gui.setItem(47, CoinflipGuiUtil.item(Material.PLAYER_HEAD, Component.text("My Coinflip", NamedTextColor.AQUA), myLore))
+        // Same bottom row as /coinflip: status in the unused Back slot, Create bottom-right.
+        gui.setItem(45, GuiStyle.item(Material.PLAYER_HEAD, Component.text("My Coinflip", NamedTextColor.AQUA), myLore))
 
         gui.setItem(
-            49,
-            CoinflipGuiUtil.item(
+            53,
+            GuiStyle.item(
                 Material.EMERALD,
                 Component.text("Create Credits Coinflip", NamedTextColor.GREEN),
                 listOf(
@@ -101,10 +104,11 @@ object CreditsCoinflipGui {
             )
         ) { p, _ -> promptCreate(plugin, p) }
 
-        gui.setItem(51, CoinflipGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         if (clampedPage < totalPages - 1) {
-            gui.setItem(53, CoinflipGuiUtil.item(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.nextSlot(54), GuiStyle.nextPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 openMain(plugin, p, clampedPage + 1)
             }
         }
@@ -141,7 +145,7 @@ object CreditsCoinflipGui {
             Component.empty(),
             if (isOwn) Component.text("Click to view/cancel.", NamedTextColor.YELLOW) else Component.text("Click to join.", NamedTextColor.GREEN)
         )
-        return CoinflipGuiUtil.skull(
+        return GuiStyle.skull(
             Bukkit.getOfflinePlayer(cf.creatorUuid),
             Component.text(cf.creatorName, if (isOwn) NamedTextColor.AQUA else NamedTextColor.GOLD),
             lore
@@ -160,8 +164,8 @@ object CreditsCoinflipGui {
 
         val isOwn = cf.creatorUuid == player.uniqueId
         val gui = CustomGui(Component.text(if (isOwn) "Your Credits Flip" else "Join Credits Flip", NamedTextColor.AQUA), 27)
-        val red = CoinflipGuiUtil.item(Material.RED_STAINED_GLASS_PANE, Component.text(if (isOwn) "Cancel Coinflip" else "Back", NamedTextColor.RED))
-        val green = CoinflipGuiUtil.item(Material.LIME_STAINED_GLASS_PANE, Component.text("Confirm Join", NamedTextColor.GREEN))
+        val red = GuiStyle.item(Material.RED_STAINED_GLASS_PANE, Component.text(if (isOwn) "Cancel Coinflip" else "Back", NamedTextColor.RED))
+        val green = GuiStyle.item(Material.LIME_STAINED_GLASS_PANE, Component.text("Confirm Join", NamedTextColor.GREEN))
 
         for (i in 0 until 27) {
             val col = i % 9
@@ -180,7 +184,7 @@ object CreditsCoinflipGui {
                     mgr(plugin).joinFlip(p, id)
                 }
             } else if (col > 4) {
-                gui.setItem(i, CoinflipGuiUtil.filler())
+                gui.setItem(i, GuiStyle.filler())
             }
         }
 
@@ -195,7 +199,7 @@ object CreditsCoinflipGui {
             lore.add(Component.empty())
             lore.add(Component.text("Winner takes the full ${mgr(plugin).fmt(cf.wager * 2)} pot.", NamedTextColor.GRAY))
         }
-        gui.setItem(13, CoinflipGuiUtil.skull(Bukkit.getOfflinePlayer(cf.creatorUuid), Component.text(cf.creatorName, NamedTextColor.GOLD), lore))
+        gui.setItem(13, GuiStyle.skull(Bukkit.getOfflinePlayer(cf.creatorUuid), Component.text(cf.creatorName, NamedTextColor.GOLD), lore))
 
         plugin.guiManager.open(player, gui)
     }
@@ -209,7 +213,7 @@ object CreditsCoinflipGui {
         val challenger = Bukkit.getOfflinePlayer(challengerUuid)
 
         val gui = CustomGui(Component.text("Credits Coinflip!", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true), 27)
-        for (i in 0 until 27) gui.inventory.setItem(i, CoinflipGuiUtil.filler(Material.CYAN_STAINED_GLASS_PANE))
+        for (i in 0 until 27) gui.inventory.setItem(i, GuiStyle.filler(Material.CYAN_STAINED_GLASS_PANE))
         gui.inventory.setItem(10, sideSkull(plugin, creator, cf.creatorName, cf.wager))
         gui.inventory.setItem(16, sideSkull(plugin, challenger, cf.challengerName ?: "Unknown", cf.wager))
 
@@ -239,7 +243,7 @@ object CreditsCoinflipGui {
         remaining: Iterator<Long>, showingCreator: Boolean
     ) {
         val (shown, shownName) = if (showingCreator) creator to cf.creatorName else challenger to (cf.challengerName ?: "Unknown")
-        gui.inventory.setItem(13, CoinflipGuiUtil.skull(shown, Component.text(shownName, NamedTextColor.YELLOW)))
+        gui.inventory.setItem(13, GuiStyle.skull(shown, Component.text(shownName, NamedTextColor.YELLOW)))
         for (viewer in gui.inventory.viewers.filterIsInstance<Player>()) {
             viewer.playSound(viewer.location, Sound.UI_BUTTON_CLICK, 0.6f, if (showingCreator) 1.4f else 1.0f)
         }
@@ -262,7 +266,7 @@ object CreditsCoinflipGui {
         val winnerName = if (creatorWon) cf.creatorName else cf.challengerName ?: "Unknown"
         gui.inventory.setItem(
             13,
-            CoinflipGuiUtil.skull(
+            GuiStyle.skull(
                 if (creatorWon) creator else challenger,
                 Component.text("WINNER!", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true),
                 listOf(
@@ -286,7 +290,7 @@ object CreditsCoinflipGui {
         }, plugin.coinflipManager.resultDisplayTicks)
     }
 
-    private fun sideSkull(plugin: Joshymc, owner: OfflinePlayer, name: String, wager: Long) = CoinflipGuiUtil.skull(
+    private fun sideSkull(plugin: Joshymc, owner: OfflinePlayer, name: String, wager: Long) = GuiStyle.skull(
         owner,
         Component.text(name, NamedTextColor.AQUA),
         listOf(Component.text("Wager: ", NamedTextColor.GRAY).append(Component.text(mgr(plugin).fmt(wager), NamedTextColor.AQUA)))

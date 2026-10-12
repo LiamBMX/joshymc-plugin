@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.team
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.TeamManager
@@ -42,7 +43,7 @@ object TeamMainGui {
         val canManageBank = isOwner || role == "admin"
 
         val gui = CustomGui(Component.text(team.displayName, NamedTextColor.GOLD), 45)
-        for (slot in 0..44) gui.setItem(slot, TeamGuiUtil.filler())
+        for (slot in 0..44) gui.setItem(slot, GuiStyle.filler())
 
         val owner = Bukkit.getOfflinePlayer(UUID.fromString(team.ownerUuid))
         val members = plugin.teamManager.getTeamMembers(teamName)
@@ -50,7 +51,7 @@ object TeamMainGui {
         val isOpen = plugin.teamManager.isTeamOpen(teamName)
         val friendlyFire = plugin.teamManager.isTeamPvpEnabled(teamName)
 
-        gui.setItem(4, TeamGuiUtil.item(
+        gui.setItem(4, GuiStyle.item(
             Material.WHITE_BANNER,
             Component.text(team.displayName, NamedTextColor.GOLD),
             listOf(
@@ -68,55 +69,55 @@ object TeamMainGui {
             )
         ))
 
-        gui.setItem(10, TeamGuiUtil.item(
+        gui.setItem(10, GuiStyle.item(
             Material.PAPER, Component.text("Team Info", NamedTextColor.YELLOW),
             listOf(Component.empty(), Component.text("View full team info & roster.", NamedTextColor.GRAY))
         )) { p, _ ->
             TeamInfoGui.open(plugin, p, teamName, Component.text("Back to Team Panel", NamedTextColor.YELLOW)) { pl, viewer -> open(pl, viewer) }
         }
 
-        gui.setItem(12, TeamGuiUtil.item(
+        gui.setItem(12, GuiStyle.item(
             Material.PLAYER_HEAD, Component.text("Members & Management", NamedTextColor.AQUA),
             listOf(Component.empty(), Component.text("Invite, kick, promote, and more.", NamedTextColor.GRAY))
         )) { p, _ -> TeamManagementGui.open(plugin, p) }
 
-        gui.setItem(14, TeamGuiUtil.item(
+        gui.setItem(14, GuiStyle.item(
             Material.GOLD_INGOT, Component.text("Team Bank", NamedTextColor.GREEN),
             listOf(Component.empty(), Component.text("Deposit or withdraw team funds.", NamedTextColor.GRAY))
         )) { p, _ -> TeamBankGui.open(plugin, p) }
 
-        gui.setItem(16, TeamGuiUtil.item(
+        gui.setItem(16, GuiStyle.item(
             Material.RED_BED, Component.text("Team Home", NamedTextColor.LIGHT_PURPLE),
             listOf(Component.empty(), Component.text("Teleport to or set the team home.", NamedTextColor.GRAY))
         )) { p, _ -> TeamHomeGui.open(plugin, p) }
 
-        gui.setItem(19, TeamGuiUtil.item(
+        gui.setItem(19, GuiStyle.item(
             Material.COMPARATOR, Component.text("Team Settings", NamedTextColor.YELLOW),
             listOf(Component.empty(), Component.text("Friendly fire, access, rename, chat.", NamedTextColor.GRAY))
         )) { p, _ -> TeamSettingsGui.open(plugin, p) }
 
         if (canManageBank) {
-            gui.setItem(21, TeamGuiUtil.item(
+            gui.setItem(21, GuiStyle.item(
                 Material.ENDER_CHEST, Component.text("Team Ender Chest", NamedTextColor.DARK_PURPLE),
                 listOf(Component.empty(), Component.text("Click to open the shared team chest.", NamedTextColor.GRAY))
             )) { p, _ -> Bukkit.dispatchCommand(p, "team echest") }
         } else {
-            gui.setItem(21, TeamGuiUtil.item(
+            gui.setItem(21, GuiStyle.item(
                 Material.GRAY_DYE, Component.text("Team Ender Chest", NamedTextColor.DARK_GRAY),
                 listOf(Component.empty(), Component.text("You do not have permission to use this.", NamedTextColor.RED))
             ))
         }
 
-        gui.setItem(23, TeamGuiUtil.item(Material.COMPASS, Component.text("Browse Teams", NamedTextColor.WHITE))) { p, _ ->
+        gui.setItem(23, GuiStyle.item(Material.COMPASS, Component.text("Browse Teams", NamedTextColor.WHITE))) { p, _ ->
             TeamListGui.open(plugin, p)
         }
 
-        gui.setItem(25, TeamGuiUtil.item(Material.NETHER_STAR, Component.text("Team Leaderboard", NamedTextColor.GOLD))) { p, _ ->
+        gui.setItem(25, GuiStyle.item(Material.NETHER_STAR, Component.text("Team Leaderboard", NamedTextColor.GOLD))) { p, _ ->
             TeamTopGui.open(plugin, p)
         }
 
         if (isOwner) {
-            gui.setItem(31, TeamGuiUtil.item(
+            gui.setItem(31, GuiStyle.item(
                 Material.GRAY_DYE, Component.text("Leave Team", NamedTextColor.DARK_GRAY),
                 listOf(
                     Component.empty(),
@@ -125,7 +126,7 @@ object TeamMainGui {
                 )
             ))
         } else {
-            gui.setItem(31, TeamGuiUtil.item(
+            gui.setItem(31, GuiStyle.item(
                 Material.BARRIER, Component.text("Leave Team", NamedTextColor.RED),
                 listOf(Component.empty(), Component.text("Click to leave your team.", NamedTextColor.GRAY))
             )) { p, _ ->
@@ -138,22 +139,22 @@ object TeamMainGui {
             }
         }
 
-        gui.setItem(40, TeamGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.closeSlot(45), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
     }
 
     private fun openNoTeam(plugin: Joshymc, player: Player) {
         val gui = CustomGui(Component.text("Team Panel", NamedTextColor.GOLD), 27)
-        for (slot in 0..26) gui.setItem(slot, TeamGuiUtil.filler())
+        for (slot in 0..26) gui.setItem(slot, GuiStyle.filler())
 
-        gui.setItem(4, TeamGuiUtil.item(
+        gui.setItem(4, GuiStyle.item(
             Material.WHITE_BANNER,
             Component.text("You Are Not On A Team", NamedTextColor.RED),
             listOf(Component.empty(), Component.text("Create or join a team to get started.", NamedTextColor.GRAY))
         ))
 
-        gui.setItem(10, TeamGuiUtil.item(
+        gui.setItem(10, GuiStyle.item(
             Material.LIME_DYE, Component.text("Create Team", NamedTextColor.GREEN),
             listOf(Component.empty(), Component.text("Click to create a new team.", NamedTextColor.GRAY))
         )) { p, _ ->
@@ -171,7 +172,7 @@ object TeamMainGui {
         }
 
         val invites = plugin.teamManager.getPendingInvites(player.uniqueId)
-        gui.setItem(12, TeamGuiUtil.item(
+        gui.setItem(12, GuiStyle.item(
             Material.WRITABLE_BOOK,
             Component.text("Pending Invites", NamedTextColor.YELLOW),
             if (invites.isEmpty())
@@ -184,16 +185,16 @@ object TeamMainGui {
                 )
         )) { p, _ -> if (invites.isNotEmpty()) openInvites(plugin, p) }
 
-        gui.setItem(14, TeamGuiUtil.item(
+        gui.setItem(14, GuiStyle.item(
             Material.COMPASS, Component.text("Browse Teams", NamedTextColor.WHITE),
             listOf(Component.empty(), Component.text("Browse & join open teams.", NamedTextColor.GRAY))
         )) { p, _ -> TeamListGui.open(plugin, p) }
 
-        gui.setItem(16, TeamGuiUtil.item(Material.NETHER_STAR, Component.text("Team Leaderboard", NamedTextColor.GOLD))) { p, _ ->
+        gui.setItem(16, GuiStyle.item(Material.NETHER_STAR, Component.text("Team Leaderboard", NamedTextColor.GOLD))) { p, _ ->
             TeamTopGui.open(plugin, p)
         }
 
-        gui.setItem(22, TeamGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.closeSlot(27), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
     }
@@ -201,10 +202,10 @@ object TeamMainGui {
     private fun openInvites(plugin: Joshymc, player: Player) {
         val invites = plugin.teamManager.getPendingInvites(player.uniqueId)
         val gui = CustomGui(Component.text("Pending Invites", NamedTextColor.YELLOW), 27)
-        for (slot in 0..26) gui.setItem(slot, TeamGuiUtil.filler())
+        for (slot in 0..26) gui.setItem(slot, GuiStyle.filler())
 
         if (invites.isEmpty()) {
-            gui.setItem(13, TeamGuiUtil.item(Material.BARRIER, Component.text("No Pending Invites", NamedTextColor.RED)))
+            gui.setItem(13, GuiStyle.item(Material.BARRIER, Component.text("No Pending Invites", NamedTextColor.RED)))
         } else {
             for ((index, invitedTeam) in invites.withIndex().take(9)) {
                 val team = plugin.teamManager.getTeam(invitedTeam) ?: continue
@@ -224,7 +225,8 @@ object TeamMainGui {
             }
         }
 
-        gui.setItem(22, TeamGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> open(plugin, p) }
+        gui.setItem(GuiStyle.backSlot(27), GuiStyle.back()) { p, _ -> open(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(27), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
     }

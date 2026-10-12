@@ -1,8 +1,8 @@
 package com.liam.joshymc.gui.casino.crash
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
-import com.liam.joshymc.gui.casino.CasinoGuiUtil
 import com.liam.joshymc.gui.casino.CasinoMainGui
 import com.liam.joshymc.manager.CasinoCrashManager
 import com.liam.joshymc.manager.CommunicationsManager
@@ -37,15 +37,15 @@ object CrashGui {
 
     fun open(plugin: Joshymc, player: Player) {
         val gui = CustomGui(Component.text("Crash", NamedTextColor.GOLD), 36)
-        gui.border(CasinoGuiUtil.filler())
-        for (slot in 10..16) gui.setItem(slot, CasinoGuiUtil.filler())
-        for (slot in 19..25) gui.setItem(slot, CasinoGuiUtil.filler())
+        gui.border(GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
+        for (slot in 10..16) gui.setItem(slot, GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
+        for (slot in 19..25) gui.setItem(slot, GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
 
-        gui.setItem(4, CasinoGuiUtil.item(Material.FIREWORK_ROCKET, Component.text("Crash", NamedTextColor.GOLD), listOf(Component.text("Bet during betting, cash out before it crashes!", NamedTextColor.GRAY))))
-        gui.setItem(8, CasinoGuiUtil.closeButton())
+        gui.setItem(4, GuiStyle.item(Material.FIREWORK_ROCKET, Component.text("Crash", NamedTextColor.GOLD), listOf(Component.text("Bet during betting, cash out before it crashes!", NamedTextColor.GRAY))))
+        gui.setItem(8, GuiStyle.close())
 
-        gui.setItem(29, CasinoGuiUtil.backButton()) { p, _ -> CasinoMainGui.open(plugin, p) }
-        gui.setItem(33, CasinoGuiUtil.closeButton()) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.backSlot(36), GuiStyle.back()) { p, _ -> CasinoMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(36), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         gui.onClose = { p ->
             openGuis.remove(p.uniqueId)
@@ -57,7 +57,7 @@ object CrashGui {
         refreshInto(plugin, player, gui)
 
         plugin.guiManager.open(player, gui)
-        player.playSound(player.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.2f)
+        GuiStyle.clickSound(player)
     }
 
     fun refresh(plugin: Joshymc, player: Player) {
@@ -122,7 +122,7 @@ object CrashGui {
             }
         }
 
-        gui.setItem(13, CasinoGuiUtil.item(Material.CLOCK, clockName, lore)) { p, _ ->
+        gui.setItem(13, GuiStyle.item(Material.CLOCK, clockName, lore)) { p, _ ->
             val payout = manager.cashOut(p)
             if (payout != null) {
                 plugin.commsManager.send(p, Component.text("Cashed out for ${plugin.economyManager.formatShort(payout)}!", NamedTextColor.GREEN), CommunicationsManager.Category.CASINO)
@@ -133,7 +133,7 @@ object CrashGui {
         if (liveBet != null) {
             gui.setItem(
                 11,
-                CasinoGuiUtil.item(Material.GOLD_INGOT, Component.text("Your Bet", NamedTextColor.GOLD), listOf(Component.text(plugin.economyManager.format(liveBet.bet), NamedTextColor.WHITE)))
+                GuiStyle.item(Material.GOLD_INGOT, Component.text("Your Bet", NamedTextColor.GOLD), listOf(Component.text(plugin.economyManager.format(liveBet.bet), NamedTextColor.WHITE)))
             )
         } else {
             val preset = selectedAmount[player.uniqueId]
@@ -141,9 +141,9 @@ object CrashGui {
                 11,
                 when {
                     status != CasinoCrashManager.RoundStatus.BETTING ->
-                        CasinoGuiUtil.item(Material.GRAY_DYE, Component.text("Place Bet", NamedTextColor.GRAY), listOf(Component.text("Wait for the next round.", NamedTextColor.DARK_GRAY)))
+                        GuiStyle.item(Material.GRAY_DYE, Component.text("Place Bet", NamedTextColor.GRAY), listOf(Component.text("Wait for the next round.", NamedTextColor.DARK_GRAY)))
                     preset != null ->
-                        CasinoGuiUtil.item(
+                        GuiStyle.item(
                             Material.EMERALD,
                             Component.text("Place Bet", NamedTextColor.GREEN),
                             listOf(
@@ -152,7 +152,7 @@ object CrashGui {
                             )
                         )
                     else ->
-                        CasinoGuiUtil.item(Material.EMERALD, Component.text("Place Bet", NamedTextColor.GREEN), listOf(Component.text("Click to bet this round.", NamedTextColor.GRAY)))
+                        GuiStyle.item(Material.EMERALD, Component.text("Place Bet", NamedTextColor.GREEN), listOf(Component.text("Click to bet this round.", NamedTextColor.GRAY)))
                 }
             ) { p, _ ->
                 if (manager.getRoundStatus() != CasinoCrashManager.RoundStatus.BETTING) return@setItem

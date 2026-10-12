@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.bounty
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
@@ -43,23 +44,23 @@ object BountyPlaceGui {
         session.playerSelectPage = page
 
         val gui = CustomGui(Component.text("Place Bounty", NamedTextColor.GOLD), 54)
-        for (slot in 0..8) gui.setItem(slot, BountyGuiUtil.filler())
-        for (slot in 45..53) gui.setItem(slot, BountyGuiUtil.filler())
-        gui.setItem(4, BountyGuiUtil.item(Material.PLAYER_HEAD, Component.text("Select a Target", NamedTextColor.YELLOW)))
+        for (slot in 0..8) gui.setItem(slot, GuiStyle.filler())
+        for (slot in 45..53) gui.setItem(slot, GuiStyle.filler())
+        gui.setItem(4, GuiStyle.item(Material.PLAYER_HEAD, Component.text("Select a Target", NamedTextColor.YELLOW)))
 
         val targets = Bukkit.getOnlinePlayers().filter { it != player }.sortedBy { it.name }
 
         if (targets.isEmpty()) {
             gui.setItem(
                 22,
-                BountyGuiUtil.item(
+                GuiStyle.item(
                     Material.BARRIER,
                     Component.text("No Valid Targets", NamedTextColor.RED),
                     listOf(Component.empty(), Component.text("There are no other players online right now.", NamedTextColor.GRAY))
                 )
             )
-            gui.setItem(48, BountyGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> BountyMainGui.open(plugin, p) }
-            gui.setItem(49, BountyGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+            gui.setItem(GuiStyle.backSlot(54), GuiStyle.back()) { p, _ -> BountyMainGui.open(plugin, p) }
+            gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
             plugin.guiManager.open(player, gui)
             return
         }
@@ -78,17 +79,18 @@ object BountyPlaceGui {
         }
 
         if (clampedPage > 0) {
-            gui.setItem(45, BountyGuiUtil.item(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.prevSlot(54), GuiStyle.previousPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 openPlayerSelect(plugin, p, clampedPage - 1)
             }
         }
 
-        gui.setItem(47, BountyGuiUtil.item(Material.PAPER, Component.text("Page ${clampedPage + 1}/$totalPages", NamedTextColor.WHITE)))
-        gui.setItem(48, BountyGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> BountyMainGui.open(plugin, p) }
-        gui.setItem(49, BountyGuiUtil.item(Material.BARRIER, Component.text("Close", NamedTextColor.RED))) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.backSlot(54), GuiStyle.back()) { p, _ -> BountyMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         if (clampedPage < totalPages - 1) {
-            gui.setItem(53, BountyGuiUtil.item(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.nextSlot(54), GuiStyle.nextPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 openPlayerSelect(plugin, p, clampedPage + 1)
             }
         }
@@ -138,7 +140,7 @@ object BountyPlaceGui {
         session.amount = session.amount.coerceIn(0.0, TeamManager.MAX_BOUNTY_AMOUNT)
 
         val gui = CustomGui(Component.text("Bounty Amount", NamedTextColor.GOLD), 27)
-        for (slot in 0..26) gui.setItem(slot, BountyGuiUtil.filler())
+        for (slot in 0..26) gui.setItem(slot, GuiStyle.filler())
 
         val display = ItemStack(Material.PLAYER_HEAD)
         display.editMeta { meta ->
@@ -158,7 +160,7 @@ object BountyPlaceGui {
         for ((delta, slot) in AMOUNT_DELTAS) {
             gui.setItem(
                 slot,
-                BountyGuiUtil.item(
+                GuiStyle.item(
                     if (delta < 0) Material.RED_DYE else Material.LIME_DYE,
                     Component.text(
                         (if (delta > 0) "+$" else "-$") + plugin.economyManager.formatShort(kotlin.math.abs(delta)),
@@ -177,7 +179,7 @@ object BountyPlaceGui {
 
         gui.setItem(
             19,
-            BountyGuiUtil.item(
+            GuiStyle.item(
                 Material.PAPER,
                 Component.text("Custom Amount", NamedTextColor.YELLOW),
                 listOf(Component.empty(), Component.text("Click to type an amount in chat.", NamedTextColor.GRAY))
@@ -192,11 +194,11 @@ object BountyPlaceGui {
             )
         }
 
-        gui.setItem(22, BountyGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.RED))) { p, _ ->
+        gui.setItem(GuiStyle.backSlot(27), GuiStyle.back()) { p, _ ->
             openPlayerSelect(plugin, p, session.playerSelectPage)
         }
 
-        gui.setItem(25, BountyGuiUtil.item(Material.LIME_STAINED_GLASS_PANE, Component.text("Continue", NamedTextColor.GREEN))) { p, _ ->
+        gui.setItem(25, GuiStyle.item(Material.LIME_STAINED_GLASS_PANE, Component.text("Continue", NamedTextColor.GREEN))) { p, _ ->
             val s = plugin.teamManager.getBountySession(p.uniqueId)
             val amount = s?.amount
             if (s == null || amount == null || !amount.isFinite() || amount <= 0.0) {
@@ -234,8 +236,8 @@ object BountyPlaceGui {
 
         val gui = CustomGui(Component.text("Confirm Bounty", NamedTextColor.GOLD), 27)
 
-        val redGlass = BountyGuiUtil.item(Material.RED_STAINED_GLASS_PANE, Component.text("Cancel", NamedTextColor.RED))
-        val greenGlass = BountyGuiUtil.item(Material.LIME_STAINED_GLASS_PANE, Component.text("Confirm Bounty", NamedTextColor.GREEN))
+        val redGlass = GuiStyle.item(Material.RED_STAINED_GLASS_PANE, Component.text("Cancel", NamedTextColor.RED))
+        val greenGlass = GuiStyle.item(Material.LIME_STAINED_GLASS_PANE, Component.text("Confirm Bounty", NamedTextColor.GREEN))
 
         for (i in 0 until 27) {
             val col = i % 9
@@ -260,7 +262,7 @@ object BountyPlaceGui {
         }
         gui.setItem(13, display)
 
-        gui.setItem(18, BountyGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> openAmountSelect(plugin, p) }
+        gui.setItem(GuiStyle.backSlot(27), GuiStyle.back()) { p, _ -> openAmountSelect(plugin, p) }
 
         gui.onClose = { p -> if (!plugin.teamManager.isAwaitingBountyAmountInput(p.uniqueId)) plugin.teamManager.clearBountySession(p.uniqueId) }
         plugin.guiManager.open(player, gui)

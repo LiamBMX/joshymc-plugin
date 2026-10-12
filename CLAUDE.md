@@ -123,6 +123,7 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 ## GUI patterns (`gui/GuiManager.kt`)
 - **`CustomGui(title, size)`** — wraps a Bukkit Inventory + per-slot click handlers + onClose hook.
 - **`plugin.guiManager.open(player, gui)`** opens it.
+- **`GuiStyle`** (issue #1120) is the shared design language: `item`/`filler`/`skull`, `back(label)` (ARROW), `close()` (BARRIER), `previousPage`/`nextPage` (ARROW with a "Page X/Y" line), `stateLine`/`stateColor`/`toggle` (green enabled, red disabled), and `clickSound`/`pageSound`/`successSound`/`errorSound`. Bottom-row slots: `backSlot(size)` = size-9, `prevSlot` = size-7, `closeSlot` = size-5, `nextSlot` = size-3. The bounty, casino, claim, coinflip, stock and team menus use it; don't add new per-feature `XGuiUtil.item/filler` copies.
 - **Click behavior (v1.0.48 rules)**: `GuiManager.onClick` keys off `event.clickedInventory`. If the click landed on the GUI itself → cancel + route to handler. If it landed on the player's own inventory → allow ordinary clicks but BLOCK actions that would push items into the GUI: `isShiftClick`, `DOUBLE_CLICK`, `NUMBER_KEY`, `SWAP_OFFHAND`. **Pre-v1.0.48 the entire bottom inventory was frozen**, which was the bug Blu3 reported.
 - **GUI persistence on page navigation**: `openGuis[uuid]` is set BEFORE `player.openInventory(...)`, so the close-event for the old inventory sees the new GUI as already-tracked and doesn't remove it.
 - **Anti-dupe**: 200ms click cooldown enforced on GUI clicks.

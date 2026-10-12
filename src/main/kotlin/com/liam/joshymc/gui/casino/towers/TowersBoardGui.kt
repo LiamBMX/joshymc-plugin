@@ -1,8 +1,8 @@
 package com.liam.joshymc.gui.casino.towers
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
-import com.liam.joshymc.gui.casino.CasinoGuiUtil
 import com.liam.joshymc.manager.CasinoTowersManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -31,25 +31,25 @@ object TowersBoardGui {
         }
 
         val gui = CustomGui(Component.text("Towers", NamedTextColor.GREEN), 36)
-        gui.border(CasinoGuiUtil.filler())
-        for (slot in 10..16) gui.setItem(slot, CasinoGuiUtil.filler())
-        for (slot in 19..25) gui.setItem(slot, CasinoGuiUtil.filler())
+        gui.border(GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
+        for (slot in 10..16) gui.setItem(slot, GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
+        for (slot in 19..25) gui.setItem(slot, GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
 
         gui.setItem(
             4,
-            CasinoGuiUtil.item(
+            GuiStyle.item(
                 Material.LADDER,
                 Component.text("Towers — ${session.difficulty.name}", NamedTextColor.GREEN),
                 listOf(Component.text("Bet: ${plugin.economyManager.format(session.bet)}", NamedTextColor.GRAY))
             )
         )
-        gui.setItem(8, CasinoGuiUtil.closeButton())
+        gui.setItem(8, GuiStyle.close())
 
         val slots = tileSlots(session.difficulty.tiles)
         for ((tileIndex, slot) in slots.withIndex()) {
             gui.setItem(
                 slot,
-                CasinoGuiUtil.item(Material.YELLOW_STAINED_GLASS_PANE, Component.text("Climb", NamedTextColor.YELLOW), listOf(Component.text("Level ${session.level + 1} / ${plugin.casinoTowersManager.levels}", NamedTextColor.GRAY)))
+                GuiStyle.item(Material.YELLOW_STAINED_GLASS_PANE, Component.text("Climb", NamedTextColor.YELLOW), listOf(Component.text("Level ${session.level + 1} / ${plugin.casinoTowersManager.levels}", NamedTextColor.GRAY)))
             ) { p, _ ->
                 when (val result = plugin.casinoTowersManager.pick(p, tileIndex)) {
                     is CasinoTowersManager.ClimbResult.Safe -> {
@@ -74,14 +74,14 @@ object TowersBoardGui {
         val multiplier = plugin.casinoTowersManager.currentMultiplier(session)
         val potentialPayout = session.bet * multiplier
 
-        gui.setItem(19, CasinoGuiUtil.item(Material.PAPER, Component.text("Level", NamedTextColor.AQUA), listOf(Component.text("${session.level} / ${plugin.casinoTowersManager.levels}", NamedTextColor.WHITE))))
-        gui.setItem(22, CasinoGuiUtil.item(Material.CLOCK, Component.text("Multiplier", NamedTextColor.YELLOW), listOf(Component.text("%.2fx".format(multiplier), NamedTextColor.WHITE))))
-        gui.setItem(25, CasinoGuiUtil.item(Material.GOLD_INGOT, Component.text("Potential Payout", NamedTextColor.GOLD), listOf(Component.text(plugin.economyManager.format(potentialPayout), NamedTextColor.WHITE))))
+        gui.setItem(19, GuiStyle.item(Material.PAPER, Component.text("Level", NamedTextColor.AQUA), listOf(Component.text("${session.level} / ${plugin.casinoTowersManager.levels}", NamedTextColor.WHITE))))
+        gui.setItem(22, GuiStyle.item(Material.CLOCK, Component.text("Multiplier", NamedTextColor.YELLOW), listOf(Component.text("%.2fx".format(multiplier), NamedTextColor.WHITE))))
+        gui.setItem(25, GuiStyle.item(Material.GOLD_INGOT, Component.text("Potential Payout", NamedTextColor.GOLD), listOf(Component.text(plugin.economyManager.format(potentialPayout), NamedTextColor.WHITE))))
 
         if (session.level > 0) {
             gui.setItem(
                 31,
-                CasinoGuiUtil.item(Material.EMERALD_BLOCK, Component.text("Cash Out", NamedTextColor.GREEN), listOf(Component.text("Click to secure ${plugin.economyManager.format(potentialPayout)}.", NamedTextColor.GRAY)))
+                GuiStyle.item(Material.EMERALD_BLOCK, Component.text("Cash Out", NamedTextColor.GREEN), listOf(Component.text("Click to secure ${plugin.economyManager.format(potentialPayout)}.", NamedTextColor.GRAY)))
             ) { p, _ ->
                 val payout = plugin.casinoTowersManager.cashOut(p)
                 if (payout != null) {
@@ -93,7 +93,7 @@ object TowersBoardGui {
         } else {
             gui.setItem(
                 31,
-                CasinoGuiUtil.item(Material.GRAY_DYE, Component.text("Cash Out", NamedTextColor.GRAY), listOf(Component.text("Clear a level first.", NamedTextColor.DARK_GRAY)))
+                GuiStyle.item(Material.GRAY_DYE, Component.text("Cash Out", NamedTextColor.GRAY), listOf(Component.text("Clear a level first.", NamedTextColor.DARK_GRAY)))
             )
         }
 

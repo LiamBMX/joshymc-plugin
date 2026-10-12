@@ -1,8 +1,8 @@
 package com.liam.joshymc.gui.casino.mines
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
-import com.liam.joshymc.gui.casino.CasinoGuiUtil
 import com.liam.joshymc.manager.CasinoMinesManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -28,7 +28,7 @@ object MinesBoardGui {
         }
 
         val gui = CustomGui(Component.text("Mines", NamedTextColor.RED), 54)
-        val filler = CasinoGuiUtil.filler()
+        val filler = GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL)
         for (slot in 0..8) gui.setItem(slot, filler)
         for (row in GRID_SLOTS.indices) {
             gui.setItem((row + 1) * 9, filler)
@@ -41,7 +41,7 @@ object MinesBoardGui {
 
         gui.setItem(
             4,
-            CasinoGuiUtil.item(
+            GuiStyle.item(
                 Material.TNT,
                 Component.text("Mines", NamedTextColor.RED),
                 listOf(
@@ -50,7 +50,7 @@ object MinesBoardGui {
                 )
             )
         )
-        gui.setItem(8, CasinoGuiUtil.closeButton())
+        gui.setItem(8, GuiStyle.close())
 
         for (row in GRID_SLOTS.indices) {
             for (col in GRID_SLOTS[row].indices) {
@@ -80,21 +80,21 @@ object MinesBoardGui {
 
         gui.setItem(
             16,
-            CasinoGuiUtil.item(Material.PAPER, Component.text("Safe Revealed", NamedTextColor.GREEN), listOf(Component.text("${session.revealed.size} / ${25 - session.mines}", NamedTextColor.WHITE)))
+            GuiStyle.item(Material.PAPER, Component.text("Safe Revealed", NamedTextColor.GREEN), listOf(Component.text("${session.revealed.size} / ${25 - session.mines}", NamedTextColor.WHITE)))
         )
         gui.setItem(
             25,
-            CasinoGuiUtil.item(Material.CLOCK, Component.text("Multiplier", NamedTextColor.YELLOW), listOf(Component.text("%.2fx".format(multiplier), NamedTextColor.WHITE)))
+            GuiStyle.item(Material.CLOCK, Component.text("Multiplier", NamedTextColor.YELLOW), listOf(Component.text("%.2fx".format(multiplier), NamedTextColor.WHITE)))
         )
         gui.setItem(
             34,
-            CasinoGuiUtil.item(Material.GOLD_INGOT, Component.text("Potential Payout", NamedTextColor.GOLD), listOf(Component.text(plugin.economyManager.format(potentialPayout), NamedTextColor.WHITE)))
+            GuiStyle.item(Material.GOLD_INGOT, Component.text("Potential Payout", NamedTextColor.GOLD), listOf(Component.text(plugin.economyManager.format(potentialPayout), NamedTextColor.WHITE)))
         )
 
         if (session.revealed.isNotEmpty()) {
             gui.setItem(
                 52,
-                CasinoGuiUtil.item(Material.EMERALD_BLOCK, Component.text("Cash Out", NamedTextColor.GREEN), listOf(Component.text("Click to secure ${plugin.economyManager.format(potentialPayout)}.", NamedTextColor.GRAY)))
+                GuiStyle.item(Material.EMERALD_BLOCK, Component.text("Cash Out", NamedTextColor.GREEN), listOf(Component.text("Click to secure ${plugin.economyManager.format(potentialPayout)}.", NamedTextColor.GRAY)))
             ) { p, _ ->
                 val payout = plugin.casinoMinesManager.cashOut(p)
                 if (payout != null) {
@@ -106,7 +106,7 @@ object MinesBoardGui {
         } else {
             gui.setItem(
                 52,
-                CasinoGuiUtil.item(Material.GRAY_DYE, Component.text("Cash Out", NamedTextColor.GRAY), listOf(Component.text("Reveal a safe tile first.", NamedTextColor.DARK_GRAY)))
+                GuiStyle.item(Material.GRAY_DYE, Component.text("Cash Out", NamedTextColor.GRAY), listOf(Component.text("Reveal a safe tile first.", NamedTextColor.DARK_GRAY)))
             )
         }
 
@@ -115,8 +115,8 @@ object MinesBoardGui {
 
     private fun tileItem(session: CasinoMinesManager.Session, tile: Int): org.bukkit.inventory.ItemStack {
         return when {
-            tile in session.revealed -> CasinoGuiUtil.item(Material.LIME_STAINED_GLASS_PANE, Component.text("Safe", NamedTextColor.GREEN))
-            else -> CasinoGuiUtil.item(Material.GRAY_STAINED_GLASS_PANE, Component.text("?", NamedTextColor.WHITE))
+            tile in session.revealed -> GuiStyle.item(Material.LIME_STAINED_GLASS_PANE, Component.text("Safe", NamedTextColor.GREEN))
+            else -> GuiStyle.item(Material.GRAY_STAINED_GLASS_PANE, Component.text("?", NamedTextColor.WHITE))
         }
     }
 }

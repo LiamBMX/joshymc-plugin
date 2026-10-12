@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.stock
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
@@ -55,34 +56,32 @@ object StockTradingGui {
         }
 
         // Control row
-        for (slot in 45..53) gui.setItem(slot, StockGuiUtil.filler(Material.BLACK_STAINED_GLASS_PANE))
+        for (slot in 45..53) gui.setItem(slot, GuiStyle.filler())
 
         if (clampedPage > 0) {
-            gui.setItem(45, StockGuiUtil.item(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.prevSlot(54), GuiStyle.previousPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 plugin.guiManager.open(p, build(plugin, p, sort, clampedPage - 1))
             }
         }
 
-        gui.setItem(46, StockGuiUtil.item(Material.NETHER_STAR, Component.text("Back to Home", NamedTextColor.AQUA))) { p, _ ->
+        gui.setItem(GuiStyle.backSlot(54), GuiStyle.back("Back to Home")) { p, _ ->
             plugin.guiManager.open(p, StockHomeGui.build(plugin, p))
         }
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         gui.setItem(
-            49,
-            StockGuiUtil.item(
+            53,
+            GuiStyle.item(
                 Material.HOPPER,
                 Component.text("Sort: ${sort.displayName}", NamedTextColor.LIGHT_PURPLE),
                 listOf(Component.empty(), Component.text("Click to change sorting", NamedTextColor.GRAY))
             )
         ) { p, _ -> plugin.guiManager.open(p, build(plugin, p, sort.next(), 0)) }
 
-        gui.setItem(
-            52,
-            StockGuiUtil.item(Material.PAPER, Component.text("Page ${clampedPage + 1} / $totalPages", NamedTextColor.WHITE))
-        )
-
         if (clampedPage < totalPages - 1) {
-            gui.setItem(53, StockGuiUtil.item(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.nextSlot(54), GuiStyle.nextPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 plugin.guiManager.open(p, build(plugin, p, sort, clampedPage + 1))
             }
         }
@@ -120,7 +119,7 @@ object StockTradingGui {
         lore.add(Component.empty())
         lore.add(Component.text("Click to invest", NamedTextColor.GREEN))
 
-        return StockGuiUtil.item(
+        return GuiStyle.item(
             stock.icon,
             Component.text("${stock.name} ", NamedTextColor.GOLD).append(Component.text("[${stock.ticker}]", NamedTextColor.GRAY)),
             lore
@@ -212,11 +211,11 @@ object StockTradingGui {
         )
 
         val gui = CustomGui(Component.text(if (isBuy) "Confirm Purchase" else "Confirm Sale", NamedTextColor.GOLD), 27)
-        gui.border(StockGuiUtil.filler(Material.BLACK_STAINED_GLASS_PANE))
+        gui.border(GuiStyle.filler())
 
         gui.setItem(
             13,
-            StockGuiUtil.item(
+            GuiStyle.item(
                 stock.icon,
                 Component.text("${stock.name} [${stock.ticker}]", NamedTextColor.GOLD),
                 listOf(
@@ -233,7 +232,7 @@ object StockTradingGui {
 
         gui.setItem(
             11,
-            StockGuiUtil.item(Material.LIME_CONCRETE, Component.text("CONFIRM", NamedTextColor.GREEN))
+            GuiStyle.item(Material.LIME_CONCRETE, Component.text("CONFIRM", NamedTextColor.GREEN))
         ) { p, _ ->
             val pending = market.pendingTradeConfirmations.remove(p.uniqueId)
             p.closeInventory()
@@ -250,7 +249,7 @@ object StockTradingGui {
 
         gui.setItem(
             15,
-            StockGuiUtil.item(Material.RED_CONCRETE, Component.text("CANCEL", NamedTextColor.RED))
+            GuiStyle.item(Material.RED_CONCRETE, Component.text("CANCEL", NamedTextColor.RED))
         ) { p, _ ->
             market.pendingTradeConfirmations.remove(p.uniqueId)
             p.closeInventory()

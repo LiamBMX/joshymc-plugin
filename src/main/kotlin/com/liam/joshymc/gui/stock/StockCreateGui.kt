@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.stock
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
@@ -19,11 +20,11 @@ object StockCreateGui {
     fun build(plugin: Joshymc, player: Player): CustomGui {
         val market = plugin.stockMarketManager
         val gui = CustomGui(Component.text("Create a Stock", NamedTextColor.GOLD), 27)
-        gui.border(StockGuiUtil.filler(Material.BLACK_STAINED_GLASS_PANE))
+        gui.border(GuiStyle.filler())
 
         gui.setItem(
             13,
-            StockGuiUtil.item(
+            GuiStyle.item(
                 Material.PAPER,
                 Component.text("Create a New Stock", NamedTextColor.AQUA),
                 listOf(
@@ -56,9 +57,10 @@ object StockCreateGui {
             plugin.commsManager.send(p, Component.text("Type a name or 'cancel'.", NamedTextColor.GRAY), CommunicationsManager.Category.ECONOMY)
         }
 
-        gui.setItem(22, StockGuiUtil.item(Material.NETHER_STAR, Component.text("Back to Home", NamedTextColor.AQUA))) { p, _ ->
+        gui.setItem(GuiStyle.backSlot(27), GuiStyle.back("Back to Home")) { p, _ ->
             plugin.guiManager.open(p, StockHomeGui.build(plugin, p))
         }
+        gui.setItem(GuiStyle.closeSlot(27), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         return gui
     }
@@ -69,26 +71,27 @@ object StockCreateGui {
         val pending = market.getPendingCreation(player.uniqueId)
 
         val gui = CustomGui(Component.text("Confirm Stock Creation", NamedTextColor.GOLD), 27)
-        gui.border(StockGuiUtil.filler(Material.BLACK_STAINED_GLASS_PANE))
+        gui.border(GuiStyle.filler())
 
         if (pending == null) {
             gui.setItem(
                 13,
-                StockGuiUtil.item(
+                GuiStyle.item(
                     Material.BARRIER,
                     Component.text("Request Expired", NamedTextColor.RED),
                     listOf(Component.empty(), Component.text("Please start again.", NamedTextColor.GRAY))
                 )
             )
-            gui.setItem(22, StockGuiUtil.item(Material.NETHER_STAR, Component.text("Back to Home", NamedTextColor.AQUA))) { p, _ ->
+            gui.setItem(GuiStyle.backSlot(27), GuiStyle.back("Back to Home")) { p, _ ->
                 plugin.guiManager.open(p, StockHomeGui.build(plugin, p))
             }
+            gui.setItem(GuiStyle.closeSlot(27), GuiStyle.close()) { p, _ -> p.closeInventory() }
             return gui
         }
 
         gui.setItem(
             13,
-            StockGuiUtil.item(
+            GuiStyle.item(
                 Material.PAPER,
                 Component.text(pending.name, NamedTextColor.GOLD).append(Component.text(" [${pending.ticker}]", NamedTextColor.GRAY)),
                 listOf(
@@ -103,7 +106,7 @@ object StockCreateGui {
             )
         )
 
-        gui.setItem(11, StockGuiUtil.item(Material.LIME_CONCRETE, Component.text("CONFIRM", NamedTextColor.GREEN))) { p, _ ->
+        gui.setItem(11, GuiStyle.item(Material.LIME_CONCRETE, Component.text("CONFIRM", NamedTextColor.GREEN))) { p, _ ->
             p.closeInventory()
             when (val outcome = market.finalizeStockCreation(p)) {
                 is StockMarketManager.CreateOutcome.Success -> {
@@ -120,7 +123,7 @@ object StockCreateGui {
             }
         }
 
-        gui.setItem(15, StockGuiUtil.item(Material.RED_CONCRETE, Component.text("CANCEL", NamedTextColor.RED))) { p, _ ->
+        gui.setItem(15, GuiStyle.item(Material.RED_CONCRETE, Component.text("CANCEL", NamedTextColor.RED))) { p, _ ->
             market.pendingStockConfirmations.remove(p.uniqueId)
             p.closeInventory()
             plugin.commsManager.send(p, Component.text("Stock creation cancelled.", NamedTextColor.GRAY), CommunicationsManager.Category.ECONOMY)

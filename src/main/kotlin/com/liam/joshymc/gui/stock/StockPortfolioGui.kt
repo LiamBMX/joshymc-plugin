@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.stock
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.StockMarketManager
@@ -32,15 +33,16 @@ object StockPortfolioGui {
         if (rows.isEmpty()) {
             gui.setItem(
                 22,
-                StockGuiUtil.item(
+                GuiStyle.item(
                     Material.BARRIER,
                     Component.text("No Investments Yet", NamedTextColor.RED),
                     listOf(Component.empty(), Component.text("Buy shares from the Trade menu to see them here.", NamedTextColor.GRAY))
                 )
             )
-            gui.setItem(49, StockGuiUtil.item(Material.NETHER_STAR, Component.text("Back to Home", NamedTextColor.AQUA))) { p, _ ->
+            gui.setItem(GuiStyle.backSlot(54), GuiStyle.back("Back to Home")) { p, _ ->
                 plugin.guiManager.open(p, StockHomeGui.build(plugin, p))
             }
+            gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
             return gui
         }
 
@@ -56,22 +58,23 @@ object StockPortfolioGui {
             gui.setItem(base + 2, buildSellButton(stock)) { p, _ -> StockTradingGui.startSell(plugin, p, stock) }
         }
 
-        for (slot in 45..53) gui.setItem(slot, StockGuiUtil.filler(Material.BLACK_STAINED_GLASS_PANE))
+        for (slot in 45..53) gui.setItem(slot, GuiStyle.filler())
 
         if (clampedPage > 0) {
-            gui.setItem(45, StockGuiUtil.item(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.prevSlot(54), GuiStyle.previousPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 plugin.guiManager.open(p, build(plugin, p, clampedPage - 1))
             }
         }
 
-        gui.setItem(46, StockGuiUtil.item(Material.NETHER_STAR, Component.text("Back to Home", NamedTextColor.AQUA))) { p, _ ->
+        gui.setItem(GuiStyle.backSlot(54), GuiStyle.back("Back to Home")) { p, _ ->
             plugin.guiManager.open(p, StockHomeGui.build(plugin, p))
         }
-
-        gui.setItem(52, StockGuiUtil.item(Material.PAPER, Component.text("Page ${clampedPage + 1} / $totalPages", NamedTextColor.WHITE)))
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         if (clampedPage < totalPages - 1) {
-            gui.setItem(53, StockGuiUtil.item(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.nextSlot(54), GuiStyle.nextPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 plugin.guiManager.open(p, build(plugin, p, clampedPage + 1))
             }
         }
@@ -105,7 +108,7 @@ object StockPortfolioGui {
             Component.text("24h: ", NamedTextColor.GRAY)
                 .append(Component.text("${StockGuiUtil.pct(stats.changePercent24h)} ${stats.trend.arrow}", StockGuiUtil.trendColor(stats.trend)))
         )
-        return StockGuiUtil.item(
+        return GuiStyle.item(
             stock.icon,
             Component.text("${stock.name} ", NamedTextColor.GOLD).append(Component.text("[${stock.ticker}]", NamedTextColor.GRAY)),
             lore
@@ -113,7 +116,7 @@ object StockPortfolioGui {
     }
 
     private fun buildBuyButton(stock: StockMarketManager.Stock): ItemStack {
-        return StockGuiUtil.item(
+        return GuiStyle.item(
             Material.LIME_STAINED_GLASS_PANE,
             Component.text("BUY MORE ", NamedTextColor.GREEN).append(Component.text("[${stock.ticker}]", NamedTextColor.GRAY)),
             listOf(Component.empty(), Component.text("Click to invest in ${stock.name}", NamedTextColor.GRAY))
@@ -121,7 +124,7 @@ object StockPortfolioGui {
     }
 
     private fun buildSellButton(stock: StockMarketManager.Stock): ItemStack {
-        return StockGuiUtil.item(
+        return GuiStyle.item(
             Material.RED_STAINED_GLASS_PANE,
             Component.text("SELL ", NamedTextColor.RED).append(Component.text("[${stock.ticker}]", NamedTextColor.GRAY)),
             listOf(Component.empty(), Component.text("Click to sell your ${stock.name}", NamedTextColor.GRAY))

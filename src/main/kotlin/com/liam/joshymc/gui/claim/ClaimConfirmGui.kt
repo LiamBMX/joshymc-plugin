@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.claim
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
@@ -19,13 +20,13 @@ object ClaimConfirmGui {
         onCancel: (Joshymc, Player) -> Unit = { p, viewer -> ClaimMainGui.open(p, viewer) }
     ) {
         val gui = CustomGui(Component.text("Are You Sure?", NamedTextColor.RED), 27)
-        for (slot in 0..26) gui.setItem(slot, ClaimGuiUtil.filler())
+        for (slot in 0..26) gui.setItem(slot, GuiStyle.filler())
 
-        gui.setItem(13, ClaimGuiUtil.item(Material.PAPER, question, details))
-        gui.setItem(11, ClaimGuiUtil.item(Material.LIME_DYE, Component.text("Confirm", NamedTextColor.GREEN))) { p, _ ->
+        gui.setItem(13, GuiStyle.item(Material.PAPER, question, details))
+        gui.setItem(11, GuiStyle.item(Material.LIME_DYE, Component.text("Confirm", NamedTextColor.GREEN))) { p, _ ->
             onConfirm(plugin, p)
         }
-        gui.setItem(15, ClaimGuiUtil.item(Material.RED_DYE, Component.text("Cancel", NamedTextColor.RED))) { p, _ ->
+        gui.setItem(15, GuiStyle.item(Material.RED_DYE, Component.text("Cancel", NamedTextColor.RED))) { p, _ ->
             onCancel(plugin, p)
         }
 

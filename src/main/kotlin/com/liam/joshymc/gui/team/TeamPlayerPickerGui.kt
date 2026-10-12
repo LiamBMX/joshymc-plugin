@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.team
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
@@ -36,12 +37,13 @@ object TeamPlayerPickerGui {
         page: Int = 0
     ) {
         val gui = CustomGui(title, 54)
-        for (slot in 0..8) gui.setItem(slot, TeamGuiUtil.filler())
-        for (slot in 45..53) gui.setItem(slot, TeamGuiUtil.filler())
+        for (slot in 0..8) gui.setItem(slot, GuiStyle.filler())
+        for (slot in 45..53) gui.setItem(slot, GuiStyle.filler())
 
         if (entries.isEmpty()) {
-            gui.setItem(22, TeamGuiUtil.item(Material.BARRIER, emptyMessage))
-            gui.setItem(49, TeamGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> onBack(plugin, p) }
+            gui.setItem(22, GuiStyle.item(Material.BARRIER, emptyMessage))
+            gui.setItem(GuiStyle.backSlot(54), GuiStyle.back()) { p, _ -> onBack(plugin, p) }
+            gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
             plugin.guiManager.open(player, gui)
             return
         }
@@ -55,16 +57,17 @@ object TeamPlayerPickerGui {
         }
 
         if (clampedPage > 0) {
-            gui.setItem(45, TeamGuiUtil.item(Material.ARROW, Component.text("Previous Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.prevSlot(54), GuiStyle.previousPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, title, entries, emptyMessage, onBack, onPick, clampedPage - 1)
             }
         }
-
-        gui.setItem(47, TeamGuiUtil.item(Material.PAPER, Component.text("Page ${clampedPage + 1}/$totalPages", NamedTextColor.WHITE)))
-        gui.setItem(49, TeamGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> onBack(plugin, p) }
+        gui.setItem(GuiStyle.backSlot(54), GuiStyle.back()) { p, _ -> onBack(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         if (clampedPage < totalPages - 1) {
-            gui.setItem(53, TeamGuiUtil.item(Material.ARROW, Component.text("Next Page", NamedTextColor.YELLOW))) { p, _ ->
+            gui.setItem(GuiStyle.nextSlot(54), GuiStyle.nextPage(clampedPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
                 open(plugin, p, title, entries, emptyMessage, onBack, onPick, clampedPage + 1)
             }
         }

@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.team
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
@@ -31,7 +32,7 @@ object TeamManagementGui {
         val canManage = isOwner || role == "admin"
 
         val gui = CustomGui(Component.text("Team Management", NamedTextColor.GOLD), 45)
-        for (slot in 0..44) gui.setItem(slot, TeamGuiUtil.filler())
+        for (slot in 0..44) gui.setItem(slot, GuiStyle.filler())
 
         val members = plugin.teamManager.getTeamMembers(teamName)
         val memberSlots = 9..18
@@ -56,12 +57,12 @@ object TeamManagementGui {
         }
 
         if (canManage) {
-            gui.setItem(28, TeamGuiUtil.item(
+            gui.setItem(28, GuiStyle.item(
                 Material.LIME_DYE, Component.text("Invite Player", NamedTextColor.GREEN),
                 listOf(Component.empty(), Component.text("Click to invite an online player.", NamedTextColor.GRAY))
             )) { p, _ -> openInvitePicker(plugin, p) }
 
-            gui.setItem(29, TeamGuiUtil.item(
+            gui.setItem(29, GuiStyle.item(
                 Material.BARRIER, Component.text("Kick Member", NamedTextColor.RED),
                 listOf(Component.empty(), Component.text("Click to remove a member.", NamedTextColor.GRAY))
             )) { p, _ -> openKickPicker(plugin, p, teamName, role) }
@@ -71,22 +72,22 @@ object TeamManagementGui {
         }
 
         if (isOwner) {
-            gui.setItem(30, TeamGuiUtil.item(
+            gui.setItem(30, GuiStyle.item(
                 Material.EXPERIENCE_BOTTLE, Component.text("Promote Member", NamedTextColor.YELLOW),
                 listOf(Component.empty(), Component.text("Click to promote a member to admin.", NamedTextColor.GRAY))
             )) { p, _ -> openPromotePicker(plugin, p, teamName) }
 
-            gui.setItem(31, TeamGuiUtil.item(
+            gui.setItem(31, GuiStyle.item(
                 Material.GLASS_BOTTLE, Component.text("Demote Member", NamedTextColor.GRAY),
                 listOf(Component.empty(), Component.text("Click to demote an admin to member.", NamedTextColor.GRAY))
             )) { p, _ -> openDemotePicker(plugin, p, teamName) }
 
-            gui.setItem(32, TeamGuiUtil.item(
+            gui.setItem(32, GuiStyle.item(
                 Material.NETHER_STAR, Component.text("Transfer Ownership", NamedTextColor.LIGHT_PURPLE),
                 listOf(Component.empty(), Component.text("Click to make another member the owner.", NamedTextColor.GRAY))
             )) { p, _ -> openTransferPicker(plugin, p, teamName) }
 
-            gui.setItem(33, TeamGuiUtil.item(
+            gui.setItem(33, GuiStyle.item(
                 Material.TNT, Component.text("Disband Team", NamedTextColor.DARK_RED),
                 listOf(Component.empty(), Component.text("Permanently delete this team.", NamedTextColor.GRAY))
             )) { p, _ ->
@@ -105,12 +106,13 @@ object TeamManagementGui {
             gui.setItem(33, disabledItem("Disband Team"))
         }
 
-        gui.setItem(40, TeamGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> TeamMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.backSlot(45), GuiStyle.back()) { p, _ -> TeamMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(45), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
     }
 
-    private fun disabledItem(label: String) = TeamGuiUtil.item(
+    private fun disabledItem(label: String) = GuiStyle.item(
         Material.GRAY_DYE,
         Component.text(label, NamedTextColor.DARK_GRAY),
         listOf(Component.empty(), Component.text("You do not have permission to use this.", NamedTextColor.RED))

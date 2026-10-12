@@ -1,11 +1,11 @@
 package com.liam.joshymc.gui.casino
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Material
-import org.bukkit.Sound
 import org.bukkit.entity.Player
 
 /** Read-only Casino Statistics screen (issue #727) — persisted per-player totals. */
@@ -13,7 +13,7 @@ object CasinoStatsGui {
 
     fun open(plugin: Joshymc, player: Player) {
         val gui = CustomGui(Component.text("Casino Statistics", NamedTextColor.AQUA), 27)
-        gui.border(CasinoGuiUtil.filler())
+        gui.border(GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
 
         val stats = plugin.casinoManager.getStats(player.uniqueId)
         val net = stats.won - stats.lost
@@ -21,7 +21,7 @@ object CasinoStatsGui {
 
         gui.setItem(
             11,
-            CasinoGuiUtil.item(
+            GuiStyle.item(
                 Material.GOLD_INGOT,
                 Component.text("Overview", NamedTextColor.GOLD),
                 listOf(
@@ -36,7 +36,7 @@ object CasinoStatsGui {
 
         gui.setItem(
             15,
-            CasinoGuiUtil.item(
+            GuiStyle.item(
                 Material.PAPER,
                 Component.text("Games Played", NamedTextColor.AQUA),
                 listOf(
@@ -48,10 +48,10 @@ object CasinoStatsGui {
             )
         )
 
-        gui.setItem(18, CasinoGuiUtil.backButton()) { p, _ -> CasinoMainGui.open(plugin, p) }
-        gui.setItem(22, CasinoGuiUtil.closeButton()) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.backSlot(27), GuiStyle.back()) { p, _ -> CasinoMainGui.open(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(27), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
-        player.playSound(player.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.2f)
+        GuiStyle.clickSound(player)
     }
 }

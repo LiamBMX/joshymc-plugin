@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.coinflip
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
@@ -34,8 +35,8 @@ object CoinflipDetailGui {
             27
         )
 
-        val redGlass = CoinflipGuiUtil.item(Material.RED_STAINED_GLASS_PANE, Component.text(if (isOwn) "Cancel Coinflip" else "Back", NamedTextColor.RED))
-        val greenGlass = CoinflipGuiUtil.item(Material.LIME_STAINED_GLASS_PANE, Component.text("Confirm Join", NamedTextColor.GREEN))
+        val redGlass = GuiStyle.item(Material.RED_STAINED_GLASS_PANE, Component.text(if (isOwn) "Cancel Coinflip" else "Back", NamedTextColor.RED))
+        val greenGlass = GuiStyle.item(Material.LIME_STAINED_GLASS_PANE, Component.text("Confirm Join", NamedTextColor.GREEN))
 
         for (i in 0 until 27) {
             val col = i % 9
@@ -54,7 +55,7 @@ object CoinflipDetailGui {
                     plugin.coinflipManager.joinCoinflip(p, id)
                 }
             } else if (col > 4) {
-                gui.setItem(i, CoinflipGuiUtil.filler())
+                gui.setItem(i, GuiStyle.filler())
             }
         }
 
@@ -70,7 +71,7 @@ object CoinflipDetailGui {
             lore.add(Component.text("Winner takes the full ${plugin.economyManager.formatShort(pot)} pot.", NamedTextColor.GRAY))
         }
 
-        gui.setItem(13, CoinflipGuiUtil.skull(creator, Component.text(cf.creatorName, NamedTextColor.GOLD), lore))
+        gui.setItem(13, GuiStyle.skull(creator, Component.text(cf.creatorName, NamedTextColor.GOLD), lore))
 
         plugin.guiManager.open(player, gui)
     }

@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.claim
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import net.kyori.adventure.text.Component
@@ -25,7 +26,7 @@ object ClaimInfoGui {
         }
 
         val gui = CustomGui(Component.text("Claim Info", NamedTextColor.GOLD), 27)
-        for (slot in 0..26) gui.setItem(slot, ClaimGuiUtil.filler())
+        for (slot in 0..26) gui.setItem(slot, GuiStyle.filler())
 
         val ownerName = Bukkit.getOfflinePlayer(claim.ownerUuid).name ?: "Unknown"
         val subs = plugin.claimManager.getSubclaimsInClaim(claim)
@@ -49,16 +50,17 @@ object ClaimInfoGui {
             add(Component.text("Created: ", NamedTextColor.GRAY).append(Component.text(created, NamedTextColor.WHITE)))
         }
 
-        gui.setItem(13, ClaimGuiUtil.item(Material.MAP, Component.text("Claim #${claim.id}", NamedTextColor.GOLD), lore))
+        gui.setItem(13, GuiStyle.item(Material.MAP, Component.text("Claim #${claim.id}", NamedTextColor.GOLD), lore))
 
         if (plugin.claimManager.canManageClaim(player, claim)) {
-            gui.setItem(15, ClaimGuiUtil.item(
+            gui.setItem(15, GuiStyle.item(
                 Material.GOLDEN_SHOVEL, Component.text("Manage This Claim", NamedTextColor.GREEN),
                 listOf(Component.empty(), Component.text("Click to open management.", NamedTextColor.GRAY))
             )) { p, _ -> ClaimManagementGui.open(plugin, p, claim.id) }
         }
 
-        gui.setItem(22, ClaimGuiUtil.item(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW))) { p, _ -> onBack(plugin, p) }
+        gui.setItem(GuiStyle.backSlot(27), GuiStyle.back()) { p, _ -> onBack(plugin, p) }
+        gui.setItem(GuiStyle.closeSlot(27), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
     }

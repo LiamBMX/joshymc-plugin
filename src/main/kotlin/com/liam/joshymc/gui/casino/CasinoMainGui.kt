@@ -1,5 +1,6 @@
 package com.liam.joshymc.gui.casino
 
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.gui.casino.mines.MinesSetupGui
@@ -21,11 +22,11 @@ object CasinoMainGui {
 
     fun open(plugin: Joshymc, player: Player) {
         val gui = CustomGui(Component.text("Casino", NamedTextColor.DARK_PURPLE), 54)
-        gui.border(CasinoGuiUtil.filler())
+        gui.border(GuiStyle.filler(GuiStyle.THEMED_FILLER_MATERIAL))
 
         gui.setItem(
             4,
-            CasinoGuiUtil.item(
+            GuiStyle.item(
                 Material.GOLD_INGOT,
                 Component.text("Your Balance", NamedTextColor.GOLD),
                 listOf(Component.text(plugin.economyManager.format(plugin.economyManager.getBalance(player)), NamedTextColor.GREEN))
@@ -47,14 +48,14 @@ object CasinoMainGui {
 
         gui.setItem(
             31,
-            CasinoGuiUtil.item(
+            GuiStyle.item(
                 Material.BOOK,
                 Component.text("Casino Statistics", NamedTextColor.AQUA),
                 listOf(Component.text("View your Casino history.", NamedTextColor.GRAY))
             )
         ) { p, _ -> CasinoStatsGui.open(plugin, p) }
 
-        gui.setItem(49, CasinoGuiUtil.closeButton()) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.closeSlot(54), GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
@@ -73,7 +74,7 @@ object CasinoMainGui {
         if (enabled) {
             gui.setItem(
                 slot,
-                CasinoGuiUtil.item(
+                GuiStyle.item(
                     material,
                     Component.text(name, NamedTextColor.GREEN),
                     listOf(Component.empty(), Component.text("Click to play.", NamedTextColor.GRAY))
@@ -83,7 +84,7 @@ object CasinoMainGui {
         } else {
             gui.setItem(
                 slot,
-                CasinoGuiUtil.item(
+                GuiStyle.item(
                     material,
                     Component.text(name, NamedTextColor.GRAY),
                     listOf(Component.empty(), Component.text("Currently disabled.", NamedTextColor.DARK_GRAY))
