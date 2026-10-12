@@ -16,6 +16,7 @@ import org.bukkit.event.inventory.InventoryCloseEvent
 import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.Inventory
+import org.bukkit.inventory.InventoryHolder
 import org.bukkit.inventory.ItemStack
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -54,6 +55,12 @@ class TradeManager(private val plugin: Joshymc) : Listener {
         var countdownValue: Int = -1,
         var completing: Boolean = false // Anti-dupe: prevents double-execution
     )
+
+    /** Marks trade windows so they stay frozen after the trade ends (see [onInventoryClick]). */
+    private class TradeHolder : InventoryHolder {
+        lateinit var inv: Inventory
+        override fun getInventory(): Inventory = inv
+    }
 
     data class TradeRequest(
         val sender: UUID,
@@ -194,7 +201,9 @@ class TradeManager(private val plugin: Joshymc) : Listener {
 
     fun startTrade(player1: Player, player2: Player) {
         val title = Component.text("Trade: ${player1.name} \u2194 ${player2.name}")
-        val inventory = Bukkit.createInventory(null, 54, title)
+        val holder = TradeHolder()
+        val inventory = Bukkit.createInventory(holder, 54, title)
+        holder.inv = inventory
 
         // Set up divider panes
         val dividerPane = ItemStack(Material.GRAY_STAINED_GLASS_PANE).apply {
@@ -424,7 +433,14 @@ class TradeManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onInventoryClick(event: InventoryClickEvent) {
         val player = event.whoClicked as? Player ?: return
-        val trade = getTradeByInventory(event.inventory) ?: return
+        val trade = getTradeByInventory(event.inventory)
+        if (trade == null) {
+            // A completed/cancelled trade leaves its window open until the close scheduled
+            // one tick later. It's no longer tracked, so freeze it: otherwise items placed in
+            // it would be lost on close and the panes/buttons could be taken.
+            if (event.inventory.holder is TradeHolder) event.isCancelled = true
+            return
+        }
 
         // COLLECT_TO_CURSOR (double-click) gathers every matching-material stack from
         // BOTH the trade inventory and the clicker's own inventory, regardless of which
@@ -524,7 +540,11 @@ class TradeManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler
     fun onInventoryDrag(event: InventoryDragEvent) {
-        val trade = getTradeByInventory(event.inventory) ?: return
+        val trade = getTradeByInventory(event.inventory)
+        if (trade == null) {
+            if (event.inventory.holder is TradeHolder) event.isCancelled = true
+            return
+        }
         val player = event.whoClicked as? Player ?: return
         val isP1 = player.uniqueId == trade.player1
 

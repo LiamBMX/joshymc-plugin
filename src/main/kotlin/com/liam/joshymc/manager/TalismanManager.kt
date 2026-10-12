@@ -25,6 +25,7 @@ import org.bukkit.event.block.BlockDropItemEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.PlayerDeathEvent
+import org.bukkit.event.inventory.ClickType
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerExpChangeEvent
@@ -835,6 +836,11 @@ class TalismanManager(private val plugin: Joshymc) : Listener {
             if (isTalismanItem(event.currentItem)) {
                 event.isCancelled = true
             }
+        }
+        // Block hotbar key 9 from swapping the talisman out of its slot into the hovered slot
+        if (event.click == ClickType.NUMBER_KEY && event.hotbarButton == TALISMAN_SLOT &&
+            isTalismanItem(player.inventory.getItem(TALISMAN_SLOT))) {
+            event.isCancelled = true
         }
         // Also block shift-clicking talisman items
         if (event.isShiftClick && isTalismanItem(event.currentItem)) {

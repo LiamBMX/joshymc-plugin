@@ -59,6 +59,10 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     )
 
     private val openEchests = mutableMapOf<UUID, String>() // player UUID -> team name
+    // Team name -> the single live chest inventory shared by every member viewing it. Opening
+    // pulls the rows out of the DB, so a second member must join this inventory rather than
+    // load an empty copy whose save would wipe the first member's items.
+    private val echestSessions = mutableMapOf<String, Inventory>()
     // Identity set of inventories opened via openTeamEchestReadOnly (issue #976)
     // — any InventoryClickEvent/InventoryDragEvent against one of these is cancelled.
     private val readOnlyEchestViews = mutableSetOf<Inventory>()
@@ -186,6 +190,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         plugin.databaseManager.execute("DELETE FROM team_members WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_balances WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_echests WHERE team_name = ?", name)
+        echestSessions.remove(name) // so a member still viewing it can't save it back for a deleted team
         plugin.databaseManager.execute("DELETE FROM team_homes WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM teams WHERE name = ?", name)
         return true
@@ -514,6 +519,24 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     // ── Team echest methods ──
 
     fun openTeamEchest(player: Player, teamName: String) {
+        // Settle a team chest this player still has open before (re)opening one.
+        openEchests.remove(player.uniqueId)?.let { open ->
+            echestSessions[open]?.let { closeEchestSession(open, it, player) }
+        }
+
+        val inv = echestSessions.getOrPut(teamName) { loadTeamEchest(teamName) }
+
+        // player.openInventory() closes whatever inventory the player currently
+        // has open first (e.g. the /team GUI, if this was opened via its Team
+        // Ender Chest button), firing InventoryCloseEvent for it. Track AFTER
+        // that call returns so onEchestClose doesn't mistake that stale close
+        // for the echest closing and save the wrong inventory's contents into
+        // team_echests (issue #837).
+        player.openInventory(inv)
+        openEchests[player.uniqueId] = teamName
+    }
+
+    private fun loadTeamEchest(teamName: String): Inventory {
         val title = Component.text("Team Chest", NamedTextColor.AQUA)
         val inv = Bukkit.createInventory(null, 54, title)
 
@@ -540,15 +563,15 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         plugin.databaseManager.execute(
             "DELETE FROM team_echests WHERE team_name = ?", teamName
         )
+        return inv
+    }
 
-        // player.openInventory() closes whatever inventory the player currently
-        // has open first (e.g. the /team GUI, if this was opened via its Team
-        // Ender Chest button), firing InventoryCloseEvent for it. Track AFTER
-        // that call returns so onEchestClose doesn't mistake that stale close
-        // for the echest closing and save the wrong inventory's contents into
-        // team_echests (issue #837).
-        player.openInventory(inv)
-        openEchests[player.uniqueId] = teamName
+    /** Saves the shared chest as [viewer] leaves it; drops the session once nobody else is viewing. */
+    private fun closeEchestSession(teamName: String, inv: Inventory, viewer: Player) {
+        saveTeamEchest(teamName, inv)
+        if (inv.viewers.none { it.uniqueId != viewer.uniqueId }) {
+            echestSessions.remove(teamName)
+        }
     }
 
     /**
@@ -624,8 +647,11 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     fun onEchestClose(event: InventoryCloseEvent) {
         if (readOnlyEchestViews.remove(event.inventory)) return
         val player = event.player as? Player ?: return
-        val teamName = openEchests.remove(player.uniqueId) ?: return
-        saveTeamEchest(teamName, event.inventory)
+        val teamName = openEchests[player.uniqueId] ?: return
+        val inv = echestSessions[teamName] ?: return
+        if (event.inventory !== inv) return
+        openEchests.remove(player.uniqueId)
+        closeEchestSession(teamName, inv, player)
     }
 
     @EventHandler
@@ -635,8 +661,8 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         clearBountySession(player.uniqueId)
         if (readOnlyEchestViews.remove(player.openInventory.topInventory)) return
         val teamName = openEchests.remove(player.uniqueId) ?: return
-        val inv = player.openInventory.topInventory
-        saveTeamEchest(teamName, inv)
+        val inv = echestSessions[teamName] ?: return
+        closeEchestSession(teamName, inv, player)
     }
 
     // ── Bounty methods ──

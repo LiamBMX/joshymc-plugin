@@ -9,13 +9,23 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.inventory.InventoryClickEvent
+import org.bukkit.event.inventory.InventoryDragEvent
+import org.bukkit.inventory.InventoryView
 
 class LinkGuiListener(private val plugin: Joshymc) : Listener {
 
+    private fun isLinkGui(view: InventoryView): Boolean =
+        PlainTextComponentSerializer.plainText().serialize(view.title()).startsWith(LinkGui.GUI_TITLE_PREFIX)
+
+    /** The Link GUI is display-only: a drag into it would leave the item behind when it closes. */
+    @EventHandler
+    fun onInventoryDrag(event: InventoryDragEvent) {
+        if (isLinkGui(event.view)) event.isCancelled = true
+    }
+
     @EventHandler
     fun onInventoryClick(event: InventoryClickEvent) {
-        val title = PlainTextComponentSerializer.plainText().serialize(event.view.title())
-        if (!title.startsWith(LinkGui.GUI_TITLE_PREFIX)) return
+        if (!isLinkGui(event.view)) return
 
         event.isCancelled = true
 
