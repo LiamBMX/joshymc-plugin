@@ -280,6 +280,8 @@ class SpawnWorldManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler
     fun onVoidFall(event: PlayerMoveEvent) {
+        // Rotation-only packets can't take anyone below y=0.
+        if (!event.hasChangedPosition()) return
         val player = event.player
         if (player.world.name != worldName) return
         if (event.to.y > 0) return

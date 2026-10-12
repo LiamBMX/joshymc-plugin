@@ -187,6 +187,7 @@ class ListenerManager(private val plugin: Joshymc) {
         // Quest events
         pm.registerEvents(plugin.questCycleManager, plugin)
         pm.registerEvents(plugin.eventQuestManager, plugin)
+        pm.registerEvents(com.liam.joshymc.listener.TravelTrackingListener(plugin), plugin)
         pm.registerEvents(plugin.resurgeManager, plugin)
 
         // Talisman effects
