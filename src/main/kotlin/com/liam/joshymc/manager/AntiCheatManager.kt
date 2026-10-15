@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.AlertThrottle
 import com.liam.joshymc.util.BedrockUtil
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -133,6 +134,24 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
     private var alertCooldownMs = 3000L
     private var decayTask: BukkitTask? = null
 
+    /**
+     * Discord staff alerts get their own, longer cooldown per player/check (issue #1153) on top
+     * of the in-game gate above, which is left untouched. Detections held back meanwhile are
+     * summarised in one grouped follow-up per window by [discordSummaryTask].
+     */
+    private data class DiscordAlertKey(val uuid: UUID, val check: CheckType)
+    private data class DiscordAlertSnapshot(
+        val playerName: String,
+        val uuid: UUID,
+        val check: CheckType,
+        val vl: Double,
+        val detail: String,
+        val world: String,
+        val x: Int, val y: Int, val z: Int
+    )
+    private var discordAlertThrottle = AlertThrottle<DiscordAlertKey, DiscordAlertSnapshot>(30_000L)
+    private var discordSummaryTask: BukkitTask? = null
+
     // ══════════════════════════════════════════════════════════
     //  LIFECYCLE
     // ══════════════════════════════════════════════════════════
@@ -143,6 +162,8 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
         alertVL = cfg.getDouble("anticheat.alert-vl", 10.0)
         kickVL = cfg.getDouble("anticheat.kick-vl", 50.0)
         alertCooldownMs = cfg.getLong("anticheat.alert-cooldown-ms", 3000L)
+        val discordCooldownSeconds = cfg.getLong("anticheat.discord-alert-cooldown-seconds", 30L).coerceAtLeast(0L)
+        discordAlertThrottle = AlertThrottle(discordCooldownSeconds * 1000L)
 
         enabledChecks.clear()
         for (check in CheckType.entries) {
@@ -167,6 +188,11 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             }
         }, 20L, 20L)
 
+        // Grouped Discord follow-ups: only builds embeds and queues them, never touches the network.
+        discordSummaryTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+            sendDiscordSummaries(discordAlertThrottle.drainDue(System.currentTimeMillis()))
+        }, 100L, 100L)
+
         val checkCount = enabledChecks.size
         plugin.logger.info("[AntiCheat] Started with $checkCount/${CheckType.entries.size} checks enabled.")
     }
@@ -174,6 +200,11 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
     fun stop() {
         decayTask?.cancel()
         decayTask = null
+        discordSummaryTask?.cancel()
+        discordSummaryTask = null
+        // Reload/shutdown mid-cooldown: queue what was held back rather than losing it. On a
+        // reload the Discord queue survives and is delivered once the bot reconnects.
+        sendDiscordSummaries(discordAlertThrottle.drainAll(System.currentTimeMillis()))
         playerData.clear()
     }
 
@@ -289,7 +320,14 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             }
             plugin.logger.info("[AntiCheat] ${player.name} failed ${check.displayName} VL=${"%.0f".format(newVL)} $detail")
 
-            sendStaffDiscordAlert(player, check, newVL, detail)
+            val loc = player.location
+            val snapshot = DiscordAlertSnapshot(
+                player.name, player.uniqueId, check, newVL, detail,
+                loc.world?.name ?: "unknown", loc.blockX, loc.blockY, loc.blockZ
+            )
+            discordAlertThrottle.offer(DiscordAlertKey(player.uniqueId, check), snapshot, now)?.let { earlier ->
+                sendStaffDiscordAlert(snapshot, earlier)
+            }
 
             // PvP cheat-detection Discord alert (issue #852) — same threshold/cooldown gate as
             // the staff chat alert above, restricted to combat-relevant checks only.
@@ -324,8 +362,31 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    /** Staff-monitoring Discord embed (issue #1016) — same gate as the staff chat alert. */
-    private fun sendStaffDiscordAlert(player: Player, check: CheckType, vl: Double, detail: String) {
+    /**
+     * Staff-monitoring Discord embed (issue #1016) — same gate as the staff chat alert, then the
+     * Discord-only cooldown (issue #1153). [earlier] counts detections held back in an expired
+     * window that this alert absorbs.
+     */
+    private fun sendStaffDiscordAlert(alert: DiscordAlertSnapshot, earlier: Int) {
+        val builder = staffDiscordEmbed(alert, alert.check.displayName)
+        if (earlier > 0) builder.setDescription("Also covers $earlier earlier detection${if (earlier == 1) "" else "s"} held back by the Discord alert cooldown.")
+        plugin.discordManager.sendStaffAlert(builder.build())
+    }
+
+    /** One grouped follow-up per player/check whose Discord cooldown held detections back. */
+    private fun sendDiscordSummaries(summaries: List<AlertThrottle.Summary<DiscordAlertKey, DiscordAlertSnapshot>>) {
+        for (summary in summaries) {
+            val latest = summary.latest
+            val seconds = (summary.windowMs / 1000L).coerceAtLeast(1L)
+            val builder = staffDiscordEmbed(latest, "${latest.check.displayName} (grouped)")
+                .setDescription("${summary.suppressed} more detection${if (summary.suppressed == 1) "" else "s"} in the last ${seconds}s. Details below are from the latest one.")
+            plugin.discordManager.sendStaffAlert(builder.build())
+        }
+    }
+
+    private fun staffDiscordEmbed(alert: DiscordAlertSnapshot, checkLabel: String): net.dv8tion.jda.api.EmbedBuilder {
+        val check = alert.check
+        val vl = alert.vl
         val (label, color) = when {
             vl >= kickVL * 0.5 -> "High priority" to 0xED4245
             vl >= alertVL * 1.5 -> "Repeated violations" to 0xFFA500
@@ -339,22 +400,18 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             CheckType.FAST_BREAK, CheckType.FAST_PLACE, CheckType.SCAFFOLD, CheckType.NUKER -> "Block Cheat Detection"
             else -> "Exploit Detection"
         }
-        val loc = player.location
-        plugin.discordManager.sendStaffAlert(
-            net.dv8tion.jda.api.EmbedBuilder()
-                .setTitle("$category: ${check.displayName}")
-                .setColor(color)
-                .addField("Player", "${player.name} (`${player.uniqueId}`)", false)
-                .addField("Detection", category, true)
-                .addField("Check", check.displayName, true)
-                .addField("Violation Level", "%.0f".format(vl), true)
-                .addField("Severity", label, true)
-                .addField("Details", detail.ifBlank { "No additional details." }.take(1000), false)
-                .addField("World", loc.world?.name ?: "unknown", true)
-                .addField("Location", "X: ${loc.blockX}, Y: ${loc.blockY}, Z: ${loc.blockZ}", true)
-                .setTimestamp(java.time.Instant.now())
-                .build()
-        )
+        return net.dv8tion.jda.api.EmbedBuilder()
+            .setTitle("$category: $checkLabel")
+            .setColor(color)
+            .addField("Player", "${alert.playerName} (`${alert.uuid}`)", false)
+            .addField("Detection", category, true)
+            .addField("Check", check.displayName, true)
+            .addField("Violation Level", "%.0f".format(vl), true)
+            .addField("Severity", label, true)
+            .addField("Details", alert.detail.ifBlank { "No additional details." }.take(1000), false)
+            .addField("World", alert.world, true)
+            .addField("Location", "X: ${alert.x}, Y: ${alert.y}, Z: ${alert.z}", true)
+            .setTimestamp(java.time.Instant.now())
     }
 
     // ══════════════════════════════════════════════════════════

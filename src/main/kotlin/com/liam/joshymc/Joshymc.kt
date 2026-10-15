@@ -679,7 +679,7 @@ class Joshymc : JavaPlugin() {
         safe("rotatingBossBarManager.stop") { rotatingBossBarManager.stop() }
         safe("lagCleanerManager.stop") { lagCleanerManager.stop() }
         safe("resourcePackManager.shutdown") { resourcePackManager.shutdown() }
-        safe("discordManager.shutdown") { discordManager.shutdown() }
+        safe("discordManager.shutdown") { discordManager.shutdown(serverStopping = false) }
 
         // 4. Clear registries
         safe("itemManager.clear") { itemManager.clear() }
@@ -731,7 +731,7 @@ class Joshymc : JavaPlugin() {
         safe("commandManager.registerAll") { commandManager.registerAll() }
 
         // 8. Restart Discord
-        safe("discordManager.start") { discordManager.start() }
+        safe("discordManager.start") { discordManager.start(announceStartup = false) }
 
         // 9. Restart lag cleaner, combat manager, chat manager, and AFK manager with new config
         safe("rankManager.start") { rankManager.start() }

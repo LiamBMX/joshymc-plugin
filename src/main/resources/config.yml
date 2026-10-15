@@ -909,6 +909,9 @@ anticheat:
   alert-vl: 20          # VL threshold to alert staff
   kick-vl: 150          # VL threshold to kick player (very high to avoid false kicks)
   alert-cooldown-ms: 3000  # Cooldown between alerts per check per player
+  # Separate cooldown for the Discord staff anti-cheat alert, per player per check. Detections
+  # held back are posted as one grouped follow-up when it ends. 0 sends every in-game alert.
+  discord-alert-cooldown-seconds: 30
   checks:
     flight: true         # Detects fly hacks (sustained air time, ascending without jump)
     speed: true          # Detects speed hacks (moving faster than possible)

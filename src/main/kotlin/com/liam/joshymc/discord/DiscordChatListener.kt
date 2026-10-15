@@ -3,6 +3,7 @@ package com.liam.joshymc.discord
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.link.LinkGui
 import net.dv8tion.jda.api.EmbedBuilder
+import net.dv8tion.jda.api.events.GenericEvent
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent
 import net.dv8tion.jda.api.hooks.ListenerAdapter
@@ -10,7 +11,14 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 
 class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
 
+    /**
+     * Only the bot connection DiscordManager currently owns may act on events, so an old
+     * connection still draining after a reload can never double-post or double-reply.
+     */
+    private fun isActiveConnection(event: GenericEvent): Boolean = event.jda === plugin.discordManager.jda
+
     override fun onMessageReceived(event: MessageReceivedEvent) {
+        if (!isActiveConnection(event)) return
         if (event.author.isBot) return
 
         // Handle DMs — link codes
@@ -102,6 +110,7 @@ class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
     }
 
     override fun onSlashCommandInteraction(event: SlashCommandInteractionEvent) {
+        if (!isActiveConnection(event)) return
         when (event.name) {
             "online" -> {
                 event.deferReply().queue()
