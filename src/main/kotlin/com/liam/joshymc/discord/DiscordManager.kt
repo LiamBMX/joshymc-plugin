@@ -9,21 +9,17 @@ import net.dv8tion.jda.api.entities.Activity
 import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.interactions.commands.build.Commands
 import net.dv8tion.jda.api.entities.MessageEmbed
-import net.dv8tion.jda.api.entities.channel.concrete.ForumChannel
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
-import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel
-import net.dv8tion.jda.api.entities.channel.forums.ForumTag
+import net.dv8tion.jda.api.events.session.SessionRecreateEvent
+import net.dv8tion.jda.api.events.session.SessionResumeEvent
+import net.dv8tion.jda.api.exceptions.InvalidTokenException
+import net.dv8tion.jda.api.hooks.ListenerAdapter
 import net.dv8tion.jda.api.requests.GatewayIntent
-import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder
 import net.dv8tion.jda.api.utils.messages.MessageRequest
 import java.time.Duration
 import java.time.Instant
 import java.util.EnumSet
-import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 
 class DiscordManager(private val plugin: Joshymc) {
 
@@ -70,11 +66,22 @@ class DiscordManager(private val plugin: Joshymc) {
             ?: plugin.config.getString("discord.punishments.forum-channel-id")
             ?: ""
 
-    private val punishmentLogLock = Any()
-    private var punishmentLogExecutor: ExecutorService? = null
-    private val pendingPunishmentLogs = ConcurrentLinkedQueue<PunishmentManager.PunishmentLog>()
-    /** True while the bot is connecting, so punishments issued meanwhile are held instead of dropped. */
-    private var connecting = false
+    /** Durable punishment log delivery (issue #1157); its table is created by PunishmentManager.start(). */
+    val punishmentLogs = PunishmentLogOutbox(
+        plugin,
+        forumChannelId = { punishmentForumChannelId },
+        buildEmbed = ::buildPunishmentEmbed,
+        describe = { "${actionLabel(it.action)} for ${it.targetName} (${it.targetUuid})" }
+    )
+
+    /** Wakes punishment delivery when JDA's own gateway reconnect brings the bot back. */
+    private val sessionListener = object : ListenerAdapter() {
+        override fun onSessionResume(event: SessionResumeEvent) = punishmentLogs.onReconnected()
+        override fun onSessionRecreate(event: SessionRecreateEvent) = punishmentLogs.onReconnected()
+    }
+
+    /** When the last failed-connection line was logged, so a long outage doesn't flood the console. */
+    private var lastConnectFailureLog = 0L
 
     private val staffMonitoringEnabled: Boolean get() = plugin.config.getBoolean("discord.staff-monitoring.enabled", false)
     private val staffAnticheatChannelId: String get() = plugin.config.getString("discord.staff-monitoring.anticheat-channel-id") ?: ""
@@ -91,7 +98,6 @@ class DiscordManager(private val plugin: Joshymc) {
             return
         }
 
-        val configuredChannelId = channelId
         if (!chatChannelConfigured) {
             if (!staffMonitoringEnabled) {
                 plugin.logger.warning("[Discord] Channel ID not set in config.yml — integration disabled.")
@@ -116,14 +122,23 @@ class DiscordManager(private val plugin: Joshymc) {
         MessageRequest.setDefaultMentionRepliedUser(false)
 
         plugin.logger.info("[Discord] Connecting bot...")
-        synchronized(punishmentLogLock) { connecting = true }
+        connect(token, attempt, announceStartup, failures = 0)
+    }
 
+    /**
+     * One connection attempt for the [start] call identified by [attempt]. A failed attempt is
+     * retried with bounded exponential backoff (issue #1157) while state stays CONNECTING, so
+     * there is never a second attempt or JDA running alongside it. Once connected, gateway
+     * drops are left to JDA's own reconnect.
+     */
+    private fun connect(token: String, attempt: Long, announceStartup: Boolean, failures: Int) {
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
+            if (!isConnecting(attempt)) return@Runnable
             var built: JDA? = null
             try {
                 built = JDABuilder.createDefault(token)
                     .enableIntents(GatewayIntent.GUILD_MESSAGES, GatewayIntent.MESSAGE_CONTENT, GatewayIntent.DIRECT_MESSAGES)
-                    .addEventListeners(DiscordChatListener(plugin))
+                    .addEventListeners(DiscordChatListener(plugin), sessionListener)
                     .build()
                 // Own the connecting instance before blocking on it, so a reload or shutdown
                 // that lands mid-handshake shuts it down instead of leaking it.
@@ -152,8 +167,9 @@ class DiscordManager(private val plugin: Joshymc) {
                     return@Runnable
                 }
 
-                plugin.logger.info("[Discord] Bot connected as ${built.selfUser.name}")
-                startPunishmentLogging()
+                plugin.logger.info("[Discord] Bot connected as ${built.selfUser.name}" + if (failures > 0) " after ${failures + 1} attempts" else "")
+                // Under the lifecycle lock: a shutdown() racing this either stops the worker or prevents it.
+                synchronized(lifecycleLock) { if (generation == attempt) punishmentLogs.start(built) }
 
                 // A missing chat channel only disables the chat bridge; staff alerts and
                 // reports still go to their own channels.
@@ -161,7 +177,7 @@ class DiscordManager(private val plugin: Joshymc) {
                 if (channel != null) {
                     plugin.logger.info("[Discord] Bound to channel #${channel.name} (${channel.id})")
                 } else if (chatChannelConfigured) {
-                    plugin.logger.severe("[Discord] Could not find channel with ID: $configuredChannelId — check your config!")
+                    plugin.logger.severe("[Discord] Could not find channel with ID: $channelId — check your config!")
                 }
 
                 // Register slash commands for the guild
@@ -189,23 +205,52 @@ class DiscordManager(private val plugin: Joshymc) {
                 // Only a real server start announces itself; /joshymc reload reconnects quietly.
                 if (announceStartup) send(":green_circle: **Server started**")
             } catch (e: Exception) {
+                val retry = e !is InvalidTokenException
                 val current = synchronized(lifecycleLock) {
                     if (generation == attempt) {
                         connectingJda = null
                         jda = null
-                        state = ConnectionState.STOPPED
+                        // Stays CONNECTING while a retry is pending, so start() can't open a second connection.
+                        state = if (retry) ConnectionState.CONNECTING else ConnectionState.STOPPED
                     }
                     generation == attempt
                 }
                 try { built?.shutdownNow() } catch (_: Exception) {}
-                // A cancelled attempt was stopped by shutdown(), which already handled the punishment logs.
+                // A cancelled attempt was stopped by shutdown().
                 if (!current) return@Runnable
-                stopPunishmentLogging()
-                plugin.logger.severe("[Discord] Failed to connect: ${e.message}")
-                e.printStackTrace()
+                // A connection that got as far as starting delivery must not keep its worker.
+                punishmentLogs.stop()
+                if (!retry) {
+                    plugin.logger.severe("[Discord] The bot token was rejected - fix discord.token and run /joshymc reload. Punishment logs stay queued.")
+                    return@Runnable
+                }
+                scheduleReconnect(token, attempt, announceStartup, failures + 1, e)
             }
         })
     }
+
+    private fun scheduleReconnect(token: String, attempt: Long, announceStartup: Boolean, failures: Int, error: Exception) {
+        val delaySeconds = (RECONNECT_BASE_SECONDS shl (failures - 1).coerceIn(0, 10)).coerceAtMost(RECONNECT_MAX_SECONDS)
+        val now = System.currentTimeMillis()
+        // Every early failure is logged (the first with its stack trace); at the cap, only every 30 minutes.
+        if (delaySeconds < RECONNECT_MAX_SECONDS || now - lastConnectFailureLog >= 30 * 60_000L) {
+            lastConnectFailureLog = now
+            plugin.logger.severe("[Discord] Failed to connect (attempt $failures): ${error.message} - retrying in ${delaySeconds}s.")
+            if (failures == 1) error.printStackTrace()
+        }
+        try {
+            val task = plugin.server.scheduler.runTaskLaterAsynchronously(plugin, Runnable {
+                connect(token, attempt, announceStartup, failures)
+            }, delaySeconds * 20L)
+            synchronized(scheduledTaskIds) { scheduledTaskIds.add(task.taskId) }
+        } catch (_: Exception) {
+            // The plugin is disabling: nothing to retry into.
+            synchronized(lifecycleLock) { if (generation == attempt) state = ConnectionState.STOPPED }
+        }
+    }
+
+    private fun isConnecting(attempt: Long): Boolean =
+        synchronized(lifecycleLock) { generation == attempt && state == ConnectionState.CONNECTING }
 
     private fun isCurrent(attempt: Long): Boolean =
         synchronized(lifecycleLock) { generation == attempt && state == ConnectionState.CONNECTED }
@@ -229,7 +274,8 @@ class DiscordManager(private val plugin: Joshymc) {
         }
         try {
             cancelScheduledTasks()
-            stopPunishmentLogging()
+            // Unsent punishment logs stay in the database for the next connection.
+            punishmentLogs.stop()
 
             try {
                 pending?.shutdownNow()
@@ -380,161 +426,18 @@ class DiscordManager(private val plugin: Joshymc) {
     private fun textChannel(id: String, bot: JDA? = jda): TextChannel? =
         try { bot?.getTextChannelById(id) } catch (_: NumberFormatException) { null }
 
-    private fun getPunishmentForumChannel(): ForumChannel? = jda?.getForumChannelById(punishmentForumChannelId)
-
     /**
-     * Logs a moderation action into the punished player's own forum thread (issue #1069).
-     * Called right after the punishment is stored, so a Discord failure can never roll it back.
-     * Delivery runs on a single background thread: the main thread never waits on Discord, and
-     * two quick punishments for the same player can never both decide to create a thread.
-     * Entries issued while the bot is still connecting wait in memory and go out once it is ready.
+     * Queues a moderation action for the punished player's own forum post (issue #1069).
+     * Called inside the punishment's own transaction, so the delivery intent is stored exactly
+     * when the punishment is (issue #1157); posting happens later on the outbox worker, so the
+     * main thread never waits on Discord and an outage or restart only delays the log.
      */
     fun logPunishment(entry: PunishmentManager.PunishmentLog) {
         if (!punishmentSyncEnabled || punishmentForumChannelId.isEmpty()) return
-        synchronized(punishmentLogLock) {
-            val executor = punishmentLogExecutor
-            when {
-                jda != null && executor != null -> executor.execute { deliverPunishmentLog(entry) }
-                connecting -> pendingPunishmentLogs.add(entry)
-                else -> plugin.logger.severe("[Discord] Bot is not connected - ${actionLabel(entry.action)} for ${entry.targetName} (${entry.targetUuid}) was not logged to Discord.")
-            }
-        }
+        punishmentLogs.enqueue(entry)
     }
 
-    /** Called once the bot is ready: opens the logging thread and sends anything issued while connecting. */
-    private fun startPunishmentLogging() {
-        synchronized(punishmentLogLock) {
-            val executor = Executors.newSingleThreadExecutor { r -> Thread(r, "JoshyMC-PunishmentLog").apply { isDaemon = true } }
-            punishmentLogExecutor = executor
-            connecting = false
-            while (pendingPunishmentLogs.isNotEmpty()) {
-                val entry = pendingPunishmentLogs.poll() ?: break
-                executor.execute { deliverPunishmentLog(entry) }
-            }
-        }
-    }
-
-    private fun stopPunishmentLogging() {
-        val executor = synchronized(punishmentLogLock) {
-            connecting = false
-            if (pendingPunishmentLogs.isNotEmpty()) {
-                plugin.logger.severe("[Discord] ${pendingPunishmentLogs.size} punishment log(s) were issued before the bot connected and were not sent to Discord.")
-                pendingPunishmentLogs.clear()
-            }
-            punishmentLogExecutor.also { punishmentLogExecutor = null }
-        } ?: return
-        executor.shutdown()
-        try {
-            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
-                plugin.logger.warning("[Discord] Timed out sending queued punishment logs to Discord during shutdown.")
-                executor.shutdownNow()
-            }
-        } catch (_: InterruptedException) {
-            executor.shutdownNow()
-            Thread.currentThread().interrupt()
-        }
-    }
-
-    /** Runs on the punishment-log thread only, so blocking .complete() calls are fine here. */
-    private fun deliverPunishmentLog(entry: PunishmentManager.PunishmentLog) {
-        val who = "${entry.targetName} (${entry.targetUuid})"
-        try {
-            val forum = getPunishmentForumChannel()
-            if (forum == null) {
-                plugin.logger.severe("[Discord] Punishment forum channel $punishmentForumChannelId not found (or the bot lacks View Channel) - ${actionLabel(entry.action)} for $who was not logged.")
-                return
-            }
-
-            val embed = buildPunishmentEmbed(entry)
-            val title = "${entry.targetName} - Punishment History".take(100)
-
-            val mappedId = plugin.databaseManager.queryFirst(
-                "SELECT thread_id FROM punishment_discord_threads WHERE player_uuid = ?", entry.targetUuid.toString()
-            ) { rs -> rs.getString("thread_id") }
-
-            if (mappedId != null) {
-                val thread = findPunishmentThread(forum, mappedId)
-                if (thread != null) {
-                    reopenPunishmentThread(thread, title, who)
-                    thread.sendMessageEmbeds(embed).complete()
-                    if (thread.name != title) {
-                        plugin.databaseManager.execute(
-                            "UPDATE punishment_discord_threads SET player_name = ? WHERE player_uuid = ?",
-                            entry.targetName, entry.targetUuid.toString()
-                        )
-                    }
-                    return
-                }
-                plugin.logger.warning("[Discord] Punishment thread $mappedId for $who no longer exists in the forum - creating a new one.")
-            }
-
-            val action = forum.createForumPost(title, MessageCreateBuilder().setEmbeds(embed).build())
-            val tags = punishmentForumTags(forum)
-            if (tags.isNotEmpty()) action.setTags(tags)
-            val post = action.complete()
-
-            // Stored straight away so the next punishment for this player reuses the thread.
-            plugin.databaseManager.execute(
-                "INSERT OR REPLACE INTO punishment_discord_threads (player_uuid, thread_id, player_name, created_at) VALUES (?, ?, ?, ?)",
-                entry.targetUuid.toString(), post.threadChannel.id, entry.targetName, System.currentTimeMillis()
-            )
-        } catch (e: Exception) {
-            plugin.logger.severe("[Discord] Failed to log ${actionLabel(entry.action)} for $who to the punishment forum: ${e.message}")
-        }
-    }
-
-    /**
-     * The mapped thread, whether active (cached) or archived (looked up in the forum's archive).
-     * Returns null only when the thread is really gone from this forum; lookup errors propagate so
-     * a Discord hiccup never leads to a duplicate thread.
-     */
-    private fun findPunishmentThread(forum: ForumChannel, threadId: String): ThreadChannel? {
-        jda?.getThreadChannelById(threadId)?.let { return it.takeIf { t -> t.parentChannel.id == forum.id } }
-        for (thread in forum.retrieveArchivedPublicThreadChannels()) {
-            if (thread.id == threadId) return thread
-        }
-        return null
-    }
-
-    /** Unarchives the thread and follows a username change. Failures are logged; the entry is still posted. */
-    private fun reopenPunishmentThread(thread: ThreadChannel, title: String, who: String) {
-        if (thread.isArchived) {
-            try {
-                thread.manager.setArchived(false).complete()
-            } catch (e: Exception) {
-                plugin.logger.warning("[Discord] Could not unarchive punishment thread ${thread.id} for $who (needs Manage Threads if it is locked): ${e.message}")
-            }
-        }
-        if (thread.name != title) {
-            try {
-                thread.manager.setName(title).complete()
-            } catch (e: Exception) {
-                plugin.logger.warning("[Discord] Could not rename punishment thread ${thread.id} for $who: ${e.message}")
-            }
-        }
-    }
-
-    /**
-     * Tags for a new post: the configured `discord.punishments.forum-tag` if it exists, otherwise
-     * none - unless the forum requires a tag, then one named like "punish" or else the first one.
-     */
-    private fun punishmentForumTags(forum: ForumChannel): List<ForumTag> {
-        val available = forum.availableTags
-        val configured = plugin.config.getString("discord.punishments.forum-tag")?.trim().orEmpty()
-        if (configured.isNotEmpty()) {
-            available.firstOrNull { it.name.equals(configured, ignoreCase = true) }?.let { return listOf(it) }
-            plugin.logger.warning("[Discord] discord.punishments.forum-tag \"$configured\" is not a tag on #${forum.name}.")
-        }
-        if (!forum.isTagRequired) return emptyList()
-        val fallback = available.firstOrNull { it.name.contains("punish", ignoreCase = true) } ?: available.firstOrNull()
-        if (fallback == null) {
-            plugin.logger.warning("[Discord] #${forum.name} requires a tag but has none - post creation will likely fail.")
-            return emptyList()
-        }
-        return listOf(fallback)
-    }
-
-    private fun buildPunishmentEmbed(entry: PunishmentManager.PunishmentLog): MessageEmbed {
+    internal fun buildPunishmentEmbed(entry: PunishmentManager.PunishmentLog): MessageEmbed {
         val staff = if (entry.staffName.equals("CONSOLE", ignoreCase = true)) "Console" else entry.staffName
         val builder = EmbedBuilder()
             .setTitle("${actionEmoji(entry.action)} ${actionLabel(entry.action)}")
@@ -709,6 +612,9 @@ class DiscordManager(private val plugin: Joshymc) {
     }
 
     companion object {
+        private const val RECONNECT_BASE_SECONDS = 5L
+        private const val RECONNECT_MAX_SECONDS = 300L
+
         /**
          * Breaks every Discord mention form in untrusted text while keeping it readable:
          * `@everyone`, `@here` and `@name` get a zero-width space after the `@`, and

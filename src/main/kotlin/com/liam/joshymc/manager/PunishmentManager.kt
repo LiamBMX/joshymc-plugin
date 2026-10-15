@@ -91,6 +91,9 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
             )
         """.trimIndent())
 
+        // Issue #1157: durable queue of logs waiting to be posted to those threads.
+        plugin.discordManager.punishmentLogs.ensureSchema()
+
         plugin.server.pluginManager.registerEvents(this, plugin)
 
         // Periodic expiry check every 60 seconds (1200 ticks)
@@ -110,17 +113,20 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
     }
 
     fun unban(targetUuid: UUID, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null) {
-        val revoked = plugin.databaseManager.query(
-            "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1",
-            targetUuid.toString()
-        ) { rs -> mapRecord(rs) }
+        // One transaction, so the revocation and its Discord log are stored together (issue #1157).
+        plugin.databaseManager.transaction {
+            val revoked = plugin.databaseManager.query(
+                "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1",
+                targetUuid.toString()
+            ) { rs -> mapRecord(rs) }
 
-        plugin.databaseManager.execute(
-            "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1",
-            revokerName, revokerUuid?.toString(), revokeReason, System.currentTimeMillis(), targetUuid.toString()
-        )
+            plugin.databaseManager.execute(
+                "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1",
+                revokerName, revokerUuid?.toString(), revokeReason, System.currentTimeMillis(), targetUuid.toString()
+            )
 
-        logRevocation("UNBAN", targetUuid, revoked, revokerName, revokeReason)
+            logRevocation("UNBAN", targetUuid, revoked, revokerName, revokeReason)
+        }
     }
 
     fun isBanned(targetUuid: UUID): ActivePunishment? {
@@ -153,17 +159,20 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
     }
 
     fun unmute(targetUuid: UUID, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null) {
-        val revoked = plugin.databaseManager.query(
-            "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1",
-            targetUuid.toString()
-        ) { rs -> mapRecord(rs) }
+        // One transaction, so the revocation and its Discord log are stored together (issue #1157).
+        plugin.databaseManager.transaction {
+            val revoked = plugin.databaseManager.query(
+                "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1",
+                targetUuid.toString()
+            ) { rs -> mapRecord(rs) }
 
-        plugin.databaseManager.execute(
-            "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1",
-            revokerName, revokerUuid?.toString(), revokeReason, System.currentTimeMillis(), targetUuid.toString()
-        )
+            plugin.databaseManager.execute(
+                "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1",
+                revokerName, revokerUuid?.toString(), revokeReason, System.currentTimeMillis(), targetUuid.toString()
+            )
 
-        logRevocation("UNMUTE", targetUuid, revoked, revokerName, revokeReason)
+            logRevocation("UNMUTE", targetUuid, revoked, revokerName, revokeReason)
+        }
     }
 
     fun isMuted(targetUuid: UUID): ActivePunishment? {
@@ -200,29 +209,35 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
     /** Remove the most recent active warning, or a specific one by [warnId]. Returns true if a row was updated. */
     fun unwarn(targetUuid: UUID, warnId: Int? = null, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null): Boolean {
         val now = System.currentTimeMillis()
-        return if (warnId != null) {
-            val record = plugin.databaseManager.queryFirst(
-                "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE id = ? AND target_uuid = ? AND type = 'WARN' AND active = 1",
-                warnId, targetUuid.toString()
-            ) { rs -> mapRecord(rs) }
-            val updated = plugin.databaseManager.executeUpdate(
-                "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE id = ? AND target_uuid = ? AND type = 'WARN' AND active = 1",
-                revokerName, revokerUuid?.toString(), revokeReason, now, warnId, targetUuid.toString()
-            ) > 0
-            if (updated && record != null) logRevocation("UNWARN", targetUuid, listOf(record), revokerName, revokeReason)
-            updated
-        } else {
-            val record = plugin.databaseManager.queryFirst(
-                "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE target_uuid = ? AND type = 'WARN' AND active = 1 ORDER BY created_at DESC LIMIT 1",
-                targetUuid.toString()
-            ) { rs -> mapRecord(rs) } ?: return false
-            plugin.databaseManager.execute(
-                "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE id = ?",
-                revokerName, revokerUuid?.toString(), revokeReason, now, record.id
-            )
-            logRevocation("UNWARN", targetUuid, listOf(record), revokerName, revokeReason)
-            true
+        var updated = false
+        // One transaction, so the revocation and its Discord log are stored together (issue #1157).
+        plugin.databaseManager.transaction {
+            if (warnId != null) {
+                val record = plugin.databaseManager.queryFirst(
+                    "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE id = ? AND target_uuid = ? AND type = 'WARN' AND active = 1",
+                    warnId, targetUuid.toString()
+                ) { rs -> mapRecord(rs) }
+                updated = plugin.databaseManager.executeUpdate(
+                    "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE id = ? AND target_uuid = ? AND type = 'WARN' AND active = 1",
+                    revokerName, revokerUuid?.toString(), revokeReason, now, warnId, targetUuid.toString()
+                ) > 0
+                if (updated && record != null) logRevocation("UNWARN", targetUuid, listOf(record), revokerName, revokeReason)
+            } else {
+                val record = plugin.databaseManager.queryFirst(
+                    "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE target_uuid = ? AND type = 'WARN' AND active = 1 ORDER BY created_at DESC LIMIT 1",
+                    targetUuid.toString()
+                ) { rs -> mapRecord(rs) }
+                if (record != null) {
+                    plugin.databaseManager.execute(
+                        "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE id = ?",
+                        revokerName, revokerUuid?.toString(), revokeReason, now, record.id
+                    )
+                    logRevocation("UNWARN", targetUuid, listOf(record), revokerName, revokeReason)
+                    updated = true
+                }
+            }
         }
+        return updated
     }
 
     // ── Kicks ───────────────────────────────────────────────
@@ -299,39 +314,43 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
     ): InsertedPunishment {
         val now = System.currentTimeMillis()
         val expiresAt = if (durationMs != null) now + durationMs else null
+        var id = -1
 
-        plugin.databaseManager.execute(
-            "INSERT INTO punishments (target_uuid, target_name, punisher_uuid, punisher_name, type, reason, duration_ms, created_at, expires_at, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-            targetUuid.toString(),
-            targetName,
-            punisherUuid?.toString(),
-            punisherName,
-            type,
-            reason,
-            durationMs,
-            now,
-            expiresAt
-        )
+        // One transaction, so the punishment and its Discord log are stored together (issue #1157).
+        plugin.databaseManager.transaction {
+            plugin.databaseManager.execute(
+                "INSERT INTO punishments (target_uuid, target_name, punisher_uuid, punisher_name, type, reason, duration_ms, created_at, expires_at, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+                targetUuid.toString(),
+                targetName,
+                punisherUuid?.toString(),
+                punisherName,
+                type,
+                reason,
+                durationMs,
+                now,
+                expiresAt
+            )
 
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { rs -> rs.getInt("id") } ?: -1
+            id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { rs -> rs.getInt("id") } ?: -1
 
-        if (id != -1) {
-            val previousCount = plugin.databaseManager.queryFirst(
-                "SELECT COUNT(*) AS n FROM punishments WHERE target_uuid = ? AND id < ?",
-                targetUuid.toString(), id
-            ) { rs -> rs.getInt("n") }
-            logToDiscord(PunishmentLog(
-                action = type,
-                targetUuid = targetUuid,
-                targetName = targetName,
-                staffName = punisherName,
-                reason = reason,
-                timestamp = now,
-                punishmentId = id,
-                durationMs = durationMs,
-                expiresAt = expiresAt,
-                previousCount = previousCount
-            ))
+            if (id != -1) {
+                val previousCount = plugin.databaseManager.queryFirst(
+                    "SELECT COUNT(*) AS n FROM punishments WHERE target_uuid = ? AND id < ?",
+                    targetUuid.toString(), id
+                ) { rs -> rs.getInt("n") }
+                logToDiscord(PunishmentLog(
+                    action = type,
+                    targetUuid = targetUuid,
+                    targetName = targetName,
+                    staffName = punisherName,
+                    reason = reason,
+                    timestamp = now,
+                    punishmentId = id,
+                    durationMs = durationMs,
+                    expiresAt = expiresAt,
+                    previousCount = previousCount
+                ))
+            }
         }
 
         return InsertedPunishment(id, expiresAt)
@@ -356,7 +375,11 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         ))
     }
 
-    /** Discord logging must never undo or block a punishment that is already stored. */
+    /**
+     * Discord logging must never undo or block a punishment. Runs inside the punishment's
+     * transaction; a failed outbox insert only fails that one statement, so the punishment
+     * still commits and the failure is logged.
+     */
     private fun logToDiscord(entry: PunishmentLog) {
         try {
             plugin.discordManager.logPunishment(entry)
