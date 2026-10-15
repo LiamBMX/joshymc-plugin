@@ -22,8 +22,28 @@ import org.bukkit.entity.Player
 
 class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
+    /**
+     * A `/claim admin <name>` action (issue #1137). Each one has its own
+     * permission; `/claim admin` itself has none, it only routes.
+     */
+    private class AdminSubcommand(
+        val permission: String,
+        val run: (CommandSender, Array<out String>) -> Unit,
+    )
+
+    private val adminSubcommands: Map<String, AdminSubcommand> = linkedMapOf(
+        "wand" to AdminSubcommand(ClaimManager.ADMIN_WAND_PERMISSION) { sender, _ -> handleAdminWand(sender) },
+    )
+
+    private fun allowedAdminSubcommands(sender: CommandSender): List<String> =
+        adminSubcommands.filterValues { sender.hasPermission(it.permission) }.keys.toList()
+
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         val sub = args.getOrNull(0)?.lowercase()
+        if (sub == "admin" && !label.equals("unclaim", ignoreCase = true)) {
+            handleAdmin(sender, args)
+            return true
+        }
         if (sub == "addblocks" || sub == "setblocks") {
             if (sender is Player) {
                 if (!sender.hasPermission("joshymc.claim.admin")) {
@@ -273,6 +293,29 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         plugin.commsManager.send(player, Component.text("Claim wand added to your inventory! Right-click two corners to claim.", NamedTextColor.GREEN))
     }
 
+    /**
+     * `/claim admin <subcommand>`. Unknown or forbidden subcommands get the
+     * usage of what the sender may run, or the plain no-permission message
+     * when that's nothing, so hidden subcommands aren't revealed.
+     */
+    private fun handleAdmin(sender: CommandSender, args: Array<out String>) {
+        val subcommand = args.getOrNull(1)?.lowercase()?.let { adminSubcommands[it] }
+        if (subcommand != null) {
+            if (sender.hasPermission(subcommand.permission)) subcommand.run(sender, args) else Msg.noPermission(sender)
+            return
+        }
+        val allowed = allowedAdminSubcommands(sender)
+        if (allowed.isEmpty()) Msg.noPermission(sender)
+        else Msg.usage(sender, "/claim admin <${allowed.joinToString("|")}>")
+    }
+
+    private fun handleAdminWand(sender: CommandSender) {
+        if (sender !is Player) { Msg.playersOnly(sender); return }
+        val leftover = sender.inventory.addItem(plugin.claimManager.createAdminClaimWand())
+        leftover.values.forEach { sender.world.dropItemNaturally(sender.location, it) }
+        plugin.commsManager.send(sender, Component.text("Admin claim wand added to your inventory! Right-click two corners to create an admin claim.", NamedTextColor.GREEN))
+    }
+
     private fun handleShow(player: Player) {
         val on = plugin.claimManager.toggleParticles(player)
         val msg = if (on) "Claim borders enabled. Look for particles!" else "Claim borders disabled."
@@ -319,7 +362,8 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         val claim = plugin.claimManager.getClaimAt(player.location)
         if (claim == null) { plugin.commsManager.send(player, Component.text("This area is not claimed.", NamedTextColor.GRAY)); return }
 
-        val ownerName = Bukkit.getOfflinePlayer(claim.ownerUuid).name ?: "Unknown"
+        val ownerName = if (plugin.claimManager.isAdminClaim(claim)) "Admin Claim"
+            else Bukkit.getOfflinePlayer(claim.ownerUuid).name ?: "Unknown"
         val subs = plugin.claimManager.getSubclaimsInClaim(claim)
         val msg = Component.text()
             .append(Component.text("--- Claim Info ---\n", TextColor.color(0xFFD700)).decoration(TextDecoration.BOLD, true))
@@ -544,9 +588,15 @@ class ClaimCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (alias.equals("unclaim", true)) return emptyList()
         val directions = listOf("north", "south", "east", "west")
+        val adminAllowed = allowedAdminSubcommands(sender)
         return when (args.size) {
-            1 -> listOf("wand", "trust", "untrust", "trusted", "deny", "undeny", "denied", "show", "team", "personal", "map", "info", "list", "blocks", "expand", "shrink", "pvp", "tnt", "settings", "help").filter { it.startsWith(args[0].lowercase()) }
+            1 -> {
+                val subs = listOf("wand", "trust", "untrust", "trusted", "deny", "undeny", "denied", "show", "team", "personal", "map", "info", "list", "blocks", "expand", "shrink", "pvp", "tnt", "settings", "help")
+                val withAdmin = if (adminAllowed.isEmpty()) subs else subs + "admin"
+                withAdmin.filter { it.startsWith(args[0].lowercase()) }
+            }
             2 -> when (args[0].lowercase()) {
+                "admin" -> adminAllowed.filter { it.startsWith(args[1].lowercase()) }
                 "blocks" -> listOf("give").filter { it.startsWith(args[1].lowercase()) }
                 "trust", "untrust", "deny", "undeny" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1], true) }
                 "expand", "shrink" -> directions.filter { it.startsWith(args[1].lowercase()) }

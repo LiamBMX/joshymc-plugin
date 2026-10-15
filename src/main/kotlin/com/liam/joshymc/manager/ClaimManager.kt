@@ -1,8 +1,10 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.Color
 import org.bukkit.Location
@@ -21,6 +23,7 @@ import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.EquipmentSlot
+import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitTask
 import java.io.File
@@ -115,6 +118,9 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     /** Players with first corner set, waiting for second corner */
     private val pendingCorner1 = mutableMapOf<UUID, Location>()
 
+    /** Same as [pendingCorner1] for the admin claim wand, kept apart so the two wands never mix corners. */
+    private val pendingAdminCorner1 = mutableMapOf<UUID, Location>()
+
     val showingParticles = mutableSetOf<UUID>()
     private var particleTask: BukkitTask? = null
     private var blockAccrualTask: BukkitTask? = null
@@ -128,9 +134,19 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     private var blockedWorlds: Set<String> = DEFAULT_BLOCKED_WORLDS
 
     private val claimWandKey = NamespacedKey(plugin, "claim_wand")
+    private val adminClaimWandKey = NamespacedKey(plugin, "admin_claim_wand")
 
     companion object {
         private val DEFAULT_BLOCKED_WORLDS = setOf("resource", "spawn", "pvp", "event", "world_end", "afk", "dungeon")
+
+        /**
+         * Owner of every admin claim (issue #1137). No player has this id, so
+         * admin claims fall through the normal owner/trusted/team checks and
+         * only bypass or `joshymc.claim.admin` gets in, with no new rules.
+         */
+        val ADMIN_OWNER_UUID: UUID = UUID(0L, 0L)
+
+        const val ADMIN_WAND_PERMISSION = "joshymc.claim.admin.wand"
     }
 
     // ══════════════════════════════════════════════════════════
@@ -379,6 +395,8 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         var purgedClaims = 0
         for (uuidStr in ownerUuids) {
             val uuid = UUID.fromString(uuidStr)
+            // Admin claims have no player behind them to go inactive
+            if (uuid == ADMIN_OWNER_UUID) continue
             // Never purge claims of currently online players
             if (Bukkit.getPlayer(uuid) != null) continue
 
@@ -492,6 +510,51 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         return ClaimCreateResult.Success(claim)
     }
 
+    fun isAdminClaim(claim: Claim): Boolean = claim.ownerUuid == ADMIN_OWNER_UUID
+
+    /**
+     * Create an admin claim (issue #1137): same bounds, size and overlap rules
+     * as [createClaim], but owned by [ADMIN_OWNER_UUID], costs no claim blocks
+     * and takes no terrain snapshot (there's no player claim to roll back).
+     */
+    fun createAdminClaim(pos1: Location, pos2: Location): ClaimCreateResult {
+        val world = pos1.world ?: return ClaimCreateResult.Failure("Invalid world.")
+        if (world.environment != org.bukkit.World.Environment.NORMAL) {
+            return ClaimCreateResult.Failure("Claims can only be created in the Overworld.")
+        }
+        val worldName = world.name
+        if (worldName.lowercase() in blockedWorlds) return ClaimCreateResult.Failure("Claims are disabled in this world.")
+        if (pos1.world?.name != pos2.world?.name) return ClaimCreateResult.Failure("Corners must be in the same world.")
+
+        val minX = min(pos1.blockX, pos2.blockX)
+        val maxX = max(pos1.blockX, pos2.blockX)
+        val minZ = min(pos1.blockZ, pos2.blockZ)
+        val maxZ = max(pos1.blockZ, pos2.blockZ)
+        val area = (maxX - minX + 1) * (maxZ - minZ + 1)
+
+        if (area < 4) return ClaimCreateResult.Failure("Claim must be at least 2x2.")
+        if (area > 10000) return ClaimCreateResult.Failure("Claim too large (max 10,000 blocks per claim).")
+
+        for (existing in claims) {
+            if (existing.world != worldName) continue
+            if (overlaps(minX, minZ, maxX, maxZ, existing.minX, existing.minZ, existing.maxX, existing.maxZ)) {
+                if (isAdminClaim(existing)) return ClaimCreateResult.Failure("Overlaps with an existing admin claim.")
+                return ClaimCreateResult.Failure("Overlaps with ${Bukkit.getOfflinePlayer(existing.ownerUuid).name ?: "someone"}'s claim.")
+            }
+        }
+
+        val createdAt = System.currentTimeMillis()
+        plugin.databaseManager.execute(
+            "INSERT INTO claims_v2 (world, x1, z1, x2, z2, owner_uuid, team_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            worldName, minX, minZ, maxX, maxZ, ADMIN_OWNER_UUID.toString(), null, createdAt
+        )
+
+        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() as id") { it.getInt("id") } ?: 0
+        val claim = Claim(id, worldName, minX, minZ, maxX, maxZ, ADMIN_OWNER_UUID, null, createdAt)
+        claims.add(claim)
+        return ClaimCreateResult.Success(claim)
+    }
+
     fun deleteClaim(player: Player, claim: Claim): Boolean {
         if (claim.ownerUuid != player.uniqueId && !player.hasPermission("joshymc.claim.admin")) return false
 
@@ -511,7 +574,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         // Restore terrain only when an admin force-deletes someone else's claim.
         // When the owner voluntarily unclims, skip restore so legitimately mined
         // blocks are not rolled back (prevents the mine-unclaim-repeat dupe).
-        if (player.uniqueId != claim.ownerUuid && player.hasPermission("joshymc.claim.admin")) {
+        if (player.uniqueId != claim.ownerUuid && player.hasPermission("joshymc.claim.admin") && !isAdminClaim(claim)) {
             restoreTerrainSnapshot(claim)
         } else {
             getSnapshotFile(claim).let { if (it.exists()) it.delete() }
@@ -960,8 +1023,110 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         val item = player.inventory.itemInMainHand
         if (item.type != Material.GOLDEN_SHOVEL) return false
         // Subclaim wands are golden shovels that carry the claim_wand PDC tag — exclude them.
+        // Admin claim wands are excluded too, so they can never make a player claim.
         val meta = item.itemMeta ?: return true
-        return !meta.persistentDataContainer.has(claimWandKey, PersistentDataType.INTEGER)
+        val pdc = meta.persistentDataContainer
+        return !pdc.has(claimWandKey, PersistentDataType.INTEGER) && !pdc.has(adminClaimWandKey, PersistentDataType.BYTE)
+    }
+
+    /** The admin claim wand is identified only by its PDC tag, never by name or lore. */
+    fun isAdminClaimWand(item: ItemStack?): Boolean {
+        if (item == null || item.type != Material.GOLDEN_SHOVEL) return false
+        return item.persistentDataContainer.has(adminClaimWandKey, PersistentDataType.BYTE)
+    }
+
+    fun createAdminClaimWand(): ItemStack {
+        val wand = ItemStack(Material.GOLDEN_SHOVEL)
+        wand.editMeta { meta ->
+            meta.displayName(
+                Component.text("Admin Claim Wand", NamedTextColor.RED)
+                    .decoration(TextDecoration.ITALIC, false)
+                    .decoration(TextDecoration.BOLD, true)
+            )
+            meta.lore(listOf(
+                Component.empty(),
+                Component.text("  Creates ADMIN CLAIMS, not player claims", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false),
+                Component.text("  Right-click a block to set corner 1", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("  Right-click again to set corner 2", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("  Staff only", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+            ))
+            meta.setEnchantmentGlintOverride(true)
+            meta.persistentDataContainer.set(adminClaimWandKey, PersistentDataType.BYTE, 1)
+        }
+        return wand
+    }
+
+    /**
+     * Admin claim wand (issue #1137): the same two-corner flow as the golden
+     * shovel, but it makes admin claims. The permission is checked on every
+     * use, so a wand that ends up with someone else does nothing for them.
+     */
+    @EventHandler
+    fun onAdminWandInteract(event: PlayerInteractEvent) {
+        if (event.hand != EquipmentSlot.HAND) return
+        if (event.action != Action.RIGHT_CLICK_BLOCK) return
+
+        val player = event.player
+        if (!isAdminClaimWand(player.inventory.itemInMainHand)) return
+        event.isCancelled = true
+
+        if (!player.hasPermission(ADMIN_WAND_PERMISSION)) {
+            pendingAdminCorner1.remove(player.uniqueId)
+            Msg.noPermission(player)
+            return
+        }
+
+        if (player.world.environment != org.bukkit.World.Environment.NORMAL) {
+            plugin.commsManager.send(player, Component.text("Claims can only be created in the Overworld.", NamedTextColor.RED))
+            return
+        }
+
+        if (player.world.name.lowercase() in blockedWorlds) {
+            plugin.commsManager.send(player, Component.text("Claims are disabled in this world.", NamedTextColor.RED))
+            return
+        }
+
+        val block = event.clickedBlock ?: return
+        val loc = block.location
+
+        val corner1 = pendingAdminCorner1[player.uniqueId]
+
+        if (corner1 == null) {
+            pendingAdminCorner1[player.uniqueId] = loc
+            player.playSound(loc, Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f)
+            plugin.commsManager.send(player,
+                Component.text("Admin claim corner 1 set at ${loc.blockX}, ${loc.blockZ}. ", NamedTextColor.GREEN)
+                    .append(Component.text("Right-click another block to set corner 2.", NamedTextColor.GRAY))
+            )
+            showCornerPillar(player, loc, Color.RED)
+            return
+        }
+
+        pendingAdminCorner1.remove(player.uniqueId)
+
+        if (corner1.world?.name != loc.world?.name) {
+            plugin.commsManager.send(player, Component.text("Both corners must be in the same world.", NamedTextColor.RED))
+            return
+        }
+
+        when (val result = createAdminClaim(corner1, loc)) {
+            is ClaimCreateResult.Success -> {
+                val claim = result.claim
+                player.playSound(loc, Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.2f)
+                plugin.commsManager.send(player,
+                    Component.text("Admin claim created! ", NamedTextColor.GREEN)
+                        .append(Component.text("#${claim.id}", NamedTextColor.GOLD))
+                        .append(Component.text(" (${claim.maxX - claim.minX + 1}x${claim.maxZ - claim.minZ + 1}, ${claim.area} blocks).", NamedTextColor.GREEN))
+                )
+                showClaimBorder(player, claim, Color.RED)
+                plugin.logger.info("[Claims] ${player.name} created admin claim #${claim.id} in ${claim.world} (${claim.minX},${claim.minZ}) to (${claim.maxX},${claim.maxZ})")
+            }
+            is ClaimCreateResult.Failure -> {
+                player.playSound(loc, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
+                plugin.commsManager.send(player, Component.text(result.reason, NamedTextColor.RED))
+            }
+        }
     }
 
     @EventHandler
@@ -1043,6 +1208,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
         pendingCorner1.remove(event.player.uniqueId)
+        pendingAdminCorner1.remove(event.player.uniqueId)
         selections.remove(event.player.uniqueId)
     }
 
