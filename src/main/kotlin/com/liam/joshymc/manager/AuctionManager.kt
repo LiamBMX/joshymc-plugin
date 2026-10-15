@@ -283,10 +283,22 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        plugin.databaseManager.execute(
-            "INSERT INTO auction_expired (owner_uuid, item, expired_at) VALUES (?, ?, ?)",
-            uuid.toString(), serializeItem(unstored), System.currentTimeMillis()
-        )
+        try {
+            plugin.databaseManager.execute(
+                "INSERT INTO auction_expired (owner_uuid, item, expired_at) VALUES (?, ?, ?)",
+                uuid.toString(), serializeItem(unstored), System.currentTimeMillis()
+            )
+        } catch (e: Exception) {
+            logUnheldItem("expired-items fallback", uuid, unstored, e)
+            if (player != null) {
+                plugin.commsManager.send(
+                    player,
+                    Component.text("Your Auction House item couldn't be stored. It was logged for staff — please contact a staff member.", NamedTextColor.RED),
+                    CommunicationsManager.Category.DEFAULT
+                )
+            }
+            return
+        }
         if (player != null) {
             plugin.commsManager.send(
                 player,
@@ -299,6 +311,22 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             )
         }
     }
+
+    /**
+     * Last resort when an already-paid item could not be put anywhere persistent: log the
+     * serialized stack (base64 of [ItemStack.serializeAsBytes], all metadata intact) so staff
+     * can restore it exactly. Never auto-requeued, since a partial delivery may have happened.
+     */
+    private fun logUnheldItem(context: String, owner: UUID, item: ItemStack, error: Exception) {
+        val serialized = try { serializeItem(item) } catch (_: Exception) { "<unserializable ${item.type} x${item.amount}>" }
+        plugin.logger.severe(
+            "[Auction] RECOVERY NEEDED ($context): could not deliver or hold ${item.amount}x ${item.type} for $owner: " +
+                "${error.message}. Check their storage before restoring. Item data: $serialized"
+        )
+    }
+
+    /** Thrown inside the purchase transaction to roll back the listing claim and any money moved. */
+    private class PurchaseRollback(message: String) : RuntimeException(message)
 
     // ---- Row mapper ----
 
@@ -435,12 +463,42 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        // Anti-dupe: atomically delete the listing FIRST. If another call already
-        // deleted it, rowsAffected will be 0 and we abort before moving any money/items.
-        val rowsDeleted = plugin.databaseManager.executeUpdate(
-            "DELETE FROM auction_listings WHERE id = ?", listingId
-        )
-        if (rowsDeleted == 0) {
+        val tax = listing.price * (taxPercent / 100.0)
+        val sellerPayout = listing.price - tax
+
+        // Claim the listing, charge the buyer and pay the seller as one transaction. The
+        // claim is the conditional DELETE (anti-dupe: a second buyer or stale GUI deletes 0
+        // rows and moves nothing); a failed charge or payout rolls the claim back with it,
+        // so the listing is never half-sold and never resurrected after the money commits.
+        var claimed = false
+        try {
+            plugin.databaseManager.transaction {
+                claimed = plugin.databaseManager.executeUpdate(
+                    "DELETE FROM auction_listings WHERE id = ?", listingId
+                ) == 1
+                if (!claimed) return@transaction
+
+                val withdrawn = when (listing.currency) {
+                    Currency.MONEY -> plugin.economyManager.withdraw(player.uniqueId, listing.price)
+                    Currency.CREDITS -> plugin.creditsManager.withdraw(player.uniqueId, listing.price)
+                }
+                if (!withdrawn) throw PurchaseRollback("buyer could not be charged")
+
+                val deposited = when (listing.currency) {
+                    Currency.MONEY -> plugin.economyManager.deposit(listing.sellerUuid, sellerPayout)
+                    Currency.CREDITS -> { plugin.creditsManager.deposit(listing.sellerUuid, sellerPayout); true }
+                }
+                if (!deposited) throw PurchaseRollback("seller could not be paid")
+            }
+        } catch (e: Exception) {
+            if (e !is PurchaseRollback) {
+                plugin.logger.severe("[Auction] Purchase of listing #$listingId by ${player.name} failed and was rolled back: ${e.message}")
+            }
+            plugin.commsManager.send(player, Component.text("Transaction failed.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
+            return
+        }
+
+        if (!claimed) {
             plugin.antiDupeManager.record(
                 player,
                 "Duplicate Auction Purchase Attempt",
@@ -454,32 +512,13 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        // Listing is now claimed by this buyer — safe to proceed
-        val withdrawn = when (listing.currency) {
-            Currency.MONEY -> plugin.economyManager.withdraw(player.uniqueId, listing.price)
-            Currency.CREDITS -> plugin.creditsManager.withdraw(player.uniqueId, listing.price)
+        // The sale is committed. Deliver outside the transaction (live inventory changes
+        // can't roll back), routing to /overflow (then the expired-items queue) if full.
+        try {
+            deliverOrHold(player.uniqueId, listing.item)
+        } catch (e: Exception) {
+            logUnheldItem("listing #$listingId bought by ${player.name}", player.uniqueId, listing.item, e)
         }
-        if (!withdrawn) {
-            // Withdraw failed — re-insert the listing to undo the delete
-            plugin.databaseManager.execute(
-                "INSERT INTO auction_listings (id, seller_uuid, seller_name, item, price, currency, listed_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                listing.id, listing.sellerUuid.toString(), listing.sellerName,
-                serializeItem(listing.item), listing.price, listing.currency.name, listing.listedAt, listing.expiresAt
-            )
-            plugin.commsManager.send(player, Component.text("Transaction failed.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
-            return
-        }
-
-        // Calculate tax and pay seller
-        val tax = listing.price * (taxPercent / 100.0)
-        val sellerPayout = listing.price - tax
-        when (listing.currency) {
-            Currency.MONEY -> plugin.economyManager.deposit(listing.sellerUuid, sellerPayout)
-            Currency.CREDITS -> plugin.creditsManager.deposit(listing.sellerUuid, sellerPayout)
-        }
-
-        // Give item to buyer, routing to /overflow (then the expired-items queue) if full
-        deliverOrHold(player.uniqueId, listing.item)
 
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.5f, 1.5f)
         plugin.commsManager.send(

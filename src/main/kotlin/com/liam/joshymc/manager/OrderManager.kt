@@ -401,12 +401,53 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         val now = System.currentTimeMillis()
         for (item in items) {
             if (item.amount <= 0) continue
-            plugin.databaseManager.execute(
-                "INSERT INTO order_pending_deliveries (owner_uuid, item, created_at) VALUES (?, ?, ?)",
-                uuid.toString(), serializeItem(item), now
-            )
+            try {
+                plugin.databaseManager.execute(
+                    "INSERT INTO order_pending_deliveries (owner_uuid, item, created_at) VALUES (?, ?, ?)",
+                    uuid.toString(), serializeItem(item), now
+                )
+            } catch (e: Exception) {
+                logUndeliveredItems("pending-deliveries fallback", uuid, listOf(item), e)
+            }
         }
         markNotifyPending(uuid)
+    }
+
+    /**
+     * Hands items taken for a fulfillment that didn't go through back to [seller], as the
+     * exact removed stacks (metadata intact): inventory first, then their Orders overflow /
+     * pending deliveries, never the ground.
+     */
+    private fun returnToSeller(seller: Player, items: List<ItemStack>) {
+        try {
+            val leftover = items.mapNotNull { plugin.depositItemSafely(seller, it) }
+            if (leftover.isNotEmpty()) {
+                depositToOverflowOrQueue(seller.uniqueId, leftover)
+                plugin.commsManager.send(
+                    seller,
+                    Component.text("Some returned items didn't fit and were sent to ", NamedTextColor.YELLOW)
+                        .append(Component.text("/overflow", NamedTextColor.GOLD))
+                        .append(Component.text(".", NamedTextColor.YELLOW))
+                )
+            }
+        } catch (e: Exception) {
+            logUndeliveredItems("returning unsold items to ${seller.name}", seller.uniqueId, items, e)
+        }
+    }
+
+    /**
+     * Last resort when items could not be put anywhere persistent: log each serialized stack
+     * (base64 of [ItemStack.serializeAsBytes], all metadata intact) so staff can restore it
+     * exactly. Never auto-requeued, since part of the delivery may already have happened.
+     */
+    private fun logUndeliveredItems(context: String, owner: UUID, items: List<ItemStack>, error: Exception) {
+        for (item in items) {
+            val serialized = try { serializeItem(item) } catch (_: Exception) { "<unserializable ${item.type} x${item.amount}>" }
+            plugin.logger.severe(
+                "[Orders] RECOVERY NEEDED ($context): could not deliver or hold ${item.amount}x ${item.type} for $owner: " +
+                    "${error.message}. Check their storage before restoring. Item data: $serialized"
+            )
+        }
     }
 
     private fun markNotifyPending(uuid: UUID) {
@@ -994,13 +1035,42 @@ class OrderManager(private val plugin: Joshymc) : Listener {
 
         val payout = (sellQty.toDouble() * order.pricePerItem).coerceAtMost(order.remainingEscrow)
 
-        // Anti-dupe: atomically claim the fulfillment slice first. If someone else beat us to it
-        // (or the order changed), rowsUpdated will be 0 and nothing has moved yet.
-        val rowsUpdated = plugin.databaseManager.executeUpdate(
-            "UPDATE buy_orders SET remaining_qty = remaining_qty - ?, remaining_escrow = remaining_escrow - ? WHERE id = ? AND remaining_qty >= ? AND expires_at > ?",
-            sellQty, payout, orderId, sellQty, now
-        )
-        if (rowsUpdated == 0) {
+        // Take the items first and check exactly sellQty came out. Nothing in the DB has
+        // changed yet, so a mismatch only has to hand the removed stacks back.
+        val removedItems = removeMatching(seller.inventory, order.item, sellQty)
+        val removedQty = removedItems.sumOf { it.amount }
+        if (removedQty != sellQty) {
+            plugin.logger.warning("[Orders] ${seller.name} selling into order #$orderId: removed $removedQty items but expected $sellQty; aborted and returned them.")
+            returnToSeller(seller, removedItems)
+            plugin.commsManager.send(seller, Component.text("Your items changed while selling, so nothing was sold. Please try again.", NamedTextColor.RED))
+            return
+        }
+
+        // Claim the fulfillment slice, reduce the escrow, pay the seller and close a completed
+        // order as one transaction. The claim is conditional (anti-dupe: a stale or repeated
+        // fulfill updates 0 rows); a failed payout rolls the claim back too.
+        var claimed = false
+        try {
+            plugin.databaseManager.transaction {
+                claimed = plugin.databaseManager.executeUpdate(
+                    "UPDATE buy_orders SET remaining_qty = remaining_qty - ?, remaining_escrow = remaining_escrow - ? WHERE id = ? AND remaining_qty >= ? AND expires_at > ?",
+                    sellQty, payout, orderId, sellQty, now
+                ) == 1
+                if (!claimed) return@transaction
+                if (!plugin.economyManager.deposit(seller.uniqueId, payout)) {
+                    throw IllegalStateException("payout of $payout was rejected")
+                }
+                plugin.databaseManager.execute("DELETE FROM buy_orders WHERE id = ? AND remaining_qty <= 0", orderId)
+            }
+        } catch (e: Exception) {
+            plugin.logger.severe("[Orders] ${seller.name} selling ${sellQty}x into order #$orderId failed and was rolled back: ${e.message}")
+            returnToSeller(seller, removedItems)
+            plugin.commsManager.send(seller, Component.text("Transaction failed. Your items were returned.", NamedTextColor.RED))
+            return
+        }
+
+        if (!claimed) {
+            returnToSeller(seller, removedItems)
             plugin.antiDupeManager.record(
                 seller,
                 "Duplicate Order Fulfillment Attempt",
@@ -1015,15 +1085,16 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        val removedItems = removeMatching(seller.inventory, order.item, sellQty)
-        plugin.economyManager.deposit(seller.uniqueId, payout)
-        deliverItems(order.buyerUuid, removedItems)
-
-        val remainingAfter = order.remainingQty - sellQty
-        if (remainingAfter <= 0) {
-            plugin.databaseManager.execute("DELETE FROM buy_orders WHERE id = ? AND remaining_qty <= 0", orderId)
+        // Committed. Deliver the exact removed stacks after the transaction, since live
+        // inventory changes can't roll back; the delivery path falls back to /overflow and
+        // the persistent pending-deliveries queue (offline buyers go straight there).
+        try {
+            deliverItems(order.buyerUuid, removedItems)
+        } catch (e: Exception) {
+            logUndeliveredItems("order #$orderId delivery", order.buyerUuid, removedItems, e)
         }
 
+        val remainingAfter = order.remainingQty - sellQty
         plugin.logger.info("[Orders] ${seller.name} sold ${sellQty}x ${order.item.type} into order #$orderId (buyer ${order.buyerName}) for ${plugin.economyManager.format(payout)}.")
 
         seller.playSound(seller.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.2f)
