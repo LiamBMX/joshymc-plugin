@@ -188,9 +188,9 @@ commands:
     usage: /stock promote <ticker>
   eco:
     description: Manage player economy
-    usage: /eco <give|take|set|reset> <player> <amount>
+    usage: /eco <give|take|remove|set|reset> <player> <amount>
   balance:
-    description: Check your balance
+    description: Check your balance (operators can /money remove|set <player> <amount>)
     usage: /balance [player]
     aliases: [bal, money]
   pay:
@@ -268,7 +268,7 @@ commands:
     usage: /tokens <give|sell|buy> [args...]
   credits:
     description: Check credits balance, pay other players, or manage player credits (admin)
-    usage: /credits <balance|bal|baltop|pay> [args...]
+    usage: /credits <balance|bal|baltop|pay|give|take|remove|set|reset> [args...]
     aliases: [credit]
   creditspay:
     description: Send Credits to another player

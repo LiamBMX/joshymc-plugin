@@ -16,6 +16,8 @@ import java.util.UUID
 
 class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
+    private val adminBalance = AdminBalanceCommand(plugin)
+
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isEmpty() || args[0].equals("balance", ignoreCase = true) || args[0].equals("bal", ignoreCase = true)) {
             return handleBalance(sender, args)
@@ -29,30 +31,27 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return handleBaltop(sender)
         }
 
-        if (!sender.hasPermission("joshymc.credits")) {
-            Msg.noPermission(sender)
-            return true
+        val sub = args[0].lowercase()
+        val rest = args.drop(1)
+
+        // Removing or setting someone's Credits is operator-only and works offline (issue #1162).
+        when (sub) {
+            "take", "remove" -> {
+                adminBalance.handle(sender, AdminBalanceCommand.Currency.CREDITS, AdminBalanceCommand.Operation.REMOVE, "/credits $sub <player> <amount>", rest)
+                return true
+            }
+            "set" -> {
+                adminBalance.handle(sender, AdminBalanceCommand.Currency.CREDITS, AdminBalanceCommand.Operation.SET, "/credits set <player> <amount>", rest)
+                return true
+            }
+            "reset" -> {
+                adminBalance.handleReset(sender, AdminBalanceCommand.Currency.CREDITS, "/credits reset <player>", rest)
+                return true
+            }
         }
 
-        val sub = args[0].lowercase()
-
-        if (sub == "reset") {
-            if (args.size < 2) {
-                Msg.usage(sender, "/credits reset <player>")
-                return true
-            }
-            val target = Bukkit.getPlayer(args[1])
-            if (target == null) {
-                Msg.playerNotFound(sender)
-                return true
-            }
-            plugin.creditsManager.setBalance(target.uniqueId, 0.0)
-            sender.sendMessage(
-                Component.text("Reset ", NamedTextColor.GREEN)
-                    .append(Component.text(target.name, NamedTextColor.WHITE))
-                    .append(Component.text("'s credits to ", NamedTextColor.GREEN))
-                    .append(Component.text(plugin.creditsManager.format(0.0), NamedTextColor.AQUA))
-            )
+        if (!sender.hasPermission("joshymc.credits")) {
+            Msg.noPermission(sender)
             return true
         }
 
@@ -83,24 +82,8 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                         .append(Component.text(target.name, NamedTextColor.WHITE))
                 )
             }
-            "take" -> {
-                val success = plugin.creditsManager.withdraw(target.uniqueId, amount)
-                if (!success) {
-                    sender.sendMessage(
-                        Component.text(target.name, NamedTextColor.WHITE)
-                            .append(Component.text(" does not have enough credits.", NamedTextColor.RED))
-                    )
-                } else {
-                    sender.sendMessage(
-                        Component.text("Took ", NamedTextColor.GREEN)
-                            .append(Component.text(plugin.creditsManager.format(amount), NamedTextColor.AQUA))
-                            .append(Component.text(" credits from ", NamedTextColor.GREEN))
-                            .append(Component.text(target.name, NamedTextColor.WHITE))
-                    )
-                }
-            }
             else -> {
-                Msg.usage(sender, "/credits <balance|bal|pay|give|take|reset> [player] [amount]")
+                Msg.usage(sender, "/credits <balance|bal|pay|give|take|set|reset> [player] [amount]")
             }
         }
 
@@ -263,9 +246,12 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 add("balance"); add("bal")
                 if (sender.hasPermission("joshymc.credits.baltop")) add("baltop")
                 if (sender.hasPermission("joshymc.credits.pay")) add("pay")
-                if (sender.hasPermission("joshymc.credits")) addAll(listOf("give", "take", "reset"))
+                if (sender.hasPermission("joshymc.credits")) add("give")
+                if (adminBalance.canUse(sender)) addAll(listOf("take", "remove", "set", "reset"))
             }.filter { it.startsWith(args[0].lowercase()) }
             2 -> {
+                if (sub in ADMIN_SUBS && !adminBalance.canUse(sender)) return emptyList()
+                if (sub == "give" && !sender.hasPermission("joshymc.credits")) return emptyList()
                 if (sub == "pay") {
                     if (!sender.hasPermission("joshymc.credits.pay")) return emptyList()
                     listOf("1", "5", "10", "100").filter { it.startsWith(args[1]) }
@@ -279,11 +265,16 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                     Bukkit.getOnlinePlayers().map { it.name }
                         .filter { it != sender.name }
                         .filter { it.lowercase().startsWith(args[2].lowercase()) }
-                } else if (sub != "reset" && sub != "balance" && sub != "bal") {
+                } else if ((sub == "give" && sender.hasPermission("joshymc.credits")) ||
+                    (sub in ADMIN_SUBS && sub != "reset" && adminBalance.canUse(sender))) {
                     listOf("1", "5", "10", "100").filter { it.startsWith(args[2]) }
                 } else emptyList()
             }
             else -> emptyList()
         }
+    }
+
+    companion object {
+        private val ADMIN_SUBS = setOf("take", "remove", "set", "reset")
     }
 }

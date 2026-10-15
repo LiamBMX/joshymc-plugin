@@ -91,6 +91,10 @@ class PlayerResolver(private val plugin: Joshymc) : Listener {
         plugin.logger.info("[PlayerResolver] Backfilled $count player name(s) from existing player data.")
     }
 
+    /** The name [uuid] last joined with, or null if they have never joined since this table existed. */
+    fun lastKnownName(uuid: UUID): String? =
+        plugin.databaseManager.queryFirst("SELECT name FROM player_names WHERE uuid = ?", uuid.toString()) { rs -> rs.getString("name") }
+
     private fun remember(player: Player) {
         byName[key(player.name)] = player.uniqueId
         try {

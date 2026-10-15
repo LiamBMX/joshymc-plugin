@@ -15,7 +15,18 @@ import java.util.UUID
 
 class BalanceCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
+    private val adminBalance = AdminBalanceCommand(plugin)
+
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        // /money remove|set <player> <amount>: operator-only, works offline (issue #1162).
+        // A lone "/bal set" still looks up a player named "set".
+        val sub = args.getOrNull(0)?.lowercase()
+        if (args.size >= 2 && (sub == "remove" || sub == "set")) {
+            val operation = if (sub == "remove") AdminBalanceCommand.Operation.REMOVE else AdminBalanceCommand.Operation.SET
+            adminBalance.handle(sender, AdminBalanceCommand.Currency.COINS, operation, "/$label $sub <player> <amount>", args.drop(1))
+            return true
+        }
+
         if (sender !is Player) {
             Msg.playersOnly(sender)
             return true
@@ -62,9 +73,17 @@ class BalanceCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
+        val canAdmin = adminBalance.canUse(sender)
         if (args.size == 1) {
-            return Bukkit.getOnlinePlayers().map { it.name }.filter { it.lowercase().startsWith(args[0].lowercase()) }
+            val subs = if (canAdmin) listOf("remove", "set") else emptyList()
+            return (subs + Bukkit.getOnlinePlayers().map { it.name }).filter { it.lowercase().startsWith(args[0].lowercase()) }
         }
-        return emptyList()
+        val sub = args[0].lowercase()
+        if (!canAdmin || (sub != "remove" && sub != "set")) return emptyList()
+        return when (args.size) {
+            2 -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.lowercase().startsWith(args[1].lowercase()) }
+            3 -> listOf("100", "1000", "10000", "100000").filter { it.startsWith(args[2]) }
+            else -> emptyList()
+        }
     }
 }
