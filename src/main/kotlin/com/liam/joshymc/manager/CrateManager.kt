@@ -664,6 +664,24 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    /**
+     * True if every stack in [items] fits in the player's storage once the one key in
+     * their main hand is consumed. Simulates on a copy with the same addItem rules the
+     * real delivery uses, so partial stacks, max stack sizes and metadata differences
+     * all count — not just empty slots.
+     */
+    private fun select3RewardsFit(player: Player, items: List<ItemStack>): Boolean {
+        val contents = player.inventory.storageContents.map { it?.clone() }.toTypedArray()
+        val heldSlot = player.inventory.heldItemSlot
+        val held = contents.getOrNull(heldSlot)
+        if (held != null) {
+            if (held.amount > 1) held.amount -= 1 else contents[heldSlot] = null
+        }
+        val temp = Bukkit.createInventory(null, 36)
+        temp.contents = contents
+        return temp.addItem(*items.map { it.clone() }.toTypedArray()).isEmpty()
+    }
+
     fun openCrate(player: Player, crateType: String, block: Block) {
         val crate = crates[crateType] ?: return
 
@@ -1053,12 +1071,15 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 )
                 return@setItem
             }
-            val hasFreeSlot = p.inventory.firstEmpty() != -1 || keyInHand.amount == 1
-            if (!hasFreeSlot) {
+            // Build the exact stacks that will be granted, then make sure all 3 fit before
+            // the key is touched. One free slot is not enough for 3 rewards.
+            val rewardItems = rewardsToGrant.map { buildRewardItem(it) }
+            if (!select3RewardsFit(p, rewardItems)) {
+                select3Sessions.remove(p.uniqueId)
                 p.closeInventory()
                 plugin.commsManager.send(
                     p,
-                    Component.text("Your inventory is full — clear some space and try again.", NamedTextColor.RED)
+                    Component.text("You need more inventory space to claim all 3 rewards — no key was used.", NamedTextColor.RED)
                 )
                 p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
                 return@setItem
@@ -1068,8 +1089,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             select3Sessions.remove(p.uniqueId)
             p.closeInventory()
 
-            for (reward in rewardsToGrant) {
-                val rewardItem = buildRewardItem(reward)
+            for (rewardItem in rewardItems) {
                 plugin.giveItemSafely(p, rewardItem)
             }
             spawnWinParticles(p, crate)
