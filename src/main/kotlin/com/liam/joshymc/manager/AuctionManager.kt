@@ -269,7 +269,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
             item
         }
 
-        if (plugin.overflowManager.depositItem(uuid, OverflowManager.OverflowType.AUCTION_HOUSE, remaining)) {
+        val unstored = plugin.overflowManager.depositItem(uuid, OverflowManager.OverflowType.AUCTION_HOUSE, remaining)
+        if (unstored == null) {
             if (player != null) {
                 plugin.commsManager.send(
                     player,
@@ -284,7 +285,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
 
         plugin.databaseManager.execute(
             "INSERT INTO auction_expired (owner_uuid, item, expired_at) VALUES (?, ?, ?)",
-            uuid.toString(), serializeItem(remaining), System.currentTimeMillis()
+            uuid.toString(), serializeItem(unstored), System.currentTimeMillis()
         )
         if (player != null) {
             plugin.commsManager.send(

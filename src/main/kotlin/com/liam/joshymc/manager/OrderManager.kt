@@ -389,9 +389,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         val stillPending = mutableListOf<ItemStack>()
         for (item in items) {
             if (item.amount <= 0) continue
-            if (!plugin.overflowManager.depositItem(uuid, OverflowManager.OverflowType.ORDERS, item)) {
-                stillPending.add(item)
-            }
+            plugin.overflowManager.depositItem(uuid, OverflowManager.OverflowType.ORDERS, item)
+                ?.let { stillPending.add(it) }
         }
         if (stillPending.isNotEmpty()) {
             storePendingDeliveries(uuid, stillPending)

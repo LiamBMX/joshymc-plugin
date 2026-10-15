@@ -55,16 +55,58 @@ class EconomyManager(private val plugin: Joshymc) {
         )
     }
 
-    fun deposit(uuid: UUID, amount: Double) {
-        val current = getBalance(uuid)
-        setBalance(uuid, current + amount)
+    /**
+     * Shared amount rule for [deposit] and [withdraw]: finite and not negative. A negative
+     * deposit must never act as a withdrawal, and NaN/Infinity must never reach a balance
+     * check (NaN compares false against everything).
+     */
+    private fun isValidAmount(amount: Double): Boolean = amount.isFinite() && amount >= 0.0
+
+    /**
+     * Adds [amount] to the balance in one atomic upsert (creates the row for a new player).
+     * Returns false without touching the balance if [amount] is invalid; zero is a no-op.
+     * A database error is logged and rethrown so an enclosing transaction rolls back.
+     */
+    fun deposit(uuid: UUID, amount: Double): Boolean {
+        if (!isValidAmount(amount)) {
+            plugin.logger.warning("[Economy] Rejected deposit of $amount to $uuid (invalid amount).")
+            return false
+        }
+        if (amount == 0.0) return true
+        try {
+            plugin.databaseManager.execute(
+                "INSERT INTO economy (uuid, balance) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET balance = balance + excluded.balance",
+                uuid.toString(), amount
+            )
+        } catch (e: Exception) {
+            plugin.logger.severe("[Economy] Deposit of $amount to $uuid failed: ${e.message}")
+            throw e
+        }
+        return true
     }
 
+    /**
+     * Subtracts [amount] in one conditional UPDATE that only matches when the balance covers
+     * it, so there is no separate read to race against. Returns false (balance unchanged) for
+     * insufficient funds, a player with no balance row, or an invalid amount; zero succeeds.
+     * A database error is logged and rethrown so an enclosing transaction rolls back.
+     */
     fun withdraw(uuid: UUID, amount: Double): Boolean {
-        val current = getBalance(uuid)
-        if (current < amount) return false
-        setBalance(uuid, current - amount)
-        return true
+        if (!isValidAmount(amount)) {
+            plugin.logger.warning("[Economy] Rejected withdrawal of $amount from $uuid (invalid amount).")
+            return false
+        }
+        if (amount == 0.0) return true
+        val updated = try {
+            plugin.databaseManager.executeUpdate(
+                "UPDATE economy SET balance = balance - ? WHERE uuid = ? AND balance >= ?",
+                amount, uuid.toString(), amount
+            )
+        } catch (e: Exception) {
+            plugin.logger.severe("[Economy] Withdrawal of $amount from $uuid failed: ${e.message}")
+            throw e
+        }
+        return updated == 1
     }
 
     fun has(uuid: UUID, amount: Double): Boolean {
