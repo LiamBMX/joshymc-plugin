@@ -105,35 +105,51 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
     // ---- Deposit (used by Orders/AH delivery fallback) ----
 
     /**
-     * Persists [item] into the player's Overflow storage of [type], using the SAME stack that
-     * would otherwise have been delivered (no copies made). Returns false without storing
-     * anything if that storage has no free slot left.
+     * Stores a copy of [item] in the player's Overflow storage of [type] and returns what did
+     * NOT fit: null when everything was stored, otherwise the exact leftover stack (all of it
+     * when nothing fit), with the item's full metadata. [item] itself is never modified, so
+     * callers must queue only the returned leftover.
      */
-    fun depositItem(uuid: UUID, type: OverflowType, item: ItemStack): Boolean {
-        if (item.amount <= 0) return true
+    fun depositItem(uuid: UUID, type: OverflowType, item: ItemStack): ItemStack? {
+        if (item.amount <= 0) return null
+        val copy = item.clone()
 
         // If the player currently has this exact storage open, deposit straight into the live
         // inventory instead of the DB, so we don't clobber what they're looking at right now.
         val open = openOverflow[uuid]
         if (open != null && open.first == type) {
-            val fitted = open.second.addItem(item).isEmpty()
-            // Save right away: a committed delivery must never live only in memory.
-            if (fitted) saveOverflow(uuid, type, open.second)
-            return fitted
+            val leftover = open.second.addItem(copy.clone()).values.firstOrNull()?.clone()
+            if (leftover != null && leftover.amount >= copy.amount) return leftover
+            // Save right away: a committed delivery must never live only in memory. If that
+            // write fails, the fitted part is still in the live inventory and the next flush
+            // or close persists it, so only the leftover goes back to the caller.
+            try {
+                saveOverflow(uuid, type, open.second)
+            } catch (e: Exception) {
+                dirty.add(uuid)
+                plugin.logger.severe("[Overflow] Saving $type storage of $uuid failed: ${e.message}")
+            }
+            return leftover
         }
 
-        val usedSlots = plugin.databaseManager.query(
-            "SELECT slot FROM overflow_storage WHERE uuid = ? AND type = ?",
-            uuid.toString(), type.name
-        ) { rs -> rs.getInt("slot") }.toSet()
+        return try {
+            val usedSlots = plugin.databaseManager.query(
+                "SELECT slot FROM overflow_storage WHERE uuid = ? AND type = ?",
+                uuid.toString(), type.name
+            ) { rs -> rs.getInt("slot") }.toSet()
 
-        val freeSlot = (0 until type.size).firstOrNull { it !in usedSlots } ?: return false
+            val freeSlot = (0 until type.size).firstOrNull { it !in usedSlots } ?: return copy
 
-        plugin.databaseManager.execute(
-            "INSERT INTO overflow_storage (uuid, type, slot, item) VALUES (?, ?, ?, ?)",
-            uuid.toString(), type.name, freeSlot, serializeItem(item)
-        )
-        return true
+            plugin.databaseManager.execute(
+                "INSERT INTO overflow_storage (uuid, type, slot, item) VALUES (?, ?, ?, ?)",
+                uuid.toString(), type.name, freeSlot, serializeItem(copy)
+            )
+            null
+        } catch (e: Exception) {
+            // Nothing was stored: hand the whole stack back so the caller can still queue it.
+            plugin.logger.severe("[Overflow] Depositing into $type storage of $uuid failed: ${e.message}")
+            copy
+        }
     }
 
     fun getItemCount(uuid: UUID, type: OverflowType): Int {
