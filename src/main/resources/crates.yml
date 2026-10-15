@@ -10,6 +10,14 @@
 # key-item-model: optional resource-pack model key applied to the key item (e.g. "joshymc:cabin_key").
 #   Purely cosmetic — the key is still identified by its internal crate ID. Omit to keep the
 #   default vanilla appearance for key-material. Falls back safely if the model key is invalid.
+# weight: whole number, 1 or more. Values below 1 are treated as 1 (with a console warning).
+#
+## Renamed crates:
+# Keys remember the crate ID they were made for. If you rename or replace a crate ID, map the old
+# ID to the new one in a top-level "crate-aliases" section so existing keys (and crate blocks
+# registered under the old ID) keep working. Nothing is mapped automatically.
+# crate-aliases:
+#   old_crate_id: new_crate_id
 
 crates:
   common:

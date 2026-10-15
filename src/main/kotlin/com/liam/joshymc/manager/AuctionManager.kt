@@ -330,8 +330,28 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
 
     // ---- Row mapper ----
 
-    private fun mapListing(rs: java.sql.ResultSet): AuctionListing {
-        return AuctionListing(
+    /** listing table + id pairs whose unreadable-row warning was already logged, so the 60s expiry pass doesn't spam it. */
+    private val reportedUnreadableRows: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /**
+     * Runs a row mapper, turning a row that can't be read (corrupt item data, bad UUID) into
+     * null with a logged warning naming its id. Callers skip nulls, so one bad row never fails
+     * a whole page, lookup or expiry pass. The row itself stays in the table untouched.
+     */
+    private inline fun <T> readRow(table: String, rs: java.sql.ResultSet, map: () -> T): T? {
+        return try {
+            map()
+        } catch (e: Exception) {
+            val id = try { rs.getInt("id").toString() } catch (_: Exception) { "?" }
+            if (reportedUnreadableRows.add("$table#$id")) {
+                plugin.logger.warning("[Auction] Skipping unreadable $table row #$id (left in the database for staff): ${e.message}")
+            }
+            null
+        }
+    }
+
+    private fun mapListing(rs: java.sql.ResultSet): AuctionListing? = readRow("auction_listings", rs) {
+        AuctionListing(
             id = rs.getInt("id"),
             sellerUuid = UUID.fromString(rs.getString("seller_uuid")),
             sellerName = rs.getString("seller_name"),
@@ -350,8 +370,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    private fun mapExpired(rs: java.sql.ResultSet): ExpiredItem {
-        return ExpiredItem(
+    private fun mapExpired(rs: java.sql.ResultSet): ExpiredItem? = readRow("auction_expired", rs) {
+        ExpiredItem(
             id = rs.getInt("id"),
             ownerUuid = UUID.fromString(rs.getString("owner_uuid")),
             item = deserializeItem(rs.getString("item")),
@@ -359,9 +379,9 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         )
     }
 
-    private fun mapBidListing(rs: java.sql.ResultSet): BidListing {
+    private fun mapBidListing(rs: java.sql.ResultSet): BidListing? = readRow("auction_bid_listings", rs) {
         val bidderUuidStr = rs.getString("current_bidder_uuid")
-        return BidListing(
+        BidListing(
             id = rs.getInt("id"),
             sellerUuid = UUID.fromString(rs.getString("seller_uuid")),
             sellerName = rs.getString("seller_name"),
@@ -387,6 +407,20 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         return baseMaxListings + bonus
     }
 
+    /**
+     * Every active listing [uuid] holds, sell and bid together: the one count the
+     * [getAuctionListingLimit] cap applies to, whichever kind is being listed. Counted in SQL
+     * so a row with unreadable item data still takes up its slot.
+     */
+    fun countActiveListings(uuid: UUID): Int {
+        val now = System.currentTimeMillis()
+        return plugin.databaseManager.queryFirst(
+            "SELECT (SELECT COUNT(*) FROM auction_listings WHERE seller_uuid = ? AND expires_at > ?) + " +
+                "(SELECT COUNT(*) FROM auction_bid_listings WHERE seller_uuid = ? AND expires_at > ?) AS cnt",
+            uuid.toString(), now, uuid.toString(), now
+        ) { rs -> rs.getInt("cnt") } ?: 0
+    }
+
     // ---- Core methods ----
 
     fun listItem(player: Player, price: Double, currency: Currency = Currency.MONEY) {
@@ -407,8 +441,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         }
 
         val limit = getAuctionListingLimit(player)
-        val currentListings = getPlayerListings(player.uniqueId)
-        if (currentListings.size >= limit) {
+        if (countActiveListings(player.uniqueId) >= limit) {
             plugin.commsManager.send(player, Component.text("You have reached the maximum of $limit listings.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
@@ -576,21 +609,21 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         return plugin.databaseManager.query(
             "SELECT * FROM auction_listings WHERE expires_at > ? ORDER BY listed_at DESC LIMIT ? OFFSET ?",
             System.currentTimeMillis(), pageSize, offset
-        ) { rs -> mapListing(rs) }
+        ) { rs -> mapListing(rs) }.filterNotNull()
     }
 
     fun getPlayerListings(uuid: UUID): List<AuctionListing> {
         return plugin.databaseManager.query(
             "SELECT * FROM auction_listings WHERE seller_uuid = ? AND expires_at > ? ORDER BY listed_at DESC",
             uuid.toString(), System.currentTimeMillis()
-        ) { rs -> mapListing(rs) }
+        ) { rs -> mapListing(rs) }.filterNotNull()
     }
 
     fun getExpiredItems(uuid: UUID): List<ExpiredItem> {
         return plugin.databaseManager.query(
             "SELECT * FROM auction_expired WHERE owner_uuid = ? ORDER BY expired_at DESC",
             uuid.toString()
-        ) { rs -> mapExpired(rs) }
+        ) { rs -> mapExpired(rs) }.filterNotNull()
     }
 
     fun claimExpired(player: Player, expiredId: Int) {
@@ -638,8 +671,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         }
 
         val limit = getAuctionListingLimit(player)
-        val totalListings = getPlayerListings(player.uniqueId).size + getPlayerBidListings(player.uniqueId).size
-        if (totalListings >= limit) {
+        if (countActiveListings(player.uniqueId) >= limit) {
             plugin.commsManager.send(player, Component.text("You have reached the maximum of $limit listings.", NamedTextColor.RED), CommunicationsManager.Category.DEFAULT)
             return
         }
@@ -797,14 +829,14 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         return plugin.databaseManager.query(
             "SELECT * FROM auction_bid_listings WHERE expires_at > ? ORDER BY listed_at DESC LIMIT ? OFFSET ?",
             System.currentTimeMillis(), pageSize, offset
-        ) { rs -> mapBidListing(rs) }
+        ) { rs -> mapBidListing(rs) }.filterNotNull()
     }
 
     fun getPlayerBidListings(uuid: UUID): List<BidListing> {
         return plugin.databaseManager.query(
             "SELECT * FROM auction_bid_listings WHERE seller_uuid = ? AND expires_at > ? ORDER BY listed_at DESC",
             uuid.toString(), System.currentTimeMillis()
-        ) { rs -> mapBidListing(rs) }
+        ) { rs -> mapBidListing(rs) }.filterNotNull()
     }
 
     fun getTotalBidListings(): Int {
@@ -819,7 +851,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         val expired = plugin.databaseManager.query(
             "SELECT * FROM auction_bid_listings WHERE expires_at <= ?",
             now
-        ) { rs -> mapBidListing(rs) }
+        ) { rs -> mapBidListing(rs) }.filterNotNull()
 
         // Each listing settles on its own: a failure on one can never roll back (and so
         // resurrect) a listing that was already settled and delivered earlier in the pass.
@@ -929,7 +961,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
         val expired = plugin.databaseManager.query(
             "SELECT * FROM auction_listings WHERE expires_at <= ?",
             now
-        ) { rs -> mapListing(rs) }
+        ) { rs -> mapListing(rs) }.filterNotNull()
 
         if (expired.isEmpty()) return
 
@@ -1029,7 +1061,7 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
 
         // Your Listings (slot 49)
         val yourListingLimit = getAuctionListingLimit(player)
-        val yourListingCount = getPlayerListings(player.uniqueId).size + getPlayerBidListings(player.uniqueId).size
+        val yourListingCount = countActiveListings(player.uniqueId)
         val yourListings = ItemStack(Material.BOOK)
         yourListings.editMeta { meta ->
             meta.displayName(

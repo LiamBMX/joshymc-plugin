@@ -39,6 +39,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     companion object {
         private val CRATE_GUI_TITLE_PREFIX = "Crate: "
         private val PREVIEW_GUI_TITLE_PREFIX = "Preview: "
+        private const val ACTIVATION_DEBOUNCE_MS = 500L
     }
 
     /**
@@ -198,6 +199,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     private val configProblems = mutableMapOf<String, MutableList<String>>()
     /** crate id -> when its "refused to open" warning was last logged, so clicks don't flood the console. */
     private val lastRefusalLog = mutableMapOf<String, Long>()
+    /** Renamed crate id -> current crate id, from crates.yml `crate-aliases`. Old keys resolve through it. */
+    private val crateAliases = mutableMapOf<String, String>()
+    /**
+     * player -> when their last keyed crate open started. A second activation inside
+     * [ACTIVATION_DEBOUNCE_MS] (e.g. another plugin force-opening the crate block right after the
+     * click) is ignored so one interaction never spends two keys.
+     */
+    private val lastActivation = mutableMapOf<UUID, Long>()
     private var particleTask: BukkitTask? = null
     private var pendingRetryTask: BukkitTask? = null
     private lateinit var cratesFile: File
@@ -284,6 +293,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         crates.clear()
         configProblems.clear()
         lastRefusalLog.clear()
+        crateAliases.clear()
         val section = cratesConfig.getConfigurationSection("crates") ?: return
 
         for (id in section.getKeys(false)) {
@@ -336,8 +346,18 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                         if (itemBase64 == null) problems.add("reward '$rewardKey' has unknown material '$matStr'")
                         Material.STONE
                     }
+                    if (itemBase64 != null && deserializeItem(itemBase64) == null) {
+                        // Never hand out the plain base material in place of the stored item.
+                        problems.add("reward '$rewardKey' has an item-base64 snapshot that can't be decoded")
+                    }
                     val amount = rewardSection.getInt("amount", 1)
-                    val weight = rewardSection.getInt("weight", 1)
+                    val configuredWeight = rewardSection.getInt("weight", 1)
+                    // The editor only allows 1-1000; a hand-edited weight below 1 is clamped so
+                    // the weighted draw never sees a zero or negative total.
+                    val weight = if (configuredWeight < 1) {
+                        plugin.logger.warning("[Crates] Crate '$id' reward '$rewardKey' has invalid weight $configuredWeight; using 1 instead.")
+                        1
+                    } else configuredWeight
                     val rewardDisplayName = rewardSection.getString("display-name", mat.name.lowercase().replace("_", " ")) ?: mat.name
                     val enchantments = mutableMapOf<Enchantment, Int>()
 
@@ -365,7 +385,36 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 mode, animationType, idleParticle, winParticle, particleColor
             )
         }
+        loadAliases()
     }
+
+    /**
+     * Reads `crate-aliases` (old crate id -> current crate id) from crates.yml so keys minted
+     * before a crate was renamed keep opening it. Only explicit entries are used; nothing is
+     * guessed, and an alias never shadows a crate that still exists under that id.
+     */
+    private fun loadAliases() {
+        crateAliases.clear()
+        val section = cratesConfig.getConfigurationSection("crate-aliases") ?: return
+        for (oldId in section.getKeys(false)) {
+            val target = section.getString(oldId)?.trim()?.takeIf { it.isNotEmpty() }
+            when {
+                target == null ->
+                    plugin.logger.warning("[Crates] crate-aliases.$oldId has no target crate id; ignored.")
+                crates.containsKey(oldId) ->
+                    plugin.logger.warning("[Crates] crate-aliases.$oldId ignored: a crate named '$oldId' still exists.")
+                !crates.containsKey(target) ->
+                    plugin.logger.warning("[Crates] crate-aliases.$oldId points at unknown crate '$target'; ignored.")
+                else -> crateAliases[oldId] = target
+            }
+        }
+        if (crateAliases.isNotEmpty()) {
+            plugin.logger.info("[Crates] Crate id aliases: ${crateAliases.entries.joinToString { "${it.key} -> ${it.value}" }}")
+        }
+    }
+
+    /** The current crate id for [id]: itself if it's a crate, its configured alias target otherwise. */
+    fun resolveCrateId(id: String): String = if (crates.containsKey(id)) id else crateAliases[id] ?: id
 
     private fun loadLocations() {
         crateLocations.clear()
@@ -579,7 +628,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val exact = crateLocations.firstOrNull {
             it.world == block.world.name && it.x == block.x && it.y == block.y && it.z == block.z
         }?.crateType
-        if (exact != null) return exact
+        if (exact != null) return resolveCrateId(exact)
 
         // Fuzzy fallback: the 6 face-neighbours. Catches double chests where
         // only one half was registered, and 1-block off-by-one mistakes from
@@ -598,7 +647,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     it.y == block.y + dy &&
                     it.z == block.z + dz
             }
-            if (match != null) return match.crateType
+            if (match != null) return resolveCrateId(match.crateType)
         }
         return null
     }
@@ -669,13 +718,16 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         if (item == null || item.type == Material.AIR) return false
         val meta = item.itemMeta ?: return false
         val storedType = meta.persistentDataContainer.get(crateKeyKey, PersistentDataType.STRING) ?: return false
-        return crateType == null || storedType == crateType
+        return crateType == null || resolveCrateId(storedType) == crateType
     }
 
-    /** Returns the crate type tagged on the key item, or null if it's not a key. */
+    /**
+     * Returns the crate type the key item opens, or null if it's not a key. A key tagged with a
+     * renamed crate id resolves through `crate-aliases`; the item's own tag is left as it is.
+     */
     fun getKeyType(item: ItemStack): String? {
         val meta = item.itemMeta ?: return null
-        return meta.persistentDataContainer.get(crateKeyKey, PersistentDataType.STRING)
+        return meta.persistentDataContainer.get(crateKeyKey, PersistentDataType.STRING)?.let { resolveCrateId(it) }
     }
 
     private fun consumeOneKey(player: Player) {
@@ -759,6 +811,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         if (crate.rewards.isEmpty()) return "no rewards configured"
         crate.rewards.withIndex().firstOrNull { it.value.amount < 1 }?.let {
             return "reward #${it.index} (${it.value.displayName}) has amount ${it.value.amount}"
+        }
+        crate.rewards.withIndex().firstOrNull { it.value.itemBase64 != null && deserializeItem(it.value.itemBase64) == null }?.let {
+            return "reward #${it.index} (${it.value.displayName}) has an item-base64 snapshot that can't be decoded"
         }
         if (crate.mode == CrateMode.SELECT_3 && crate.rewards.size < 3) {
             return "Select 3 mode needs at least 3 rewards (has ${crate.rewards.size})"
@@ -948,9 +1003,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
                     return@setItem
                 }
+                val rewardItem = buildRewardItem(rewardRef)
                 consumeOneKey(p)
                 p.closeInventory()
-                val rewardItem = buildRewardItem(rewardRef)
                 plugin.giveItemSafely(p, rewardItem)
                 spawnWinParticles(p, crate)
                 p.playSound(p.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
@@ -1647,6 +1702,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             }
             return serialized
         }
+        // A stored snapshot that won't decode must never turn into the plain base material.
+        // crateProblem refuses such crates before any key is taken, so this is a last guard.
+        check(reward.itemBase64 == null) { "crate reward '${reward.displayName}' has an item-base64 snapshot that can't be decoded" }
 
         val item = ItemStack(reward.material, reward.amount)
         if (reward.enchantments.isNotEmpty()) {
@@ -2047,6 +2105,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
         if (player.isSneaking && isKey(itemInHand, crateType)) {
+            if (debounced(player)) return
             massOpen(player, crateType, block)
             return
         }
@@ -2086,12 +2145,27 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
 
+        if (debounced(player)) return
+
         // SELECT / SELECT_3 defer key consumption until the player actually finalizes a pick,
         // so closing the GUI without choosing does not cost a key.
         if (!isManualPickMode(crate.mode)) {
             consumeOneKey(player)
         }
         beginOpening(player, crate)
+    }
+
+    /**
+     * True if [player] started a keyed crate open less than [ACTIVATION_DEBOUNCE_MS] ago, in which
+     * case this activation repeats the same interaction and is dropped. Otherwise records this
+     * activation and returns false. Called right before a key-spending open.
+     */
+    private fun debounced(player: Player): Boolean {
+        val now = System.currentTimeMillis()
+        val last = lastActivation[player.uniqueId]
+        if (last != null && now - last < ACTIVATION_DEBOUNCE_MS) return true
+        lastActivation[player.uniqueId] = now
+        return false
     }
 
     // HIGHEST so we win against world/claim/etc. plugins that may have already
@@ -2180,6 +2254,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // delivered when they log back in.
         inFlightRewards.remove(event.player.uniqueId)
         activeAnimations.remove(event.player.uniqueId)
+        lastActivation.remove(event.player.uniqueId)
     }
 
     @EventHandler
