@@ -143,11 +143,10 @@ class CasinoRouletteManager(private val plugin: Joshymc) {
         if (!plugin.casinoManager.placeBet(player, CasinoManager.Game.ROULETTE, amount)) return null
 
         val result = random.nextInt(37)
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO casino_roulette_bets (uuid, name, bet_type, bet_value, amount, result, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             player.uniqueId.toString(), player.name, betType.name, betValue, amount, result, Status.PENDING.name, System.currentTimeMillis()
-        )
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { it.getInt("id") } ?: -1
+        ) ?: -1
         plugin.casinoManager.log("Roulette #$id placed — player=${player.name} type=${betType.name} value=$betValue amount=$amount result=$result")
         return getBet(id)
     }

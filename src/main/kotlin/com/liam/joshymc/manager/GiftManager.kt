@@ -403,11 +403,10 @@ class GiftManager(private val plugin: Joshymc) : Listener {
         lastSentAt[player.uniqueId] = System.currentTimeMillis()
 
         val now = System.currentTimeMillis()
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO gifts (sender_uuid, sender_name, recipient_uuid, recipient_name, coins, message, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?)",
             player.uniqueId.toString(), player.name, pending.recipientUuid.toString(), pending.recipientName, pending.coins, pending.message, now
-        )
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() as id") { it.getInt("id") } ?: -1
+        ) ?: -1
         for (item in pending.items) {
             plugin.databaseManager.execute("INSERT INTO gift_items (gift_id, item) VALUES (?, ?)", id, serializeItem(item))
         }

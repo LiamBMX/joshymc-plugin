@@ -318,7 +318,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
 
         // One transaction, so the punishment and its Discord log are stored together (issue #1157).
         plugin.databaseManager.transaction {
-            plugin.databaseManager.execute(
+            id = plugin.databaseManager.insertReturningId(
                 "INSERT INTO punishments (target_uuid, target_name, punisher_uuid, punisher_name, type, reason, duration_ms, created_at, expires_at, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
                 targetUuid.toString(),
                 targetName,
@@ -329,9 +329,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
                 durationMs,
                 now,
                 expiresAt
-            )
-
-            id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { rs -> rs.getInt("id") } ?: -1
+            ) ?: -1
 
             if (id != -1) {
                 val previousCount = plugin.databaseManager.queryFirst(

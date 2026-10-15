@@ -172,6 +172,23 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
     }
 
     /**
+     * Run an INSERT and return the rowid it created, or null when it inserted nothing
+     * (e.g. INSERT OR IGNORE hit a conflict). The insert and the `last_insert_rowid()`
+     * read share one hold of [lock], so another thread's insert can't land between them
+     * and hand back its id instead (issue #1159). Joins an enclosing [transaction].
+     */
+    fun insertReturningId(sql: String, vararg params: Any?): Int? = locked {
+        val inserted = connection.prepareStatement(sql).use { stmt ->
+            params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
+            stmt.executeUpdate()
+        }
+        if (inserted <= 0) return@locked null
+        connection.createStatement().use { stmt ->
+            stmt.executeQuery("SELECT last_insert_rowid()").use { rs -> if (rs.next()) rs.getInt(1) else null }
+        }
+    }
+
+    /**
      * Execute a query and map each row to a result using the provided mapper.
      */
     override fun <T> query(sql: String, vararg params: Any?, mapper: (java.sql.ResultSet) -> T): List<T> = locked {

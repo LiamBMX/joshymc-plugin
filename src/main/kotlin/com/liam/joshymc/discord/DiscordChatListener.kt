@@ -130,7 +130,7 @@ class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
             val players = plugin.server.onlinePlayers
             val max = plugin.server.maxPlayers
 
-            val embed = EmbedBuilder()
+            val embed = SafeEmbedBuilder()
                 .setColor(0x55FFFF)
                 .setTitle("Online Players (${players.size}/$max)")
 

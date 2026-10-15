@@ -605,11 +605,10 @@ class GiveawayManager(private val plugin: Joshymc) : Listener {
         val now = System.currentTimeMillis()
         val endsAt = now + durationHours * 3_600_000L
 
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO giveaways (creator_uuid, creator_name, title, description, coins, created_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')",
             player.uniqueId.toString(), player.name, pending.title, pending.description, pending.coins, now, endsAt
-        )
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() as id") { it.getInt("id") } ?: -1
+        ) ?: -1
         for (item in pending.items) {
             plugin.databaseManager.execute("INSERT INTO giveaway_items (giveaway_id, item) VALUES (?, ?)", id, serializeItem(item))
         }

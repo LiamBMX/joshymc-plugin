@@ -1,7 +1,6 @@
 package com.liam.joshymc.discord
 
 import com.liam.joshymc.Joshymc
-import net.dv8tion.jda.api.EmbedBuilder
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.entities.MessageEmbed
@@ -20,8 +19,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class UpdateHighlightsAnnouncer(private val plugin: Joshymc) {
 
-    private val enabled: Boolean get() = plugin.config.getBoolean("update-highlights.enabled", false)
-    private val channelId: String get() = plugin.config.getString("update-highlights.discord-channel")?.trim().orEmpty()
+    val enabled: Boolean get() = plugin.config.getBoolean("update-highlights.enabled", false)
+    val channelId: String get() = plugin.config.getString("update-highlights.discord-channel")?.trim().orEmpty()
 
     /** Hashes being sent right now, so a reload during the post can't send it twice. */
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
@@ -99,7 +98,7 @@ class UpdateHighlightsAnnouncer(private val plugin: Joshymc) {
     }
 
     private fun buildEmbed(version: String, summary: String, highlights: List<String>): MessageEmbed {
-        val builder = EmbedBuilder()
+        val builder = SafeEmbedBuilder()
             .setTitle("JoshyMC Update v$version")
             .setColor(0x5865F2)
             .setFooter("play.joshymc.net")

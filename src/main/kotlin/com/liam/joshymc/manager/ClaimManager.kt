@@ -495,12 +495,10 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO claims_v2 (world, x1, z1, x2, z2, owner_uuid, team_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             worldName, minX, minZ, maxX, maxZ, player.uniqueId.toString(), null, System.currentTimeMillis()
-        )
-
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() as id") { it.getInt("id") } ?: 0
+        ) ?: 0
         val claim = Claim(id, worldName, minX, minZ, maxX, maxZ, player.uniqueId, null, System.currentTimeMillis())
         claims.add(claim)
 
@@ -544,12 +542,10 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         }
 
         val createdAt = System.currentTimeMillis()
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO claims_v2 (world, x1, z1, x2, z2, owner_uuid, team_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             worldName, minX, minZ, maxX, maxZ, ADMIN_OWNER_UUID.toString(), null, createdAt
-        )
-
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() as id") { it.getInt("id") } ?: 0
+        ) ?: 0
         val claim = Claim(id, worldName, minX, minZ, maxX, maxZ, ADMIN_OWNER_UUID, null, createdAt)
         claims.add(claim)
         return ClaimCreateResult.Success(claim)
@@ -897,13 +893,11 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         val claim = getClaimAt(pos1) ?: return SubclaimResult.NOT_IN_CLAIM
         if (!canManageClaim(player, claim)) return SubclaimResult.NO_PERMISSION
 
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO subclaims (world, x1, y1, z1, x2, y2, z2, owner_uuid, parent_claim_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             worldName, pos1.blockX, pos1.blockY, pos1.blockZ, pos2.blockX, pos2.blockY, pos2.blockZ,
             player.uniqueId.toString(), claim.id
-        )
-
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() as id") { it.getInt("id") } ?: return SubclaimResult.DB_ERROR
+        ) ?: return SubclaimResult.DB_ERROR
         subclaims.add(Subclaim(id, worldName, pos1.blockX, pos1.blockY, pos1.blockZ, pos2.blockX, pos2.blockY, pos2.blockZ, player.uniqueId, claim.id))
         selections.remove(player.uniqueId)
         return SubclaimResult.SUCCESS

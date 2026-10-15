@@ -1,7 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
-import net.dv8tion.jda.api.EmbedBuilder
+import com.liam.joshymc.discord.SafeEmbedBuilder
 import org.bukkit.Bukkit
 import org.bukkit.entity.Entity
 import org.bukkit.entity.Player
@@ -86,6 +86,9 @@ class CombatAlertManager(private val plugin: Joshymc) {
         )
 
         if (!discordEnabled || discordChannelId.isEmpty()) return
+        // AntiCheatManager already posts this detection to the staff anti-cheat channel; if that's
+        // the same channel, a second copy would just be a duplicate there (issue #1159).
+        if (plugin.discordManager.isStaffAlertChannel(discordChannelId)) return
         queueDiscordAlert(player, checkName, severity, detectedValue, evidence, targetName, world, location, ping, tps, now)
     }
 
@@ -121,7 +124,7 @@ class CombatAlertManager(private val plugin: Joshymc) {
 
         if (bucket.count > 1) return // within the window and already alerted — grouped follow-up covers the rest
 
-        val embed = EmbedBuilder()
+        val embed = SafeEmbedBuilder()
             .setTitle("PvP Cheat Detection Alert")
             .setColor(severity.color)
             .addField("Player", player.name, true)
@@ -152,7 +155,7 @@ class CombatAlertManager(private val plugin: Joshymc) {
     }
 
     private fun sendGroupedFollowUp(uuid: UUID, playerName: String, checkName: String, count: Int, peakDetail: String) {
-        val embed = EmbedBuilder()
+        val embed = SafeEmbedBuilder()
             .setTitle("Repeated PvP Cheat Alerts Suppressed")
             .setColor(0xFFA500)
             .setDescription("**$playerName** triggered **$checkName** **$count** times in the last $rateLimitSeconds seconds.")

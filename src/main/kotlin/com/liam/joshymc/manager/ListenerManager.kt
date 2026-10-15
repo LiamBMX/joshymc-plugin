@@ -62,6 +62,9 @@ class ListenerManager(private val plugin: Joshymc) {
     var greatPumpkinPieListener: GreatPumpkinPieListener? = null
         private set
 
+    var ancientDebrisMonitorListener: AncientDebrisMonitorListener? = null
+        private set
+
     lateinit var welcomeListener: WelcomeListener
         private set
 
@@ -90,7 +93,10 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(CombatListener(plugin), plugin)
         pm.registerEvents(com.liam.joshymc.listener.ExplosionPvpListener(plugin), plugin)
         pm.registerEvents(PvpKillLogListener(plugin), plugin)
-        pm.registerEvents(AncientDebrisMonitorListener(plugin), plugin)
+        ancientDebrisMonitorListener = AncientDebrisMonitorListener(plugin).also {
+            it.start()
+            pm.registerEvents(it, plugin)
+        }
 
         // Phase 3 — Mining
         pm.registerEvents(VeinminerListener(plugin), plugin)

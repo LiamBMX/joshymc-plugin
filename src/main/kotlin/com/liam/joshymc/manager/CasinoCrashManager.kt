@@ -147,11 +147,10 @@ class CasinoCrashManager(private val plugin: Joshymc) {
         val crashPoint = floor(raw * 100.0) / 100.0
 
         val now = System.currentTimeMillis()
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO casino_crash_rounds (crash_point, status, created_at) VALUES (?, ?, ?)",
             crashPoint, RoundStatus.BETTING.name, now
-        )
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { it.getInt("id") } ?: -1
+        ) ?: -1
 
         liveBets.clear()
         round = RoundState(id, RoundStatus.BETTING, crashPoint.coerceAtLeast(1.0), now)
@@ -264,11 +263,10 @@ class CasinoCrashManager(private val plugin: Joshymc) {
         }
         if (!plugin.casinoManager.placeBet(player, CasinoManager.Game.CRASH, amount)) return false
 
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO casino_crash_bets (round_id, uuid, name, bet, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             state.id, player.uniqueId.toString(), player.name, amount, BetStatus.PENDING.name, System.currentTimeMillis()
-        )
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { it.getInt("id") } ?: -1
+        ) ?: -1
         liveBets[player.uniqueId] = LiveBet(id, player.uniqueId, player.name, amount, BetStatus.PENDING)
         debugLog("Crash round #${state.id} bet placed — player=${player.name} amount=$amount")
         return true

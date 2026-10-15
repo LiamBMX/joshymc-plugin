@@ -1,7 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
-import net.dv8tion.jda.api.EmbedBuilder
+import com.liam.joshymc.discord.SafeEmbedBuilder
 import org.bukkit.entity.Player
 import java.time.Instant
 import java.util.UUID
@@ -131,7 +131,7 @@ class AntiDupeManager(private val plugin: Joshymc) {
 
         if (bucket.count > 1) return // within the window and already alerted — grouped follow-up covers the rest
 
-        val embed = EmbedBuilder()
+        val embed = SafeEmbedBuilder()
             .setTitle("Possible Duplication Detected")
             .setColor(risk.color)
             .addField("Player", player.name, true)
@@ -164,7 +164,7 @@ class AntiDupeManager(private val plugin: Joshymc) {
     }
 
     private fun sendGroupedFollowUp(uuid: UUID, playerName: String, detectionType: String, count: Int) {
-        val embed = EmbedBuilder()
+        val embed = SafeEmbedBuilder()
             .setTitle("Repeated Anti-Dupe Alerts Suppressed")
             .setColor(0xFFA500)
             .setDescription("**$playerName** triggered **$detectionType** **$count** times in the last $rateLimitSeconds seconds.")
