@@ -1289,7 +1289,11 @@ class Joshymc : JavaPlugin() {
             defaultStream.bufferedReader()
         )
 
-        var changed = 0
+        // Issue #1161: Discord channel ids moved under discord.channels. Copy the old keys first,
+        // or the backfill below would fill the new keys with the bundled channel ids.
+        val discordMoves = com.liam.joshymc.discord.DiscordConfig.migrate(config)
+        for (move in discordMoves) logger.info("[ConfigMigrator] Moved deprecated Discord setting $move.")
+        var changed = discordMoves.size
         for (key in defaults.getKeys(true)) {
             if (defaults.isConfigurationSection(key)) continue
             if (NO_BACKFILL_SECTION_PREFIXES.any { key.startsWith(it) }) continue

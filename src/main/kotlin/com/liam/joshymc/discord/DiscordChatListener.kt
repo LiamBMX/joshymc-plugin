@@ -9,6 +9,7 @@ import net.dv8tion.jda.api.events.GenericEvent
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent
 import net.dv8tion.jda.api.hooks.ListenerAdapter
+import org.bukkit.plugin.IllegalPluginAccessException
 
 class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
 
@@ -17,6 +18,20 @@ class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
      * connection still draining after a reload can never double-post or double-reply.
      */
     private fun isActiveConnection(event: GenericEvent): Boolean = event.jda === plugin.discordManager.jda
+
+    /**
+     * Hands [task] to the main thread (Bukkit API is never touched from JDA's threads). Does
+     * nothing once the plugin is disabling, so an event that raced shutdown can't throw or run
+     * against a plugin instance that is gone (issue #1161).
+     */
+    private fun onMainThread(task: () -> Unit) {
+        if (!plugin.isEnabled) return
+        try {
+            plugin.server.scheduler.runTask(plugin, Runnable { if (plugin.isEnabled) task() })
+        } catch (_: IllegalPluginAccessException) {
+            // Disabled between the check and the call.
+        }
+    }
 
     override fun onMessageReceived(event: MessageReceivedEvent) {
         if (!isActiveConnection(event)) return
@@ -48,9 +63,7 @@ class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
         // Only the server's format is parsed for & codes; name and message stay literal text.
         val component = DiscordText.render(plugin.discordManager.minecraftFormat, name, message)
 
-        plugin.server.scheduler.runTask(plugin, Runnable {
-            plugin.server.broadcast(component)
-        })
+        onMainThread { plugin.server.broadcast(component) }
     }
 
     private fun handleDm(event: MessageReceivedEvent) {
@@ -88,18 +101,18 @@ class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
             .setDescription("Now confirm the link in-game by clicking **Confirm** in the GUI.")
             .setThumbnail("https://mc-heads.net/head/${pending.playerUuid}/128")
             .addField("Minecraft Player", pending.playerName, true)
-            .setFooter("play.joshymc.net")
+            .setFooter(DiscordEmbeds.PUBLIC_FOOTER)
             .setTimestamp(java.time.Instant.now())
             .build()
         ).queue()
 
         // Update the GUI on the main thread, unless the session ended in the meantime.
-        plugin.server.scheduler.runTask(plugin, Runnable {
-            val current = plugin.linkManager.sessions.current(pending.playerUuid) ?: return@Runnable
-            if (current.code != pending.code || current.claim?.id != claim.id) return@Runnable
-            val player = plugin.server.getPlayer(pending.playerUuid) ?: return@Runnable
+        onMainThread update@{
+            val current = plugin.linkManager.sessions.current(pending.playerUuid) ?: return@update
+            if (current.code != pending.code || current.claim?.id != claim.id) return@update
+            val player = plugin.server.getPlayer(pending.playerUuid) ?: return@update
             LinkGui.showConfirmation(player, current)
-        })
+        }
     }
 
     private fun dmEmbed(event: MessageReceivedEvent, color: Int, description: String) {
@@ -126,7 +139,7 @@ class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
     }
 
     private fun replyOnlineEmbed(callback: (net.dv8tion.jda.api.entities.MessageEmbed) -> Unit) {
-        plugin.server.scheduler.runTask(plugin, Runnable {
+        onMainThread {
             val players = plugin.server.onlinePlayers
             val max = plugin.server.maxPlayers
 
@@ -141,10 +154,10 @@ class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
                 embed.setDescription(list)
             }
 
-            embed.setFooter("play.joshymc.net")
+            embed.setFooter(DiscordEmbeds.PUBLIC_FOOTER)
             embed.setTimestamp(java.time.Instant.now())
 
             callback(embed.build())
-        })
+        }
     }
 }

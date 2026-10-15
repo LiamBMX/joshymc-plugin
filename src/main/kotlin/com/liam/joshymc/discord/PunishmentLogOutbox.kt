@@ -77,6 +77,12 @@ class PunishmentLogOutbox(
     private var forumBoundLogged = false
     private val lastLogged = ConcurrentHashMap<String, Long>()
 
+    /** Archived posts seen by the last archive scans (see [findThread]); worker thread only. */
+    private val archiveIndex = HashMap<String, ThreadChannel>()
+    private var archiveIndexJda: JDA? = null
+    private var archiveIndexForum: String? = null
+    private var archiveIndexAt = 0L
+
     fun ensureSchema() {
         db.createTable("""
             CREATE TABLE IF NOT EXISTS punishment_discord_outbox (
@@ -414,6 +420,8 @@ class PunishmentLogOutbox(
         }
 
         if (thread.isArchived) {
+            // Reopened (or about to be by the send below), so JDA caches it from here on.
+            archiveIndex.remove(thread.id)
             try {
                 thread.manager.setArchived(false).timeout(REQUEST_TIMEOUT_S, TimeUnit.SECONDS).complete()
             } catch (e: Exception) {
@@ -460,11 +468,29 @@ class PunishmentLogOutbox(
      * The mapped post, whether active (cached) or archived (looked up in the forum's archive).
      * Returns null only when the post is really gone from this forum; lookup errors propagate so
      * a Discord hiccup never leads to a duplicate post.
+     *
+     * Issue #1161: JDA 5 has no REST call that fetches one thread by id, so the archive is
+     * still the fallback for posts JDA doesn't cache, but every archived post a scan pages past
+     * is remembered in [archiveIndex] for [ARCHIVE_INDEX_TTL_MS]. A backlog of logs for many
+     * players with archived posts then costs one scan, not one per player. An id missing from
+     * the index always triggers a fresh scan (it may have been archived since), so a deleted
+     * post is only ever concluded from a complete, current listing.
      */
     private fun findThread(jda: JDA, forum: ForumChannel, threadId: String): ThreadChannel? {
         val cached = try { jda.getThreadChannelById(threadId) } catch (_: NumberFormatException) { return null }
         cached?.let { return it.takeIf { t -> t.parentChannel.id == forum.id } }
+
+        val now = System.currentTimeMillis()
+        if (archiveIndexJda !== jda || archiveIndexForum != forum.id || now - archiveIndexAt > ARCHIVE_INDEX_TTL_MS) {
+            archiveIndex.clear()
+            archiveIndexJda = jda
+            archiveIndexForum = forum.id
+            archiveIndexAt = now
+        }
+        archiveIndex[threadId]?.let { return it }
+
         for (thread in forum.retrieveArchivedPublicThreadChannels()) {
+            archiveIndex[thread.id] = thread
             if (thread.id == threadId) return thread
         }
         return null
@@ -560,6 +586,7 @@ class PunishmentLogOutbox(
         private const val REQUEST_TIMEOUT_S = 30L
         private const val RECONCILE_HISTORY = 50
         private const val ADOPT_CANDIDATES = 25
+        private const val ARCHIVE_INDEX_TTL_MS = 10 * 60_000L
         private const val DELIVERED_RETENTION_MS = 30L * 24 * 60 * 60_000L
 
         /** Without these nothing can be posted. Manage Threads is optional (only locked posts need it). */

@@ -1,7 +1,7 @@
 package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
-import com.liam.joshymc.discord.SafeEmbedBuilder
+import com.liam.joshymc.discord.DiscordEmbeds
 import org.bukkit.Material
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.Player
@@ -11,8 +11,6 @@ import org.bukkit.event.Listener
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import java.time.Instant
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 
 /**
  * Posts a Discord embed for every PvP kill (issue #974) — killer, victim, weapon,
@@ -45,17 +43,16 @@ class PvpKillLogListener(private val plugin: Joshymc) : Listener {
         val weapon = describeWeapon(victim, killer)
         val location = victim.location
         val world = location.world?.name ?: "unknown"
-        val time = ZonedDateTime.now(plugin.timezoneManager.zoneFor(killer)).format(TIME_FORMAT)
+        // A Discord timestamp, shown in each viewer's timezone (issue #1161: was the killer's
+        // local time with no timezone on it).
+        val now = System.currentTimeMillis()
 
-        val embed = SafeEmbedBuilder()
-            .setTitle("⚔️ Player Kill")
-            .setColor(0xED4245)
-            .addField("Killer", killer.name, true)
-            .addField("Victim", victim.name, true)
+        val embed = DiscordEmbeds.alert("⚔️ Player Kill", KILL_COLOR, "PvP Kill Log", Instant.ofEpochMilli(now))
+            .addField("Killer", DiscordEmbeds.player(killer.name, killer.uniqueId), true)
+            .addField("Victim", DiscordEmbeds.player(victim.name, victim.uniqueId), true)
             .addField("Weapon", weapon, true)
             .addField("Location", "$world (${location.blockX}, ${location.blockY}, ${location.blockZ})", false)
-            .addField("Time", time, true)
-            .setTimestamp(Instant.now())
+            .addField("Time", DiscordEmbeds.time(now, "T"), true)
             .build()
 
         plugin.discordManager.sendEmbedToChannel(discordChannelId, embed)
@@ -76,6 +73,6 @@ class PvpKillLogListener(private val plugin: Joshymc) : Listener {
     }
 
     companion object {
-        private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+        private const val KILL_COLOR = 0xED4245
     }
 }

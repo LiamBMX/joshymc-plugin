@@ -1,7 +1,7 @@
 package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
-import com.liam.joshymc.discord.SafeEmbedBuilder
+import com.liam.joshymc.discord.DiscordEmbeds
 import net.dv8tion.jda.api.entities.MessageEmbed
 import org.bukkit.Material
 import org.bukkit.entity.Player
@@ -12,8 +12,6 @@ import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.scheduler.BukkitTask
 import java.time.Instant
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 /**
@@ -112,10 +110,10 @@ class AncientDebrisMonitorListener(private val plugin: Joshymc) : Listener {
         if (count >= high && !state.highSent) {
             state.highSent = true
             state.suspiciousSent = true
-            sendAlert(player.name, state, count, high = true)
+            sendAlert(player.name, player.uniqueId, state, count, high = true)
         } else if (count >= suspicious && !state.suspiciousSent && !state.highSent) {
             state.suspiciousSent = true
-            sendAlert(player.name, state, count, high = false)
+            sendAlert(player.name, player.uniqueId, state, count, high = false)
         }
     }
 
@@ -124,21 +122,21 @@ class AncientDebrisMonitorListener(private val plugin: Joshymc) : Listener {
         states.remove(event.player.uniqueId)
     }
 
-    private fun sendAlert(playerName: String, state: PlayerState, count: Int, high: Boolean) {
+    private fun sendAlert(playerName: String, uuid: UUID, state: PlayerState, count: Int, high: Boolean) {
         val minutes = windowMs / 60_000L
         val worlds = state.recent.map { it.world }.distinct().joinToString(", ")
         val locations = state.recent.takeLast(MAX_LISTED_LOCATIONS).joinToString("\n") { "- ${coords(it)}" }
 
-        val embed = SafeEmbedBuilder()
-            .setTitle(if (high) "🚨 HIGH: Suspicious Ancient Debris Mining" else "⚠️ Suspicious Ancient Debris Mining")
-            .setColor(if (high) 0xED4245 else 0xFEE75C)
+        val severity = if (high) DiscordEmbeds.Severity.HIGH else DiscordEmbeds.Severity.LOW
+        val embed = DiscordEmbeds.alert(
+            if (high) "🚨 HIGH: Suspicious Ancient Debris Mining" else "⚠️ Suspicious Ancient Debris Mining",
+            severity.color, "X-ray Monitor • Manual staff review required"
+        )
             .addField("Detection", "X-ray (Ancient Debris)", true)
-            .addField("Player", playerName, true)
+            .addField("Player", DiscordEmbeds.player(playerName, uuid), true)
             .addField("World", worlds, true)
             .addField("Count", "$count Ancient Debris in $minutes minutes", false)
             .addField("Recent Locations", locations, false)
-            .setFooter("Manual staff review required.")
-            .setTimestamp(Instant.now())
             .build()
 
         plugin.discordManager.sendEmbedToChannel(channelId, embed)
@@ -149,17 +147,15 @@ class AncientDebrisMonitorListener(private val plugin: Joshymc) : Listener {
     private fun logMined(player: Player, entry: Mined) {
         if (channelId.isEmpty()) return
         if (flushTask == null) {
-            val time = ZonedDateTime.now(plugin.timezoneManager.zoneFor(player)).format(TIME_FORMAT)
+            // A Discord timestamp, shown in each viewer's timezone (issue #1161: was the miner's
+            // local time with no timezone on it).
             plugin.discordManager.sendEmbedToChannel(
                 channelId,
-                SafeEmbedBuilder()
-                    .setTitle("⛏️ Ancient Debris Mined")
-                    .setColor(0x99572B)
-                    .addField("Player", "${player.name} (`${player.uniqueId}`)", false)
+                DiscordEmbeds.alert("⛏️ Ancient Debris Mined", MINED_COLOR, FOOTER_SOURCE, Instant.ofEpochMilli(entry.timeMs))
+                    .addField("Player", DiscordEmbeds.player(player.name, player.uniqueId), false)
                     .addField("World", entry.world, true)
                     .addField("Location", coords(entry), true)
-                    .addField("Time", time, true)
-                    .setTimestamp(Instant.now())
+                    .addField("Time", DiscordEmbeds.time(entry.timeMs, "T"), true)
                     .build()
             )
             return
@@ -199,22 +195,20 @@ class AncientDebrisMonitorListener(private val plugin: Joshymc) : Listener {
         val hidden = batch.count - batch.recent.size
         val locations = if (hidden > 0) "$shown\n...and $hidden earlier" else shown
 
-        return SafeEmbedBuilder()
-            .setTitle("⛏️ Ancient Debris Mined")
-            .setColor(0x99572B)
-            .addField("Player", "${batch.name} (`$uuid`)", false)
+        return DiscordEmbeds.alert("⛏️ Ancient Debris Mined", MINED_COLOR, FOOTER_SOURCE, Instant.ofEpochMilli(batch.lastMs))
+            .addField("Player", DiscordEmbeds.player(batch.name, uuid), false)
             .addField("Count", batch.count.toString(), true)
             .addField(if (multiWorld) "Worlds" else "World", worlds, true)
             .addField("Time", window, true)
             .addField(if (batch.count == 1) "Location" else "Locations", locations, false)
-            .setTimestamp(Instant.ofEpochMilli(batch.lastMs))
             .build()
     }
 
-    private fun coords(m: Mined) = "X: ${m.x}, Y: ${m.y}, Z: ${m.z}"
+    private fun coords(m: Mined) = DiscordEmbeds.coords(m.x, m.y, m.z)
 
     companion object {
         private const val MAX_LISTED_LOCATIONS = 10
-        private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+        private const val MINED_COLOR = 0x99572B
+        private const val FOOTER_SOURCE = "X-ray Monitor"
     }
 }

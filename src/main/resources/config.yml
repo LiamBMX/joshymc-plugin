@@ -112,8 +112,9 @@ discord:
   # Bot token from https://discord.com/developers/applications
   token: "YOUR_BOT_TOKEN_HERE"
 
-  # Channel ID for chat bridge + events (all in one channel)
-  channel-id: "000000000000000000"
+  # Discord server (guild) the /online slash command is registered in. Leave empty to skip
+  # slash command registration.
+  guild-id: "1284630112234508330"
 
   # Format for messages sent TO Discord from Minecraft
   # Placeholders: {player}, {message}
@@ -151,7 +152,22 @@ discord:
     # replayed late. Alerts and reports never expire. 0 keeps chat until the queue is full.
     chat-max-age-seconds: 300
 
+  # Channel ids the bot posts to. Feature feeds with their own section keep their channel
+  # there, next to their toggles: anti-dupe.discord.channel-id, combat-alerts.discord.channel-id,
+  # pvp-kill-logs.discord.channel-id, ancient-debris-monitor.discord-channel-id and
+  # update-highlights.discord-channel. An empty or all-zero id turns that destination off.
+  # Deprecated keys, copied here once on upgrade and ignored afterwards (you may delete them):
+  #   discord.channel-id / discord.chat-channel-id      -> channels.chat
+  #   staff-monitoring.anticheat-channel-id              -> channels.staff-anticheat
+  #   staff-monitoring.reports-channel-id                -> channels.staff-reports
+  #   punishments.forum-channel-id                       -> channels.punishments-forum
   channels:
+    # Chat bridge + join/leave/death/start/stop events (all in one channel).
+    chat: "000000000000000000"
+    # Staff-monitoring alerts (anti-cheat, dupe, X-ray). Needs staff-monitoring.enabled.
+    staff-anticheat: "1554209031994998904"
+    # /report embeds. Needs staff-monitoring.enabled.
+    staff-reports: "1554209119265751142"
     # Forum channel for punishment history: every warn/unwarn/mute/unmute/kick/ban/unban
     # is posted as an embed in that player's ONE forum post, matched by UUID (so name
     # changes reuse it). The bot needs View Channel, Create Posts, Send Messages in
@@ -168,11 +184,10 @@ discord:
 
   # Staff-monitoring server. Uses the same bot (it must be authorized in that server with
   # View Channel, Send Messages and Embed Links). Anti-cheat/dupe/mining alerts and /report
-  # embeds are posted to these exact channel ids; nothing is posted publicly.
+  # embeds are posted to discord.channels.staff-anticheat / staff-reports; nothing is
+  # posted publicly.
   staff-monitoring:
     enabled: true
-    anticheat-channel-id: "1554209031994998904"
-    reports-channel-id: "1554209119265751142"
 
 # Update Highlights: once the Discord bot above connects, a release build posts the
 # player-facing highlights bundled in the JAR (src/main/resources/update-highlights.yml)
@@ -187,6 +202,8 @@ update-highlights:
 # attempt (e.g. an auction bought twice, a voucher redeemed twice). Detection only —
 # never auto-bans, mutes, or reverses anything. Reuses the Discord bot above; set
 # discord.channel-id below to a channel the bot can post embeds in.
+# Alerts and their grouped follow-ups ALSO reach discord.channels.staff-anticheat (with
+# staff monitoring on); if both ids are the same channel, it gets one copy.
 anti-dupe:
   enabled: true
 
@@ -211,7 +228,7 @@ anti-dupe:
 # AntiKB/Velocity, AimSnap). Detection + staff alerting only — never auto-bans, kicks,
 # mutes, or freezes anyone. Reuses the Discord bot above; set discord.channel-id below to
 # a channel the bot can post embeds in.
-# These detections ALSO reach discord.staff-monitoring.anticheat-channel-id as staff alerts.
+# These detections ALSO reach discord.channels.staff-anticheat as staff alerts.
 # That is intentional (a separate PvP feed with ping/TPS/evidence); if both ids are the same
 # channel, only the staff alert posts there.
 combat-alerts:

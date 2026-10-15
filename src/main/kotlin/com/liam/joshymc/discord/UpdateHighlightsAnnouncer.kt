@@ -101,7 +101,7 @@ class UpdateHighlightsAnnouncer(private val plugin: Joshymc) {
         val builder = SafeEmbedBuilder()
             .setTitle("JoshyMC Update v$version")
             .setColor(0x5865F2)
-            .setFooter("play.joshymc.net")
+            .setFooter(DiscordEmbeds.PUBLIC_FOOTER)
             .setTimestamp(Instant.now())
         if (summary.isNotEmpty()) builder.setDescription(summary.take(MessageEmbed.DESCRIPTION_MAX_LENGTH))
 

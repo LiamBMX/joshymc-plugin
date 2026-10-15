@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.discord.DiscordEmbeds
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
@@ -102,18 +103,16 @@ class ReportCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         cooldowns[player.uniqueId] = now
 
         val loc = player.location
+        // The location is the reporter's (where /report was run), not the reported player's.
         plugin.discordManager.sendStaffReport(
-            com.liam.joshymc.discord.SafeEmbedBuilder()
-                .setTitle("🚨 NEW PLAYER REPORT")
-                .setColor(0xED4245)
-                .addField("Reported Player", target.name, true)
-                .addField("Reported By", player.name, true)
-                .addField("Reason", reason.take(1000), false)
-                .addField("Time", "<t:${now / 1000}:F>", false)
-                .addField("World", loc.world?.name ?: "unknown", true)
-                .addField("Coordinates", "X: ${loc.blockX}, Y: ${loc.blockY}, Z: ${loc.blockZ}", true)
+            DiscordEmbeds.alert("🚨 NEW PLAYER REPORT", DiscordEmbeds.Severity.HIGH.color, "Player Reports", java.time.Instant.ofEpochMilli(now))
+                .addField("Reported Player", DiscordEmbeds.player(target.name, target.uniqueId), true)
+                .addField("Reported By", DiscordEmbeds.player(player.name, player.uniqueId), true)
+                .addField("Reason", DiscordEmbeds.escape(reason).take(1000), false)
+                .addField("Time", DiscordEmbeds.time(now), false)
+                .addField("Reporter's World", loc.world?.name ?: "unknown", true)
+                .addField("Reporter's Location", DiscordEmbeds.coords(loc.blockX, loc.blockY, loc.blockZ), true)
                 .apply { if (reportId != null) addField("Report ID", "#$reportId", true) }
-                .setTimestamp(java.time.Instant.now())
                 .build()
         )
 
