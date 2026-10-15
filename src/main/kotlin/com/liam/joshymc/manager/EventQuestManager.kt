@@ -122,6 +122,19 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             "WHEAT_SEEDS" to "WHEAT", "BEETROOT_SEEDS" to "BEETROOTS", "COCOA_BEANS" to "COCOA",
             "MELON_SLICE" to "MELON", "SWEET_BERRIES" to "SWEET_BERRY_BUSH", "PITCHER_POD" to "PITCHER_CROP"
         )
+        /**
+         * BREAK_BLOCK / MINE_ORE filters name the block that is broken; admins often type the item the ore
+         * drops instead, which no broken block ever matches. Maps to the stone-layer ore only; MINE_ORE
+         * already counts its deepslate twin via [oreVariants], BREAK_BLOCK stays exact.
+         */
+        private val MINING_ITEM_TO_BLOCK = mapOf(
+            "COAL" to "COAL_ORE", "RAW_IRON" to "IRON_ORE", "IRON_INGOT" to "IRON_ORE",
+            "RAW_COPPER" to "COPPER_ORE", "COPPER_INGOT" to "COPPER_ORE", "RAW_GOLD" to "GOLD_ORE",
+            "GOLD_INGOT" to "GOLD_ORE", "GOLD_NUGGET" to "NETHER_GOLD_ORE", "REDSTONE" to "REDSTONE_ORE",
+            "LAPIS_LAZULI" to "LAPIS_ORE", "DIAMOND" to "DIAMOND_ORE", "EMERALD" to "EMERALD_ORE",
+            "QUARTZ" to "NETHER_QUARTZ_ORE", "NETHERITE_SCRAP" to "ANCIENT_DEBRIS"
+        )
+        private val MINING_TYPES = setOf(EventObjective.BREAK_BLOCK, EventObjective.MINE_ORE)
         private val REWARD_SOURCES = setOf("custom-item", "existing-custom-item", "crate-key", HELD_ITEM)
     }
 
@@ -294,6 +307,9 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             val rawTarget = (q.getString("material") ?: q.getString("entity"))?.takeIf { !it.equals("ANY", ignoreCase = true) }
             val target = rawTarget?.let { canonicalTarget(type, it) }
             if (rawTarget != null && target == null) { eventError(id, "quest $n has unknown material/entity '$rawTarget'"); return null }
+            if (type in MINING_TYPES && target != null && Material.matchMaterial(target)?.isBlock != true) {
+                plugin.logger.warning("[EventQuests] Event '$id' quest $n: '$rawTarget' is not a block, so no mined block can ever match it.")
+            }
             quests += EventQuestDef(n - 1, type, target, amount, q.getString("name"), q.getString("description"))
         }
 
@@ -326,6 +342,8 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         EventObjective.KILL_PLAYER, EventObjective.TRAVEL, EventObjective.PLAY_TIME -> raw.uppercase()
         EventObjective.HARVEST_CROP -> Material.matchMaterial(raw.trim())?.name
             ?.let { normalizeHarvestName(HARVEST_ITEM_TO_BLOCK[it] ?: it) }
+        EventObjective.BREAK_BLOCK, EventObjective.MINE_ORE -> Material.matchMaterial(raw.trim())?.name
+            ?.let { MINING_ITEM_TO_BLOCK[it] ?: it }
         else -> Material.matchMaterial(raw.trim())?.name
     }
 
@@ -585,7 +603,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
 
     /** External hook for listeners (e.g. Veinminer) that break blocks without firing a real BlockBreakEvent. */
     fun recordBlockBreak(player: Player, block: Block) {
-        if (isExempt(player)) return
+        if (block.type.isAir || isExempt(player)) return
         processBreak(player, block, harvestCheck = false)
     }
 
@@ -612,8 +630,11 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         if (playerPlaced) return
 
         forActive(player, EventObjective.BREAK_BLOCK, { it == null || it == name }) { ev, q -> advance(player, ev, q, 1) }
-        forActive(player, EventObjective.MINE_ORE, { it == null || it in oreVariants(name) }) { ev, q -> advance(player, ev, q, 1) }
+        // An unfiltered MINE_ORE quest reads "Mine N ore", so only ores count toward it, not dirt or stone.
+        forActive(player, EventObjective.MINE_ORE, { if (it == null) isOre(name) else it in oreVariants(name) }) { ev, q -> advance(player, ev, q, 1) }
     }
+
+    private fun isOre(name: String) = name.endsWith("_ORE") || name == "ANCIENT_DEBRIS"
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onBlockPlace(event: BlockPlaceEvent) {
@@ -857,6 +878,8 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             .filter { it != org.bukkit.entity.EntityType.UNKNOWN && it != org.bukkit.entity.EntityType.PLAYER }
             .map { it.name } + "ANY"
         EventObjective.KILL_PLAYER, EventObjective.TRAVEL, EventObjective.PLAY_TIME -> emptyList()
+        EventObjective.BREAK_BLOCK, EventObjective.MINE_ORE ->
+            Material.entries.filter { !it.isLegacy && it.isItem && it.isBlock }.map { it.name } + "ANY"
         else -> Material.entries.filter { !it.isLegacy && it.isItem }.map { it.name } + "ANY"
     }
 
@@ -921,6 +944,9 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         val target = filter?.let { canonicalTarget(type, it) }
         val key = if (type == EventObjective.KILL_MOB) "entity" else "material"
         if (filter != null && target == null) return "Unknown $key '$rawTarget' for ${type.name}."
+        if (type in MINING_TYPES && target != null && Material.matchMaterial(target)?.isBlock != true) {
+            return "'$rawTarget' is not a block. ${type.name} counts the block that is broken, e.g. diamond_ore."
+        }
         val count = cfg.getConfigurationSection("questlines.$id.quests")?.getKeys(false)?.size ?: 0
         if (count >= MAX_QUESTS) return "A questline can have at most $MAX_QUESTS quests."
         if (anyProgress(id, "completed")) return "Players have already completed this questline, so quests can't be added."

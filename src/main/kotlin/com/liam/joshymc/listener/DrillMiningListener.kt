@@ -52,6 +52,8 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
                         12, 0.3, 0.3, 0.3, 0.05,
                         block.blockData
                     )
+                    // These breaks fire no BlockBreakEvent, so report them to Event Quests before the block changes.
+                    if (player.isOnline) plugin.eventQuestManager.recordBlockBreak(player, block)
                     block.breakNaturally(item)
                 }
 
