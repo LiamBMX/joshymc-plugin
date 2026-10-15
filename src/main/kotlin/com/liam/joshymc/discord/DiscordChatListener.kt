@@ -1,13 +1,14 @@
 package com.liam.joshymc.discord
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.link.DiscordClaim
 import com.liam.joshymc.link.LinkGui
+import com.liam.joshymc.link.LinkSessions
 import net.dv8tion.jda.api.EmbedBuilder
 import net.dv8tion.jda.api.events.GenericEvent
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent
 import net.dv8tion.jda.api.hooks.ListenerAdapter
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 
 class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
 
@@ -30,7 +31,7 @@ class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
         val expectedChannel = plugin.discordManager.channelId
         if (event.channel.id != expectedChannel) return
 
-        val message = event.message.contentStripped.take(256)
+        val message = DiscordText.sanitize(event.message.contentStripped, DiscordText.MAX_MESSAGE_LENGTH)
         if (message.isBlank()) return
 
         if (message.equals("!online", ignoreCase = true)) {
@@ -40,14 +41,12 @@ class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
 
         if (message.startsWith("/")) return
 
-        val name = event.member?.effectiveName ?: event.author.effectiveName
+        val name = DiscordText.sanitize(event.member?.effectiveName ?: event.author.effectiveName, DiscordText.MAX_NAME_LENGTH)
+            .ifBlank { DiscordText.sanitize(event.author.name, DiscordText.MAX_NAME_LENGTH) }
         plugin.logger.info("[Discord → MC] $name: $message")
 
-        val formatted = plugin.discordManager.minecraftFormat
-            .replace("{name}", name)
-            .replace("{message}", message)
-
-        val component = LegacyComponentSerializer.legacyAmpersand().deserialize(formatted)
+        // Only the server's format is parsed for & codes; name and message stay literal text.
+        val component = DiscordText.render(plugin.discordManager.minecraftFormat, name, message)
 
         plugin.server.scheduler.runTask(plugin, Runnable {
             plugin.server.broadcast(component)
@@ -55,39 +54,33 @@ class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
     }
 
     private fun handleDm(event: MessageReceivedEvent) {
-        val message = event.message.contentStripped.trim()
         val dm = event.channel
+        val author = event.author
+        val claim = DiscordClaim(
+            id = author.id,
+            displayName = DiscordText.sanitize(author.effectiveName, DiscordText.MAX_NAME_LENGTH),
+            username = DiscordText.sanitize(author.name, DiscordText.MAX_NAME_LENGTH),
+        )
 
-        if (!message.matches(Regex("\\d{4}"))) {
-            dm.sendMessageEmbeds(EmbedBuilder()
-                .setColor(0x55FFFF)
-                .setDescription("Send me a **4-digit code** from `/link` in-game.")
-                .build()
-            ).queue()
-            return
+        val pending = when (val result = plugin.linkManager.sessions.submit(claim, event.message.contentStripped.trim())) {
+            is LinkSessions.SubmitResult.Accepted -> result.pending
+            LinkSessions.SubmitResult.NotACode -> {
+                dmEmbed(event, 0x55FFFF, "Send me the **${plugin.linkManager.settings.codeLength}-character code** from `/link` in-game.")
+                return
+            }
+            LinkSessions.SubmitResult.Invalid -> {
+                dmEmbed(event, 0xFF5555, "Invalid or expired code.\nRun `/link` in-game to get a new one.")
+                return
+            }
+            is LinkSessions.SubmitResult.LockedOut -> {
+                dmEmbed(event, 0xFF5555, "Too many incorrect codes. Try again in ${formatWait(result.retryAfterMs)}.")
+                return
+            }
+            is LinkSessions.SubmitResult.Busy -> {
+                dmEmbed(event, 0xFF5555, "Linking is busy right now. Try again in ${formatWait(result.retryAfterMs)}.")
+                return
+            }
         }
-
-        val pending = plugin.linkManager.findPendingByCode(message)
-        if (pending == null) {
-            dm.sendMessageEmbeds(EmbedBuilder()
-                .setColor(0xFF5555)
-                .setDescription("Invalid or expired code.\nRun `/link` in-game to get a new one.")
-                .build()
-            ).queue()
-            return
-        }
-
-        if (pending.discordId != null && pending.discordId != event.author.id) {
-            dm.sendMessageEmbeds(EmbedBuilder()
-                .setColor(0xFF5555)
-                .setDescription("This code is already being used.")
-                .build()
-            ).queue()
-            return
-        }
-
-        pending.discordId = event.author.id
-        pending.discordName = event.author.effectiveName
 
         dm.sendMessageEmbeds(EmbedBuilder()
             .setColor(0x55FF55)
@@ -100,13 +93,24 @@ class DiscordChatListener(private val plugin: Joshymc) : ListenerAdapter() {
             .build()
         ).queue()
 
-        // Update the GUI on the main thread
+        // Update the GUI on the main thread, unless the session ended in the meantime.
         plugin.server.scheduler.runTask(plugin, Runnable {
-            val player = plugin.server.getPlayer(pending.playerUuid)
-            if (player != null && player.isOnline) {
-                LinkGui.updateGuiWithConfirmation(player, event.author.effectiveName, message)
-            }
+            val current = plugin.linkManager.sessions.current(pending.playerUuid) ?: return@Runnable
+            if (current.code != pending.code || current.claim?.id != claim.id) return@Runnable
+            val player = plugin.server.getPlayer(pending.playerUuid) ?: return@Runnable
+            LinkGui.showConfirmation(player, current)
         })
+    }
+
+    private fun dmEmbed(event: MessageReceivedEvent, color: Int, description: String) {
+        event.channel.sendMessageEmbeds(EmbedBuilder().setColor(color).setDescription(description).build()).queue()
+    }
+
+    private fun formatWait(ms: Long): String {
+        val seconds = (ms + 999) / 1000
+        if (seconds < 60) return if (seconds == 1L) "1 second" else "$seconds seconds"
+        val minutes = (seconds + 59) / 60
+        return if (minutes == 1L) "1 minute" else "$minutes minutes"
     }
 
     override fun onSlashCommandInteraction(event: SlashCommandInteractionEvent) {

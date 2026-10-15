@@ -121,7 +121,24 @@ discord:
 
   # Format for messages sent TO Minecraft from Discord
   # Placeholders: {name}, {message}
+  # Only this format is parsed for & codes: Discord names and messages are always shown as
+  # plain text on one line.
   minecraft-format: "&9[Discord] &f{name} &7» &f{message}"
+
+  # /link account linking. Codes are random, use no look-alike characters (0/O, 1/I/L) and
+  # are shown as XXXX-XXXX. The player still has to click Confirm in-game after the DM.
+  linking:
+    # Code length, 6-16 characters.
+    code-length: 8
+    # How long a /link code stays valid (60-1800).
+    code-expiry-seconds: 300
+    # Wrong codes one Discord account may DM before a temporary lockout.
+    max-failed-attempts: 5
+    # Window for counting wrong codes, and the lockout length after hitting the limit.
+    attempt-cooldown-seconds: 600
+    # Wrong codes per minute across all Discord accounts before code checks pause
+    # briefly for everyone. 0 disables this server-wide cap.
+    global-max-failed-per-minute: 120
 
   channels:
     # Forum channel for punishment history: every warn/unwarn/mute/unmute/kick/ban/unban

@@ -4,89 +4,78 @@ import com.liam.joshymc.Joshymc
 import org.bukkit.configuration.file.YamlConfiguration
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Discord account linking: config + `links.yml` persistence around [LinkSessions], which
+ * owns the thread-safe session and link state (issue #1155).
+ */
 class LinkManager(private val plugin: Joshymc) {
 
-    data class PendingLink(
-        val playerUuid: UUID,
-        val playerName: String,
-        val code: String,
-        val createdAt: Long = System.currentTimeMillis(),
-        var discordId: String? = null,
-        var discordName: String? = null,
-    )
-
-    // Code -> PendingLink
-    val pendingLinks = ConcurrentHashMap<String, PendingLink>()
-
-    // MC UUID -> Discord ID (persistent)
-    private val links = ConcurrentHashMap<String, String>()
-
-    // Discord ID -> MC UUID (reverse lookup)
-    private val reverseLinks = ConcurrentHashMap<String, String>()
+    val sessions = LinkSessions()
 
     private val linksFile: File get() = plugin.configFile("links.yml")
 
+    val settings: LinkSettings get() = sessions.settings
+
     fun load() {
-        if (!linksFile.exists()) return
-        val config = YamlConfiguration.loadConfiguration(linksFile)
-        for (key in config.getKeys(false)) {
-            val discordId = config.getString(key) ?: continue
-            links[key] = discordId
-            reverseLinks[discordId] = key
+        sessions.settings = readSettings()
+
+        val entries = ArrayList<Pair<UUID, String>>()
+        if (linksFile.exists()) {
+            val config = YamlConfiguration.loadConfiguration(linksFile)
+            for (key in config.getKeys(false)) {
+                val discordId = config.getString(key) ?: continue
+                val uuid = runCatching { UUID.fromString(key) }.getOrNull() ?: continue
+                entries += uuid to discordId
+            }
         }
-        plugin.logger.info("[Link] Loaded ${links.size} linked account(s).")
+        val dropped = sessions.replaceLinks(entries)
+        for ((uuid, discordId) in dropped) {
+            plugin.logger.warning("[Link] Dropped duplicate link $uuid -> $discordId (that Discord account is already linked to another player).")
+        }
+        plugin.logger.info("[Link] Loaded ${sessions.linkCount()} linked account(s).")
     }
 
+    @Synchronized
     fun save() {
         val config = YamlConfiguration()
-        for ((uuid, discordId) in links) {
-            config.set(uuid, discordId)
+        for ((uuid, discordId) in sessions.snapshotLinks()) {
+            config.set(uuid.toString(), discordId)
         }
         config.save(linksFile)
     }
 
-    fun generateCode(playerUuid: UUID, playerName: String): PendingLink {
-        // Remove any existing pending link for this player
-        pendingLinks.values.removeIf { it.playerUuid == playerUuid }
-
-        val code = (1000..9999).random().toString()
-        val pending = PendingLink(playerUuid, playerName, code)
-        pendingLinks[code] = pending
-        return pending
+    private fun readSettings(): LinkSettings {
+        val section = plugin.config.getConfigurationSection("discord.linking")
+        val defaults = LinkSettings()
+        if (section == null) return defaults
+        return LinkSettings(
+            codeLength = section.getInt("code-length", defaults.codeLength).coerceIn(LinkCodes.MIN_LENGTH, LinkCodes.MAX_LENGTH),
+            codeExpiryMs = section.getLong("code-expiry-seconds", defaults.codeExpiryMs / 1000).coerceIn(60, 1800) * 1000,
+            maxFailedAttempts = section.getInt("max-failed-attempts", defaults.maxFailedAttempts).coerceIn(1, 20),
+            attemptCooldownMs = section.getLong("attempt-cooldown-seconds", defaults.attemptCooldownMs / 1000).coerceIn(30, 86_400) * 1000,
+            globalMaxFailuresPerMinute = section.getInt("global-max-failed-per-minute", defaults.globalMaxFailuresPerMinute).coerceAtLeast(0),
+        )
     }
 
-    fun findPendingByCode(code: String): PendingLink? {
-        val pending = pendingLinks[code] ?: return null
-        // Expire after 5 minutes
-        if (System.currentTimeMillis() - pending.createdAt > 300_000) {
-            pendingLinks.remove(code)
-            return null
-        }
-        return pending
+    fun startLink(playerUuid: UUID, playerName: String): PendingLink = sessions.start(playerUuid, playerName)
+
+    /** Links the account the player's GUI showed and saves; see [LinkSessions.confirm]. */
+    fun confirmLink(playerUuid: UUID): LinkSessions.ConfirmResult {
+        val result = sessions.confirm(playerUuid)
+        if (result is LinkSessions.ConfirmResult.Linked) save()
+        return result
     }
 
-    fun confirmLink(code: String): Boolean {
-        val pending = pendingLinks.remove(code) ?: return false
-        val discordId = pending.discordId ?: return false
+    fun cancel(playerUuid: UUID) = sessions.cancel(playerUuid)
 
-        links[pending.playerUuid.toString()] = discordId
-        reverseLinks[discordId] = pending.playerUuid.toString()
-        save()
-        return true
-    }
+    fun getDiscordId(playerUuid: UUID): String? = sessions.getDiscordId(playerUuid)
+    fun getMinecraftUuid(discordId: String): String? = sessions.getMinecraftUuid(discordId)?.toString()
 
-    fun getDiscordId(playerUuid: UUID): String? = links[playerUuid.toString()]
-    fun getMinecraftUuid(discordId: String): String? = reverseLinks[discordId]
-
-    fun isLinked(playerUuid: UUID): Boolean = links.containsKey(playerUuid.toString())
+    fun isLinked(playerUuid: UUID): Boolean = sessions.isLinked(playerUuid)
 
     fun unlink(playerUuid: UUID) {
-        val discordId = links.remove(playerUuid.toString())
-        if (discordId != null) {
-            reverseLinks.remove(discordId)
-        }
+        sessions.unlink(playerUuid)
         save()
     }
 }
