@@ -14,6 +14,11 @@ import org.bukkit.entity.Player
 
 class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
+    companion object {
+        /** Most keys one /crate givekey hands each player: a full 36-slot inventory of 64-stacks. */
+        private const val MAX_GIVEKEY_AMOUNT = 36 * 64
+    }
+
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isEmpty()) {
             sendUsage(sender)
@@ -292,7 +297,15 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
 
-        val amount = if (args.size >= 4) args[3].toIntOrNull() ?: 1 else 1
+        val amount = if (args.size >= 4) {
+            val parsed = args[3].toIntOrNull()
+            if (parsed == null || parsed < 1 || parsed > MAX_GIVEKEY_AMOUNT) {
+                val msg = Component.text("Invalid amount '${args[3]}'. Use a whole number from 1 to $MAX_GIVEKEY_AMOUNT.", NamedTextColor.RED)
+                if (sender is Player) plugin.commsManager.send(sender, msg) else sender.sendMessage(msg)
+                return
+            }
+            parsed
+        } else 1
 
         // Selector support: @a (all), @r (random)
         val targets: List<Player> = when (targetArg.lowercase()) {

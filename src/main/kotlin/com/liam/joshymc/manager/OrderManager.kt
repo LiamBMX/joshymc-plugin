@@ -15,7 +15,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
-import org.bukkit.inventory.Inventory
+import org.bukkit.inventory.PlayerInventory
 import org.bukkit.inventory.ItemStack
 import org.bukkit.scheduler.BukkitTask
 import java.util.Base64
@@ -315,15 +315,20 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         return candidate.isSimilar(requested)
     }
 
-    private fun countMatching(inventory: Inventory, template: ItemStack): Int {
-        return inventory.contents.filterNotNull().filter { itemsMatch(template, it) }.sumOf { it.amount }
+    /** Counts matching items in the storage slots only (hotbar + main inventory), never armor or offhand. */
+    private fun countMatching(inventory: PlayerInventory, template: ItemStack): Int {
+        return inventory.storageContents.filterNotNull().filter { itemsMatch(template, it) }.sumOf { it.amount }
     }
 
-    /** Removes up to [amount] matching items, returning the actual removed stacks (metadata intact). */
-    private fun removeMatching(inventory: Inventory, template: ItemStack, amount: Int): List<ItemStack> {
+    /**
+     * Removes up to [amount] matching items from the storage slots only (worn armor and the
+     * offhand are never taken), returning the actual removed stacks (metadata intact).
+     */
+    private fun removeMatching(inventory: PlayerInventory, template: ItemStack, amount: Int): List<ItemStack> {
         val removed = mutableListOf<ItemStack>()
         var remaining = amount
-        for (i in 0 until inventory.size) {
+        // Storage slots are indices 0 until storageContents.size; armor and offhand come after.
+        for (i in 0 until inventory.storageContents.size) {
             if (remaining <= 0) break
             val item = inventory.getItem(i) ?: continue
             if (!itemsMatch(template, item)) continue
@@ -1050,6 +1055,7 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         // order as one transaction. The claim is conditional (anti-dupe: a stale or repeated
         // fulfill updates 0 rows); a failed payout rolls the claim back too.
         var claimed = false
+        var dustRefund = 0.0
         try {
             plugin.databaseManager.transaction {
                 claimed = plugin.databaseManager.executeUpdate(
@@ -1060,7 +1066,20 @@ class OrderManager(private val plugin: Joshymc) : Listener {
                 if (!plugin.economyManager.deposit(seller.uniqueId, payout)) {
                     throw IllegalStateException("payout of $payout was rejected")
                 }
-                plugin.databaseManager.execute("DELETE FROM buy_orders WHERE id = ? AND remaining_qty <= 0", orderId)
+                // A completed order can be left with a sliver of escrow from floating-point
+                // rounding. Hand any positive remainder back to the buyer as the row is deleted.
+                val leftover = plugin.databaseManager.queryFirst(
+                    "SELECT remaining_escrow FROM buy_orders WHERE id = ? AND remaining_qty <= 0", orderId
+                ) { rs -> rs.getDouble("remaining_escrow") }
+                if (leftover != null &&
+                    plugin.databaseManager.executeUpdate("DELETE FROM buy_orders WHERE id = ? AND remaining_qty <= 0", orderId) == 1 &&
+                    leftover > 0.0
+                ) {
+                    if (!plugin.economyManager.deposit(order.buyerUuid, leftover)) {
+                        throw IllegalStateException("escrow remainder refund of $leftover was rejected")
+                    }
+                    dustRefund = leftover
+                }
             }
         } catch (e: Exception) {
             plugin.logger.severe("[Orders] ${seller.name} selling ${sellQty}x into order #$orderId failed and was rolled back: ${e.message}")
@@ -1096,6 +1115,9 @@ class OrderManager(private val plugin: Joshymc) : Listener {
 
         val remainingAfter = order.remainingQty - sellQty
         plugin.logger.info("[Orders] ${seller.name} sold ${sellQty}x ${order.item.type} into order #$orderId (buyer ${order.buyerName}) for ${plugin.economyManager.format(payout)}.")
+        if (dustRefund > 0.0) {
+            plugin.logger.info("[Orders] Order #$orderId completed; refunded leftover escrow $dustRefund to ${order.buyerName}.")
+        }
 
         seller.playSound(seller.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.2f)
         val soldMsg = Component.text("Sold ", NamedTextColor.GREEN)
