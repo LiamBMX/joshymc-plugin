@@ -65,6 +65,6 @@ class MinecraftChatListener(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     fun onDeath(event: PlayerDeathEvent) {
         val text = event.deathMessage()?.let { plainSerializer.serialize(it) } ?: "${event.player.name} died"
-        plugin.discordManager.send(":skull: $text")
+        plugin.discordManager.sendDeath(text)
     }
 }
