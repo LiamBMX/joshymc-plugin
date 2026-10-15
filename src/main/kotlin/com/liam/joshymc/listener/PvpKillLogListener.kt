@@ -1,7 +1,7 @@
 package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
-import net.dv8tion.jda.api.EmbedBuilder
+import com.liam.joshymc.discord.SafeEmbedBuilder
 import org.bukkit.Material
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.Player
@@ -47,7 +47,7 @@ class PvpKillLogListener(private val plugin: Joshymc) : Listener {
         val world = location.world?.name ?: "unknown"
         val time = ZonedDateTime.now(plugin.timezoneManager.zoneFor(killer)).format(TIME_FORMAT)
 
-        val embed = EmbedBuilder()
+        val embed = SafeEmbedBuilder()
             .setTitle("⚔️ Player Kill")
             .setColor(0xED4245)
             .addField("Killer", killer.name, true)

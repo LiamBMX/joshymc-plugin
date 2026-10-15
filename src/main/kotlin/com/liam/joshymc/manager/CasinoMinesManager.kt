@@ -109,11 +109,10 @@ class CasinoMinesManager(private val plugin: Joshymc) {
             mineTiles.add(random.nextInt(TILES))
         }
 
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO casino_mines_sessions (uuid, bet, mines, mine_tiles, revealed, status, created_at) VALUES (?, ?, ?, ?, '', ?, ?)",
             player.uniqueId.toString(), bet, mines, mineTiles.joinToString(","), Status.ACTIVE.name, System.currentTimeMillis()
-        )
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { it.getInt("id") } ?: -1
+        ) ?: -1
 
         val session = Session(id, player.uniqueId, bet, mines, mineTiles, mutableSetOf(), Status.ACTIVE)
         active[player.uniqueId] = session

@@ -103,11 +103,10 @@ class CasinoTowersManager(private val plugin: Joshymc) {
 
         val badIndices = (0 until levels).map { random.nextInt(difficulty.tiles) }
 
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO casino_towers_sessions (uuid, bet, difficulty, bad_indices, level, status, created_at) VALUES (?, ?, ?, ?, 0, ?, ?)",
             player.uniqueId.toString(), bet, difficulty.name, badIndices.joinToString(","), Status.ACTIVE.name, System.currentTimeMillis()
-        )
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { it.getInt("id") } ?: -1
+        ) ?: -1
 
         val session = Session(id, player.uniqueId, bet, difficulty, badIndices, 0, Status.ACTIVE)
         active[player.uniqueId] = session

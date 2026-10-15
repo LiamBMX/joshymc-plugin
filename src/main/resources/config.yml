@@ -140,6 +140,17 @@ discord:
     # briefly for everyone. 0 disables this server-wide cap.
     global-max-failed-per-minute: 120
 
+  # Messages raised while the bot is still connecting (startup, /joshymc reload, or a
+  # failed connection being retried) wait here and are sent once it connects. Punishment
+  # logs never use this queue: they have their own durable one.
+  delivery-queue:
+    # Most messages held at once (10-10000). When full, the oldest chat message goes first;
+    # alerts and reports are only pushed out by newer alerts.
+    max-size: 500
+    # Chat-bridge messages (chat, joins, deaths) older than this are dropped instead of being
+    # replayed late. Alerts and reports never expire. 0 keeps chat until the queue is full.
+    chat-max-age-seconds: 300
+
   channels:
     # Forum channel for punishment history: every warn/unwarn/mute/unmute/kick/ban/unban
     # is posted as an embed in that player's ONE forum post, matched by UUID (so name
@@ -200,6 +211,9 @@ anti-dupe:
 # AntiKB/Velocity, AimSnap). Detection + staff alerting only — never auto-bans, kicks,
 # mutes, or freezes anyone. Reuses the Discord bot above; set discord.channel-id below to
 # a channel the bot can post embeds in.
+# These detections ALSO reach discord.staff-monitoring.anticheat-channel-id as staff alerts.
+# That is intentional (a separate PvP feed with ping/TPS/evidence); if both ids are the same
+# channel, only the staff alert posts there.
 combat-alerts:
   enabled: true
 
@@ -216,6 +230,8 @@ combat-alerts:
 # player-fired projectiles) — mob kills and environmental deaths are never announced.
 # Reporting only — never touches kill streaks, bounties, or PvP rewards. Reuses the
 # Discord bot above; set discord.channel-id below to a channel the bot can post embeds in.
+# Shares the combat-alerts channel by default: kills and cheat alerts are different events,
+# so nothing is posted twice.
 pvp-kill-logs:
   enabled: true
 
@@ -232,6 +248,10 @@ ancient-debris-monitor:
   window-minutes: 10
   suspicious-threshold: 8
   high-suspicion-threshold: 15
+  # Routine "Ancient Debris Mined" logs are collected per player and posted as one summary
+  # every this many seconds (10-3600). 0 posts every block on its own. X-ray alerts above
+  # are never delayed by this.
+  batch-interval-seconds: 60
 
 # Recipe Blocker — block players from crafting specific items
 # Use material names from: https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Material.html

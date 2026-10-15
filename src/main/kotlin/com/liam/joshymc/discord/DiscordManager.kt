@@ -19,7 +19,6 @@ import net.dv8tion.jda.api.utils.messages.MessageRequest
 import java.time.Duration
 import java.time.Instant
 import java.util.EnumSet
-import java.util.concurrent.ConcurrentLinkedQueue
 
 class DiscordManager(private val plugin: Joshymc) {
 
@@ -48,7 +47,17 @@ class DiscordManager(private val plugin: Joshymc) {
         data class Embed(val embed: MessageEmbed, val channelId: String? = null) : QueuedAction()
     }
 
-    private val messageQueue = ConcurrentLinkedQueue<QueuedAction>()
+    /**
+     * Outgoing messages (issue #1159). Bounded, and filled while the bot is CONNECTING as well
+     * as CONNECTED, so alerts and reports raised during startup or a reconnect are delivered
+     * once it is ready instead of being dropped. Size and chat expiry: `discord.delivery-queue`.
+     */
+    private val messageQueue = DiscordDeliveryQueue<QueuedAction>(
+        capacity = { plugin.config.getInt("discord.delivery-queue.max-size", 500).coerceIn(10, 10_000) },
+        routineMaxAgeMs = { plugin.config.getLong("discord.delivery-queue.chat-max-age-seconds", 300L).coerceAtLeast(0L) * 1000L }
+    )
+    /** When the last queue-discard warning was logged, so a long outage logs once a minute at most. */
+    @Volatile private var lastDiscardLog = 0L
 
     private val updateHighlights = UpdateHighlightsAnnouncer(plugin)
 
@@ -90,6 +99,42 @@ class DiscordManager(private val plugin: Joshymc) {
     /** The chat bridge is optional: staff monitoring keeps working without it (issue #1068). */
     private val chatChannelConfigured: Boolean get() = channelId.isNotEmpty() && channelId != "000000000000000000"
 
+    /**
+     * The Discord features that are switched on with a channel to post to (issue #1159). The
+     * bot connects when any of them is, so punishment logs, update highlights or alert feeds
+     * work without the public chat bridge or staff monitoring. Each feature still checks its
+     * own toggles when it sends; this only decides whether connecting is worth it.
+     */
+    private fun enabledFeatures(): List<String> {
+        val cfg = plugin.config
+        return buildList {
+            if (chatChannelConfigured) add("chat bridge")
+            if (staffMonitoringEnabled && (channelSet("discord.staff-monitoring.anticheat-channel-id", staffAnticheatChannelId) or
+                    channelSet("discord.staff-monitoring.reports-channel-id", staffReportsChannelId))) add("staff monitoring")
+            if (punishmentSyncEnabled && channelSet("discord.channels.punishments-forum", punishmentForumChannelId)) add("punishment logs")
+            if (updateHighlights.enabled && channelSet("update-highlights.discord-channel", updateHighlights.channelId)) add("update highlights")
+            if (cfg.getBoolean("anti-dupe.enabled", true) && cfg.getBoolean("anti-dupe.discord.enabled", true) &&
+                channelSet("anti-dupe.discord.channel-id", cfg.getString("anti-dupe.discord.channel-id"))) add("anti-dupe alerts")
+            if (cfg.getBoolean("combat-alerts.enabled", true) && cfg.getBoolean("combat-alerts.discord.enabled", true) &&
+                channelSet("combat-alerts.discord.channel-id", cfg.getString("combat-alerts.discord.channel-id"))) add("combat alerts")
+            if (cfg.getBoolean("pvp-kill-logs.enabled", true) &&
+                channelSet("pvp-kill-logs.discord.channel-id", cfg.getString("pvp-kill-logs.discord.channel-id"))) add("PvP kill logs")
+            if (cfg.getBoolean("ancient-debris-monitor.enabled", true) &&
+                channelSet("ancient-debris-monitor.discord-channel-id", cfg.getString("ancient-debris-monitor.discord-channel-id"))) add("Ancient Debris monitor")
+        }
+    }
+
+    /** A real channel id: set, not the all-zero placeholder, and numeric (warned about otherwise). */
+    private fun channelSet(key: String, id: String?): Boolean {
+        val value = id?.trim().orEmpty()
+        if (value.isEmpty() || value.all { it == '0' }) return false
+        if (!value.all { it.isDigit() }) {
+            plugin.logger.warning("[Discord] $key \"$value\" is not a channel id (expected digits only) - that feature won't post.")
+            return false
+        }
+        return true
+    }
+
     /** [announceStartup] is true only for a real server start, so /joshymc reload doesn't post "Server started". */
     fun start(announceStartup: Boolean = true) {
         val token = plugin.config.getString("discord.token") ?: ""
@@ -98,12 +143,16 @@ class DiscordManager(private val plugin: Joshymc) {
             return
         }
 
+        // Any feature that posts to its own channel is reason enough to connect; the chat
+        // bridge is just one of them (issue #1159).
+        val features = enabledFeatures()
+        if (features.isEmpty()) {
+            plugin.logger.warning("[Discord] No Discord feature is enabled with a channel set in config.yml — integration disabled.")
+            discardQueued("no Discord feature is enabled")
+            return
+        }
         if (!chatChannelConfigured) {
-            if (!staffMonitoringEnabled) {
-                plugin.logger.warning("[Discord] Channel ID not set in config.yml — integration disabled.")
-                return
-            }
-            plugin.logger.warning("[Discord] Channel ID not set in config.yml — chat bridge disabled, staff monitoring only.")
+            plugin.logger.warning("[Discord] Channel ID not set in config.yml — chat bridge disabled; connecting for: ${features.joinToString()}.")
         }
 
         val attempt = synchronized(lifecycleLock) {
@@ -222,6 +271,7 @@ class DiscordManager(private val plugin: Joshymc) {
                 punishmentLogs.stop()
                 if (!retry) {
                     plugin.logger.severe("[Discord] The bot token was rejected - fix discord.token and run /joshymc reload. Punishment logs stay queued.")
+                    discardQueued("the bot token was rejected")
                     return@Runnable
                 }
                 scheduleReconnect(token, attempt, announceStartup, failures + 1, e)
@@ -256,10 +306,12 @@ class DiscordManager(private val plugin: Joshymc) {
         synchronized(lifecycleLock) { generation == attempt && state == ConnectionState.CONNECTED }
 
     /**
-     * Disconnects the bot without ever waiting on Discord unbounded. Queued messages and the
-     * "Server stopped" notice (only when [serverStopping], never on /joshymc reload) are handed
-     * to JDA's async requester, then JDA gets a few seconds to drain before it is cut off.
-     * A connection still handshaking is cancelled and can never publish itself afterwards.
+     * Disconnects the bot without ever waiting on Discord unbounded. Queued messages, plus the
+     * "Server stopped" notice when [serverStopping] (never on /joshymc reload), are handed to
+     * JDA's async requester, then JDA gets a few seconds to drain before it is cut off. If the
+     * bot never connected, a reload keeps the queue for the next connection and a server stop
+     * discards it with a log line. A connection still handshaking is cancelled and can never
+     * publish itself afterwards.
      */
     fun shutdown(serverStopping: Boolean = true) {
         val active: JDA?
@@ -283,15 +335,20 @@ class DiscordManager(private val plugin: Joshymc) {
                 plugin.logger.warning("[Discord] Failed to cancel the connecting bot: ${e.message}")
             }
 
+            if (active == null && serverStopping) {
+                // Never connected: nothing can deliver what's queued. A reload keeps it for the
+                // next connection instead.
+                discardQueued("the server stopped before the bot connected")
+            }
+
             if (active != null) {
-                if (serverStopping) {
-                    try {
-                        // Best effort: whatever was still queued, then the stop notice.
-                        flushQueue(active)
-                        chatChannel(active)?.sendMessage(":red_circle: **Server stopped**")?.queue(null) { }
-                    } catch (e: Exception) {
-                        plugin.logger.warning("[Discord] Could not send the shutdown notice: ${e.message}")
-                    }
+                try {
+                    // Best effort: whatever was still queued (on reload too, so pending alerts
+                    // aren't lost), then the stop notice on a real server stop.
+                    flushQueue(active)
+                    if (serverStopping) chatChannel(active)?.sendMessage(":red_circle: **Server stopped**")?.queue(null) { }
+                } catch (e: Exception) {
+                    plugin.logger.warning("[Discord] Could not send the shutdown notice: ${e.message}")
                 }
                 try {
                     // shutdown() lets already-queued requests finish; shutdownNow() cancels them.
@@ -319,13 +376,13 @@ class DiscordManager(private val plugin: Joshymc) {
     }
 
     fun send(content: String) {
-        if (jda == null || !chatChannelConfigured) return
-        messageQueue.add(QueuedAction.Text(content))
+        if (!chatChannelConfigured) return
+        enqueue(QueuedAction.Text(content), alert = false)
     }
 
     fun sendEmbed(embed: MessageEmbed) {
-        if (jda == null || !chatChannelConfigured) return
-        messageQueue.add(QueuedAction.Embed(embed))
+        if (!chatChannelConfigured) return
+        enqueue(QueuedAction.Embed(embed), alert = false)
     }
 
     /**
@@ -334,9 +391,49 @@ class DiscordManager(private val plugin: Joshymc) {
      * flushed the same way, so a bad channel id can never block the main thread.
      */
     fun sendEmbedToChannel(targetChannelId: String, embed: MessageEmbed) {
-        if (jda == null || targetChannelId.isEmpty()) return
-        messageQueue.add(QueuedAction.Embed(embed, targetChannelId))
+        if (targetChannelId.isEmpty()) return
+        enqueue(QueuedAction.Embed(embed, targetChannelId), alert = true)
     }
+
+    /**
+     * Queues [action] while the bot is connected or still connecting (issue #1159); a stopped
+     * bot (disabled, token rejected, shutting down) takes nothing, so the queue can't fill
+     * up with messages nobody will send.
+     */
+    private fun enqueue(action: QueuedAction, alert: Boolean) {
+        val current = state
+        if (current != ConnectionState.CONNECTING && current != ConnectionState.CONNECTED) return
+        messageQueue.offer(action, alert)
+        reportDiscards()
+    }
+
+    /** One warning a minute at most for messages the queue had to throw away. */
+    private fun reportDiscards() {
+        val now = System.currentTimeMillis()
+        if (now - lastDiscardLog < 60_000L) return
+        val discards = messageQueue.takeDiscards() ?: return
+        lastDiscardLog = now
+        val parts = buildList {
+            if (discards.alertOverflow > 0) add("${discards.alertOverflow} alert(s) (queue full)")
+            if (discards.routineOverflow > 0) add("${discards.routineOverflow} chat message(s) (queue full)")
+            if (discards.routineExpired > 0) add("${discards.routineExpired} chat message(s) older than the chat age limit")
+        }
+        plugin.logger.warning("[Discord] Dropped ${parts.joinToString(", ")} while the bot was unavailable (discord.delivery-queue).")
+    }
+
+    /** Drops everything queued, logging what was lost and why. */
+    private fun discardQueued(reason: String) {
+        val (alerts, routine) = messageQueue.clear()
+        messageQueue.takeDiscards()
+        if (alerts + routine > 0) plugin.logger.warning("[Discord] Discarded $alerts queued alert(s) and $routine chat message(s): $reason.")
+    }
+
+    /**
+     * True when [id] is the staff anti-cheat channel and staff monitoring will post there,
+     * so a feature mirroring the same detection can skip its own copy into it (issue #1159).
+     */
+    fun isStaffAlertChannel(id: String): Boolean =
+        staffMonitoringEnabled && id.isNotEmpty() && id == staffAnticheatChannelId
 
     /**
      * Staff-monitoring alert (anti-cheat, dupe, mining). Goes to the dedicated staff guild's
@@ -439,7 +536,7 @@ class DiscordManager(private val plugin: Joshymc) {
 
     internal fun buildPunishmentEmbed(entry: PunishmentManager.PunishmentLog): MessageEmbed {
         val staff = if (entry.staffName.equals("CONSOLE", ignoreCase = true)) "Console" else entry.staffName
-        val builder = EmbedBuilder()
+        val builder = SafeEmbedBuilder()
             .setTitle("${actionEmoji(entry.action)} ${actionLabel(entry.action)}")
             .setColor(actionColor(entry.action))
             .setThumbnail(headUrl(entry.targetUuid.toString()))
@@ -540,6 +637,8 @@ class DiscordManager(private val plugin: Joshymc) {
     private fun flushQueue(bot: JDA) {
         run {
             if (messageQueue.isEmpty()) return
+            val queued = ArrayDeque(messageQueue.drain())
+            reportDiscards()
 
             // A missing chat channel only drops chat-bridge messages; embeds addressed to
             // their own channel (anti-cheat alerts, reports, ...) are still delivered.
@@ -549,8 +648,8 @@ class DiscordManager(private val plugin: Joshymc) {
             // Batch text messages together, but embeds must be sent individually
             val textBatch = mutableListOf<String>()
 
-            while (messageQueue.isNotEmpty()) {
-                when (val action = messageQueue.poll() ?: break) {
+            while (queued.isNotEmpty()) {
+                when (val action = queued.removeFirst()) {
                     is QueuedAction.Text -> if (channel != null) textBatch.add(action.content) else droppedChat++
                     is QueuedAction.Embed -> {
                         // Flush any pending text first

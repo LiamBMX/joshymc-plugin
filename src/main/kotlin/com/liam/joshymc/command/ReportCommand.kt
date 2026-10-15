@@ -82,22 +82,28 @@ class ReportCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
         val reason = args.drop(1).joinToString(" ")
 
-        plugin.databaseManager.execute(
-            "INSERT INTO reports (reporter_uuid, reporter_name, target_uuid, target_name, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            player.uniqueId.toString(),
-            player.name,
-            target.uniqueId.toString(),
-            target.name,
-            reason,
-            now
-        )
+        // Insert and id read run under one DB lock, so the id is this report's (issue #1159).
+        val reportId = try {
+            plugin.databaseManager.insertReturningId(
+                "INSERT INTO reports (reporter_uuid, reporter_name, target_uuid, target_name, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                player.uniqueId.toString(),
+                player.name,
+                target.uniqueId.toString(),
+                target.name,
+                reason,
+                now
+                )
+        } catch (e: Exception) {
+            plugin.logger.warning("[Report] Could not save report from ${player.name}: ${e.message}")
+            plugin.commsManager.send(player, Component.text("Could not submit your report. Please try again.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            return true
+        }
 
         cooldowns[player.uniqueId] = now
 
-        val reportId = plugin.databaseManager.queryFirst("SELECT last_insert_rowid()") { rs -> rs.getInt(1) }
         val loc = player.location
         plugin.discordManager.sendStaffReport(
-            net.dv8tion.jda.api.EmbedBuilder()
+            com.liam.joshymc.discord.SafeEmbedBuilder()
                 .setTitle("🚨 NEW PLAYER REPORT")
                 .setColor(0xED4245)
                 .addField("Reported Player", target.name, true)

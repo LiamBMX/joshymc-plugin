@@ -602,6 +602,8 @@ class Joshymc : JavaPlugin() {
         listenerManager.passiveEnchantListener?.stop()
         listenerManager.thrownTridentVisualListener?.stop()
         listenerManager.greatPumpkinPieListener?.stop()
+        // Before discordManager.shutdown(), so the last mining summaries still go out.
+        listenerManager.ancientDebrisMonitorListener?.stop()
         claimManager.stop()
         scoreboardManager.stop()
         announcementManager.stop()
@@ -679,6 +681,8 @@ class Joshymc : JavaPlugin() {
         safe("rotatingBossBarManager.stop") { rotatingBossBarManager.stop() }
         safe("lagCleanerManager.stop") { lagCleanerManager.stop() }
         safe("resourcePackManager.shutdown") { resourcePackManager.shutdown() }
+        // Post the pending Ancient Debris summaries while the bot is still up (its task was cancelled in step 1).
+        safe("ancientDebrisMonitor.stop") { listenerManager.ancientDebrisMonitorListener?.stop() }
         safe("discordManager.shutdown") { discordManager.shutdown(serverStopping = false) }
 
         // 4. Clear registries

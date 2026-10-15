@@ -400,7 +400,7 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             CheckType.FAST_BREAK, CheckType.FAST_PLACE, CheckType.SCAFFOLD, CheckType.NUKER -> "Block Cheat Detection"
             else -> "Exploit Detection"
         }
-        return net.dv8tion.jda.api.EmbedBuilder()
+        return com.liam.joshymc.discord.SafeEmbedBuilder()
             .setTitle("$category: $checkLabel")
             .setColor(color)
             .addField("Player", "${alert.playerName} (`${alert.uuid}`)", false)

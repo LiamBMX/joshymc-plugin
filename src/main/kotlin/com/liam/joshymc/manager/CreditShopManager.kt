@@ -67,11 +67,10 @@ class CreditShopManager(private val plugin: Joshymc) {
     }
 
     fun addItem(categoryId: String, item: ItemStack, price: Double): Int {
-        plugin.databaseManager.execute(
+        return plugin.databaseManager.insertReturningId(
             "INSERT INTO credit_shop_items (category_id, item, price, added_at) VALUES (?, ?, ?, ?)",
             categoryId, serializeItem(item), price, System.currentTimeMillis()
-        )
-        return plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { rs -> rs.getInt("id") } ?: -1
+        ) ?: -1
     }
 
     fun removeItem(id: Int): Boolean {

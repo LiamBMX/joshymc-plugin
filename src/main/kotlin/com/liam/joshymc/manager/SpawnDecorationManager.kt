@@ -298,13 +298,10 @@ class SpawnDecorationManager(private val plugin: Joshymc) : Listener {
     // ── CRUD operations ─────────────────────────────────────
 
     fun addHologram(location: Location, text: String): Int {
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO spawn_decorations (type, world, x, y, z, data) VALUES (?, ?, ?, ?, ?, ?)",
             "hologram", location.world.name, location.x, location.y, location.z, text
-        )
-        val id = plugin.databaseManager.queryFirst(
-            "SELECT last_insert_rowid() AS id"
-        ) { it.getInt("id") } ?: -1
+        ) ?: -1
 
         val row = DecorationRow(id, "hologram", location.world.name, location.x, location.y, location.z, text)
         spawnHologramEntities(row)
@@ -320,13 +317,10 @@ class SpawnDecorationManager(private val plugin: Joshymc) : Listener {
         animation: String = "static"
     ): Int {
         val data = "$type;radius=$radius;count=$count;speed=$speed;animation=$animation"
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO spawn_decorations (type, world, x, y, z, data) VALUES (?, ?, ?, ?, ?, ?)",
             "particle", location.world.name, location.x, location.y, location.z, data
-        )
-        val id = plugin.databaseManager.queryFirst(
-            "SELECT last_insert_rowid() AS id"
-        ) { it.getInt("id") } ?: -1
+        ) ?: -1
 
         val row = DecorationRow(id, "particle", location.world.name, location.x, location.y, location.z, data)
         particleEmitters.add(row)
@@ -372,11 +366,10 @@ class SpawnDecorationManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun insertFirework(location: Location, data: String): Int {
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO spawn_decorations (type, world, x, y, z, data) VALUES (?, ?, ?, ?, ?, ?)",
             "firework", location.world.name, location.x, location.y, location.z, data
-        )
-        val id = plugin.databaseManager.queryFirst("SELECT last_insert_rowid() AS id") { it.getInt("id") } ?: -1
+        ) ?: -1
         val row = DecorationRow(id, "firework", location.world.name, location.x, location.y, location.z, data)
         fireworkEmitters.add(row)
         restartParticleTask()
@@ -735,13 +728,10 @@ class SpawnDecorationManager(private val plugin: Joshymc) : Listener {
     }
 
     fun addBeacon(location: Location, color: String): Int {
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO spawn_decorations (type, world, x, y, z, data) VALUES (?, ?, ?, ?, ?, ?)",
             "beacon", location.world.name, location.x, location.y, location.z, color
-        )
-        val id = plugin.databaseManager.queryFirst(
-            "SELECT last_insert_rowid() AS id"
-        ) { it.getInt("id") } ?: -1
+        ) ?: -1
 
         val row = DecorationRow(id, "beacon", location.world.name, location.x, location.y, location.z, color)
         beaconEmitters.add(row)
@@ -915,13 +905,10 @@ class SpawnDecorationManager(private val plugin: Joshymc) : Listener {
 
     fun addLogo(location: Location): Int {
         val data = "\uE000"
-        plugin.databaseManager.execute(
+        val id = plugin.databaseManager.insertReturningId(
             "INSERT INTO spawn_decorations (type, world, x, y, z, data) VALUES (?, ?, ?, ?, ?, ?)",
             "logo", location.world.name, location.x, location.y, location.z, data
-        )
-        val id = plugin.databaseManager.queryFirst(
-            "SELECT last_insert_rowid() AS id"
-        ) { it.getInt("id") } ?: -1
+        ) ?: -1
 
         val row = DecorationRow(id, "logo", location.world.name, location.x, location.y, location.z, data)
         spawnHologramEntities(row)
