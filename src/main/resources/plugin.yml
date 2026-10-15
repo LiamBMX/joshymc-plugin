@@ -1373,6 +1373,9 @@ permissions:
   joshymc.claim.admin:
     description: Admin claim management (unclaim others, bypass)
     default: op
+  joshymc.claim.admin.wand:
+    description: Get and use the admin claim wand (/claim admin wand) to create admin claims
+    default: op
   joshymc.claim.bypass:
     description: Bypass claim protection
     default: op
