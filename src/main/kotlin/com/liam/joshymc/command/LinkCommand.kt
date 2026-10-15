@@ -28,8 +28,8 @@ class LinkCommand(private val plugin: Joshymc) : CommandExecutor {
             return true
         }
 
-        val pending = plugin.linkManager.generateCode(sender.uniqueId, sender.name)
-        LinkGui.openCodeGui(sender, pending.code)
+        val pending = plugin.linkManager.startLink(sender.uniqueId, sender.name)
+        LinkGui.openCodeGui(sender, pending)
 
         return true
     }

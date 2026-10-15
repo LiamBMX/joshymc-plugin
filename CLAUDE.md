@@ -169,7 +169,8 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 - Bot connects async; doesn't block server startup
 - 2-way chat bridge + join/leave/death/start/stop forwarding
 - @everyone/@here escaped automatically
-- `/link` ↔ `/unlink` for account linking, persisted via `LinkManager`
+- `/link` ↔ `/unlink` for account linking, persisted via `LinkManager`. **Issue #1155**: all session/link state lives in `link/LinkSessions` (one small lock, immutable `PendingLink`, strict one-to-one links). Codes are 8-char `SecureRandom` codes with no look-alikes (`LinkCodes`, shown `XXXX-XXXX`), wrong DMs are rate-limited per account plus a global cap (`LinkAttemptLimiter`, tunables in `discord.linking`), and the player must still click Confirm, which only links the account the GUI showed.
+- **Discord → Minecraft chat is literal text** (issue #1155): only `discord.minecraft-format` is parsed for `&` codes; names and messages go through `DiscordText.sanitize` + `DiscordText.render`. Never splice Discord-controlled text into a legacy string before deserializing.
 - **Update highlights (issue #1121)**: before tagging a release with player-visible changes, fill in `src/main/resources/update-highlights.yml` (summary + bullets, no dev details). Once the bot connects, `UpdateHighlightsAnnouncer` posts it to `update-highlights.discord-channel` as a "JoshyMC Update vX" embed. It posts once per content hash (`update_highlights_posted` table), so unchanged files never repost, and `-SNAPSHOT` builds never post.
 
 ## Style conventions

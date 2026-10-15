@@ -4,10 +4,12 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.Sound
 import org.bukkit.entity.Player
+import org.bukkit.inventory.InventoryView
 import org.bukkit.inventory.ItemStack
 
 object LinkGui {
@@ -17,6 +19,7 @@ object LinkGui {
     const val STATUS_SLOT = 11      // middle left (opposite of cancel)
     const val CONFIRM_SLOT = 11     // replaces status when confirmed
     const val CANCEL_SLOT = 15      // middle right
+    val CONFIRM_MATERIAL = Material.LIME_WOOL
 
     private val ACCENT = TextColor.color(0x55FFFF)
     private val SUCCESS = TextColor.color(0x55FF55)
@@ -31,7 +34,11 @@ object LinkGui {
 
     private fun noItalic(c: Component): Component = c.decoration(TextDecoration.ITALIC, false)
 
-    fun openCodeGui(player: Player, code: String) {
+    fun isLinkGui(view: InventoryView): Boolean =
+        PlainTextComponentSerializer.plainText().serialize(view.title()).startsWith(GUI_TITLE_PREFIX)
+
+    fun openCodeGui(player: Player, pending: PendingLink) {
+        val code = LinkCodes.display(pending.code)
         val inv = Bukkit.createInventory(null, 27,
             noItalic(Component.text("Link Discord", ACCENT).decoration(TextDecoration.BOLD, true))
         )
@@ -83,8 +90,15 @@ object LinkGui {
         player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f, 1.5f)
     }
 
-    fun updateGuiWithConfirmation(player: Player, discordName: String, code: String) {
+    /**
+     * Shows the Discord account that sent the code and the Confirm button. Main thread only.
+     * Reopens the Link GUI if the player closed it, so it never writes into another inventory.
+     */
+    fun showConfirmation(player: Player, pending: PendingLink) {
+        val claim = pending.claim ?: return
+        if (!isLinkGui(player.openInventory)) openCodeGui(player, pending)
         val inv = player.openInventory.topInventory
+        val code = LinkCodes.display(pending.code)
 
         // Update code item
         val codeItem = ItemStack(Material.NAME_TAG)
@@ -109,7 +123,9 @@ object LinkGui {
         statusMeta.lore(listOf(
             Component.empty(),
             noItalic(Component.text("Discord: ", NamedTextColor.GRAY)
-                .append(Component.text(discordName, ACCENT))),
+                .append(Component.text(claim.displayName, ACCENT))),
+            noItalic(Component.text("Username: ", NamedTextColor.GRAY)
+                .append(Component.text("@" + claim.username, ACCENT))),
             Component.empty(),
             noItalic(Component.text("Is this you?", NamedTextColor.YELLOW)),
         ))
@@ -117,7 +133,7 @@ object LinkGui {
         inv.setItem(STATUS_SLOT, statusItem)
 
         // Add confirm button — bottom left-center
-        val confirmItem = ItemStack(Material.LIME_WOOL)
+        val confirmItem = ItemStack(CONFIRM_MATERIAL)
         val confirmMeta = confirmItem.itemMeta!!
         confirmMeta.displayName(noItalic(
             Component.text("Confirm", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true)
