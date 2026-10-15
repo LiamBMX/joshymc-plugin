@@ -26,6 +26,7 @@ import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemFlag
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
@@ -671,6 +672,11 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * all count — not just empty slots.
      */
     private fun select3RewardsFit(player: Player, items: List<ItemStack>): Boolean {
+        return storageAfterOneKey(player).addItem(*items.map { it.clone() }.toTypedArray()).isEmpty()
+    }
+
+    /** A scratch copy of the player's storage with one key taken from the main hand. */
+    private fun storageAfterOneKey(player: Player): Inventory {
         val contents = player.inventory.storageContents.map { it?.clone() }.toTypedArray()
         val heldSlot = player.inventory.heldItemSlot
         val held = contents.getOrNull(heldSlot)
@@ -679,7 +685,46 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }
         val temp = Bukkit.createInventory(null, 36)
         temp.contents = contents
-        return temp.addItem(*items.map { it.clone() }.toTypedArray()).isEmpty()
+        return temp
+    }
+
+    /**
+     * True if whatever the next mass-open key rolls is guaranteed to fit once that key is
+     * taken. Checking every possible reward (not just the one rolled) means a nearly full
+     * inventory can't be used to keep only the rolls that fit and reroll the rest for free.
+     * A single reward is simulated with real addItem stacking; a multi-reward open (Select 3)
+     * needs empty slots for its [perOpen] bulkiest rewards, which never undercounts.
+     */
+    private fun massOpenNextFits(player: Player, candidates: List<ItemStack>, perOpen: Int): Boolean {
+        if (perOpen <= 1) {
+            return candidates.all { storageAfterOneKey(player).addItem(it.clone()).isEmpty() }
+        }
+        val emptySlots = storageAfterOneKey(player).storageContents.count { it == null || it.type == Material.AIR }
+        val needed = candidates
+            .map { (it.amount + it.maxStackSize - 1) / it.maxStackSize.coerceAtLeast(1) }
+            .sortedDescending()
+            .take(perOpen)
+            .sum()
+        return needed <= emptySlots
+    }
+
+    /**
+     * Delivers a mass-open reward without ever dropping it: anything that unexpectedly doesn't
+     * fit is held in crate_pending_rewards and retried, like an interrupted animation reward.
+     */
+    private fun deliverMassOpenReward(player: Player, item: ItemStack, label: String) {
+        val leftover = plugin.depositItemSafely(player, item) ?: return
+        if (leftover.amount <= 0) return
+        plugin.databaseManager.execute(
+            "INSERT INTO crate_pending_rewards (id, owner_uuid, item, label, created_at) VALUES (?, ?, ?, ?, ?)",
+            UUID.randomUUID().toString(), player.uniqueId.toString(), serializeItem(leftover), label, System.currentTimeMillis()
+        )
+        plugin.commsManager.send(
+            player,
+            Component.text("Your crate reward ", NamedTextColor.YELLOW)
+                .append(Component.text(label, TextColor.color(0xFFAA00)))
+                .append(Component.text(" is safely held and will be delivered once you have space.", NamedTextColor.YELLOW))
+        )
     }
 
     fun openCrate(player: Player, crateType: String, block: Block) {
@@ -1742,40 +1787,38 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             )
         }
 
-        // Require at least one free slot before we even start, so the first reward has somewhere to land.
-        if (player.inventory.firstEmpty() == -1) {
-            plugin.commsManager.send(
-                player,
-                Component.text("Your inventory is full — clear some space before mass-opening.", NamedTextColor.RED)
-            )
-            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
-            return
-        }
-
-        // Consume keys incrementally so we can refund any we can't use.
-        player.inventory.setItemInMainHand(null)
+        // Keys never leave the main-hand slot: each one is taken only after its reward is known
+        // to fit, so a stop part-way leaves every unopened key exactly where it was and there
+        // is nothing to refund.
+        val perOpen = rewardsPerOpen(crate)
+        val candidates = crate.rewards.map { buildRewardItem(it) }
+        val heldSlot = player.inventory.heldItemSlot
 
         val rewardSummary = mutableMapOf<String, Int>()
         var keysUsed = 0
         for (i in 0 until keyCount) {
-            // Stop if the inventory has no room for another reward.
-            // (Partial stacks can still top up existing stacks, but firstEmpty == -1 is our hard stop.)
-            if (player.inventory.firstEmpty() == -1) break
+            if (player.inventory.heldItemSlot != heldSlot || !isKey(player.inventory.itemInMainHand, crateType)) break
+            if (!massOpenNextFits(player, candidates, perOpen)) break
 
+            consumeOneKey(player)
             // One key = one open: a Select 3 crate grants 3 distinct rewards, like its manual pick.
-            for (reward in selectDistinctWeightedRewards(crate, rewardsPerOpen(crate))) {
-                val rewardItem = buildRewardItem(reward)
-                plugin.giveItemSafely(player, rewardItem)
+            for (reward in selectDistinctWeightedRewards(crate, perOpen)) {
+                deliverMassOpenReward(player, buildRewardItem(reward), "${reward.displayName} x${reward.amount}")
                 rewardSummary[reward.displayName] = (rewardSummary[reward.displayName] ?: 0) + reward.amount
             }
             keysUsed++
         }
 
-        val keysRefunded = keyCount - keysUsed
-        if (keysRefunded > 0) {
-            // Main hand is empty after setItemInMainHand(null), so giveKey is guaranteed a slot.
-            giveKey(player, crateType, keysRefunded)
+        if (keysUsed == 0) {
+            plugin.commsManager.send(
+                player,
+                Component.text("You need more inventory space to mass-open this crate — no key was used.", NamedTextColor.RED)
+            )
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+            return
         }
+
+        val keysRefunded = keyCount - keysUsed
 
         // Send summary message
         plugin.commsManager.send(
@@ -1797,9 +1840,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         if (keysRefunded > 0) {
             plugin.commsManager.send(
                 player,
-                Component.text("Your inventory filled up — ", NamedTextColor.YELLOW)
+                Component.text("Your inventory filled up — stopped with ", NamedTextColor.YELLOW)
                     .append(Component.text("$keysRefunded ", NamedTextColor.WHITE))
-                    .append(Component.text("key${if (keysRefunded == 1) "" else "s"} returned.", NamedTextColor.YELLOW))
+                    .append(Component.text("unopened key${if (keysRefunded == 1) "" else "s"} still in your hand.", NamedTextColor.YELLOW))
             )
         }
 
