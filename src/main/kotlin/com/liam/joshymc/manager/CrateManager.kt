@@ -190,6 +190,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * (join, retry, shutdown) skips rows that are in flight.
      */
     private val inFlightRewards = mutableMapOf<UUID, String>()
+    /**
+     * crate id -> config values crates.yml had that loadCrates couldn't read (unknown mode,
+     * animation type or reward material). The crate still loads so admins can preview and
+     * edit it, but it refuses to open until the value is fixed instead of guessing a fallback.
+     */
+    private val configProblems = mutableMapOf<String, MutableList<String>>()
+    /** crate id -> when its "refused to open" warning was last logged, so clicks don't flood the console. */
+    private val lastRefusalLog = mutableMapOf<String, Long>()
     private var particleTask: BukkitTask? = null
     private var pendingRetryTask: BukkitTask? = null
     private lateinit var cratesFile: File
@@ -274,10 +282,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     private fun loadCrates() {
         crates.clear()
+        configProblems.clear()
+        lastRefusalLog.clear()
         val section = cratesConfig.getConfigurationSection("crates") ?: return
 
         for (id in section.getKeys(false)) {
             val crateSection = section.getConfigurationSection(id) ?: continue
+            val problems = mutableListOf<String>()
             val displayName = crateSection.getString("display-name", id) ?: id
             val keyMaterialStr = crateSection.getString("key-material", "TRIPWIRE_HOOK") ?: "TRIPWIRE_HOOK"
             val keyMaterial = try { Material.valueOf(keyMaterialStr) } catch (_: Exception) { Material.TRIPWIRE_HOOK }
@@ -293,10 +304,17 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val animationGlass = try { Material.valueOf(glassStr) } catch (_: Exception) { Material.WHITE_STAINED_GLASS_PANE }
 
             val modeStr = crateSection.getString("mode", "random") ?: "random"
-            val mode = try { CrateMode.valueOf(modeStr.uppercase()) } catch (_: Exception) { CrateMode.RANDOM }
+            val mode = try { CrateMode.valueOf(modeStr.uppercase()) } catch (_: Exception) {
+                problems.add("unknown mode '$modeStr'")
+                CrateMode.RANDOM
+            }
 
             val animTypeStr = crateSection.getString("animation-type", "spin") ?: "spin"
-            val animationType = try { AnimationType.valueOf(animTypeStr.uppercase()) } catch (_: Exception) { AnimationType.SPIN }
+            val animationType = try { AnimationType.valueOf(animTypeStr.uppercase()) } catch (_: Exception) {
+                // Only RANDOM crates animate, so a bad value on a pick crate is harmless.
+                if (mode == CrateMode.RANDOM) problems.add("unknown animation-type '$animTypeStr'")
+                AnimationType.SPIN
+            }
 
             val idleParticleStr = crateSection.getString("idle-particle", "END_ROD") ?: "END_ROD"
             val idleParticle = try { Particle.valueOf(idleParticleStr.uppercase()) } catch (_: Exception) { Particle.END_ROD }
@@ -312,7 +330,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 for (rewardKey in rewardsSection.getKeys(false)) {
                     val rewardSection = rewardsSection.getConfigurationSection(rewardKey) ?: continue
                     val matStr = rewardSection.getString("material", "STONE") ?: "STONE"
-                    val mat = try { Material.valueOf(matStr) } catch (_: Exception) { Material.STONE }
+                    val itemBase64 = rewardSection.getString("item-base64")?.takeIf { it.isNotBlank() }
+                    val mat = try { Material.valueOf(matStr) } catch (_: Exception) {
+                        // A stored item snapshot is what gets granted, so the material only matters without one.
+                        if (itemBase64 == null) problems.add("reward '$rewardKey' has unknown material '$matStr'")
+                        Material.STONE
+                    }
                     val amount = rewardSection.getInt("amount", 1)
                     val weight = rewardSection.getInt("weight", 1)
                     val rewardDisplayName = rewardSection.getString("display-name", mat.name.lowercase().replace("_", " ")) ?: mat.name
@@ -328,9 +351,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                         }
                     }
 
-                    val itemBase64 = rewardSection.getString("item-base64")?.takeIf { it.isNotBlank() }
                     rewards.add(CrateReward(mat, amount, weight, rewardDisplayName, enchantments, itemBase64))
                 }
+            }
+
+            if (problems.isNotEmpty()) {
+                configProblems[id] = problems
+                plugin.logger.warning("[Crates] Crate '$id' is misconfigured and won't open until crates.yml is fixed: ${problems.joinToString("; ")}")
             }
 
             crates[id] = CrateDef(
@@ -511,6 +538,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             }
         }
         cratesConfig.save(cratesFile)
+        // The file now holds the values every crate actually loaded with (the editor rewrote the
+        // unreadable ones), so the load-time problems no longer describe it.
+        if (configProblems.isNotEmpty()) {
+            plugin.logger.warning("[Crates] Saving crates.yml replaced unreadable values in ${configProblems.keys.joinToString()} with their defaults (mode random, animation-type spin, material STONE); check those crates in the editor.")
+            configProblems.clear()
+        }
     }
 
     fun setCrateLocation(block: Block, crateType: String): Boolean {
@@ -645,17 +678,6 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return meta.persistentDataContainer.get(crateKeyKey, PersistentDataType.STRING)
     }
 
-    /**
-     * Consume one key from the player's main hand, but only if the crate is in
-     * RANDOM mode. SELECT-mode crates consume the key when the player picks a
-     * reward, so calling this for them would double-charge.
-     */
-    fun consumeOneKeyIfAuto(player: Player, crateType: String) {
-        if (!isManualPickMode(crates[crateType]?.mode ?: CrateMode.RANDOM)) {
-            consumeOneKey(player)
-        }
-    }
-
     private fun consumeOneKey(player: Player) {
         val itemInHand = player.inventory.itemInMainHand
         if (itemInHand.amount > 1) {
@@ -727,19 +749,74 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         )
     }
 
-    fun openCrate(player: Player, crateType: String, block: Block) {
-        val crate = crates[crateType] ?: return
-
-        if (crate.rewards.isEmpty()) {
-            plugin.commsManager.send(player, Component.text("This crate has no rewards configured.", NamedTextColor.RED))
-            return
+    /**
+     * Why [crate] can't be opened, or null when it's ready. The one set of validity rules every
+     * open path (click, mass-open, /crate force) checks before a key is touched. [randomDraw] is
+     * true when the open picks rewards by weight (RANDOM crates, and any mass-open).
+     */
+    private fun crateProblem(crate: CrateDef, randomDraw: Boolean): String? {
+        configProblems[crate.id]?.let { return it.joinToString("; ") }
+        if (crate.rewards.isEmpty()) return "no rewards configured"
+        crate.rewards.withIndex().firstOrNull { it.value.amount < 1 }?.let {
+            return "reward #${it.index} (${it.value.displayName}) has amount ${it.value.amount}"
         }
+        if (crate.mode == CrateMode.SELECT_3 && crate.rewards.size < 3) {
+            return "Select 3 mode needs at least 3 rewards (has ${crate.rewards.size})"
+        }
+        if (randomDraw) {
+            crate.rewards.withIndex().firstOrNull { it.value.weight < 0 }?.let {
+                return "reward #${it.index} (${it.value.displayName}) has negative weight ${it.value.weight}"
+            }
+            if (crate.rewards.sumOf { it.weight } <= 0) return "reward weights add up to 0"
+        }
+        return null
+    }
 
+    /**
+     * Returns the crate if it's valid and ready to open; otherwise tells the player (their key
+     * is untouched), logs the reason for staff, and returns null. Call before consuming a key.
+     */
+    private fun openableCrate(player: Player, crateType: String, massOpen: Boolean): CrateDef? {
+        val crate = crates[crateType]
+        val problem = if (crate == null) {
+            "crate type '$crateType' is not defined in crates.yml"
+        } else {
+            crateProblem(crate, randomDraw = massOpen || crate.mode == CrateMode.RANDOM)
+        } ?: return crate
+
+        plugin.commsManager.send(
+            player,
+            Component.text(
+                if (crate == null) "This key can't be used right now — its crate no longer exists. Your key was not used."
+                else "This crate is unavailable right now. Your key was not used.",
+                NamedTextColor.RED
+            )
+        )
+        if (player.hasPermission("joshymc.crate.admin")) {
+            plugin.commsManager.send(player, Component.text("Admin: crate '$crateType' — $problem", NamedTextColor.GRAY))
+        }
+        player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+
+        val now = System.currentTimeMillis()
+        if (now - (lastRefusalLog[crateType] ?: 0L) >= 60_000L) {
+            lastRefusalLog[crateType] = now
+            plugin.logger.warning("[Crates] Refused to open crate '$crateType' for ${player.name} (no key used): $problem")
+        }
+        return null
+    }
+
+    /** Opens a crate without a key (/crate force). Keyed opens go through [handleCrateClick]. */
+    fun openCrate(player: Player, crateType: String, block: Block) {
         if (activeAnimations.contains(player.uniqueId)) {
             plugin.commsManager.send(player, Component.text("You already have a crate animation running.", NamedTextColor.RED))
             return
         }
+        val crate = openableCrate(player, crateType, massOpen = false) ?: return
+        beginOpening(player, crate)
+    }
 
+    /** Starts the opening flow for a crate that already passed [openableCrate] (and had its key taken, for RANDOM). */
+    private fun beginOpening(player: Player, crate: CrateDef) {
         // SELECT mode: open a pick GUI instead of animating
         if (crate.mode == CrateMode.SELECT) {
             openSelectGui(player, crate)
@@ -748,10 +825,6 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         // SELECT_3 mode: open the multi-pick GUI instead of animating
         if (crate.mode == CrateMode.SELECT_3) {
-            if (crate.rewards.size < 3) {
-                plugin.commsManager.send(player, Component.text("This crate is misconfigured for Select 3 (needs at least 3 rewards) — contact an admin.", NamedTextColor.RED))
-                return
-            }
             select3Sessions[player.uniqueId] = Select3Session(crate.id)
             openSelect3Gui(player, crate)
             return
@@ -1759,17 +1832,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     // --- Mass open ---
 
     private fun massOpen(player: Player, crateType: String, block: Block) {
-        val crate = crates[crateType] ?: return
-
-        if (crate.rewards.isEmpty()) {
-            plugin.commsManager.send(player, Component.text("This crate has no rewards configured.", NamedTextColor.RED))
-            return
-        }
-
         if (activeAnimations.contains(player.uniqueId)) {
             plugin.commsManager.send(player, Component.text("You already have a crate animation running.", NamedTextColor.RED))
             return
         }
+
+        val crate = openableCrate(player, crateType, massOpen = true) ?: return
 
         // Anti-dupe: re-validate key at the moment of consumption
         val itemInHand = player.inventory.itemInMainHand
@@ -2000,6 +2068,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
 
+        // The crate must be valid before anything else happens — the key is only taken below.
+        val crate = openableCrate(player, crateType, massOpen = false) ?: return
+
+        // Block opening if the inventory has no room for the reward — otherwise it would
+        // drop on the ground and risk being lost (void/lava/despawn).
+        // Main-hand slot will free up when we consume the key, but that only helps if
+        // the player holds exactly one key; otherwise a fresh free slot is required.
         val hasFreeSlot = player.inventory.firstEmpty() != -1 ||
             (itemInHand.amount == 1 && isKey(itemInHand, crateType))
         if (!hasFreeSlot) {
@@ -2011,10 +2086,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        if (!isManualPickMode(crates[crateType]?.mode ?: CrateMode.RANDOM)) {
+        // SELECT / SELECT_3 defer key consumption until the player actually finalizes a pick,
+        // so closing the GUI without choosing does not cost a key.
+        if (!isManualPickMode(crate.mode)) {
             consumeOneKey(player)
         }
-        openCrate(player, crateType, block)
+        beginOpening(player, crate)
     }
 
     // HIGHEST so we win against world/claim/etc. plugins that may have already
@@ -2084,65 +2161,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // tries to place the held item instead of opening the crate.
         event.setUseItemInHand(org.bukkit.event.Event.Result.DENY)
 
-        if (activeAnimations.contains(player.uniqueId)) {
-            plugin.commsManager.send(player, Component.text("You already have a crate animation running.", NamedTextColor.RED))
-            return
-        }
-
-        val itemInHand = player.inventory.itemInMainHand
-
-        // Sneak + right-click WITHOUT key = preview
-        if (player.isSneaking && !isKey(itemInHand, crateType)) {
-            openPreview(player, crateType)
-            return
-        }
-
-        // Sneak + right-click WITH key = mass open
-        if (player.isSneaking && isKey(itemInHand, crateType)) {
-            massOpen(player, crateType, block)
-            return
-        }
-
-        if (!isKey(itemInHand, crateType)) {
-            val crate = crates[crateType]
-            if (crate != null) {
-                plugin.commsManager.send(
-                    player,
-                    Component.text("You need a ", NamedTextColor.RED)
-                        .append(Component.text(crate.keyName, TextColor.color(0xFFAA00)))
-                        .append(Component.text(" to open this crate.", NamedTextColor.RED))
-                )
-                plugin.commsManager.send(
-                    player,
-                    Component.text("Sneak + right-click to preview rewards.", NamedTextColor.GRAY)
-                )
-            }
-            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
-            return
-        }
-
-        // Block opening if the inventory has no room for the reward — otherwise it would
-        // drop on the ground and risk being lost (void/lava/despawn).
-        // Main-hand slot will free up when we consume the key, but that only helps if
-        // the player holds exactly one key; otherwise a fresh free slot is required.
-        val hasFreeSlot = player.inventory.firstEmpty() != -1 ||
-            (itemInHand.amount == 1 && isKey(itemInHand, crateType))
-        if (!hasFreeSlot) {
-            plugin.commsManager.send(
-                player,
-                Component.text("Your inventory is full — clear some space before opening.", NamedTextColor.RED)
-            )
-            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
-            return
-        }
-
-        // SELECT / SELECT_3 defer key consumption until the player actually finalizes a pick,
-        // so closing the GUI without choosing does not cost a key.
-        if (!isManualPickMode(crates[crateType]?.mode ?: CrateMode.RANDOM)) {
-            consumeOneKey(player)
-        }
-
-        openCrate(player, crateType, block)
+        handleCrateClick(player, crateType, block, leftClick = false)
     }
 
     @EventHandler
