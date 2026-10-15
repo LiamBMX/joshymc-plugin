@@ -147,7 +147,9 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
         val vl: Double,
         val detail: String,
         val world: String,
-        val x: Int, val y: Int, val z: Int
+        val x: Int, val y: Int, val z: Int,
+        /** When the detection happened, so a grouped summary posted later still shows its real time. */
+        val at: java.time.Instant
     )
     private var discordAlertThrottle = AlertThrottle<DiscordAlertKey, DiscordAlertSnapshot>(30_000L)
     private var discordSummaryTask: BukkitTask? = null
@@ -323,7 +325,8 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             val loc = player.location
             val snapshot = DiscordAlertSnapshot(
                 player.name, player.uniqueId, check, newVL, detail,
-                loc.world?.name ?: "unknown", loc.blockX, loc.blockY, loc.blockZ
+                loc.world?.name ?: "unknown", loc.blockX, loc.blockY, loc.blockZ,
+                java.time.Instant.ofEpochMilli(now)
             )
             discordAlertThrottle.offer(DiscordAlertKey(player.uniqueId, check), snapshot, now)?.let { earlier ->
                 sendStaffDiscordAlert(snapshot, earlier)
@@ -388,9 +391,9 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
         val check = alert.check
         val vl = alert.vl
         val (label, color) = when {
-            vl >= kickVL * 0.5 -> "High priority" to 0xED4245
-            vl >= alertVL * 1.5 -> "Repeated violations" to 0xFFA500
-            else -> "Suspicious" to 0xFEE75C
+            vl >= kickVL * 0.5 -> "High priority" to com.liam.joshymc.discord.DiscordEmbeds.Severity.HIGH.color
+            vl >= alertVL * 1.5 -> "Repeated violations" to com.liam.joshymc.discord.DiscordEmbeds.Severity.MEDIUM.color
+            else -> "Suspicious" to com.liam.joshymc.discord.DiscordEmbeds.Severity.LOW.color
         }
         // Detection category (issue #1068) so staff can tell PvP / movement / exploit alerts apart.
         val category = when (check) {
@@ -400,10 +403,8 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             CheckType.FAST_BREAK, CheckType.FAST_PLACE, CheckType.SCAFFOLD, CheckType.NUKER -> "Block Cheat Detection"
             else -> "Exploit Detection"
         }
-        return com.liam.joshymc.discord.SafeEmbedBuilder()
-            .setTitle("$category: $checkLabel")
-            .setColor(color)
-            .addField("Player", "${alert.playerName} (`${alert.uuid}`)", false)
+        return com.liam.joshymc.discord.DiscordEmbeds.alert("$category: $checkLabel", color, "Anti-Cheat", alert.at)
+            .addField("Player", com.liam.joshymc.discord.DiscordEmbeds.player(alert.playerName, alert.uuid), false)
             .addField("Detection", category, true)
             .addField("Check", check.displayName, true)
             .addField("Violation Level", "%.0f".format(vl), true)

@@ -1,7 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
-import com.liam.joshymc.discord.SafeEmbedBuilder
+import com.liam.joshymc.discord.DiscordEmbeds
 import org.bukkit.entity.Player
 import java.time.Instant
 import java.util.UUID
@@ -20,10 +20,10 @@ import java.util.concurrent.ConcurrentHashMap
 class AntiDupeManager(private val plugin: Joshymc) {
 
     enum class RiskLevel(val label: String, val color: Int, val configKey: String) {
-        LOW("Low", 0xFEE75C, "low"),
-        MEDIUM("Medium", 0xFFA500, "medium"),
-        HIGH("High", 0xED4245, "high"),
-        CRITICAL("Critical", 0x8B0000, "critical")
+        LOW("Low", DiscordEmbeds.Severity.LOW.color, "low"),
+        MEDIUM("Medium", DiscordEmbeds.Severity.MEDIUM.color, "medium"),
+        HIGH("High", DiscordEmbeds.Severity.HIGH.color, "high"),
+        CRITICAL("Critical", DiscordEmbeds.Severity.CRITICAL.color, "critical")
     }
 
     private data class RateBucket(var count: Int, val windowStart: Long)
@@ -131,11 +131,8 @@ class AntiDupeManager(private val plugin: Joshymc) {
 
         if (bucket.count > 1) return // within the window and already alerted — grouped follow-up covers the rest
 
-        val embed = SafeEmbedBuilder()
-            .setTitle("Possible Duplication Detected")
-            .setColor(risk.color)
-            .addField("Player", player.name, true)
-            .addField("UUID", player.uniqueId.toString(), true)
+        val embed = DiscordEmbeds.alert("Possible Duplication Detected", risk.color, FOOTER_SOURCE, Instant.ofEpochMilli(timestamp))
+            .addField("Player", DiscordEmbeds.player(player.name, player.uniqueId), false)
             .addField("Risk Level", risk.label, true)
             .addField("Detection Type", detectionType, false)
             .apply {
@@ -147,7 +144,6 @@ class AntiDupeManager(private val plugin: Joshymc) {
                 addField("World", world, true)
                 addField("Location", location, true)
             }
-            .setTimestamp(Instant.ofEpochMilli(timestamp))
             .build()
         val ownChannel = if (discordEnabled) discordChannelId else ""
         plugin.discordManager.sendEmbedToChannel(ownChannel, embed)
@@ -163,14 +159,21 @@ class AntiDupeManager(private val plugin: Joshymc) {
         }
     }
 
+    /**
+     * Goes everywhere the first alert went (issue #1161): this feature's own channel and the
+     * staff anti-cheat channel, with one copy when they are the same channel.
+     */
     private fun sendGroupedFollowUp(uuid: UUID, playerName: String, detectionType: String, count: Int) {
-        val embed = SafeEmbedBuilder()
-            .setTitle("Repeated Anti-Dupe Alerts Suppressed")
-            .setColor(0xFFA500)
-            .setDescription("**$playerName** triggered **$detectionType** **$count** times in the last $rateLimitSeconds seconds.")
-            .addField("UUID", uuid.toString(), true)
-            .setTimestamp(Instant.now())
+        val embed = DiscordEmbeds.alert("Repeated Anti-Dupe Alerts Suppressed", DiscordEmbeds.GROUPED_COLOR, FOOTER_SOURCE)
+            .setDescription("**${DiscordEmbeds.escape(playerName)}** triggered **${DiscordEmbeds.escape(detectionType)}** **$count** times in the last $rateLimitSeconds seconds.")
+            .addField("Player", DiscordEmbeds.player(playerName, uuid), false)
             .build()
-        if (discordEnabled) plugin.discordManager.sendEmbedToChannel(discordChannelId, embed)
+        val ownChannel = if (discordEnabled) discordChannelId else ""
+        plugin.discordManager.sendEmbedToChannel(ownChannel, embed)
+        plugin.discordManager.sendStaffAlert(embed, ownChannel)
+    }
+
+    private companion object {
+        const val FOOTER_SOURCE = "Anti-Dupe"
     }
 }

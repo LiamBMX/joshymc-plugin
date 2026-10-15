@@ -5,15 +5,18 @@ import com.liam.joshymc.manager.PunishmentManager
 import net.dv8tion.jda.api.EmbedBuilder
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
+import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.entities.Activity
 import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.interactions.commands.build.Commands
 import net.dv8tion.jda.api.entities.MessageEmbed
-import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel
 import net.dv8tion.jda.api.events.session.SessionRecreateEvent
 import net.dv8tion.jda.api.events.session.SessionResumeEvent
+import net.dv8tion.jda.api.exceptions.ErrorResponseException
 import net.dv8tion.jda.api.exceptions.InvalidTokenException
 import net.dv8tion.jda.api.hooks.ListenerAdapter
+import net.dv8tion.jda.api.requests.ErrorResponse
 import net.dv8tion.jda.api.requests.GatewayIntent
 import net.dv8tion.jda.api.utils.messages.MessageRequest
 import java.time.Duration
@@ -38,6 +41,8 @@ class DiscordManager(private val plugin: Joshymc) {
     private val lifecycleLock = Any()
     /** The JDA instance still connecting, owned here so [shutdown] can stop it mid-handshake. */
     private var connectingJda: JDA? = null
+    /** The connection [shutdown] is flushing, so its send callbacks still report until it closes. */
+    @Volatile private var drainingJda: JDA? = null
     /** Bumped by every [start] and [shutdown]; a connect attempt whose generation is stale discards its JDA. */
     private var generation = 0L
     private val scheduledTaskIds = mutableListOf<Int>()
@@ -61,19 +66,20 @@ class DiscordManager(private val plugin: Joshymc) {
 
     private val updateHighlights = UpdateHighlightsAnnouncer(plugin)
 
-    val channelId: String get() =
-        plugin.config.getString("discord.channel-id")
-            ?: plugin.config.getString("discord.chat-channel-id")
-            ?: ""
+    /** `discord.channels.chat` (issue #1161; see [DiscordConfig] for the deprecated keys it replaced). */
+    val channelId: String get() = DiscordConfig.channelId(plugin.config, DiscordConfig.Channel.CHAT)
     val chatFormat: String get() = plugin.config.getString("discord.chat-format") ?: "**{player}** » {message}"
     val minecraftFormat: String get() = plugin.config.getString("discord.minecraft-format") ?: "&9[Discord] &f{name} &7» &f{message}"
 
     private val punishmentSyncEnabled: Boolean get() = plugin.config.getBoolean("discord.punishments.enabled", false)
-    /** `discord.channels.punishments-forum`, falling back to the pre-#1069 `discord.punishments.forum-channel-id`. */
     private val punishmentForumChannelId: String get() =
-        plugin.config.getString("discord.channels.punishments-forum")?.takeIf { it.isNotBlank() }
-            ?: plugin.config.getString("discord.punishments.forum-channel-id")
-            ?: ""
+        DiscordConfig.channelId(plugin.config, DiscordConfig.Channel.PUNISHMENTS_FORUM)
+
+    /** Missing/unusable channel warnings, once per channel and problem (issue #1161). */
+    private val channelHealth = DiscordChannelHealth(
+        warn = { plugin.logger.warning(it) },
+        info = { plugin.logger.info(it) }
+    )
 
     /** Durable punishment log delivery (issue #1157); its table is created by PunishmentManager.start(). */
     val punishmentLogs = PunishmentLogOutbox(
@@ -90,14 +96,19 @@ class DiscordManager(private val plugin: Joshymc) {
     }
 
     /** When the last failed-connection line was logged, so a long outage doesn't flood the console. */
-    private var lastConnectFailureLog = 0L
+    @Volatile private var lastConnectFailureLog = 0L
 
     private val staffMonitoringEnabled: Boolean get() = plugin.config.getBoolean("discord.staff-monitoring.enabled", false)
-    private val staffAnticheatChannelId: String get() = plugin.config.getString("discord.staff-monitoring.anticheat-channel-id") ?: ""
-    private val staffReportsChannelId: String get() = plugin.config.getString("discord.staff-monitoring.reports-channel-id") ?: ""
+    private val staffAnticheatChannelId: String get() =
+        DiscordConfig.channelId(plugin.config, DiscordConfig.Channel.STAFF_ANTICHEAT).takeUnless(::isPlaceholder).orEmpty()
+    private val staffReportsChannelId: String get() =
+        DiscordConfig.channelId(plugin.config, DiscordConfig.Channel.STAFF_REPORTS).takeUnless(::isPlaceholder).orEmpty()
 
     /** The chat bridge is optional: staff monitoring keeps working without it (issue #1068). */
-    private val chatChannelConfigured: Boolean get() = channelId.isNotEmpty() && channelId != "000000000000000000"
+    private val chatChannelConfigured: Boolean get() = !isPlaceholder(channelId)
+
+    /** Empty or the all-zero id from the bundled config: that destination is off. */
+    private fun isPlaceholder(id: String): Boolean = id.isEmpty() || id.all { it == '0' }
 
     /**
      * The Discord features that are switched on with a channel to post to (issue #1159). The
@@ -109,8 +120,8 @@ class DiscordManager(private val plugin: Joshymc) {
         val cfg = plugin.config
         return buildList {
             if (chatChannelConfigured) add("chat bridge")
-            if (staffMonitoringEnabled && (channelSet("discord.staff-monitoring.anticheat-channel-id", staffAnticheatChannelId) or
-                    channelSet("discord.staff-monitoring.reports-channel-id", staffReportsChannelId))) add("staff monitoring")
+            if (staffMonitoringEnabled && (channelSet(DiscordConfig.Channel.STAFF_ANTICHEAT.key, staffAnticheatChannelId) or
+                    channelSet(DiscordConfig.Channel.STAFF_REPORTS.key, staffReportsChannelId))) add("staff monitoring")
             if (punishmentSyncEnabled && channelSet("discord.channels.punishments-forum", punishmentForumChannelId)) add("punishment logs")
             if (updateHighlights.enabled && channelSet("update-highlights.discord-channel", updateHighlights.channelId)) add("update highlights")
             if (cfg.getBoolean("anti-dupe.enabled", true) && cfg.getBoolean("anti-dupe.discord.enabled", true) &&
@@ -196,6 +207,7 @@ class DiscordManager(private val plugin: Joshymc) {
                     generation == attempt
                 }
                 if (!owned) {
+                    detachListeners(built)
                     built.shutdownNow()
                     return@Runnable
                 }
@@ -212,6 +224,7 @@ class DiscordManager(private val plugin: Joshymc) {
                     generation == attempt
                 }
                 if (!published) {
+                    detachListeners(built)
                     built.shutdownNow()
                     return@Runnable
                 }
@@ -220,29 +233,20 @@ class DiscordManager(private val plugin: Joshymc) {
                 // Under the lifecycle lock: a shutdown() racing this either stops the worker or prevents it.
                 synchronized(lifecycleLock) { if (generation == attempt) punishmentLogs.start(built) }
 
+                // A new connection reports each channel's problems afresh.
+                channelHealth.clear()
+
                 // A missing chat channel only disables the chat bridge; staff alerts and
                 // reports still go to their own channels.
-                val channel = getChannel()
-                if (channel != null) {
-                    plugin.logger.info("[Discord] Bound to channel #${channel.name} (${channel.id})")
-                } else if (chatChannelConfigured) {
-                    plugin.logger.severe("[Discord] Could not find channel with ID: $channelId — check your config!")
+                if (chatChannelConfigured) {
+                    val channel = resolveChannel(built, channelId, CHAT_LABEL)
+                    if (channel != null) plugin.logger.info("[Discord] Bound to channel #${channel.name} (${channel.id})")
                 }
 
-                // Register slash commands for the guild
-                val guild = jda?.getGuildById("1284630112234508330")
-                if (guild != null) {
-                    guild.updateCommands().addCommands(
-                        Commands.slash("online", "Show who's online on the Minecraft server")
-                    ).queue {
-                        plugin.logger.info("[Discord] Slash commands registered for ${guild.name}")
-                    }
-                } else {
-                    plugin.logger.warning("[Discord] Could not find guild to register slash commands.")
-                }
+                registerSlashCommands(built)
 
-                verifyStaffMonitoringChannels()
-                jda?.let { updateHighlights.announce(it) }
+                verifyStaffMonitoringChannels(built)
+                if (isCurrent(attempt)) updateHighlights.announce(built)
 
                 plugin.server.scheduler.runTask(plugin, Runnable {
                     if (!isCurrent(attempt)) return@Runnable
@@ -323,6 +327,7 @@ class DiscordManager(private val plugin: Joshymc) {
             pending = connectingJda
             jda = null
             connectingJda = null
+            drainingJda = active
         }
         try {
             cancelScheduledTasks()
@@ -330,7 +335,7 @@ class DiscordManager(private val plugin: Joshymc) {
             punishmentLogs.stop()
 
             try {
-                pending?.shutdownNow()
+                pending?.let { detachListeners(it); it.shutdownNow() }
             } catch (e: Exception) {
                 plugin.logger.warning("[Discord] Failed to cancel the connecting bot: ${e.message}")
             }
@@ -342,9 +347,13 @@ class DiscordManager(private val plugin: Joshymc) {
             }
 
             if (active != null) {
+                // No gateway event (chat, DMs, slash commands, session resumes) reaches plugin
+                // code from here on, even while JDA drains its last requests (issue #1161).
+                detachListeners(active)
                 try {
                     // Best effort: whatever was still queued (on reload too, so pending alerts
-                    // aren't lost), then the stop notice on a real server stop.
+                    // aren't lost), then the stop notice on a real server stop. New messages
+                    // were refused from the moment state became STOPPING.
                     flushQueue(active)
                     if (serverStopping) chatChannel(active)?.sendMessage(":red_circle: **Server stopped**")?.queue(null) { }
                 } catch (e: Exception) {
@@ -366,7 +375,17 @@ class DiscordManager(private val plugin: Joshymc) {
                 }
             }
         } finally {
+            drainingJda = null
             synchronized(lifecycleLock) { state = ConnectionState.STOPPED }
+        }
+    }
+
+    private fun detachListeners(bot: JDA) {
+        try {
+            val listeners = bot.registeredListeners
+            if (listeners.isNotEmpty()) bot.removeEventListener(*listeners.toTypedArray())
+        } catch (e: Exception) {
+            plugin.logger.warning("[Discord] Could not detach the bot's event listeners: ${e.message}")
         }
     }
 
@@ -454,30 +473,38 @@ class DiscordManager(private val plugin: Joshymc) {
         sendEmbedToChannel(id, embed)
     }
 
-    /** Logs a concise warning for each staff-monitoring channel the bot cannot post embeds in. */
-    private fun verifyStaffMonitoringChannels() {
+    /** Logs where each staff-monitoring channel is bound, or (once) why the bot can't post there. */
+    private fun verifyStaffMonitoringChannels(bot: JDA) {
         if (!staffMonitoringEnabled) return
-        for ((label, id) in listOf("anticheat-channel-id" to staffAnticheatChannelId, "reports-channel-id" to staffReportsChannelId)) {
+        for (channel in listOf(DiscordConfig.Channel.STAFF_ANTICHEAT, DiscordConfig.Channel.STAFF_REPORTS)) {
+            val id = if (channel == DiscordConfig.Channel.STAFF_ANTICHEAT) staffAnticheatChannelId else staffReportsChannelId
             if (id.isEmpty()) {
-                plugin.logger.warning("[Discord] staff-monitoring.$label is not set — those alerts will not be sent.")
+                plugin.logger.warning("[Discord] ${channel.key} is not set — those alerts will not be sent.")
                 continue
             }
-            val channel = textChannel(id)
-            if (channel == null) {
-                plugin.logger.warning("[Discord] staff-monitoring.$label ($id) not found — the bot is not in that server (authorize it with the bot + applications.commands scopes) or lacks View Channel.")
-                continue
-            }
-            val missing = listOf(
-                net.dv8tion.jda.api.Permission.VIEW_CHANNEL,
-                net.dv8tion.jda.api.Permission.MESSAGE_SEND,
-                net.dv8tion.jda.api.Permission.MESSAGE_EMBED_LINKS
-            ).filterNot { channel.guild.selfMember.hasPermission(channel, it) }
-            if (missing.isEmpty()) {
-                plugin.logger.info("[Discord] Staff monitoring $label bound to #${channel.name} (${channel.guild.name}).")
-            } else {
-                plugin.logger.warning("[Discord] staff-monitoring.$label (#${channel.name}) is missing bot permissions: ${missing.joinToString { it.getName() }}.")
-            }
+            val resolved = resolveChannel(bot, id, channel.key) ?: continue
+            plugin.logger.info("[Discord] ${channel.key} bound to #${resolved.name} (${resolved.guild.name}).")
         }
+    }
+
+    /** Registers /online in `discord.guild-id` (issue #1161: no longer hardcoded). */
+    private fun registerSlashCommands(bot: JDA) {
+        val guildId = DiscordConfig.guildId(plugin.config)
+        if (guildId.isEmpty()) {
+            plugin.logger.info("[Discord] ${DiscordConfig.GUILD_ID_KEY} is empty - slash commands are not registered.")
+            return
+        }
+        val guild = try { bot.getGuildById(guildId) } catch (_: NumberFormatException) { null }
+        if (guild == null) {
+            plugin.logger.warning("[Discord] Guild $guildId (${DiscordConfig.GUILD_ID_KEY}) not found - the bot is not in that server, so slash commands are not registered.")
+            return
+        }
+        guild.updateCommands().addCommands(
+            Commands.slash("online", "Show who's online on the Minecraft server")
+        ).queue(
+            { if (bot === jda) plugin.logger.info("[Discord] Slash commands registered for ${guild.name}") },
+            { err -> if (bot === jda) plugin.logger.warning("[Discord] Could not register slash commands in ${guild.name}: ${err.message}") }
+        )
     }
 
     fun sendChat(playerName: String, message: String) {
@@ -499,7 +526,7 @@ class DiscordManager(private val plugin: Joshymc) {
         val embed = EmbedBuilder()
             .setColor(0x55FF55)
             .setAuthor("$playerName joined", null, headUrl(uuid))
-            .setFooter("play.joshymc.net")
+            .setFooter(DiscordEmbeds.PUBLIC_FOOTER)
             .setTimestamp(java.time.Instant.now())
             .build()
         sendEmbed(embed)
@@ -509,19 +536,75 @@ class DiscordManager(private val plugin: Joshymc) {
         val embed = EmbedBuilder()
             .setColor(0xFF5555)
             .setAuthor("$playerName left", null, headUrl(uuid))
-            .setFooter("play.joshymc.net")
+            .setFooter(DiscordEmbeds.PUBLIC_FOOTER)
             .setTimestamp(java.time.Instant.now())
             .build()
         sendEmbed(embed)
     }
 
-    fun getChannel(): TextChannel? = jda?.let { chatChannel(it) }
+    fun getChannel(): GuildMessageChannel? = jda?.let { chatChannel(it) }
 
-    private fun chatChannel(bot: JDA): TextChannel? = if (chatChannelConfigured) textChannel(channelId, bot) else null
+    private fun chatChannel(bot: JDA): GuildMessageChannel? =
+        if (chatChannelConfigured) resolveChannel(bot, channelId, CHAT_LABEL) else null
 
-    /** Channel lookup that treats a malformed id in config as "not found" instead of throwing. */
-    private fun textChannel(id: String, bot: JDA? = jda): TextChannel? =
-        try { bot?.getTextChannelById(id) } catch (_: NumberFormatException) { null }
+    /**
+     * The channel [id] names if the bot can post embeds there, else null with the reason logged
+     * once per channel and problem (issue #1161). Any channel that takes messages works: text,
+     * announcement, thread, or a voice channel's text chat. Never throws, so a bad destination
+     * can't surface in gameplay code; nothing is ever redirected elsewhere.
+     */
+    private fun resolveChannel(bot: JDA, id: String, label: String): GuildMessageChannel? {
+        val problem: String
+        if (!id.all { it.isDigit() }) {
+            problem = "\"$id\" is not a valid channel id (expected digits only)"
+        } else {
+            val channel = try { bot.getGuildChannelById(id) } catch (_: NumberFormatException) { null }
+            problem = when {
+                channel == null -> "channel not found - it was deleted, or the bot is not in that server or lacks View Channel"
+                channel !is GuildMessageChannel -> "#${channel.name} is a ${channel.type} channel, which can't receive messages"
+                else -> {
+                    val self = channel.guild.selfMember
+                    val missing = POST_PERMISSIONS.filterNot { self.hasPermission(channel, it) }
+                    when {
+                        missing.isNotEmpty() -> "the bot is missing ${missing.joinToString { it.getName() }} in #${channel.name}"
+                        !channel.canTalk() -> "the bot can't send messages in #${channel.name}"
+                        else -> {
+                            channelHealth.ok(id, label)
+                            return channel
+                        }
+                    }
+                }
+            }
+        }
+        channelHealth.problem(id, label, problem)
+        return null
+    }
+
+    /** Callbacks for one message to [target]: track the channel's health, but never for an old connection. */
+    private fun sendCallbacks(bot: JDA, target: GuildMessageChannel, label: String): Pair<(Any?) -> Unit, (Throwable) -> Unit> {
+        val onSuccess: (Any?) -> Unit = { if (isLive(bot)) channelHealth.ok(target.id, label) }
+        val onFailure: (Throwable) -> Unit = failure@{ err ->
+            if (!isLive(bot)) return@failure
+            val problem = when ((err as? ErrorResponseException)?.errorResponse) {
+                ErrorResponse.UNKNOWN_CHANNEL -> "#${target.name} was deleted"
+                ErrorResponse.MISSING_ACCESS, ErrorResponse.MISSING_PERMISSIONS -> "the bot lacks permission to post in #${target.name}"
+                else -> "sending to #${target.name} failed: ${err.message}"
+            }
+            channelHealth.problem(target.id, label, problem, dropped = 1)
+        }
+        return onSuccess to onFailure
+    }
+
+    /** The config key a channel id came from, for log lines; feature feeds share a generic label. */
+    private fun channelLabel(id: String): String = when (id) {
+        channelId -> CHAT_LABEL
+        staffAnticheatChannelId -> DiscordConfig.Channel.STAFF_ANTICHEAT.key
+        staffReportsChannelId -> DiscordConfig.Channel.STAFF_REPORTS.key
+        else -> ALERT_LABEL
+    }
+
+    /** True while [bot] is this manager's connection, or the one [shutdown] is draining. */
+    private fun isLive(bot: JDA): Boolean = bot === jda || bot === drainingJda
 
     /**
      * Queues a moderation action for the punished player's own forum post (issue #1069).
@@ -573,7 +656,7 @@ class DiscordManager(private val plugin: Joshymc) {
     }
 
     /** Discord renders `<t:..>` in each viewer's own timezone. */
-    private fun discordTime(epochMs: Long, style: String): String = "<t:${epochMs / 1000}:$style>"
+    private fun discordTime(epochMs: Long, style: String): String = DiscordEmbeds.time(epochMs, style)
 
     private fun actionLabel(action: String): String = when (action) {
         "WARN" -> "Warn"
@@ -606,9 +689,6 @@ class DiscordManager(private val plugin: Joshymc) {
         else -> 0x5865F2
     }
 
-    private fun avatarUrl(uuid: String): String =
-        "https://mc-heads.net/avatar/$uuid/64"
-
     private fun headUrl(uuid: String): String =
         "https://mc-heads.net/head/$uuid/128"
 
@@ -633,86 +713,79 @@ class DiscordManager(private val plugin: Joshymc) {
         synchronized(scheduledTaskIds) { scheduledTaskIds.add(id) }
     }
 
-    /** Hands every queued message to JDA's async requester; never waits on Discord. */
+    /**
+     * Hands every queued message to JDA's async requester; never waits on Discord. Each
+     * destination is resolved once per flush; messages for a channel that can't take them are
+     * dropped and counted against that channel's (already logged) problem (issue #1161).
+     */
     private fun flushQueue(bot: JDA) {
-        run {
-            if (messageQueue.isEmpty()) return
-            val queued = ArrayDeque(messageQueue.drain())
-            reportDiscards()
+        if (messageQueue.isEmpty()) return
+        val queued = ArrayDeque(messageQueue.drain())
+        reportDiscards()
 
-            // A missing chat channel only drops chat-bridge messages; embeds addressed to
-            // their own channel (anti-cheat alerts, reports, ...) are still delivered.
-            val channel = chatChannel(bot)
-            var droppedChat = 0
+        // A missing chat channel only drops chat-bridge messages; embeds addressed to
+        // their own channel (anti-cheat alerts, reports, ...) are still delivered.
+        val channel = chatChannel(bot)
+        val targets = HashMap<String, GuildMessageChannel?>()
+        val dropped = HashMap<String, Int>()
 
-            // Batch text messages together, but embeds must be sent individually
-            val textBatch = mutableListOf<String>()
+        // Batch text messages together, but embeds must be sent individually
+        val textBatch = mutableListOf<String>()
 
-            while (queued.isNotEmpty()) {
-                when (val action = queued.removeFirst()) {
-                    is QueuedAction.Text -> if (channel != null) textBatch.add(action.content) else droppedChat++
-                    is QueuedAction.Embed -> {
-                        // Flush any pending text first
-                        if (channel != null) flushText(channel, textBatch)
-                        val target = if (action.channelId != null) textChannel(action.channelId, bot) else channel
-                        if (target == null) {
-                            if (action.channelId != null) {
-                                plugin.logger.warning("[Discord] Target channel not found for embed (${action.channelId}).")
-                            } else {
-                                droppedChat++
-                            }
-                        } else {
-                            // JDA throws synchronously on missing permissions; catch it so one
-                            // bad channel can't cost the rest of this batch.
-                            try {
-                                target.sendMessageEmbeds(action.embed).queue(
-                                    null,
-                                    { err -> plugin.logger.warning("[Discord] Failed to send embed to #${target.name} (${target.id}): ${err.message}") }
-                                )
-                            } catch (e: Exception) {
-                                plugin.logger.warning("[Discord] Failed to send embed to #${target.name} (${target.id}): ${e.message}")
-                            }
-                        }
+        while (queued.isNotEmpty()) {
+            when (val action = queued.removeFirst()) {
+                is QueuedAction.Text -> if (channel != null) textBatch.add(action.content) else dropped.merge(channelId, 1, Int::plus)
+                is QueuedAction.Embed -> {
+                    // Flush any pending text first
+                    if (channel != null) flushText(bot, channel, textBatch)
+                    val targetId = action.channelId ?: channelId
+                    val label = channelLabel(targetId)
+                    val target = if (action.channelId == null) channel
+                        else targets.getOrPut(targetId) { resolveChannel(bot, targetId, label) }
+                    if (target == null) {
+                        dropped.merge(targetId, 1, Int::plus)
+                        continue
+                    }
+                    // JDA throws synchronously on missing permissions; catch it so one
+                    // bad channel can't cost the rest of this batch.
+                    val (onSuccess, onFailure) = sendCallbacks(bot, target, label)
+                    try {
+                        target.sendMessageEmbeds(action.embed).queue(onSuccess, onFailure)
+                    } catch (e: Exception) {
+                        onFailure(e)
                     }
                 }
             }
-
-            if (channel != null) flushText(channel, textBatch)
-            if (droppedChat > 0) plugin.logger.warning("[Discord] Chat channel not found, dropped $droppedChat message(s).")
         }
+
+        if (channel != null) flushText(bot, channel, textBatch)
+        for ((id, count) in dropped) channelHealth.dropped(id, count)
     }
 
-    private fun flushText(channel: TextChannel, batch: MutableList<String>) {
+    private fun flushText(bot: JDA, channel: GuildMessageChannel, batch: MutableList<String>) {
         if (batch.isEmpty()) return
         val combined = batch.joinToString("\n")
+        val (onSuccess, onFailure) = sendCallbacks(bot, channel, CHAT_LABEL)
         for (chunk in combined.chunked(1990)) {
             try {
-                channel.sendMessage(chunk).setAllowedMentions(EnumSet.noneOf(Message.MentionType::class.java)).queue(
-                    null,
-                    { err -> plugin.logger.warning("[Discord] Failed to send message: ${err.message}") }
-                )
+                channel.sendMessage(chunk).setAllowedMentions(EnumSet.noneOf(Message.MentionType::class.java)).queue(onSuccess, onFailure)
             } catch (e: Exception) {
-                plugin.logger.warning("[Discord] Failed to send message: ${e.message}")
+                onFailure(e)
             }
         }
         batch.clear()
     }
 
-    private fun escapeMarkdown(text: String): String {
-        return text
-            .replace("\\", "\\\\")
-            .replace("*", "\\*")
-            .replace("_", "\\_")
-            .replace("~", "\\~")
-            .replace("`", "\\`")
-            .replace("|", "\\|")
-            .replace(">", "\\>")
-            .let(::neutralizeMentions)
-    }
+    private fun escapeMarkdown(text: String): String = DiscordEmbeds.escape(text)
 
     companion object {
         private const val RECONNECT_BASE_SECONDS = 5L
         private const val RECONNECT_MAX_SECONDS = 300L
+        private const val CHAT_LABEL = "discord.channels.chat"
+        private const val ALERT_LABEL = "Discord alert channel"
+
+        /** Needed to post an embed anywhere; sending itself is checked with canTalk(), which knows threads need Send Messages in Threads. */
+        private val POST_PERMISSIONS = listOf(Permission.VIEW_CHANNEL, Permission.MESSAGE_EMBED_LINKS)
 
         /**
          * Breaks every Discord mention form in untrusted text while keeping it readable:

@@ -79,7 +79,8 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_by_uuid TEXT") } catch (_: Exception) {}
         try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_reason TEXT") } catch (_: Exception) {}
         try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_at INTEGER") } catch (_: Exception) {}
-        try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN discord_thread_id TEXT") } catch (_: Exception) {}
+        // Issue #1161: punishments.discord_thread_id is no longer added; the per-player thread
+        // lives in punishment_discord_threads. Older databases keep the unused column (harmless).
 
         // Issue #1069: one Discord forum thread per punished player, keyed by UUID so name changes reuse it.
         plugin.databaseManager.createTable("""

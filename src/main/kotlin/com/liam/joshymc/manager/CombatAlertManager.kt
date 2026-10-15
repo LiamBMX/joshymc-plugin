@@ -1,7 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
-import com.liam.joshymc.discord.SafeEmbedBuilder
+import com.liam.joshymc.discord.DiscordEmbeds
 import org.bukkit.Bukkit
 import org.bukkit.entity.Entity
 import org.bukkit.entity.Player
@@ -21,9 +21,9 @@ import java.util.concurrent.ConcurrentHashMap
 class CombatAlertManager(private val plugin: Joshymc) {
 
     enum class Severity(val label: String, val color: Int) {
-        LOW("Low", 0xFEE75C),
-        MEDIUM("Medium", 0xFFA500),
-        HIGH("High", 0xED4245)
+        LOW("Low", DiscordEmbeds.Severity.LOW.color),
+        MEDIUM("Medium", DiscordEmbeds.Severity.MEDIUM.color),
+        HIGH("High", DiscordEmbeds.Severity.HIGH.color)
     }
 
     private data class RateBucket(var count: Int, val windowStart: Long, var peakDetail: String)
@@ -124,11 +124,8 @@ class CombatAlertManager(private val plugin: Joshymc) {
 
         if (bucket.count > 1) return // within the window and already alerted — grouped follow-up covers the rest
 
-        val embed = SafeEmbedBuilder()
-            .setTitle("PvP Cheat Detection Alert")
-            .setColor(severity.color)
-            .addField("Player", player.name, true)
-            .addField("UUID", player.uniqueId.toString(), true)
+        val embed = DiscordEmbeds.alert("PvP Cheat Detection Alert", severity.color, FOOTER_SOURCE, Instant.ofEpochMilli(timestamp))
+            .addField("Player", DiscordEmbeds.player(player.name, player.uniqueId), false)
             .addField("Check", checkName, true)
             .addField("Severity", severity.label, true)
             .addField("Detected Value", detectedValue.ifBlank { "N/A" }, true)
@@ -138,7 +135,6 @@ class CombatAlertManager(private val plugin: Joshymc) {
             .addField("World", world, true)
             .addField("Location", location, true)
             .addField("Evidence", evidence.ifBlank { "Suspicious combat behavior detected." }, false)
-            .setTimestamp(Instant.ofEpochMilli(timestamp))
             .build()
         plugin.discordManager.sendEmbedToChannel(discordChannelId, embed)
 
@@ -155,13 +151,10 @@ class CombatAlertManager(private val plugin: Joshymc) {
     }
 
     private fun sendGroupedFollowUp(uuid: UUID, playerName: String, checkName: String, count: Int, peakDetail: String) {
-        val embed = SafeEmbedBuilder()
-            .setTitle("Repeated PvP Cheat Alerts Suppressed")
-            .setColor(0xFFA500)
-            .setDescription("**$playerName** triggered **$checkName** **$count** times in the last $rateLimitSeconds seconds.")
-            .addField("UUID", uuid.toString(), true)
+        val embed = DiscordEmbeds.alert("Repeated PvP Cheat Alerts Suppressed", DiscordEmbeds.GROUPED_COLOR, FOOTER_SOURCE)
+            .setDescription("**${DiscordEmbeds.escape(playerName)}** triggered **$checkName** **$count** times in the last $rateLimitSeconds seconds.")
+            .addField("Player", DiscordEmbeds.player(playerName, uuid), false)
             .addField("Peak", peakDetail.ifBlank { "N/A" }, true)
-            .setTimestamp(Instant.now())
             .build()
         plugin.discordManager.sendEmbedToChannel(discordChannelId, embed)
     }
@@ -176,5 +169,9 @@ class CombatAlertManager(private val plugin: Joshymc) {
         null -> "N/A"
         is Player -> target.name
         else -> target.type.name.lowercase().replace('_', ' ')
+    }
+
+    private companion object {
+        const val FOOTER_SOURCE = "PvP Cheat Alerts"
     }
 }
