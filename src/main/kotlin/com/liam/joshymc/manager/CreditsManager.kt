@@ -20,6 +20,7 @@ class CreditsManager(private val plugin: Joshymc) : Listener {
     private var creditsPerHour: Double = 1.0
 
     private val formatter = DecimalFormat("#,##0.0")
+    private val adminLedger by lazy { AdminBalanceLedger(plugin.databaseManager, "credits", scale = 1) }
     private var tickTaskId: Int = -1
 
     fun start() {
@@ -114,6 +115,21 @@ class CreditsManager(private val plugin: Joshymc) : Listener {
         if (current < amount) return false
         setBalance(uuid, current - amount)
         return true
+    }
+
+    /**
+     * Operator removal (issue #1162): atomically takes [amount] (rounded to tenths) if the
+     * balance covers it, running [audit] inside the same transaction. Never goes negative.
+     */
+    fun adminRemove(uuid: UUID, amount: Double, audit: (AdminBalanceResult.Changed) -> Unit): AdminBalanceResult {
+        topCache = null
+        return adminLedger.remove(uuid, amount, audit).also { topCache = null }
+    }
+
+    /** Operator set (issue #1162): atomically replaces the balance, running [audit] in the same transaction. */
+    fun adminSet(uuid: UUID, amount: Double, audit: (AdminBalanceResult.Changed) -> Unit): AdminBalanceResult.Changed {
+        topCache = null
+        return adminLedger.set(uuid, amount, audit).also { topCache = null }
     }
 
     /**

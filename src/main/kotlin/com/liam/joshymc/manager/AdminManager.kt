@@ -170,6 +170,20 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         )
     }
 
+    /** [logAction] for actors that may not be a player: console logs as admin uuid `CONSOLE`. */
+    fun logAction(adminUuid: UUID?, adminName: String, action: String, targetUuid: UUID?, targetName: String?, details: String?) {
+        plugin.databaseManager.execute(
+            "INSERT INTO admin_logs (admin_uuid, admin_name, action, target_uuid, target_name, details, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            adminUuid?.toString() ?: "CONSOLE",
+            adminName,
+            action,
+            targetUuid?.toString(),
+            targetName,
+            details,
+            System.currentTimeMillis()
+        )
+    }
+
     fun getRecentLogs(limit: Int = 50): List<AdminLog> {
         return plugin.databaseManager.query(
             "SELECT id, admin_name, action, target_name, details, timestamp FROM admin_logs ORDER BY timestamp DESC LIMIT ?",

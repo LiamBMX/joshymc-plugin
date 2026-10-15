@@ -25,6 +25,7 @@ class EconomyManager(private val plugin: Joshymc) {
     }
 
     private val formatter = DecimalFormat("#,##0.00")
+    private val adminLedger by lazy { AdminBalanceLedger(plugin.databaseManager, "economy", scale = 2) }
 
     fun start() {
         plugin.databaseManager.createTable("""
@@ -108,6 +109,17 @@ class EconomyManager(private val plugin: Joshymc) {
         }
         return updated == 1
     }
+
+    /**
+     * Operator removal (issue #1162): atomically takes [amount] (rounded to cents) if the
+     * balance covers it, running [audit] inside the same transaction. Never goes negative.
+     */
+    fun adminRemove(uuid: UUID, amount: Double, audit: (AdminBalanceResult.Changed) -> Unit): AdminBalanceResult =
+        adminLedger.remove(uuid, amount, audit)
+
+    /** Operator set (issue #1162): atomically replaces the balance, running [audit] in the same transaction. */
+    fun adminSet(uuid: UUID, amount: Double, audit: (AdminBalanceResult.Changed) -> Unit): AdminBalanceResult.Changed =
+        adminLedger.set(uuid, amount, audit)
 
     fun has(uuid: UUID, amount: Double): Boolean {
         return getBalance(uuid) >= amount

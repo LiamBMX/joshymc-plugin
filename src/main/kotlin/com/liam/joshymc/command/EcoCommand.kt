@@ -13,7 +13,28 @@ import org.bukkit.command.TabCompleter
 
 class EcoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
+    private val adminBalance = AdminBalanceCommand(plugin)
+
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        val sub = args.getOrNull(0)?.lowercase()
+        val rest = args.drop(1)
+
+        // Removing or setting someone's balance is operator-only and works offline (issue #1162).
+        when (sub) {
+            "take", "remove" -> {
+                adminBalance.handle(sender, AdminBalanceCommand.Currency.COINS, AdminBalanceCommand.Operation.REMOVE, "/eco $sub <player> <amount>", rest)
+                return true
+            }
+            "set" -> {
+                adminBalance.handle(sender, AdminBalanceCommand.Currency.COINS, AdminBalanceCommand.Operation.SET, "/eco set <player> <amount>", rest)
+                return true
+            }
+            "reset" -> {
+                adminBalance.handleReset(sender, AdminBalanceCommand.Currency.COINS, "/eco reset <player>", rest)
+                return true
+            }
+        }
+
         if (!sender.hasPermission("joshymc.eco")) {
             plugin.commsManager.send(sender as? org.bukkit.entity.Player ?: run {
                 Msg.noPermission(sender)
@@ -22,30 +43,8 @@ class EcoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
-        if (args.isEmpty()) {
+        if (sub != "give") {
             Msg.usage(sender, "/eco <give|take|set|reset> <player> <amount>")
-            return true
-        }
-
-        val sub = args[0].lowercase()
-
-        if (sub == "reset") {
-            if (args.size < 2) {
-                Msg.usage(sender, "/eco reset <player>")
-                return true
-            }
-            val target = Bukkit.getPlayer(args[1])
-            if (target == null) {
-                Msg.playerNotFound(sender)
-                return true
-            }
-            plugin.economyManager.setBalance(target.uniqueId, 0.0)
-            sender.sendMessage(
-                Component.text("Reset ", NamedTextColor.GREEN)
-                    .append(Component.text(target.name, NamedTextColor.WHITE))
-                    .append(Component.text("'s balance to ", NamedTextColor.GREEN))
-                    .append(Component.text(plugin.economyManager.format(0.0), NamedTextColor.GOLD))
-            )
             return true
         }
 
@@ -66,55 +65,28 @@ class EcoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
-        when (sub) {
-            "give" -> {
-                plugin.economyManager.deposit(target.uniqueId, amount)
-                sender.sendMessage(
-                    Component.text("Gave ", NamedTextColor.GREEN)
-                        .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GOLD))
-                        .append(Component.text(" to ", NamedTextColor.GREEN))
-                        .append(Component.text(target.name, NamedTextColor.WHITE))
-                )
-            }
-            "take" -> {
-                val success = plugin.economyManager.withdraw(target.uniqueId, amount)
-                if (!success) {
-                    sender.sendMessage(
-                        Component.text(target.name, NamedTextColor.WHITE)
-                            .append(Component.text(" does not have enough funds.", NamedTextColor.RED))
-                    )
-                } else {
-                    sender.sendMessage(
-                        Component.text("Took ", NamedTextColor.GREEN)
-                            .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GOLD))
-                            .append(Component.text(" from ", NamedTextColor.GREEN))
-                            .append(Component.text(target.name, NamedTextColor.WHITE))
-                    )
-                }
-            }
-            "set" -> {
-                plugin.economyManager.setBalance(target.uniqueId, amount)
-                sender.sendMessage(
-                    Component.text("Set ", NamedTextColor.GREEN)
-                        .append(Component.text(target.name, NamedTextColor.WHITE))
-                        .append(Component.text("'s balance to ", NamedTextColor.GREEN))
-                        .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GOLD))
-                )
-            }
-            else -> {
-                Msg.usage(sender, "/eco <give|take|set|reset> <player> <amount>")
-            }
-        }
-
+        plugin.economyManager.deposit(target.uniqueId, amount)
+        sender.sendMessage(
+            Component.text("Gave ", NamedTextColor.GREEN)
+                .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GOLD))
+                .append(Component.text(" to ", NamedTextColor.GREEN))
+                .append(Component.text(target.name, NamedTextColor.WHITE))
+        )
         return true
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
+        val sub = args.getOrNull(0)?.lowercase()
+        val isAdminSub = sub in setOf("take", "remove", "set", "reset")
+        if (args.size >= 2 && (if (isAdminSub) !adminBalance.canUse(sender) else !sender.hasPermission("joshymc.eco"))) return emptyList()
         return when (args.size) {
-            1 -> listOf("give", "take", "set", "reset").filter { it.startsWith(args[0].lowercase()) }
+            1 -> buildList {
+                if (sender.hasPermission("joshymc.eco")) add("give")
+                if (adminBalance.canUse(sender)) addAll(listOf("take", "remove", "set", "reset"))
+            }.filter { it.startsWith(args[0].lowercase()) }
             2 -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.lowercase().startsWith(args[1].lowercase()) }
             3 -> {
-                if (args[0].lowercase() != "reset") {
+                if (sub != "reset") {
                     listOf("100", "1000", "10000", "100000").filter { it.startsWith(args[2]) }
                 } else emptyList()
             }
