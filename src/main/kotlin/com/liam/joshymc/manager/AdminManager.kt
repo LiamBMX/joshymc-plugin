@@ -987,9 +987,9 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        // Set Rank (slot 20) — admin only, never in a restricted (Mod Mode) panel
+        // Manage Ranks (slot 20) — admin only, never in a restricted (Mod Mode) panel
         if (!restricted && admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(20, buildItem(Material.GOLD_INGOT, "Set Rank", NamedTextColor.GOLD, "Change this player's rank")) { p, _ ->
+            gui.setItem(20, buildItem(Material.GOLD_INGOT, "Manage Ranks", NamedTextColor.GOLD, "Add or remove individual ranks")) { p, _ ->
                 openRankSelector(p, target.uniqueId, targetName)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
             }
@@ -1529,10 +1529,13 @@ class AdminManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun openRankSelector(admin: Player, targetUuid: UUID, targetName: String) {
+        // Each rank toggles on its own: add/remove only ever touch the one rank
+        // clicked, so donor, staff and external LuckPerms groups survive (issue #1167).
         val ranks = plugin.rankManager.getAllRanks().toList()
-        val rows = ((ranks.size + 8) / 9).coerceIn(1, 6)
+        val held = plugin.rankManager.getPlayerRankIds(targetUuid)
+        val rows = ((ranks.size + 8) / 9 + 1).coerceIn(2, 6)
         val gui = CustomGui(
-            Component.text("Set Rank: $targetName", NamedTextColor.GOLD)
+            Component.text("Ranks: $targetName", NamedTextColor.GOLD)
                 .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
             rows * 9
         )
@@ -1540,34 +1543,41 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         for ((index, rank) in ranks.withIndex()) {
             if (index >= rows * 9 - 9) break
-            val item = ItemStack(Material.NAME_TAG)
+            val has = rank.id in held
+            // `default` is the base rank every ranked player keeps; addRank re-adds it
+            // automatically, so it is shown but never removed from here.
+            val isBase = rank.id == "default"
+            val item = ItemStack(if (has) Material.NAME_TAG else Material.PAPER)
             item.editMeta { meta ->
                 meta.displayName(plugin.commsManager.parseLegacy(rank.displayTag)
                     .decoration(TextDecoration.ITALIC, false))
+                val action = when {
+                    isBase && has -> Component.text("Base rank, always kept", NamedTextColor.GRAY)
+                    has -> Component.text("Click to remove this rank only", NamedTextColor.RED)
+                    else -> Component.text("Click to add this rank", NamedTextColor.GREEN)
+                }
                 meta.lore(listOf(
                     Component.text("ID: ${rank.id}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                    Component.text("Weight: ${rank.weight}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.text("Category: ${rank.category}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                    Component.text(if (has) "Held" else "Not held", if (has) NamedTextColor.GREEN else NamedTextColor.DARK_GRAY)
+                        .decoration(TextDecoration.ITALIC, false),
                     Component.empty(),
-                    Component.text("Click to assign", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false)
+                    action.decoration(TextDecoration.ITALIC, false)
                 ))
+                if (has) meta.setEnchantmentGlintOverride(true)
             }
             gui.setItem(index, item) { p, _ ->
-                plugin.rankManager.setPlayerRank(targetUuid, rank.id)
-                logAction(p, "SET_RANK", Bukkit.getOfflinePlayer(targetUuid), rank.id)
-                plugin.commsManager.send(p, Component.text("Set $targetName's rank to ", NamedTextColor.GREEN)
-                    .append(plugin.commsManager.parseLegacy(rank.displayTag)), CommunicationsManager.Category.ADMIN)
-                p.playSound(p.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.0f)
-                openPlayerPanel(p, Bukkit.getOfflinePlayer(targetUuid))
+                when {
+                    isBase && has -> p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.5f, 1.0f)
+                    has -> openRankRemoveConfirm(p, targetUuid, targetName, rank)
+                    else -> {
+                        val change = plugin.rankManager.addRankDetailed(targetUuid, rank.id)
+                        if (change.changed) logAction(p, "RANK_ADD", Bukkit.getOfflinePlayer(targetUuid), rank.id)
+                        sendRankChangeResult(p, change, "Added ", rank, " to $targetName", "$targetName already has ")
+                        openRankSelector(p, targetUuid, targetName)
+                    }
+                }
             }
-        }
-
-        // Remove rank option
-        gui.setItem(rows * 9 - 5, buildItem(Material.BARRIER, "Remove Rank", NamedTextColor.RED, "Reset to default rank")) { p, _ ->
-            plugin.rankManager.setPlayerRank(targetUuid, null)
-            logAction(p, "REMOVE_RANK", Bukkit.getOfflinePlayer(targetUuid))
-            plugin.commsManager.send(p, Component.text("Removed $targetName's rank", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
-            p.playSound(p.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.0f)
-            openPlayerPanel(p, Bukkit.getOfflinePlayer(targetUuid))
         }
 
         // Back button
@@ -1577,6 +1587,74 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         }
 
         plugin.guiManager.open(admin, gui)
+    }
+
+    /** Confirm step before removing one rank, so a misclick can't strip a purchased rank. */
+    private fun openRankRemoveConfirm(admin: Player, targetUuid: UUID, targetName: String, rank: RankManager.Rank) {
+        val gui = CustomGui(
+            Component.text("Remove Rank?", NamedTextColor.RED)
+                .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
+            27
+        )
+        gui.fill(FILLER)
+
+        val info = ItemStack(Material.NAME_TAG)
+        info.editMeta { meta ->
+            meta.displayName(plugin.commsManager.parseLegacy(rank.displayTag).decoration(TextDecoration.ITALIC, false))
+            meta.lore(listOf(
+                Component.text("Player: $targetName", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("Only this rank is removed.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("Other ranks and groups are kept.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+            ))
+        }
+        gui.setItem(13, info)
+
+        gui.setItem(11, buildItem(Material.LIME_CONCRETE, "Confirm", NamedTextColor.GREEN, "Remove ${rank.id} from $targetName")) { p, _ ->
+            val change = plugin.rankManager.removeRankDetailed(targetUuid, rank.id)
+            if (change.changed) logAction(p, "RANK_REMOVE", Bukkit.getOfflinePlayer(targetUuid), rank.id)
+            sendRankChangeResult(p, change, "Removed ", rank, " from $targetName", "$targetName no longer has ")
+            openRankSelector(p, targetUuid, targetName)
+        }
+
+        gui.setItem(15, buildItem(Material.RED_CONCRETE, "Cancel", NamedTextColor.RED, "Keep this rank")) { p, _ ->
+            openRankSelector(p, targetUuid, targetName)
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+        }
+
+        plugin.guiManager.open(admin, gui)
+    }
+
+    /**
+     * Feedback for an admin-GUI rank change. LuckPerms applies console commands
+     * asynchronously, so a dispatched command is reported as requested, not saved.
+     */
+    private fun sendRankChangeResult(
+        admin: Player,
+        change: RankManager.RankChange,
+        verb: String,
+        rank: RankManager.Rank,
+        tail: String,
+        unchangedPrefix: String
+    ) {
+        val tag = plugin.commsManager.parseLegacy(rank.displayTag)
+        if (!change.changed) {
+            plugin.commsManager.send(admin, Component.text(unchangedPrefix, NamedTextColor.RED).append(tag)
+                .append(Component.text(".", NamedTextColor.RED)), CommunicationsManager.Category.ADMIN)
+            admin.playSound(admin.location, Sound.ENTITY_VILLAGER_NO, 0.5f, 1.0f)
+            return
+        }
+        plugin.commsManager.send(admin, Component.text(verb, NamedTextColor.GREEN).append(tag)
+            .append(Component.text("$tail.", NamedTextColor.GREEN)), CommunicationsManager.Category.ADMIN)
+        when (change.luckPerms) {
+            RankManager.LuckPermsSync.REQUESTED -> plugin.commsManager.send(admin,
+                Component.text("LuckPerms update requested for ${rank.id}; other groups were not touched.", NamedTextColor.GRAY),
+                CommunicationsManager.Category.ADMIN)
+            RankManager.LuckPermsSync.FAILED -> plugin.commsManager.send(admin,
+                Component.text("LuckPerms group ${rank.id} could not be updated (see console). JoshyMC rank was saved.", NamedTextColor.YELLOW),
+                CommunicationsManager.Category.ADMIN)
+            RankManager.LuckPermsSync.SKIPPED -> {}
+        }
+        admin.playSound(admin.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.0f)
     }
 
     private fun openBalanceSelector(admin: Player, targetUuid: UUID, targetName: String) {
