@@ -185,9 +185,12 @@ class EconomyManager(private val plugin: Joshymc) {
 
     /**
      * Parses shorthand amounts: 10k, 1.5m, 2b, 1t, 1q, 1qi, 1sx, 1sp, 1oc, 1no, 1dc,
-     * or plain numbers. Returns null if the input is invalid.
+     * or plain numbers. Returns null if the input is invalid, negative, or not finite
+     * (NaN, Infinity, or a value like 1e400 that overflows a double; issue #1170).
      */
-    fun parseAmount(input: String): Double? {
+    fun parseAmount(input: String): Double? = parseRawAmount(input)?.takeIf { it.isFinite() }
+
+    private fun parseRawAmount(input: String): Double? {
         val cleaned = input.replace(",", "").replace("$", "").trim().lowercase()
         if (cleaned.isEmpty()) return null
 

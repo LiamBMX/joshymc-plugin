@@ -67,6 +67,15 @@ class PlayerResolver(private val plugin: Joshymc) : Listener {
     }
 
     /**
+     * The online player named exactly [name] (case-insensitive), or null (issue #1170).
+     * Use this for anything that grants a reward: unlike `Bukkit.getPlayer(String)` it never
+     * falls back to a player whose name merely starts with [name], so `/credits give Sam`
+     * can't pay `Sammy123` while Sam is offline. Floodgate players match by the name the
+     * server shows for them, prefix included (e.g. `.Steve`).
+     */
+    fun online(name: String): Player? = if (name.isBlank()) null else Bukkit.getPlayerExact(name)
+
+    /**
      * First start only: seeds the table from the world's player data so players who joined
      * before this table existed (and have since dropped out of Paper's user cache) still
      * resolve. Names come from local player data files; nothing is fetched.

@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.AdminBalanceResult
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.manager.CreditsManager
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -27,7 +28,7 @@ class AdminBalanceCommand(private val plugin: Joshymc) {
 
     enum class Currency(val label: String, val scale: Int, val max: BigDecimal) {
         COINS("Coins", 2, BigDecimal("10000000000000")),     // 10T: cents stay exact in a double
-        CREDITS("Credits", 1, BigDecimal("1000000000")),
+        CREDITS("Credits", 1, BigDecimal.valueOf(CreditsManager.MAX_AMOUNT.toLong())),
     }
 
     enum class Operation { REMOVE, SET }

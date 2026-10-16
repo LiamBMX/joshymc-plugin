@@ -166,7 +166,7 @@ class TalismanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             return
         }
 
-        val target = Bukkit.getPlayer(args[1])
+        val target = plugin.playerResolver.online(args[1]) // exact name only (issue #1170)
         if (target == null) {
             Msg.playerNotFound(sender, args[1])
             return

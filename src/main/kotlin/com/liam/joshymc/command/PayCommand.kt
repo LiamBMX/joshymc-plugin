@@ -30,7 +30,7 @@ class PayCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
-        val target = Bukkit.getPlayer(args[0])
+        val target = plugin.playerResolver.online(args[0]) // exact name only (issue #1170)
         if (target == null) {
             Msg.playerNotFound(sender, category = CommunicationsManager.Category.ECONOMY)
             return true

@@ -138,7 +138,7 @@ class SellWandCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         }
 
         val multiplier = args[0].toDoubleOrNull()
-        if (multiplier == null || multiplier <= 0) {
+        if (multiplier == null || !multiplier.isFinite() || multiplier <= 0) {
             sender.sendMessage(Component.text("Multiplier must be a positive number (e.g., 1.5, 2, 3).", NamedTextColor.RED))
             return true
         }
@@ -150,8 +150,8 @@ class SellWandCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         }
 
         val target: Player = if (args.size >= 3) {
-            Bukkit.getPlayer(args[2]) ?: run {
-                Msg.playerNotFound(sender)
+            plugin.playerResolver.online(args[2]) ?: run { // exact name only (issue #1170)
+                Msg.playerNotFound(sender, args[2])
                 return true
             }
         } else if (sender is Player) {

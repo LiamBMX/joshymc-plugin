@@ -148,10 +148,13 @@ class CreditVoucherManager(private val plugin: Joshymc) {
             // we give the voucher back rather than leave the player uncharged AND unpaid.
             takeOne()
 
-            try {
+            val deposited = try {
                 plugin.creditsManager.deposit(player.uniqueId, amount.toDouble())
             } catch (ex: Exception) {
                 plugin.logger.warning("[CreditVouchers] Deposit failed for ${player.name} ($amount): ${ex.message}")
+                false
+            }
+            if (!deposited) {
                 give(player, amount, 1)
                 releaseVoucherId(voucherUuid)
                 plugin.commsManager.send(player, Component.text("Redemption failed, your voucher has been returned.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)

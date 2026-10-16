@@ -62,9 +62,11 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
 
-        val target = if (args.size >= 3) plugin.server.getPlayer(args[2]) else (sender as? Player)
+        // Exact name only (issue #1170), and never the sender when a named target isn't online.
+        val target = if (args.size >= 3) plugin.playerResolver.online(args[2]) else (sender as? Player)
         if (target == null) {
-            val msg = Component.text("Specify a target player.", NamedTextColor.RED)
+            val msg = if (args.size >= 3) Component.text("No online player is named exactly ${args[2]}.", NamedTextColor.RED)
+            else Component.text("Specify a target player.", NamedTextColor.RED)
             if (sender is Player) plugin.commsManager.send(sender, msg) else sender.sendMessage(msg)
             return
         }
@@ -312,9 +314,10 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "@a", "*" -> plugin.server.onlinePlayers.toList()
             "@r" -> plugin.server.onlinePlayers.toList().shuffled().take(1)
             else -> {
-                val p = plugin.server.getPlayer(targetArg)
+                // Exact name only (issue #1170): a prefix match could hand the keys to someone else.
+                val p = plugin.playerResolver.online(targetArg)
                 if (p == null) {
-                    val msg = Component.text("Player not found: $targetArg", NamedTextColor.RED)
+                    val msg = Component.text("No online player is named exactly $targetArg. No keys were given.", NamedTextColor.RED)
                     if (sender is Player) plugin.commsManager.send(sender, msg) else sender.sendMessage(msg)
                     return
                 }

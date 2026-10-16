@@ -17,6 +17,11 @@ import java.util.UUID
  */
 class CreditsManager(private val plugin: Joshymc) : Listener {
 
+    companion object {
+        /** Largest single deposit, withdrawal or transfer; the same ceiling as `/credits set`. */
+        const val MAX_AMOUNT = 1_000_000_000.0
+    }
+
     private var creditsPerHour: Double = 1.0
 
     private val formatter = DecimalFormat("#,##0.0")
@@ -105,16 +110,60 @@ class CreditsManager(private val plugin: Joshymc) : Listener {
         )
     }
 
-    fun deposit(uuid: UUID, amount: Double) {
-        val current = getBalance(uuid)
-        setBalance(uuid, current + amount)
+    /**
+     * Amount rule for [deposit] and [withdraw] (issue #1170): finite, greater than zero and
+     * no more than [MAX_AMOUNT]. NaN compares false against everything, so without this a
+     * NaN or Infinity slips past `<=` checks and gets written into the balance.
+     */
+    private fun isValidAmount(amount: Double): Boolean = amount.isFinite() && amount > 0.0 && amount <= MAX_AMOUNT
+
+    /**
+     * Adds [amount] in one atomic upsert (creates the row for a new player). Returns false
+     * without touching the balance if [amount] is invalid (see [isValidAmount]), zero included.
+     * A database error is logged and rethrown so an enclosing transaction rolls back.
+     */
+    fun deposit(uuid: UUID, amount: Double): Boolean {
+        if (!isValidAmount(amount)) {
+            if (amount != 0.0) plugin.logger.warning("[Credits] Rejected deposit of $amount to $uuid (invalid amount).")
+            return false
+        }
+        topCache = null
+        try {
+            plugin.databaseManager.execute(
+                "INSERT INTO credits (uuid, balance, credited_hours) VALUES (?, ?, 0) ON CONFLICT(uuid) DO UPDATE SET balance = balance + excluded.balance",
+                uuid.toString(), amount
+            )
+        } catch (e: Exception) {
+            plugin.logger.severe("[Credits] Deposit of $amount to $uuid failed: ${e.message}")
+            throw e
+        }
+        topCache = null
+        return true
     }
 
+    /**
+     * Subtracts [amount] in one conditional UPDATE that only matches when the balance covers
+     * it. Returns false (balance unchanged) for insufficient funds, no balance row, or an
+     * invalid amount; zero succeeds without a write. A database error is logged and rethrown.
+     */
     fun withdraw(uuid: UUID, amount: Double): Boolean {
-        val current = getBalance(uuid)
-        if (current < amount) return false
-        setBalance(uuid, current - amount)
-        return true
+        if (amount == 0.0) return true
+        if (!isValidAmount(amount)) {
+            plugin.logger.warning("[Credits] Rejected withdrawal of $amount from $uuid (invalid amount).")
+            return false
+        }
+        topCache = null
+        val updated = try {
+            plugin.databaseManager.executeUpdate(
+                "UPDATE credits SET balance = balance - ? WHERE uuid = ? AND balance >= ?",
+                amount, uuid.toString(), amount
+            )
+        } catch (e: Exception) {
+            plugin.logger.severe("[Credits] Withdrawal of $amount from $uuid failed: ${e.message}")
+            throw e
+        }
+        topCache = null
+        return updated == 1
     }
 
     /**
@@ -140,7 +189,7 @@ class CreditsManager(private val plugin: Joshymc) : Listener {
      */
     @Synchronized
     fun transfer(from: UUID, to: UUID, amount: Double): Boolean {
-        if (from == to || !amount.isFinite() || amount <= 0.0) return false
+        if (from == to || !isValidAmount(amount)) return false
         if (!(getBalance(to) + amount).isFinite()) return false
         topCache = null
         var ok = false

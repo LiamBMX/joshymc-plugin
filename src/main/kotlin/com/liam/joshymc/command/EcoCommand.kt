@@ -53,9 +53,10 @@ class EcoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
-        val target = Bukkit.getPlayer(args[1])
+        // Exact name only (issue #1170): a prefix match could pay a different player.
+        val target = plugin.playerResolver.online(args[1])
         if (target == null) {
-            Msg.playerNotFound(sender)
+            Msg.error(sender, "No online player is named exactly ${args[1]}. Nothing was given.")
             return true
         }
 
@@ -65,7 +66,17 @@ class EcoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
-        plugin.economyManager.deposit(target.uniqueId, amount)
+        val deposited = try {
+            plugin.economyManager.deposit(target.uniqueId, amount)
+        } catch (e: Exception) {
+            false
+        }
+        if (!deposited) {
+            Msg.error(sender, "Could not give Coins to ${target.name}. Nothing was changed.")
+            return true
+        }
+
+        plugin.logger.info("[Economy] ${sender.name} gave $amount Coins to ${target.name} (${target.uniqueId}).")
         sender.sendMessage(
             Component.text("Gave ", NamedTextColor.GREEN)
                 .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GOLD))

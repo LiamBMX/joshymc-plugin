@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.manager.CreditsManager
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -55,38 +56,47 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return true
         }
 
+        if (sub != "give") {
+            Msg.usage(sender, "/credits <balance|bal|pay|give|take|set|reset> [player] [amount]")
+            return true
+        }
+
         if (args.size < 3) {
-            Msg.usage(sender, "/credits $sub <player> <amount>")
+            Msg.usage(sender, "/credits give <player> <amount>")
             return true
         }
 
-        val target = Bukkit.getPlayer(args[1])
+        // Exact name only (issue #1170): a prefix match could pay a different player.
+        val target = plugin.playerResolver.online(args[1])
         if (target == null) {
-            Msg.playerNotFound(sender)
+            Msg.error(sender, "No online player is named exactly ${args[1]}. Nothing was given.")
             return true
         }
 
-        val amount = args[2].toDoubleOrNull()
-        if (amount == null || amount <= 0) {
-            sender.sendMessage(Component.text("Invalid amount.", NamedTextColor.RED))
+        val amount = AdminBalanceCommand.parseAmount(args[2], AdminBalanceCommand.Currency.CREDITS, allowZero = false)
+        if (amount == null) {
+            Msg.error(sender, "Invalid amount: ${args[2]}. Use a number greater than 0, at most 1 decimal place " +
+                "and no more than ${plugin.creditsManager.format(CreditsManager.MAX_AMOUNT)}.")
             return true
         }
 
-        when (sub) {
-            "give" -> {
-                plugin.creditsManager.deposit(target.uniqueId, amount)
-                sender.sendMessage(
-                    Component.text("Gave ", NamedTextColor.GREEN)
-                        .append(Component.text(plugin.creditsManager.format(amount), NamedTextColor.AQUA))
-                        .append(Component.text(" credits to ", NamedTextColor.GREEN))
-                        .append(Component.text(target.name, NamedTextColor.WHITE))
-                )
-            }
-            else -> {
-                Msg.usage(sender, "/credits <balance|bal|pay|give|take|set|reset> [player] [amount]")
-            }
+        val deposited = try {
+            plugin.creditsManager.deposit(target.uniqueId, amount)
+        } catch (e: Exception) {
+            false
+        }
+        if (!deposited) {
+            Msg.error(sender, "Could not give Credits to ${target.name}. Nothing was changed.")
+            return true
         }
 
+        plugin.logger.info("[Credits] ${sender.name} gave $amount Credits to ${target.name} (${target.uniqueId}).")
+        sender.sendMessage(
+            Component.text("Gave ", NamedTextColor.GREEN)
+                .append(Component.text(plugin.creditsManager.format(amount), NamedTextColor.AQUA))
+                .append(Component.text(" credits to ", NamedTextColor.GREEN))
+                .append(Component.text(target.name, NamedTextColor.WHITE))
+        )
         return true
     }
 
@@ -187,13 +197,13 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return true
         }
 
-        val amount = args[1].toDoubleOrNull()
-        if (amount == null || amount <= 0) {
+        val amount = AdminBalanceCommand.parseAmount(args[1], AdminBalanceCommand.Currency.CREDITS, allowZero = false)
+        if (amount == null) {
             plugin.commsManager.send(sender, Component.text("Invalid amount.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return true
         }
 
-        val target = Bukkit.getPlayer(args[2])
+        val target = plugin.playerResolver.online(args[2])
         if (target == null) {
             Msg.playerNotFound(sender, category = CommunicationsManager.Category.ECONOMY)
             return true
@@ -209,13 +219,12 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return true
         }
 
-        val success = plugin.creditsManager.withdraw(sender.uniqueId, amount)
+        // One transaction for both sides, so a failed credit can't eat the sender's Credits.
+        val success = plugin.creditsManager.transfer(sender.uniqueId, target.uniqueId, amount)
         if (!success) {
             plugin.commsManager.send(sender, Component.text("You don't have enough credits.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return true
         }
-
-        plugin.creditsManager.deposit(target.uniqueId, amount)
 
         val formatted = plugin.creditsManager.format(amount)
         plugin.commsManager.send(

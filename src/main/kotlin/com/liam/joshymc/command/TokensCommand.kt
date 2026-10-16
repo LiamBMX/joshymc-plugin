@@ -46,9 +46,10 @@ class TokensCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             sender.sendMessage(Component.text("Amount must be a positive integer.", NamedTextColor.RED))
             return true
         }
-        val target = Bukkit.getPlayer(args[2])
+        // Exact name only (issue #1170): a prefix match could hand the tokens to someone else.
+        val target = plugin.playerResolver.online(args[2])
         if (target == null) {
-            sender.sendMessage(Component.text("Player '${args[2]}' is not online.", NamedTextColor.RED))
+            sender.sendMessage(Component.text("No online player is named exactly ${args[2]}. Nothing was given.", NamedTextColor.RED))
             return true
         }
 
