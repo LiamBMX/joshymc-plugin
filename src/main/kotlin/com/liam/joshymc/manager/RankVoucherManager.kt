@@ -5,37 +5,38 @@ import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
+import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
+import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Physical Rank Vouchers (issue #595) — real, tradeable Name Tag items that
- * upgrade a player's purchasable rank tier through the existing [RankManager]
- * add/remove-rank + LuckPerms sync logic. Only the seven purchasable tiers
- * below are supported; staff ranks are never voucher-redeemable. Vouchers
- * never downgrade and are never consumed if the player already holds an
- * equal or higher tier.
+ * upgrade a player's donor tier through [RankManager.grantDonorTier]. Only the
+ * seven [DonorTiers] are supported; staff ranks are never voucher-redeemable.
+ * Vouchers never downgrade and are never consumed if the player already holds
+ * an equal or higher tier, which [RankManager.currentDonorTier] resolves from
+ * JoshyMC's records plus live LuckPerms groups, so it survives restarts.
+ *
+ * A redemption only becomes COMPLETED once LuckPerms shows the new group; until
+ * then its rank_voucher_redemptions row is PENDING. If the grant can't be
+ * confirmed, the voucher comes back and its id is released. If the player
+ * leaves (or the server stops) mid-confirmation, the row is settled when they
+ * next join (issue #1173).
  */
-class RankVoucherManager(private val plugin: Joshymc) {
-
-    // Ordered lowest -> highest. This ordering IS the voucher hierarchy —
-    // these seven purchasable tiers live entirely in LuckPerms/permissions
-    // (joshymc.rankperk.<id> in config.yml), never in RankManager's own
-    // ranks.list, so position in this list is the only place the hierarchy
-    // is defined.
-    private val tierOrder = listOf("scout", "pathfinder", "lumberjack", "trailblazer", "voyager", "ranger", "pioneer")
+class RankVoucherManager(private val plugin: Joshymc) : Listener {
 
     val voucherTypeKey = NamespacedKey(plugin, "voucher_type")
     val voucherRankKey = NamespacedKey(plugin, "voucher_rank")
     val voucherVersionKey = NamespacedKey(plugin, "voucher_version")
     val voucherUuidKey = NamespacedKey(plugin, "voucher_uuid")
-
-    private val redeeming = ConcurrentHashMap.newKeySet<UUID>()
 
     fun start() {
         plugin.databaseManager.createTable("""
@@ -47,15 +48,25 @@ class RankVoucherManager(private val plugin: Joshymc) {
                 timestamp INTEGER NOT NULL
             )
         """.trimIndent())
+        // Rows written before issue #1173 were all finished redemptions, hence the default.
+        try {
+            plugin.databaseManager.execute(
+                "ALTER TABLE rank_voucher_redemptions ADD COLUMN status TEXT NOT NULL DEFAULT '$STATUS_COMPLETED'"
+            )
+        } catch (_: Exception) {}
+
+        Bukkit.getPluginManager().registerEvents(this, plugin)
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            Bukkit.getOnlinePlayers().forEach { resolvePending(it, 0) }
+        }, PENDING_RESOLVE_DELAY_TICKS)
     }
 
-    fun getSupportedRankIds(): List<String> = tierOrder
+    // The hierarchy lives in DonorTiers so vouchers, the Credit Shop and /rank agree (issue #1173).
+    fun getSupportedRankIds(): List<String> = DonorTiers.ORDER
 
-    fun isSupportedRank(rankId: String): Boolean = rankId.lowercase() in tierOrder
+    fun isSupportedRank(rankId: String): Boolean = DonorTiers.isTier(rankId)
 
-    fun displayName(rankId: String): String = rankId.lowercase().replaceFirstChar { it.uppercase() }
-
-    private fun tierIndex(rankId: String): Int = tierOrder.indexOf(rankId.lowercase())
+    fun displayName(rankId: String): String = DonorTiers.displayName(rankId)
 
     // ── Item building / identification ─────────────────────────────────────
 
@@ -107,49 +118,60 @@ class RankVoucherManager(private val plugin: Joshymc) {
         // that force-stacked identical PDC onto multiple items — refuse rather than
         // apply the rank upgrade repeatedly.
         if (heldItem.amount != 1) {
-            plugin.commsManager.send(
-                player,
-                Component.text("This voucher stack is invalid and cannot be redeemed.", NamedTextColor.RED),
-                CommunicationsManager.Category.ECONOMY
-            )
+            send(player, "This voucher stack is invalid and cannot be redeemed.", NamedTextColor.RED)
             plugin.logger.warning("[RankVouchers] ${player.name} attempted to redeem a malformed voucher stack (amount=${heldItem.amount}).")
             return
         }
 
-        if (!redeeming.add(player.uniqueId)) return
-        try {
-            val pdc = heldItem.itemMeta?.persistentDataContainer
-            val version = pdc?.get(voucherVersionKey, PersistentDataType.INTEGER)
-            val rankId = pdc?.get(voucherRankKey, PersistentDataType.STRING)
-            val voucherUuid = pdc?.get(voucherUuidKey, PersistentDataType.STRING)
+        val pdc = heldItem.itemMeta?.persistentDataContainer
+        val version = pdc?.get(voucherVersionKey, PersistentDataType.INTEGER)
+        val rawRank = pdc?.get(voucherRankKey, PersistentDataType.STRING)
+        val rankId = DonorTiers.normalize(rawRank)
+        val voucherUuid = pdc?.get(voucherUuidKey, PersistentDataType.STRING)
 
-            if (version != VOUCHER_VERSION || rankId == null || !isSupportedRank(rankId) || voucherUuid == null) {
-                plugin.commsManager.send(
-                    player,
-                    Component.text("This voucher is invalid and cannot be redeemed.", NamedTextColor.RED),
-                    CommunicationsManager.Category.ECONOMY
-                )
-                plugin.logger.warning("[RankVouchers] ${player.name} attempted to redeem a malformed voucher (version=$version, rank=$rankId, uuid=$voucherUuid).")
+        if (version != VOUCHER_VERSION || rankId == null || voucherUuid == null) {
+            send(player, "This voucher is invalid and cannot be redeemed.", NamedTextColor.RED)
+            plugin.logger.warning("[RankVouchers] ${player.name} attempted to redeem a malformed voucher (version=$version, rank=$rawRank, uuid=$voucherUuid).")
+            return
+        }
+
+        // Shared with Credit Shop rank packages: one donor change per player at a time,
+        // held until the grant is confirmed or rolled back.
+        if (!plugin.rankManager.tryLockDonorChange(player.uniqueId)) {
+            send(player, "Your last rank change is still processing.", NamedTextColor.RED)
+            return
+        }
+        var handedOff = false
+        try {
+            if (hasPendingDonorGrant(player.uniqueId)) {
+                send(player, "A previous rank upgrade is still being confirmed. Try again in a moment.", NamedTextColor.RED)
                 return
             }
 
-            val currentTier = currentTierId(player.uniqueId)
-            val currentIndex = currentTier?.let { tierIndex(it) } ?: -1
-            val voucherIndex = tierIndex(rankId)
-
-            if (voucherIndex <= currentIndex) {
-                val message = if (voucherIndex == currentIndex) {
-                    "You already have the ${displayName(rankId)} rank."
-                } else {
-                    "You already have a higher rank than ${displayName(rankId)}."
+            val currentTier = plugin.rankManager.currentDonorTier(player.uniqueId)
+            when (DonorTiers.compare(currentTier, rankId)) {
+                DonorTiers.Comparison.SAME_TIER -> {
+                    send(player, "You already have the ${displayName(rankId)} rank. Your voucher was not used.", NamedTextColor.YELLOW)
+                    plugin.logger.info("[RankVouchers] Rejected ${displayName(rankId)} voucher from ${player.name} (${player.uniqueId}): already holds that tier.")
+                    return
                 }
-                plugin.commsManager.send(player, Component.text(message, NamedTextColor.YELLOW), CommunicationsManager.Category.ECONOMY)
+                DonorTiers.Comparison.LOWER_TIER -> {
+                    send(player, "You already have ${displayName(currentTier!!)}, which is higher than ${displayName(rankId)}. Your voucher was not used.", NamedTextColor.YELLOW)
+                    plugin.logger.info("[RankVouchers] Rejected ${displayName(rankId)} voucher from ${player.name} (${player.uniqueId}): holds higher tier $currentTier.")
+                    return
+                }
+                DonorTiers.Comparison.UPGRADE -> {}
+            }
+
+            if (!plugin.rankManager.isLuckPermsAvailable()) {
+                send(player, "Rank vouchers can't be redeemed right now. Your voucher was not used.", NamedTextColor.RED)
+                plugin.logger.warning("[RankVouchers] ${player.name} tried to redeem a ${displayName(rankId)} voucher but LuckPerms is not enabled.")
                 return
             }
 
             // Atomically reserve this voucher's unique id first, same anti-dupe idiom as
             // CreditVoucherManager — stops a duplicated physical item (same PDC uuid) from
-            // ever redeeming twice.
+            // ever redeeming twice. The row stays PENDING until LuckPerms confirms.
             if (!reserveVoucherId(voucherUuid, player, rankId)) {
                 plugin.antiDupeManager.record(
                     player,
@@ -159,61 +181,151 @@ class RankVoucherManager(private val plugin: Joshymc) {
                     source = "Rank Voucher",
                     transactionId = voucherUuid
                 )
-                plugin.commsManager.send(
-                    player,
-                    Component.text("This voucher has already been redeemed.", NamedTextColor.RED),
-                    CommunicationsManager.Category.ECONOMY
-                )
+                send(player, "This voucher has already been redeemed.", NamedTextColor.RED)
                 return
             }
 
             takeOne()
-
-            try {
-                // Reuse RankManager's own add/remove-rank logic (issue's "LuckPerms safety"
-                // requirement) — this preserves every unrelated LuckPerms group/permission
-                // and only ever touches the one purchasable tier being replaced.
-                if (currentTier != null) plugin.rankManager.removeRank(player.uniqueId, currentTier)
-                plugin.rankManager.addRank(player.uniqueId, rankId)
-            } catch (ex: Exception) {
-                plugin.logger.warning("[RankVouchers] Rank upgrade failed for ${player.name} ($rankId): ${ex.message}")
-                give(player, rankId, 1)
-                releaseVoucherId(voucherUuid)
-                plugin.commsManager.send(player, Component.text("Redemption failed, your voucher has been returned.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
-                return
+            send(player, "Applying the ${displayName(rankId)} rank...", NamedTextColor.GRAY)
+            handedOff = true
+            plugin.rankManager.grantDonorTier(player, rankId) { result ->
+                try {
+                    finishRedemption(player, voucherUuid, rankId, currentTier, result)
+                } finally {
+                    plugin.rankManager.unlockDonorChange(player.uniqueId)
+                }
             }
-
-            plugin.commsManager.send(
-                player,
-                Component.text("You redeemed the ${displayName(rankId)} rank!", NamedTextColor.GREEN),
-                CommunicationsManager.Category.ECONOMY
-            )
         } finally {
-            redeeming.remove(player.uniqueId)
+            if (!handedOff) plugin.rankManager.unlockDonorChange(player.uniqueId)
         }
     }
 
-    /** The player's current highest voucher-tier rank, or null if they hold none of the seven. */
-    private fun currentTierId(uuid: UUID): String? {
-        return plugin.rankManager.getPlayerRankIds(uuid)
-            .filter { isSupportedRank(it) }
-            .maxByOrNull { tierIndex(it) }
+    private fun finishRedemption(
+        player: Player,
+        voucherUuid: String,
+        rankId: String,
+        previousTier: String?,
+        result: RankManager.DonorGrantResult
+    ) {
+        when (result) {
+            RankManager.DonorGrantResult.CONFIRMED -> {
+                markCompleted(voucherUuid)
+                send(player, "You redeemed the ${displayName(rankId)} rank!", NamedTextColor.GREEN)
+                plugin.logger.info("[RankVouchers] ${player.name} (${player.uniqueId}) redeemed ${displayName(rankId)} (was ${previousTier ?: "none"}), voucher $voucherUuid.")
+            }
+            // Stays PENDING; resolvePending settles it on their next join.
+            RankManager.DonorGrantResult.PLAYER_LEFT -> {}
+            else -> {
+                if (returnVoucher(player, voucherUuid, rankId)) {
+                    send(player, "Your ${displayName(rankId)} rank couldn't be confirmed, so your voucher has been returned.", NamedTextColor.RED)
+                }
+                plugin.logger.warning("[RankVouchers] Rank upgrade to $rankId failed for ${player.name} (${player.uniqueId}): $result. Voucher returned.")
+            }
+        }
     }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onJoin(event: PlayerJoinEvent) {
+        val player = event.player
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable { resolvePending(player, 0) }, PENDING_RESOLVE_DELAY_TICKS)
+    }
+
+    /**
+     * Settles PENDING redemptions left by a player who quit (or a server that stopped)
+     * before LuckPerms confirmed. LuckPerms has loaded their groups by now: if the tier is
+     * there the redemption completes, otherwise the request is undone and the voucher is
+     * returned. Each row is claimed with a conditional update, so it settles exactly once.
+     */
+    private fun resolvePending(player: Player, attempt: Int) {
+        if (!player.isOnline) return
+        val rows = plugin.databaseManager.query(
+            "SELECT voucher_uuid, rank_id FROM rank_voucher_redemptions WHERE uuid = ? AND status = ?",
+            player.uniqueId.toString(), STATUS_PENDING
+        ) { rs -> rs.getString("voucher_uuid") to rs.getString("rank_id") }
+        if (rows.isEmpty()) return
+        if (!plugin.rankManager.isLuckPermsAvailable()) {
+            plugin.logger.warning("[RankVouchers] ${player.name} has ${rows.size} pending voucher redemption(s) but LuckPerms is not enabled; leaving them pending.")
+            return
+        }
+        if (!plugin.rankManager.tryLockDonorChange(player.uniqueId)) {
+            if (attempt < PENDING_RESOLVE_MAX_ATTEMPTS) {
+                Bukkit.getScheduler().runTaskLater(plugin, Runnable { resolvePending(player, attempt + 1) }, PENDING_RESOLVE_DELAY_TICKS)
+            }
+            return
+        }
+        try {
+            for ((voucherUuid, rawRank) in rows) {
+                val rankId = DonorTiers.normalize(rawRank)
+                if (rankId == null) {
+                    plugin.logger.warning("[RankVouchers] Pending voucher $voucherUuid for ${player.name} names unknown tier '$rawRank'; left for an admin.")
+                    continue
+                }
+                if (plugin.rankManager.isDonorGroupConfirmed(player, rankId)) {
+                    if (markCompleted(voucherUuid)) {
+                        plugin.rankManager.completeDonorGrant(player.uniqueId, rankId)
+                        send(player, "Your ${displayName(rankId)} rank voucher redemption is complete.", NamedTextColor.GREEN)
+                        plugin.logger.info("[RankVouchers] Settled pending voucher $voucherUuid for ${player.name}: $rankId confirmed in LuckPerms.")
+                    }
+                } else {
+                    plugin.rankManager.revokeUnconfirmedDonorGrant(player.uniqueId, rankId)
+                    if (returnVoucher(player, voucherUuid, rankId)) {
+                        send(player, "Your ${displayName(rankId)} rank upgrade didn't go through, so your voucher has been returned.", NamedTextColor.RED)
+                        plugin.logger.warning("[RankVouchers] Settled pending voucher $voucherUuid for ${player.name}: $rankId not in LuckPerms, voucher returned.")
+                    }
+                }
+            }
+        } finally {
+            plugin.rankManager.unlockDonorChange(player.uniqueId)
+        }
+    }
+
+    /** True while [uuid] has an unconfirmed voucher redemption or Credit Shop rank purchase. */
+    private fun hasPendingDonorGrant(uuid: UUID): Boolean =
+        hasPendingRedemption(uuid) || plugin.voucherManager.hasPendingRankPurchase(uuid)
+
+    fun hasPendingRedemption(uuid: UUID): Boolean =
+        plugin.databaseManager.queryFirst(
+            "SELECT 1 AS found FROM rank_voucher_redemptions WHERE uuid = ? AND status = ? LIMIT 1",
+            uuid.toString(), STATUS_PENDING
+        ) { it.getInt("found") } != null
 
     private fun reserveVoucherId(voucherUuid: String, player: Player, rankId: String): Boolean {
         val rows = plugin.databaseManager.executeUpdate(
-            "INSERT OR IGNORE INTO rank_voucher_redemptions (voucher_uuid, uuid, player_name, rank_id, timestamp) VALUES (?, ?, ?, ?, ?)",
-            voucherUuid, player.uniqueId.toString(), player.name, rankId, System.currentTimeMillis()
+            "INSERT OR IGNORE INTO rank_voucher_redemptions (voucher_uuid, uuid, player_name, rank_id, timestamp, status) VALUES (?, ?, ?, ?, ?, ?)",
+            voucherUuid, player.uniqueId.toString(), player.name, rankId, System.currentTimeMillis(), STATUS_PENDING
         )
         return rows > 0
     }
 
-    private fun releaseVoucherId(voucherUuid: String) {
-        plugin.databaseManager.execute("DELETE FROM rank_voucher_redemptions WHERE voucher_uuid = ?", voucherUuid)
+    private fun markCompleted(voucherUuid: String): Boolean =
+        plugin.databaseManager.executeUpdate(
+            "UPDATE rank_voucher_redemptions SET status = ? WHERE voucher_uuid = ? AND status = ?",
+            STATUS_COMPLETED, voucherUuid, STATUS_PENDING
+        ) == 1
+
+    /**
+     * Releases a PENDING reservation (so the id isn't burned when no rank was granted) and
+     * hands the player a fresh voucher of the same tier. False if the row was already settled.
+     */
+    private fun returnVoucher(player: Player, voucherUuid: String, rankId: String): Boolean {
+        val released = plugin.databaseManager.executeUpdate(
+            "DELETE FROM rank_voucher_redemptions WHERE voucher_uuid = ? AND status = ?",
+            voucherUuid, STATUS_PENDING
+        ) == 1
+        if (released) give(player, rankId, 1)
+        return released
+    }
+
+    private fun send(player: Player, text: String, color: NamedTextColor) {
+        plugin.commsManager.send(player, Component.text(text, color), CommunicationsManager.Category.ECONOMY)
     }
 
     companion object {
         const val VOUCHER_VERSION = 1
         const val MAX_QUANTITY = 10_000
+        private const val STATUS_PENDING = "PENDING"
+        private const val STATUS_COMPLETED = "COMPLETED"
+        private const val PENDING_RESOLVE_DELAY_TICKS = 40L
+        private const val PENDING_RESOLVE_MAX_ATTEMPTS = 5
     }
 }

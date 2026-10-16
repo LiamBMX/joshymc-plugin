@@ -41,6 +41,10 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     private val ranks = mutableMapOf<String, Rank>()
     private val playerRanks = mutableMapOf<UUID, MutableSet<String>>() // UUID -> set of rank IDs
+    // UUID -> donor tiers JoshyMC granted (player_ranks rows that are DonorTiers, issue #1173)
+    private val donorTierRecords = mutableMapOf<UUID, MutableSet<String>>()
+    // Players with a donor-tier grant in flight; shared by Rank Vouchers and the Credit Shop.
+    private val donorChangeLocks = java.util.concurrent.ConcurrentHashMap.newKeySet<UUID>()
     private val collisionStates = mutableMapOf<UUID, Boolean>()
     private val rankPerks = mutableListOf<RankPerk>()
 
@@ -232,6 +236,10 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     companion object {
         private const val TEAM_PREFIX = "jmc_"
+        private const val DONOR_CONFIRM_POLL_TICKS = 10L
+        private const val DONOR_CONFIRM_TIMEOUT_TICKS = 200L
+        /** Never granted to anyone and not in plugin.yml: only ops and wildcards hold it. */
+        private const val WILDCARD_PROBE_NODE = "joshymc.internal.donortier.wildcardprobe"
     }
 
     private fun migrateToMultiRankSchema() {
@@ -296,6 +304,7 @@ class RankManager(private val plugin: Joshymc) : Listener {
 
     private fun loadPlayerRanks() {
         playerRanks.clear()
+        donorTierRecords.clear()
         val rows = plugin.databaseManager.query(
             "SELECT uuid, rank_id FROM player_ranks"
         ) { rs ->
@@ -305,6 +314,9 @@ class RankManager(private val plugin: Joshymc) : Listener {
             if (ranks.containsKey(rankId)) {
                 playerRanks.getOrPut(uuid) { mutableSetOf() }.add(rankId)
             }
+            // Donor tiers usually aren't in ranks.list, so the check above used to drop them
+            // and vouchers forgot every donor after a restart (issue #1173). Keep them apart.
+            DonorTiers.normalize(rankId)?.let { donorTierRecords.getOrPut(uuid) { mutableSetOf() }.add(it) }
         }
     }
 
@@ -406,6 +418,7 @@ class RankManager(private val plugin: Joshymc) : Listener {
             "INSERT OR IGNORE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
             uuid.toString(), rankId
         )
+        DonorTiers.normalize(rankId)?.let { donorTierRecords.getOrPut(uuid) { mutableSetOf() }.add(it) }
         // Preserve the default rank alongside any non-default rank so players
         // retain their base permissions/display when a special rank is added.
         if (rankId != "default" && ranks.containsKey("default") && set.add("default")) {
@@ -425,10 +438,13 @@ class RankManager(private val plugin: Joshymc) : Listener {
      * for [rankId]; every other player_ranks row and LuckPerms parent is left alone.
      */
     fun removeRankDetailed(uuid: UUID, rankId: String): RankChange {
-        val set = playerRanks[uuid] ?: return RankChange(false, LuckPermsSync.SKIPPED)
-        if (rankId !in set) return RankChange(false, LuckPermsSync.SKIPPED)
-        set.remove(rankId)
-        if (set.isEmpty()) playerRanks.remove(uuid)
+        val set = playerRanks[uuid]
+        val donorSet = donorTierRecords[uuid]
+        val inRanks = set != null && rankId in set
+        val inDonor = donorSet != null && rankId in donorSet
+        if (!inRanks && !inDonor) return RankChange(false, LuckPermsSync.SKIPPED)
+        if (set != null && set.remove(rankId) && set.isEmpty()) playerRanks.remove(uuid)
+        if (donorSet != null && donorSet.remove(rankId) && donorSet.isEmpty()) donorTierRecords.remove(uuid)
         plugin.databaseManager.execute(
             "DELETE FROM player_ranks WHERE uuid = ? AND rank_id = ?",
             uuid.toString(), rankId
@@ -447,26 +463,173 @@ class RankManager(private val plugin: Joshymc) : Listener {
         dispatchLuckPerms(uuid, rankId, "remove")
 
     // Uses LP's console command surface, which avoids a hard compile-time dependency.
-    // Only `parent add` / `parent remove` are ever sent, never `parent set`.
+    // Only `parent add` / `parent remove` are ever sent, never `parent set`. The user is
+    // addressed by UUID (LP accepts a UUID wherever it takes a username), so offline players,
+    // renamed players and Floodgate accounts all resolve to the exact account (issue #1173).
     private fun dispatchLuckPerms(uuid: UUID, rankId: String, action: String): LuckPermsSync {
-        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) return LuckPermsSync.SKIPPED
-        val name = Bukkit.getOfflinePlayer(uuid).name
-        if (name == null) {
-            plugin.logger.warning("[Ranks] LuckPerms parent $action $rankId skipped for $uuid: no known player name.")
-            return LuckPermsSync.FAILED
-        }
+        if (!isLuckPermsAvailable()) return LuckPermsSync.SKIPPED
         return try {
-            if (Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent $action $rankId")) {
+            if (Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $uuid parent $action $rankId")) {
                 LuckPermsSync.REQUESTED
             } else {
-                plugin.logger.warning("[Ranks] LuckPerms parent $action $rankId was not accepted for $name.")
+                plugin.logger.warning("[Ranks] LuckPerms parent $action $rankId was not accepted for $uuid.")
                 LuckPermsSync.FAILED
             }
         } catch (e: Exception) {
-            plugin.logger.warning("[Ranks] LuckPerms parent $action failed for $name ($rankId): ${e.message}")
+            plugin.logger.warning("[Ranks] LuckPerms parent $action failed for $uuid ($rankId): ${e.message}")
             LuckPermsSync.FAILED
         }
     }
+
+    fun isLuckPermsAvailable(): Boolean = Bukkit.getPluginManager().isPluginEnabled("LuckPerms")
+
+    // ── Donor tiers (issue #1173) ───────────────────────
+
+    /** Donor tiers JoshyMC itself granted [uuid] (its player_ranks records), lowest first. */
+    fun getDonorTierRecords(uuid: UUID): List<String> =
+        donorTierRecords[uuid].orEmpty().sortedBy { DonorTiers.index(it) }
+
+    /** Donor tiers [player]'s live permissions show (LuckPerms groups or rank-perk nodes), lowest first. */
+    fun liveDonorTiers(player: Player): Set<String> {
+        val explicit = explicitPermissions(player)
+        return DonorTiers.liveTiers(explicit, hasWildcard(player)) { player.hasPermission(it) }
+    }
+
+    /** Where a player's donor tier comes from: [live] is only known while they're online. */
+    data class DonorTierStatus(val tier: String?, val recorded: List<String>, val live: Set<String>, val liveChecked: Boolean)
+
+    /**
+     * The single donor-tier resolver every donor system uses: the highest of JoshyMC's own
+     * records (survive restarts and cover offline players) and, for an online player, the
+     * tiers their live LuckPerms permissions show (covers direct LuckPerms assignments and
+     * inheritance). Staff groups never count: only the seven [DonorTiers] are considered.
+     */
+    fun donorTierStatus(uuid: UUID): DonorTierStatus {
+        val recorded = getDonorTierRecords(uuid)
+        val online = Bukkit.getPlayer(uuid)
+        val live = online?.let { liveDonorTiers(it) } ?: emptySet()
+        return DonorTierStatus(DonorTiers.highest(recorded + live), recorded, live, online != null)
+    }
+
+    fun currentDonorTier(uuid: UUID): String? = donorTierStatus(uuid).tier
+
+    /**
+     * Claim [uuid]'s donor-change slot. Every donor grant (voucher or Credit Shop) holds it
+     * from validation until the grant is confirmed or rolled back, so two purchases can't
+     * both pass the ownership check and charge twice. False if a change is already running.
+     */
+    fun tryLockDonorChange(uuid: UUID): Boolean = donorChangeLocks.add(uuid)
+
+    fun unlockDonorChange(uuid: UUID) {
+        donorChangeLocks.remove(uuid)
+    }
+
+    fun isDonorChangeLocked(uuid: UUID): Boolean = uuid in donorChangeLocks
+
+    enum class DonorGrantResult {
+        /** LuckPerms shows the new group on the player; JoshyMC recorded the tier. */
+        CONFIRMED,
+        /** LuckPerms isn't installed, so nothing was sent. */
+        UNAVAILABLE,
+        /** The `parent add` command couldn't be dispatched; nothing changed. */
+        DISPATCH_FAILED,
+        /** LuckPerms didn't show the group within the timeout; a `parent remove` undid the request. */
+        UNCONFIRMED,
+        /** The player left before it could be confirmed. Callers keep it pending and settle it on their next join. */
+        PLAYER_LEFT
+    }
+
+    /**
+     * Grants [tier] to [player] through a single targeted `lp user <uuid> parent add`, then
+     * waits (up to [DONOR_CONFIRM_TIMEOUT_TICKS]) until LuckPerms actually shows the group on
+     * the player before calling [onResult] with [DonorGrantResult.CONFIRMED]. LuckPerms
+     * applies console commands asynchronously, so a dispatched command proves nothing.
+     *
+     * On confirmation the tier is recorded in player_ranks and lower tiers that JoshyMC
+     * itself recorded are removed (`parent remove`, one group each). Staff and every group
+     * JoshyMC didn't grant are never touched, and `parent set` is never used.
+     *
+     * The caller must hold [tryLockDonorChange] and must already have checked that [tier] is
+     * an upgrade. [onResult] always runs on the main thread, exactly once, unless the plugin
+     * is disabled first (callers persist a pending row for that case).
+     */
+    fun grantDonorTier(player: Player, tier: String, onResult: (DonorGrantResult) -> Unit) {
+        val uuid = player.uniqueId
+        if (!isLuckPermsAvailable()) {
+            onResult(DonorGrantResult.UNAVAILABLE)
+            return
+        }
+        if (addLuckPermsGroup(uuid, tier) != LuckPermsSync.REQUESTED) {
+            onResult(DonorGrantResult.DISPATCH_FAILED)
+            return
+        }
+        object : org.bukkit.scheduler.BukkitRunnable() {
+            var waited = 0L
+            override fun run() {
+                waited += DONOR_CONFIRM_POLL_TICKS
+                if (!player.isOnline) {
+                    cancel()
+                    plugin.logger.info("[Ranks] ${player.name} ($uuid) left before LuckPerms confirmed donor tier $tier; it stays pending until they rejoin.")
+                    onResult(DonorGrantResult.PLAYER_LEFT)
+                    return
+                }
+                if (isDonorGroupConfirmed(player, tier)) {
+                    cancel()
+                    completeDonorGrant(uuid, tier)
+                    onResult(DonorGrantResult.CONFIRMED)
+                    return
+                }
+                if (waited >= DONOR_CONFIRM_TIMEOUT_TICKS) {
+                    cancel()
+                    plugin.logger.warning("[Ranks] LuckPerms did not confirm donor tier $tier for ${player.name} ($uuid) within ${DONOR_CONFIRM_TIMEOUT_TICKS / 20}s; sending parent remove to undo the request.")
+                    revokeUnconfirmedDonorGrant(uuid, tier)
+                    onResult(DonorGrantResult.UNCONFIRMED)
+                }
+            }
+        }.runTaskTimer(plugin, DONOR_CONFIRM_POLL_TICKS, DONOR_CONFIRM_POLL_TICKS)
+    }
+
+    /** True once LuckPerms shows [tier]'s group on [player] (explicit node, or a live check for non-wildcard players). */
+    fun isDonorGroupConfirmed(player: Player, tier: String): Boolean =
+        DonorTiers.groupConfirmed(tier, explicitPermissions(player), hasWildcard(player)) { player.hasPermission(it) }
+
+    /**
+     * Bookkeeping after LuckPerms confirmed [tier]: record it in player_ranks so it survives
+     * restarts, then drop the lower tiers JoshyMC recorded earlier (they're redundant). Lower
+     * tiers assigned outside JoshyMC are left alone.
+     */
+    fun completeDonorGrant(uuid: UUID, tier: String) {
+        val records = donorTierRecords.getOrPut(uuid) { mutableSetOf() }
+        if (records.add(tier)) {
+            plugin.databaseManager.execute(
+                "INSERT OR IGNORE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
+                uuid.toString(), tier
+            )
+        }
+        if (ranks.containsKey(tier)) {
+            playerRanks.getOrPut(uuid) { mutableSetOf() }.add(tier)
+            Bukkit.getPlayer(uuid)?.let { applyTeamFor(it) }
+        }
+        for (lower in DonorTiers.below(tier, records.toList())) {
+            val change = removeRankDetailed(uuid, lower)
+            if (change.luckPerms == LuckPermsSync.FAILED) {
+                plugin.logger.warning("[Ranks] Could not remove redundant donor tier $lower from $uuid after upgrading to $tier; remove it in LuckPerms by hand.")
+            }
+        }
+    }
+
+    /** Undo a `parent add` for [tier] that never showed up (or never completed): one targeted `parent remove`. */
+    fun revokeUnconfirmedDonorGrant(uuid: UUID, tier: String) {
+        if (removeLuckPermsGroup(uuid, tier) == LuckPermsSync.FAILED) {
+            plugin.logger.warning("[Ranks] Could not send parent remove $tier for $uuid; check that player's LuckPerms groups by hand.")
+        }
+    }
+
+    private fun explicitPermissions(player: Player): Set<String> =
+        player.effectivePermissions.filter { it.value }.mapTo(HashSet()) { it.permission }
+
+    /** True for ops and wildcard holders: they answer yes to a node nobody is ever granted. */
+    private fun hasWildcard(player: Player): Boolean = player.hasPermission(WILDCARD_PROBE_NODE)
 
     /**
      * Get the formatted prefix for a player's rank (with color codes).

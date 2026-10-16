@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.manager.DonorTiers
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -266,12 +267,13 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         val target = resolveTarget(sender, playerName) ?: return
         val displayName = target.name ?: playerName
         val rank = plugin.rankManager.getRank(rankId)
-        if (rank == null) {
+        // Donor tiers aren't in ranks.list, but a stale JoshyMC donor record can still be removed (issue #1173).
+        if (rank == null && !DonorTiers.isTier(rankId)) {
             sender.sendMessage(Component.text("Unknown rank: $rankId. Use /rank list to see available ranks.", NamedTextColor.RED))
             return
         }
 
-        val tagDisplay = plugin.commsManager.parseLegacy(rank.displayTag)
+        val tagDisplay = rank?.let { plugin.commsManager.parseLegacy(it.displayTag) } ?: donorTag(rankId)
         val removed = plugin.rankManager.removeRank(target.uniqueId, rankId)
         if (!removed) {
             reply(
@@ -328,6 +330,17 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             }
         }
 
+        // Donor tiers live in LuckPerms, not ranks.list, so list them on their own (issue #1173).
+        msg.append(Component.newline())
+            .append(Component.text("Donor Tiers", NamedTextColor.YELLOW).decoration(TextDecoration.BOLD, true))
+            .append(Component.text(" (LuckPerms groups, highest first)", NamedTextColor.DARK_GRAY))
+        for (tier in DonorTiers.ORDER.asReversed()) {
+            msg.append(Component.newline())
+                .append(Component.text("  - ", NamedTextColor.DARK_GRAY))
+                .append(donorTag(tier))
+                .append(Component.text(" ($tier)", NamedTextColor.DARK_GRAY))
+        }
+
         sender.sendMessage(msg.build())
     }
 
@@ -352,19 +365,52 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 sender,
                 Component.text("$displayName currently has no managed ranks.", NamedTextColor.GRAY)
             )
-            return
+        } else {
+            val tags = assignedIds.mapNotNull { plugin.rankManager.getRank(it) }.sortedByDescending { it.weight }
+            val msg = Component.text()
+                .append(Component.text("$displayName's ranks: ", NamedTextColor.GRAY))
+            for ((index, rank) in tags.withIndex()) {
+                if (index > 0) msg.append(Component.text(", ", NamedTextColor.GRAY))
+                msg.append(plugin.commsManager.parseLegacy(rank.displayTag))
+            }
+            reply(sender, msg.build())
         }
 
-        val tags = assignedIds.mapNotNull { plugin.rankManager.getRank(it) }.sortedByDescending { it.weight }
-        val msg = Component.text()
-            .append(Component.text("$displayName's ranks: ", NamedTextColor.GRAY))
-        for ((index, rank) in tags.withIndex()) {
-            if (index > 0) msg.append(Component.text(", ", NamedTextColor.GRAY))
-            msg.append(plugin.commsManager.parseLegacy(rank.displayTag))
-        }
-
-        reply(sender, msg.build())
+        reply(sender, donorTierLine(displayName, target.uniqueId))
     }
+
+    /**
+     * Donor tier line for /rank check (issue #1173), from the same resolver vouchers and the
+     * Credit Shop use: JoshyMC's records plus, when online, the live LuckPerms groups.
+     */
+    private fun donorTierLine(displayName: String, uuid: UUID): Component {
+        val status = plugin.rankManager.donorTierStatus(uuid)
+        val tier = status.tier
+        if (tier == null) {
+            val text = if (status.liveChecked) "$displayName has no donor tier."
+            else "$displayName has no donor tier on record (LuckPerms-only tiers show while they're online)."
+            return Component.text(text, NamedTextColor.GRAY)
+        }
+        val source = when {
+            tier in status.live && tier in status.recorded -> "LuckPerms + JoshyMC record"
+            tier in status.live -> "LuckPerms"
+            status.liveChecked -> "JoshyMC record only, not in LuckPerms"
+            else -> "JoshyMC record; offline, LuckPerms not checked"
+        }
+        val msg = Component.text()
+            .append(Component.text("Donor tier: ", NamedTextColor.GRAY))
+            .append(donorTag(tier))
+            .append(Component.text(" ($source)", NamedTextColor.DARK_GRAY))
+        val others = (status.recorded + status.live).filter { it != tier }.distinct()
+        if (others.isNotEmpty()) {
+            msg.append(Component.text(" Also holds: ${others.joinToString(", ") { DonorTiers.displayName(it) }}", NamedTextColor.DARK_GRAY))
+        }
+        return msg.build()
+    }
+
+    private fun donorTag(tier: String): Component =
+        plugin.rankManager.getRank(tier)?.let { plugin.commsManager.parseLegacy(it.displayTag) }
+            ?: Component.text(DonorTiers.displayName(tier), NamedTextColor.GOLD)
 
     /** Resolves [playerName] locally (no Mojang lookup); replies "Player not found" and returns null for unknown names. */
     private fun resolveTarget(sender: CommandSender, playerName: String): OfflinePlayer? {
@@ -433,7 +479,7 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 "add" -> plugin.rankManager.getRankIds().filter { it.startsWith(args[2].lowercase()) }.toList()
                 "remove" -> {
                     val targetUuid = (Bukkit.getPlayer(args[1]) ?: plugin.playerResolver.resolve(args[1]))?.uniqueId
-                    val assigned = targetUuid?.let { plugin.rankManager.getPlayerRankIds(it) }.orEmpty()
+                    val assigned = targetUuid?.let { plugin.rankManager.getPlayerRankIds(it) + plugin.rankManager.getDonorTierRecords(it) }.orEmpty()
                     val pool = assigned.ifEmpty { plugin.rankManager.getRankIds() }
                     pool.filter { it.startsWith(args[2].lowercase()) }.toList()
                 }
