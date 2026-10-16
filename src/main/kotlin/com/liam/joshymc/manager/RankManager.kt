@@ -362,50 +362,45 @@ class RankManager(private val plugin: Joshymc) : Listener {
     fun getSellMultiplier(player: Player): Double = getRankPerkBonus(player)?.sellMultiplier ?: 1.0
 
     /**
-     * Set a player's rank. Pass null to remove their rank.
-     *
-     * If LuckPerms is installed, this also updates the player's parent group so
-     * permissions configured on the LP group (e.g. joshymc.anvil on "warrior")
-     * actually apply — otherwise our /rank only changes the chat tag while LP's
-     * permission state stays on whatever group was previously assigned.
+     * What happened on the LuckPerms side of a rank change. Changes go through LP's
+     * console command, which LP applies asynchronously, so [REQUESTED] only means the
+     * command was dispatched, never that LuckPerms has saved it.
      */
-    fun setPlayerRank(uuid: UUID, rankId: String?) {
-        if (rankId == null) {
-            playerRanks.remove(uuid)
-            plugin.databaseManager.execute("DELETE FROM player_ranks WHERE uuid = ?", uuid.toString())
-        } else {
-            val set = playerRanks.getOrPut(uuid) { mutableSetOf() }
-            set.add(rankId)
-            plugin.databaseManager.execute(
-                "INSERT OR IGNORE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
-                uuid.toString(), rankId
-            )
-            // Preserve the default rank alongside any non-default rank so players
-            // retain their base permissions/display when a special rank is assigned.
-            if (rankId != "default" && ranks.containsKey("default")) {
-                set.add("default")
-                plugin.databaseManager.execute(
-                    "INSERT OR IGNORE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
-                    uuid.toString(), "default"
-                )
-            }
-        }
-
-        // Update the scoreboard team so the nameplate prefix reflects the
-        // new rank immediately (no relog needed).
-        Bukkit.getPlayer(uuid)?.let { applyTeamFor(it) }
-
-        syncWithLuckPerms(uuid, rankId)
+    enum class LuckPermsSync {
+        /** LuckPerms isn't installed, or the JoshyMC rank set didn't change. */
+        SKIPPED,
+        /** The targeted `parent add` / `parent remove` command was dispatched. */
+        REQUESTED,
+        /** The command couldn't be dispatched (unknown player name, error). Logged. */
+        FAILED
     }
+
+    /** Result of [addRankDetailed] / [removeRankDetailed]. */
+    data class RankChange(val changed: Boolean, val luckPerms: LuckPermsSync)
 
     /**
      * Add ONLY [rankId] to [uuid]'s rank set, leaving every other rank the
      * player already has untouched. Returns false (no changes made) if the
      * player already has this rank.
      */
-    fun addRank(uuid: UUID, rankId: String): Boolean {
+    fun addRank(uuid: UUID, rankId: String): Boolean = addRankDetailed(uuid, rankId).changed
+
+    /**
+     * Remove ONLY [rankId] from [uuid]'s rank set, leaving every other rank
+     * the player has untouched. Returns false (no changes made) if the
+     * player doesn't have this rank.
+     */
+    fun removeRank(uuid: UUID, rankId: String): Boolean = removeRankDetailed(uuid, rankId).changed
+
+    /**
+     * [addRank], also reporting the LuckPerms side. Only ever issues `parent add` for
+     * [rankId] (plus `default` when it was missing), so donor, staff and externally
+     * managed LuckPerms groups are never touched. There is intentionally no "set rank"
+     * operation: LP's `parent set` replaces every parent group (issue #1167).
+     */
+    fun addRankDetailed(uuid: UUID, rankId: String): RankChange {
         val set = playerRanks.getOrPut(uuid) { mutableSetOf() }
-        if (rankId in set) return false
+        if (rankId in set) return RankChange(false, LuckPermsSync.SKIPPED)
         set.add(rankId)
         plugin.databaseManager.execute(
             "INSERT OR IGNORE INTO player_ranks (uuid, rank_id) VALUES (?, ?)",
@@ -422,18 +417,16 @@ class RankManager(private val plugin: Joshymc) : Listener {
         }
 
         Bukkit.getPlayer(uuid)?.let { applyTeamFor(it) }
-        addLuckPermsGroup(uuid, rankId)
-        return true
+        return RankChange(true, addLuckPermsGroup(uuid, rankId))
     }
 
     /**
-     * Remove ONLY [rankId] from [uuid]'s rank set, leaving every other rank
-     * the player has untouched. Returns false (no changes made) if the
-     * player doesn't have this rank.
+     * [removeRank], also reporting the LuckPerms side. Only ever issues `parent remove`
+     * for [rankId]; every other player_ranks row and LuckPerms parent is left alone.
      */
-    fun removeRank(uuid: UUID, rankId: String): Boolean {
-        val set = playerRanks[uuid] ?: return false
-        if (rankId !in set) return false
+    fun removeRankDetailed(uuid: UUID, rankId: String): RankChange {
+        val set = playerRanks[uuid] ?: return RankChange(false, LuckPermsSync.SKIPPED)
+        if (rankId !in set) return RankChange(false, LuckPermsSync.SKIPPED)
         set.remove(rankId)
         if (set.isEmpty()) playerRanks.remove(uuid)
         plugin.databaseManager.execute(
@@ -442,54 +435,36 @@ class RankManager(private val plugin: Joshymc) : Listener {
         )
 
         Bukkit.getPlayer(uuid)?.let { applyTeamFor(it) }
-        removeLuckPermsGroup(uuid, rankId)
-        return true
+        return RankChange(true, removeLuckPermsGroup(uuid, rankId))
     }
 
     /** Add a single LuckPerms parent node without touching any other group. */
-    private fun addLuckPermsGroup(uuid: UUID, rankId: String) {
-        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) return
-        val name = Bukkit.getOfflinePlayer(uuid).name ?: return
-        try {
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent add $rankId")
-        } catch (e: Exception) {
-            plugin.logger.warning("[Ranks] LuckPerms add failed for $name ($rankId): ${e.message}")
-        }
-    }
+    private fun addLuckPermsGroup(uuid: UUID, rankId: String): LuckPermsSync =
+        dispatchLuckPerms(uuid, rankId, "add")
 
     /** Remove a single LuckPerms parent node without touching any other group. */
-    private fun removeLuckPermsGroup(uuid: UUID, rankId: String) {
-        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) return
-        val name = Bukkit.getOfflinePlayer(uuid).name ?: return
-        try {
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent remove $rankId")
-        } catch (e: Exception) {
-            plugin.logger.warning("[Ranks] LuckPerms remove failed for $name ($rankId): ${e.message}")
+    private fun removeLuckPermsGroup(uuid: UUID, rankId: String): LuckPermsSync =
+        dispatchLuckPerms(uuid, rankId, "remove")
+
+    // Uses LP's console command surface, which avoids a hard compile-time dependency.
+    // Only `parent add` / `parent remove` are ever sent, never `parent set`.
+    private fun dispatchLuckPerms(uuid: UUID, rankId: String, action: String): LuckPermsSync {
+        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) return LuckPermsSync.SKIPPED
+        val name = Bukkit.getOfflinePlayer(uuid).name
+        if (name == null) {
+            plugin.logger.warning("[Ranks] LuckPerms parent $action $rankId skipped for $uuid: no known player name.")
+            return LuckPermsSync.FAILED
         }
-    }
-
-    private fun syncWithLuckPerms(uuid: UUID, rankId: String?) {
-        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) return
-
-        val name = Bukkit.getOfflinePlayer(uuid).name ?: return
-        // Use LP's console command surface — avoids a hard compile-time dep and
-        // sidesteps the full LP UserManager/NodeBuilder reflection dance.
-        //
-        // Per Joshy's request, players keep the `default` LuckPerms group even
-        // after being given a rank, so default-group permissions still apply.
-        // We `parent set` the new rank to clear any stale parent, then
-        // `parent add default` so the player inherits both.
-        try {
-            if (rankId == null) {
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent set default")
+        return try {
+            if (Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent $action $rankId")) {
+                LuckPermsSync.REQUESTED
             } else {
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent set $rankId")
-                if (rankId != "default") {
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user $name parent add default")
-                }
+                plugin.logger.warning("[Ranks] LuckPerms parent $action $rankId was not accepted for $name.")
+                LuckPermsSync.FAILED
             }
         } catch (e: Exception) {
-            plugin.logger.warning("[Ranks] LuckPerms sync failed for $name ($rankId): ${e.message}")
+            plugin.logger.warning("[Ranks] LuckPerms parent $action failed for $name ($rankId): ${e.message}")
+            LuckPermsSync.FAILED
         }
     }
 
