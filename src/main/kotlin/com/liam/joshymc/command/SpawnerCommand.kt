@@ -71,9 +71,10 @@ class SpawnerCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             "@a", "*" -> Bukkit.getOnlinePlayers().toList()
             "@r" -> Bukkit.getOnlinePlayers().toList().shuffled().take(1)
             else -> {
-                val p = Bukkit.getPlayer(targetArg)
+                // Exact name only (issue #1170): a prefix match could hand the spawners to someone else.
+                val p = plugin.playerResolver.online(targetArg)
                 if (p == null) {
-                    sendMsg(sender, Component.text("Player not found: $targetArg", NamedTextColor.RED))
+                    sendMsg(sender, Component.text("No online player is named exactly $targetArg. Nothing was given.", NamedTextColor.RED))
                     return
                 }
                 listOf(p)

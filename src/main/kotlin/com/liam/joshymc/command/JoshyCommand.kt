@@ -58,7 +58,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         // Special "eggs" keyword — give all egg items
         if (itemId.equals("eggs", ignoreCase = true)) {
             val target: Player = if (args.size >= 4) {
-                plugin.server.getPlayer(args[3]) ?: run {
+                plugin.playerResolver.online(args[3]) ?: run { // exact name only (issue #1170)
                     Msg.playerNotFound(sender, args[3])
                     return
                 }
@@ -88,7 +88,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         val target: Player = if (args.size >= 4) {
-            plugin.server.getPlayer(args[3]) ?: run {
+            plugin.playerResolver.online(args[3]) ?: run { // exact name only (issue #1170)
                 Msg.playerNotFound(sender, args[3])
                 return
             }
