@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.ChatTagManager
+import com.liam.joshymc.manager.DonorTiers
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -300,17 +301,19 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return
         }
 
-        val rankId = if (rankArg == "none") null else rankArg
-        if (rankId != null && plugin.rankManager.getRank(rankId) == null) {
-            Msg.error(sender, "Unknown rank: $rankId. Use /rank list to see available ranks.")
+        // Only donor tiers can be sold: staff ranks and arbitrary LuckPerms groups are refused (issue #1173).
+        val rankId = if (rankArg == "none") null else DonorTiers.normalize(rankArg)
+        if (rankArg != "none" && rankId == null) {
+            Msg.error(sender, "$rankArg is not a donor tier. Rank packages can only sell: ${DonorTiers.ORDER.joinToString(", ")}.")
             return
         }
 
         plugin.voucherManager.setRank(id, rankId)
-        sender.sendMessage(
-            if (rankId == null) Component.text("Unlinked $id from any rank.", NamedTextColor.GREEN)
-            else Component.text("Linked $id to the $rankId rank (ownership/downgrade checks now apply).", NamedTextColor.GREEN)
-        )
+        if (rankId == null) {
+            Msg.success(sender, "Unlinked $id from any rank.")
+        } else {
+            Msg.success(sender, "Linked $id to the ${DonorTiers.displayName(rankId)} donor tier. Ownership/downgrade checks apply, and the tier is granted and confirmed in LuckPerms directly; the reward command is not run for rank packages.")
+        }
     }
 
     private fun handleSetCommand(sender: CommandSender, args: Array<out String>) {
@@ -399,7 +402,13 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         sender.sendMessage(Component.text("  Category: ${voucher.categoryId}", NamedTextColor.GRAY))
         sender.sendMessage(Component.text("  Price: ${plugin.creditsManager.format(voucher.price)} credits", NamedTextColor.GRAY))
         sender.sendMessage(Component.text("  Rank: ${voucher.rankId ?: "none"}", NamedTextColor.GRAY))
-        sender.sendMessage(Component.text("  Command: ${voucher.rewardCommand}", NamedTextColor.GRAY))
+        val tier = plugin.voucherManager.rankPackageTier(voucher)
+        val commandNote = when {
+            voucher.rankId != null && tier == null -> " (refused: '${voucher.rankId}' is not a donor tier)"
+            tier != null -> " (not run: donor tier ${DonorTiers.displayName(tier)} is granted directly)"
+            else -> ""
+        }
+        sender.sendMessage(Component.text("  Command: ${voucher.rewardCommand}$commandNote", NamedTextColor.GRAY))
         sender.sendMessage(Component.text("  Enabled: ${voucher.enabled}", NamedTextColor.GRAY))
         sender.sendMessage(Component.text("  Description: ${voucher.description}", NamedTextColor.GRAY))
     }
@@ -516,7 +525,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
-                "setrank" -> (plugin.rankManager.getRankIds() + "none").filter { it.startsWith(args[2].lowercase()) }
+                "setrank" -> (DonorTiers.ORDER + "none").filter { it.startsWith(args[2].lowercase()) }
                 "give" -> (plugin.physicalVoucherManager.getEnabledVoucherIds() +
                         plugin.chatTagManager.getVoucherTagIds().map { "$CHAT_TAG_VOUCHER_PREFIX$it" })
                     .filter { it.startsWith(args[2].lowercase()) }
