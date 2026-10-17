@@ -28,6 +28,9 @@ abstract class CustomItem {
     /** Whether this item should have an enchantment glint */
     open val hasGlint: Boolean = false
 
+    /** Whether this item is a candy the Candy Shop may sell (issue #1211). */
+    open val isCandy: Boolean = false
+
     /**
      * Builds the final ItemStack with PDC tag, display name, lore, and glint.
      */

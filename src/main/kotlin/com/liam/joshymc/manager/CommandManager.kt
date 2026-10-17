@@ -399,6 +399,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        plugin.getCommand("candy")?.let {
+            val cmd = com.liam.joshymc.command.CandyCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
         plugin.getCommand("overflow")?.let {
             it.setExecutor(com.liam.joshymc.command.OverflowCommand(plugin))
         }
@@ -823,6 +829,7 @@ class CommandManager(private val plugin: Joshymc) {
         "towers" to "joshymc.casino",
         "orders" to "joshymc.orders",
         "order" to "joshymc.orders",
+        "candy" to "joshymc.candy",
         "overflow" to "joshymc.overflow",
         "eco" to "joshymc.eco",
         "balance" to "joshymc.balance",

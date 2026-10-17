@@ -37,6 +37,7 @@ class LinkPop(val color: LinkPopColor) : CustomItem() {
 
     override val id = color.itemId
     override val material = Material.COOKIE
+    override val isCandy = true
 
     override val displayName: Component = Component.text("${color.label} Link Pop", TextColor.color(color.rgb))
         .decoration(TextDecoration.ITALIC, false)

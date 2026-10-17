@@ -17,6 +17,8 @@ import com.liam.joshymc.manager.SettingsManager
 import com.liam.joshymc.enchant.CustomEnchant
 import com.liam.joshymc.enchant.CustomEnchantManager
 import com.liam.joshymc.enchant.EnchantTarget
+import com.liam.joshymc.enchant.QuickHit
+import com.liam.joshymc.enchant.QuickHitSettings
 import com.liam.joshymc.manager.AFKManager
 import com.liam.joshymc.manager.AdminManager
 import com.liam.joshymc.manager.AnnouncementManager
@@ -222,6 +224,8 @@ class Joshymc : JavaPlugin() {
     lateinit var sellPriceManager: com.liam.joshymc.manager.SellPriceManager
         private set
     lateinit var saleManager: com.liam.joshymc.manager.SaleManager
+        private set
+    lateinit var candyShopManager: com.liam.joshymc.candyshop.CandyShopManager
         private set
     lateinit var creditShopManager: com.liam.joshymc.manager.CreditShopManager
         private set
@@ -470,6 +474,7 @@ class Joshymc : JavaPlugin() {
         sellPriceManager = com.liam.joshymc.manager.SellPriceManager(this)
         sellPriceManager.start()
         saleManager = com.liam.joshymc.manager.SaleManager(this)
+        candyShopManager = com.liam.joshymc.candyshop.CandyShopManager(this)
 
         itemManager.registerAll()
         recipeManager.registerAll()
@@ -522,6 +527,8 @@ class Joshymc : JavaPlugin() {
         creditsManager.start()
         registerEnchants()
         if (isFeatureEnabled("custom-enchants")) customEnchantManager.start()
+        // Players already online (plugman / /reload) get Quick Hit for what they hold.
+        listenerManager.quickHitListener?.refreshAll()
         serverShopManager.start()
         creditShopManager.start()
         voucherManager.start()
@@ -561,6 +568,8 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("voting")) voteManager.start()
         spawnDecorationManager.start()
         eventManager.start()
+        // After items (it sells registered candies), economy, Mod Mode and the event world.
+        if (isFeatureEnabled("candy-shop")) candyShopManager.start()
 
         discordManager.start()
 
@@ -608,8 +617,10 @@ class Joshymc : JavaPlugin() {
         portalManager.stop()
         voteManager.stop()
         purchaseFulfillmentManager.stop()
+        candyShopManager.stop()
         spawnDecorationManager.stop()
         listenerManager.passiveEnchantListener?.stop()
+        listenerManager.quickHitListener?.stop()
         listenerManager.thrownTridentVisualListener?.stop()
         listenerManager.greatPumpkinPieListener?.stop()
         // Before discordManager.shutdown(), so the last mining summaries still go out.
@@ -677,6 +688,7 @@ class Joshymc : JavaPlugin() {
         safe("casinoTowersManager.stop") { casinoTowersManager.stop() }
         safe("casinoManager.stop") { casinoManager.stop() }
         safe("orderManager.stop") { orderManager.stop() }
+        safe("candyShopManager.stop") { candyShopManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
         safe("questCycleManager.stop") { questCycleManager.stop() }
         safe("eventQuestManager.stop") { eventQuestManager.stop() }
@@ -740,6 +752,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("kill-streaks")) safe("killStreakManager.start") { killStreakManager.start() }
         if (isFeatureEnabled("login-streaks")) safe("loginStreakManager.start") { loginStreakManager.start() }
         safe("resourcePackManager.start") { resourcePackManager.start() }
+        if (isFeatureEnabled("candy-shop")) safe("candyShopManager.start") { candyShopManager.start() }
 
         // 7. Commands just get new instances (executors are swapped, not re-registered)
         safe("commandManager.registerAll") { commandManager.registerAll() }
@@ -759,6 +772,7 @@ class Joshymc : JavaPlugin() {
         safe("antiCheatManager.start") { antiCheatManager.start() }
         safe("registerEnchants") { registerEnchants() }
         safe("customEnchantManager.start") { customEnchantManager.start() }
+        safe("quickHitListener.refreshAll") { listenerManager.quickHitListener?.refreshAll() }
 
         logger.info("JoshyMC has been fully reloaded!")
     }
@@ -802,6 +816,17 @@ class Joshymc : JavaPlugin() {
             description = "Chance to stun the target"))
         cem.register(CustomEnchant("blizzard", "Blizzard", 3, EnchantTarget.AXE,
             description = "Applies freezing slowness to opponent"))
+
+        // ── Melee weapons & tools ───────────────────────
+        val quickHit = QuickHitSettings.load(config.getConfigurationSection("quick-hit"))
+        quickHit.problems.forEach { logger.warning("[Enchants] quick-hit: $it") }
+        cem.quickHit = quickHit
+        if (quickHit.enabled) {
+            cem.register(CustomEnchant(QuickHit.ID, QuickHit.DISPLAY_NAME, quickHit.maxLevel, EnchantTarget.MELEE_TOOL,
+                description = QuickHit.DESCRIPTION, appliesTo = quickHit::canApplyTo))
+        } else {
+            cem.unregister(QuickHit.ID)
+        }
 
         // ── Helmet ──────────────────────────────────────
         cem.register(CustomEnchant("night_vision", "Night Vision", 1, EnchantTarget.HELMET,

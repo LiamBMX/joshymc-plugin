@@ -13,6 +13,7 @@ import com.liam.joshymc.listener.LinkPopListener
 import com.liam.joshymc.listener.JosheesBarListener
 import com.liam.joshymc.listener.TomatoListener
 import com.liam.joshymc.listener.GSitListener
+import com.liam.joshymc.listener.DiscordGroupListener
 import com.liam.joshymc.listener.LinkGuiListener
 import com.liam.joshymc.listener.MinecraftChatListener
 import com.liam.joshymc.listener.ModModeListener
@@ -52,12 +53,14 @@ import com.liam.joshymc.listener.ChatTagVoucherListener
 import com.liam.joshymc.listener.SellWandListener
 import com.liam.joshymc.listener.enchant.CombatEnchantListener
 import com.liam.joshymc.listener.enchant.PassiveEnchantListener
+import com.liam.joshymc.listener.enchant.QuickHitListener
 import com.liam.joshymc.listener.enchant.ToolEnchantListener
 import com.liam.joshymc.listener.enchant.WeaponEnchantListener
 
 class ListenerManager(private val plugin: Joshymc) {
 
     var passiveEnchantListener: PassiveEnchantListener? = null
+    var quickHitListener: QuickHitListener? = null
         private set
 
     var thrownTridentVisualListener: ThrownTridentVisualListener? = null
@@ -88,6 +91,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(TomatoListener(plugin), plugin)
         pm.registerEvents(MinecraftChatListener(plugin), plugin)
         pm.registerEvents(LinkGuiListener(plugin), plugin)
+        pm.registerEvents(DiscordGroupListener(plugin), plugin)
 
         // Phase 1
         pm.registerEvents(NightVisionListener(plugin), plugin)
@@ -154,6 +158,8 @@ class ListenerManager(private val plugin: Joshymc) {
         passiveEnchantListener = PassiveEnchantListener(plugin)
         passiveEnchantListener!!.start()
         pm.registerEvents(passiveEnchantListener!!, plugin)
+        quickHitListener = QuickHitListener(plugin)
+        pm.registerEvents(quickHitListener!!, plugin)
 
         // Claims
         pm.registerEvents(plugin.claimManager, plugin)
