@@ -1581,6 +1581,20 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    /**
+     * Holds [item] in crate_pending_rewards for [player], to be retried by the pending-reward
+     * loop. Used for Event World crate keys that didn't fit in /overflow (issue #1178).
+     */
+    fun holdPendingReward(player: Player, item: ItemStack) {
+        val label = getKeyType(item)?.let { crates[it]?.keyName }?.let { "$it x${item.amount}" }
+            ?: "${item.type.name.lowercase().replace('_', ' ')} x${item.amount}"
+        plugin.databaseManager.execute(
+            "INSERT INTO crate_pending_rewards (id, owner_uuid, item, label, created_at) VALUES (?, ?, ?, ?, ?)",
+            UUID.randomUUID().toString(), player.uniqueId.toString(), serializeItem(item.clone()), label, System.currentTimeMillis()
+        )
+        plugin.logger.warning("[Crates] ${player.name}'s Crate Keys overflow is full; held $label as a pending crate reward.")
+    }
+
     /** Delivers every held crate reward of [player] that isn't owned by a running animation. */
     fun deliverPendingRewards(player: Player) {
         val inFlight = inFlightRewards[player.uniqueId]
@@ -1601,6 +1615,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         for (owner in owners) {
             val uuid = try { UUID.fromString(owner) } catch (_: Exception) { continue }
             val player = Bukkit.getPlayer(uuid) ?: continue
+            // Held rewards wait until the player leaves the event: the event inventory is
+            // wiped on exit, and Event World keys would just bounce back into this table.
+            if (plugin.eventManager.isInEventWorld(player)) continue
             // Don't re-send "inventory full" every 30s: only retry once a slot is free.
             if (!plugin.modModeManager.isModMode(player) && player.inventory.firstEmpty() == -1) continue
             deliverPendingRewards(player)

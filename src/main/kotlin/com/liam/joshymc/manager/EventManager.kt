@@ -71,6 +71,13 @@ class EventManager(private val plugin: Joshymc) : Listener {
     private lateinit var savedInventoryConfig: YamlConfiguration
     val playersInEventWorld: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
 
+    /**
+     * True while [player] is using the separate event inventory: they're tracked as inside, or
+     * already standing in the event world during the 2-tick gap before [onJoin] tracks them.
+     */
+    fun isInEventWorld(player: Player): Boolean =
+        player.uniqueId in playersInEventWorld || player.world.name == eventWorldName
+
     // ── Game cycle ────────────────────────────────────────
 
     private var gameIndex = 0

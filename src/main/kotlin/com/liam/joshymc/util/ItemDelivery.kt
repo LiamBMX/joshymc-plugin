@@ -14,11 +14,17 @@ import org.bukkit.inventory.ItemStack
  * (e.g. GiveawayManager.deliverPending) can reuse this exact same staff-mode-
  * aware routing. This is the one authoritative delivery path — do not
  * reimplement the mod-mode branching elsewhere.
+ *
+ * Crate keys given while the player is in the Event World (issue #1178) go to
+ * the Crate Keys section of /overflow instead: the event inventory is wiped
+ * when they leave, and keys must not be usable inside an event.
  */
 fun Joshymc.depositItemSafely(player: Player, item: ItemStack): ItemStack? {
     if (item.type == Material.AIR || item.amount <= 0) return null
 
     return when {
+        eventManager.isInEventWorld(player) && crateManager.isKey(item) ->
+            overflowManager.storeEventCrateKey(player, item)
         modModeManager.isModMode(player) -> modModeManager.addItemToBackup(player.uniqueId, item)
         else -> player.inventory.addItem(item).values.firstOrNull()
     }
@@ -27,11 +33,16 @@ fun Joshymc.depositItemSafely(player: Player, item: ItemStack): ItemStack? {
 /**
  * [depositItemSafely], dropping any leftover at the player's feet rather than
  * discarding it, matching the existing addItem-then-drop pattern used elsewhere
- * in the plugin.
+ * in the plugin. Crate keys left over in the Event World (their /overflow
+ * Crate Keys section is full) are held as a pending crate reward instead, which
+ * is retried once the player is out of the event.
  */
 fun Joshymc.giveItemSafely(player: Player, item: ItemStack) {
     val leftover = depositItemSafely(player, item) ?: return
-    if (leftover.amount > 0) {
+    if (leftover.amount <= 0) return
+    if (eventManager.isInEventWorld(player) && crateManager.isKey(leftover)) {
+        crateManager.holdPendingReward(player, leftover)
+    } else {
         player.world.dropItemNaturally(player.location, leftover)
     }
 }
