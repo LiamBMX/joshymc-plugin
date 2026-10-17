@@ -147,6 +147,11 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         val ADMIN_OWNER_UUID: UUID = UUID(0L, 0L)
 
         const val ADMIN_WAND_PERMISSION = "joshymc.claim.admin.wand"
+
+        /** `/claim show` wall patch: blocks around the player horizontally, blocks above/below, and a hard cap per refresh. */
+        private const val BORDER_REACH = 24.0
+        private const val BORDER_HALF_HEIGHT = 8.0
+        private const val BORDER_MAX_PARTICLES = 1200
     }
 
     // ══════════════════════════════════════════════════════════
@@ -1113,7 +1118,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
                         .append(Component.text("#${claim.id}", NamedTextColor.GOLD))
                         .append(Component.text(" (${claim.maxX - claim.minX + 1}x${claim.maxZ - claim.minZ + 1}, ${claim.area} blocks).", NamedTextColor.GREEN))
                 )
-                showClaimBorder(player, claim, Color.RED)
+                showClaimBorders(player, listOf(claim to Color.RED))
                 plugin.logger.info("[Claims] ${player.name} created admin claim #${claim.id} in ${claim.world} (${claim.minX},${claim.minZ}) to (${claim.maxX},${claim.maxZ})")
             }
             is ClaimCreateResult.Failure -> {
@@ -1179,7 +1184,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
                             .append(Component.text("${getAvailableBlocks(player.uniqueId)} blocks remaining.", NamedTextColor.GRAY))
                     )
                     // Show the full border
-                    showClaimBorder(player, claim, Color.LIME)
+                    showClaimBorders(player, listOf(claim to Color.LIME))
                 }
                 is ClaimCreateResult.Failure -> {
                     player.playSound(loc, Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f)
@@ -1204,6 +1209,7 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         pendingCorner1.remove(event.player.uniqueId)
         pendingAdminCorner1.remove(event.player.uniqueId)
         selections.remove(event.player.uniqueId)
+        showingParticles.remove(event.player.uniqueId)
     }
 
     // ══════════════════════════════════════════════════════════
@@ -1225,80 +1231,49 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
                 val player = Bukkit.getPlayer(uuid) ?: continue
                 if (player.world.environment != org.bukkit.World.Environment.NORMAL) continue
                 val playerTeam = plugin.teamManager.getPlayerTeam(player.uniqueId)
+                val loc = player.location
 
-                for (claim in claims) {
-                    if (claim.world != player.world.name) continue
-                    // Only show nearby claims (within 64 blocks)
-                    val cx = (claim.minX + claim.maxX) / 2.0
-                    val cz = (claim.minZ + claim.maxZ) / 2.0
-                    if (player.location.x < cx - 80 || player.location.x > cx + 80) continue
-                    if (player.location.z < cz - 80 || player.location.z > cz + 80) continue
-
-                    val color = when {
-                        claim.ownerUuid == player.uniqueId -> Color.LIME
-                        claim.teamName != null && claim.teamName == playerTeam -> Color.AQUA
-                        else -> Color.RED
+                // Own claims first, then team, then others, so a wall shared by
+                // neighbouring claims is drawn once, in the colour that matters most.
+                val nearby = claims
+                    .filter { it.world == player.world.name && ClaimBorderView.isNear(it.minX, it.maxX, it.minZ, it.maxZ, loc.x, loc.z, BORDER_REACH) }
+                    .map { claim ->
+                        when {
+                            claim.ownerUuid == player.uniqueId -> 0 to (claim to Color.LIME)
+                            claim.teamName != null && claim.teamName == playerTeam -> 1 to (claim to Color.AQUA)
+                            else -> 2 to (claim to Color.RED)
+                        }
                     }
-                    showClaimBorder(player, claim, color)
-                }
+                    .sortedBy { it.first }
+                    .map { it.second }
+                showClaimBorders(player, nearby)
             }
-        }, 15L, 15L) // Every 15 ticks
+        }, 10L, 10L)
     }
 
-    /** Draw a bright border at ground level for a claim */
-    private fun showClaimBorder(player: Player, claim: Claim, color: Color) {
+    /**
+     * Draw the patch of each claim's wall around the player, at the player's
+     * own height so borders show underground too (issue #1191). Particles go
+     * to this player only; no blocks are read, so no chunks load.
+     */
+    private fun showClaimBorders(player: Player, nearby: List<Pair<Claim, Color>>) {
+        if (nearby.isEmpty()) return
         val world = player.world
-        val dust = DustOptions(color, 1.5f) // Big bright particles
-        val cornerDust = DustOptions(Color.YELLOW, 2.0f) // Extra bright corners
-
-        val minX = claim.minX; val maxX = claim.maxX + 1 // +1 because claim includes the max block
-        val minZ = claim.minZ; val maxZ = claim.maxZ + 1
-
-        // Draw edges at ground level with 0.5 block spacing (dense)
-        // North edge (minZ)
-        var x = minX.toDouble()
-        while (x <= maxX.toDouble()) {
-            val y = world.getHighestBlockYAt(x.toInt(), minZ) + 1.0
-            player.spawnParticle(Particle.DUST, x, y, minZ.toDouble(), 1, dust)
-            player.spawnParticle(Particle.DUST, x, y + 0.5, minZ.toDouble(), 1, dust)
-            x += 0.5
-        }
-        // South edge (maxZ)
-        x = minX.toDouble()
-        while (x <= maxX.toDouble()) {
-            val y = world.getHighestBlockYAt(x.toInt(), maxZ) + 1.0
-            player.spawnParticle(Particle.DUST, x, y, maxZ.toDouble(), 1, dust)
-            player.spawnParticle(Particle.DUST, x, y + 0.5, maxZ.toDouble(), 1, dust)
-            x += 0.5
-        }
-        // West edge (minX)
-        var z = minZ.toDouble()
-        while (z <= maxZ.toDouble()) {
-            val y = world.getHighestBlockYAt(minX, z.toInt()) + 1.0
-            player.spawnParticle(Particle.DUST, minX.toDouble(), y, z, 1, dust)
-            player.spawnParticle(Particle.DUST, minX.toDouble(), y + 0.5, z, 1, dust)
-            z += 0.5
-        }
-        // East edge (maxX)
-        z = minZ.toDouble()
-        while (z <= maxZ.toDouble()) {
-            val y = world.getHighestBlockYAt(maxX, z.toInt()) + 1.0
-            player.spawnParticle(Particle.DUST, maxX.toDouble(), y, z, 1, dust)
-            player.spawnParticle(Particle.DUST, maxX.toDouble(), y + 0.5, z, 1, dust)
-            z += 0.5
-        }
-
-        // Bright corner pillars (5 blocks tall)
-        val corners = listOf(
-            minX.toDouble() to minZ.toDouble(),
-            maxX.toDouble() to minZ.toDouble(),
-            minX.toDouble() to maxZ.toDouble(),
-            maxX.toDouble() to maxZ.toDouble()
-        )
-        for ((cx, cz) in corners) {
-            val baseY = world.getHighestBlockYAt(cx.toInt(), cz.toInt()) + 1.0
-            for (dy in 0..5) {
-                player.spawnParticle(Particle.DUST, cx, baseY + dy, cz, 2, cornerDust)
+        val loc = player.location
+        val cornerDust = DustOptions(Color.YELLOW, 1.5f)
+        val drawn = HashSet<Long>()
+        for ((claim, color) in nearby) {
+            val dust = DustOptions(color, 1.0f)
+            val points = ClaimBorderView.points(
+                claim.minX, claim.maxX, claim.minZ, claim.maxZ,
+                loc.x, loc.y + 1.0, loc.z,
+                world.minHeight, world.maxHeight,
+                BORDER_REACH, BORDER_HALF_HEIGHT
+            )
+            for (p in points) {
+                if (drawn.size >= BORDER_MAX_PARTICLES) return
+                if (!drawn.add(ClaimBorderView.key(p))) continue
+                player.spawnParticle(Particle.DUST, p.x.toDouble(), p.y.toDouble(), p.z.toDouble(), 1, if (p.corner) cornerDust else dust)
             }
         }
     }
