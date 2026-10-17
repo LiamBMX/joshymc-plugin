@@ -17,6 +17,7 @@ import org.bukkit.event.inventory.InventoryAction
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryCloseEvent
 import org.bukkit.event.inventory.InventoryDragEvent
+import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
@@ -29,12 +30,16 @@ import java.util.concurrent.ConcurrentHashMap
  * Persistent withdraw-only storage ("/overflow") that Orders and Auction House deliveries fall
  * back to when a buyer's inventory is full, so an already-committed delivery is never dropped,
  * deleted, or duplicated. Players can take items out but cannot manually deposit into it.
+ * Crate keys given in the Event World land in its Crate Keys section (issue #1178); none of
+ * the storages can be opened from inside the Event World.
  */
 class OverflowManager(private val plugin: Joshymc) : Listener {
 
     enum class OverflowType(val label: String, val size: Int) {
         ORDERS("Orders Overflow", 54),
-        AUCTION_HOUSE("AH Overflow", 9)
+        AUCTION_HOUSE("AH Overflow", 9),
+        /** Crate keys given while the player was in the Event World (issue #1178). */
+        CRATE_KEYS("Crate Keys", 54)
     }
 
     companion object {
@@ -132,6 +137,8 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
             return leftover
         }
 
+        if (type == OverflowType.CRATE_KEYS) return depositStacking(uuid, type, copy)
+
         return try {
             val usedSlots = plugin.databaseManager.query(
                 "SELECT slot FROM overflow_storage WHERE uuid = ? AND type = ?",
@@ -152,6 +159,100 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    /**
+     * Stores [copy] in a closed storage the way addItem would: identical stacks (same crate,
+     * same metadata) are topped up first, then free slots get stacks of at most the item's max
+     * size. All rows are written in one transaction, so a failed write stores nothing and the
+     * whole stack is handed back.
+     */
+    private fun depositStacking(uuid: UUID, type: OverflowType, copy: ItemStack): ItemStack? {
+        val db = plugin.databaseManager
+        val max = copy.maxStackSize.coerceAtLeast(1)
+        var remaining = copy.amount
+        return try {
+            db.transaction {
+                val rows = db.query(
+                    "SELECT slot, item FROM overflow_storage WHERE uuid = ? AND type = ?",
+                    uuid.toString(), type.name
+                ) { rs -> rs.getInt("slot") to rs.getString("item") }
+
+                for ((slot, data) in rows.sortedBy { it.first }) {
+                    if (remaining <= 0) break
+                    val stored = runCatching { deserializeItem(data) }.getOrNull() ?: continue
+                    if (stored.amount >= max || !stored.isSimilar(copy)) continue
+                    val add = minOf(max - stored.amount, remaining)
+                    stored.amount += add
+                    remaining -= add
+                    db.execute(
+                        "UPDATE overflow_storage SET item = ? WHERE uuid = ? AND type = ? AND slot = ?",
+                        serializeItem(stored), uuid.toString(), type.name, slot
+                    )
+                }
+
+                val usedSlots = rows.map { it.first }.toSet()
+                for (slot in 0 until type.size) {
+                    if (remaining <= 0) break
+                    if (slot in usedSlots) continue
+                    val stack = copy.clone().apply { amount = minOf(max, remaining) }
+                    db.execute(
+                        "INSERT INTO overflow_storage (uuid, type, slot, item) VALUES (?, ?, ?, ?)",
+                        uuid.toString(), type.name, slot, serializeItem(stack)
+                    )
+                    remaining -= stack.amount
+                }
+            }
+            if (remaining <= 0) null else copy.clone().apply { amount = remaining }
+        } catch (e: Exception) {
+            plugin.logger.severe("[Overflow] Depositing into $type storage of $uuid failed: ${e.message}")
+            copy
+        }
+    }
+
+    // ---- Event World crate keys (issue #1178) ----
+
+    /** Players already told this event visit that their keys went to /overflow. */
+    private val eventKeyNotified = ConcurrentHashMap.newKeySet<UUID>()
+
+    /**
+     * Stores a crate key given to [player] while they're in the Event World in their Crate Keys
+     * storage, so it never enters the temporary event inventory. Returns what didn't fit, like
+     * [depositItem]. The player is told once per event visit, and reminded when they leave.
+     */
+    fun storeEventCrateKey(player: Player, item: ItemStack): ItemStack? {
+        val leftover = depositItem(player.uniqueId, OverflowType.CRATE_KEYS, item)
+        val stored = item.amount - (leftover?.amount ?: 0)
+        if (stored > 0) {
+            plugin.logger.info("[Overflow] Stored $stored event-world crate key(s) for ${player.name} (${player.uniqueId}).")
+            if (eventKeyNotified.add(player.uniqueId)) {
+                plugin.commsManager.send(
+                    player,
+                    Component.text("You received crate keys while participating in an event! Your keys have been safely stored in ", NamedTextColor.YELLOW)
+                        .append(Component.text("/overflow", NamedTextColor.GOLD))
+                        .append(Component.text(".", NamedTextColor.YELLOW))
+                )
+            }
+        }
+        return leftover
+    }
+
+    @EventHandler
+    fun onChangedWorld(event: PlayerChangedWorldEvent) {
+        val player = event.player
+        val eventWorld = plugin.eventManager.eventWorldName
+        if (player.world.name == eventWorld) {
+            // Never leave a storage open inside the event (teleports normally close it already).
+            if (openOverflow.containsKey(player.uniqueId)) player.closeInventory()
+            return
+        }
+        if (event.from.name != eventWorld || !eventKeyNotified.remove(player.uniqueId)) return
+        plugin.commsManager.send(
+            player,
+            Component.text("Crate keys you received during the event are waiting in ", NamedTextColor.YELLOW)
+                .append(Component.text("/overflow", NamedTextColor.GOLD))
+                .append(Component.text(" → Crate Keys.", NamedTextColor.YELLOW))
+        )
+    }
+
     fun getItemCount(uuid: UUID, type: OverflowType): Int {
         val open = openOverflow[uuid]
         if (open != null && open.first == type) {
@@ -165,13 +266,25 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
 
     // ---- Hub GUI ----
 
+    /** True (and tells the player) when [player] is in the Event World, where /overflow is closed. */
+    private fun blockedInEventWorld(player: Player): Boolean {
+        if (!plugin.eventManager.isInEventWorld(player)) return false
+        plugin.commsManager.send(player, Component.text("You can't open /overflow in the event world. Use /spawn to leave first.", NamedTextColor.RED))
+        return true
+    }
+
     fun openHub(player: Player) {
+        if (blockedInEventWorld(player)) return
         val gui = CustomGui(HUB_TITLE, 27)
         for (i in 0 until 27) gui.inventory.setItem(i, FILLER.clone())
 
         gui.setItem(11, hubIcon(Material.CHEST, OverflowType.ORDERS, player)) { p, _ ->
             p.closeInventory()
             openOverflow(p, OverflowType.ORDERS)
+        }
+        gui.setItem(13, hubIcon(Material.TRIPWIRE_HOOK, OverflowType.CRATE_KEYS, player)) { p, _ ->
+            p.closeInventory()
+            openOverflow(p, OverflowType.CRATE_KEYS)
         }
         gui.setItem(15, hubIcon(Material.ENDER_CHEST, OverflowType.AUCTION_HOUSE, player)) { p, _ ->
             p.closeInventory()
@@ -213,6 +326,7 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
     // ---- Open a storage ----
 
     fun openOverflow(player: Player, type: OverflowType) {
+        if (blockedInEventWorld(player)) return
         val uuid = player.uniqueId
         // Settle a storage that's still open before loading from the DB, so its items are
         // written back (and can't be lost or loaded twice) when this one replaces it.
@@ -269,6 +383,12 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
         val inv = entry.second
         if (event.view.topInventory != inv) return
 
+        // Nothing comes out of Overflow inside the Event World.
+        if (plugin.eventManager.isInEventWorld(player)) {
+            event.isCancelled = true
+            return
+        }
+
         if (event.clickedInventory == inv) {
             val cursorHasItem = !event.cursor.type.isAir
             val isDeposit = event.click == ClickType.NUMBER_KEY ||
@@ -277,6 +397,9 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
                 (cursorHasItem && (event.click == ClickType.LEFT || event.click == ClickType.RIGHT))
             if (isDeposit) {
                 event.isCancelled = true
+            } else if (event.isShiftClick && !fitsAny(player, event.currentItem)) {
+                // Vanilla leaves the stack where it is; just say why.
+                plugin.commsManager.send(player, Component.text("Your inventory is full. The items stay safely in Overflow.", NamedTextColor.RED))
             }
             return
         }
@@ -285,6 +408,14 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
         // items INTO the storage; ordinary rearranging of their own inventory is fine.
         if (event.isShiftClick) {
             event.isCancelled = true
+        }
+    }
+
+    /** True if at least one of [item] would fit in the player's storage slots. */
+    private fun fitsAny(player: Player, item: ItemStack?): Boolean {
+        if (item == null || item.type.isAir) return true
+        return player.inventory.storageContents.any {
+            it == null || it.type.isAir || (it.isSimilar(item) && it.amount < it.maxStackSize)
         }
     }
 
