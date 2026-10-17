@@ -11,6 +11,8 @@ import com.liam.joshymc.communityevent.arena.ArenaCommands
 import com.liam.joshymc.communityevent.arena.ArenaMenu
 import com.liam.joshymc.communityevent.arena.EventArenas
 import com.liam.joshymc.communityevent.arena.RegionSelections
+import com.liam.joshymc.communityevent.game.GameMenu
+import com.liam.joshymc.communityevent.game.HostedGames
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -109,10 +111,15 @@ class EventManager(private val plugin: Joshymc) : Listener {
 
     val arenaCommands = ArenaCommands(plugin, arenas, sessions, selections, ::giveWand) { menu.arenaMenu.openList(it) }
 
+    /** Spleef and Sumo gameplay (issue #1187): the controllers for those two event types. */
+    val games = HostedGames(plugin, sessions, arenas, this)
+
     init {
         sessions.onChange = { menu.refreshOpenMenus() }
-        sessions.startCheck = { arenas.startProblem(it) }
+        sessions.startCheck = { arenas.startProblem(it) ?: games.startProblem(it) }
+        games.onChange = { menu.refreshOpenMenus() }
         menu.arenaMenu = ArenaMenu(plugin, arenas, sessions, selections, arenaCommands, ::giveWand) { menu.open(it) }
+        menu.gameMenu = GameMenu(games) { menu.open(it) }
     }
 
     // ── Lifecycle ─────────────────────────────────────────
@@ -135,7 +142,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
 
         loadConfig()
         arenas.load()
-        Bukkit.getPluginManager().registerEvents(this, plugin)
+        games.start()
+        // Listeners (this and games.listener) are registered once by ListenerManager.registerAll().
 
         // Tick every second: drives game timer and hourly cycle
         cycleTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickCycle() }, 20L, 20L)
@@ -145,6 +153,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
     fun shutdown() {
         cycleTask?.cancel()
         sessions.shutdown()
+        games.shutdown()
         selections.shutdown()
         currentGame?.cleanup()
         currentGame = null
@@ -315,6 +324,12 @@ class EventManager(private val plugin: Joshymc) : Listener {
     fun onBreak(event: BlockBreakEvent) {
         val player = event.player
         if (player.world.name != eventWorldName) return
+        // Spleef/Sumo players (staff included) break only the active Spleef floor, and it drops nothing.
+        when (games.breakDecision(player, event.block)) {
+            true -> { event.isDropItems = false; event.expToDrop = 0; return }
+            false -> { event.isCancelled = true; return }
+            null -> {}
+        }
         if (player.hasPermission("joshymc.event")) return
         if (!breakEnabled) event.isCancelled = true
     }
@@ -323,6 +338,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
     fun onPlace(event: BlockPlaceEvent) {
         val player = event.player
         if (player.world.name != eventWorldName) return
+        if (games.deniesPlace(player)) { event.isCancelled = true; return }
         if (player.hasPermission("joshymc.event")) return
         if (!buildEnabled) event.isCancelled = true
     }
@@ -1021,7 +1037,11 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 }
                 "status" -> if (host(sender)) sendStatus(sender)
                 "arena", "arenas" -> arenaCommands.handleArena(sender, args)
-                in EventType.ids -> arenaCommands.handleType(sender, EventType.fromId(sub)!!, args)
+                in EventType.ids -> {
+                    val type = EventType.fromId(sub)!!
+                    if (games.handlesCommand(type, args.getOrNull(1)?.lowercase())) games.handleCommand(sender, type, args)
+                    else arenaCommands.handleType(sender, type, args)
+                }
                 "help" -> sendUsage(sender)
                 in adminSubs -> {
                     if (sender !is Player) { Msg.playersOnly(sender); return true }
@@ -1148,6 +1168,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 lines += "&e/event stop &7- End the event"
                 lines += "&e/event reset [confirm] &7- Reset the event to Created"
                 lines += "&e/event status &7- Show event status"
+                lines += "&e/event spleef start|reset|status &7- Next Spleef round, restore the floor, status"
+                lines += "&e/event sumo next|status &7- Next Sumo match, tournament status"
             }
             lines += arenaCommands.usageLines(sender)
             if (sender.hasPermission(EventPermissions.ADMIN)) {
@@ -1170,11 +1192,21 @@ class EventManager(private val plugin: Joshymc) : Listener {
                     if (host) addAll(hostSubs)
                     if (arenaCommands.canView(sender)) add("arena")
                     if (EventPermissions.canSetupArenas(sender)) addAll(EventType.ids)
+                    else if (host) addAll(listOf(EventType.SPLEEF.id, EventType.SUMO.id))
                     if (admin) addAll(adminSubs)
                 }.filter { it.startsWith(args[0].lowercase()) }
                 else -> when {
                     args[0].equals("arena", true) || args[0].equals("arenas", true) -> arenaCommands.tabArena(sender, args)
-                    EventType.fromId(args[0]) != null -> arenaCommands.tabType(sender, EventType.fromId(args[0])!!, args)
+                    EventType.fromId(args[0]) != null -> {
+                        val type = EventType.fromId(args[0])!!
+                        when {
+                            args.size == 2 -> (games.tabSubs(type, sender) + arenaCommands.tabType(sender, type, args))
+                                .distinct().filter { it.startsWith(args[1].lowercase()) }
+                            args.size == 3 && type == EventType.SPLEEF && args[1].equals("reset", true) && host ->
+                                arenas.ofType(EventType.SPLEEF).map { it.displayName }.filter { it.lowercase().startsWith(args[2].lowercase()) }
+                            else -> arenaCommands.tabType(sender, type, args)
+                        }
+                    }
                     args.size == 2 -> legacyTab(args, admin, host)
                     else -> emptyList()
                 }

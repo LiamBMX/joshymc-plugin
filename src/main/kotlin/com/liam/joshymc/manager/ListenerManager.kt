@@ -208,6 +208,7 @@ class ListenerManager(private val plugin: Joshymc) {
         // Arena + portals + voting
         pm.registerEvents(plugin.arenaManager, plugin)
         pm.registerEvents(plugin.eventManager, plugin)
+        pm.registerEvents(plugin.eventManager.games.listener, plugin)
         pm.registerEvents(plugin.portalManager, plugin)
         pm.registerEvents(plugin.voteManager, plugin)
         pm.registerEvents(plugin.fakeBaseManager, plugin)
