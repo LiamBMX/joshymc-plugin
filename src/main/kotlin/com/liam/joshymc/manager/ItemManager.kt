@@ -65,6 +65,8 @@ class ItemManager(private val plugin: Joshymc) {
         register(WoodlandHunter())
         register(Maplefang())
         register(Hearthkeeper())
+        // Viking Boomerang (trident with hidden built-in Loyalty III)
+        register(VikingBoomerang())
         // Nordic set (November crate armor; the treads keep the autumn_wanderer id)
         register(NordicHelm())
         register(NordicPlate())

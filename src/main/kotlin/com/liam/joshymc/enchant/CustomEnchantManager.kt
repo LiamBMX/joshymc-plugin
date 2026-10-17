@@ -22,7 +22,7 @@ class CustomEnchantManager(private val plugin: Joshymc) : Listener {
 
     companion object {
         private const val PDC_PREFIX = "enchant_"
-        private const val LORE_MARKER = "\u200B" // Zero-width space to identify our lore lines
+        const val LORE_MARKER = "\u200B" // Zero-width space to identify our lore lines
 
         private val ROMAN_NUMERALS = arrayOf(
             "", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"
