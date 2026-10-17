@@ -425,8 +425,8 @@ commands:
     description: Manage PvP arenas
     usage: /arena <wand|create|delete|list|info|enable|disable|points|undo|clear|tp|buildwand|resetbuild|clearbuild>
   event:
-    description: Manage the event world and mini-games
-    usage: /event <wand|save|pvp|build|break|setworld|start|stop|status>
+    description: Event Manager for hosted community events, plus event-world setup
+    usage: /event [join|leave|create <type>|open|start|stop|reset [confirm]|status|wand|save|pvp|build|break|setworld]
   portal:
     description: Manage custom portals
     usage: /portal <wand|create|delete|action|cooldown|message|list|info|tp>
@@ -1116,8 +1116,16 @@ permissions:
     description: Manage PvP arenas
     default: op
   joshymc.event:
-    description: Manage the event world and mini-games
+    description: Full event-world admin (zone wand, PvP/build/break toggles, mini-games, event-world bypass); includes hosting
     default: op
+    children:
+      joshymc.event.host: true
+  joshymc.event.host:
+    description: Host community events (Event Manager GUI, /event create/open/start/stop/reset/status) - for Community Managers
+    default: op
+  joshymc.event.join:
+    description: Register for hosted community events with /event join and /event leave
+    default: true
   joshymc.portal:
     description: Manage portals
     default: op

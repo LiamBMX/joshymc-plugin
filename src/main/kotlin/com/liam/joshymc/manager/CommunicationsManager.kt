@@ -44,6 +44,7 @@ class CommunicationsManager(private val plugin: Joshymc) {
         ADMIN("ADMIN", TextColor.color(0xFF5555)),
         ECONOMY("ECONOMY", TextColor.color(0xFFD700)),
         CASINO("CASINO", TextColor.color(0xFF55FF)),
+        EVENT("EVENT", TextColor.color(0xFFAA00)),
     }
 
     private val categoryPrefixes = mutableMapOf<Category, Component>()
