@@ -211,19 +211,26 @@ def hair(a: np.ndarray, mask=None, seed: int = 0, bias: float = 0.0, flow: int =
     copper-gold highlight strands and a few deep rust ones."""
     h, w = a.shape[:2]
     X, Y = grid(h, w)
-    xs = X + (Y * flow) // 8
-    lock = xs // 3
-    lx = xs % 3
-    wob = _hash(lock, Y // 5, seed)
-    idx = 5 + np.where(lx == 0, 1, 0) - np.where(lx == 2, 1, 0) + np.where(wob > 0.7, 1, 0) \
-        - np.where(wob < 0.2, 1, 0)
-    idx = idx - np.where((lx == 2) & (_hash(lock, Y // 3, seed + 2) > 0.5), 2, 0)
+    # wavy locks 6 texels wide: each sways a little and is rounded across (lit ridge
+    # left of centre, dark gap at its edges), breaking into a new lock now and then
+    sway = np.rint(1.2 * np.sin(Y / 4.5 + (X // 6) * 1.7 + seed)).astype(int)
+    xs = X + sway + (Y * flow) // 8
+    lock = xs // 6
+    lx = xs % 6
+    seg = (Y + (_hash(lock, 0, seed) * 17).astype(int)) // 13
+    across = np.array([4, 5, 6, 7, 6, 4])[lx]
+    wob = _hash(lock, seg, seed)
+    idx = across + np.where(wob > 0.8, 1, 0) - np.where(wob < 0.2, 1, 0)
+    tip = ((Y + (_hash(lock, 0, seed) * 17).astype(int)) % 13) >= 11
+    idx = idx - np.where(tip, 2, 0)
     idx = np.rint(idx + bias * 2).astype(int)
     paint = pick(GINGER, idx)
-    hi = (_hash(xs, Y // 4, seed + 4) > 0.9) & (lx == 0)
-    paint[hi] = C(GINGER[8])
-    lo = _hash(xs, Y // 6, seed + 5) > 0.94
-    paint[lo] = C(GINGER[2])
+    hi = (lx == 2) & (_hash(lock, Y // 2, seed + 4) > 0.55) & ~tip
+    paint[hi] = C(GINGER[7])
+    spark = hi & (_hash(X, Y, seed + 6) > 0.96)
+    paint[spark] = C(GINGER[8])
+    gap = (lx == 0) & (_hash(lock, Y // 4, seed + 5) > 0.55)
+    paint[gap] = C(GINGER[2])
     _apply(a, mask, paint)
 
 
