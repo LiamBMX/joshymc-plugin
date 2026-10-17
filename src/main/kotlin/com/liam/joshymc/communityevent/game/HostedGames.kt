@@ -20,11 +20,11 @@ import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 
 /**
- * Spleef, Sumo (issue #1187), Sharks and Minnows and Crystal PvP (issue #1189) gameplay for
- * hosted events. Registers one [MinigameGame] per type as the session's controller, so it
+ * Spleef, Sumo (issue #1187), Sharks and Minnows, Crystal PvP (issue #1189) and Mob Waves
+ * (issue #1192) gameplay for hosted events. Registers one [MinigameGame] per type as the session's controller, so it
  * plugs into the existing lifecycle instead of running its own session. Also owns the arena
- * snapshots, event gear, the Crystal PvP kit, the gameplay listener and the
- * `/event spleef|sumo|sharks|cpvp ...` game commands.
+ * snapshots, event gear, the Crystal PvP and Mob Waves kits, the gameplay listeners and the
+ * `/event spleef|sumo|sharks|cpvp|mobs ...` game commands.
  */
 class HostedGames(
     val plugin: Joshymc,
@@ -38,8 +38,11 @@ class HostedGames(
     val sumo = SumoGame(this)
     val sharks = SharksGame(this)
     val cpvp = CrystalPvpGame(this)
-    val kit = CrystalPvpKit(plugin)
+    val mobs = MobWavesGame(this)
+    val kit = EventKit(plugin, "event_cpvp_kit", "Crystal PvP")
+    val mobsKit = EventKit(plugin, "event_mobs_kit", "Mob Waves")
     val listener = HostedGameListener(this)
+    val mobsListener = MobWavesListener(this)
 
     /** Refreshes open Event Manager menus; set by EventManager. */
     var onChange: (() -> Unit)? = null
@@ -51,6 +54,7 @@ class HostedGames(
         sessions.registerController(EventType.SUMO, sumo)
         sessions.registerController(EventType.SHARKS, sharks)
         sessions.registerController(EventType.CPVP, cpvp)
+        sessions.registerController(EventType.MOBS, mobs)
     }
 
     val eventWorldName: String get() = events.eventWorldName
@@ -65,8 +69,16 @@ class HostedGames(
     fun start() {
         floors.load()
         kit.load()
+        mobsKit.load()
         // Worlds are loaded by the time the server finishes starting; restore any floor a crash left broken.
-        Bukkit.getScheduler().runTaskLater(plugin, Runnable { floors.recoverAll { it.spawnLocation } }, 40L)
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            floors.recoverAll { it.spawnLocation }
+            // No event survives a restart, so any Mob Waves mob still loaded is left over.
+            Bukkit.getWorld(eventWorldName)?.let { w ->
+                val removed = mobs.sweepStale(w)
+                if (removed > 0) plugin.logger.info("[Event] Removed $removed leftover Mob Waves mob(s) from '${w.name}'.")
+            }
+        }, 40L)
     }
 
     fun shutdown() {
@@ -82,7 +94,7 @@ class HostedGames(
         EventType.SUMO -> sumo
         EventType.SHARKS -> sharks
         EventType.CPVP -> cpvp
-        EventType.MOBS -> null
+        EventType.MOBS -> mobs
     }
 
     /** The running hosted game, if any. */
@@ -136,13 +148,14 @@ class HostedGames(
     private val sumoSubs = listOf("next", "status")
     private val sharksSubs = listOf("next", "status")
     private val cpvpSubs = listOf("next", "status", "setkit", "reset")
+    private val mobsSubs = listOf("next", "pause", "resume", "status", "setkit")
 
     private fun subsFor(type: EventType): List<String> = when (type) {
         EventType.SPLEEF -> spleefSubs
         EventType.SUMO -> sumoSubs
         EventType.SHARKS -> sharksSubs
         EventType.CPVP -> cpvpSubs
-        EventType.MOBS -> emptyList()
+        EventType.MOBS -> mobsSubs
     }
 
     fun handlesCommand(type: EventType, sub: String?): Boolean = sub in subsFor(type)
@@ -160,11 +173,14 @@ class HostedGames(
             "next" -> reply(sender, when (type) {
                 EventType.SHARKS -> nextCrossingCommand()
                 EventType.CPVP -> nextCrystalMatchCommand()
+                EventType.MOBS -> nextWaveCommand()
                 else -> nextMatchCommand()
             })
+            "pause" -> reply(sender, pauseWavesCommand())
+            "resume" -> reply(sender, resumeWavesCommand())
             "setkit" -> {
                 val player = sender as? Player ?: run { Msg.playersOnly(sender); return }
-                val result = cpvp.saveKit(player)
+                val result = if (type == EventType.MOBS) mobs.saveKit(player) else cpvp.saveKit(player)
                 if (result.saved) Msg.success(sender, result.message, category) else Msg.error(sender, result.message, category)
             }
             "reset" -> {
@@ -206,6 +222,20 @@ class HostedGames(
         return cpvp.startNextMatch()
     }
 
+    /** Why a Mob Waves command can't run now, or null. */
+    private fun mobsProblem(): EventResult.Failure? {
+        val session = sessions.active
+        if (session == null || session.type != EventType.MOBS) return EventResult.Failure("There is no Mob Waves event. Create one with /event create mobs.")
+        if (session.state != EventState.RUNNING) return EventResult.Failure("Mob Waves hasn't started. /event start begins the event and its first wave.")
+        return null
+    }
+
+    fun nextWaveCommand(): EventResult = mobsProblem() ?: mobs.nextWave()
+
+    fun pauseWavesCommand(): EventResult = mobsProblem() ?: mobs.pause()
+
+    fun resumeWavesCommand(): EventResult = mobsProblem() ?: mobs.resume()
+
     fun sendStatus(sender: CommandSender, type: EventType) {
         Msg.reply(sender, Component.text("=== ${type.displayName} Status ===", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true), category)
         val session = sessions.active
@@ -229,9 +259,20 @@ class HostedGames(
                     Msg.reply(sender, Component.text("Arena: ", NamedTextColor.GRAY).append(Component.text(cpvp.arenaState(it), NamedTextColor.WHITE)), category)
                 }
             }
-            val kitText = if (kit.isEmpty) "not saved (/event cpvp setkit)" else "${kit.size} item stack(s)"
-            Msg.reply(sender, Component.text("Kit: ", NamedTextColor.GRAY).append(Component.text(kitText, if (kit.isEmpty) NamedTextColor.RED else NamedTextColor.WHITE)), category)
+            sendKitLine(sender, kit, "cpvp")
         }
+        if (type == EventType.MOBS) {
+            val s = mobs.readSettings()
+            Msg.reply(sender, Component.text("Waves configured: ", NamedTextColor.GRAY).append(Component.text("${s.playable.size} (max ${s.maxActiveMobs} mobs alive, ${s.intermissionSeconds}s intermission)", NamedTextColor.WHITE)), category)
+            s.problems.take(5).forEach { Msg.reply(sender, Component.text("Config problem: $it", NamedTextColor.RED), category) }
+            if (s.problems.size > 5) Msg.reply(sender, Component.text("...and ${s.problems.size - 5} more (see hosted-events.mobs in config.yml).", NamedTextColor.RED), category)
+            sendKitLine(sender, mobsKit, "mobs")
+        }
+    }
+
+    private fun sendKitLine(sender: CommandSender, kit: EventKit, id: String) {
+        val kitText = if (kit.isEmpty) "not saved (/event $id setkit)" else "${kit.size} item stack(s)"
+        Msg.reply(sender, Component.text("Kit: ", NamedTextColor.GRAY).append(Component.text(kitText, if (kit.isEmpty) NamedTextColor.RED else NamedTextColor.WHITE)), category)
     }
 
     private fun reply(sender: CommandSender, result: EventResult) = when (result) {

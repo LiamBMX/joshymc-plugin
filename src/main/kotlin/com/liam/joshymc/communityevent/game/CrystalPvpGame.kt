@@ -13,14 +13,11 @@ import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.Location
-import org.bukkit.NamespacedKey
 import org.bukkit.Sound
 import org.bukkit.attribute.Attribute
 import org.bukkit.block.Block
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
-import org.bukkit.inventory.ItemStack
-import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitTask
 import java.util.UUID
 
@@ -175,20 +172,12 @@ class CrystalPvpGame(games: HostedGames) : MinigameGame(games, EventType.CPVP) {
                 for (uuid in round.active) {
                     if (uuid in equipped) continue
                     val p = Bukkit.getPlayer(uuid) ?: continue
-                    if (applyKit(p, kit)) equipped += uuid
+                    if (applyKit(p, kit, GameMode.ADVENTURE)) equipped += uuid
                 }
             },
             onGo = { onGo(equipped) },
         )
         games.changed()
-    }
-
-    /** Clears the event inventory and fills it with tagged copies of the kit, slot for slot. */
-    private fun applyKit(player: Player, kit: Map<Int, ItemStack>): Boolean {
-        if (!equip(player, GameMode.ADVENTURE, emptyList())) return false
-        player.activePotionEffects.forEach { player.removePotionEffect(it.type) }
-        for ((slot, item) in kit) player.inventory.setItem(slot, games.gear.tagCopy(item))
-        return true
     }
 
     private fun onGo(equipped: Set<UUID>) {
@@ -398,32 +387,13 @@ class CrystalPvpGame(games: HostedGames) : MinigameGame(games, EventType.CPVP) {
     // ── Kit ───────────────────────────────────────────────
 
     /**
-     * `/event cpvp setkit`: saves [player]'s event-world inventory as the kit. Only while
-     * EventManager holds their real inventory (so a survival inventory is never saved), and
-     * never while they're competing.
+     * `/event cpvp setkit`: saves [player]'s event-world inventory as the kit, never while
+     * they're competing (see [MinigameGame.copyKit]).
      */
     fun saveKit(player: Player): KitSave {
-        if (!games.inventorySaved(player)) {
-            return KitSave(false, "Stand in the event world first: the kit is copied from your event inventory, never your survival one.")
-        }
-        if (isRunning && round.isAlive(player.uniqueId) && round.state.inProgress) {
-            return KitSave(false, "You're in a match. Save the kit between matches.")
-        }
-        val wand = NamespacedKey(plugin, "event_wand")
-        val inv = player.inventory
-        val items = LinkedHashMap<Int, ItemStack>()
-        for (slot in CrystalPvpKit.SLOTS) {
-            val item = inv.getItem(slot) ?: continue
-            if (item.type.isAir || item.persistentDataContainer.has(wand, PersistentDataType.INTEGER)) continue
-            items[slot] = games.gear.untagCopy(item)
-        }
-        games.kit.save(items)?.let { return KitSave(false, it) }
-        plugin.logger.info("[Event] ${player.name} saved the Crystal PvP kit (${items.size} item stack(s)).")
-        games.changed()
-        return KitSave(true, "Saved the Crystal PvP kit: ${items.size} item stack(s), armor and off-hand included.")
+        val busy = isRunning && round.isAlive(player.uniqueId) && round.state.inProgress
+        return copyKit(player, games.kit, if (busy) "You're in a match. Save the kit between matches." else null)
     }
-
-    data class KitSave(val saved: Boolean, val message: String)
 
     // ── Leaving ───────────────────────────────────────────
 

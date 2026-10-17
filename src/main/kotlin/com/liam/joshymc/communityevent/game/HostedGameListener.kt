@@ -80,6 +80,7 @@ class HostedGameListener(private val games: HostedGames) : Listener {
             else -> null
         }
         if (game === games.cpvp) { crystalPvpDamage(event, attacker); return }
+        if (game === games.mobs) { mobWavesDamage(event); return }
         val victim = event.entity as? Player
         val victimIn = victim != null && game.isPlaying(victim)
         val attackerIn = attacker != null && game.isPlaying(attacker)
@@ -121,6 +122,32 @@ class HostedGameListener(private val games: HostedGames) : Listener {
         if (involved) event.isCancelled = true
     }
 
+    /**
+     * Mob Waves (issue #1192): living participants and event mobs fight each other, and nobody
+     * else is involved. Participants never hurt each other (so nobody is combat-tagged),
+     * spectators can't hit mobs or be hit, event mobs don't hurt each other or anything outside
+     * the fight, and players of the game don't hurt unrelated entities. Mobs can't be hit while
+     * the waves are paused.
+     */
+    private fun mobWavesDamage(event: EntityDamageByEntityEvent) {
+        val mobs = games.mobs
+        val victim = event.entity
+        val source = event.damageSource.causingEntity ?: event.damager
+        if (victim is Player) {
+            when {
+                mobs.isCompeting(victim.uniqueId) -> if (source != victim && !mobs.isEventMob(source)) event.isCancelled = true
+                mobs.isPlaying(victim) || mobs.isEventMob(source) -> event.isCancelled = true
+            }
+            return
+        }
+        if (mobs.isEventMob(victim)) {
+            val player = source as? Player
+            if (player == null || !mobs.isCompeting(player.uniqueId) || mobs.isPaused) event.isCancelled = true
+            return
+        }
+        if (mobs.isEventMob(source) || (source is Player && mobs.isPlaying(source))) event.isCancelled = true
+    }
+
     @EventHandler(priority = EventPriority.LOWEST)
     fun onDamage(event: EntityDamageEvent) {
         if (event is EntityDamageByEntityEvent) return
@@ -134,6 +161,13 @@ class HostedGameListener(private val games: HostedGames) : Listener {
                 return
             }
         }
+        if (game === games.mobs && games.mobs.isCompeting(victim.uniqueId)) {
+            // Mob Waves participants take fall, fire and other environmental damage; the void sends them back.
+            if (event.cause != EntityDamageEvent.DamageCause.VOID) return
+            event.isCancelled = true
+            games.mobs.sendBack(victim)
+            return
+        }
         if (!game.isPlaying(victim)) return
         event.isCancelled = true
         // Below the elimination height a competitor is already out; anyone else falling into the void is caught.
@@ -143,20 +177,23 @@ class HostedGameListener(private val games: HostedGames) : Listener {
     }
 
     /**
-     * Crystal PvP: damage that would kill a competitor ends their match instead, so nobody dies
-     * in the event world (no death message, drops, kill rewards or respawn screen). A held
-     * Totem of Undying is left to work as usual.
+     * Crystal PvP and Mob Waves: damage that would kill a competitor ends their match (or
+     * eliminates them from the waves) instead, so nobody dies in the event world (no death
+     * message, drops, kill rewards or respawn screen). A held Totem of Undying is left to work as usual.
      */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onLethalDamage(event: EntityDamageEvent) {
         val victim = event.entity as? Player ?: return
         val cpvp = games.cpvp
-        if (!cpvp.isFighting(victim.uniqueId)) return
+        val mobs = games.mobs
+        val inCpvp = cpvp.isFighting(victim.uniqueId)
+        val inMobs = !inCpvp && games.running === mobs && mobs.isCompeting(victim.uniqueId)
+        if (!inCpvp && !inMobs) return
         if (event.finalDamage < victim.health) return
         val inv = victim.inventory
         if (inv.itemInMainHand.type == Material.TOTEM_OF_UNDYING || inv.itemInOffHand.type == Material.TOTEM_OF_UNDYING) return
         event.isCancelled = true
-        cpvp.lethal(victim)
+        if (inCpvp) cpvp.lethal(victim) else mobs.lethal(victim)
     }
 
     // ── Crystal PvP: crystals, explosions, buckets ──
@@ -250,7 +287,14 @@ class HostedGameListener(private val games: HostedGames) : Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onPickup(event: EntityPickupItemEvent) {
         val player = event.entity as? Player ?: return
-        if (games.running?.isPlaying(player) == true) event.isCancelled = true
+        val game = games.running ?: return
+        if (!game.isPlaying(player)) return
+        // Mob Waves with drop-items on: living participants keep wave loot, tagged so it never leaves the event world.
+        if (game === games.mobs && games.mobs.dropsItems && games.mobs.isCompeting(player.uniqueId)) {
+            if (!games.gear.isGear(event.item.itemStack)) event.item.itemStack = games.gear.tagCopy(event.item.itemStack)
+            return
+        }
+        event.isCancelled = true
     }
 
     /** Gear can't be moved into a chest or any other non-player inventory. */
@@ -274,7 +318,9 @@ class HostedGameListener(private val games: HostedGames) : Listener {
         if (event.action != Action.RIGHT_CLICK_BLOCK && event.action != Action.PHYSICAL) return
         if (games.running?.isPlaying(event.player) != true) return
         event.setUseInteractedBlock(Event.Result.DENY)
-        if (event.action == Action.RIGHT_CLICK_BLOCK && !games.cpvp.isFighting(event.player.uniqueId)) event.setUseItemInHand(Event.Result.DENY)
+        // Mob Waves participants keep using their kit (food, bows, potions) while looking at a block; placing is still refused.
+        val usesItems = games.cpvp.isFighting(event.player.uniqueId) || (games.running === games.mobs && games.mobs.isCompeting(event.player.uniqueId))
+        if (event.action == Action.RIGHT_CLICK_BLOCK && !usesItems) event.setUseItemInHand(Event.Result.DENY)
     }
 
     // ── Leaving ───────────────────────────────────────────

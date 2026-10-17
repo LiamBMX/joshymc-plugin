@@ -1167,3 +1167,89 @@ hosted-events:
       max-blocks: 100000
       # Seconds after a match before the arena is restored (blocks-per-tick is shared with spleef.floor).
       delay-seconds: 2
+  # Mob Waves: everyone fights the waves below together with the kit saved by /event mobs setkit.
+  # Clearing the last wave with anyone alive wins; everyone eliminated loses. No rewards are given.
+  # Mob Waves refuses to start while anything here is invalid; /event mobs status lists the problems.
+  mobs:
+    countdown-seconds: 5
+    # Break between waves. Staff can end it early with /event mobs next.
+    intermission-seconds: 15
+    min-players: 1
+    # Event mobs alive at once (hard cap 200). The rest of a wave waits until some die.
+    max-active-mobs: 30
+    # Most mobs a single wave may have (hard cap 1000).
+    max-mobs-per-wave: 120
+    # Mobs spawned per batch and ticks between batches (20 ticks = 1 second). Waves can override both.
+    spawn-batch-size: 4
+    spawn-interval-ticks: 20
+    # Mobs never spawn closer than this many blocks to a living player.
+    min-player-distance: 4
+    # Ordinary mob drops (picked-up loot never leaves the event world). Mob equipment never drops,
+    # and experience never drops at all: event-world XP would carry over into survival.
+    drop-items: false
+    # Full health, food and no effects for everyone still alive when a wave is cleared.
+    heal-between-waves: true
+    scaling:
+      # Extra mob health per wave after the first (0.05 = +5% per wave), on top of each wave's own multiplier.
+      health-per-wave: 0.05
+    # Play only the first N waves below. 0 = all of them.
+    waves-to-play: 0
+    # Mobs waves may use. Ender dragons, withers, ghasts, phantoms and endermen are never allowed.
+    allowed-entities:
+      - ZOMBIE
+      - HUSK
+      - ZOMBIE_VILLAGER
+      - DROWNED
+      - SKELETON
+      - STRAY
+      - BOGGED
+      - SPIDER
+      - CAVE_SPIDER
+      - CREEPER
+      - WITCH
+      - PILLAGER
+      - VINDICATOR
+      - WITHER_SKELETON
+      - BLAZE
+    # Waves, numbered 1, 2, 3, ... without gaps. Per wave:
+    #   mobs: <TYPE>: <count>, or <TYPE>: { count, gear, health-multiplier, damage-multiplier, name }
+    #   boss: { type, count (default 1), gear, health-multiplier, damage-multiplier, name } - spawns last and glows
+    #   name, gear (none/leather/chainmail/golden/iron/diamond/netherite), health-multiplier (0.25-20),
+    #   damage-multiplier (0.25-5), speed-multiplier (0.5-2), spawn-points (Mob Spawn Point numbers, default all),
+    #   spawn-batch-size, spawn-interval-ticks
+    # Waves you delete stay deleted; remove the whole waves section to get these defaults back.
+    waves:
+      '1':
+        mobs:
+          ZOMBIE: 4
+      '2':
+        mobs:
+          ZOMBIE: 6
+          SKELETON: 2
+      '3':
+        mobs:
+          ZOMBIE: 6
+          SKELETON: 3
+          SPIDER: 3
+      '4':
+        gear: chainmail
+        spawn-interval-ticks: 15
+        mobs:
+          ZOMBIE: 8
+          SKELETON: 4
+          SPIDER: 4
+          CREEPER: 2
+      '5':
+        name: Boss Wave
+        gear: iron
+        health-multiplier: 1.2
+        mobs:
+          ZOMBIE: 6
+          SKELETON: 4
+          WITCH: 1
+        boss:
+          type: ZOMBIE
+          name: Grave Warden
+          gear: diamond
+          health-multiplier: 6.0
+          damage-multiplier: 1.5

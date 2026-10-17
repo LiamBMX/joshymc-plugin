@@ -91,8 +91,12 @@ class Joshymc : JavaPlugin() {
             "homes.limits-by-rank.",
             "warps.limits-by-rank.",
             "orders.limits.",
-            "rank-perks."
+            "rank-perks.",
+            // Issue #1192: Mob Waves wave list. Backfilled only as a whole, when the section is missing.
+            "$MOB_WAVES_KEY."
         )
+
+        private const val MOB_WAVES_KEY = "hosted-events.mobs.waves"
     }
 
     fun isFeatureEnabled(feature: String): Boolean {
@@ -1304,6 +1308,16 @@ class Joshymc : JavaPlugin() {
             if (defaults.isConfigurationSection(key)) continue
             if (NO_BACKFILL_SECTION_PREFIXES.any { key.startsWith(it) }) continue
             if (!config.contains(key, true)) {
+                config.set(key, defaults.get(key))
+                changed++
+            }
+        }
+
+        // Issue #1192: the Mob Waves waves are staff-owned (deleted waves stay deleted), but a
+        // config without the section at all, like one from before Mob Waves, gets the defaults.
+        if (!config.contains(MOB_WAVES_KEY, true) && defaults.isConfigurationSection(MOB_WAVES_KEY)) {
+            for (key in defaults.getKeys(true)) {
+                if (!key.startsWith("$MOB_WAVES_KEY.") || defaults.isConfigurationSection(key)) continue
                 config.set(key, defaults.get(key))
                 changed++
             }
