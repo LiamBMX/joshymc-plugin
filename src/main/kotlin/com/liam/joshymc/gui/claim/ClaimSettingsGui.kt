@@ -32,7 +32,8 @@ object ClaimSettingsGui {
         FlagEntry(21, PublicFlag.SWITCHES, Material.LEVER, "Buttons & Levers", "Press buttons and flip levers."),
         FlagEntry(22, PublicFlag.CONTAINERS, Material.CHEST, "Containers", "Open chests, barrels, furnaces and hoppers."),
         FlagEntry(23, PublicFlag.VILLAGER_TRADING, Material.EMERALD, "Villager Trading", "Trade with villagers."),
-        FlagEntry(24, PublicFlag.VEHICLES, Material.OAK_BOAT, "Vehicles", "Ride boats and minecarts.")
+        FlagEntry(24, PublicFlag.VEHICLES, Material.OAK_BOAT, "Vehicles", "Ride boats and minecarts."),
+        FlagEntry(25, PublicFlag.ENDER_PEARLS, Material.ENDER_PEARL, "Ender Pearls", "Teleport into or around here with Ender Pearls.")
     )
 
     fun open(plugin: Joshymc, player: Player, claimId: Int) {

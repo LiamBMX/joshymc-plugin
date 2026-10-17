@@ -52,6 +52,7 @@ import org.bukkit.event.player.PlayerFishEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerMoveEvent
+import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.event.player.PlayerToggleFlightEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.event.vehicle.VehicleDestroyEvent
@@ -66,6 +67,7 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
     private val pvpDenyMessage = Component.text("PvP is disabled in this claim.", NamedTextColor.RED)
     private val projectileDenyMessage = Component.text("Projectiles are disabled in this claim.", NamedTextColor.RED)
     private val flyDenyMessage = Component.text("Flying is disabled in this claim.", NamedTextColor.RED)
+    private val enderPearlDenyMessage = Component.text("You cannot use Ender Pearls in this claim!", NamedTextColor.RED)
 
     private fun denyWithMessage(player: Player, message: Component = denyMessage) {
         val now = System.currentTimeMillis()
@@ -489,6 +491,19 @@ class ClaimProtectionListener(private val plugin: Joshymc) : Listener {
             player.isFlying = false
         }
         denyWithMessage(player, flyDenyMessage)
+    }
+
+    // 25. Ender pearl teleports (issue #1194) — judged by where the pearl
+    //     lands, so throwing from outside or inside the claim makes no
+    //     difference. Other teleport causes (commands, portals) are untouched.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onEnderPearlTeleport(event: PlayerTeleportEvent) {
+        if (event.cause != PlayerTeleportEvent.TeleportCause.ENDER_PEARL) return
+        val player = event.player
+        if (!plugin.claimManager.canPerform(player, event.to, PublicFlag.ENDER_PEARLS)) {
+            event.isCancelled = true
+            denyWithMessage(player, enderPearlDenyMessage)
+        }
     }
 
     private fun isFlightRestricted(player: Player): Boolean =
