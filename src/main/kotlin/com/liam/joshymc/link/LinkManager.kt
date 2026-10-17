@@ -13,6 +13,9 @@ class LinkManager(private val plugin: Joshymc) {
 
     val sessions = LinkSessions()
 
+    /** The LuckPerms Discord verification group, kept in step with [sessions]' links (issue #1213). */
+    val groupSync = DiscordGroupSync(plugin, sessions::isLinked)
+
     private val linksFile: File get() = plugin.configFile("links.yml")
 
     val settings: LinkSettings get() = sessions.settings
@@ -34,6 +37,7 @@ class LinkManager(private val plugin: Joshymc) {
             plugin.logger.warning("[Link] Dropped duplicate link $uuid -> $discordId (that Discord account is already linked to another player).")
         }
         plugin.logger.info("[Link] Loaded ${sessions.linkCount()} linked account(s).")
+        groupSync.reload()
     }
 
     @Synchronized
@@ -63,7 +67,12 @@ class LinkManager(private val plugin: Joshymc) {
     /** Links the account the player's GUI showed and saves; see [LinkSessions.confirm]. */
     fun confirmLink(playerUuid: UUID): LinkSessions.ConfirmResult {
         val result = sessions.confirm(playerUuid)
-        if (result is LinkSessions.ConfirmResult.Linked) save()
+        if (result is LinkSessions.ConfirmResult.Linked) {
+            save()
+            groupSync.sync(playerUuid, notify = true)
+            // The player who lost this Discord account to the new link loses the group too.
+            result.replacedPlayer?.let { groupSync.sync(it) }
+        }
         return result
     }
 
@@ -75,7 +84,8 @@ class LinkManager(private val plugin: Joshymc) {
     fun isLinked(playerUuid: UUID): Boolean = sessions.isLinked(playerUuid)
 
     fun unlink(playerUuid: UUID) {
-        sessions.unlink(playerUuid)
+        if (sessions.unlink(playerUuid) == null) return
         save()
+        groupSync.sync(playerUuid, notify = true)
     }
 }

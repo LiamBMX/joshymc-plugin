@@ -141,6 +141,12 @@ discord:
     # Wrong codes per minute across all Discord accounts before code checks pause
     # briefly for everyone. 0 disables this server-wide cap.
     global-max-failed-per-minute: 120
+    # LuckPerms group given to players while their Discord account is linked: added after
+    # a confirmed /link, removed on /unlink, and repaired on join. Only this one parent
+    # group is ever touched (never `parent set`); created empty if it doesn't exist.
+    verified-group:
+      enabled: true
+      group: discord
 
   # Messages raised while the bot is still connecting (startup, /joshymc reload, or a
   # failed connection being retried) wait here and are sent once it connects. Punishment
