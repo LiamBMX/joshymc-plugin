@@ -38,6 +38,7 @@ class ItemManager(private val plugin: Joshymc) {
         // Candy
         register(PeanutButterCup())
         LinkPopColor.entries.forEach { register(LinkPop(it)) }
+        register(JosheesBar())
 
         // Throwables
         register(Tomato())
