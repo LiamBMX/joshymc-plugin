@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.communityevent.arena.ArenaCommands
 import com.liam.joshymc.communityevent.arena.ArenaMenu
 import com.liam.joshymc.communityevent.arena.EventArenas
+import com.liam.joshymc.communityevent.game.GameMenu
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.manager.CommunicationsManager
@@ -34,6 +35,9 @@ class EventManagerMenu(
     /** The Arena Setup section (issue #1183); set by EventManager once the arena commands exist. */
     lateinit var arenaMenu: ArenaMenu
 
+    /** Spleef/Sumo game controls (issue #1187); set by EventManager. */
+    lateinit var gameMenu: GameMenu
+
     private val comms get() = plugin.commsManager
 
     /** Main menus currently open, so lifecycle changes can refresh them. */
@@ -45,6 +49,7 @@ class EventManagerMenu(
         private const val SLOT_CREATE = 19
         private const val SLOT_OPEN = 20
         private const val SLOT_START = 21
+        private const val SLOT_GAME = 22
         private const val SLOT_STOP = 23
         private const val SLOT_RESET = 24
         private const val SLOT_SETTINGS = 25
@@ -111,7 +116,7 @@ class EventManagerMenu(
                 null -> "Create an event first."
                 EventState.CREATED -> "Open registration first."
                 EventState.OPEN -> if ((active?.participantCount ?: 0) == 0) "Nobody has registered yet."
-                    else arenas.startProblem(active)
+                    else sessions.startCheck?.invoke(active)
                 else -> "The event is already running."
             },
         ) { p -> act(p) { sessions.start() } }
@@ -155,6 +160,13 @@ class EventManagerMenu(
                 act(p) { sessions.reset(confirmed = false) }
             }
         }
+
+        val gameType = active?.type?.takeIf { it == EventType.SPLEEF || it == EventType.SUMO }
+        actionButton(
+            gui, SLOT_GAME, gameType?.icon ?: Material.DIAMOND_SHOVEL, "Game Controls",
+            "Spleef rounds and floor reset, Sumo matches and bracket.",
+            unavailable = if (gameType == null) "Only for Spleef and Sumo events." else null,
+        ) { p -> gameMenu.open(p) }
 
         gui.setItem(
             SLOT_SETTINGS,

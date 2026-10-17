@@ -87,4 +87,20 @@ interface EventController {
     fun onStart(session: EventSession) {}
     fun onStop(session: EventSession) {}
     fun onReset(session: EventSession) {}
+
+    /**
+     * A registered player left a RUNNING event (issue #1187). Runs before they are
+     * unregistered; afterwards they can't rejoin until the next event opens.
+     */
+    fun onParticipantLeave(session: EventSession, uuid: UUID, reason: LeaveReason) {}
+}
+
+/** Why a player left a running event. */
+enum class LeaveReason(val label: String) {
+    /** `/event leave`. */
+    LEFT("left the event"),
+    /** Logged off. */
+    QUIT("disconnected"),
+    /** Teleported or `/spawn`ed out of the event world. */
+    LEFT_WORLD("left the event world"),
 }

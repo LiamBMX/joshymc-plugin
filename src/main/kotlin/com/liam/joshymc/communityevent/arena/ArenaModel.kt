@@ -122,8 +122,9 @@ object ArenaLayouts {
         ),
         EventType.SUMO to ArenaLayout(
             required = listOf(ArenaField.SPAWN_1, ArenaField.SPAWN_2, ArenaField.LOSE_HEIGHT),
-            optional = listOf(ArenaField.LOBBY),
-            commands = linkedMapOf("setspawn1" to ArenaField.SPAWN_1, "setspawn2" to ArenaField.SPAWN_2, "setlose" to ArenaField.LOSE_HEIGHT),
+            // Optional boundary (issue #1187): stepping outside it horizontally loses the match.
+            optional = listOf(ArenaField.LOBBY, ArenaField.REGION),
+            commands = linkedMapOf("setspawn1" to ArenaField.SPAWN_1, "setspawn2" to ArenaField.SPAWN_2, "setlose" to ArenaField.LOSE_HEIGHT, "setregion" to ArenaField.REGION),
         ),
         EventType.CPVP to ArenaLayout(
             required = listOf(ArenaField.SPAWN_1, ArenaField.SPAWN_2, ArenaField.REGION),

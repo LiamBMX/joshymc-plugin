@@ -253,15 +253,38 @@ class EventSessions(
 
     fun leave(player: Player): EventResult {
         val session = active ?: return EventResult.Failure("There is no event right now.")
-        if (!session.unregister(player.uniqueId)) return EventResult.Failure("You aren't registered for ${session.type.displayName}.")
-        changed()
+        if (!session.isRegistered(player.uniqueId)) return EventResult.Failure("You aren't registered for ${session.type.displayName}.")
+        if (session.state == EventState.RUNNING) {
+            withdraw(player.uniqueId, LeaveReason.LEFT)
+        } else {
+            session.unregister(player.uniqueId)
+            changed()
+        }
         return EventResult.Success(session, "You left the ${session.type.displayName} event.")
     }
 
-    /** Players who log off before the start drop out of registration; running events keep them for their controller. */
+    /**
+     * Players who log off drop out of registration. In a running event the controller is told
+     * first (issue #1187), so a disconnect counts as leaving and the player can't come back as
+     * an active competitor.
+     */
     fun onQuit(uuid: UUID) {
         val session = active ?: return
-        if (session.state == EventState.OPEN && session.unregister(uuid)) changed()
+        when (session.state) {
+            EventState.OPEN -> if (session.unregister(uuid)) changed()
+            // Types without gameplay yet keep their registrations, as before.
+            EventState.RUNNING -> if (session.type in controllers) withdraw(uuid, LeaveReason.QUIT)
+            else -> {}
+        }
+    }
+
+    /** A registered player leaves the RUNNING event: the controller handles it, then they're unregistered. */
+    fun withdraw(uuid: UUID, reason: LeaveReason) {
+        val session = active ?: return
+        if (session.state != EventState.RUNNING || !session.isRegistered(uuid)) return
+        runHook(session, "leave") { it.onParticipantLeave(session, uuid, reason) }
+        session.unregister(uuid)
+        changed()
     }
 
     /** Server stop: end any live session quietly. Nothing is persisted, so nothing comes back after a restart. */

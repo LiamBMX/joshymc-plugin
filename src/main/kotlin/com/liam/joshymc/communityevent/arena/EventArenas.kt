@@ -85,9 +85,9 @@ class EventArenas(
     fun forget(uuid: UUID) { editing.remove(uuid) }
 
     /**
-     * Reason the event can't start because of its arena, or null. An event with no arena
-     * picked may still start (no event type has gameplay that needs one yet), but a picked
-     * arena must still exist and be READY: nothing falls back to some other location.
+     * Reason the event can't start because of its arena, or null. Types without gameplay may
+     * start with no arena picked (Spleef and Sumo require one, see HostedGames.startProblem),
+     * but a picked arena must still exist and be READY: nothing falls back to some other location.
      */
     fun startProblem(session: EventSession): String? {
         val id = session.arenaId ?: return null

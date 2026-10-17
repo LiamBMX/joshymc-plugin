@@ -1100,3 +1100,40 @@ staff-tags:
     auto-equip: true
     show-in-chat: true
     show-in-tab: true
+
+# Hosted Spleef and Sumo events (issue #1187). Staff run them through /event; arenas are
+# saved presets made with /event arena. Nothing here awards prizes.
+hosted-events:
+  spleef:
+    countdown-seconds: 5
+    min-players: 2
+    # Rounds per event. After the last one the player with the most round wins is champion
+    # and the event ends. 0 = keep playing rounds until staff run /event stop.
+    max-rounds: 1
+    # Seconds a round may last before it ends with no winner. 0 = no limit.
+    round-time-limit-seconds: 0
+    # The temporary shovel every player gets for the round. It never leaves the event world.
+    shovel:
+      material: DIAMOND_SHOVEL
+      efficiency: 5
+    floor:
+      # Largest floor region Spleef will snapshot and restore.
+      max-blocks: 50000
+      # Restore the floor automatically after each round (it's always restored when the event ends).
+      restore-after-round: true
+      restore-delay-seconds: 3
+      # Blocks restored per tick, so a big floor never lags the server.
+      blocks-per-tick: 1000
+  sumo:
+    countdown-seconds: 3
+    min-players: 2
+    # Items each competitor gets for a match (material names). Empty = bare hands.
+    loadout: []
+    # Hits deal no damage; they only push. Sprinting hits push 1.5x as far.
+    knockback:
+      horizontal: 0.42
+      vertical: 0.36
+      hit-cooldown-ms: 450
+    # Seconds before the next match starts by itself (with its countdown). 0 = staff start
+    # every match with /event sumo next or the Game Controls menu.
+    auto-next-seconds: 0
