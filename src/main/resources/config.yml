@@ -1101,6 +1101,17 @@ staff-tags:
     show-in-chat: true
     show-in-tab: true
 
+# Peanut Butter Cup (issue #1198): a custom candy that eats like a Cookie. Eating one also gives
+# a short effect that its name and lore deliberately keep secret (default Speed III for 6 seconds).
+# Players in a running hosted event game never get it. Applies on /joshymc reload.
+peanut-butter-cup:
+  hidden-effect:
+    # false = the cup is just a cookie
+    enabled: true
+    duration-ticks: 120
+    # Zero-indexed: 0 = Speed I, 2 = Speed III
+    amplifier: 2
+
 # Hosted Spleef and Sumo events (issue #1187). Staff run them through /event; arenas are
 # saved presets made with /event arena. Nothing here awards prizes.
 hosted-events:
