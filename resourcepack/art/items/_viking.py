@@ -222,7 +222,7 @@ def hair(a: np.ndarray, mask=None, seed: int = 0, bias: float = 0.0, flow: int =
     wob = _hash(lock, seg, seed)
     idx = across + np.where(wob > 0.8, 1, 0) - np.where(wob < 0.2, 1, 0)
     tip = ((Y + (_hash(lock, 0, seed) * 17).astype(int)) % 13) >= 11
-    idx = idx - np.where(tip, 2, 0)
+    idx = idx - np.where(tip, 1, 0)
     idx = np.rint(idx + bias * 2).astype(int)
     paint = pick(GINGER, idx)
     hi = (lx == 2) & (_hash(lock, Y // 2, seed + 4) > 0.55) & ~tip
