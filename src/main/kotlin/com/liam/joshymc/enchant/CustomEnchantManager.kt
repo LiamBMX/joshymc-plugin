@@ -35,6 +35,10 @@ class CustomEnchantManager(private val plugin: Joshymc) : Listener {
 
     private val enchants = mutableMapOf<String, CustomEnchant>()
 
+    /** `quick-hit` config, loaded in Joshymc.registerEnchants and read by QuickHitListener. */
+    var quickHit: QuickHitSettings = QuickHitSettings.DEFAULT
+        internal set
+
     // ── Lifecycle ────────────────────────────────────────
 
     fun start() {
@@ -45,6 +49,11 @@ class CustomEnchantManager(private val plugin: Joshymc) : Listener {
 
     fun register(enchant: CustomEnchant) {
         enchants[enchant.id] = enchant
+    }
+
+    /** Drops an enchant from the registry. Items keep its PDC level, so re-registering restores it. */
+    fun unregister(enchantId: String) {
+        enchants.remove(enchantId)
     }
 
     fun getEnchant(id: String): CustomEnchant? = enchants[id]
@@ -99,7 +108,7 @@ class CustomEnchantManager(private val plugin: Joshymc) : Listener {
         val enchant = enchants[enchantId] ?: return false
 
         // Validate target
-        if (!enchant.target.canApplyTo(item)) return false
+        if (!enchant.canApplyTo(item)) return false
 
         // Validate level
         if (level < 1 || level > enchant.maxLevel) return false
@@ -217,7 +226,7 @@ class CustomEnchantManager(private val plugin: Joshymc) : Listener {
             val enchant = enchants[id] ?: continue
 
             // Check if enchant can apply to this item type
-            if (!enchant.target.canApplyTo(left)) continue
+            if (!enchant.canApplyTo(left)) continue
 
             val leftLevel = leftEnchants[id] ?: 0
 
@@ -283,7 +292,7 @@ class CustomEnchantManager(private val plugin: Joshymc) : Listener {
      * Get all enchants that can be applied to a given item.
      */
     fun getApplicableEnchants(item: ItemStack): List<CustomEnchant> {
-        return enchants.values.filter { it.target.canApplyTo(item) }
+        return enchants.values.filter { it.canApplyTo(item) }
     }
 
     /**
