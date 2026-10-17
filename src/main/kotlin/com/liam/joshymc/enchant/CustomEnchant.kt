@@ -20,8 +20,12 @@ data class CustomEnchant(
     /** Enchants that conflict with this one (by ID) */
     val conflicts: Set<String> = emptySet(),
     /** Description shown in enchant table / help */
-    val description: String = ""
-)
+    val description: String = "",
+    /** Replaces [target]'s item check when set (e.g. Quick Hit's configurable categories) */
+    val appliesTo: ((ItemStack) -> Boolean)? = null
+) {
+    fun canApplyTo(item: ItemStack): Boolean = appliesTo?.invoke(item) ?: target.canApplyTo(item)
+}
 
 enum class EnchantTarget {
     SWORD,
@@ -43,6 +47,8 @@ enum class EnchantTarget {
     HOE,
     ALL_TOOLS,
     MELEE_WEAPON,
+    /** Anything with a melee attack cooldown worth shortening (Quick Hit) */
+    MELEE_TOOL,
     SPYGLASS,
     ALL;
 
@@ -70,6 +76,7 @@ enum class EnchantTarget {
             ALL_TOOLS -> PICKAXE.canApplyTo(item) || SHOVEL.canApplyTo(item)
                     || HOE.canApplyTo(item) || AXE.canApplyTo(item)
             MELEE_WEAPON -> SWORD.canApplyTo(item) || AXE.canApplyTo(item)
+            MELEE_TOOL -> QuickHitCategory.DEFAULTS.any { it.matches(item) }
             SPYGLASS -> name == "SPYGLASS"
             ALL -> true
         }

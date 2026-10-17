@@ -1146,6 +1146,29 @@ link-pops:
       duration-ticks: 220
       amplifier: 2
 
+# Quick Hit custom enchant (issue #1209): while the enchanted item is in the main hand, a full
+# strength melee attack recharges this much faster. Damage per hit, mining speed and projectiles
+# stay vanilla. Applied with /ce add quick_hit <level>; combines in anvils like other custom
+# enchants. Applies on /joshymc reload.
+quick-hit:
+  # false = the enchant can't be applied and existing Quick Hit items do nothing (their level is kept)
+  enabled: true
+  max-level: 3
+  # Percent of the recharge time removed per level (above 0, at most 50). 30 = 1s becomes 0.7s.
+  cooldown-reduction-percent:
+    '1': 10
+    '2': 20
+    '3': 30
+  # Item groups that accept it: sword, axe, pickaxe, shovel, hoe, mace, trident, spear
+  categories:
+    - sword
+    - axe
+    - pickaxe
+    - shovel
+    - hoe
+    - mace
+    - trident
+
 # Hosted Spleef and Sumo events (issue #1187). Staff run them through /event; arenas are
 # saved presets made with /event arena.
 hosted-events:

@@ -51,12 +51,14 @@ import com.liam.joshymc.listener.ChatTagVoucherListener
 import com.liam.joshymc.listener.SellWandListener
 import com.liam.joshymc.listener.enchant.CombatEnchantListener
 import com.liam.joshymc.listener.enchant.PassiveEnchantListener
+import com.liam.joshymc.listener.enchant.QuickHitListener
 import com.liam.joshymc.listener.enchant.ToolEnchantListener
 import com.liam.joshymc.listener.enchant.WeaponEnchantListener
 
 class ListenerManager(private val plugin: Joshymc) {
 
     var passiveEnchantListener: PassiveEnchantListener? = null
+    var quickHitListener: QuickHitListener? = null
         private set
 
     var thrownTridentVisualListener: ThrownTridentVisualListener? = null
@@ -152,6 +154,8 @@ class ListenerManager(private val plugin: Joshymc) {
         passiveEnchantListener = PassiveEnchantListener(plugin)
         passiveEnchantListener!!.start()
         pm.registerEvents(passiveEnchantListener!!, plugin)
+        quickHitListener = QuickHitListener(plugin)
+        pm.registerEvents(quickHitListener!!, plugin)
 
         // Claims
         pm.registerEvents(plugin.claimManager, plugin)
