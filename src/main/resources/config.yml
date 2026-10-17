@@ -36,6 +36,7 @@ features:
   giveaways: true
   gift: true
   casino: true
+  candy-shop: true
 
 # Mob Stacking — merges nearby mobs of the same type into a single entity
 mob-stacking:
@@ -1100,6 +1101,29 @@ staff-tags:
     auto-equip: true
     show-in-chat: true
     show-in-tab: true
+
+# Candy Shop (issue #1211): the Candy Man opens /candy (alias /trickortreat) four times a day at
+# random quarter hours, at least 3 hours apart, for 30 minutes, selling 3 different candies for
+# Money (never Credits). Admins fill the pool with /candy admin additem <price> <percentage>
+# while holding a registered candy. Applies on /joshymc reload.
+candy-shop:
+  # IANA time zone the daily schedule follows (e.g. America/New_York, Europe/London).
+  # Empty = America/New_York, the server's default zone.
+  timezone: ""
+  # Each candy's percentage is its chance to be in an opening. Exactly 3 candies are sold per
+  # opening, so the enabled chances can only all be exact when they add up to 300%.
+  #   normalize: scale every chance by the same factor so they add up to 300% (capped at 100%);
+  #              /candy admin list shows the effective chances whenever they differ.
+  #   exact:     the enabled chances must add up to 300%, otherwise openings are skipped and
+  #              admins are told why.
+  probability-mode: normalize
+  # Announcements and the closed message. & colour codes; {minutes} = minutes left.
+  messages:
+    open: "&d&l🍬 Candy Man&d: &f\"I've arrived with some sweet surprises! The Candy Shop is now &a&lOPEN&f for 30 minutes! Use &d/candy&f to see what's for sale!\""
+    # Sent instead of "open" when the server starts in the middle of an opening.
+    resumed: "&d&l🍬 Candy Man&d: &f\"I've arrived with some sweet surprises! The Candy Shop is &a&lOPEN&f for {minutes} more minutes! Use &d/candy&f to see what's for sale!\""
+    close: "&d&l🍬 Candy Man&d: &f\"That's all for now! The Candy Shop is &c&lCLOSED&f. I'll be back with more treats!\""
+    closed-info: "&dThe Candy Man isn't around right now! Come back when the Candy Shop opens."
 
 # Peanut Butter Cup (issue #1198): a custom candy that eats like a Cookie. Eating one also gives
 # a short effect that its name and lore deliberately keep secret (default Speed III for 6 seconds).
