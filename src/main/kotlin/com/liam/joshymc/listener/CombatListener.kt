@@ -122,6 +122,8 @@ class CombatListener(private val plugin: Joshymc) : Listener {
         val attacker = resolvePlayerSource(event) ?: return
         if (attacker == victim) return
         if (plugin.modModeManager.isModMode(attacker)) return
+        // Hosted Crystal PvP matches never tag: quitting mid-match must not combat-log the event inventory (issue #1189).
+        if (plugin.eventManager.games.isMatchFight(attacker, victim)) return
         val combat = plugin.combatManager
         combat.tag(attacker)
         combat.tag(victim)

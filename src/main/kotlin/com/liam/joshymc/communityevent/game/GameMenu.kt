@@ -17,8 +17,8 @@ import org.bukkit.entity.Player
 import java.util.UUID
 
 /**
- * "Game Controls" in the Event Manager (issue #1187): Spleef and Sumo controls that follow
- * the game's state. Every click re-checks [EventPermissions.canHost] and the game state, so a
+ * "Game Controls" in the Event Manager (issues #1187, #1189): Spleef, Sumo, Sharks and Minnows
+ * and Crystal PvP controls that follow the game's state. Every click re-checks [EventPermissions.canHost] and the game state, so a
  * stale menu can't start two matches or reset a floor mid-round.
  */
 class GameMenu(private val games: HostedGames, private val back: (Player) -> Unit) {
@@ -34,6 +34,7 @@ class GameMenu(private val games: HostedGames, private val back: (Player) -> Uni
         private const val SLOT_THIRD = 22
         private const val SLOT_FOURTH = 23
         private const val SLOT_END = 24
+        private const val SLOT_RESET = 31
         private const val LIST_SIZE = 54
         private const val PER_PAGE = 45
     }
@@ -42,18 +43,24 @@ class GameMenu(private val games: HostedGames, private val back: (Player) -> Uni
         if (!guard(player)) return
         val session = games.sessions.active
         val type = session?.type
-        if (session == null || (type != EventType.SPLEEF && type != EventType.SUMO)) {
-            Msg.error(player, "Game controls are for Spleef and Sumo events. Create one with /event create spleef|sumo.", category)
+        val game = type?.let { games.gameFor(it) }
+        if (session == null || type == null || game == null) {
+            Msg.error(player, "Game controls are for Spleef, Sumo, Sharks and Crystal PvP events. Create one with /event create <type>.", category)
             return
         }
         val gui = CustomGui(Component.text("${type.displayName} Controls", NamedTextColor.DARK_GRAY), SIZE)
         gui.border(GuiStyle.filler())
-        val game = games.gameFor(type)!!
         val running = session.state == EventState.RUNNING && game.isRunning
         val lore = if (running) game.statusLines() else listOf(Component.text("The event is ${session.state.label.lowercase()}. /event start begins it.", NamedTextColor.GRAY))
         gui.setItem(SLOT_STATUS, GuiStyle.item(type.icon, Component.text("${type.displayName} Status", NamedTextColor.GOLD), lore))
 
-        if (type == EventType.SPLEEF) spleefButtons(gui, running) else sumoButtons(gui, running)
+        when (type) {
+            EventType.SPLEEF -> spleefButtons(gui, running)
+            EventType.SUMO -> sumoButtons(gui, running)
+            EventType.SHARKS -> sharksButtons(gui, running)
+            EventType.CPVP -> cpvpButtons(gui, running)
+            EventType.MOBS -> {}
+        }
 
         button(gui, SLOT_END, Material.RED_CONCRETE, "End Event", "Stops ${type.displayName} for everyone. Asks to confirm.", null) { p ->
             val target = games.sessions.active ?: return@button
@@ -135,6 +142,73 @@ class GameMenu(private val games: HostedGames, private val back: (Player) -> Uni
         )
         listButton(gui, SLOT_THIRD, Material.PAPER, "Tournament Queue", "Waiting to play this bracket round, in order.") { game.bracket?.queue ?: emptyList() }
         listButton(gui, SLOT_FOURTH, Material.PLAYER_HEAD, "Remaining Competitors", "Everyone still in the tournament.") { game.bracket?.remaining ?: emptyList() }
+    }
+
+    private fun sharksButtons(gui: CustomGui, running: Boolean) {
+        val game = games.sharks
+        val state = game.round.state
+        button(
+            gui, SLOT_PRIMARY, Material.LIME_CONCRETE, "Start Next Crossing", "Puts everyone on their spawn and starts the countdown.",
+            when {
+                !running -> "The event isn't running."
+                state.inProgress -> "A crossing is in progress."
+                state == RoundState.ENDING -> "The last crossing is still ending."
+                state == RoundState.COMPLETE -> "Sharks and Minnows is over."
+                else -> null
+            },
+        ) { p -> report(p, games.nextCrossingCommand()); open(p) }
+
+        listButton(gui, SLOT_SECOND, Material.PRISMARINE_SHARD, "Sharks", "Tagging minnows this crossing.") { game.roster.sharks }
+        listButton(gui, SLOT_THIRD, Material.TROPICAL_FISH, "Minnows", "Still minnows (crossing or safe).") { game.roster.minnows }
+        listButton(gui, SLOT_FOURTH, Material.COD, "Caught Players", "Caught in the current or last crossing; sharks next crossing.") { game.roster.caught }
+    }
+
+    private fun cpvpButtons(gui: CustomGui, running: Boolean) {
+        val game = games.cpvp
+        val state = game.round.state
+        val arena = game.currentArena() ?: games.arenas.selectedFor(games.sessions.active)
+        button(
+            gui, SLOT_PRIMARY, Material.END_CRYSTAL, "Start Next Match", "Snapshots the arena, kits the next pair and starts the countdown.",
+            when {
+                !running -> "The event isn't running."
+                state.inProgress -> "A match is in progress."
+                state == RoundState.ENDING -> "The last match is still ending."
+                state == RoundState.COMPLETE -> "The tournament is over."
+                arena != null && games.floors.isRestoring(arena.id) -> "The arena is being restored."
+                arena != null && games.floors.isDamaged(arena.id) -> "Reset the arena first."
+                games.kit.isEmpty -> "No kit is saved (/event cpvp setkit)."
+                else -> null
+            },
+        ) { p -> report(p, games.nextCrystalMatchCommand()); open(p) }
+
+        val match = game.currentMatch()
+        gui.setItem(
+            SLOT_SECOND,
+            GuiStyle.item(
+                Material.DIAMOND_SWORD, Component.text("Current Competitors", NamedTextColor.GOLD),
+                if (match != null) listOf(
+                    Component.text("${game.nameOf(match.first)} vs ${game.nameOf(match.second)}", NamedTextColor.WHITE),
+                    Component.text("State: ${state.label}", NamedTextColor.GRAY),
+                ) else listOf(Component.text("No match in progress.", NamedTextColor.GRAY)),
+            ),
+        )
+        listButton(gui, SLOT_THIRD, Material.PAPER, "Tournament Queue", "Waiting to play this bracket round, in order.") { game.bracket?.queue ?: emptyList() }
+        listButton(gui, SLOT_FOURTH, Material.PLAYER_HEAD, "Remaining Players", "Everyone still in the tournament.") { game.bracket?.remaining ?: emptyList() }
+
+        button(
+            gui, SLOT_RESET, Material.OBSIDIAN, "Reset Arena", "Restores the arena's saved blocks and removes crystals. Asks to confirm.",
+            when {
+                arena == null -> "No arena is selected."
+                running && state.inProgress -> "Not while a match is in progress."
+                games.floors.isRestoring(arena.id) -> "Already restoring."
+                !games.floors.isDamaged(arena.id) -> "The arena is intact."
+                else -> null
+            },
+        ) { p ->
+            confirm(p, "Reset the Crystal PvP arena?", listOf("Restores the saved arena blocks.", "Anyone inside the arena is moved out.")) {
+                games.cpvp.resetArena(null, p) ?: EventResult.Success(games.sessions.active ?: return@confirm EventResult.Failure("There is no event."), "Restoring the arena.")
+            }
+        }
     }
 
     // ── Player lists ──────────────────────────────────────

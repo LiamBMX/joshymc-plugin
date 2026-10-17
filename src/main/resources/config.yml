@@ -1137,3 +1137,33 @@ hosted-events:
     # Seconds before the next match starts by itself (with its countdown). 0 = staff start
     # every match with /event sumo next or the Game Controls menu.
     auto-next-seconds: 0
+  # Sharks and Minnows: one Shark hit catches a crossing Minnow; caught Minnows are Sharks from
+  # the next crossing. Staff start each crossing after the first with /event sharks next.
+  sharks:
+    countdown-seconds: 5
+    min-players: 3
+    # Random Sharks at the start. Always at least 1, and at least two Minnows are left.
+    starting-sharks: 1
+    # Minnows still crossing when this runs out are caught. 0 = no limit.
+    crossing-time-limit-seconds: 60
+    # Ignore a second tag from the same Shark within this many milliseconds.
+    catch-cooldown-ms: 300
+    # Seconds after a crossing before everyone is lined up on their spawn again.
+    round-transition-delay-seconds: 3
+  # Crystal PvP: single-elimination 1v1 with the kit saved by /event cpvp setkit. Staff start
+  # each match after the first with /event cpvp next.
+  cpvp:
+    countdown-seconds: 5
+    min-players: 2
+    # Seconds a match may last; at the limit the healthier player wins. 0 = no limit.
+    match-time-limit-seconds: 0
+    # Both players out at the same moment (or equal health at the limit): rematch | both-out
+    on-draw: rematch
+    # Blocks competitors may place and break inside the Arena Boundary during a match.
+    allowed-blocks:
+      - OBSIDIAN
+    restore:
+      # Largest Arena Boundary that is snapshotted before each match and restored after it.
+      max-blocks: 100000
+      # Seconds after a match before the arena is restored (blocks-per-tick is shared with spleef.floor).
+      delay-seconds: 2

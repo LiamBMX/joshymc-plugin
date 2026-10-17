@@ -324,7 +324,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
     fun onBreak(event: BlockBreakEvent) {
         val player = event.player
         if (player.world.name != eventWorldName) return
-        // Spleef/Sumo players (staff included) break only the active Spleef floor, and it drops nothing.
+        // Hosted game players (staff included) break only the active Spleef floor or allowed Crystal PvP blocks, and drop nothing.
         when (games.breakDecision(player, event.block)) {
             true -> { event.isDropItems = false; event.expToDrop = 0; return }
             false -> { event.isCancelled = true; return }
@@ -338,7 +338,12 @@ class EventManager(private val plugin: Joshymc) : Listener {
     fun onPlace(event: BlockPlaceEvent) {
         val player = event.player
         if (player.world.name != eventWorldName) return
-        if (games.deniesPlace(player)) { event.isCancelled = true; return }
+        // Players of a hosted game place nothing, except Crystal PvP competitors (allowed blocks, inside the arena).
+        when (games.placeDecision(player, event.block)) {
+            true -> return
+            false -> { event.isCancelled = true; return }
+            null -> {}
+        }
         if (player.hasPermission("joshymc.event")) return
         if (!buildEnabled) event.isCancelled = true
     }
@@ -355,6 +360,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
         } ?: return
         val victim = event.entity as? Player ?: return
         if (attacker.world.name != eventWorldName) return
+        // The two competitors of an active Crystal PvP match fight whatever the event-world PvP toggle says.
+        if (games.isMatchFight(attacker, victim)) return
 
         val game = currentGame
         if (game != null && game.isPvpAllowed()) {
@@ -1170,6 +1177,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 lines += "&e/event status &7- Show event status"
                 lines += "&e/event spleef start|reset|status &7- Next Spleef round, restore the floor, status"
                 lines += "&e/event sumo next|status &7- Next Sumo match, tournament status"
+                lines += "&e/event sharks next|status &7- Next Sharks and Minnows crossing, status"
+                lines += "&e/event cpvp next|status|setkit|reset &7- Next Crystal PvP match, status, save kit, restore arena"
             }
             lines += arenaCommands.usageLines(sender)
             if (sender.hasPermission(EventPermissions.ADMIN)) {

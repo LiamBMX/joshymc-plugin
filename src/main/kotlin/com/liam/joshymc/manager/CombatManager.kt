@@ -166,6 +166,8 @@ class CombatManager(private val plugin: Joshymc) {
         // The "pvp" world forces PvP on for everyone, overriding personal
         // preference — players can't opt out of it there.
         if (player.world.name == PVP_WORLD_NAME) return true
+        // A competitor of an active hosted Crystal PvP match signed up to fight (issue #1189).
+        if (plugin.eventManager.games.inCrystalMatch(player)) return true
         return plugin.settingsManager.getSetting(player, PVP_SETTING_KEY)
     }
 

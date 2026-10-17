@@ -20,10 +20,11 @@ import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 
 /**
- * Spleef and Sumo gameplay for hosted events (issue #1187). Registers one [MinigameGame] per
- * type as the session's controller, so it plugs into the existing lifecycle instead of
- * running its own session. Also owns the floor snapshots, event gear, the gameplay listener
- * and the `/event spleef|sumo <start|reset|next|status>` commands.
+ * Spleef, Sumo (issue #1187), Sharks and Minnows and Crystal PvP (issue #1189) gameplay for
+ * hosted events. Registers one [MinigameGame] per type as the session's controller, so it
+ * plugs into the existing lifecycle instead of running its own session. Also owns the arena
+ * snapshots, event gear, the Crystal PvP kit, the gameplay listener and the
+ * `/event spleef|sumo|sharks|cpvp ...` game commands.
  */
 class HostedGames(
     val plugin: Joshymc,
@@ -35,6 +36,9 @@ class HostedGames(
     val gear = EventGear(plugin)
     val spleef = SpleefGame(this)
     val sumo = SumoGame(this)
+    val sharks = SharksGame(this)
+    val cpvp = CrystalPvpGame(this)
+    val kit = CrystalPvpKit(plugin)
     val listener = HostedGameListener(this)
 
     /** Refreshes open Event Manager menus; set by EventManager. */
@@ -45,6 +49,8 @@ class HostedGames(
     init {
         sessions.registerController(EventType.SPLEEF, spleef)
         sessions.registerController(EventType.SUMO, sumo)
+        sessions.registerController(EventType.SHARKS, sharks)
+        sessions.registerController(EventType.CPVP, cpvp)
     }
 
     val eventWorldName: String get() = events.eventWorldName
@@ -58,6 +64,7 @@ class HostedGames(
 
     fun start() {
         floors.load()
+        kit.load()
         // Worlds are loaded by the time the server finishes starting; restore any floor a crash left broken.
         Bukkit.getScheduler().runTaskLater(plugin, Runnable { floors.recoverAll { it.spawnLocation } }, 40L)
     }
@@ -73,14 +80,16 @@ class HostedGames(
     fun gameFor(type: EventType): MinigameGame? = when (type) {
         EventType.SPLEEF -> spleef
         EventType.SUMO -> sumo
-        else -> null
+        EventType.SHARKS -> sharks
+        EventType.CPVP -> cpvp
+        EventType.MOBS -> null
     }
 
-    /** The running Spleef/Sumo game, if any. */
+    /** The running hosted game, if any. */
     val running: MinigameGame?
         get() = sessions.active?.takeIf { it.state == EventState.RUNNING }?.let { gameFor(it.type) }?.takeIf { it.isRunning }
 
-    /** Extra start requirement for Spleef/Sumo sessions: a READY arena of the right kind and enough players. */
+    /** Extra start requirement for hosted game sessions: a READY arena of the right kind and enough players. */
     fun startProblem(session: EventSession): String? {
         val game = gameFor(session.type) ?: return null
         val arena = arenas.selectedFor(session)
@@ -92,35 +101,55 @@ class HostedGames(
 
     /**
      * Block breaking by a player of the running game: true = allowed (a Spleef floor block in
-     * an ACTIVE round), false = denied (everything else they try), null = not in a game.
+     * an ACTIVE round, or an allowed Crystal PvP block inside the boundary during a match),
+     * false = denied (everything else they try), null = not in a game.
      */
     fun breakDecision(player: Player, block: Block): Boolean? {
         val game = running ?: return null
         if (!game.isPlaying(player)) return null
-        return game === spleef && spleef.canBreak(player, block)
+        return when {
+            game === spleef -> spleef.canBreak(player, block)
+            game === cpvp -> cpvp.canBuild(player, block)
+            else -> false
+        }
     }
 
-    /** Players of the running game never place blocks. */
-    fun deniesPlace(player: Player): Boolean = running?.isPlaying(player) == true
+    /**
+     * Block placing, same answers as [breakDecision]: only Crystal PvP competitors place, only
+     * the allowed blocks, only inside the boundary, only while their match is ACTIVE.
+     */
+    fun placeDecision(player: Player, block: Block): Boolean? {
+        val game = running ?: return null
+        if (!game.isPlaying(player)) return null
+        return game === cpvp && cpvp.canBuild(player, block)
+    }
+
+    /** [player] is a competitor of an ACTIVE Crystal PvP match (their PvP toggle doesn't apply there). */
+    fun inCrystalMatch(player: Player): Boolean = cpvp.isFighting(player.uniqueId)
+
+    /** A hit between the two competitors of the ACTIVE Crystal PvP match: allowed, and never a combat tag. */
+    fun isMatchFight(attacker: Player, victim: Player): Boolean = cpvp.isOpponent(attacker.uniqueId, victim.uniqueId)
 
     // ── Commands ──────────────────────────────────────────
 
     private val spleefSubs = listOf("start", "reset", "status")
     private val sumoSubs = listOf("next", "status")
+    private val sharksSubs = listOf("next", "status")
+    private val cpvpSubs = listOf("next", "status", "setkit", "reset")
 
-    fun handlesCommand(type: EventType, sub: String?): Boolean = when (type) {
-        EventType.SPLEEF -> sub in spleefSubs
-        EventType.SUMO -> sub in sumoSubs
-        else -> false
+    private fun subsFor(type: EventType): List<String> = when (type) {
+        EventType.SPLEEF -> spleefSubs
+        EventType.SUMO -> sumoSubs
+        EventType.SHARKS -> sharksSubs
+        EventType.CPVP -> cpvpSubs
+        EventType.MOBS -> emptyList()
     }
+
+    fun handlesCommand(type: EventType, sub: String?): Boolean = sub in subsFor(type)
 
     fun tabSubs(type: EventType, sender: CommandSender): List<String> {
         if (!EventPermissions.canHost(sender)) return emptyList()
-        return when (type) {
-            EventType.SPLEEF -> spleefSubs
-            EventType.SUMO -> sumoSubs
-            else -> emptyList()
-        }
+        return subsFor(type)
     }
 
     fun handleCommand(sender: CommandSender, type: EventType, args: Array<out String>) {
@@ -128,13 +157,23 @@ class HostedGames(
         when (args.getOrNull(1)?.lowercase()) {
             "status" -> sendStatus(sender, type)
             "start" -> reply(sender, startRoundCommand())
-            "next" -> reply(sender, nextMatchCommand())
+            "next" -> reply(sender, when (type) {
+                EventType.SHARKS -> nextCrossingCommand()
+                EventType.CPVP -> nextCrystalMatchCommand()
+                else -> nextMatchCommand()
+            })
+            "setkit" -> {
+                val player = sender as? Player ?: run { Msg.playersOnly(sender); return }
+                val result = cpvp.saveKit(player)
+                if (result.saved) Msg.success(sender, result.message, category) else Msg.error(sender, result.message, category)
+            }
             "reset" -> {
                 val name = args.getOrNull(2)
                 val target = if (name != null) arenas.get(name) ?: run { Msg.error(sender, "No arena named '$name'.", category); return } else null
-                val failure = spleef.resetFloor(target, sender)
+                val failure = if (type == EventType.CPVP) cpvp.resetArena(target, sender) else spleef.resetFloor(target, sender)
+                val what = if (type == EventType.CPVP) "Crystal PvP arena" else "Spleef floor"
                 if (failure != null) Msg.error(sender, failure.message, category)
-                else Msg.success(sender, "Restoring the Spleef floor. You'll be told when it's done.", category)
+                else Msg.success(sender, "Restoring the $what. You'll be told when it's done.", category)
             }
         }
     }
@@ -153,6 +192,20 @@ class HostedGames(
         return sumo.startNextMatch()
     }
 
+    fun nextCrossingCommand(): EventResult {
+        val session = sessions.active
+        if (session == null || session.type != EventType.SHARKS) return EventResult.Failure("There is no Sharks and Minnows event. Create one with /event create sharks.")
+        if (session.state != EventState.RUNNING) return EventResult.Failure("Sharks and Minnows hasn't started. /event start begins the event and its first crossing.")
+        return sharks.startNextCrossing()
+    }
+
+    fun nextCrystalMatchCommand(): EventResult {
+        val session = sessions.active
+        if (session == null || session.type != EventType.CPVP) return EventResult.Failure("There is no Crystal PvP event. Create one with /event create cpvp.")
+        if (session.state != EventState.RUNNING) return EventResult.Failure("Crystal PvP hasn't started. /event start begins the tournament and its first match.")
+        return cpvp.startNextMatch()
+    }
+
     fun sendStatus(sender: CommandSender, type: EventType) {
         Msg.reply(sender, Component.text("=== ${type.displayName} Status ===", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true), category)
         val session = sessions.active
@@ -169,6 +222,15 @@ class HostedGames(
             arenas.selectedFor(session)?.let {
                 Msg.reply(sender, Component.text("Floor: ", NamedTextColor.GRAY).append(Component.text(spleef.floorState(it), NamedTextColor.WHITE)), category)
             }
+        }
+        if (type == EventType.CPVP) {
+            if (!cpvp.isRunning) {
+                arenas.selectedFor(session)?.let {
+                    Msg.reply(sender, Component.text("Arena: ", NamedTextColor.GRAY).append(Component.text(cpvp.arenaState(it), NamedTextColor.WHITE)), category)
+                }
+            }
+            val kitText = if (kit.isEmpty) "not saved (/event cpvp setkit)" else "${kit.size} item stack(s)"
+            Msg.reply(sender, Component.text("Kit: ", NamedTextColor.GRAY).append(Component.text(kitText, if (kit.isEmpty) NamedTextColor.RED else NamedTextColor.WHITE)), category)
         }
     }
 
