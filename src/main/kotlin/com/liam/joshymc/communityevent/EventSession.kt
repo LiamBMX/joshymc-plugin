@@ -1,8 +1,23 @@
 package com.liam.joshymc.communityevent
 
+import com.liam.joshymc.communityevent.result.EventOutcome
+import com.liam.joshymc.communityevent.result.RewardEntry
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.scheduler.BukkitTask
 import java.util.UUID
+
+/**
+ * A finished game's own verdict (issue #1199): [winners] (several for Mob Waves survivors,
+ * none for a draw/defeat), the detected runner-up and third place where the game knows them,
+ * and a one-line [summary]. Staff still confirm it before anything is paid.
+ */
+data class DetectedResult(
+    val outcome: EventOutcome,
+    val winners: List<UUID>,
+    val second: List<UUID> = emptyList(),
+    val third: List<UUID> = emptyList(),
+    val summary: String,
+)
 
 /** Lifecycle of a hosted event: CREATED -> OPEN -> RUNNING -> FINISHED. */
 enum class EventState(val label: String, val color: NamedTextColor) {
@@ -51,6 +66,28 @@ class EventSession(
     private val registered = LinkedHashSet<UUID>()
     val participants: Set<UUID> get() = registered.toSet()
     val participantCount: Int get() = registered.size
+
+    /**
+     * Everyone registered when the event started, with their name then (issue #1199). Unlike
+     * [participants] it keeps players who left or were knocked out, so the result record lists
+     * who actually took part. Cleared by reset.
+     */
+    var roster: Map<UUID, String> = emptyMap()
+        internal set
+
+    /** What the game detected when it finished (issue #1199), or null (stopped before a result). First report wins. */
+    var detected: DetectedResult? = null
+        internal set
+
+    /** The reward preset captured when the event started (issue #1199), so mid-event edits don't change the prize. */
+    var rewards: List<RewardEntry> = emptyList()
+        internal set
+
+    fun reportResult(result: DetectedResult): Boolean {
+        if (detected != null || state != EventState.RUNNING) return false
+        detected = result
+        return true
+    }
 
     /** Free-form per-session data for future event controllers (arena picked, round number, ...). */
     val metadata: MutableMap<String, Any> = HashMap()

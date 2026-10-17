@@ -1113,8 +1113,24 @@ peanut-butter-cup:
     amplifier: 2
 
 # Hosted Spleef and Sumo events (issue #1187). Staff run them through /event; arenas are
-# saved presets made with /event arena. Nothing here awards prizes.
+# saved presets made with /event arena.
 hosted-events:
+  # Event results and rewards (issue #1199). Reward presets per event type are set in game with
+  # /event rewards (stored in data.db). A finished event waits for staff to confirm its result
+  # (/event result) before anything is paid; payouts go through the store delivery queue, so
+  # Coins/Credits arrive while offline and items arrive on the next join.
+  results:
+    # Broadcast the confirmed result ("Spleef has ended! Congratulations to ...!").
+    announce: true
+    # Highest value a single reward line may have. Higher values are refused when configured
+    # and skipped (recorded in the audit log) if a cap is lowered later.
+    limits:
+      max-coins: 1000000
+      max-credits: 1000
+      # Tokens / crate keys per line.
+      max-items: 64
+      # Reward lines per event type.
+      max-entries: 10
   spleef:
     countdown-seconds: 5
     min-players: 2
@@ -1179,7 +1195,8 @@ hosted-events:
       # Seconds after a match before the arena is restored (blocks-per-tick is shared with spleef.floor).
       delay-seconds: 2
   # Mob Waves: everyone fights the waves below together with the kit saved by /event mobs setkit.
-  # Clearing the last wave with anyone alive wins; everyone eliminated loses. No rewards are given.
+  # Clearing the last wave with anyone alive wins (every survivor is a winner); everyone eliminated
+  # loses. Rewards come from the Mob Waves preset (/event rewards), once staff confirm the result.
   # Mob Waves refuses to start while anything here is invalid; /event mobs status lists the problems.
   mobs:
     countdown-seconds: 5

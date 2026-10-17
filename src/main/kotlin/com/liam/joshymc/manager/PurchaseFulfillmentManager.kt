@@ -159,6 +159,29 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
     }
 
     /**
+     * Records one already-validated reward for a known player and delivers what it can right
+     * away, exactly like a store line (issue #1199: event rewards). [reference] makes the row's
+     * dedupe key UNIQUE, so calling this again for the same reward returns [FulfillResult.Duplicate]
+     * and grants nothing. Main thread.
+     */
+    fun enqueue(uuid: UUID, name: String, spec: PurchaseRewards.Spec, reference: String, source: String): FulfillResult {
+        val dedupeKey = PurchaseRewards.dedupeKey(reference, uuid.toString(), spec)
+        val inserted = try {
+            store.insert(uuid, name, spec, reference, dedupeKey, source)
+        } catch (e: Exception) {
+            plugin.logger.severe("[Purchases] Could not record '${spec.describe()}' for $name ($uuid) ref=$reference: ${e.message}. Nothing was granted.")
+            return FulfillResult.DatabaseError(e.message ?: e.javaClass.simpleName)
+        }
+        val delivery = when (inserted) {
+            is PurchaseDeliveryStore.InsertResult.Duplicate -> return FulfillResult.Duplicate(inserted.existing)
+            is PurchaseDeliveryStore.InsertResult.Inserted -> inserted.delivery
+        }
+        plugin.logger.info("[Purchases] #${delivery.id} recorded ${delivery.state.name}: ${spec.describe()} for $name ($uuid) ref=$reference source=$source")
+        process(delivery)
+        return FulfillResult.Recorded(store.get(delivery.id) ?: delivery)
+    }
+
+    /**
      * A UUID is taken as given (the store verified it); a name must exactly match a player
      * who has joined this server, never a prefix. Floodgate players resolve like anyone
      * else: by their Floodgate UUID, or the name the server shows (prefix included).
@@ -229,7 +252,7 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         plugin.logger.info("[Purchases] #${row.id} COMPLETED: ${row.describe()} deposited to ${row.recipientName} ($uuid) ref=${row.externalRef ?: "none"}")
         Bukkit.getPlayer(uuid)?.let { player ->
             val text = if (kind == Kind.COINS) plugin.economyManager.format(amount) else "${plugin.creditsManager.format(amount)} Credits"
-            notify(player, Component.text("Your store purchase was delivered: ", NamedTextColor.GREEN)
+            notify(player, Component.text("Your ${what(row)} was delivered: ", NamedTextColor.GREEN)
                 .append(Component.text(text, if (kind == Kind.COINS) NamedTextColor.GOLD else NamedTextColor.AQUA))
                 .append(Component.text(".", NamedTextColor.GREEN)))
         }
@@ -243,6 +266,9 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
      */
     private fun processItems(player: Player, snapshot: Delivery, kind: Kind) {
         if (!player.isOnline || player.isDead) return
+        // The event world's inventory is temporary (issue #1199: winners are usually still there
+        // when their event reward is confirmed). Stay PENDING; the sweep delivers once they leave.
+        if (plugin.eventManager.isInEventWorld(player)) return
         val probe = buildUnit(kind, snapshot.param)
             ?: return markFailed(snapshot, "the reward no longer exists on this server (${snapshot.describe()})")
         if (!canFitOne(player, probe)) {
@@ -297,13 +323,13 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         if (next == State.FAILED) plugin.logger.warning(line) else plugin.logger.info(line)
 
         if (delivered > 0) {
-            notify(player, Component.text("Store purchase delivered: ", NamedTextColor.GREEN)
+            notify(player, Component.text("${what(row).replaceFirstChar { it.uppercase() }} delivered: ", NamedTextColor.GREEN)
                 .append(Component.text("${delivered}x ${rewardLabel(kind, row.param)}", NamedTextColor.AQUA))
                 .append(Component.text(".", NamedTextColor.GREEN)))
         }
         if (next == State.PENDING) noticeFull(player, row.copy(remaining = left), force = delivered > 0)
         if (next == State.FAILED) {
-            notify(player, Component.text("Part of your store purchase couldn't be delivered. Staff can see it as delivery #${row.id}.", NamedTextColor.RED))
+            notify(player, Component.text("Part of your ${what(row)} couldn't be delivered. Staff can see it as delivery #${row.id}.", NamedTextColor.RED))
         }
     }
 
@@ -424,8 +450,11 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         val kind = row.kind ?: return
         notify(player, Component.text("Your inventory is full. ", NamedTextColor.YELLOW)
             .append(Component.text("${row.remaining}x ${rewardLabel(kind, row.param)}", NamedTextColor.AQUA))
-            .append(Component.text(" from your store purchase is waiting. Free up space and it arrives within a minute.", NamedTextColor.YELLOW)))
+            .append(Component.text(" from your ${what(row)} is waiting. Free up space and it arrives within a minute.", NamedTextColor.YELLOW)))
     }
+
+    /** How the player hears about [row]: event rewards (issue #1199) aren't store purchases. */
+    private fun what(row: Delivery): String = if (row.source.startsWith(EVENT_SOURCE_PREFIX)) "event reward" else "store purchase"
 
     private fun notify(player: Player, message: Component) {
         plugin.commsManager.send(player, message, CommunicationsManager.Category.ECONOMY)
@@ -519,6 +548,8 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
     }
 
     companion object {
+        /** `source` of rows queued by hosted-event rewards (issue #1199). */
+        const val EVENT_SOURCE_PREFIX = "event:"
         private const val JOIN_DELAY_TICKS = 100L
         private const val STARTUP_SWEEP_DELAY_TICKS = 200L
         private const val SWEEP_INTERVAL_TICKS = 20L * 60
