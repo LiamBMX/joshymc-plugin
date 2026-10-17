@@ -9,6 +9,7 @@ import com.liam.joshymc.listener.DrillMiningListener
 import com.liam.joshymc.listener.EditKitListener
 import com.liam.joshymc.listener.EasterEggListener
 import com.liam.joshymc.listener.PeanutButterCupListener
+import com.liam.joshymc.listener.TomatoListener
 import com.liam.joshymc.listener.GSitListener
 import com.liam.joshymc.listener.LinkGuiListener
 import com.liam.joshymc.listener.MinecraftChatListener
@@ -80,6 +81,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(EditKitListener(plugin), plugin)
         pm.registerEvents(EasterEggListener(plugin), plugin)
         pm.registerEvents(PeanutButterCupListener(plugin), plugin)
+        pm.registerEvents(TomatoListener(plugin), plugin)
         pm.registerEvents(MinecraftChatListener(plugin), plugin)
         pm.registerEvents(LinkGuiListener(plugin), plugin)
 

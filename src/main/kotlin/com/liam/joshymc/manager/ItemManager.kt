@@ -38,6 +38,9 @@ class ItemManager(private val plugin: Joshymc) {
         // Candy
         register(PeanutButterCup())
 
+        // Throwables
+        register(Tomato())
+
         // October Halloween Collection
         register(PhantomsGrasp())
         register(Gravedigger())
