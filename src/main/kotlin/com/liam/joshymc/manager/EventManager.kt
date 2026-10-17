@@ -1179,6 +1179,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 lines += "&e/event sumo next|status &7- Next Sumo match, tournament status"
                 lines += "&e/event sharks next|status &7- Next Sharks and Minnows crossing, status"
                 lines += "&e/event cpvp next|status|setkit|reset &7- Next Crystal PvP match, status, save kit, restore arena"
+                lines += "&e/event mobs next|pause|resume|status|setkit &7- Skip the intermission, pause/resume waves, status, save kit"
             }
             lines += arenaCommands.usageLines(sender)
             if (sender.hasPermission(EventPermissions.ADMIN)) {
@@ -1200,8 +1201,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
                     if (sender.hasPermission(EventPermissions.JOIN)) addAll(listOf("join", "leave"))
                     if (host) addAll(hostSubs)
                     if (arenaCommands.canView(sender)) add("arena")
-                    if (EventPermissions.canSetupArenas(sender)) addAll(EventType.ids)
-                    else if (host) addAll(listOf(EventType.SPLEEF.id, EventType.SUMO.id))
+                    // Every type has game subcommands for hosts (and arena setup for arena staff).
+                    if (host || EventPermissions.canSetupArenas(sender)) addAll(EventType.ids)
                     if (admin) addAll(adminSubs)
                 }.filter { it.startsWith(args[0].lowercase()) }
                 else -> when {

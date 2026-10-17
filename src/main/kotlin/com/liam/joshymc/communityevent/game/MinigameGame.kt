@@ -239,6 +239,40 @@ abstract class MinigameGame(protected val games: HostedGames, val type: EventTyp
         return true
     }
 
+    // ── Kits ──────────────────────────────────────────────
+
+    /**
+     * `/event <type> setkit`: saves [player]'s event-world inventory as [kit]. Only while
+     * EventManager holds their real inventory (so a survival inventory is never saved), and
+     * never while [busy] (the reason they can't save right now) is set.
+     */
+    protected fun copyKit(player: Player, kit: EventKit, busy: String?): KitSave {
+        if (!games.inventorySaved(player)) {
+            return KitSave(false, "Stand in the event world first: the kit is copied from your event inventory, never your survival one.")
+        }
+        if (busy != null) return KitSave(false, busy)
+        val wand = org.bukkit.NamespacedKey(plugin, "event_wand")
+        val inv = player.inventory
+        val items = LinkedHashMap<Int, org.bukkit.inventory.ItemStack>()
+        for (slot in EventKit.SLOTS) {
+            val item = inv.getItem(slot) ?: continue
+            if (item.type.isAir || item.persistentDataContainer.has(wand, org.bukkit.persistence.PersistentDataType.INTEGER)) continue
+            items[slot] = games.gear.untagCopy(item)
+        }
+        kit.save(items)?.let { return KitSave(false, it) }
+        plugin.logger.info("[Event] ${player.name} saved the ${kit.label} kit (${items.size} item stack(s)).")
+        games.changed()
+        return KitSave(true, "Saved the ${kit.label} kit: ${items.size} item stack(s), armor and off-hand included.")
+    }
+
+    /** Clears the event inventory and fills it with tagged copies of [kit], slot for slot. */
+    protected fun applyKit(player: Player, kit: Map<Int, org.bukkit.inventory.ItemStack>, gameMode: GameMode): Boolean {
+        if (!equip(player, gameMode, emptyList())) return false
+        player.activePotionEffects.forEach { player.removePotionEffect(it.type) }
+        for ((slot, item) in kit) player.inventory.setItem(slot, games.gear.tagCopy(item))
+        return true
+    }
+
     // ── Countdown ─────────────────────────────────────────
 
     /**

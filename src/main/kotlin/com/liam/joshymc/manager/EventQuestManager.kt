@@ -658,6 +658,8 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         val killer = entity.killer ?: return
         if (isExempt(killer)) return
         if (entity.scoreboardTags.contains("joshymc_combat_npc") || entity.scoreboardTags.contains("NPC")) return
+        // Hosted Mob Waves mobs (issue #1192) are event-only: killing them never counts toward quests.
+        if (entity.scoreboardTags.contains(com.liam.joshymc.communityevent.game.MobWavesGame.EVENT_MOB_TAG)) return
 
         if (entity is Player) {
             if (entity.uniqueId == killer.uniqueId || isExempt(entity)) return

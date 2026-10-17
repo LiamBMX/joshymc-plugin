@@ -17,8 +17,8 @@ import org.bukkit.entity.Player
 import java.util.UUID
 
 /**
- * "Game Controls" in the Event Manager (issues #1187, #1189): Spleef, Sumo, Sharks and Minnows
- * and Crystal PvP controls that follow the game's state. Every click re-checks [EventPermissions.canHost] and the game state, so a
+ * "Game Controls" in the Event Manager (issues #1187, #1189, #1192): Spleef, Sumo, Sharks and
+ * Minnows, Crystal PvP and Mob Waves controls that follow the game's state. Every click re-checks [EventPermissions.canHost] and the game state, so a
  * stale menu can't start two matches or reset a floor mid-round.
  */
 class GameMenu(private val games: HostedGames, private val back: (Player) -> Unit) {
@@ -45,7 +45,7 @@ class GameMenu(private val games: HostedGames, private val back: (Player) -> Uni
         val type = session?.type
         val game = type?.let { games.gameFor(it) }
         if (session == null || type == null || game == null) {
-            Msg.error(player, "Game controls are for Spleef, Sumo, Sharks and Crystal PvP events. Create one with /event create <type>.", category)
+            Msg.error(player, "No hosted event is active. Create one with /event create <type>.", category)
             return
         }
         val gui = CustomGui(Component.text("${type.displayName} Controls", NamedTextColor.DARK_GRAY), SIZE)
@@ -59,7 +59,7 @@ class GameMenu(private val games: HostedGames, private val back: (Player) -> Uni
             EventType.SUMO -> sumoButtons(gui, running)
             EventType.SHARKS -> sharksButtons(gui, running)
             EventType.CPVP -> cpvpButtons(gui, running)
-            EventType.MOBS -> {}
+            EventType.MOBS -> mobsButtons(gui, running, session.state)
         }
 
         button(gui, SLOT_END, Material.RED_CONCRETE, "End Event", "Stops ${type.displayName} for everyone. Asks to confirm.", null) { p ->
@@ -209,6 +209,60 @@ class GameMenu(private val games: HostedGames, private val back: (Player) -> Uni
                 games.cpvp.resetArena(null, p) ?: EventResult.Success(games.sessions.active ?: return@confirm EventResult.Failure("There is no event."), "Restoring the arena.")
             }
         }
+    }
+
+    private fun mobsButtons(gui: CustomGui, running: Boolean, sessionState: EventState) {
+        val game = games.mobs
+        val run = game.run
+        val phase = run?.phase
+        if (!running) {
+            button(
+                gui, SLOT_PRIMARY, Material.ZOMBIE_HEAD, "Start Mob Waves", "Teleports everyone, hands out the kit and starts wave 1.",
+                when (sessionState) {
+                    EventState.CREATED -> "Open registration first."
+                    EventState.OPEN -> null
+                    else -> "The event has ended. Create or reset an event."
+                },
+            ) { p -> report(p, games.sessions.start()); open(p) }
+        } else {
+            button(
+                gui, SLOT_PRIMARY, Material.LIME_CONCRETE, "Start Next Wave", "Ends the intermission and spawns the next wave now.",
+                when {
+                    run == null -> "Mob Waves isn't running."
+                    phase == WavePhase.COUNTDOWN -> "Wave 1 starts after the countdown."
+                    phase == WavePhase.ACTIVE -> "Wave ${run.wave} is in progress."
+                    phase?.isOver == true -> "Mob Waves is over."
+                    run.paused -> "Resume the waves first."
+                    else -> null
+                },
+            ) { p -> report(p, games.nextWaveCommand()); open(p) }
+        }
+
+        val waveLore = if (run == null) listOf(Component.text("Not running.", NamedTextColor.GRAY)) else buildList {
+            add(Component.text("Wave ${run.wave}/${run.totalWaves}", NamedTextColor.WHITE))
+            add(Component.text("Phase: ${run.phase.label}${if (run.paused) " (paused)" else ""}", NamedTextColor.GRAY))
+            if (run.phase == WavePhase.ACTIVE) {
+                add(Component.text("Remaining mobs: ${run.remaining}", NamedTextColor.RED))
+                add(Component.text("${run.activeMobs} alive, ${run.pendingSpawns} to spawn", NamedTextColor.GRAY))
+            }
+            add(Component.text("Mobs killed: ${run.totalKilled}", NamedTextColor.GRAY))
+        }
+        gui.setItem(SLOT_SECOND, GuiStyle.item(Material.SPAWNER, Component.text("Current Wave", NamedTextColor.GOLD), waveLore))
+        listButton(gui, SLOT_THIRD, Material.PLAYER_HEAD, "Surviving Players", "Still fighting.") { game.survivors() }
+        listButton(gui, SLOT_FOURTH, Material.SKELETON_SKULL, "Eliminated Players", "Out for the rest of this event.") { game.spectators() }
+
+        val paused = run?.paused == true
+        button(
+            gui, SLOT_RESET, if (paused) Material.LIME_DYE else Material.GRAY_DYE,
+            if (paused) "Resume Wave Progression" else "Pause Wave Progression",
+            if (paused) "Mobs move again and spawning continues." else "Stops spawning and the intermission clock; mobs freeze.",
+            when {
+                !running || run == null -> "Mob Waves isn't running."
+                run.phase.isOver -> "Mob Waves is over."
+                run.phase == WavePhase.COUNTDOWN -> "Wait for the countdown to finish."
+                else -> null
+            },
+        ) { p -> report(p, if (games.mobs.isPaused) games.resumeWavesCommand() else games.pauseWavesCommand()); open(p) }
     }
 
     // ── Player lists ──────────────────────────────────────
