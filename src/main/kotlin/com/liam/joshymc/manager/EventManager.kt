@@ -7,6 +7,10 @@ import com.liam.joshymc.communityevent.EventResult
 import com.liam.joshymc.communityevent.EventSessions
 import com.liam.joshymc.communityevent.EventState
 import com.liam.joshymc.communityevent.EventType
+import com.liam.joshymc.communityevent.arena.ArenaCommands
+import com.liam.joshymc.communityevent.arena.ArenaMenu
+import com.liam.joshymc.communityevent.arena.EventArenas
+import com.liam.joshymc.communityevent.arena.RegionSelections
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -69,8 +73,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
 
     // ── Wand selections ───────────────────────────────────
 
-    private val wandPos1 = HashMap<UUID, Location>()
-    private val wandPos2 = HashMap<UUID, Location>()
+    /** Wand / pos1 / pos2 corners, shared by the event-world zone and arena regions. */
+    val selections = RegionSelections(plugin)
 
     // ── Player state ──────────────────────────────────────
 
@@ -98,10 +102,17 @@ class EventManager(private val plugin: Joshymc) : Listener {
     /** The staff-hosted event session (create/open/start/stop/reset). In memory only. */
     val sessions = EventSessions(plugin) { currentGame != null }
 
-    val menu = EventManagerMenu(plugin, sessions) { settingsLines() }
+    /** Saved arenas / reusable event presets (issue #1183), stored in data.db. */
+    val arenas = EventArenas(plugin, sessions) { eventWorldName }
+
+    val menu = EventManagerMenu(plugin, sessions, arenas) { settingsLines() }
+
+    val arenaCommands = ArenaCommands(plugin, arenas, sessions, selections, ::giveWand) { menu.arenaMenu.openList(it) }
 
     init {
         sessions.onChange = { menu.refreshOpenMenus() }
+        sessions.startCheck = { arenas.startProblem(it) }
+        menu.arenaMenu = ArenaMenu(plugin, arenas, sessions, selections, arenaCommands, ::giveWand) { menu.open(it) }
     }
 
     // ── Lifecycle ─────────────────────────────────────────
@@ -123,6 +134,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
         else YamlConfiguration()
 
         loadConfig()
+        arenas.load()
         Bukkit.getPluginManager().registerEvents(this, plugin)
 
         // Tick every second: drives game timer and hourly cycle
@@ -133,6 +145,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
     fun shutdown() {
         cycleTask?.cancel()
         sessions.shutdown()
+        selections.shutdown()
         currentGame?.cleanup()
         currentGame = null
     }
@@ -269,8 +282,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
         val player = event.player
         if (player.world.name == eventWorldName) onLeaveEventWorld(player)
         sessions.onQuit(player.uniqueId)
-        wandPos1.remove(player.uniqueId)
-        wandPos2.remove(player.uniqueId)
+        selections.clear(player.uniqueId)
+        arenas.forget(player.uniqueId)
     }
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -288,13 +301,13 @@ class EventManager(private val plugin: Joshymc) : Listener {
     }
 
     /**
-     * The only exceptions to the event-world command lock below `joshymc.event`: hosts may run
-     * `/event` (hosting only; the executor still gates admin subcommands), and players may
+     * The only exceptions to the event-world command lock below `joshymc.event`: hosts and arena
+     * setup staff may run `/event` (the executor still gates each subcommand), and players may
      * `/event join` or `/event leave`.
      */
     private fun isAllowedEventCommand(player: Player, cmd: String, sub: String?): Boolean {
         if (cmd != "event") return false
-        if (EventPermissions.canHost(player)) return true
+        if (EventPermissions.canHost(player) || EventPermissions.canSetupArenas(player)) return true
         return sub == "join" || sub == "leave"
     }
 
@@ -341,22 +354,38 @@ class EventManager(private val plugin: Joshymc) : Listener {
         val item = event.item ?: return
         val meta = item.itemMeta ?: return
         if (!meta.persistentDataContainer.has(wandKey, PersistentDataType.INTEGER)) return
+        // The wand never uses or breaks anything, and only staff can select with it.
         event.isCancelled = true
         val player = event.player
+        if (!canUseWand(player)) return
         val block = event.clickedBlock ?: return
         when (event.action) {
             org.bukkit.event.block.Action.LEFT_CLICK_BLOCK -> {
-                wandPos1[player.uniqueId] = block.location
+                selections.setPos1(player, block.location)
                 comms.send(player, Component.text("Position 1 set to (${block.x}, ${block.y}, ${block.z}).", NamedTextColor.GREEN))
                 player.playSound(player.location, Sound.UI_BUTTON_CLICK, 0.7f, 1.2f)
             }
             org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK -> {
-                wandPos2[player.uniqueId] = block.location
+                selections.setPos2(player, block.location)
                 comms.send(player, Component.text("Position 2 set to (${block.x}, ${block.y}, ${block.z}).", NamedTextColor.GREEN))
                 player.playSound(player.location, Sound.UI_BUTTON_CLICK, 0.7f, 0.8f)
             }
             else -> {}
         }
+    }
+
+    /** Creative-mode left-clicks with the wand must not break the block being selected. */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onWandBreak(event: BlockBreakEvent) {
+        val meta = event.player.inventory.itemInMainHand.itemMeta ?: return
+        if (meta.persistentDataContainer.has(wandKey, PersistentDataType.INTEGER)) event.isCancelled = true
+    }
+
+    private fun canUseWand(player: Player): Boolean =
+        player.hasPermission(EventPermissions.ADMIN) || EventPermissions.canSetupArenas(player)
+
+    private fun giveWand(player: Player) {
+        player.inventory.addItem(createWand()).values.forEach { player.world.dropItemNaturally(player.location, it) }
     }
 
     // ── Hourly cycle ──────────────────────────────────────
@@ -437,7 +466,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
             Component.empty(),
             Component.text("Left-click block: Set Position 1", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
             Component.text("Right-click block: Set Position 2", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-            Component.text("Run /event save to confirm zone.", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false)
+            Component.text("Save with an arena region command or /event save.", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false)
         ))
         meta.persistentDataContainer.set(wandKey, PersistentDataType.INTEGER, 1)
         item.itemMeta = meta
@@ -943,6 +972,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 null -> when {
                     sender !is Player -> sendUsage(sender)
                     EventPermissions.canHost(sender) -> menu.open(sender)
+                    EventPermissions.canSetupArenas(sender) -> menu.arenaMenu.openList(sender)
                     sender.hasPermission(EventPermissions.JOIN) -> sendUsage(sender)
                     else -> Msg.noPermission(sender, category)
                 }
@@ -990,6 +1020,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
                     }
                 }
                 "status" -> if (host(sender)) sendStatus(sender)
+                "arena", "arenas" -> arenaCommands.handleArena(sender, args)
+                in EventType.ids -> arenaCommands.handleType(sender, EventType.fromId(sub)!!, args)
                 "help" -> sendUsage(sender)
                 in adminSubs -> {
                     if (sender !is Player) { Msg.playersOnly(sender); return true }
@@ -1027,6 +1059,12 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 val open = session.state == EventState.OPEN
                 row("Registration", if (open) "Open" else "Closed", if (open) NamedTextColor.GREEN else NamedTextColor.RED)
                 row("Registered", session.participantCount.toString())
+                val arena = arenas.selectedFor(session)
+                when {
+                    session.arenaId == null -> row("Arena", "none selected", NamedTextColor.DARK_GRAY)
+                    arena == null -> row("Arena", "${session.arenaId} (deleted)", NamedTextColor.RED)
+                    else -> row("Arena", "${arena.displayName} (${arenas.report(arena).summary()})")
+                }
                 row("Active", if (session.state.isActive) "Yes" else "No", if (session.state.isActive) NamedTextColor.GREEN else NamedTextColor.GRAY)
             }
             if (sender.hasPermission(EventPermissions.ADMIN)) {
@@ -1054,12 +1092,12 @@ class EventManager(private val plugin: Joshymc) : Listener {
         private fun adminCommand(sender: Player, sub: String, args: Array<out String>) {
             when (sub) {
                 "wand" -> {
-                    sender.inventory.addItem(createWand())
+                    giveWand(sender)
                     comms.send(sender, Component.text("Event wand added. Left-click = Pos1, Right-click = Pos2.", NamedTextColor.GREEN))
                 }
                 "save" -> {
-                    val p1 = wandPos1[sender.uniqueId]
-                    val p2 = wandPos2[sender.uniqueId]
+                    val p1 = selections.pos1(sender.uniqueId)
+                    val p2 = selections.pos2(sender.uniqueId)
                     if (p1 == null || p2 == null) {
                         comms.send(sender, Component.text("Set both positions with the event wand first.", NamedTextColor.RED)); return
                     }
@@ -1111,6 +1149,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 lines += "&e/event reset [confirm] &7- Reset the event to Created"
                 lines += "&e/event status &7- Show event status"
             }
+            lines += arenaCommands.usageLines(sender)
             if (sender.hasPermission(EventPermissions.ADMIN)) {
                 lines += "&e/event wand &7- Get event zone wand"
                 lines += "&e/event save &7- Save selected zone"
@@ -1129,8 +1168,21 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 1 -> buildList {
                     if (sender.hasPermission(EventPermissions.JOIN)) addAll(listOf("join", "leave"))
                     if (host) addAll(hostSubs)
+                    if (arenaCommands.canView(sender)) add("arena")
+                    if (EventPermissions.canSetupArenas(sender)) addAll(EventType.ids)
                     if (admin) addAll(adminSubs)
                 }.filter { it.startsWith(args[0].lowercase()) }
+                else -> when {
+                    args[0].equals("arena", true) || args[0].equals("arenas", true) -> arenaCommands.tabArena(sender, args)
+                    EventType.fromId(args[0]) != null -> arenaCommands.tabType(sender, EventType.fromId(args[0])!!, args)
+                    args.size == 2 -> legacyTab(args, admin, host)
+                    else -> emptyList()
+                }
+            }
+        }
+
+        private fun legacyTab(args: Array<out String>, admin: Boolean, host: Boolean): List<String> {
+            return when (args.size) {
                 2 -> when (args[0].lowercase()) {
                     "create" -> if (host) EventType.ids else emptyList()
                     "reset" -> if (host) listOf("confirm") else emptyList()

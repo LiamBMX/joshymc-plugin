@@ -1,6 +1,9 @@
 package com.liam.joshymc.communityevent
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.communityevent.arena.ArenaCommands
+import com.liam.joshymc.communityevent.arena.ArenaMenu
+import com.liam.joshymc.communityevent.arena.EventArenas
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.manager.CommunicationsManager
@@ -24,8 +27,12 @@ import java.util.UUID
 class EventManagerMenu(
     private val plugin: Joshymc,
     private val sessions: EventSessions,
+    private val arenas: EventArenas,
     private val settingsLines: () -> List<Component>,
 ) {
+
+    /** The Arena Setup section (issue #1183); set by EventManager once the arena commands exist. */
+    lateinit var arenaMenu: ArenaMenu
 
     private val comms get() = plugin.commsManager
 
@@ -41,6 +48,7 @@ class EventManagerMenu(
         private const val SLOT_STOP = 23
         private const val SLOT_RESET = 24
         private const val SLOT_SETTINGS = 25
+        private const val SLOT_ARENAS = 31
 
         private const val SUB_SIZE = 27
         private val TYPE_SLOTS = intArrayOf(11, 12, 13, 14, 15)
@@ -102,7 +110,8 @@ class EventManagerMenu(
             unavailable = when (state) {
                 null -> "Create an event first."
                 EventState.CREATED -> "Open registration first."
-                EventState.OPEN -> if ((active?.participantCount ?: 0) == 0) "Nobody has registered yet." else null
+                EventState.OPEN -> if ((active?.participantCount ?: 0) == 0) "Nobody has registered yet."
+                    else arenas.startProblem(active)
                 else -> "The event is already running."
             },
         ) { p -> act(p) { sessions.start() } }
@@ -155,6 +164,19 @@ class EventManagerMenu(
             ),
         ) { p, _ -> GuiStyle.clickSound(p); openSettings(p) }
 
+        gui.setItem(
+            SLOT_ARENAS,
+            GuiStyle.item(
+                Material.MAP, Component.text("Arena Setup", NamedTextColor.GOLD),
+                listOf(
+                    Component.text("Saved arenas: create, configure, select", NamedTextColor.GRAY),
+                    Component.text("and check what's missing.", NamedTextColor.GRAY),
+                    Component.empty(),
+                    Component.text("Click to open", NamedTextColor.YELLOW),
+                ),
+            ),
+        ) { p, _ -> GuiStyle.clickSound(p); arenaMenu.openList(p, filter = sessions.active?.type) }
+
         gui.setItem(GuiStyle.closeSlot(MAIN_SIZE), GuiStyle.close()) { p, _ -> p.closeInventory() }
         gui.fill(GuiStyle.filler())
     }
@@ -175,6 +197,7 @@ class EventManagerMenu(
             line("Registered", session.participantCount.toString(), NamedTextColor.WHITE),
             line("Created", ago(session.createdAt), NamedTextColor.WHITE),
         )
+        lore += arenaLine(session)
         if (!session.state.isActive) lore += Component.text("No event is active.", NamedTextColor.GRAY)
         return GuiStyle.item(session.type.icon, Component.text("Event Status", NamedTextColor.GOLD), lore)
     }
@@ -325,6 +348,16 @@ class EventManagerMenu(
         player.closeInventory()
         Msg.noPermission(player, CommunicationsManager.Category.EVENT)
         return false
+    }
+
+    /** "Arena: name (STATUS)" for the status item, or "Arena: none". */
+    private fun arenaLine(session: EventSession): Component {
+        val id = session.arenaId ?: return line("Arena", "none selected", NamedTextColor.DARK_GRAY)
+        val arena = arenas.selectedFor(session) ?: return line("Arena", "$id (deleted)", NamedTextColor.RED)
+        val report = arenas.report(arena)
+        return Component.text("Arena: ", NamedTextColor.GRAY)
+            .append(Component.text(arena.displayName + " ", NamedTextColor.WHITE))
+            .append(Component.text(report.status.name, ArenaCommands.statusColor(report.status)))
     }
 
     private fun title(text: String) = Component.text(text, NamedTextColor.DARK_GRAY)

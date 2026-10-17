@@ -13,6 +13,16 @@ object EventPermissions {
     /** Players: /event join and /event leave. */
     const val JOIN = "joshymc.event.join"
 
+    /** Arena setup (issue #1183): create, edit and delete saved arenas. A child of [HOST] and [ADMIN] in plugin.yml. */
+    const val ARENA = "joshymc.event.arena"
+
     /** [ADMIN] also passes, in case a permissions plugin doesn't apply plugin.yml children. */
     fun canHost(sender: CommandSender): Boolean = sender.hasPermission(HOST) || sender.hasPermission(ADMIN)
+
+    /**
+     * Arena setup. An explicit [ARENA] grant or negation wins (so a host can be kept out of
+     * arena editing); otherwise hosts and admins have it, as plugin.yml's children say.
+     */
+    fun canSetupArenas(sender: CommandSender): Boolean =
+        if (sender.isPermissionSet(ARENA)) sender.hasPermission(ARENA) else canHost(sender)
 }
