@@ -314,19 +314,19 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             }
 
             "tnt_blast" -> {
-                world.playSound(center, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 1.0f)
+                playKillSound(center,Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 1.0f)
                 scheduleParticles(center, Particle.EXPLOSION, 5, 0.3, 0.3, 0.3, ticks = 3)
                 scheduleParticles(center, Particle.SMOKE, 30, 0.5, 0.5, 0.5, ticks = 5)
             }
 
             "creeper_explosion" -> {
-                world.playSound(center, Sound.ENTITY_CREEPER_DEATH, 1.0f, 1.0f)
+                playKillSound(center,Sound.ENTITY_CREEPER_DEATH, 1.0f, 1.0f)
                 scheduleParticles(center, Particle.EXPLOSION, 3, 0.2, 0.2, 0.2, ticks = 3)
                 scheduleParticles(center, Particle.HAPPY_VILLAGER, 30, 0.6, 0.6, 0.6, ticks = 6)
             }
 
             "wither_skull" -> {
-                world.playSound(center, Sound.ENTITY_WITHER_SHOOT, 0.8f, 0.8f)
+                playKillSound(center,Sound.ENTITY_WITHER_SHOOT, 0.8f, 0.8f)
                 scheduleParticles(center, Particle.SMOKE, 40, 0.4, 0.4, 0.4, ticks = 6)
                 scheduleParticles(center, Particle.ASH, 30, 0.5, 0.8, 0.5, ticks = 8)
             }
@@ -346,21 +346,21 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             }
 
             "ice_shatter" -> {
-                world.playSound(center, Sound.BLOCK_GLASS_BREAK, 1.0f, 1.5f)
+                playKillSound(center,Sound.BLOCK_GLASS_BREAK, 1.0f, 1.5f)
                 scheduleParticles(center, Particle.SNOWFLAKE, 40, 0.5, 0.5, 0.5, ticks = 6)
                 scheduleParticles(center, Particle.DUST, 20, 0.4, 0.4, 0.4,
                     data = Particle.DustOptions(Color.fromRGB(170, 255, 255), 1.0f), ticks = 8)
             }
 
             "thunder_clap" -> {
-                world.playSound(center, Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 0.8f, 1.2f)
+                playKillSound(center,Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 0.8f, 1.2f)
                 scheduleParticles(center, Particle.FLASH, 2, 0.0, 0.0, 0.0,
                     data = Color.WHITE, ticks = 2)
                 scheduleParticles(center, Particle.ELECTRIC_SPARK, 30, 0.5, 0.5, 0.5, ticks = 6)
             }
 
             "lava_burst" -> {
-                world.playSound(center, Sound.BLOCK_LAVA_POP, 1.0f, 0.8f)
+                playKillSound(center,Sound.BLOCK_LAVA_POP, 1.0f, 0.8f)
                 scheduleParticles(center, Particle.LAVA, 30, 0.4, 0.3, 0.4, ticks = 7)
                 scheduleParticles(center, Particle.DUST, 20, 0.3, 0.5, 0.3,
                     data = Particle.DustOptions(Color.ORANGE, 1.2f), ticks = 5)
@@ -376,7 +376,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             }
 
             "ghost_ascend" -> {
-                world.playSound(center, Sound.ENTITY_VEX_AMBIENT, 0.8f, 0.5f)
+                playKillSound(center,Sound.ENTITY_VEX_AMBIENT, 0.8f, 0.5f)
                 for (tick in 0..9) {
                     plugin.server.scheduler.runTaskLater(plugin, Runnable {
                         val riseLoc = center.clone().add(0.0, tick * 0.3, 0.0)
@@ -386,24 +386,24 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             }
 
             "ender_teleport" -> {
-                world.playSound(center, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f)
+                playKillSound(center,Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f)
                 scheduleParticles(center, Particle.PORTAL, 60, 0.5, 0.8, 0.5, ticks = 6)
             }
 
             "totem_pop" -> {
-                world.playSound(center, Sound.ITEM_TOTEM_USE, 0.8f, 1.0f)
+                playKillSound(center,Sound.ITEM_TOTEM_USE, 0.8f, 1.0f)
                 scheduleParticles(center, Particle.TOTEM_OF_UNDYING, 50, 0.5, 0.8, 0.5, ticks = 8)
             }
 
             "void_collapse" -> {
-                world.playSound(center, Sound.BLOCK_PORTAL_TRAVEL, 0.3f, 2.0f)
+                playKillSound(center,Sound.BLOCK_PORTAL_TRAVEL, 0.3f, 2.0f)
                 scheduleParticles(center, Particle.REVERSE_PORTAL, 50, 0.6, 0.6, 0.6, ticks = 8)
                 scheduleParticles(center, Particle.DUST, 20, 0.3, 0.3, 0.3,
                     data = Particle.DustOptions(Color.fromRGB(17, 0, 34), 2.0f), ticks = 6)
             }
 
             "flower_burst" -> {
-                world.playSound(center, Sound.BLOCK_AZALEA_LEAVES_BREAK, 1.0f, 1.5f)
+                playKillSound(center,Sound.BLOCK_AZALEA_LEAVES_BREAK, 1.0f, 1.5f)
                 scheduleParticles(center, Particle.CHERRY_LEAVES, 40, 0.6, 0.6, 0.6, ticks = 8)
                 scheduleParticles(center, Particle.HAPPY_VILLAGER, 20, 0.5, 0.5, 0.5, ticks = 6)
             }
@@ -421,7 +421,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             }
 
             "spore_cloud" -> {
-                world.playSound(center, Sound.BLOCK_FUNGUS_BREAK, 1.0f, 0.8f)
+                playKillSound(center,Sound.BLOCK_FUNGUS_BREAK, 1.0f, 0.8f)
                 scheduleParticles(center, Particle.SPORE_BLOSSOM_AIR, 40, 0.6, 0.4, 0.6, ticks = 8)
                 scheduleParticles(center, Particle.DUST, 15, 0.4, 0.3, 0.4,
                     data = Particle.DustOptions(Color.fromRGB(136, 102, 68), 1.0f), ticks = 6)
@@ -437,7 +437,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             }
 
             "bee_swarm" -> {
-                world.playSound(center, Sound.ENTITY_BEE_LOOP, 0.8f, 1.2f)
+                playKillSound(center,Sound.ENTITY_BEE_LOOP, 0.8f, 1.2f)
                 for (tick in 0..9) {
                     plugin.server.scheduler.runTaskLater(plugin, Runnable {
                         val angle = tick * 0.6
@@ -450,39 +450,39 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             }
 
             "smoke_screen" -> {
-                world.playSound(center, Sound.BLOCK_FIRE_EXTINGUISH, 0.8f, 0.8f)
+                playKillSound(center,Sound.BLOCK_FIRE_EXTINGUISH, 0.8f, 0.8f)
                 scheduleParticles(center, Particle.CAMPFIRE_COSY_SMOKE, 20, 0.4, 0.2, 0.4, ticks = 8)
                 scheduleParticles(center, Particle.LARGE_SMOKE, 30, 0.6, 0.4, 0.6, ticks = 6)
             }
 
             "wither_cloud" -> {
-                world.playSound(center, Sound.ENTITY_WITHER_AMBIENT, 0.5f, 0.5f)
+                playKillSound(center,Sound.ENTITY_WITHER_AMBIENT, 0.5f, 0.5f)
                 scheduleParticles(center, Particle.SMOKE, 40, 0.5, 0.4, 0.5, ticks = 8)
                 scheduleParticles(center, Particle.ASH, 30, 0.6, 0.5, 0.6, ticks = 6)
             }
 
             "sculk_shriek" -> {
-                world.playSound(center, Sound.BLOCK_SCULK_SHRIEKER_SHRIEK, 1.0f, 1.0f)
+                playKillSound(center,Sound.BLOCK_SCULK_SHRIEKER_SHRIEK, 1.0f, 1.0f)
                 scheduleParticles(center, Particle.SCULK_CHARGE_POP, 30, 0.5, 0.5, 0.5, ticks = 8)
                 scheduleParticles(center, Particle.SONIC_BOOM, 1, 0.0, 0.0, 0.0, ticks = 3)
             }
 
             "shadow_burst" -> {
-                world.playSound(center, Sound.ENTITY_PHANTOM_DEATH, 0.8f, 0.6f)
+                playKillSound(center,Sound.ENTITY_PHANTOM_DEATH, 0.8f, 0.6f)
                 scheduleParticles(center, Particle.SQUID_INK, 30, 0.5, 0.5, 0.5, ticks = 6)
                 scheduleParticles(center, Particle.DUST, 25, 0.6, 0.6, 0.6,
                     data = Particle.DustOptions(Color.fromRGB(17, 17, 17), 1.5f), ticks = 8)
             }
 
             "obsidian_shatter" -> {
-                world.playSound(center, Sound.BLOCK_RESPAWN_ANCHOR_DEPLETE, 0.8f, 0.5f)
+                playKillSound(center,Sound.BLOCK_RESPAWN_ANCHOR_DEPLETE, 0.8f, 0.5f)
                 scheduleParticles(center, Particle.DUST, 40, 0.5, 0.5, 0.5,
                     data = Particle.DustOptions(Color.fromRGB(102, 0, 170), 1.5f), ticks = 7)
                 scheduleParticles(center, Particle.REVERSE_PORTAL, 20, 0.3, 0.3, 0.3, ticks = 5)
             }
 
             "dragon_breath_burst" -> {
-                world.playSound(center, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.5f, 1.5f)
+                playKillSound(center,Sound.ENTITY_ENDER_DRAGON_GROWL, 0.5f, 1.5f)
                 for (tick in 0..9) {
                     plugin.server.scheduler.runTaskLater(plugin, Runnable {
                         val angle = tick * 0.63
@@ -496,7 +496,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             }
 
             "beacon_blast" -> {
-                world.playSound(center, Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 2.0f)
+                playKillSound(center,Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 2.0f)
                 for (tick in 0..9) {
                     plugin.server.scheduler.runTaskLater(plugin, Runnable {
                         val beamLoc = center.clone().add(0.0, tick * 0.5, 0.0)
@@ -506,7 +506,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             }
 
             "enchant_swirl" -> {
-                world.playSound(center, Sound.BLOCK_ENCHANTMENT_TABLE_USE, 1.0f, 1.0f)
+                playKillSound(center,Sound.BLOCK_ENCHANTMENT_TABLE_USE, 1.0f, 1.0f)
                 for (tick in 0..9) {
                     plugin.server.scheduler.runTaskLater(plugin, Runnable {
                         val angle = tick * 0.7
@@ -520,7 +520,7 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             }
 
             "prism_shatter" -> {
-                world.playSound(center, Sound.BLOCK_AMETHYST_BLOCK_BREAK, 1.0f, 1.0f)
+                playKillSound(center,Sound.BLOCK_AMETHYST_BLOCK_BREAK, 1.0f, 1.0f)
                 scheduleParticles(center, Particle.DUST, 20, 0.5, 0.5, 0.5,
                     data = Particle.DustOptions(Color.AQUA, 1.2f), ticks = 5)
                 scheduleParticles(center, Particle.DUST, 20, 0.5, 0.5, 0.5,
@@ -529,12 +529,21 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
             }
 
             "nether_portal_burst" -> {
-                world.playSound(center, Sound.BLOCK_PORTAL_TRIGGER, 0.5f, 1.5f)
+                playKillSound(center,Sound.BLOCK_PORTAL_TRIGGER, 0.5f, 1.5f)
                 scheduleParticles(center, Particle.PORTAL, 50, 0.5, 0.8, 0.5, ticks = 8)
                 scheduleParticles(center, Particle.DUST, 25, 0.4, 0.6, 0.4,
                     data = Particle.DustOptions(Color.fromRGB(119, 0, 204), 1.5f), ticks = 7)
             }
         }
+    }
+
+    /**
+     * Plays a kill effect sound at [SOUND_VOLUME_MULTIPLIER] of its listed [volume] (issue #1184).
+     * Every kill effect sound goes through here, so the multiplier is applied exactly once.
+     */
+    private fun playKillSound(loc: Location, sound: Sound, volume: Float, pitch: Float) {
+        val world = loc.world ?: return
+        world.playSound(loc, sound, volume * SOUND_VOLUME_MULTIPLIER, pitch)
     }
 
     /**
@@ -591,5 +600,10 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
                 )
             }
         }
+    }
+
+    companion object {
+        /** Kill effect sounds play at 20% of their listed volume (issue #1184). */
+        const val SOUND_VOLUME_MULTIPLIER = 0.2f
     }
 }
