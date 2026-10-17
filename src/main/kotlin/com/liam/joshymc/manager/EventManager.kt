@@ -1,6 +1,13 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.communityevent.EventManagerMenu
+import com.liam.joshymc.communityevent.EventPermissions
+import com.liam.joshymc.communityevent.EventResult
+import com.liam.joshymc.communityevent.EventSessions
+import com.liam.joshymc.communityevent.EventState
+import com.liam.joshymc.communityevent.EventType
+import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -86,6 +93,17 @@ class EventManager(private val plugin: Joshymc) : Listener {
     private var cycleTask: BukkitTask? = null
     private var cycleTick = 0
 
+    // ── Hosted events (issue #1180) ───────────────────────
+
+    /** The staff-hosted event session (create/open/start/stop/reset). In memory only. */
+    val sessions = EventSessions(plugin) { currentGame != null }
+
+    val menu = EventManagerMenu(plugin, sessions) { settingsLines() }
+
+    init {
+        sessions.onChange = { menu.refreshOpenMenus() }
+    }
+
     // ── Lifecycle ─────────────────────────────────────────
 
     private lateinit var configFile: File
@@ -114,6 +132,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
 
     fun shutdown() {
         cycleTask?.cancel()
+        sessions.shutdown()
         currentGame?.cleanup()
         currentGame = null
     }
@@ -249,6 +268,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
     fun onQuit(event: PlayerQuitEvent) {
         val player = event.player
         if (player.world.name == eventWorldName) onLeaveEventWorld(player)
+        sessions.onQuit(player.uniqueId)
         wandPos1.remove(player.uniqueId)
         wandPos2.remove(player.uniqueId)
     }
@@ -258,12 +278,24 @@ class EventManager(private val plugin: Joshymc) : Listener {
         val player = event.player
         if (player.world.name != eventWorldName) return
         if (player.hasPermission("joshymc.event")) return
-        val cmd = event.message.removePrefix("/").split(" ").first().lowercase()
+        val parts = event.message.removePrefix("/").split(" ")
+        val cmd = parts.first().lowercase()
         val allowed = setOf("spawn", "jmc", "joshymc")
-        if (cmd !in allowed) {
+        if (cmd !in allowed && !isAllowedEventCommand(player, cmd, parts.getOrNull(1)?.lowercase())) {
             event.isCancelled = true
             comms.send(player, Component.text("Only /spawn is allowed in the event world.", NamedTextColor.RED))
         }
+    }
+
+    /**
+     * The only exceptions to the event-world command lock below `joshymc.event`: hosts may run
+     * `/event` (hosting only; the executor still gates admin subcommands), and players may
+     * `/event join` or `/event leave`.
+     */
+    private fun isAllowedEventCommand(player: Player, cmd: String, sub: String?): Boolean {
+        if (cmd != "event") return false
+        if (EventPermissions.canHost(player)) return true
+        return sub == "join" || sub == "leave"
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -340,6 +372,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
 
     private fun tryStartNextGame() {
         if (currentGame != null) return
+        // Don't drop an automatic mini-game into the middle of a staff-hosted event.
+        if (sessions.active != null) return
         val world = Bukkit.getWorld(eventWorldName) ?: return
         val players = world.players.filter { playersInEventWorld.contains(it.uniqueId) }
         if (players.isEmpty()) return
@@ -874,18 +908,151 @@ class EventManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    // ── Settings summary (Event Manager GUI) ─────────────
+
+    private fun settingsLines(): List<Component> {
+        fun onOff(label: String, on: Boolean) =
+            Component.text("$label: ", NamedTextColor.GRAY).append(Component.text(if (on) "ON" else "OFF", if (on) NamedTextColor.GREEN else NamedTextColor.RED))
+        val zone = if (zoneMin != null && zoneMax != null) {
+            "(${zoneMin!!.blockX},${zoneMin!!.blockY},${zoneMin!!.blockZ}) to (${zoneMax!!.blockX},${zoneMax!!.blockY},${zoneMax!!.blockZ})"
+        } else "not set"
+        return listOf(
+            Component.text("World: ", NamedTextColor.GRAY).append(Component.text(eventWorldName, NamedTextColor.WHITE)),
+            Component.text("Zone: ", NamedTextColor.GRAY).append(Component.text(zone, NamedTextColor.WHITE)),
+            onOff("PvP", pvpEnabled), onOff("Build", buildEnabled), onOff("Break", breakEnabled),
+        )
+    }
+
     // ── EventCommand ──────────────────────────────────────
 
+    /**
+     * `/event`. Hosts (joshymc.event.host) get the Event Manager GUI and the session
+     * lifecycle commands; players get join/leave; admins (joshymc.event) additionally keep
+     * the event-world setup commands and the automatic mini-games (`/event start <game>`).
+     */
     inner class EventCommand : CommandExecutor, TabCompleter {
 
-        override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-            if (sender !is Player) { sender.sendMessage("Players only."); return true }
-            if (!sender.hasPermission("joshymc.event")) {
-                comms.send(sender, Component.text("No permission.", NamedTextColor.RED)); return true
-            }
-            if (args.isEmpty()) { sendUsage(sender); return true }
+        private val legacyGames = listOf("tntrun", "redlightgreenlight", "sharksandminnows", "hideandseek")
+        private val hostSubs = listOf("create", "open", "start", "stop", "reset", "status", "help")
+        private val adminSubs = listOf("wand", "save", "pvp", "build", "break", "setworld")
+        private val category = CommunicationsManager.Category.EVENT
 
-            when (args[0].lowercase()) {
+        override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+            val sub = args.firstOrNull()?.lowercase()
+            when (sub) {
+                null -> when {
+                    sender !is Player -> sendUsage(sender)
+                    EventPermissions.canHost(sender) -> menu.open(sender)
+                    sender.hasPermission(EventPermissions.JOIN) -> sendUsage(sender)
+                    else -> Msg.noPermission(sender, category)
+                }
+                "join", "leave" -> {
+                    if (sender !is Player) { Msg.playersOnly(sender); return true }
+                    if (!sender.hasPermission(EventPermissions.JOIN)) { Msg.noPermission(sender, category); return true }
+                    reply(sender, if (sub == "join") sessions.join(sender) else sessions.leave(sender))
+                }
+                "create" -> {
+                    if (!host(sender)) return true
+                    val id = args.getOrNull(1) ?: run { Msg.usage(sender, "/event create <${EventType.ids.joinToString("|")}>", category); return true }
+                    val type = EventType.fromId(id) ?: run {
+                        Msg.error(sender, "Unknown event type '$id'. Choose one of: ${EventType.ids.joinToString(", ")}.", category)
+                        return true
+                    }
+                    reply(sender, sessions.create(type, sender))
+                }
+                "open" -> if (host(sender)) reply(sender, sessions.open())
+                "start" -> {
+                    if (args.size >= 2) {
+                        // Older automatic mini-games: `/event start <game>` (admin only).
+                        if (sender !is Player) { Msg.playersOnly(sender); return true }
+                        if (!sender.hasPermission(EventPermissions.ADMIN)) { Msg.noPermission(sender, category); return true }
+                        legacyStart(sender, args[1])
+                        return true
+                    }
+                    if (host(sender)) reply(sender, sessions.start())
+                }
+                "stop" -> {
+                    if (!host(sender)) return true
+                    if (sessions.active == null && currentGame != null) {
+                        if (!sender.hasPermission(EventPermissions.ADMIN)) { Msg.noPermission(sender, category); return true }
+                        stopGame()
+                        Msg.success(sender, "Game stopped.", category)
+                        return true
+                    }
+                    reply(sender, sessions.stop())
+                }
+                "reset" -> {
+                    if (!host(sender)) return true
+                    val result = sessions.reset(confirmed = args.getOrNull(1).equals("confirm", ignoreCase = true))
+                    reply(sender, result)
+                    if (result is EventResult.NeedsConfirmation) {
+                        Msg.reply(sender, Component.text("Run /event reset confirm to continue.", NamedTextColor.YELLOW), category)
+                    }
+                }
+                "status" -> if (host(sender)) sendStatus(sender)
+                "help" -> sendUsage(sender)
+                in adminSubs -> {
+                    if (sender !is Player) { Msg.playersOnly(sender); return true }
+                    if (!sender.hasPermission(EventPermissions.ADMIN)) { Msg.noPermission(sender, category); return true }
+                    adminCommand(sender, sub, args)
+                }
+                else -> sendUsage(sender)
+            }
+            return true
+        }
+
+        private fun host(sender: CommandSender): Boolean {
+            if (EventPermissions.canHost(sender)) return true
+            Msg.noPermission(sender, category)
+            return false
+        }
+
+        private fun reply(sender: CommandSender, result: EventResult) = when (result) {
+            is EventResult.Success -> Msg.success(sender, result.message, category)
+            is EventResult.Failure, is EventResult.NeedsConfirmation -> Msg.error(sender, result.message, category)
+        }
+
+        private fun sendStatus(sender: CommandSender) {
+            fun row(label: String, value: String, color: NamedTextColor = NamedTextColor.WHITE) =
+                Msg.reply(sender, Component.text("$label: ", NamedTextColor.GRAY).append(Component.text(value, color)), category)
+
+            Msg.reply(sender, Component.text("=== Event Status ===", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true), category)
+            val session = sessions.current
+            if (session == null) {
+                Msg.reply(sender, Component.text("No event is active.", NamedTextColor.GRAY), category)
+            } else {
+                row("Event", "${session.type.displayName} (${session.type.id})")
+                row("State", session.state.label, session.state.color)
+                row("Host", session.hostName)
+                val open = session.state == EventState.OPEN
+                row("Registration", if (open) "Open" else "Closed", if (open) NamedTextColor.GREEN else NamedTextColor.RED)
+                row("Registered", session.participantCount.toString())
+                row("Active", if (session.state.isActive) "Yes" else "No", if (session.state.isActive) NamedTextColor.GREEN else NamedTextColor.GRAY)
+            }
+            if (sender.hasPermission(EventPermissions.ADMIN)) {
+                settingsLines().forEach { Msg.reply(sender, it, category) }
+                row("Mini-game", currentGame?.javaClass?.simpleName ?: "none")
+                row("Players in event world", playersInEventWorld.size.toString())
+            }
+        }
+
+        private fun legacyStart(sender: Player, gameName: String) {
+            sessions.active?.let {
+                Msg.error(sender, "A hosted ${it.type.displayName} event is active. Stop it before starting a mini-game.", category)
+                return
+            }
+            val world = Bukkit.getWorld(eventWorldName)
+                ?: run { comms.send(sender, Component.text("World '$eventWorldName' not loaded.", NamedTextColor.RED)); return }
+            val players = if (playersInEventWorld.isEmpty())
+                listOf(sender)
+            else
+                world.players.filter { playersInEventWorld.contains(it.uniqueId) }
+            startGame(gameName, players)
+            comms.send(sender, Component.text("Starting: $gameName with ${players.size} player(s).", NamedTextColor.GREEN))
+        }
+
+        private fun adminCommand(sender: Player, sub: String, args: Array<out String>) {
+            when (sub) {
                 "wand" -> {
                     sender.inventory.addItem(createWand())
                     comms.send(sender, Component.text("Event wand added. Left-click = Pos1, Right-click = Pos2.", NamedTextColor.GREEN))
@@ -894,96 +1061,84 @@ class EventManager(private val plugin: Joshymc) : Listener {
                     val p1 = wandPos1[sender.uniqueId]
                     val p2 = wandPos2[sender.uniqueId]
                     if (p1 == null || p2 == null) {
-                        comms.send(sender, Component.text("Set both positions with the event wand first.", NamedTextColor.RED)); return true
+                        comms.send(sender, Component.text("Set both positions with the event wand first.", NamedTextColor.RED)); return
                     }
-                    val world = p1.world ?: run { comms.send(sender, Component.text("Invalid world.", NamedTextColor.RED)); return true }
+                    val world = p1.world ?: run { comms.send(sender, Component.text("Invalid world.", NamedTextColor.RED)); return }
                     zoneMin = Location(world, minOf(p1.x, p2.x), minOf(p1.y, p2.y), minOf(p1.z, p2.z))
                     zoneMax = Location(world, maxOf(p1.x, p2.x), maxOf(p1.y, p2.y), maxOf(p1.z, p2.z))
                     saveConfig()
                     comms.send(sender, Component.text("Zone saved: (${zoneMin!!.blockX},${zoneMin!!.blockY},${zoneMin!!.blockZ}) to (${zoneMax!!.blockX},${zoneMax!!.blockY},${zoneMax!!.blockZ})", NamedTextColor.GREEN))
                 }
                 "pvp" -> {
-                    if (args.size < 2) { comms.send(sender, Component.text("Usage: /event pvp <on|off>", NamedTextColor.RED)); return true }
+                    if (args.size < 2) { comms.send(sender, Component.text("Usage: /event pvp <on|off>", NamedTextColor.RED)); return }
                     pvpEnabled = args[1].lowercase() == "on"
                     saveConfig()
                     comms.send(sender, Component.text("Event PvP: ${if (pvpEnabled) "ON" else "OFF"}", if (pvpEnabled) NamedTextColor.GREEN else NamedTextColor.RED))
                 }
                 "build" -> {
-                    if (args.size < 2) { comms.send(sender, Component.text("Usage: /event build <on|off>", NamedTextColor.RED)); return true }
+                    if (args.size < 2) { comms.send(sender, Component.text("Usage: /event build <on|off>", NamedTextColor.RED)); return }
                     buildEnabled = args[1].lowercase() == "on"
                     saveConfig()
                     comms.send(sender, Component.text("Event build: ${if (buildEnabled) "ON" else "OFF"}", if (buildEnabled) NamedTextColor.GREEN else NamedTextColor.RED))
                 }
                 "break" -> {
-                    if (args.size < 2) { comms.send(sender, Component.text("Usage: /event break <on|off>", NamedTextColor.RED)); return true }
+                    if (args.size < 2) { comms.send(sender, Component.text("Usage: /event break <on|off>", NamedTextColor.RED)); return }
                     breakEnabled = args[1].lowercase() == "on"
                     saveConfig()
                     comms.send(sender, Component.text("Event break: ${if (breakEnabled) "ON" else "OFF"}", if (breakEnabled) NamedTextColor.GREEN else NamedTextColor.RED))
                 }
                 "setworld" -> {
-                    if (args.size < 2) { comms.send(sender, Component.text("Usage: /event setworld <world>", NamedTextColor.RED)); return true }
+                    if (args.size < 2) { comms.send(sender, Component.text("Usage: /event setworld <world>", NamedTextColor.RED)); return }
                     eventWorldName = args[1]
                     saveConfig()
                     comms.send(sender, Component.text("Event world: $eventWorldName", NamedTextColor.GREEN))
                 }
-                "start" -> {
-                    val world = Bukkit.getWorld(eventWorldName)
-                        ?: run { comms.send(sender, Component.text("World '$eventWorldName' not loaded.", NamedTextColor.RED)); return true }
-                    val players = if (playersInEventWorld.isEmpty())
-                        listOf(sender)
-                    else
-                        world.players.filter { playersInEventWorld.contains(it.uniqueId) }
-                    val gameName = if (args.size >= 2) args[1] else {
-                        val names = listOf("tntrun", "redlightgreenlight", "sharksandminnows", "hideandseek")
-                        names[gameIndex % names.size].also { gameIndex++ }
-                    }
-                    startGame(gameName, players)
-                    comms.send(sender, Component.text("Starting: $gameName with ${players.size} player(s).", NamedTextColor.GREEN))
-                }
-                "stop" -> {
-                    if (currentGame == null) { comms.send(sender, Component.text("No game running.", NamedTextColor.RED)); return true }
-                    stopGame()
-                    comms.send(sender, Component.text("Game stopped.", NamedTextColor.GREEN))
-                }
-                "status" -> {
-                    comms.send(sender, Component.text("=== Event Status ===", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true))
-                    comms.send(sender, Component.text("World: $eventWorldName", NamedTextColor.GRAY))
-                    comms.send(sender, Component.text("Zone: ${zoneMin?.let { "(${it.blockX},${it.blockY},${it.blockZ})" } ?: "not set"} to ${zoneMax?.let { "(${it.blockX},${it.blockY},${it.blockZ})" } ?: "not set"}", NamedTextColor.GRAY))
-                    comms.send(sender, Component.text("PvP: ${if (pvpEnabled) "ON" else "OFF"} | Build: ${if (buildEnabled) "ON" else "OFF"} | Break: ${if (breakEnabled) "ON" else "OFF"}", NamedTextColor.GRAY))
-                    comms.send(sender, Component.text("Game: ${currentGame?.javaClass?.simpleName ?: "none"} | Players in world: ${playersInEventWorld.size}", NamedTextColor.GRAY))
-                }
-                else -> sendUsage(sender)
             }
-            return true
         }
 
-        private fun sendUsage(player: Player) {
-            listOf(
-                "", "&6&lEvent Commands:",
-                "&e/event wand &7- Get event zone wand",
-                "&e/event save &7- Save selected zone",
-                "&e/event pvp <on|off> &7- Toggle PvP",
-                "&e/event build <on|off> &7- Toggle building",
-                "&e/event break <on|off> &7- Toggle breaking",
-                "&e/event setworld <world> &7- Set event world",
-                "&e/event start [game] &7- Start a game (tntrun/redlightgreenlight/sharksandminnows/hideandseek)",
-                "&e/event stop &7- Stop current game",
-                "&e/event status &7- Show status", ""
-            ).forEach { player.sendMessage(comms.parseLegacy(it)) }
+        private fun sendUsage(sender: CommandSender) {
+            val lines = mutableListOf("", "&6&lEvent Commands:")
+            if (sender.hasPermission(EventPermissions.JOIN)) {
+                lines += "&e/event join &7- Register for the open event"
+                lines += "&e/event leave &7- Leave the event"
+            }
+            if (EventPermissions.canHost(sender)) {
+                lines += "&e/event &7- Open the Event Manager"
+                lines += "&e/event create <${EventType.ids.joinToString("|")}> &7- Create an event"
+                lines += "&e/event open &7- Open registration"
+                lines += "&e/event start &7- Start the event"
+                lines += "&e/event stop &7- End the event"
+                lines += "&e/event reset [confirm] &7- Reset the event to Created"
+                lines += "&e/event status &7- Show event status"
+            }
+            if (sender.hasPermission(EventPermissions.ADMIN)) {
+                lines += "&e/event wand &7- Get event zone wand"
+                lines += "&e/event save &7- Save selected zone"
+                lines += "&e/event pvp|build|break <on|off> &7- Event world toggles"
+                lines += "&e/event setworld <world> &7- Set event world"
+                lines += "&e/event start <game> &7- Start a mini-game (${legacyGames.joinToString("/")})"
+            }
+            lines += ""
+            lines.forEach { sender.sendMessage(comms.parseLegacy(it)) }
         }
 
         override fun onTabComplete(sender: CommandSender, command: Command, label: String, args: Array<out String>): List<String> {
-            if (!sender.hasPermission("joshymc.event")) return emptyList()
+            val admin = sender.hasPermission(EventPermissions.ADMIN)
+            val host = EventPermissions.canHost(sender)
             return when (args.size) {
-                1 -> listOf("wand", "save", "pvp", "build", "break", "setworld", "start", "stop", "status")
-                    .filter { it.startsWith(args[0].lowercase()) }
+                1 -> buildList {
+                    if (sender.hasPermission(EventPermissions.JOIN)) addAll(listOf("join", "leave"))
+                    if (host) addAll(hostSubs)
+                    if (admin) addAll(adminSubs)
+                }.filter { it.startsWith(args[0].lowercase()) }
                 2 -> when (args[0].lowercase()) {
-                    "pvp", "build", "break" -> listOf("on", "off").filter { it.startsWith(args[1].lowercase()) }
-                    "start" -> listOf("tntrun", "redlightgreenlight", "sharksandminnows", "hideandseek")
-                        .filter { it.startsWith(args[1].lowercase()) }
-                    "setworld" -> Bukkit.getWorlds().map { it.name }.filter { it.startsWith(args[1].lowercase()) }
+                    "create" -> if (host) EventType.ids else emptyList()
+                    "reset" -> if (host) listOf("confirm") else emptyList()
+                    "start" -> if (admin) legacyGames else emptyList()
+                    "pvp", "build", "break" -> if (admin) listOf("on", "off") else emptyList()
+                    "setworld" -> if (admin) Bukkit.getWorlds().map { it.name } else emptyList()
                     else -> emptyList()
-                }
+                }.filter { it.startsWith(args[1].lowercase()) }
                 else -> emptyList()
             }
         }

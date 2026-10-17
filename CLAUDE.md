@@ -90,6 +90,7 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 | **PortalManager** | Custom portals (region wand → action). |
 | **ArenaManager** | (above) |
 | **VoteManager** + **VotifierServer** | Vote rewards. `/vote` is intentionally NOT claimed by JoshyMC (other vote plugins own it); we expose `/jvote` only. CommandManager unregisters `/vote` at runtime as a belt-and-suspenders safety net. |
+| **EventManager** + `communityevent/` | Event world (separate inventory saved to `event_inventories.yml`, command lock to `/spawn`, PvP/build/break toggles, zone wand, older automatic mini-games). **Issue #1180**: hosted events live in `EventSessions` (one in-memory session, `EventType` spleef/sharks/sumo/cpvp/mobs, `EventState` CREATED→OPEN→RUNNING→FINISHED validated by `canMoveTo`) with the staff `EventManagerMenu` GUI on `/event`. Hosts need `joshymc.event.host` (Community Managers; `joshymc.event` implies it), players `/event join|leave` with `joshymc.event.join`. Gameplay plugs in through `EventSessions.registerController(type, EventController)`; tie tasks to the session with `session.track(task)` so stop/reset/shutdown cancel them. Sessions are never persisted, so a restart can't leave a phantom RUNNING event. |
 | **SpawnDecorationManager** | Holograms/particles/beacons at spawn. |
 | **WarpManager** + (`/spawn`, `/warp`, `/setwarp`, `/pwarp`) | Server + player warps. |
 | **KitManager** | `/kit` with cooldowns, `/createkit`, `/deletekit`. |
