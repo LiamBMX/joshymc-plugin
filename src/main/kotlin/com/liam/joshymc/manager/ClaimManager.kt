@@ -100,7 +100,9 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
      * before. PvP stays the claim-wide [Claim.pvpEnabled] toggle.
      */
     enum class PublicFlag {
-        BUILD, BREAK, MOB_COMBAT, PROJECTILES, FLY, DOORS, SWITCHES, CONTAINERS, VILLAGER_TRADING, VEHICLES, BUCKETS;
+        BUILD, BREAK, MOB_COMBAT, PROJECTILES, FLY, DOORS, SWITCHES, CONTAINERS, VILLAGER_TRADING, VEHICLES, BUCKETS,
+        /** Ender pearl teleports landing in the claim (issue #1194). */
+        ENDER_PEARLS;
 
         companion object {
             fun from(name: String): PublicFlag? = entries.find { it.name == name }
@@ -976,13 +978,13 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
      * The shared claim-action check (issue #1106): bypass, owner, trusted and
      * team access first ([canAccess]), then the claim's public flag. Public
      * flags never open a subclaim, which stays limited to its access list.
-     * FLY and PROJECTILES are claim-wide rules about the airspace, so
-     * subclaims don't take them away from players with claim access.
+     * FLY, PROJECTILES and ENDER_PEARLS are claim-wide rules about the
+     * airspace, so subclaims don't take them away from players with claim access.
      */
     fun canPerform(player: Player, location: Location, flag: PublicFlag): Boolean {
         if (canAccess(player, location)) return true
         val claim = getClaimAt(location) ?: return true
-        if (flag == PublicFlag.FLY || flag == PublicFlag.PROJECTILES) {
+        if (flag == PublicFlag.FLY || flag == PublicFlag.PROJECTILES || flag == PublicFlag.ENDER_PEARLS) {
             return hasClaimAccess(player, claim) || flag in claim.publicFlags
         }
         if (getSubclaimAt(location) != null) return false
