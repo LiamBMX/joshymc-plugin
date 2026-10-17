@@ -73,6 +73,11 @@ class ItemManager(private val plugin: Joshymc) {
         register(NordicPlate())
         register(NordicGreaves())
         register(NordicTreads())
+        // Viking set (horned helmet with the orange beard, issue #1217)
+        register(VikingHelmet())
+        register(VikingChestplate())
+        register(VikingLeggings())
+        register(VikingBoots())
         // Winter Collection
         register(Frostbite())
         register(GlacierBreaker())
