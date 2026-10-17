@@ -42,6 +42,12 @@ class EventSessions(
     /** Called after every state or registration change, e.g. to refresh open Event Manager menus. */
     var onChange: (() -> Unit)? = null
 
+    /**
+     * Checked before a start; a non-null result is the reason the event can't start
+     * (e.g. the selected arena is incomplete or its world is gone).
+     */
+    var startCheck: ((EventSession) -> String?)? = null
+
     private val controllers = HashMap<EventType, EventController>()
 
     private val comms get() = plugin.commsManager
@@ -112,6 +118,7 @@ class EventSessions(
         if (session.participantCount == 0) {
             return EventResult.Failure("Nobody has registered yet. Players join with /event join.")
         }
+        startCheck?.invoke(session)?.let { return EventResult.Failure(it) }
         if (!move(session, EventState.RUNNING)) return invalid(session, EventState.RUNNING)
         session.startedAt = System.currentTimeMillis()
         val failure = runHook(session, "start") { it.onStart(session) }
@@ -194,6 +201,39 @@ class EventSessions(
         changed()
         val note = if (failure != null) " (the ${session.type.displayName} handler reported an error: $failure)" else ""
         return EventResult.Success(session, "${session.type.displayName} event reset to Created.$note")
+    }
+
+    // ── Arena (issue #1183) ───────────────────────────────
+
+    /**
+     * Picks a saved arena for the active event. Only an arena of the event's type, and only
+     * before the event runs, so a running event never changes arena underneath its players.
+     * Nothing is started, teleported or changed in the world.
+     */
+    fun assignArena(arenaId: String, arenaType: EventType, arenaName: String): EventResult {
+        val session = active ?: return EventResult.Failure("There is no active event. Create one with /event create <type> first.")
+        if (session.state == EventState.RUNNING) {
+            return EventResult.Failure("${session.type.displayName} is running; its arena can't change until it ends.")
+        }
+        if (arenaType != session.type) {
+            return EventResult.Failure("'$arenaName' is a ${arenaType.displayName} arena, but the current event is ${session.type.displayName}.")
+        }
+        if (session.arenaId == arenaId) return EventResult.Failure("'$arenaName' is already selected for this event.")
+        session.arenaId = arenaId
+        plugin.logger.info("[Event] Arena '$arenaId' selected for the ${session.type.displayName} event (${session.id}).")
+        changed()
+        return EventResult.Success(session, "Selected arena '$arenaName' for ${session.type.displayName}.")
+    }
+
+    fun clearArena(): EventResult {
+        val session = active ?: return EventResult.Failure("There is no active event.")
+        if (session.state == EventState.RUNNING) {
+            return EventResult.Failure("${session.type.displayName} is running; its arena can't change until it ends.")
+        }
+        if (session.arenaId == null) return EventResult.Failure("No arena is selected for this event.")
+        session.arenaId = null
+        changed()
+        return EventResult.Success(session, "Cleared the arena for ${session.type.displayName}.")
     }
 
     // ── Registration ──────────────────────────────────────

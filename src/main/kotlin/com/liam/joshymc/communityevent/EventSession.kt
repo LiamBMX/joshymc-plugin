@@ -44,6 +44,10 @@ class EventSession(
     var endedAt: Long? = null
         internal set
 
+    /** Id of the saved arena picked for this event (issue #1183), or null. Kept across reset. */
+    var arenaId: String? = null
+        internal set
+
     private val registered = LinkedHashSet<UUID>()
     val participants: Set<UUID> get() = registered.toSet()
     val participantCount: Int get() = registered.size
