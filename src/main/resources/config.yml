@@ -1180,7 +1180,8 @@ link-pops:
       duration-ticks: 220
       amplifier: 2
 
-# Joshees Bar (issue #1204): a custom chocolate bar that eats like a Cookie. Eating one also gives
+# Joshy's Bar (issue #1204; called Joshees Bar before issue #1226, which is why the key below
+# keeps its old name): a custom chocolate bar that eats like a Cookie. Eating one also gives
 # a short effect that its name and lore deliberately keep secret (default Strength III for
 # 9 seconds). Players in a running hosted event game never get it. The amplifier is capped at 4
 # and the duration at 5 minutes. Applies on /joshymc reload.

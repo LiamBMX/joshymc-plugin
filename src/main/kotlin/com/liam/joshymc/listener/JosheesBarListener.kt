@@ -10,7 +10,7 @@ import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
 
 /**
- * The Joshees Bar's secret (issue #1204): eating one gives Strength III for 9 seconds by
+ * Joshy's Bar's secret (issue #1204): eating one gives Strength III for 9 seconds by
  * default (`joshees-bar.hidden-effect` in config.yml). Food, hunger and consuming the item
  * stay vanilla Cookie behaviour; this only adds the effect, with no message or extra
  * particles, so nothing gives it away before it kicks in.
