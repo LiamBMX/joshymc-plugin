@@ -289,6 +289,11 @@ commands:
     description: Give physical, non-stackable Rank Voucher items that redeem for a purchasable rank tier
     usage: /rankvoucher give <player> <rank> [quantity]
     permission: joshymc.rankvoucher.admin
+  purchase:
+    description: Store purchase fulfillment (fulfill is console only) and delivery recovery
+    usage: /purchase <fulfill|list|info|retry|cancel|assign>
+    aliases: [jpurchase]
+    permission: joshymc.purchase.admin
   talisman:
     description: Equip talismans and relics
     usage: /talisman [equip|unequip|info|list]
@@ -892,6 +897,9 @@ permissions:
     default: op
   joshymc.rankvoucher.admin:
     description: Give physical Rank Vouchers via /rankvoucher give (redeeming one needs no permission)
+    default: op
+  joshymc.purchase.admin:
+    description: View store deliveries with /purchase list|info; retry/cancel/assign also need op. /purchase fulfill is console only
     default: op
   joshymc.balance:
     description: Check balance

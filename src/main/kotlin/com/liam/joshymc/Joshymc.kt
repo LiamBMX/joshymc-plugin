@@ -231,6 +231,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var chatTagVoucherManager: com.liam.joshymc.manager.ChatTagVoucherManager
         private set
+    lateinit var purchaseFulfillmentManager: com.liam.joshymc.manager.PurchaseFulfillmentManager
+        private set
     lateinit var rankManager: RankManager
         private set
     lateinit var claimManager: ClaimManager
@@ -453,6 +455,7 @@ class Joshymc : JavaPlugin() {
         creditVoucherManager = com.liam.joshymc.manager.CreditVoucherManager(this)
         rankVoucherManager = com.liam.joshymc.manager.RankVoucherManager(this)
         chatTagVoucherManager = com.liam.joshymc.manager.ChatTagVoucherManager(this)
+        purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
         eventManager = com.liam.joshymc.manager.EventManager(this)
         resurgeManager = com.liam.joshymc.manager.ResurgeManager(this)
         boosterManager = BoosterManager(this)
@@ -537,6 +540,8 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("kill-effects")) killEffectManager.start()
         adminManager.start()
         modModeManager.start()
+        // After every reward factory it builds items from (crates, vouchers, chat tags) and Mod Mode.
+        purchaseFulfillmentManager.start()
         hideStaffManager.start()
         endManager.start()
         chatManager.start()
@@ -598,6 +603,7 @@ class Joshymc : JavaPlugin() {
         antiCheatManager.stop()
         portalManager.stop()
         voteManager.stop()
+        purchaseFulfillmentManager.stop()
         spawnDecorationManager.stop()
         listenerManager.passiveEnchantListener?.stop()
         listenerManager.thrownTridentVisualListener?.stop()
