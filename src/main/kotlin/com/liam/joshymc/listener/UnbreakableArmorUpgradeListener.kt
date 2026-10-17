@@ -19,7 +19,8 @@ import org.bukkit.inventory.Inventory
  *    flipped on.
  *  - The Ice Skates were renamed Snowveil Skates in issue #1098 (same `ice_skates` id),
  *    and the Autumn Wanderer boots Nordic Treads in issue #1097 (same `autumn_wanderer`
- *    id): copies still showing the old name get the new one. Copies renamed on an anvil
+ *    id), and the Joshees Bar Joshy's Bar in issue #1226 (same `joshees_bar` id): copies
+ *    still showing the old name get the new one. Copies renamed on an anvil
  *    keep their custom name.
  *
  * Matched by the `custom_item_id` PDC tag only; nothing else on the item (model,
@@ -97,6 +98,7 @@ class UnbreakableArmorUpgradeListener(private val plugin: Joshymc) : Listener {
         val RENAMED = mapOf(
             "ice_skates" to "Ice Skates",
             "autumn_wanderer" to "Autumn Wanderer",
+            "joshees_bar" to "Joshees Bar",
         )
     }
 }

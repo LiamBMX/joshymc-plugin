@@ -1,9 +1,10 @@
-"""Joshees Bar (issue #1204): a wrapped chocolate candy bar, torn open at one end with a
+"""Joshy's Bar (issue #1204, renamed from Joshees Bar in issue #1226; the id keeps the old
+name so existing copies and assets stay valid): a wrapped chocolate candy bar, torn open at one end with a
 bite taken out of it. A retextured Cookie, so it eats like one.
 
 The bar lies along +X. Its wrapper is deep blue foil: a body with rounded long edges (two
 overlapping boxes, one taller and one wider), a puffed label panel on top carrying the
-JOSHEES logo (cream letters on a slanted red ribbon, gold pinstripes), a red band and gold
+JOSHY'S logo (cream letters on a slanted red ribbon, gold pinstripes), a red band and gold
 pinlines round the sides, a seam fin underneath and a barcode panel on the back. The far
 (-X) end is pinched into a crimped, saw-toothed seal; the near (+X) end is torn open, with
 peeled flaps lifting off the bar and a strip of silver liner showing.
@@ -24,7 +25,7 @@ from __future__ import annotations
 from art.kit import animate, box, canvas, display, fill, model, rgba, save, save_animation, shine, sparkle, turn
 
 ID = "joshees_bar"
-NAME = "Joshees Bar"
+NAME = "Joshy's Bar"
 KIND = "food"
 COUNTERPART = "item/cookie"
 
@@ -71,21 +72,36 @@ LETTERS = {
           "##...##", "##...##", "##...##", "##...##"],
     "E": ["#######", "#######", "##.....", "##.....", "######.", "######.", "##.....",
           "##.....", "##.....", "#######", "#######"],
+    "Y": ["##...##", "##...##", "##...##", "###.###", ".#####.", "..###..", "..###..",
+          "..###..", "..###..", "..###..", "..###.."],
+    # The apostrophe: a short wedge hanging from the cap line.
+    "'": ["##", "##", "##", "#.", "..", "..", "..", "..", "..", "..", ".."],
 }
 
+WORD = "JOSHY'S"
 
-def logo_mask(word: str = "JOSHEES") -> dict[tuple[int, int], int]:
+
+def logo_mask(word: str = WORD) -> dict[tuple[int, int], int]:
     """Pixels of the word in a chunky italic face (rows lean right toward the top),
-    mapped to the index of the letter they belong to."""
+    mapped to the index of the letter they belong to. Each glyph advances by its own
+    width plus a one pixel gap (two around punctuation)."""
     cells = {}
+    pen = 0
     for i, ch in enumerate(word):
         rows = LETTERS[ch]
+        narrow = len(rows[0]) < 4      # punctuation gets a wider gap so its outline stays apart
+        pen += 1 if narrow else 0
         for y, row in enumerate(rows):
             lean = (len(rows) - 1 - y) // 4
             for x, c in enumerate(row):
                 if c == "#":
-                    cells[(i * 8 + x + lean, y)] = i
+                    cells[(pen + x + lean, y)] = i
+        pen += len(rows[0]) + (2 if narrow else 1)
     return cells
+
+
+def logo_width(word: str = WORD) -> int:
+    return max(x for x, _ in logo_mask(word)) + 1
 
 
 def in_counter(mask: dict, x: int, y: int) -> bool:
@@ -144,7 +160,7 @@ def label_frame(t: float):
         for dx, dy in ((0, -1), (-1, 0), (0, 0), (1, 0), (0, 1)):
             px[cx + dx, cy + dy] = rgba(GOLD[4] if (dx, dy) == (0, 0) else GOLD[3])
     # The word: cream, a touch warmer at the bottom, with a navy outline and drop shadow.
-    paint_word(px, logo_mask(), 4, 10, lambda y: CREAM[3] if y < 5 else CREAM[2] if y < 9 else CREAM[1],
+    paint_word(px, logo_mask(), (61 - logo_width()) // 2, 10, lambda y: CREAM[3] if y < 5 else CREAM[2] if y < 9 else CREAM[1],
                outline=BLUE[1], shadow=BLUE[0])
     out = shine(img, t, "#ffffff", width=5, strength=0.35, angle=30.0, pause=0.6)
     twinkle = wave_window(t, 0.45, 0.75)
@@ -207,7 +223,7 @@ def textures() -> None:
     # The back: plain foil with a cream barcode panel near one end.
     back = canvas(128)
     blue_foil(back, (0, 0, 127, 127), 2, seed=5)
-    paint_word(back.load(), logo_mask(), 8, 5, lambda y: CREAM[2], shadow=BLUE[0])
+    paint_word(back.load(), logo_mask(), 8 + (57 - logo_width()) // 2, 5, lambda y: CREAM[2], shadow=BLUE[0])
     fill(back, (5, 21, 72, 21), GOLD[2])
     fill(back, (28, 24, 48, 34), CREAM[3])
     for x in range(30, 47):
