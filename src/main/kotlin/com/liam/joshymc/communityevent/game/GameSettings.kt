@@ -4,8 +4,8 @@ import org.bukkit.Material
 import org.bukkit.configuration.ConfigurationSection
 
 /**
- * `hosted-events.spleef` / `hosted-events.sumo` in config.yml (issue #1187). Read once when a
- * round or match starts, never per tick.
+ * `hosted-events.<type>` in config.yml (issues #1187, #1189). Read once when a round or match
+ * starts, never per tick.
  */
 data class SpleefSettings(
     val countdownSeconds: Int,
@@ -62,6 +62,66 @@ data class SumoSettings(
                 knockbackVertical = (c?.getDouble("knockback.vertical", 0.36) ?: 0.36).coerceIn(0.0, 2.0),
                 hitCooldownMs = (c?.getLong("knockback.hit-cooldown-ms", 450L) ?: 450L).coerceIn(0L, 5_000L),
                 autoNextSeconds = (c?.getInt("auto-next-seconds", 0) ?: 0).coerceIn(0, 120),
+            )
+        }
+    }
+}
+
+/** `hosted-events.sharks` (issue #1189). */
+data class SharksSettings(
+    val countdownSeconds: Int,
+    val minPlayers: Int,
+    val startingSharks: Int,
+    /** 0 = no limit; Minnows still crossing when it runs out are caught. */
+    val crossingTimeLimitSeconds: Int,
+    /** Hits from the same Shark closer together than this are ignored (stops a double tag on lag). */
+    val catchCooldownMs: Long,
+    /** Seconds after a crossing before players are moved back to their spawns for the next one. */
+    val transitionDelaySeconds: Int,
+) {
+    companion object {
+        fun read(root: ConfigurationSection?): SharksSettings {
+            val c = root?.getConfigurationSection("sharks")
+            return SharksSettings(
+                countdownSeconds = (c?.getInt("countdown-seconds", 5) ?: 5).coerceIn(1, 30),
+                minPlayers = (c?.getInt("min-players", 3) ?: 3).coerceAtLeast(2),
+                startingSharks = (c?.getInt("starting-sharks", 1) ?: 1).coerceAtLeast(1),
+                crossingTimeLimitSeconds = (c?.getInt("crossing-time-limit-seconds", 60) ?: 60).coerceIn(0, 3600),
+                catchCooldownMs = (c?.getLong("catch-cooldown-ms", 300L) ?: 300L).coerceIn(0L, 5_000L),
+                transitionDelaySeconds = (c?.getInt("round-transition-delay-seconds", 3) ?: 3).coerceIn(0, 60),
+            )
+        }
+    }
+}
+
+/** `hosted-events.cpvp` (issue #1189). */
+data class CrystalPvpSettings(
+    val countdownSeconds: Int,
+    val minPlayers: Int,
+    /** 0 = no limit; at the limit the healthier competitor wins, equal health is a draw. */
+    val matchTimeLimitSeconds: Int,
+    /** A draw (both out in the same tick, or equal health at the time limit): rematch, or both are out. */
+    val rematchOnDraw: Boolean,
+    /** Blocks competitors may place and break inside the Arena Boundary. */
+    val allowedBlocks: Set<Material>,
+    val maxArenaBlocks: Int,
+    val restoreDelaySeconds: Int,
+) {
+    companion object {
+        fun read(root: ConfigurationSection?): CrystalPvpSettings {
+            val c = root?.getConfigurationSection("cpvp")
+            val names = if (c != null && c.isList("allowed-blocks")) c.getStringList("allowed-blocks") else listOf("OBSIDIAN")
+            val blocks = names
+                .mapNotNull { name -> Material.matchMaterial(name)?.takeIf { it.isBlock && !it.isAir } }
+                .toSet()
+            return CrystalPvpSettings(
+                countdownSeconds = (c?.getInt("countdown-seconds", 5) ?: 5).coerceIn(1, 30),
+                minPlayers = (c?.getInt("min-players", 2) ?: 2).coerceAtLeast(2),
+                matchTimeLimitSeconds = (c?.getInt("match-time-limit-seconds", 0) ?: 0).coerceIn(0, 3600),
+                rematchOnDraw = !(c?.getString("on-draw", "rematch") ?: "rematch").equals("both-out", ignoreCase = true),
+                allowedBlocks = blocks,
+                maxArenaBlocks = (c?.getInt("restore.max-blocks", 100_000) ?: 100_000).coerceIn(1, 500_000),
+                restoreDelaySeconds = (c?.getInt("restore.delay-seconds", 2) ?: 2).coerceIn(0, 60),
             )
         }
     }

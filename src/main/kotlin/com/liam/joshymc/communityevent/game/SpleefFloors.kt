@@ -6,18 +6,23 @@ import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.World
 import org.bukkit.block.data.BlockData
+import org.bukkit.entity.EnderCrystal
+import org.bukkit.entity.Item
 import org.bukkit.entity.Player
 import org.bukkit.scheduler.BukkitTask
+import org.bukkit.util.BoundingBox
 
 /**
- * Spleef floor snapshots and restoration (issue #1187). Main thread only.
+ * Arena block snapshots and restoration: Spleef floors (issue #1187) and Crystal PvP arena
+ * boundaries (issue #1189), keyed by arena id (ids are unique across types). Main thread only.
  *
  * Before a round a floor's blocks are captured and saved to [FloorSnapshotStore]; the row
  * stays until the floor is fully restored, so a restart mid-round restores it on the next
  * startup. Restoration only touches positions inside the saved region whose block differs
  * from the snapshot, a bounded number per tick, without physics, and moves anyone standing
  * in the floor out of the way first. Restore jobs are not session tasks: stopping an event
- * never leaves a floor half-restored.
+ * never leaves a floor half-restored. Once the blocks are back, leftover End Crystals and
+ * dropped items inside the region are removed too.
  */
 class SpleefFloors(private val plugin: Joshymc) {
 
@@ -44,7 +49,7 @@ class SpleefFloors(private val plugin: Joshymc) {
             warnings.forEach { plugin.logger.warning("[Event] $it") }
             store = s
             if (pending.isNotEmpty()) {
-                plugin.logger.info("[Event] ${pending.size} Spleef floor(s) were left damaged by the last shutdown; restoring them.")
+                plugin.logger.info("[Event] ${pending.size} arena floor(s) were left damaged by the last shutdown; restoring them.")
             }
         } catch (e: Exception) {
             store = null
@@ -59,11 +64,11 @@ class SpleefFloors(private val plugin: Joshymc) {
         for (snapshot in pending.values.toList()) {
             val world = Bukkit.getWorld(snapshot.region.world)
             if (world == null) {
-                plugin.logger.warning("[Event] World '${snapshot.region.world}' isn't loaded, so arena '${snapshot.arenaId}''s Spleef floor wasn't restored. Run /event spleef reset ${snapshot.arenaId} once it is.")
+                plugin.logger.warning("[Event] World '${snapshot.region.world}' isn't loaded, so arena '${snapshot.arenaId}''s saved blocks weren't restored. Run /event spleef reset ${snapshot.arenaId} (or /event cpvp reset) once it is.")
                 continue
             }
             restore(snapshot.arenaId, { safeSpot(world) }) { changed ->
-                plugin.logger.info("[Event] Restored arena '${snapshot.arenaId}''s Spleef floor after restart ($changed block(s) changed).")
+                plugin.logger.info("[Event] Restored arena '${snapshot.arenaId}''s saved blocks after restart ($changed block(s) changed).")
             }
         }
     }
@@ -151,6 +156,7 @@ class SpleefFloors(private val plugin: Joshymc) {
             }
         }
         if (job.cursor >= snapshot.size) {
+            clearLooseEntities(job)
             job.task.cancel()
             jobs.remove(arenaId)
             job.done(job.changed)
@@ -166,6 +172,13 @@ class SpleefFloors(private val plugin: Joshymc) {
             player.fallDistance = 0f
             player.teleport(spot)
         }
+    }
+
+    /** Leftover End Crystals and item drops inside the region (its chunks are loaded by now). */
+    private fun clearLooseEntities(job: Job) {
+        val r = job.snapshot.region
+        val box = BoundingBox(r.minX.toDouble(), r.minY.toDouble(), r.minZ.toDouble(), r.maxX + 1.0, r.maxY + 1.0, r.maxZ + 1.0)
+        job.world.getNearbyEntities(box) { it is EnderCrystal || it is Item }.forEach { it.remove() }
     }
 
     private fun isInside(player: Player, r: ArenaRegion): Boolean {

@@ -161,11 +161,11 @@ class EventManagerMenu(
             }
         }
 
-        val gameType = active?.type?.takeIf { it == EventType.SPLEEF || it == EventType.SUMO }
+        val gameType = active?.type?.takeIf { it != EventType.MOBS }
         actionButton(
             gui, SLOT_GAME, gameType?.icon ?: Material.DIAMOND_SHOVEL, "Game Controls",
-            "Spleef rounds and floor reset, Sumo matches and bracket.",
-            unavailable = if (gameType == null) "Only for Spleef and Sumo events." else null,
+            "Rounds, matches, crossings, brackets and arena resets.",
+            unavailable = if (gameType == null) "Only for Spleef, Sumo, Sharks and Crystal PvP events." else null,
         ) { p -> gameMenu.open(p) }
 
         gui.setItem(
