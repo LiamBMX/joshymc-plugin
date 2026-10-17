@@ -23,6 +23,7 @@ class PeanutButterCup : CustomItem() {
 
     override val id = ID
     override val material = Material.COOKIE
+    override val isCandy = true
 
     override val displayName: Component = Component.text("Peanut Butter Cup", TextColor.color(0xD99234))
         .decoration(TextDecoration.ITALIC, false)
