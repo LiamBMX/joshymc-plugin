@@ -1200,6 +1200,18 @@ rurus:
     # Zero-indexed: 0 = Saturation I
     amplifier: 0
 
+# Candy Corn (issue #1206): a Halloween candy that eats like a Cookie. Eating one also gives a
+# short effect that its name and lore deliberately keep secret (default Regeneration V for
+# 2 seconds). Players in a running hosted event game never get it. The amplifier is capped at 4
+# and the duration at 1 minute. Applies on /joshymc reload.
+candy-corn:
+  hidden-effect:
+    # false = the candy is just a cookie
+    enabled: true
+    duration-ticks: 40
+    # Zero-indexed: 4 = Regeneration V
+    amplifier: 4
+
 # Quick Hit custom enchant (issue #1209): while the enchanted item is in the main hand, a full
 # strength melee attack recharges this much faster. Damage per hit, mining speed and projectiles
 # stay vanilla. Applied with /ce add quick_hit <level>; combines in anvils like other custom

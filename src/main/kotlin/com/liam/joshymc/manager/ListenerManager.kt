@@ -12,6 +12,7 @@ import com.liam.joshymc.listener.PeanutButterCupListener
 import com.liam.joshymc.listener.LinkPopListener
 import com.liam.joshymc.listener.JosheesBarListener
 import com.liam.joshymc.listener.RurusListener
+import com.liam.joshymc.listener.CandyCornListener
 import com.liam.joshymc.listener.TomatoListener
 import com.liam.joshymc.listener.VikingBoomerangListener
 import com.liam.joshymc.listener.GSitListener
@@ -91,6 +92,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(LinkPopListener(plugin), plugin)
         pm.registerEvents(JosheesBarListener(plugin), plugin)
         pm.registerEvents(RurusListener(plugin), plugin)
+        pm.registerEvents(CandyCornListener(plugin), plugin)
         pm.registerEvents(TomatoListener(plugin), plugin)
         pm.registerEvents(VikingBoomerangListener(plugin), plugin)
         pm.registerEvents(MinecraftChatListener(plugin), plugin)
