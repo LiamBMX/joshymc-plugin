@@ -12,6 +12,7 @@ import com.liam.joshymc.listener.PeanutButterCupListener
 import com.liam.joshymc.listener.LinkPopListener
 import com.liam.joshymc.listener.TomatoListener
 import com.liam.joshymc.listener.GSitListener
+import com.liam.joshymc.listener.DiscordGroupListener
 import com.liam.joshymc.listener.LinkGuiListener
 import com.liam.joshymc.listener.MinecraftChatListener
 import com.liam.joshymc.listener.ModModeListener
@@ -88,6 +89,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(TomatoListener(plugin), plugin)
         pm.registerEvents(MinecraftChatListener(plugin), plugin)
         pm.registerEvents(LinkGuiListener(plugin), plugin)
+        pm.registerEvents(DiscordGroupListener(plugin), plugin)
 
         // Phase 1
         pm.registerEvents(NightVisionListener(plugin), plugin)
