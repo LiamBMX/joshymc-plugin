@@ -47,7 +47,8 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         val itemId = args[1]
 
         val amount = if (args.size >= 3) {
-            args[2].toIntOrNull()?.coerceIn(1, 64) ?: run {
+            // Out-of-range amounts are refused rather than quietly clamped (issue #1207).
+            args[2].toIntOrNull()?.takeIf { it in 1..64 } ?: run {
                 sender.sendMessage(Component.text("Amount must be a number between 1 and 64.", NamedTextColor.RED))
                 return
             }

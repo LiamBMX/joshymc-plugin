@@ -1112,6 +1112,40 @@ peanut-butter-cup:
     # Zero-indexed: 0 = Speed I, 2 = Speed III
     amplifier: 2
 
+# Link Pops (issue #1207): five custom candies (red, blue, green, purple, orange) that eat like a
+# Cookie. Each colour also gives a short effect that its name and lore deliberately keep secret
+# (defaults: red Resistance I 5s, blue Resistance I 6s, green Resistance II 7s, purple
+# Resistance III 7s, orange Resistance III 11s). Players in a running hosted event game never get
+# it. Amplifiers are zero-indexed (0 = level I), capped at 3; durations are capped at 5 minutes.
+# Applies on /joshymc reload.
+link-pops:
+  red:
+    hidden-effect:
+      # false = this colour is just a cookie
+      enabled: true
+      duration-ticks: 100
+      amplifier: 0
+  blue:
+    hidden-effect:
+      enabled: true
+      duration-ticks: 120
+      amplifier: 0
+  green:
+    hidden-effect:
+      enabled: true
+      duration-ticks: 140
+      amplifier: 1
+  purple:
+    hidden-effect:
+      enabled: true
+      duration-ticks: 140
+      amplifier: 2
+  orange:
+    hidden-effect:
+      enabled: true
+      duration-ticks: 220
+      amplifier: 2
+
 # Hosted Spleef and Sumo events (issue #1187). Staff run them through /event; arenas are
 # saved presets made with /event arena.
 hosted-events:
