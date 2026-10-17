@@ -88,6 +88,10 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     companion object {
         private const val PLACED_META = "joshymc_quest_placed"
 
+        /** Credits for finishing every Daily / every Weekly quest of a cycle (issue #1223). */
+        const val DEFAULT_DAILY_COMPLETION_CREDITS = 250.0
+        const val DEFAULT_WEEKLY_COMPLETION_CREDITS = 750.0
+
         /** Multiplier on the money reward of every Daily/Weekly quest (issue #1008). */
         private const val MONEY_REWARD_MULTIPLIER = 1.5
         private val ORE_PRODUCTS = setOf("IRON_INGOT", "GOLD_INGOT", "COPPER_INGOT")
@@ -132,6 +136,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     private var dailyRepeatProtectionDays = 7
     private var dailyCompletionRewardEnabled = true
     private var dailyCompletionCommands: List<String> = emptyList()
+    private var dailyCompletionCredits = DEFAULT_DAILY_COMPLETION_CREDITS
 
     private var selectedWeekly = 3
     private var weeklyResetDay = DayOfWeek.MONDAY
@@ -140,6 +145,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     private var weeklyRepeatProtectionWeeks = 4
     private var weeklyCompletionRewardEnabled = true
     private var weeklyCompletionCommands: List<String> = emptyList()
+    private var weeklyCompletionCredits = DEFAULT_WEEKLY_COMPLETION_CREDITS
 
     private var questMasterEnabled = true
     private var requiredDailySets = 5
@@ -158,6 +164,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         dailyRepeatProtectionDays = cfg.getInt("quests.daily.repeat-protection-days", 7)
         dailyCompletionRewardEnabled = cfg.getBoolean("quests.daily.completion-reward.enabled", true)
         dailyCompletionCommands = cfg.getStringList("quests.daily.completion-reward.commands")
+        dailyCompletionCredits = cfg.getDouble("quests.daily.completion-reward.credits", DEFAULT_DAILY_COMPLETION_CREDITS)
 
         selectedWeekly = cfg.getInt("quests.weekly.selected", 3)
         weeklyResetDay = runCatching { DayOfWeek.valueOf((cfg.getString("quests.weekly.reset.day", "MONDAY") ?: "MONDAY").uppercase()) }
@@ -167,6 +174,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         weeklyRepeatProtectionWeeks = cfg.getInt("quests.weekly.repeat-protection-weeks", 4)
         weeklyCompletionRewardEnabled = cfg.getBoolean("quests.weekly.completion-reward.enabled", true)
         weeklyCompletionCommands = cfg.getStringList("quests.weekly.completion-reward.commands")
+        weeklyCompletionCredits = cfg.getDouble("quests.weekly.completion-reward.credits", DEFAULT_WEEKLY_COMPLETION_CREDITS)
 
         questMasterEnabled = cfg.getBoolean("quests.quest-master.enabled", true)
         requiredDailySets = cfg.getInt("quests.quest-master.required-daily-sets", 5)
@@ -796,7 +804,8 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         if (!pool.all { map[it.id]?.completed == true }) return
 
         val cycleId = dailyCycleIdState
-        if (!claimDailyBonusOnce(uuid.toString(), cycleId)) return
+        val credits = if (dailyCompletionRewardEnabled) dailyCompletionCredits else 0.0
+        val paid = claimBonusWithCredits(uuid, cycleId, credits) { claimDailyBonusOnce(uuid.toString(), cycleId) } ?: return
 
         if (dailyCompletionRewardEnabled) {
             val keyId = rollDailyCompletionKey()
@@ -808,10 +817,38 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
             runRewardCommands(player, dailyCompletionCommands)
         }
         player.playSound(player.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.6f, 1.0f)
-        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("&6&l★ Daily Quests Complete! &eBonus reward granted!"))
+        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("&6&l★ Daily Quests Complete! &eBonus reward granted!${creditsSuffix(paid)}"))
 
         if (questMasterEnabled) creditQuestMasterDailySet(player, cycleId)
     }
+
+    /**
+     * Claims a set-completion bonus through [claim] (the once-per-cycle conditional UPDATE)
+     * and deposits [credits] Credits by UUID in the same transaction (issue #1223), so the
+     * claim and the payout happen together or not at all: a restart or a second completion
+     * check can never pay twice, and a failed deposit rolls the claim back instead of marking
+     * it paid. Returns the Credits paid (0 when none are configured), or null when the bonus
+     * was already claimed this cycle or the transaction failed.
+     */
+    private fun claimBonusWithCredits(uuid: UUID, cycleId: String, credits: Double, claim: () -> Boolean): Double? {
+        var paid: Double? = null
+        try {
+            plugin.databaseManager.transaction {
+                if (!claim()) return@transaction
+                paid = if (credits > 0.0 && plugin.creditsManager.deposit(uuid, credits)) credits else 0.0
+            }
+        } catch (e: Exception) {
+            plugin.logger.severe("[QuestCycle] Completion bonus for $uuid (cycle $cycleId) failed and was rolled back: ${e.message}")
+            return null
+        }
+        return paid
+    }
+
+    private fun creditsSuffix(credits: Double): String =
+        if (credits > 0.0) " &b+${formatCredits(credits)} Credits" else ""
+
+    private fun formatCredits(credits: Double): String =
+        if (credits % 1.0 == 0.0) "%,d".format(java.util.Locale.US, credits.toLong()) else plugin.creditsManager.format(credits)
 
     /** Weighted pick among the Daily Quest completion keys — Harvest 70% / Stockpile 20% / Homestead 10%. */
     private fun rollDailyCompletionKey(): String {
@@ -876,14 +913,15 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         if (!pool.all { map[it.id]?.completed == true }) return
 
         val cycleId = weeklyCycleIdState
-        if (!claimWeeklyBonusOnce(uuid.toString(), cycleId)) return
+        val credits = if (weeklyCompletionRewardEnabled) weeklyCompletionCredits else 0.0
+        val paid = claimBonusWithCredits(uuid, cycleId, credits) { claimWeeklyBonusOnce(uuid.toString(), cycleId) } ?: return
 
         if (weeklyCompletionRewardEnabled) {
             runRewardCommands(player, weeklyCompletionCommands)
             awardWeeklyKeyReward(player, cycleId)
         }
         player.playSound(player.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 1.0f)
-        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("&d&l★ Weekly Quests Complete! &eBonus reward granted!"))
+        plugin.commsManager.send(player, plugin.commsManager.parseLegacy("&d&l★ Weekly Quests Complete! &eBonus reward granted!${creditsSuffix(paid)}"))
 
         if (questMasterEnabled) {
             ensureQuestMasterRow(uuid.toString(), cycleId)
@@ -1313,7 +1351,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
             gui.setItem(dailySlots[i], buildQuestItem(quest, progress)) { p, _ -> showQuestDetails(p, quest, getProgress(p.uniqueId, quest)) }
         }
         val dailyDone = dailyPool.count { getProgress(uuid, it).completed }
-        gui.setItem(46, bonusItem("Daily Completion", dailyDone, dailyPool.size, 1, isDailyBonusClaimed(uuid, dailyCycleIdState)))
+        gui.setItem(46, bonusItem("Daily Completion", dailyDone, dailyPool.size, 1, if (dailyCompletionRewardEnabled) dailyCompletionCredits else 0.0, isDailyBonusClaimed(uuid, dailyCycleIdState)))
 
         val weeklyPool = getWeeklyPool()
         gui.setItem(16, headerItem("Weekly Quests", NamedTextColor.AQUA, weeklySecondsLeft()))
@@ -1324,7 +1362,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
             gui.setItem(weeklySlots[i], buildQuestItem(quest, progress)) { p, _ -> showQuestDetails(p, quest, getProgress(p.uniqueId, quest)) }
         }
         val weeklyDone = weeklyPool.count { getProgress(uuid, it).completed }
-        gui.setItem(52, bonusItem("Weekly Completion", weeklyDone, weeklyPool.size, 1, isWeeklyBonusClaimed(uuid, weeklyCycleIdState)))
+        gui.setItem(52, bonusItem("Weekly Completion", weeklyDone, weeklyPool.size, 1, if (weeklyCompletionRewardEnabled) weeklyCompletionCredits else 0.0, isWeeklyBonusClaimed(uuid, weeklyCycleIdState)))
 
         val qm = getQuestMasterProgress(uuid, weeklyCycleIdState)
         gui.setItem(13, questMasterItem(qm))
@@ -1389,7 +1427,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         return item
     }
 
-    private fun bonusItem(title: String, done: Int, total: Int, keys: Int, claimed: Boolean): ItemStack {
+    private fun bonusItem(title: String, done: Int, total: Int, keys: Int, credits: Double, claimed: Boolean): ItemStack {
         val item = ItemStack(if (claimed) Material.LIME_DYE else if (done >= total && total > 0) Material.LIME_DYE else Material.GRAY_DYE)
         item.editMeta { meta ->
             meta.displayName(Component.text(title.uppercase(), NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false))
@@ -1399,7 +1437,10 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
                 .decoration(TextDecoration.ITALIC, false)
             lore += Component.empty()
             lore += Component.text("  Reward: ", NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false)
-                .append(Component.text("$keys Crate Key${if (keys != 1) "s" else ""}", NamedTextColor.AQUA))
+                .append(Component.text(
+                    (if (credits > 0.0) "${formatCredits(credits)} Credits + " else "") + "$keys Crate Key${if (keys != 1) "s" else ""}",
+                    NamedTextColor.AQUA
+                ))
             lore += Component.empty()
             lore += when {
                 claimed -> Component.text("  ✔ REWARDED", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)

@@ -1012,6 +1012,8 @@ quests:
     completion-reward:
       # Grants exactly one key when enabled: Harvest Key 70% / Stockpile Key 20% / Homestead Key 10%.
       enabled: true
+      # Credits paid once per daily cycle for finishing all Daily Quests (with the key above).
+      credits: 250
       # Optional extra commands run on top of the key above. {player} is replaced with the
       # player's name. Commands run from console.
       commands: []
@@ -1028,6 +1030,8 @@ quests:
       # In addition to any commands below, completing every Weekly Quest always grants
       # exactly one weighted-random crate key (Homestead Key 70% / Campfire Key 25% /
       # Cabin Key 5%) — handled internally, not configurable here.
+      # Credits paid once per weekly cycle for finishing all Weekly Quests (with the key).
+      credits: 750
       commands: []
 
   quest-master:
