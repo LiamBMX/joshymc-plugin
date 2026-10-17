@@ -13,6 +13,9 @@ import com.liam.joshymc.communityevent.arena.EventArenas
 import com.liam.joshymc.communityevent.arena.RegionSelections
 import com.liam.joshymc.communityevent.game.GameMenu
 import com.liam.joshymc.communityevent.game.HostedGames
+import com.liam.joshymc.communityevent.result.EventResults
+import com.liam.joshymc.communityevent.result.ResultCommands
+import com.liam.joshymc.communityevent.result.ResultsMenu
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -114,8 +117,19 @@ class EventManager(private val plugin: Joshymc) : Listener {
     /** Spleef and Sumo gameplay (issue #1187): the controllers for those two event types. */
     val games = HostedGames(plugin, sessions, arenas, this)
 
+    /** Results, rewards, history and statistics (issue #1199), stored in data.db. */
+    val results = EventResults(plugin, arenas)
+    val resultsMenu = ResultsMenu(plugin, results) { menu.open(it) }
+    val resultCommands = ResultCommands(plugin, results, resultsMenu)
+
     init {
         sessions.onChange = { menu.refreshOpenMenus() }
+        sessions.onStarted = { results.onStarted(it) }
+        sessions.onFinished = { session, wasState, cause, registered -> results.onFinished(session, wasState, cause, registered) }
+        sessions.openExtra = { results.prizeLine(it) }
+        results.onChange = { menu.refreshOpenMenus() }
+        menu.results = results
+        menu.resultsMenu = resultsMenu
         sessions.startCheck = { arenas.startProblem(it) ?: games.startProblem(it) }
         games.onChange = { menu.refreshOpenMenus() }
         menu.arenaMenu = ArenaMenu(plugin, arenas, sessions, selections, arenaCommands, ::giveWand) { menu.open(it) }
@@ -142,6 +156,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
 
         loadConfig()
         arenas.load()
+        results.start()
         games.start()
         // Listeners (this and games.listener) are registered once by ListenerManager.registerAll().
 
@@ -1044,6 +1059,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 }
                 "status" -> if (host(sender)) sendStatus(sender)
                 "arena", "arenas" -> arenaCommands.handleArena(sender, args)
+                in resultCommands.handled -> resultCommands.handle(sender, args)
                 in EventType.ids -> {
                     val type = EventType.fromId(sub)!!
                     if (games.handlesCommand(type, args.getOrNull(1)?.lowercase())) games.handleCommand(sender, type, args)
@@ -1093,6 +1109,10 @@ class EventManager(private val plugin: Joshymc) : Listener {
                     else -> row("Arena", "${arena.displayName} (${arenas.report(arena).summary()})")
                 }
                 row("Active", if (session.state.isActive) "Yes" else "No", if (session.state.isActive) NamedTextColor.GREEN else NamedTextColor.GRAY)
+                if (session.state.isActive) {
+                    val prizes = if (session.state == EventState.RUNNING) session.rewards else results.presetFor(session.type)
+                    row("Prizes", prizes.joinToString(", ") { results.describe(it) }.ifEmpty { "none (/event rewards)" })
+                }
             }
             if (sender.hasPermission(EventPermissions.ADMIN)) {
                 settingsLines().forEach { Msg.reply(sender, it, category) }
@@ -1182,6 +1202,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 lines += "&e/event mobs next|pause|resume|status|setkit &7- Skip the intermission, pause/resume waves, status, save kit"
             }
             lines += arenaCommands.usageLines(sender)
+            lines += resultCommands.usageLines(sender)
             if (sender.hasPermission(EventPermissions.ADMIN)) {
                 lines += "&e/event wand &7- Get event zone wand"
                 lines += "&e/event save &7- Save selected zone"
@@ -1198,8 +1219,9 @@ class EventManager(private val plugin: Joshymc) : Listener {
             val host = EventPermissions.canHost(sender)
             return when (args.size) {
                 1 -> buildList {
-                    if (sender.hasPermission(EventPermissions.JOIN)) addAll(listOf("join", "leave"))
+                    if (sender.hasPermission(EventPermissions.JOIN)) addAll(listOf("join", "leave", "stats"))
                     if (host) addAll(hostSubs)
+                    if (host) addAll(resultCommands.subcommands - "stats")
                     if (arenaCommands.canView(sender)) add("arena")
                     // Every type has game subcommands for hosts (and arena setup for arena staff).
                     if (host || EventPermissions.canSetupArenas(sender)) addAll(EventType.ids)
@@ -1207,6 +1229,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 }.filter { it.startsWith(args[0].lowercase()) }
                 else -> when {
                     args[0].equals("arena", true) || args[0].equals("arenas", true) -> arenaCommands.tabArena(sender, args)
+                    args[0].lowercase() in resultCommands.handled -> resultCommands.tab(sender, args)
                     EventType.fromId(args[0]) != null -> {
                         val type = EventType.fromId(args[0])!!
                         when {

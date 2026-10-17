@@ -431,7 +431,7 @@ commands:
     usage: /arena <wand|create|delete|list|info|enable|disable|points|undo|clear|tp|buildwand|resetbuild|clearbuild>
   event:
     description: Event Manager for hosted community events, plus event-world setup
-    usage: /event [join|leave|create <type>|open|start|stop|reset [confirm]|status|arena ...|<type> set...|wand|save|pvp|build|break|setworld]
+    usage: /event [join|leave|stats|create <type>|open|start|stop|reset [confirm]|status|result ...|rewards ...|history|hoststats|arena ...|<type> set...|wand|save|pvp|build|break|setworld]
   portal:
     description: Manage custom portals
     usage: /portal <wand|create|delete|action|cooldown|message|list|info|tp>
@@ -1129,16 +1129,34 @@ permissions:
     children:
       joshymc.event.host: true
       joshymc.event.arena: true
+      joshymc.event.rewards: true
+      joshymc.event.result.override: true
+      joshymc.event.rewards.recover: true
+      joshymc.event.stats.others: true
   joshymc.event.host:
-    description: Host community events (Event Manager GUI, /event create/open/start/stop/reset/status, select arenas) - for Community Managers
+    description: Host community events (Event Manager GUI, /event create/open/start/stop/reset/status, select arenas, confirm results, history, own hosting stats) - for Community Managers
     default: op
     children:
       joshymc.event.arena: true
+      joshymc.event.rewards: true
+      joshymc.event.result.override: true
+  joshymc.event.rewards:
+    description: Configure event reward presets (/event rewards add|remove|clear, /event result syncrewards). Negate it to keep a host out of reward setup
+    default: op
+  joshymc.event.result.override:
+    description: Correct an unconfirmed event result (/event result setwinner|addwinner|removewinner|setplace|clear, GUI). Negate it to keep a host to confirming detected results
+    default: op
+  joshymc.event.rewards.recover:
+    description: Inspect and retry failed event reward payouts (/event rewards failed|retry). Not given to hosts
+    default: op
+  joshymc.event.stats.others:
+    description: View other staff members' event hosting statistics (/event hoststats <player>). Not given to hosts
+    default: op
   joshymc.event.arena:
     description: Create, configure and delete saved event arenas (/event arena, /event <type> set...). Negate it to keep a host out of arena editing
     default: op
   joshymc.event.join:
-    description: Register for hosted community events with /event join and /event leave
+    description: Register for hosted community events with /event join and /event leave, and see your /event stats
     default: true
   joshymc.portal:
     description: Manage portals

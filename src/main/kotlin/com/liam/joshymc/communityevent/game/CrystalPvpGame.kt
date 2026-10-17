@@ -1,6 +1,7 @@
 package com.liam.joshymc.communityevent.game
 
 import com.liam.joshymc.communityevent.EventResult
+import com.liam.joshymc.communityevent.result.EventOutcome
 import com.liam.joshymc.communityevent.EventSession
 import com.liam.joshymc.communityevent.EventType
 import com.liam.joshymc.communityevent.LeaveReason
@@ -318,6 +319,13 @@ class CrystalPvpGame(games: HostedGames) : MinigameGame(games, EventType.CPVP) {
 
     private fun crown(champion: UUID?) {
         round.complete(champion)
+        val finalLoser = bracket?.completed?.lastOrNull()?.takeIf { champion != null && it.winner == champion }?.loser
+        reportResult(
+            if (champion != null) EventOutcome.WINNER else EventOutcome.NO_WINNER,
+            listOfNotNull(champion),
+            if (champion != null) "${nameOf(champion)} won the Crystal PvP tournament" else "The tournament ended with no champion",
+            listOfNotNull(finalLoser),
+        )
         val message = if (champion != null) Component.text("${nameOf(champion)} is the Crystal PvP champion!", NamedTextColor.GOLD)
         else Component.text("The Crystal PvP tournament ended with no champion.", NamedTextColor.YELLOW)
         comms.broadcast(message, CommunicationsManager.Category.EVENT)

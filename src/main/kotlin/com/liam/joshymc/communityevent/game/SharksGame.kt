@@ -1,6 +1,7 @@
 package com.liam.joshymc.communityevent.game
 
 import com.liam.joshymc.communityevent.EventResult
+import com.liam.joshymc.communityevent.result.EventOutcome
 import com.liam.joshymc.communityevent.EventSession
 import com.liam.joshymc.communityevent.EventType
 import com.liam.joshymc.communityevent.LeaveReason
@@ -296,12 +297,17 @@ class SharksGame(games: HostedGames) : MinigameGame(games, EventType.SHARKS) {
         when (outcome) {
             is SharksRoster.Outcome.Winner -> {
                 round.complete(outcome.winner)
+                reportResult(EventOutcome.WINNER, listOf(outcome.winner), "${nameOf(outcome.winner)} was the last minnow standing")
                 comms.broadcast(Component.text("${nameOf(outcome.winner)} is the last minnow standing and wins Sharks and Minnows!", NamedTextColor.GOLD), CommunicationsManager.Category.EVENT)
                 winnerTitle(audience(), "${nameOf(outcome.winner)} wins!", "Last minnow standing")
             }
             is SharksRoster.Outcome.NoWinner -> {
                 round.complete(null)
                 val tied = outcome.lastStanding
+                reportResult(
+                    if (tied.size > 1) EventOutcome.DRAW else EventOutcome.NO_WINNER, emptyList(),
+                    if (tied.size > 1) "The last minnows (${tied.joinToString(", ") { nameOf(it) }}) were caught together" else "Every minnow was caught",
+                )
                 val detail = if (tied.isNotEmpty()) " The last minnows (${tied.joinToString(", ") { nameOf(it) }}) were caught together." else ""
                 comms.broadcast(Component.text("Every minnow was caught: Sharks and Minnows ends with no winner.$detail", NamedTextColor.YELLOW), CommunicationsManager.Category.EVENT)
                 winnerTitle(audience(), "No winner", "Every minnow was caught")

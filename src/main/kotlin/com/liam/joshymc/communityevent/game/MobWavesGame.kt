@@ -1,6 +1,7 @@
 package com.liam.joshymc.communityevent.game
 
 import com.liam.joshymc.communityevent.EventResult
+import com.liam.joshymc.communityevent.result.EventOutcome
 import com.liam.joshymc.communityevent.EventSession
 import com.liam.joshymc.communityevent.EventType
 import com.liam.joshymc.communityevent.LeaveReason
@@ -558,6 +559,7 @@ class MobWavesGame(games: HostedGames) : MinigameGame(games, EventType.MOBS) {
     private fun victory(r: MobWaveRun) {
         val survivors = round.active
         round.complete(survivors.singleOrNull())
+        reportResult(EventOutcome.WINNER, survivors, "${survivors.size} survivor(s) cleared all ${r.totalWaves} waves")
         removeMobs()
         comms.broadcast(
             Component.text("Mob Waves: the players survived all ${r.totalWaves} waves! ", NamedTextColor.GOLD)
@@ -573,6 +575,7 @@ class MobWavesGame(games: HostedGames) : MinigameGame(games, EventType.MOBS) {
     private fun defeat(r: MobWaveRun) {
         if (!r.defeat()) return
         round.complete(null)
+        reportResult(EventOutcome.DEFEAT, emptyList(), "Every player fell on wave ${r.wave}/${r.totalWaves}")
         removeMobs()
         val reached = if (r.wave == 0) "before the first wave" else "on wave ${r.wave}/${r.totalWaves}"
         comms.broadcast(Component.text("Mob Waves: every player fell $reached.", NamedTextColor.RED), CommunicationsManager.Category.EVENT)

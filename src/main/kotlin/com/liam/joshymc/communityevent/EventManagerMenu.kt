@@ -5,6 +5,8 @@ import com.liam.joshymc.communityevent.arena.ArenaCommands
 import com.liam.joshymc.communityevent.arena.ArenaMenu
 import com.liam.joshymc.communityevent.arena.EventArenas
 import com.liam.joshymc.communityevent.game.GameMenu
+import com.liam.joshymc.communityevent.result.EventResults
+import com.liam.joshymc.communityevent.result.ResultsMenu
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.manager.CommunicationsManager
@@ -38,6 +40,10 @@ class EventManagerMenu(
     /** Spleef/Sumo game controls (issue #1187); set by EventManager. */
     lateinit var gameMenu: GameMenu
 
+    /** Results, rewards, history and hosting statistics (issue #1199); set by EventManager. */
+    lateinit var resultsMenu: ResultsMenu
+    lateinit var results: EventResults
+
     private val comms get() = plugin.commsManager
 
     /** Main menus currently open, so lifecycle changes can refresh them. */
@@ -54,6 +60,10 @@ class EventManagerMenu(
         private const val SLOT_RESET = 24
         private const val SLOT_SETTINGS = 25
         private const val SLOT_ARENAS = 31
+        private const val SLOT_RESULTS = 29
+        private const val SLOT_REWARDS = 30
+        private const val SLOT_HISTORY = 32
+        private const val SLOT_HOST_STATS = 33
 
         private const val SUB_SIZE = 27
         private val TYPE_SLOTS = intArrayOf(11, 12, 13, 14, 15)
@@ -189,8 +199,77 @@ class EventManagerMenu(
             ),
         ) { p, _ -> GuiStyle.clickSound(p); arenaMenu.openList(p, filter = sessions.active?.type) }
 
+        renderResultButtons(gui, active)
+
         gui.setItem(GuiStyle.closeSlot(MAIN_SIZE), GuiStyle.close()) { p, _ -> p.closeInventory() }
         gui.fill(GuiStyle.filler())
+    }
+
+    /** Issue #1199: Event Results, Configure Rewards, Event History, Hosting Statistics. */
+    private fun renderResultButtons(gui: CustomGui, active: EventSession?) {
+        val waiting = results.awaitingCount
+        gui.setItem(
+            SLOT_RESULTS,
+            GuiStyle.item(
+                Material.TOTEM_OF_UNDYING, Component.text("Event Results", if (waiting > 0) NamedTextColor.GREEN else NamedTextColor.GOLD),
+                listOf(
+                    if (waiting > 0) Component.text("$waiting result(s) awaiting confirmation", NamedTextColor.YELLOW)
+                    else Component.text("No results awaiting confirmation.", NamedTextColor.GRAY),
+                    Component.text("Review winners, confirm, then rewards", NamedTextColor.GRAY),
+                    Component.text("are given once.", NamedTextColor.GRAY),
+                    Component.empty(),
+                    Component.text("Click to open", NamedTextColor.YELLOW),
+                ),
+            ),
+        ) { p, _ -> if (guard(p)) { GuiStyle.clickSound(p); resultsMenu.openResult(p) } }
+
+        val prizes = when {
+            active == null -> emptyList()
+            active.state == EventState.RUNNING -> active.rewards
+            else -> results.presetFor(active.type)
+        }
+        gui.setItem(
+            SLOT_REWARDS,
+            GuiStyle.item(
+                Material.CHEST, Component.text("Configure Rewards", NamedTextColor.GOLD),
+                buildList {
+                    add(Component.text("Prize presets per event type.", NamedTextColor.GRAY))
+                    if (active != null) {
+                        add(Component.empty())
+                        add(Component.text("${active.type.displayName}${if (active.state == EventState.RUNNING) " (locked at start)" else ""}:", NamedTextColor.WHITE))
+                        if (prizes.isEmpty()) add(Component.text("No rewards", NamedTextColor.GRAY))
+                        prizes.take(6).forEach { add(Component.text(results.describe(it), NamedTextColor.AQUA)) }
+                    }
+                    add(Component.empty())
+                    add(Component.text("Click to open", NamedTextColor.YELLOW))
+                },
+            ),
+        ) { p, _ -> if (guard(p)) { GuiStyle.clickSound(p); resultsMenu.openPresets(p) } }
+
+        gui.setItem(
+            SLOT_HISTORY,
+            GuiStyle.item(
+                Material.BOOKSHELF, Component.text("Event History", NamedTextColor.GOLD),
+                listOf(
+                    Component.text("Every recorded event: winners, hosts,", NamedTextColor.GRAY),
+                    Component.text("participants and reward status.", NamedTextColor.GRAY),
+                    Component.empty(),
+                    Component.text("Click to open", NamedTextColor.YELLOW),
+                ),
+            ),
+        ) { p, _ -> if (guard(p)) { GuiStyle.clickSound(p); resultsMenu.openHistory(p) } }
+
+        gui.setItem(
+            SLOT_HOST_STATS,
+            GuiStyle.item(
+                Material.SPYGLASS, Component.text("Hosting Statistics", NamedTextColor.GOLD),
+                listOf(
+                    Component.text("Events you've hosted, from history.", NamedTextColor.GRAY),
+                    Component.empty(),
+                    Component.text("Click to open", NamedTextColor.YELLOW),
+                ),
+            ),
+        ) { p, _ -> if (guard(p)) { GuiStyle.clickSound(p); resultsMenu.openHostStats(p) } }
     }
 
     private fun statusItem(session: EventSession?): org.bukkit.inventory.ItemStack {
@@ -210,6 +289,10 @@ class EventManagerMenu(
             line("Created", ago(session.createdAt), NamedTextColor.WHITE),
         )
         lore += arenaLine(session)
+        if (session.state.isActive) {
+            val prizes = if (session.state == EventState.RUNNING) session.rewards else results.presetFor(session.type)
+            lore += line("Prizes", if (prizes.isEmpty()) "none" else "${prizes.size} reward line(s)", if (prizes.isEmpty()) NamedTextColor.DARK_GRAY else NamedTextColor.AQUA)
+        }
         if (!session.state.isActive) lore += Component.text("No event is active.", NamedTextColor.GRAY)
         return GuiStyle.item(session.type.icon, Component.text("Event Status", NamedTextColor.GOLD), lore)
     }

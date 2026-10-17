@@ -48,6 +48,18 @@ class EventSessions(
      */
     var startCheck: ((EventSession) -> String?)? = null
 
+    /** Runs once a start succeeded (issue #1199: snapshot the reward preset). */
+    var onStarted: ((EventSession) -> Unit)? = null
+
+    /**
+     * Runs once a session has finished (issue #1199: event history). [registered] is who was
+     * still registered at the end, read before the session clears it.
+     */
+    var onFinished: ((session: EventSession, wasState: EventState, cause: FinishCause, registered: Set<UUID>) -> Unit)? = null
+
+    /** Extra line for the registration broadcast, e.g. the prizes (issue #1199). */
+    var openExtra: ((EventSession) -> Component?)? = null
+
     private val controllers = HashMap<EventType, EventController>()
 
     private val comms get() = plugin.commsManager
@@ -102,6 +114,7 @@ class EventSessions(
                 ),
             CommunicationsManager.Category.EVENT,
         )
+        runCatching { openExtra?.invoke(session) }.getOrNull()?.let { comms.broadcast(it, CommunicationsManager.Category.EVENT) }
         changed()
         val note = if (failure != null) " (the ${session.type.displayName} handler reported an error: $failure)" else ""
         return EventResult.Success(session, "Registration is open.$note")
@@ -121,12 +134,14 @@ class EventSessions(
         startCheck?.invoke(session)?.let { return EventResult.Failure(it) }
         if (!move(session, EventState.RUNNING)) return invalid(session, EventState.RUNNING)
         session.startedAt = System.currentTimeMillis()
+        session.roster = session.participants.associateWith { Bukkit.getPlayer(it)?.name ?: Bukkit.getOfflinePlayer(it).name ?: it.toString().take(8) }
         val failure = runHook(session, "start") { it.onStart(session) }
         if (failure != null) {
             // Initialization failed: roll back so staff can retry, and don't announce a start.
             session.cancelTasks()
             session.state = EventState.OPEN
             session.startedAt = null
+            session.roster = emptyMap()
             changed()
             return EventResult.Failure("The ${session.type.displayName} event failed to start: $failure. Registration is still open.")
         }
@@ -134,6 +149,9 @@ class EventSessions(
             Component.text("The ${session.type.displayName} event has started!", NamedTextColor.GOLD),
             CommunicationsManager.Category.EVENT,
         )
+        runCatching { onStarted?.invoke(session) }.onFailure {
+            plugin.logger.warning("[Event] Start hook failed: ${it.message}")
+        }
         changed()
         return EventResult.Success(session, "${session.type.displayName} started with ${session.participantCount} participant(s).")
     }
@@ -144,7 +162,9 @@ class EventSessions(
         } else noEvent()
         val wasState = session.state
         if (!move(session, EventState.FINISHED)) return invalid(session, EventState.FINISHED)
+        val registered = session.participants
         val failure = finish(session)
+        finished(session, wasState, FinishCause.STOPPED, registered)
         when (wasState) {
             EventState.RUNNING -> comms.broadcast(
                 Component.text("The ${session.type.displayName} event has ended. Thanks for participating!", NamedTextColor.GOLD),
@@ -191,6 +211,9 @@ class EventSessions(
         session.openedAt = null
         session.startedAt = null
         session.endedAt = null
+        session.roster = emptyMap()
+        session.detected = null
+        session.rewards = emptyList()
         session.metadata.clear()
         val failure = runHook(session, "reset") { it.onReset(session) }
         if (notify.isNotEmpty()) {
@@ -291,8 +314,11 @@ class EventSessions(
     fun shutdown() {
         val session = active ?: return
         plugin.logger.info("[Event] Discarding the ${session.type.displayName} event (${session.state.label}) on shutdown; sessions are not kept across restarts.")
+        val wasState = session.state
         session.state = EventState.FINISHED
+        val registered = session.participants
         finish(session)
+        finished(session, wasState, FinishCause.SHUTDOWN, registered)
         current = null
     }
 
@@ -327,6 +353,13 @@ class EventSessions(
         }
     }
 
+    private fun finished(session: EventSession, wasState: EventState, cause: FinishCause, registered: Set<UUID>) {
+        runCatching { onFinished?.invoke(session, wasState, cause, registered) }.onFailure {
+            plugin.logger.severe("[Event] Recording the ${session.type.displayName} event failed: ${it.message}")
+            it.printStackTrace()
+        }
+    }
+
     private fun changed() {
         runCatching { onChange?.invoke() }.onFailure {
             plugin.logger.warning("[Event] Failed to refresh event menus: ${it.message}")
@@ -337,4 +370,12 @@ class EventSessions(
 
     private fun invalid(session: EventSession, next: EventState) =
         EventResult.Failure("Can't move the ${session.type.displayName} event from ${session.state.label} to ${next.label}.")
+}
+
+/** Why a session finished (issue #1199). */
+enum class FinishCause {
+    /** `/event stop`, the GUI, or a game ending itself after its final round. */
+    STOPPED,
+    /** The server stopped while the event was live. */
+    SHUTDOWN,
 }

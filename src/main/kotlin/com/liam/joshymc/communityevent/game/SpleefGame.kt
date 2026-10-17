@@ -1,6 +1,7 @@
 package com.liam.joshymc.communityevent.game
 
 import com.liam.joshymc.communityevent.EventResult
+import com.liam.joshymc.communityevent.result.EventOutcome
 import com.liam.joshymc.communityevent.EventSession
 import com.liam.joshymc.communityevent.EventType
 import com.liam.joshymc.communityevent.LeaveReason
@@ -189,6 +190,18 @@ class SpleefGame(games: HostedGames) : MinigameGame(games, EventType.SPLEEF) {
     private fun complete() {
         val champion = round.leader()
         round.complete(champion)
+        // Runner-up only when it's unambiguous: a single round, where the last player to fall was second.
+        val second = if (champion != null && round.round == 1) listOfNotNull(round.eliminated.lastOrNull()) else emptyList()
+        reportResult(
+            when {
+                champion != null -> EventOutcome.WINNER
+                round.wins.isEmpty() -> EventOutcome.NO_WINNER
+                else -> EventOutcome.DRAW
+            },
+            listOfNotNull(champion),
+            if (champion != null) "${nameOf(champion)} won with ${round.wins[champion]} round win(s)" else "No single champion after ${round.round} round(s)",
+            second,
+        )
         val message = if (champion != null) {
             Component.text("${nameOf(champion)} is the Spleef champion with ${round.wins[champion]} round win(s)!", NamedTextColor.GOLD)
         } else {

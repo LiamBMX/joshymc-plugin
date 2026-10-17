@@ -324,6 +324,22 @@ abstract class MinigameGame(protected val games: HostedGames, val type: EventTyp
         }))
     }
 
+    /**
+     * Hands the game's verdict to the session (issue #1199) so it is recorded for staff to
+     * confirm when the event ends. Only the first report of a run counts.
+     */
+    protected fun reportResult(
+        outcome: com.liam.joshymc.communityevent.result.EventOutcome,
+        winners: List<UUID>,
+        summary: String,
+        second: List<UUID> = emptyList(),
+    ) {
+        val s = session ?: return
+        if (s.reportResult(com.liam.joshymc.communityevent.DetectedResult(outcome, winners.distinct(), second.distinct() - winners.toSet(), summary = summary))) {
+            plugin.logger.info("[Event] ${type.displayName} result detected: ${outcome.name}, winners ${winners.joinToString { nameOf(it) }.ifEmpty { "none" }}.")
+        }
+    }
+
     /** Ends the event with its result a few seconds after the final round, through the normal stop. */
     protected fun finishEventSoon() {
         val s = session ?: return
