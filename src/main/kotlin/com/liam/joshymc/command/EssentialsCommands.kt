@@ -1021,6 +1021,7 @@ class ReplyCommand(private val plugin: Joshymc) : CommandExecutor {
 object TeleportChecks {
     private val teleportCooldowns = ConcurrentHashMap<UUID, Long>()
     private val pendingTeleports = ConcurrentHashMap<UUID, Int>() // player -> task ID
+    private val inFlight: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
     private const val TP_COOLDOWN_MS = 3000L
     private const val WARMUP_TICKS = 60L // 3 seconds
 
@@ -1061,13 +1062,14 @@ object TeleportChecks {
     fun teleportWithWarmup(player: Player, destination: Location, plugin: com.liam.joshymc.Joshymc, onComplete: (() -> Unit)? = null) {
         if (PvpTeleportGuard.blocks(plugin, player, destination)) return
 
+        if (!destination.isWorldLoaded) {
+            plugin.commsManager.send(player, Component.text("That destination's world isn't loaded.", NamedTextColor.RED))
+            return
+        }
+
         // Bypass warmup for staff
         if (player.hasPermission("joshymc.tp.nocooldown")) {
-            val from = player.location
-            if (!player.teleport(destination)) return
-            BackCommand.lastLocations[player.uniqueId] = from
-            teleportCooldowns[player.uniqueId] = System.currentTimeMillis()
-            onComplete?.invoke()
+            teleportNow(player, destination, plugin) { onComplete?.invoke() }
             return
         }
 
@@ -1101,16 +1103,41 @@ object TeleportChecks {
             // Re-check: the player (or a /tpa partner) may have crossed into the PvP world during the warmup.
             if (PvpTeleportGuard.blocks(plugin, player, destination)) return@scheduleSyncDelayedTask
 
-            val from = player.location
-            if (!player.teleport(destination)) return@scheduleSyncDelayedTask
-            BackCommand.lastLocations[player.uniqueId] = from
-            teleportCooldowns[player.uniqueId] = System.currentTimeMillis()
-            plugin.commsManager.send(player, Component.text("Teleported!", NamedTextColor.GREEN))
-            player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.2f)
-            onComplete?.invoke()
+            teleportNow(player, destination, plugin) {
+                plugin.commsManager.send(player, Component.text("Teleported!", NamedTextColor.GREEN))
+                player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.2f)
+                onComplete?.invoke()
+            }
         }, WARMUP_TICKS)
 
         pendingTeleports[player.uniqueId] = taskId
+    }
+
+    /**
+     * Loads the destination chunk off the main thread, then teleports (issue #1241): a sync
+     * teleport into an unloaded chunk loads it on the main thread, stalling everyone's movement.
+     * One teleport per player in flight, and [onSuccess] runs once, on the main thread, only
+     * when the teleport went through.
+     */
+    private fun teleportNow(player: Player, destination: Location, plugin: com.liam.joshymc.Joshymc, onSuccess: () -> Unit) {
+        if (!inFlight.add(player.uniqueId)) {
+            plugin.commsManager.send(player, Component.text("You're already being teleported.", NamedTextColor.RED))
+            return
+        }
+        val from = player.location
+        player.teleportAsync(destination).whenComplete { ok, error ->
+            val finish = Runnable {
+                inFlight.remove(player.uniqueId)
+                if (error != null) plugin.logger.warning("Teleport of ${player.name} to ${destination.world?.name} failed: ${error.message}")
+                if (ok != true || error != null || !player.isOnline) return@Runnable
+                BackCommand.lastLocations[player.uniqueId] = from
+                teleportCooldowns[player.uniqueId] = System.currentTimeMillis()
+                onSuccess()
+            }
+            if (Bukkit.isPrimaryThread()) finish.run()
+            else if (plugin.isEnabled) Bukkit.getScheduler().runTask(plugin, finish)
+            else inFlight.remove(player.uniqueId)
+        }
     }
 
     private fun hasMoved(player: Player, start: Location): Boolean {

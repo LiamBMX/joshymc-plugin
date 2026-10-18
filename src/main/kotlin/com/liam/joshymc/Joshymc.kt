@@ -241,6 +241,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var purchaseFulfillmentManager: com.liam.joshymc.manager.PurchaseFulfillmentManager
         private set
+    lateinit var stuckRecoveryManager: com.liam.joshymc.recovery.StuckRecoveryManager
+        private set
     lateinit var rankManager: RankManager
         private set
     lateinit var claimManager: ClaimManager
@@ -475,6 +477,7 @@ class Joshymc : JavaPlugin() {
         sellPriceManager.start()
         saleManager = com.liam.joshymc.manager.SaleManager(this)
         candyShopManager = com.liam.joshymc.candyshop.CandyShopManager(this)
+        stuckRecoveryManager = com.liam.joshymc.recovery.StuckRecoveryManager(this)
 
         itemManager.registerAll()
         recipeManager.registerAll()
@@ -570,6 +573,8 @@ class Joshymc : JavaPlugin() {
         eventManager.start()
         // After items (it sells registered candies), economy, Mod Mode and the event world.
         if (isFeatureEnabled("candy-shop")) candyShopManager.start()
+        // Reads the feature flag itself: its listener is always registered.
+        stuckRecoveryManager.start()
 
         discordManager.start()
 
@@ -618,6 +623,7 @@ class Joshymc : JavaPlugin() {
         voteManager.stop()
         purchaseFulfillmentManager.stop()
         candyShopManager.stop()
+        stuckRecoveryManager.stop()
         spawnDecorationManager.stop()
         listenerManager.passiveEnchantListener?.stop()
         listenerManager.quickHitListener?.stop()
@@ -689,6 +695,7 @@ class Joshymc : JavaPlugin() {
         safe("casinoManager.stop") { casinoManager.stop() }
         safe("orderManager.stop") { orderManager.stop() }
         safe("candyShopManager.stop") { candyShopManager.stop() }
+        safe("stuckRecoveryManager.stop") { stuckRecoveryManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
         safe("questCycleManager.stop") { questCycleManager.stop() }
         safe("eventQuestManager.stop") { eventQuestManager.stop() }
@@ -753,6 +760,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("login-streaks")) safe("loginStreakManager.start") { loginStreakManager.start() }
         safe("resourcePackManager.start") { resourcePackManager.start() }
         if (isFeatureEnabled("candy-shop")) safe("candyShopManager.start") { candyShopManager.start() }
+        safe("stuckRecoveryManager.start") { stuckRecoveryManager.start() }
 
         // 7. Commands just get new instances (executors are swapped, not re-registered)
         safe("commandManager.registerAll") { commandManager.registerAll() }

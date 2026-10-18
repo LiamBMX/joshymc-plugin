@@ -409,6 +409,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(com.liam.joshymc.command.OverflowCommand(plugin))
         }
 
+        plugin.getCommand("unstuck")?.let {
+            val cmd = com.liam.joshymc.command.UnstuckCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
         plugin.getCommand("eco")?.let {
             val cmd = EcoCommand(plugin)
             it.setExecutor(cmd)
@@ -831,6 +837,7 @@ class CommandManager(private val plugin: Joshymc) {
         "order" to "joshymc.orders",
         "candy" to "joshymc.candy",
         "overflow" to "joshymc.overflow",
+        "unstuck" to "joshymc.unstuck",
         "eco" to "joshymc.eco",
         "balance" to "joshymc.balance",
         "pay" to "joshymc.pay",
