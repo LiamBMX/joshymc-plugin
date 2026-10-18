@@ -140,26 +140,6 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
         if (item.type.isAir || item.amount <= 0) return null
         val copy = item.clone()
 
-        // If the player currently has this exact storage open, deposit straight into the live
-        // inventory instead of the DB, so we don't clobber what they're looking at right now.
-        val open = openOverflow[uuid]
-        if (open != null && open.first == type) {
-            val leftover = open.second.addItem(copy.clone()).values.firstOrNull()?.clone()
-            if (leftover != null && leftover.amount >= copy.amount) return leftover
-            // Save right away: a committed delivery must never live only in memory. If that
-            // write fails, the fitted part is still in the live inventory and the next flush
-            // or close persists it, so only the leftover goes back to the caller.
-            try {
-                saveOverflow(uuid, type, open.second)
-            } catch (e: Exception) {
-                dirty.add(uuid)
-                plugin.logger.severe("[Overflow] Saving $type storage of $uuid failed: ${e.message}")
-            }
-            return leftover
-        }
-
-        if (type != OverflowType.AUCTION_HOUSE) return depositStacking(uuid, type, copy)
-
         return try {
             store.deposit(uuid, type.name, encode(copy), copy.amount, reference)
             refreshViewer(uuid, type)
@@ -171,108 +151,37 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    /**
-     * Stores [copy] in a closed Orders or Crate Keys storage the way addItem would (see
-     * [storeStacking]). All rows are written in one transaction, so a failed write stores
-     * nothing and the whole stack is handed back.
-     */
-    private fun depositStacking(uuid: UUID, type: OverflowType, copy: ItemStack): ItemStack? {
-        return try {
-            var leftover: ItemStack? = null
-            plugin.databaseManager.transaction { leftover = storeStacking(uuid, type, listOf(copy)).firstOrNull() }
-            leftover
-        } catch (e: Exception) {
-            plugin.logger.severe("[Overflow] Depositing into $type storage of $uuid failed: ${e.message}")
-            copy
-        }
-    }
-
-    /**
-     * Writes [items] into a closed storage's rows, stacking like addItem: identical stacks are
-     * topped up first, then free slots get stacks of at most the item's max size. Reads the
-     * storage once for the whole list. Returns, per item that didn't fully fit, the exact
-     * leftover stack. Throws on any DB error; callers run it inside a transaction.
-     */
-    private fun storeStacking(uuid: UUID, type: OverflowType, items: List<ItemStack>): List<ItemStack> {
-        val db = plugin.databaseManager
-        // slot -> stored stack (null when a row can't be read: its slot stays taken).
-        val stored = sortedMapOf<Int, ItemStack?>()
-        db.query(
-            "SELECT slot, item FROM overflow_storage WHERE uuid = ? AND type = ?",
-            uuid.toString(), type.name
-        ) { rs -> rs.getInt("slot") to rs.getString("item") }
-            .forEach { (slot, data) -> stored[slot] = runCatching { deserializeItem(data) }.getOrNull() }
-
-        val updated = mutableSetOf<Int>()
-        val inserted = mutableSetOf<Int>()
-        val leftovers = mutableListOf<ItemStack>()
-        for (item in items) {
-            if (item.amount <= 0) continue
-            val max = item.maxStackSize.coerceAtLeast(1)
-            var remaining = item.amount
-            for ((slot, stack) in stored) {
-                if (remaining <= 0) break
-                if (stack == null || stack.amount >= max || !stack.isSimilar(item)) continue
-                val add = minOf(max - stack.amount, remaining)
-                stack.amount += add
-                remaining -= add
-                if (slot !in inserted) updated.add(slot)
-            }
-            for (slot in 0 until type.size) {
-                if (remaining <= 0) break
-                if (stored.containsKey(slot)) continue
-                val stack = item.clone().apply { amount = minOf(max, remaining) }
-                stored[slot] = stack
-                inserted.add(slot)
-                remaining -= stack.amount
-            }
-            if (remaining > 0) leftovers.add(item.clone().apply { amount = remaining })
-        }
-
-        for (slot in updated) {
-            db.execute(
-                "UPDATE overflow_storage SET item = ? WHERE uuid = ? AND type = ? AND slot = ?",
-                serializeItem(stored.getValue(slot)!!), uuid.toString(), type.name, slot
-            )
-        }
-        for (slot in inserted) {
-            db.execute(
-                "INSERT INTO overflow_storage (uuid, type, slot, item) VALUES (?, ?, ?, ?)",
-                uuid.toString(), type.name, slot, serializeItem(stored.getValue(slot)!!)
-            )
-        }
-        return leftovers
-    }
-
     // ---- Transactional deposit (Buy Order deliveries, issue #1233) ----
 
     /**
-     * Saves and closes [uuid]'s [type] storage if they have it open, so its DB rows become the
-     * only copy and [storeItems] can write to them. Returns true when a storage was settled
-     * (the caller may reopen it afterwards so the player sees the new items). Throws if the
-     * save fails, leaving the storage open and untouched.
+     * Closes [uuid]'s [type] page if they have it open. Pages hold no items (everything stays in
+     * the database), so nothing needs saving; returns true when a page was closed, so the caller
+     * can reopen it once its transaction has committed and the player sees the new items.
      */
     fun settleOpenStorage(uuid: UUID, type: OverflowType): Boolean {
-        val entry = openOverflow[uuid] ?: return false
-        if (entry.first != type) return false
-        saveOverflow(uuid, type, entry.second)
-        openOverflow.remove(uuid, entry)
-        val player = Bukkit.getPlayer(uuid)
-        if (player != null && player.openInventory.topInventory === entry.second) player.closeInventory()
+        val view = viewers[uuid] ?: return false
+        if (view.type != type) return false
+        val player = plugin.server.getPlayer(uuid) ?: return false
+        if (plugin.guiManager.getOpenGui(player) !== view.gui) return false
+        player.closeInventory()
+        viewers.remove(uuid, view)
         return true
     }
 
     /**
-     * Stores copies of [items] in [uuid]'s [type] storage as DB rows only, stacking with what's
-     * there, and returns the leftovers that didn't fit. Joins an enclosing transaction and
-     * throws on any DB error, so the caller's whole operation rolls back with it. The storage
-     * must not be open: call [settleOpenStorage] first.
+     * Stores copies of [items] in [uuid]'s [type] storage. Joins an enclosing transaction and
+     * throws on any DB error, so the caller's whole operation rolls back with it. There is no
+     * cap, so the returned leftovers are always empty. Open pages aren't redrawn here (the
+     * enclosing transaction may still roll back): the caller reopens them after commit.
      */
     fun storeItems(uuid: UUID, type: OverflowType, items: List<ItemStack>): List<ItemStack> {
-        check(openOverflow[uuid]?.first != type) { "$type storage of $uuid is open" }
-        var leftovers = emptyList<ItemStack>()
-        plugin.databaseManager.transaction { leftovers = storeStacking(uuid, type, items) }
-        return leftovers
+        plugin.databaseManager.transaction {
+            for (item in items) {
+                if (item.type.isAir || item.amount <= 0) continue
+                store.deposit(uuid, type.name, encode(item), item.amount)
+            }
+        }
+        return emptyList()
     }
 
     // ---- Event World crate keys (issue #1178) ----

@@ -366,9 +366,10 @@ class OrderManager(private val plugin: Joshymc) : Listener {
 
     /**
      * Stores the items sold into a buyer's order in their Orders Overflow, never their
-     * inventory, online or offline (issue #1233). Whatever doesn't fit goes to the persistent
-     * pending-deliveries queue as the exact stacks. DB only: joins the fulfillment's
-     * transaction and throws on failure, so the sale rolls back instead of losing items.
+     * inventory, online or offline (issue #1233). Overflow has no cap (issue #1234), but any
+     * leftover would still go to the persistent pending-deliveries queue as the exact stacks.
+     * DB only: joins the fulfillment's transaction and throws on failure, so the sale rolls
+     * back instead of losing items.
      * Returns how many items went to the pending queue.
      */
     private fun storeOrderDelivery(buyerUuid: UUID, items: List<ItemStack>): Int {
@@ -449,8 +450,6 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     /**
      * Routes items that didn't fit in the buyer's inventory into their (uncapped) Orders Overflow.
      * If that write fails, falls back to the existing unbounded pending-deliveries queue so the
-     * Routes items that didn't fit in a player's inventory into their 54-slot Orders Overflow.
-     * If that's also full, falls back to the existing unbounded pending-deliveries queue so the
      * item is never dropped, deleted, or duplicated.
      */
     private fun depositToOverflowOrQueue(uuid: UUID, items: List<ItemStack>) {
@@ -1123,8 +1122,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         }
 
         // The buyer's items are written to their Orders Overflow rows inside the transaction
-        // below, so a storage they have open right now is saved and closed first (and reopened
-        // afterwards with the new items), or its next save would overwrite those rows.
+        // below, so a page they have open right now is closed first and reopened afterwards
+        // with the new items.
         val reopenOverflow = try {
             plugin.overflowManager.settleOpenStorage(order.buyerUuid, OverflowManager.OverflowType.ORDERS)
         } catch (e: Exception) {
