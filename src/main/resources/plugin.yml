@@ -183,6 +183,9 @@ commands:
   overflow:
     description: View items held in your persistent Overflow storage
     usage: /overflow
+  unstuck:
+    description: Get out of a spot where you're frozen midair or the world didn't load
+    usage: /unstuck [player]
   invest:
     description: Open the player-driven stock market (trade, create, and track stocks)
     usage: /invest [admin <reset|delete|confirm|cancel> <stock>]
@@ -875,6 +878,15 @@ permissions:
   joshymc.overflow:
     description: View your persistent Overflow storage
     default: true
+  joshymc.unstuck:
+    description: Use /unstuck when genuinely stuck (frozen midair or in chunks that didn't load)
+    default: true
+  joshymc.unstuck.others:
+    description: Recover another player with /unstuck <player> (skips the stuck check, combat and cooldown; queues offline players for their next login)
+    default: op
+  joshymc.unstuck.bypass:
+    description: Skip the /unstuck cooldown
+    default: op
   joshymc.eco:
     description: Manage economy (admin)
     default: op

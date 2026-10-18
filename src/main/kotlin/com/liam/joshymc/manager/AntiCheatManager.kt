@@ -589,6 +589,10 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             return
         }
 
+        // A client that was never sent the chunk it stands in can't fall, so its hovering
+        // isn't flight (issue #1241). Chunk sending is server-side, so a cheat can't fake this.
+        if (data.airTicks > 60 && !player.isChunkSent(org.bukkit.Chunk.getChunkKey(to.blockX shr 4, to.blockZ shr 4))) return
+
         // Allow normal jump arcs (up to ~1.25 blocks up, ~12 ticks air)
         // Flag sustained hovering or ascending after a long time airborne
         // Only flag VERY obvious flight — sustained hovering for 4+ seconds

@@ -37,6 +37,25 @@ features:
   gift: true
   casino: true
   candy-shop: true
+  stuck-recovery: true
+
+# Stuck-player recovery (issue #1241). Paper kicks "Flying is not enabled on this server" after a
+# client reports floating for ~4s; a client that never received the chunk it stands in floats
+# in place and gets that kick. None of this changes allow-flight or Paper's movement checks.
+stuck-recovery:
+  # Hold off the flying kick only while the chunk under the player was never sent to their client;
+  # a second kick of the same incident moves them to their last safe spot / spawn.
+  kick-grace: true
+  # How long one held-off incident lasts, and how many incidents a player gets per window.
+  grace-incident-seconds: 20
+  max-grace-incidents: 3
+  grace-window-minutes: 10
+  # How old a remembered "last safe spot" may be and still be used.
+  safe-spot-max-age-minutes: 10
+  # Cooldown after a successful /unstuck (joshymc.unstuck.bypass skips it).
+  unstuck-cooldown-seconds: 60
+  # After a flying kick, a login within this many minutes starts at a safe spot instead.
+  login-recovery-window-minutes: 15
 
 # Mob Stacking — merges nearby mobs of the same type into a single entity
 mob-stacking:

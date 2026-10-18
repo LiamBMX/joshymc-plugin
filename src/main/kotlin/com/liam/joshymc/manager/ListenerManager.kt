@@ -240,6 +240,9 @@ class ListenerManager(private val plugin: Joshymc) {
         // PvP world teleport lock (issue #1075)
         pm.registerEvents(PvpTeleportListener(plugin), plugin)
 
+        // Stuck-player recovery and flying-kick grace (issue #1241)
+        pm.registerEvents(plugin.stuckRecoveryManager, plugin)
+
         // Admin panel
         pm.registerEvents(plugin.adminManager, plugin)
 
