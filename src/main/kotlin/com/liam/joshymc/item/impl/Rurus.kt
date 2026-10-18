@@ -23,6 +23,7 @@ class Rurus : CustomItem() {
 
     override val id = ID
     override val material = Material.COOKIE
+    override val isCandy = true
 
     override val displayName: Component = Component.text("Rurus", TextColor.color(0xF1B649))
         .decoration(TextDecoration.ITALIC, false)
