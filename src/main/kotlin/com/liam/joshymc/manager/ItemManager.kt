@@ -45,6 +45,9 @@ class ItemManager(private val plugin: Joshymc) {
         // Throwables
         register(Tomato())
 
+        // Collectibles (looks only)
+        register(Gun())
+
         // October Halloween Collection
         register(PhantomsGrasp())
         register(Gravedigger())

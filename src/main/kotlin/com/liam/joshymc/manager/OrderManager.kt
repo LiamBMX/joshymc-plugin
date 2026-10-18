@@ -87,6 +87,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
 
         private val QUICK_AMOUNTS = intArrayOf(1, 16, 32, 64)
         private const val MAX_ESCROW = 1.0e15
+        /** How long sales into a buyer's orders are gathered into one notice (2 seconds). */
+        private const val NOTICE_DELAY_TICKS = 40L
 
         /** Creative/admin/debug-only or otherwise non-survival-obtainable materials, excluded from Item Selection. */
         private val EXCLUDED_ORDER_MATERIAL_NAMES = setOf(
@@ -224,6 +226,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     fun stop() {
         expiryTask?.cancel()
         expiryTask = null
+        // Send notices still waiting for their flush now (offline buyers get them on join).
+        for (uuid in deliveryNotices.keys.toList()) flushDeliveryNotices(uuid)
         playerPages.clear()
         playerMyOrdersPages.clear()
         playerSort.clear()
@@ -360,34 +364,93 @@ class OrderManager(private val plugin: Joshymc) : Listener {
 
     // ---- Delivery / notifications ----
 
-    private fun deliverItems(buyerUuid: UUID, items: List<ItemStack>) {
-        if (items.isEmpty()) return
+    /**
+     * Stores the items sold into a buyer's order in their Orders Overflow, never their
+     * inventory, online or offline (issue #1233). Whatever doesn't fit goes to the persistent
+     * pending-deliveries queue as the exact stacks. DB only: joins the fulfillment's
+     * transaction and throws on failure, so the sale rolls back instead of losing items.
+     * Returns how many items went to the pending queue.
+     */
+    private fun storeOrderDelivery(buyerUuid: UUID, items: List<ItemStack>): Int {
+        val leftovers = plugin.overflowManager.storeItems(buyerUuid, OverflowManager.OverflowType.ORDERS, items)
+        val now = System.currentTimeMillis()
+        for (item in leftovers) {
+            plugin.databaseManager.execute(
+                "INSERT INTO order_pending_deliveries (owner_uuid, item, created_at) VALUES (?, ?, ?)",
+                buyerUuid.toString(), serializeItem(item), now
+            )
+        }
+        return leftovers.sumOf { it.amount }
+    }
+
+    /** One order's deliveries waiting to be announced to its (online) buyer. */
+    private class DeliveryNotice(val itemName: Component) {
+        var quantity = 0
+        var paid = 0.0
+        var queued = 0
+        var completed = false
+    }
+
+    /** Buyer -> (order id -> notice). Main thread only; flushed [NOTICE_DELAY_TICKS] after the first sale. */
+    private val deliveryNotices = HashMap<UUID, LinkedHashMap<Int, DeliveryNotice>>()
+
+    /**
+     * Collects a delivery for the buyer's chat notice, so several sales into their orders
+     * within a couple of seconds become one line per order instead of one per sale.
+     */
+    private fun noteDelivery(order: BuyOrder, quantity: Int, paid: Double, queued: Int, completed: Boolean) {
+        val notices = deliveryNotices[order.buyerUuid] ?: LinkedHashMap<Int, DeliveryNotice>().also {
+            deliveryNotices[order.buyerUuid] = it
+            Bukkit.getScheduler().runTaskLater(plugin, Runnable { flushDeliveryNotices(order.buyerUuid) }, NOTICE_DELAY_TICKS)
+        }
+        val notice = notices.getOrPut(order.id) { DeliveryNotice(order.item.displayName()) }
+        notice.quantity += quantity
+        notice.paid += paid
+        notice.queued += queued
+        notice.completed = notice.completed || completed
+    }
+
+    private fun flushDeliveryNotices(buyerUuid: UUID) {
+        val notices = deliveryNotices.remove(buyerUuid) ?: return
         val buyer = Bukkit.getPlayer(buyerUuid)
         if (buyer == null) {
-            depositToOverflowOrQueue(buyerUuid, items)
-            markNotifyPending(buyerUuid)
+            // Left before the notice went out: tell them on their next join instead.
+            try { markNotifyPending(buyerUuid) } catch (e: Exception) {
+                plugin.logger.warning("[Orders] Could not save the offline notice for $buyerUuid: ${e.message}")
+            }
             return
         }
-        // Route into the saved backup inventory (not the temp staff loadout) while
-        // Moderator Mode is active, same as every other reward delivery.
-        val leftover = when {
-            plugin.modModeManager.isModMode(buyer) -> items.mapNotNull { plugin.modModeManager.addItemToBackup(buyerUuid, it) }
-            else -> buyer.inventory.addItem(*items.toTypedArray()).values.toList()
-        }
-        if (leftover.isNotEmpty()) {
-            depositToOverflowOrQueue(buyerUuid, leftover)
+        for (notice in notices.values) {
             plugin.commsManager.send(
                 buyer,
-                Component.text("Your inventory was full, so your Orders delivery was sent to ", NamedTextColor.YELLOW)
+                Component.text("Your Buy Order received ", NamedTextColor.GREEN)
+                    .append(Component.text("${notice.quantity}x ", NamedTextColor.WHITE))
+                    .append(notice.itemName)
+                    .append(Component.text(" for ", NamedTextColor.GREEN))
+                    .append(Component.text(plugin.economyManager.format(notice.paid), NamedTextColor.GOLD))
+                    .append(Component.text("! Items were sent to your ", NamedTextColor.GREEN))
                     .append(Component.text("/overflow", NamedTextColor.GOLD))
-                    .append(Component.text(".", NamedTextColor.YELLOW))
+                    .append(Component.text(".", NamedTextColor.GREEN))
             )
+            if (notice.queued > 0) {
+                plugin.commsManager.send(
+                    buyer,
+                    Component.text("Your Orders Overflow is full, so ${notice.queued} of them are waiting in ", NamedTextColor.YELLOW)
+                        .append(Component.text("/orders", NamedTextColor.GOLD))
+                        .append(Component.text(" → My Orders → Pending Items.", NamedTextColor.YELLOW))
+                )
+            }
+            if (notice.completed) {
+                plugin.commsManager.send(buyer, Component.text("Your order has been completed!", NamedTextColor.GOLD))
+            }
         }
     }
 
     /**
      * Routes items that didn't fit in the buyer's inventory into their (uncapped) Orders Overflow.
      * If that write fails, falls back to the existing unbounded pending-deliveries queue so the
+     * Routes items that didn't fit in a player's inventory into their 54-slot Orders Overflow.
+     * If that's also full, falls back to the existing unbounded pending-deliveries queue so the
      * item is never dropped, deleted, or duplicated.
      */
     private fun depositToOverflowOrQueue(uuid: UUID, items: List<ItemStack>) {
@@ -475,6 +538,11 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     }
 
     fun claimPendingDeliveries(player: Player) {
+        // The event inventory is temporary: pending items must never be handed out into it.
+        if (plugin.eventManager.isInEventWorld(player)) {
+            plugin.commsManager.send(player, Component.text("You can't claim pending items in the event world. Use /spawn to leave first.", NamedTextColor.RED))
+            return
+        }
         val deliveries = getPendingDeliveries(player.uniqueId)
         if (deliveries.isEmpty()) {
             plugin.commsManager.send(player, Component.text("You have no pending items to claim.", NamedTextColor.YELLOW))
@@ -527,9 +595,11 @@ class OrderManager(private val plugin: Joshymc) : Listener {
         if (rows > 0) {
             plugin.commsManager.send(
                 event.player,
-                Component.text("Your buy orders received items while you were offline. Use ", NamedTextColor.YELLOW)
+                Component.text("Your Buy Orders were updated while you were offline. Items they received are in ", NamedTextColor.YELLOW)
+                    .append(Component.text("/overflow", NamedTextColor.GOLD))
+                    .append(Component.text("; use ", NamedTextColor.YELLOW))
                     .append(Component.text("/orders", NamedTextColor.GOLD))
-                    .append(Component.text(" to view them.", NamedTextColor.YELLOW))
+                    .append(Component.text(" to view your orders.", NamedTextColor.YELLOW))
             )
         }
     }
@@ -834,6 +904,7 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             lore.add(loreLine("Total Escrow: ").append(Component.text(plugin.economyManager.format(escrow), NamedTextColor.GOLD)))
             lore.add(Component.empty())
             lore.add(Component.text("  The full escrow is withdrawn immediately.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
+            lore.add(Component.text("  Purchased items are automatically sent to your /overflow.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
             meta.lore(lore)
         }
 
@@ -1051,11 +1122,26 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        // Claim the fulfillment slice, reduce the escrow, pay the seller and close a completed
-        // order as one transaction. The claim is conditional (anti-dupe: a stale or repeated
-        // fulfill updates 0 rows); a failed payout rolls the claim back too.
+        // The buyer's items are written to their Orders Overflow rows inside the transaction
+        // below, so a storage they have open right now is saved and closed first (and reopened
+        // afterwards with the new items), or its next save would overwrite those rows.
+        val reopenOverflow = try {
+            plugin.overflowManager.settleOpenStorage(order.buyerUuid, OverflowManager.OverflowType.ORDERS)
+        } catch (e: Exception) {
+            plugin.logger.severe("[Orders] ${seller.name} selling into order #$orderId: could not save the buyer's open Overflow: ${e.message}")
+            returnToSeller(seller, removedItems)
+            plugin.commsManager.send(seller, Component.text("Transaction failed. Your items were returned.", NamedTextColor.RED))
+            return
+        }
+
+        // Claim the fulfillment slice, reduce the escrow, pay the seller, store the items in the
+        // buyer's Overflow and close a completed order as one transaction. The claim is
+        // conditional (anti-dupe: a stale or repeated fulfill updates 0 rows); a failed payout
+        // or delivery rolls everything back, so the sale never completes without the items
+        // being secured for the buyer.
         var claimed = false
         var dustRefund = 0.0
+        var queuedQty = 0
         try {
             plugin.databaseManager.transaction {
                 claimed = plugin.databaseManager.executeUpdate(
@@ -1066,6 +1152,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
                 if (!plugin.economyManager.deposit(seller.uniqueId, payout)) {
                     throw IllegalStateException("payout of $payout was rejected")
                 }
+                queuedQty = storeOrderDelivery(order.buyerUuid, removedItems)
+                if (Bukkit.getPlayer(order.buyerUuid) == null) markNotifyPending(order.buyerUuid)
                 // A completed order can be left with a sliver of escrow from floating-point
                 // rounding. Hand any positive remainder back to the buyer as the row is deleted.
                 val leftover = plugin.databaseManager.queryFirst(
@@ -1086,6 +1174,13 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             returnToSeller(seller, removedItems)
             plugin.commsManager.send(seller, Component.text("Transaction failed. Your items were returned.", NamedTextColor.RED))
             return
+        } finally {
+            if (reopenOverflow) {
+                val buyer = Bukkit.getPlayer(order.buyerUuid)
+                if (buyer != null && !plugin.eventManager.isInEventWorld(buyer)) {
+                    plugin.overflowManager.openOverflow(buyer, OverflowManager.OverflowType.ORDERS)
+                }
+            }
         }
 
         if (!claimed) {
@@ -1104,17 +1199,11 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        // Committed. Deliver the exact removed stacks after the transaction, since live
-        // inventory changes can't roll back; the delivery path falls back to /overflow and
-        // the persistent pending-deliveries queue (offline buyers go straight there).
-        try {
-            deliverItems(order.buyerUuid, removedItems)
-        } catch (e: Exception) {
-            logUndeliveredItems("order #$orderId delivery", order.buyerUuid, removedItems, e)
-        }
-
         val remainingAfter = order.remainingQty - sellQty
-        plugin.logger.info("[Orders] ${seller.name} sold ${sellQty}x ${order.item.type} into order #$orderId (buyer ${order.buyerName}) for ${plugin.economyManager.format(payout)}.")
+        plugin.logger.info(
+            "[Orders] ${seller.name} sold ${sellQty}x ${order.item.type} into order #$orderId (buyer ${order.buyerName}) for ${plugin.economyManager.format(payout)}; " +
+                "stored in their Orders Overflow" + (if (queuedQty > 0) " ($queuedQty to pending deliveries, Overflow full)." else ".")
+        )
         if (dustRefund > 0.0) {
             plugin.logger.info("[Orders] Order #$orderId completed; refunded leftover escrow $dustRefund to ${order.buyerName}.")
         }
@@ -1131,17 +1220,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             plugin.commsManager.send(seller, Component.text("(Only $sellQty were available to sell.)", NamedTextColor.GRAY))
         }
 
-        val buyer = Bukkit.getPlayer(order.buyerUuid)
-        if (buyer != null) {
-            val buyerMsg = Component.text("${sellQty}x ", NamedTextColor.WHITE)
-                .append(order.item.displayName())
-                .append(Component.text(" were delivered to your order for ", NamedTextColor.GREEN))
-                .append(Component.text(plugin.economyManager.format(payout), NamedTextColor.GOLD))
-                .append(Component.text(".", NamedTextColor.GREEN))
-            plugin.commsManager.send(buyer, buyerMsg)
-            if (remainingAfter <= 0) {
-                plugin.commsManager.send(buyer, Component.text("Your order has been completed!", NamedTextColor.GOLD))
-            }
+        if (Bukkit.getPlayer(order.buyerUuid) != null) {
+            noteDelivery(order, sellQty, payout, queuedQty, remainingAfter <= 0)
         }
     }
 
@@ -1368,6 +1448,7 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             lore.add(loreLine("Escrow Remaining: ").append(Component.text("$${plugin.economyManager.formatShort(order.remainingEscrow)}", NamedTextColor.GOLD)))
             lore.add(loreLine("Expires: ").append(Component.text(formatTimeLeft(order.expiresAt), NamedTextColor.YELLOW)))
             lore.add(Component.empty())
+            lore.add(Component.text("  Purchased items are sent to your /overflow.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
             lore.add(Component.text("  CLICK to cancel", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
             meta.lore(lore)
         }
@@ -1420,7 +1501,10 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             listOf(
                 Component.empty(),
                 Component.text("  Click to browse items and", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.text("  create a new Buy Order", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+                Component.text("  create a new Buy Order", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("  Purchased items are automatically", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("  sent to your /overflow.", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false)
             )
         )) { p, _ -> beginCreateOrder(p) }
 
@@ -1496,10 +1580,28 @@ class OrderManager(private val plugin: Joshymc) : Listener {
             Component.text("Pending Items ($pendingCount)", if (pendingCount > 0) NamedTextColor.GOLD else NamedTextColor.DARK_GRAY).decoration(TextDecoration.BOLD, true),
             listOf(
                 Component.empty(),
+                Component.text("  Items that didn't fit in your", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("  full Orders Overflow wait here.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
                 if (pendingCount > 0) Component.text("  Click to claim", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false)
                 else Component.text("  Nothing to claim", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
             )
         )) { p, _ -> claimPendingDeliveries(p); openMyOrdersGui(p, page) }
+
+        gui.setItem(51, simpleIcon(
+            Material.CHEST,
+            Component.text("Orders Overflow", NamedTextColor.AQUA).decoration(TextDecoration.BOLD, true),
+            listOf(
+                Component.empty(),
+                Component.text("  Purchased items are automatically", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.text("  sent here. Collect them any time.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("  Click to open", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)
+            )
+        )) { p, _ ->
+            p.closeInventory()
+            plugin.overflowManager.openOverflow(p, OverflowManager.OverflowType.ORDERS)
+        }
 
         gui.setItem(49, simpleIcon(Material.BARRIER, Component.text("Back", NamedTextColor.RED).decoration(TextDecoration.BOLD, true))) { p, _ -> openMainGui(p) }
 
