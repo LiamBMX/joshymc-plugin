@@ -1583,7 +1583,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     /**
      * Holds [item] in crate_pending_rewards for [player], to be retried by the pending-reward
-     * loop. Used for Event World crate keys that didn't fit in /overflow (issue #1178).
+     * loop. Used for Event World crate keys that couldn't be stored in /overflow (issue #1178).
      */
     fun holdPendingReward(player: Player, item: ItemStack) {
         val label = getKeyType(item)?.let { crates[it]?.keyName }?.let { "$it x${item.amount}" }
@@ -1592,7 +1592,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             "INSERT INTO crate_pending_rewards (id, owner_uuid, item, label, created_at) VALUES (?, ?, ?, ?, ?)",
             UUID.randomUUID().toString(), player.uniqueId.toString(), serializeItem(item.clone()), label, System.currentTimeMillis()
         )
-        plugin.logger.warning("[Crates] ${player.name}'s Crate Keys overflow is full; held $label as a pending crate reward.")
+        plugin.logger.warning("[Crates] ${player.name}'s crate key couldn't be stored in /overflow; held $label as a pending crate reward.")
     }
 
     /** Delivers every held crate reward of [player] that isn't owned by a running animation. */

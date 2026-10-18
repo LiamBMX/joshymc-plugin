@@ -386,8 +386,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     }
 
     /**
-     * Routes items that didn't fit in the buyer's inventory into their 54-slot Orders Overflow.
-     * If that's also full, falls back to the existing unbounded pending-deliveries queue so the
+     * Routes items that didn't fit in the buyer's inventory into their (uncapped) Orders Overflow.
+     * If that write fails, falls back to the existing unbounded pending-deliveries queue so the
      * item is never dropped, deleted, or duplicated.
      */
     private fun depositToOverflowOrQueue(uuid: UUID, items: List<ItemStack>) {

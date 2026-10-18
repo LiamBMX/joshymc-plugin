@@ -592,7 +592,7 @@ class Joshymc : JavaPlugin() {
 
     override fun onDisable() {
         storageManager.saveOpenVaults()
-        overflowManager.saveOpenOverflows()
+        overflowManager.closeOpenStorages()
         enderChestManager.saveOpenSessions()
         if (::sellCommand.isInitialized) sellCommand.resolveAllOpenSessions()
         hologramManager.stop()
@@ -671,7 +671,7 @@ class Joshymc : JavaPlugin() {
 
         // 3. Shutdown services
         safe("storageManager.saveOpenVaults") { storageManager.saveOpenVaults() }
-        safe("overflowManager.saveOpenOverflows") { overflowManager.saveOpenOverflows() }
+        safe("overflowManager.closeOpenStorages") { overflowManager.closeOpenStorages() }
         safe("enderChestManager.saveOpenSessions") { enderChestManager.saveOpenSessions() }
         safe("sellCommand.resolveAllOpenSessions") { if (::sellCommand.isInitialized) sellCommand.resolveAllOpenSessions() }
         safe("hologramManager.stop") { hologramManager.stop() }
