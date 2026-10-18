@@ -33,8 +33,8 @@ fun Joshymc.depositItemSafely(player: Player, item: ItemStack): ItemStack? {
 /**
  * [depositItemSafely], dropping any leftover at the player's feet rather than
  * discarding it, matching the existing addItem-then-drop pattern used elsewhere
- * in the plugin. Crate keys left over in the Event World (their /overflow
- * Crate Keys section is full) are held as a pending crate reward instead, which
+ * in the plugin. Crate keys left over in the Event World (storing them in
+ * /overflow failed) are held as a pending crate reward instead, which
  * is retried once the player is out of the event. Dropped leftovers are split
  * into normal-sized stacks, so e.g. 64 Tomatoes (max 16) never land as one
  * oversized stack.

@@ -250,8 +250,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
 
     /**
      * Delivers an already-committed item (paid for / already removed from its listing) to
-     * [uuid]. Tries their inventory first, then the 9-slot AH Overflow, then falls back to the
-     * existing unbounded "expired items" queue — never dropping, deleting, or duplicating it.
+     * [uuid]. Tries their inventory first, then the (uncapped) AH Overflow, then, if that write
+     * fails, falls back to the existing unbounded "expired items" queue — never dropping, deleting, or duplicating it.
      */
     private fun deliverOrHold(uuid: UUID, item: ItemStack) {
         if (item.amount <= 0) return
