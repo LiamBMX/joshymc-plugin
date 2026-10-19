@@ -96,6 +96,8 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(TomatoListener(plugin), plugin)
         pm.registerEvents(VikingBoomerangListener(plugin), plugin)
         pm.registerEvents(MinecraftChatListener(plugin), plugin)
+        // Before WelcomeListener (also NORMAL), so a blocked spam message never counts as a welcome.
+        pm.registerEvents(com.liam.joshymc.listener.ChatSpamListener(plugin), plugin)
         pm.registerEvents(LinkGuiListener(plugin), plugin)
         pm.registerEvents(DiscordGroupListener(plugin), plugin)
 

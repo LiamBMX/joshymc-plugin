@@ -159,6 +159,21 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         insert(targetUuid, targetName, punisherName, punisherUuid, "TEMPMUTE", reason, durationMs)
     }
 
+    /**
+     * Automatic temp-mute (issue #1268): a normal TEMPMUTE row by [AUTOMOD_NAME], inserted only
+     * when the player has no active mute, checked in the same transaction so a permanent or
+     * longer mute is never stacked on or shortened. Returns null when nothing was inserted.
+     */
+    fun autoTempmute(targetUuid: UUID, targetName: String, reason: String, durationMs: Long): InsertedPunishment? {
+        var inserted: InsertedPunishment? = null
+        plugin.databaseManager.transaction {
+            if (isMuted(targetUuid) != null) return@transaction
+            inserted = insert(targetUuid, targetName, AUTOMOD_NAME, null, "TEMPMUTE", reason, durationMs)
+                .takeIf { it.id != -1 }
+        }
+        return inserted
+    }
+
     fun unmute(targetUuid: UUID, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null) {
         // One transaction, so the revocation and its Discord log are stored together (issue #1157).
         plugin.databaseManager.transaction {
@@ -472,6 +487,9 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
     }
 
     companion object {
+
+        /** Punisher name on automatic punishments, shown in /history and the Discord log. */
+        const val AUTOMOD_NAME = "AutoMod"
 
         private val TIMESTAMP_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a")
 
