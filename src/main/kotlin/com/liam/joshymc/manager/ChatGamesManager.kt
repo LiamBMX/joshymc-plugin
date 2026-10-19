@@ -133,6 +133,7 @@ class ChatGamesManager(private val plugin: Joshymc) {
         // Race to claim the win — only the first thread to clear the slot
         // gets to award the prize.
         if (!current.compareAndSet(game, null)) return false
+        val elapsedMillis = System.currentTimeMillis() - game.startedAt
 
         // Award + announce on the main thread so we touch the Credits /
         // player APIs from the right thread.
@@ -140,11 +141,11 @@ class ChatGamesManager(private val plugin: Joshymc) {
             if (rewardCredits > 0.0) plugin.creditsManager.deposit(player.uniqueId, rewardCredits)
 
             Bukkit.broadcast(
-                Component.text("✦ ", TextColor.color(0xFFD700)).decoration(TextDecoration.BOLD, true)
-                    .append(Component.text(player.name, NamedTextColor.GREEN))
-                    .append(Component.text(" won the chat game and earned ", NamedTextColor.YELLOW))
-                    .append(Component.text("${plugin.creditsManager.format(rewardCredits)} Credits", NamedTextColor.GOLD))
-                    .append(Component.text("!", NamedTextColor.YELLOW))
+                ChatGameWinnerAnnouncement.build(
+                    player.name,
+                    elapsedMillis,
+                    "${plugin.creditsManager.format(rewardCredits)} Credits",
+                )
             )
             for (online in Bukkit.getOnlinePlayers()) {
                 online.playSound(online.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.15f, 1.4f)
