@@ -160,7 +160,7 @@ class GameMenu(private val games: HostedGames, private val back: (Player) -> Uni
 
         listButton(gui, SLOT_SECOND, Material.PRISMARINE_SHARD, "Sharks", "Tagging minnows this crossing.") { game.roster.sharks }
         listButton(gui, SLOT_THIRD, Material.TROPICAL_FISH, "Minnows", "Still minnows (crossing or safe).") { game.roster.minnows }
-        listButton(gui, SLOT_FOURTH, Material.COD, "Caught Players", "Caught in the current or last crossing; sharks next crossing.") { game.roster.caught }
+        listButton(gui, SLOT_FOURTH, Material.COD, "Caught Players", "Caught in the current or last crossing; sharks from then on.") { game.roster.caught }
     }
 
     private fun cpvpButtons(gui: CustomGui, running: Boolean) {
