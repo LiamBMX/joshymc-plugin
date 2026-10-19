@@ -291,6 +291,8 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         // Flat reward: $10,000 Money + 1 Credit, every time.
         plugin.economyManager.deposit(welcomer.uniqueId, 10000.0)
         plugin.creditsManager.deposit(welcomer.uniqueId, 1.0)
-        plugin.commsManager.send(welcomer, plugin.commsManager.parseLegacy("&aYou received &f${plugin.economyManager.format(10000.0)} &aand &b1 Credit &afor welcoming $newcomerName!"))
+        // Compact "+ $10,000 & 1 Credit for welcoming <name>!" line (issue #1257),
+        // sent without the chat prefix so the leading "+" starts the line.
+        plugin.commsManager.sendRaw(welcomer, WelcomeRewardMessage.build(10000.0, 1.0, newcomerName))
     }
 }
