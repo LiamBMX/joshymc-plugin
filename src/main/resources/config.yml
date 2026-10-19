@@ -124,6 +124,17 @@ chat:
   # Format for Staff Chat messages (/staffchat, /sc). Placeholders: {player}, {message}
   staffchat-format: "&8[&cStaff Chat&8] &f{player}&7: &f{message}"
 
+  # Automatic spam mute: the same public chat message (case, outer spaces and repeated
+  # spaces ignored) sent repeat-threshold times within window-ticks server ticks
+  # (20 ticks = 1 second at full TPS) is blocked and the player is temp-muted by AutoMod.
+  # Players with joshymc.antispam.bypass are never checked.
+  anti-spam:
+    enabled: true
+    repeat-threshold: 6
+    window-ticks: 30
+    mute-duration-seconds: 3600
+    mute-reason: "Spam"
+
 # Server connection info shown by /ip
 server-info:
   ip: "play.joshymc.net"

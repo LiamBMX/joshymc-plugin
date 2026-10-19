@@ -1213,6 +1213,9 @@ permissions:
   joshymc.chat.profanity.bypass:
     description: Bypass the chat profanity filter (for staff who need to discuss reports, etc.)
     default: op
+  joshymc.antispam.bypass:
+    description: Never auto-muted for repeating the same chat message
+    default: op
   joshymc.stafftag.admin:
     description: Award or remove temporary staff chat tags (SOTM)
     default: op

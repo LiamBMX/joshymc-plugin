@@ -597,6 +597,12 @@ joshymc.chat.profanity.bypass
 Bypasses the chat profanity filter (for staff who need to discuss reports, etc.).
 Default: OP
 
+joshymc.antispam.bypass
+Exempts the player from the automatic spam mute (same chat message repeated
+6 times within 30 ticks -> 1 hour AutoMod temp-mute; see config.yml
+chat.anti-spam).
+Default: OP
+
 joshymc.nick
 Allows setting your own nickname with `/nick set <name>`.
 Default: OP

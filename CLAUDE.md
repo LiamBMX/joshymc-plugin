@@ -84,7 +84,7 @@ Every `xxxManager` is initialized in `Joshymc.onEnable()` as `lateinit var ... ;
 | **NPCManager** | Static NPCs that run commands on click. Each NPC is a `Mannequin` entity (player model, skin by player name via `ResolvableProfile`); no NMS. |
 | **HologramManager** | Floating text holograms. |
 | **LeaderboardManager** | (v1.0.45) 6 player + 6 team leaderboard hologram types via SQL aggregation joins. **v1.0.45 fix**: money leaderboard was rendering UUIDs as names — resolve via `nameOf(UUID.fromString(...))`. **v1.0.45 fix**: TEAM_MONEY SQL was joining `balances` but actual table is `economy`. |
-| **PunishmentManager** | Bans / mutes / kicks / warns + history. |
+| **PunishmentManager** | Bans / mutes / kicks / warns + history. **Issue #1268 (auto spam mute)**: `listener/ChatSpamListener` (AsyncChatEvent NORMAL, ignoreCancelled, so only messages still headed for public chat) feeds the Bukkit-free `ChatSpamDetector` (normalized text, rolling window in server ticks via `Bukkit.getCurrentTick()`, history cleared on trigger and on quit). The triggering message is cancelled and `punishmentManager.autoTempmute` writes an ordinary TEMPMUTE by `AutoMod`, only if no mute is active (same transaction), so /history, expiry and the Discord log all apply. Settings `config.yml > chat.anti-spam`, bypass `joshymc.antispam.bypass` (op). |
 | **AntiCheatManager** + **GrimIntegration** | Internal AC checks + auto-installer for Grim's `punishments.yml` bridge that calls `/jmc-violation` so Grim flags surface in `/admin`. |
 | **AdminManager** | `/admin` GUI panel — player info, freeze, snapshot, rollback, ban/mute lists. |
 | **ResourceWorldManager** | Auto-regenerating resource world. |
