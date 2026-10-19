@@ -30,10 +30,17 @@ class CommunicationsManager(private val plugin: Joshymc) {
 
     /**
      * Category prefixes — each feature area gets its own styled prefix.
-     * Format: "LABEL" in bold + dark gray " » "
+     * Format: "LABEL" in bold + dark gray " » ". A category with [gradientTo] fades its label
+     * left to right from [color] to that color, and uses [separatorColor] for the " » ".
      */
-    enum class Category(val label: String, val color: TextColor) {
-        DEFAULT("JOSHYMC", TextColor.color(0x55FFFF)),
+    enum class Category(
+        val label: String,
+        val color: TextColor,
+        val gradientTo: TextColor? = null,
+        val separatorColor: TextColor = NamedTextColor.DARK_GRAY,
+    ) {
+        // The standard plugin prefix (issue #1265): bold gold-to-bright-gold "SERVER", light gray " » ".
+        DEFAULT("SERVER", TextColor.color(0xD99424), TextColor.color(0xFFD700), NamedTextColor.GRAY),
         WARP("WARP", TextColor.color(0x55FF55)),
         HOME("WARP", TextColor.color(0x55FF55)),
         COMBAT("COMBAT", TextColor.color(0xFF5555)),
@@ -55,8 +62,8 @@ class CommunicationsManager(private val plugin: Joshymc) {
         // Build category prefixes — wrapped in a non-bold parent so appended messages don't inherit bold
         for (cat in Category.entries) {
             categoryPrefixes[cat] = Component.empty()
-                .append(Component.text(cat.label, cat.color).decoration(TextDecoration.BOLD, true))
-                .append(Component.text(" \u00BB ", NamedTextColor.DARK_GRAY).decoration(TextDecoration.BOLD, false))
+                .append(categoryLabel(cat))
+                .append(Component.text(" \u00BB ", cat.separatorColor).decoration(TextDecoration.BOLD, false))
         }
 
         defaultPrefix = categoryPrefixes[Category.DEFAULT]!!
@@ -64,9 +71,23 @@ class CommunicationsManager(private val plugin: Joshymc) {
         plugin.logger.info("[Comms] Communications manager started.")
     }
 
+    private fun categoryLabel(cat: Category): Component {
+        val to = cat.gradientTo
+            ?: return Component.text(cat.label, cat.color).decoration(TextDecoration.BOLD, true)
+        val label = Component.text().decoration(TextDecoration.BOLD, true)
+        val last = (cat.label.length - 1).coerceAtLeast(1)
+        cat.label.forEachIndexed { i, ch ->
+            label.append(Component.text(ch.toString(), TextColor.lerp(i.toFloat() / last, cat.color, to)))
+        }
+        return label.build()
+    }
+
     private fun prefix(category: Category): Component {
         return categoryPrefixes[category] ?: defaultPrefix
     }
+
+    /** The standard plugin message prefix ("SERVER \u00BB "), for senders outside [send]/[broadcast]. */
+    fun standardPrefix(): Component = defaultPrefix
 
     // ---- Public messaging API ----
 

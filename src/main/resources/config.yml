@@ -8,8 +8,9 @@ resource-pack:
   port: 8163
   host: ""
 
-# Global prefix for all in-game plugin messages
-prefix: "&b&lJoshyMC &8» &r"
+# Optional override for the prefix on link messages. Leave empty to use the
+# standard gold-gradient "SERVER »" prefix every other plugin message uses.
+prefix: ""
 
 # Feature Toggles — set to false to disable a system entirely
 features:
