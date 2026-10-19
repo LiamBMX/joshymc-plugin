@@ -771,6 +771,8 @@ resource-world:
   border-size: 5000
 
 # Auto Announcements — rotating broadcast messages
+# Each message (and every /bc) is shown under a bold "▸ ANNOUNCEMENT ◂" header;
+# the text is white unless it sets its own & colours.
 # Two formats are supported per message:
 #   - "plain text"                                  (uses default-sound)
 #   - text: "..."  sound: ENTITY_EXPERIENCE_ORB_PICKUP  volume: 1.0  pitch: 1.5

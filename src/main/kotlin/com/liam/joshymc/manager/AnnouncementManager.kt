@@ -3,6 +3,7 @@ package com.liam.joshymc.manager
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.Sound
@@ -103,13 +104,9 @@ class AnnouncementManager(private val plugin: Joshymc) {
 
     /** Broadcast an entry with its configured sound (or the default if none set). */
     fun broadcastEntry(entry: AnnouncementEntry) {
-        // Split by \n for multi-line centering
-        val lines = entry.message.split("\\n", "\n")
-        for (line in lines) {
-            val centered = centerMessage(line)
-            val component = plugin.commsManager.parseLegacy(centered).decoration(TextDecoration.BOLD, true)
-            Bukkit.broadcast(component)
-        }
+        // Header and body go out as one message so they always arrive together.
+        val component = format(entry.message, plugin.commsManager::parseLegacy) ?: return
+        Bukkit.broadcast(component)
 
         val sound = entry.sound ?: defaultSound
         for (player in Bukkit.getOnlinePlayers()) {
@@ -118,22 +115,28 @@ class AnnouncementManager(private val plugin: Joshymc) {
     }
 
     companion object {
-        private const val CHAT_WIDTH = 320 // pixels
-        private const val SPACE_WIDTH = 4  // pixels (bold space = 5, but we use 4 as base)
-        private const val BOLD_CHAR_WIDTH = 7 // average bold character pixel width
+        /** Coral red used for the header (issue #1253). */
+        val HEADER_COLOR: TextColor = TextColor.color(0xFF5A4F)
+
+        /** "▸ ANNOUNCEMENT ◂" in bold coral. */
+        val HEADER: Component = Component.text("▸ ANNOUNCEMENT ◂", HEADER_COLOR, TextDecoration.BOLD)
 
         /**
-         * Center a message in the Minecraft chat by prepending spaces.
-         * Strips color codes for width calculation, preserves them in output.
+         * The announcement as one component: the header, then each non-blank
+         * line of [message] (split on `\n`) parsed with [parse], white unless
+         * the text colours itself. Body lines are siblings of the header, so
+         * `&` codes in the text can't restyle it. Null when the message has
+         * no visible text.
          */
-        fun centerMessage(message: String): String {
-            val stripped = message.replace("&[0-9a-fk-or]".toRegex(), "")
-            val messageWidth = stripped.length * BOLD_CHAR_WIDTH
-            val remaining = CHAT_WIDTH - messageWidth
-            if (remaining <= 0) return message
-            val spacesNeeded = remaining / (SPACE_WIDTH * 2) // divide by 2 for centering
-            val padding = " ".repeat(spacesNeeded.coerceAtLeast(0))
-            return "$padding$message"
+        fun format(message: String, parse: (String) -> Component): Component? {
+            val lines = message.split("\\n", "\n").map { it.trim() }.filter { it.isNotEmpty() }
+            if (lines.isEmpty()) return null
+            val builder = Component.text().append(HEADER)
+            for (line in lines) {
+                builder.append(Component.newline())
+                builder.append(parse(line).colorIfAbsent(NamedTextColor.WHITE))
+            }
+            return builder.build()
         }
     }
 
