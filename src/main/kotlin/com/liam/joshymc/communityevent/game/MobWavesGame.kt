@@ -92,7 +92,9 @@ class MobWavesGame(games: HostedGames) : MinigameGame(games, EventType.MOBS) {
 
     val isPaused: Boolean get() = run?.paused == true
 
-    override fun startProblem(session: EventSession, arena: EventArena): String? {
+    override fun minPlayers(): Int = readSettings().minPlayers
+
+    override fun setupProblem(arena: EventArena): String? {
         val s = readSettings()
         if (!s.isValid) {
             return "The Mob Waves config has ${s.problems.size} problem(s), first: ${s.problems.firstOrNull() ?: "no waves"}. See /event mobs status."
@@ -110,7 +112,6 @@ class MobWavesGame(games: HostedGames) : MinigameGame(games, EventType.MOBS) {
         }
         if (!games.mobsKit.available) return "Mob Waves kit storage failed to load at startup; check the console."
         if (games.mobsKit.isEmpty) return "No Mob Waves kit is saved. Build it in your event inventory and run /event mobs setkit."
-        if (session.participantCount < s.minPlayers) return "Mob Waves needs at least ${s.minPlayers} registered player(s) (${session.participantCount} registered)."
         return null
     }
 

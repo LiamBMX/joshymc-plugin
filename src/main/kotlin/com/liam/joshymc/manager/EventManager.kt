@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.communityevent.EventAutoStart
 import com.liam.joshymc.communityevent.EventManagerMenu
 import com.liam.joshymc.communityevent.EventPermissions
 import com.liam.joshymc.communityevent.EventResult
@@ -8,6 +9,7 @@ import com.liam.joshymc.communityevent.EventSessions
 import com.liam.joshymc.communityevent.EventState
 import com.liam.joshymc.communityevent.EventType
 import com.liam.joshymc.communityevent.EventWorldLoader
+import com.liam.joshymc.communityevent.RegistrationCountdown
 import com.liam.joshymc.communityevent.arena.ArenaCommands
 import com.liam.joshymc.communityevent.arena.ArenaMenu
 import com.liam.joshymc.communityevent.arena.EventArenas
@@ -122,6 +124,9 @@ class EventManager(private val plugin: Joshymc) : Listener {
     val results = EventResults(plugin, arenas)
     val resultsMenu = ResultsMenu(plugin, results) { menu.open(it) }
     val resultCommands = ResultCommands(plugin, results, resultsMenu)
+
+    /** One-command hosting (issue #1248): `/event start <type>` creates, picks the arena, opens and auto-starts. */
+    val autoStart = EventAutoStart(plugin, sessions, arenas, games, { eventWorldName }, { eventWorldProblem })
 
     init {
         sessions.onChange = { menu.refreshOpenMenus() }
@@ -1062,14 +1067,29 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 }
                 "open" -> if (host(sender)) reply(sender, sessions.open())
                 "start" -> {
-                    if (args.size >= 2) {
-                        // Older automatic mini-games: `/event start <game>` (admin only).
-                        if (sender !is Player) { Msg.playersOnly(sender); return true }
-                        if (!sender.hasPermission(EventPermissions.ADMIN)) { Msg.noPermission(sender, category); return true }
-                        legacyStart(sender, args[1])
+                    val arg = args.getOrNull(1)
+                    if (arg == null) {
+                        // Starts the current event now (manual setup, or early during an automatic countdown).
+                        if (host(sender)) reply(sender, sessions.start())
                         return true
                     }
-                    if (host(sender)) reply(sender, sessions.start())
+                    // Hosted types win over the older mini-game names (issue #1248: sharksandminnows is both).
+                    EventType.fromName(arg)?.let { type ->
+                        if (host(sender)) reply(sender, autoStart.start(type, sender))
+                        return true
+                    }
+                    // Older automatic mini-games: `/event start <game>` or `/event start minigame <game>` (admin only).
+                    val minigame = arg.equals("minigame", ignoreCase = true)
+                    val game = if (minigame) args.getOrNull(2) else arg
+                    if (game == null || game.lowercase() !in legacyGames) {
+                        if (!host(sender)) return true
+                        if (minigame) Msg.usage(sender, "/event start minigame <${legacyGames.joinToString("|")}>", category)
+                        else Msg.error(sender, "Unknown event '$arg'. Choose one of: ${EventType.ids.joinToString(", ")}.", category)
+                        return true
+                    }
+                    if (sender !is Player) { Msg.playersOnly(sender); return true }
+                    if (!sender.hasPermission(EventPermissions.ADMIN)) { Msg.noPermission(sender, category); return true }
+                    legacyStart(sender, game)
                 }
                 "stop" -> {
                     if (!host(sender)) return true
@@ -1134,6 +1154,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 val open = session.state == EventState.OPEN
                 row("Registration", if (open) "Open" else "Closed", if (open) NamedTextColor.GREEN else NamedTextColor.RED)
                 row("Registered", session.participantCount.toString())
+                session.autoStartRemainingSeconds()?.let { row("Auto-start", "in ${RegistrationCountdown.describe(it)}", NamedTextColor.GREEN) }
                 val arena = arenas.selectedFor(session)
                 when {
                     session.arenaId == null -> row("Arena", "none selected", NamedTextColor.DARK_GRAY)
@@ -1225,9 +1246,10 @@ class EventManager(private val plugin: Joshymc) : Listener {
             }
             if (EventPermissions.canHost(sender)) {
                 lines += "&e/event &7- Open the Event Manager"
-                lines += "&e/event create <${EventType.ids.joinToString("|")}> &7- Create an event"
+                lines += "&e/event start <${EventType.ids.joinToString("|")}> &7- Host an event: arena, 5 min registration, auto start"
+                lines += "&e/event create <${EventType.ids.joinToString("|")}> &7- Create an event (manual setup)"
                 lines += "&e/event open &7- Open registration"
-                lines += "&e/event start &7- Start the event"
+                lines += "&e/event start &7- Start the current event now"
                 lines += "&e/event stop &7- End the event"
                 lines += "&e/event reset [confirm] &7- Reset the event to Created"
                 lines += "&e/event status &7- Show event status"
@@ -1244,7 +1266,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 lines += "&e/event save &7- Save selected zone"
                 lines += "&e/event pvp|build|break <on|off> &7- Event world toggles"
                 lines += "&e/event setworld <world> &7- Set event world"
-                lines += "&e/event start <game> &7- Start a mini-game (${legacyGames.joinToString("/")})"
+                lines += "&e/event start minigame <game> &7- Start a mini-game (${legacyGames.joinToString("/")})"
             }
             lines += ""
             lines.forEach { sender.sendMessage(comms.parseLegacy(it)) }
@@ -1277,6 +1299,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
                         }
                     }
                     args.size == 2 -> legacyTab(args, admin, host)
+                    args.size == 3 && admin && args[0].equals("start", true) && args[1].equals("minigame", true) ->
+                        legacyGames.filter { it.startsWith(args[2].lowercase()) }
                     else -> emptyList()
                 }
             }
@@ -1287,7 +1311,11 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 2 -> when (args[0].lowercase()) {
                     "create" -> if (host) EventType.ids else emptyList()
                     "reset" -> if (host) listOf("confirm") else emptyList()
-                    "start" -> if (admin) legacyGames else emptyList()
+                    "start" -> buildList {
+                        if (host) EventType.entries.forEach { add(it.id); addAll(it.aliases) }
+                        // Mini-game names that aren't also a hosted type; the rest go through `minigame`.
+                        if (admin) { addAll(legacyGames.filter { EventType.fromName(it) == null }); add("minigame") }
+                    }
                     "pvp", "build", "break" -> if (admin) listOf("on", "off") else emptyList()
                     "setworld" -> if (admin) Bukkit.getWorlds().map { it.name } else emptyList()
                     else -> emptyList()

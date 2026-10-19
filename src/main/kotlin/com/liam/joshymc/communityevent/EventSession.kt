@@ -59,6 +59,18 @@ class EventSession(
     var endedAt: Long? = null
         internal set
 
+    /**
+     * When registration closes and the event starts by itself (issue #1248, `/event start <type>`),
+     * as a [System.nanoTime] deadline so lag and clock changes don't stretch the five minutes.
+     * Null for manually run events, and cleared once the event starts, resets or ends.
+     */
+    var autoStartAtNanos: Long? = null
+        internal set
+
+    /** Whole seconds until the automatic start (rounded up, never negative), or null when there is none. */
+    fun autoStartRemainingSeconds(now: Long = System.nanoTime()): Long? =
+        autoStartAtNanos?.let { RegistrationCountdown.remainingSeconds(it, now) }
+
     /** Id of the saved arena picked for this event (issue #1183), or null. Kept across reset. */
     var arenaId: String? = null
         internal set

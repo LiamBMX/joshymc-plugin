@@ -45,7 +45,9 @@ class CrystalPvpGame(games: HostedGames) : MinigameGame(games, EventType.CPVP) {
 
     private fun readSettings() = CrystalPvpSettings.read(plugin.config.getConfigurationSection("hosted-events"))
 
-    override fun startProblem(session: EventSession, arena: EventArena): String? {
+    override fun minPlayers(): Int = readSettings().minPlayers
+
+    override fun setupProblem(arena: EventArena): String? {
         val s = readSettings()
         if (arena.point(ArenaField.SPAWN_1) == null) return "Arena '${arena.displayName}' has no Competitor Spawn 1. Set it with /event cpvp setspawn1."
         if (arena.point(ArenaField.SPAWN_2) == null) return "Arena '${arena.displayName}' has no Competitor Spawn 2. Set it with /event cpvp setspawn2."
@@ -56,7 +58,6 @@ class CrystalPvpGame(games: HostedGames) : MinigameGame(games, EventType.CPVP) {
         arenaStateProblem(arena)?.let { return it }
         if (!games.kit.available) return "Crystal PvP kit storage failed to load at startup; check the console."
         if (games.kit.isEmpty) return "No Crystal PvP kit is saved. Build it in your event inventory and run /event cpvp setkit."
-        if (session.participantCount < s.minPlayers) return "Crystal PvP needs at least ${s.minPlayers} registered players (${session.participantCount} registered)."
         return null
     }
 

@@ -29,7 +29,9 @@ class SpleefGame(games: HostedGames) : MinigameGame(games, EventType.SPLEEF) {
     private var settings = SpleefSettings.read(null)
     private var roundTimer: org.bukkit.scheduler.BukkitTask? = null
 
-    override fun startProblem(session: EventSession, arena: EventArena): String? {
+    override fun minPlayers(): Int = SpleefSettings.read(plugin.config.getConfigurationSection("hosted-events")).minPlayers
+
+    override fun setupProblem(arena: EventArena): String? {
         val s = SpleefSettings.read(plugin.config.getConfigurationSection("hosted-events"))
         val floor = arena.region(ArenaField.FLOOR) ?: return "Arena '${arena.displayName}' has no Floor Region. Set it with /event spleef setfloor."
         if (arena.height(ArenaField.LOSE_HEIGHT) == null) return "Arena '${arena.displayName}' has no Elimination Height. Set it with /event spleef setlose."
@@ -40,7 +42,6 @@ class SpleefGame(games: HostedGames) : MinigameGame(games, EventType.SPLEEF) {
         if (!games.floors.available) return "Spleef floor storage failed to load at startup; check the console."
         if (games.floors.isRestoring(arena.id)) return "The floor of '${arena.displayName}' is still being restored. Try again in a moment."
         if (games.floors.isDamaged(arena.id)) return "The floor of '${arena.displayName}' hasn't been restored yet. Run /event spleef reset first."
-        if (session.participantCount < s.minPlayers) return "Spleef needs at least ${s.minPlayers} registered players (${session.participantCount} registered)."
         return null
     }
 
