@@ -27,7 +27,11 @@ class SettingsManager(private val plugin: Joshymc) {
         // Hidden settings stay registered (so getSetting/setSetting keep working
         // for the dedicated command/listener that owns them) but are no longer
         // shown in the /settings GUI or discoverable via /settings <key>.
-        val hidden: Boolean = false
+        val hidden: Boolean = false,
+        // Returns why the player can't turn this setting on right now (e.g. Team
+        // Chat without a team), or null when enabling is allowed. Turning a
+        // setting off is never blocked.
+        val enableBlockedReason: ((Player) -> String?)? = null
     )
 
     private val settings = mutableListOf<SettingDef>()
@@ -47,23 +51,24 @@ class SettingsManager(private val plugin: Joshymc) {
         )
     """.trimIndent()
 
-    private val SETTINGS_TITLE = Component.text("       ")
-        .append(Component.text("S", TextColor.color(0x55FFFF)))
-        .append(Component.text("e", TextColor.color(0x66EEFF)))
-        .append(Component.text("t", TextColor.color(0x77DDFF)))
-        .append(Component.text("t", TextColor.color(0x88CCFF)))
-        .append(Component.text("i", TextColor.color(0x99BBFF)))
-        .append(Component.text("n", TextColor.color(0xAAAAFF)))
-        .append(Component.text("g", TextColor.color(0xBB99FF)))
-        .append(Component.text("s", TextColor.color(0xCC88FF)))
-        .decoration(TextDecoration.BOLD, true)
+    // Inventory titles always start at the client's fixed left edge, so the only
+    // portable way to center one is plain leading spaces. The padding is measured
+    // from vanilla glyph widths and stays unbolded (bold spaces are 1px wider).
+    private val SETTINGS_TITLE = Component.text(" ".repeat(SettingsLayout.TITLE_PADDING_SPACES))
+        .append(
+            Component.text("S", TextColor.color(0x55FFFF))
+                .append(Component.text("e", TextColor.color(0x66EEFF)))
+                .append(Component.text("t", TextColor.color(0x77DDFF)))
+                .append(Component.text("t", TextColor.color(0x88CCFF)))
+                .append(Component.text("i", TextColor.color(0x99BBFF)))
+                .append(Component.text("n", TextColor.color(0xAAAAFF)))
+                .append(Component.text("g", TextColor.color(0xBB99FF)))
+                .append(Component.text("s", TextColor.color(0xCC88FF)))
+                .decoration(TextDecoration.BOLD, true)
+        )
         .decoration(TextDecoration.ITALIC, false)
 
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
-        editMeta { meta -> meta.displayName(Component.empty()) }
-    }
-
-    private val BORDER = ItemStack(Material.GRAY_STAINED_GLASS_PANE).apply {
         editMeta { meta -> meta.displayName(Component.empty()) }
     }
 
@@ -140,6 +145,18 @@ class SettingsManager(private val plugin: Joshymc) {
         )
     }
 
+    /**
+     * Writes a setting for a player who may be offline (e.g. clearing Team Chat
+     * when they're kicked from their team). Only touches the cache if it's loaded.
+     */
+    fun setSetting(uuid: UUID, key: String, value: Boolean) {
+        cache[uuid]?.set(key, value)
+        store.execute(
+            "INSERT OR REPLACE INTO player_settings (uuid, setting, value) VALUES (?, ?, ?)",
+            uuid.toString(), key, if (value) 1 else 0
+        )
+    }
+
     fun toggle(player: Player, key: String): Boolean {
         val current = getSetting(player, key)
         val newValue = !current
@@ -150,44 +167,30 @@ class SettingsManager(private val plugin: Joshymc) {
     fun openGui(player: Player) {
         val visibleSettings = getVisibleSettings(player)
 
-        // 5 rows (45 slots) for a clean look
-        val gui = CustomGui(SETTINGS_TITLE, 45)
+        // One centered row (issue #1263); extra rows only past nine settings.
+        val layout = SettingsLayout.slots(visibleSettings.size)
+        val gui = CustomGui(SETTINGS_TITLE, SettingsLayout.size(visibleSettings.size))
 
-        // Fill entire inventory with filler
-        for (i in 0 until 45) {
+        for (i in 0 until gui.inventory.size) {
             gui.inventory.setItem(i, FILLER.clone())
         }
 
-        // Border on top and bottom rows
-        for (i in 0..8) {
-            gui.inventory.setItem(i, BORDER.clone())
-            gui.inventory.setItem(36 + i, BORDER.clone())
-        }
-        // Border on left/right edges
-        for (row in 1..3) {
-            gui.inventory.setItem(row * 9, BORDER.clone())
-            gui.inventory.setItem(row * 9 + 8, BORDER.clone())
-        }
-
-        // Center the settings in the middle rows (rows 1-3, columns 1-7)
-        // Available slots: 7 per row, 3 rows = 21 max
-        val availableSlots = mutableListOf<Int>()
-        for (row in 1..3) {
-            for (col in 1..7) {
-                availableSlots.add(row * 9 + col)
-            }
-        }
-
-        // Center the items within the available space
-        val centeredSlots = centerItems(visibleSettings.size, availableSlots)
-
-        for ((settingIdx, slot) in centeredSlots.withIndex()) {
+        for ((settingIdx, slot) in layout.withIndex()) {
             val def = visibleSettings[settingIdx]
             val enabled = getSetting(player, def.key)
             gui.setItem(slot, buildSettingItem(def, enabled)) { p, event ->
                 if (def.permission != null && !p.hasPermission(def.permission)) {
                     p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
                     return@setItem
+                }
+
+                if (!getSetting(p, def.key)) {
+                    val blocked = def.enableBlockedReason?.invoke(p)
+                    if (blocked != null) {
+                        p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                        plugin.commsManager.send(p, Component.text(blocked, NamedTextColor.RED), CommunicationsManager.Category.SETTINGS)
+                        return@setItem
+                    }
                 }
 
                 val newValue = toggle(p, def.key)
@@ -272,53 +275,5 @@ class SettingsManager(private val plugin: Joshymc) {
 
         item.itemMeta = meta
         return item
-    }
-
-    /**
-     * Centers N items within a grid of available slots.
-     * Returns the slot positions to use for each item.
-     */
-    private fun centerItems(count: Int, availableSlots: List<Int>): List<Int> {
-        if (count == 0) return emptyList()
-        if (count >= availableSlots.size) return availableSlots.take(count)
-
-        // Group slots by row
-        val rows = availableSlots.groupBy { it / 9 }.values.toList()
-        val itemsPerRow = 7 // columns 1-7
-
-        return when {
-            count <= itemsPerRow -> {
-                // Single row — center in middle row (row 2)
-                val middleRow = rows.getOrElse(1) { rows[0] }
-                centerInRow(count, middleRow)
-            }
-            count <= itemsPerRow * 2 -> {
-                // Two rows — use rows 1 and 3 (skip middle for symmetry)
-                val topCount = (count + 1) / 2
-                val bottomCount = count - topCount
-                val topRow = rows.getOrElse(0) { rows[0] }
-                val bottomRow = rows.getOrElse(2) { rows.last() }
-                centerInRow(topCount, topRow) + centerInRow(bottomCount, bottomRow)
-            }
-            else -> {
-                // Three rows
-                val perRow = (count + 2) / 3
-                val result = mutableListOf<Int>()
-                for ((i, row) in rows.withIndex()) {
-                    val rowCount = when (i) {
-                        rows.lastIndex -> count - result.size
-                        else -> perRow.coerceAtMost(count - result.size)
-                    }
-                    result.addAll(centerInRow(rowCount, row))
-                }
-                result
-            }
-        }
-    }
-
-    private fun centerInRow(count: Int, rowSlots: List<Int>): List<Int> {
-        if (count >= rowSlots.size) return rowSlots
-        val offset = (rowSlots.size - count) / 2
-        return rowSlots.subList(offset, offset + count)
     }
 }

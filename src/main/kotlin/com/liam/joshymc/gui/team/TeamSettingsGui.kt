@@ -25,7 +25,7 @@ object TeamSettingsGui {
 
         val friendlyFire = plugin.teamManager.isTeamPvpEnabled(teamName)
         val teamOpen = plugin.teamManager.isTeamOpen(teamName)
-        val teamChat = plugin.teamManager.isTeamChatEnabled(player.uniqueId)
+        val teamChat = plugin.teamManager.isTeamChatEnabled(player)
 
         val gui = CustomGui(Component.text("Team Settings", NamedTextColor.GOLD), 27)
         for (slot in 0..26) gui.setItem(slot, GuiStyle.filler())
