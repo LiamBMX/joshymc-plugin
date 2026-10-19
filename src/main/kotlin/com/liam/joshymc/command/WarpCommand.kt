@@ -53,9 +53,11 @@ class WarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 plugin.commsManager.send(sender, Component.text("Warp '$name' not found.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
                 return true
             }
-            if (PvpTeleportGuard.blocks(plugin, sender, location)) return true
+            // The PvP entry warp is the one player way into the PvP world (issue #1243).
+            val entry = PvpTeleportGuard.isEntryWarp(plugin, sender, name, location)
+            if (!entry && PvpTeleportGuard.blocks(plugin, sender, location)) return true
             if (TeleportChecks.checkAndApply(sender, plugin)) return true
-            sender.teleport(location)
+            if (entry) PvpTeleportGuard.forced { sender.teleport(location) } else sender.teleport(location)
             plugin.commsManager.send(sender, Component.text("Teleported to warp '$name'.", NamedTextColor.GREEN), CommunicationsManager.Category.WARP)
             return true
         }
@@ -110,13 +112,14 @@ class WarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     return@setItem
                 }
 
-                if (PvpTeleportGuard.blocks(plugin, p, location) || TeleportChecks.checkAndApply(p, plugin)) {
+                val entry = PvpTeleportGuard.isEntryWarp(plugin, p, warpName, location)
+                if ((!entry && PvpTeleportGuard.blocks(plugin, p, location)) || TeleportChecks.checkAndApply(p, plugin)) {
                     p.closeInventory()
                     return@setItem
                 }
 
                 p.closeInventory()
-                p.teleport(location)
+                if (entry) PvpTeleportGuard.forced { p.teleport(location) } else p.teleport(location)
                 p.playSound(p.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.7f, 1.0f)
                 plugin.commsManager.send(p, Component.text("Teleported to warp '$warpName'.", NamedTextColor.GREEN), CommunicationsManager.Category.WARP)
             }

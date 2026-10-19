@@ -91,7 +91,7 @@ class TpaCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return true
         }
 
-        if (PvpTeleportGuard.blocks(plugin, sender, target.location)) return true
+        if (PvpTeleportGuard.blocksRequest(plugin, sender, target, moving = sender)) return true
 
         if (!plugin.settingsManager.getSetting(target, "tpa")) {
             plugin.commsManager.send(sender, Component.text("${target.name} has TPA requests disabled.", NamedTextColor.RED))
@@ -163,7 +163,7 @@ class TpaHereCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return true
         }
 
-        if (PvpTeleportGuard.blocks(plugin, target, sender.location, notify = sender)) return true
+        if (PvpTeleportGuard.blocksRequest(plugin, sender, target, moving = target)) return true
 
         if (!plugin.settingsManager.getSetting(target, "tpahere")) {
             plugin.commsManager.send(sender, Component.text("${target.name} has TPAHere requests disabled.", NamedTextColor.RED))
@@ -250,7 +250,8 @@ class TpAcceptCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         when (request.type) {
             TpaType.TPA -> {
                 // Requester teleports to target (sender)
-                if (PvpTeleportGuard.blocks(plugin, requester, sender.location, notify = sender)) return true
+                // Re-checked here: either player may have entered the PvP world since the request.
+                if (PvpTeleportGuard.blocksRequest(plugin, sender, requester, moving = requester)) return true
                 if (TeleportChecks.checkAndApply(requester, plugin)) {
                     plugin.commsManager.send(sender, Component.text("${requester.name} could not teleport (combat/cooldown/frozen).", NamedTextColor.RED))
                     return true
@@ -260,7 +261,7 @@ class TpAcceptCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             }
             TpaType.TPAHERE -> {
                 // Target (sender) teleports to requester
-                if (PvpTeleportGuard.blocks(plugin, sender, requester.location)) return true
+                if (PvpTeleportGuard.blocksRequest(plugin, sender, requester, moving = sender)) return true
                 if (TeleportChecks.checkAndApply(sender, plugin)) return true
                 plugin.commsManager.send(requester, Component.text("${sender.name} is teleporting to you...", NamedTextColor.GREEN))
                 TeleportChecks.teleportWithWarmup(sender, requester.location, plugin)
