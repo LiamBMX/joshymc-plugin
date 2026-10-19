@@ -2,8 +2,6 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.Sound
@@ -108,10 +106,10 @@ class ChatGamesManager(private val plugin: Joshymc) {
             // winner may have already cleared the slot.
             if (current.compareAndSet(expireToken, null)) {
                 Bukkit.broadcast(
-                    Component.text("⏱ ", NamedTextColor.YELLOW)
-                        .append(Component.text("Chat game expired. ", NamedTextColor.GRAY))
-                        .append(Component.text("Answer was: ", NamedTextColor.GRAY))
-                        .append(Component.text(game.answer, NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true))
+                    Component.text("⏱ ", ChatGameStartAnnouncement.ACCENT)
+                        .append(Component.text("Chat game expired. ", ChatGameStartAnnouncement.TEXT))
+                        .append(Component.text("Answer was: ", ChatGameStartAnnouncement.TEXT))
+                        .append(Component.text(game.answer, ChatGameStartAnnouncement.CHALLENGE).decoration(TextDecoration.BOLD, true))
                 )
             }
         }, solveWindowSeconds * 20L)
@@ -157,28 +155,14 @@ class ChatGamesManager(private val plugin: Joshymc) {
     // ── Announcement ────────────────────────────────────────────────────
 
     private fun announceStart(game: ActiveGame) {
-        // Empty separator line above the announcement so it visually breaks
-        // away from preceding chat. Same below.
-        val rule = Component.text("━━━━━━━━━━━━━━━ ", TextColor.color(0xFFD700))
-            .append(Component.text("✦ CHAT GAME ✦", TextColor.color(0xFFD700)).decoration(TextDecoration.BOLD, true))
-            .append(Component.text(" ━━━━━━━━━━━━━━━", TextColor.color(0xFFD700)))
-        val ruleBottom = Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", TextColor.color(0xFFD700))
-
-        val typeLine = Component.text("  ", NamedTextColor.GRAY)
-            .append(Component.text("[${game.type.displayName}]  ", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.BOLD, true))
-            .append(Component.text(game.prompt, NamedTextColor.AQUA).decoration(TextDecoration.BOLD, true))
-
-        val rewardLine = Component.text("  First in chat wins ", NamedTextColor.GRAY)
-            .append(Component.text("${plugin.creditsManager.format(rewardCredits)} Credits", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true))
-            .append(Component.text("  ·  Time: ", NamedTextColor.DARK_GRAY))
-            .append(Component.text("${solveWindowSeconds}s", NamedTextColor.GRAY))
-
-        Bukkit.broadcast(Component.empty())
-        Bukkit.broadcast(rule)
-        Bukkit.broadcast(typeLine)
-        Bukkit.broadcast(rewardLine)
-        Bukkit.broadcast(ruleBottom)
-        Bukkit.broadcast(Component.empty())
+        Bukkit.broadcast(
+            ChatGameStartAnnouncement.build(
+                game.type,
+                game.prompt,
+                "${plugin.creditsManager.format(rewardCredits)} Credits",
+                solveWindowSeconds,
+            )
+        )
 
         // Bell "ting" so players notice even if they're not looking at chat.
         for (online in Bukkit.getOnlinePlayers()) {
