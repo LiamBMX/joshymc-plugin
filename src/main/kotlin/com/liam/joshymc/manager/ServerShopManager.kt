@@ -414,7 +414,7 @@ class ServerShopManager(private val plugin: Joshymc) {
             val icon = buildShopItemIcon(shopItem)
 
             gui.setItem(slot, icon) { p, event ->
-                handleItemClick(p, shopItem, event.click)
+                handleItemClick(p, shopItem, event.click, categoryId, page)
             }
         }
 
@@ -727,32 +727,38 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     // ── Click Handler ───────────────────────────────────────────────────
 
-    private fun handleItemClick(player: Player, shopItem: ShopItem, clickType: ClickType) {
+    private fun handleItemClick(player: Player, shopItem: ShopItem, clickType: ClickType, categoryId: String, page: Int) {
         val noSell = { plugin.commsManager.send(player, Component.text("You cannot sell this item.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY); player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f) }
         val noBuy = { plugin.commsManager.send(player, Component.text("This item is not for sale.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY); player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f) }
 
         when (clickType) {
             ClickType.LEFT, ClickType.SHIFT_LEFT ->
-                if (shopItem.buyPrice > 0) openBuyQuantityGui(player, shopItem) else noBuy()
+                if (shopItem.buyPrice > 0) openBuyQuantityGui(player, shopItem, categoryId, page) else noBuy()
             ClickType.RIGHT -> if (shopItem.sellPrice > 0) sellItem(player, shopItem.material, applyCropBonus(shopItem.sellPrice, shopItem.material, player.uniqueId), 1) else noSell()
             ClickType.SHIFT_RIGHT -> if (shopItem.sellPrice > 0) sellItem(player, shopItem.material, applyCropBonus(shopItem.sellPrice, shopItem.material, player.uniqueId), -1) else noSell()
             else -> {}
         }
     }
 
-    // ── Buy Quantity GUI ────────────────────────────────────────────────
+    // ── Buy Confirmation GUI ────────────────────────────────────────────
     //
-    // 27-slot GUI letting players pick how many to buy (1..640, i.e. up to 10 stacks). Layout:
-    //   row 0:        gray border
-    //   row 1: R64 R16 R8 R-1 ITEM G+1 G+8 G+16 G+64
-    //   row 2:        confirm at slot 22
-    // Confirm charges live price * amount and gives that many items.
+    // Issue #1259. 27-slot confirmation screen, amount 1..64 (ShopBuyAmounts):
+    //   row 0:          gray border
+    //   row 1:  [=1] [-10] [-1]  ITEM  [+1] [+10] [=64]   (red / lime glass panes)
+    //   row 2:      RED DYE   LIME DYE   YELLOW DYE        (back / buy / buy stacks)
+    // Red goes back to the category page the item was clicked on, lime buys the shown amount,
+    // yellow opens the stack screen for anything above 64.
 
-    private val MAX_BUY = 640
+    private val CONFIRM_ITEM_SLOT = 13
+    private val CONFIRM_BACK_SLOT = 20
+    private val CONFIRM_BUY_SLOT = 22
+    private val CONFIRM_STACKS_SLOT = 24
 
-    private fun openBuyQuantityGui(player: Player, shopItem: ShopItem) {
-        var amount = 1
-        val livePrice = shopItem.buyPrice
+    private fun openBuyQuantityGui(player: Player, shopItem: ShopItem, categoryId: String, page: Int, startAmount: Int = 1) {
+        var amount = ShopBuyAmounts.clampSingle(startAmount)
+        // Set while a purchase runs, so a second click on the same screen can never buy twice.
+        var used = false
+        val unitPrice = shopItem.buyPrice
 
         val gui = CustomGui(
             Component.text("Buy ${displayLabel(shopItem)}", NamedTextColor.DARK_GREEN)
@@ -760,81 +766,74 @@ class ServerShopManager(private val plugin: Joshymc) {
                 .decoration(TextDecoration.ITALIC, false),
             27
         )
-
-        // Fill background
-        for (i in 0 until 27) gui.inventory.setItem(i, BORDER.clone())
+        gui.fill(BORDER.clone())
 
         fun renderDynamic() {
-            val total = livePrice * amount
-            val itemDisplay = when (shopItem.kind) {
-                ShopItemKind.POTION -> buildPotionItem(shopItem)
-                ShopItemKind.SPAWNER -> shopItem.spawnerTypeId?.let { plugin.spawnerManager.createSpawnerItem(it) } ?: ItemStack(Material.BARRIER)
-                ShopItemKind.MATERIAL -> ItemStack(shopItem.material)
-            }
-            itemDisplay.amount = amount.coerceIn(1, 64)
-            itemDisplay.editMeta { meta ->
-                meta.displayName(
-                    Component.text(displayLabel(shopItem), NamedTextColor.WHITE)
-                        .decoration(TextDecoration.ITALIC, false)
-                        .decoration(TextDecoration.BOLD, true)
-                )
-                meta.lore(listOf(
-                    Component.empty(),
-                    Component.text("Buying: ", NamedTextColor.GRAY)
-                        .append(Component.text("$amount", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true))
-                        .decoration(TextDecoration.ITALIC, false),
-                    Component.text("Unit price: ", NamedTextColor.GRAY)
-                        .append(Component.text(plugin.economyManager.format(livePrice), NamedTextColor.GOLD))
-                        .decoration(TextDecoration.ITALIC, false),
-                    Component.text("Total: ", NamedTextColor.GRAY)
-                        .append(Component.text(plugin.economyManager.format(total), NamedTextColor.GOLD))
-                        .decoration(TextDecoration.BOLD, true)
-                        .decoration(TextDecoration.ITALIC, false),
-                    Component.empty(),
-                ))
-            }
-            gui.inventory.setItem(13, itemDisplay)
-
-            val confirm = ItemStack(Material.LIME_CONCRETE)
-            confirm.editMeta { meta ->
-                meta.displayName(
-                    Component.text("Confirm Purchase", NamedTextColor.GREEN)
-                        .decoration(TextDecoration.BOLD, true)
-                        .decoration(TextDecoration.ITALIC, false)
-                )
-                meta.lore(listOf(
-                    Component.text("Buy ", NamedTextColor.GRAY)
-                        .append(Component.text("$amount", NamedTextColor.WHITE))
-                        .append(Component.text(" for ", NamedTextColor.GRAY))
-                        .append(Component.text(plugin.economyManager.format(livePrice * amount), NamedTextColor.GOLD))
-                        .decoration(TextDecoration.ITALIC, false),
-                ))
-            }
-            gui.inventory.setItem(22, confirm)
+            val total = ShopBuyAmounts.totalPrice(unitPrice, amount)
+            gui.inventory.setItem(CONFIRM_ITEM_SLOT, buildPreview(shopItem, amount, listOf(
+                Component.empty(),
+                Component.text("Amount: ", NamedTextColor.GRAY)
+                    .append(Component.text("$amount", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true))
+                    .decoration(TextDecoration.ITALIC, false),
+                Component.text("Unit price: ", NamedTextColor.GRAY)
+                    .append(Component.text(plugin.economyManager.format(unitPrice), NamedTextColor.GOLD))
+                    .decoration(TextDecoration.ITALIC, false),
+                Component.text("Total: ", NamedTextColor.GRAY)
+                    .append(Component.text(plugin.economyManager.format(total), NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true))
+                    .decoration(TextDecoration.ITALIC, false),
+            )))
+            gui.inventory.setItem(CONFIRM_BUY_SLOT, actionButton(Material.LIME_DYE, "Buy", NamedTextColor.GREEN, listOf(
+                Component.text("Buy ", NamedTextColor.GRAY)
+                    .append(Component.text("${amount}x ${displayLabel(shopItem)}", NamedTextColor.WHITE))
+                    .decoration(TextDecoration.ITALIC, false),
+                Component.text("for ", NamedTextColor.GRAY)
+                    .append(Component.text(plugin.economyManager.format(total), NamedTextColor.GOLD))
+                    .decoration(TextDecoration.ITALIC, false),
+            )))
         }
 
-        // Decrement panes (left of the item display, slot 9 = -64 stack button)
-        for ((slot, delta) in listOf(9 to -64, 10 to -16, 11 to -8, 12 to -1)) {
-            gui.setItem(slot, decBtn(delta)) { p, _ ->
-                amount = (amount + delta).coerceIn(1, MAX_BUY)
-                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.4f, 0.8f)
+        // Quantity panes: set to 1 / -10 / -1 on the left, +1 / +10 / set to 64 on the right.
+        val panes = listOf(
+            Triple(10, "Set to ${ShopBuyAmounts.MIN}", -ShopBuyAmounts.MAX_SINGLE),
+            Triple(11, "-10", -10),
+            Triple(12, "-1", -1),
+            Triple(14, "+1", 1),
+            Triple(15, "+10", 10),
+            Triple(16, "Set to ${ShopBuyAmounts.MAX_SINGLE}", ShopBuyAmounts.MAX_SINGLE),
+        )
+        for ((slot, label, delta) in panes) {
+            gui.setItem(slot, quantityPane(label, delta > 0)) { p, _ ->
+                val next = ShopBuyAmounts.adjust(amount, delta)
+                if (next == amount) {
+                    p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.4f, 1.2f)
+                    return@setItem
+                }
+                amount = next
+                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.4f, if (delta > 0) 1.4f else 0.8f)
                 renderDynamic()
             }
         }
-        // Increment panes (right of the item display, slot 17 = +64 stack button)
-        for ((slot, delta) in listOf(14 to 1, 15 to 8, 16 to 16, 17 to 64)) {
-            gui.setItem(slot, incBtn(delta)) { p, _ ->
-                amount = (amount + delta).coerceIn(1, MAX_BUY)
-                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.4f, 1.4f)
-                renderDynamic()
-            }
+
+        gui.setItem(CONFIRM_BACK_SLOT, actionButton(Material.RED_DYE, "Back", NamedTextColor.RED, listOf(
+            Component.text("Return to the shop page", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+        ))) { p, _ ->
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            openCategory(p, categoryId, page)
         }
-        // Confirm button — handler is bound here; renderDynamic() overwrites
-        // the visual on each click but the bound handler persists.
-        gui.setItem(22, ItemStack(Material.LIME_CONCRETE)) { p, _ ->
-            if (buyItem(p, shopItem, amount.coerceIn(1, MAX_BUY))) {
-                openMainMenu(p)
-            }
+
+        // Bound once; renderDynamic() only swaps the visual, the handler reads the live amount.
+        gui.setItem(CONFIRM_BUY_SLOT, ItemStack(Material.LIME_DYE)) { p, _ ->
+            if (used) return@setItem
+            used = true
+            if (buyItem(p, shopItem, amount)) openCategory(p, categoryId, page) else used = false
+        }
+
+        gui.setItem(CONFIRM_STACKS_SLOT, actionButton(Material.YELLOW_DYE, "Buy Stacks", NamedTextColor.YELLOW, listOf(
+            Component.text("Buy more than ${ShopBuyAmounts.MAX_SINGLE}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+            Component.text("in full stacks of ${ShopBuyAmounts.STACK_SIZE}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+        ))) { p, _ ->
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            openBuyStacksGui(p, shopItem, categoryId, page, amount)
         }
 
         renderDynamic()
@@ -842,26 +841,120 @@ class ServerShopManager(private val plugin: Joshymc) {
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
-    private fun decBtn(delta: Int): ItemStack {
-        val item = ItemStack(Material.RED_STAINED_GLASS_PANE)
+    // ── Buy Stacks GUI ──────────────────────────────────────────────────
+    //
+    // 36-slot screen of whole-stack options (1..10 stacks, each shown as the item with the stack
+    // count as its amount), the item preview on top, and a red dye back to the confirmation
+    // screen at the amount the player left it on. Clicking an option buys count * 64.
+
+    private val STACK_OPTION_SLOTS = listOf(11, 12, 13, 14, 15, 20, 21, 22, 23, 24)
+    private val STACKS_PREVIEW_SLOT = 4
+    private val STACKS_BACK_SLOT = 31
+
+    private fun openBuyStacksGui(player: Player, shopItem: ShopItem, categoryId: String, page: Int, returnAmount: Int) {
+        var used = false
+        val unitPrice = shopItem.buyPrice
+
+        val gui = CustomGui(
+            Component.text("Buy Stacks", NamedTextColor.DARK_GREEN)
+                .decoration(TextDecoration.BOLD, true)
+                .decoration(TextDecoration.ITALIC, false),
+            36
+        )
+        gui.fill(BORDER.clone())
+
+        gui.inventory.setItem(STACKS_PREVIEW_SLOT, buildPreview(shopItem, 1, listOf(
+            Component.empty(),
+            Component.text("Unit price: ", NamedTextColor.GRAY)
+                .append(Component.text(plugin.economyManager.format(unitPrice), NamedTextColor.GOLD))
+                .decoration(TextDecoration.ITALIC, false),
+            Component.text("Pick how many stacks to buy below.", NamedTextColor.GRAY)
+                .decoration(TextDecoration.ITALIC, false),
+        )))
+
+        for ((index, slot) in STACK_OPTION_SLOTS.take(ShopBuyAmounts.MAX_STACKS).withIndex()) {
+            val stacks = index + 1
+            val total = ShopBuyAmounts.stackTotal(stacks) ?: continue
+            val name = Component.text("$stacks Stack${if (stacks == 1) "" else "s"}", NamedTextColor.YELLOW)
+                .decoration(TextDecoration.BOLD, true)
+                .decoration(TextDecoration.ITALIC, false)
+            val icon = buildPreview(shopItem, stacks, listOf(
+                Component.empty(),
+                Component.text("Amount: ", NamedTextColor.GRAY)
+                    .append(Component.text("$total", NamedTextColor.WHITE).decoration(TextDecoration.BOLD, true))
+                    .append(Component.text(" ($stacks x ${ShopBuyAmounts.STACK_SIZE})", NamedTextColor.DARK_GRAY))
+                    .decoration(TextDecoration.ITALIC, false),
+                Component.text("Total: ", NamedTextColor.GRAY)
+                    .append(Component.text(plugin.economyManager.format(ShopBuyAmounts.totalPrice(unitPrice, total)), NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true))
+                    .decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("Click to buy", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false),
+            ), name)
+            gui.setItem(slot, icon) { p, _ ->
+                if (used) return@setItem
+                used = true
+                if (buyItem(p, shopItem, total)) openCategory(p, categoryId, page) else used = false
+            }
+        }
+
+        gui.setItem(STACKS_BACK_SLOT, actionButton(Material.RED_DYE, "Back", NamedTextColor.RED, listOf(
+            Component.text("Return to the amount screen", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+        ))) { p, _ ->
+            p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
+            openBuyQuantityGui(p, shopItem, categoryId, page, returnAmount)
+        }
+
+        plugin.guiManager.open(player, gui)
+    }
+
+    /**
+     * Display-only copy of what's being bought, showing [count] as its stack size. Never handed
+     * to the player: delivery always builds fresh items in [buyItem].
+     */
+    private fun buildPreview(shopItem: ShopItem, count: Int, lore: List<Component>, name: Component? = null): ItemStack {
+        val item = when (shopItem.kind) {
+            ShopItemKind.POTION -> buildPotionItem(shopItem)
+            ShopItemKind.SPAWNER -> shopItem.spawnerTypeId?.let { plugin.spawnerManager.createSpawnerItem(it) } ?: ItemStack(Material.BARRIER)
+            ShopItemKind.MATERIAL -> ItemStack(shopItem.material)
+        }
+        val shown = count.coerceIn(1, ShopBuyAmounts.MAX_SINGLE)
+        item.editMeta { meta ->
+            // Potions and other unstackables would clamp the count shown, so lift the cap on the preview only.
+            if (item.maxStackSize < shown) meta.setMaxStackSize(ShopBuyAmounts.MAX_SINGLE)
+            meta.displayName(name ?: Component.text(displayLabel(shopItem), NamedTextColor.WHITE)
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true))
+            meta.lore(lore)
+        }
+        item.amount = shown
+        return item
+    }
+
+    private fun quantityPane(label: String, increase: Boolean): ItemStack {
+        val item = ItemStack(if (increase) Material.LIME_STAINED_GLASS_PANE else Material.RED_STAINED_GLASS_PANE)
         item.editMeta { meta ->
             meta.displayName(
-                Component.text("$delta", NamedTextColor.RED)
+                Component.text(label, if (increase) NamedTextColor.GREEN else NamedTextColor.RED)
                     .decoration(TextDecoration.BOLD, true)
                     .decoration(TextDecoration.ITALIC, false)
             )
+            meta.lore(listOf(
+                Component.text("Amount: ${ShopBuyAmounts.MIN}-${ShopBuyAmounts.MAX_SINGLE}", NamedTextColor.GRAY)
+                    .decoration(TextDecoration.ITALIC, false),
+            ))
         }
         return item
     }
 
-    private fun incBtn(delta: Int): ItemStack {
-        val item = ItemStack(Material.LIME_STAINED_GLASS_PANE)
+    private fun actionButton(material: Material, label: String, color: NamedTextColor, lore: List<Component>): ItemStack {
+        val item = ItemStack(material)
         item.editMeta { meta ->
             meta.displayName(
-                Component.text("+$delta", NamedTextColor.GREEN)
+                Component.text(label, color)
                     .decoration(TextDecoration.BOLD, true)
                     .decoration(TextDecoration.ITALIC, false)
             )
+            meta.lore(lore)
         }
         return item
     }
@@ -869,7 +962,12 @@ class ServerShopManager(private val plugin: Joshymc) {
     // ── Buy Logic ───────────────────────────────────────────────────────
 
     private fun buyItem(player: Player, shopItem: ShopItem, amount: Int): Boolean {
-        val totalCost = shopItem.buyPrice * amount
+        if (shopItem.buyPrice <= 0 || !ShopBuyAmounts.isValidPurchase(amount)) {
+            plugin.commsManager.send(player, Component.text("Invalid purchase amount.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+            return false
+        }
+        val totalCost = ShopBuyAmounts.totalPrice(shopItem.buyPrice, amount)
 
         if (!plugin.economyManager.has(player.uniqueId, totalCost)) {
             plugin.commsManager.send(player,
