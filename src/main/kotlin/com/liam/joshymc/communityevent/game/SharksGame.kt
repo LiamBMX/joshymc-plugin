@@ -51,16 +51,13 @@ class SharksGame(games: HostedGames) : MinigameGame(games, EventType.SHARKS) {
     private var crossingTimer: BukkitTask? = null
     private var transition: BukkitTask? = null
     private val lastCatch = HashMap<UUID, Long>()
-
-    override fun minPlayers(): Int = SharksSettings.read(plugin.config.getConfigurationSection("hosted-events")).minPlayers
-
-    override fun setupProblem(arena: EventArena): String? {
     /** Readied (shirt on) for the current crossing. Only they can turn into a Shark on the spot. */
     private val equipped = HashSet<UUID>()
     private var lastMinnowAnnounced = false
 
-    override fun startProblem(session: EventSession, arena: EventArena): String? {
-        val s = SharksSettings.read(plugin.config.getConfigurationSection("hosted-events"))
+    override fun minPlayers(): Int = SharksSettings.read(plugin.config.getConfigurationSection("hosted-events")).minPlayers
+
+    override fun setupProblem(arena: EventArena): String? {
         val shark = arena.point(ArenaField.SHARK_SPAWN) ?: return "Arena '${arena.displayName}' has no Shark Spawn. Set it with /event sharks setshark."
         val minnow = arena.point(ArenaField.MINNOW_SPAWN) ?: return "Arena '${arena.displayName}' has no Minnow Spawn. Set it with /event sharks setminnow."
         val finish = arena.region(ArenaField.FINISH) ?: return "Arena '${arena.displayName}' has no Finish Zone. Set it with /event sharks setfinish."
