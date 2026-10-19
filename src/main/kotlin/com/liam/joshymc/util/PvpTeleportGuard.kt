@@ -24,6 +24,10 @@ import java.util.concurrent.ConcurrentHashMap
  *    player-controlled teleport (command, plugin, ender pearl) that
  *    crosses the PvP world boundary, whichever plugin or alias issued it.
  *
+ * The one player way in is the entry warp (`/warp pvp`, [isEntryWarp], issue
+ * #1243). Teleport requests touching the PvP world are refused by
+ * [blocksRequest] when sent, when accepted and again after the warmup.
+ *
  * Staff/internal teleports pass through either by running inside [forced]
  * (JoshyMC staff tools, AFK round-trip, admin-built portals) or by happening in
  * the same tick as a console command or a command typed by staff holding
@@ -82,13 +86,48 @@ object PvpTeleportGuard {
         return true
     }
 
+    /**
+     * The server warp players may use to enter the PvP world (`pvp.entry-warp`,
+     * issue #1243), lowercase; null when blank.
+     */
+    fun entryWarp(plugin: Joshymc): String? =
+        plugin.config.getString("pvp.entry-warp", "pvp")?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+
+    /**
+     * True when warping [player] to the server warp [warpName] at [destination]
+     * is the sanctioned way into the PvP world: it is the entry warp, it lies in
+     * the PvP world, and the player is outside it. Moves within or out of the
+     * PvP world stay locked.
+     */
+    fun isEntryWarp(plugin: Joshymc, player: Player, warpName: String, destination: Location): Boolean =
+        isEnabled(plugin) && warpName.lowercase() == entryWarp(plugin) &&
+            isPvpWorld(destination.world) && !isPvpWorld(player.world)
+
+    /**
+     * Teleport request (/tpa, /tpahere, /tpaccept) between [notify] and [other]
+     * that would teleport [moving] (issue #1243). Refused, telling [notify], when
+     * either player is in the PvP world, whichever of them moves. Bypass is
+     * [moving]'s, as in [blocks].
+     */
+    fun blocksRequest(plugin: Joshymc, notify: Player, other: Player, moving: Player): Boolean {
+        if (!isEnabled(plugin) || canBypass(moving)) return false
+        val message = when {
+            isPvpWorld(notify.world) -> "You cannot use teleport requests in the PvP World!"
+            isPvpWorld(other.world) -> "You cannot teleport to players in the PvP World!" +
+                (entryWarp(plugin)?.let { " Use /warp $it instead." } ?: "")
+            else -> return false
+        }
+        notify(plugin, notify, message)
+        return true
+    }
+
     /** Sends the block message, at most once per second per player. */
-    fun notify(plugin: Joshymc, player: Player) {
+    fun notify(plugin: Joshymc, player: Player, message: String = "You cannot teleport into or out of the PvP world.") {
         val now = System.currentTimeMillis()
         val last = lastNotified[player.uniqueId]
         if (last != null && now - last < NOTIFY_COOLDOWN_MS) return
         lastNotified[player.uniqueId] = now
-        plugin.commsManager.send(player, Component.text("You cannot teleport into or out of the PvP world.", NamedTextColor.RED))
+        plugin.commsManager.send(player, Component.text(message, NamedTextColor.RED))
     }
 
     fun clear(player: Player) {

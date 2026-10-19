@@ -314,8 +314,12 @@ combat:
 # PvP world — the "pvp" world is isolated from player teleports (/spawn, /home,
 # /warp, /tpa, /back, /rtp, ... and any other plugin's teleports in or out).
 # Staff/console force teleports, JoshyMC portals and joshymc.pvp.teleport.bypass still work.
+# /tpa, /tpahere and /tpaccept are refused whenever either player is in the PvP world.
 pvp:
   block-player-teleports: true
+  # Server warp that players may use to enter the PvP world (/warp pvp). It must
+  # be set inside the "pvp" world (/setwarp pvp). Leave blank to disable.
+  entry-warp: pvp
 
 # PvP Kill Streaks — consecutive kills without dying. Milestones pay out cash,
 # and once a player's streak reaches the bounty threshold, killing them
