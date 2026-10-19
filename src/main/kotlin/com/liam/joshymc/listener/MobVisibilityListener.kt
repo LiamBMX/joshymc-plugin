@@ -7,6 +7,7 @@ import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Mob
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
+import org.bukkit.entity.Tameable
 import org.bukkit.entity.Villager
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
@@ -14,6 +15,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
+import org.bukkit.event.entity.EntityTameEvent
 import org.bukkit.event.entity.EntityTargetEvent
 import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerJoinEvent
@@ -61,15 +63,20 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
          * Xray shulkers (tagged "joshymc_xray") are helper entities for the
          * xray enchant and must remain visible to the enchant owner. Axolotls
          * and Iron Golems are exempt from hiding at the user's request — see
-         * issue #917.
+         * issue #917. Tamed animals (anyone's pets) stay visible too, but
+         * only once actually tamed: a wild wolf is still hidden (issue #1267).
          */
         private fun shouldHide(entity: LivingEntity): Boolean {
             if (entity is ArmorStand) return false
+            if (isTamed(entity)) return false
             if (entity is Villager) return false
             if (entity.type.name in ALWAYS_VISIBLE_TYPES) return false
             if (entity.scoreboardTags.contains("joshymc_xray")) return false
             return true
         }
+
+        private fun isTamed(entity: LivingEntity): Boolean =
+            entity is Tameable && entity.isTamed
 
         /**
          * Apply the current setting state to [player]. Iterates every loaded
@@ -82,6 +89,13 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
             val world = player.world
             for (entity in world.livingEntities) {
                 if (entity is Player) continue
+                if (isTamed(entity)) {
+                    // A pet hidden before it was tamed (or by an older build)
+                    // comes back. showEntity(plugin, …) only lifts JoshyMC's
+                    // own hide, so vanish/other-plugin hides stay in place.
+                    if (!player.canSee(entity)) player.showEntity(plugin, entity)
+                    continue
+                }
                 if (!shouldHide(entity)) continue
                 if (enabled) {
                     // Toggling on: re-show every mob the player had hidden.
@@ -160,6 +174,19 @@ class MobVisibilityListener(private val plugin: Joshymc) : Listener {
             if (!visible(online) && online.canSee(entity)) {
                 online.hideEntity(plugin, entity)
             }
+        }
+    }
+
+    /**
+     * A wild animal tamed while someone has mobs hidden shows up for them
+     * right away instead of waiting for their next join/teleport re-apply.
+     * Only lifts JoshyMC's own hide (see [applyTo]).
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onTame(event: EntityTameEvent) {
+        val entity = event.entity
+        for (online in entity.world.players) {
+            if (!online.canSee(entity)) online.showEntity(plugin, entity)
         }
     }
 
