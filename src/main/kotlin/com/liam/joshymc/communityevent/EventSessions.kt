@@ -93,7 +93,11 @@ class EventSessions(
         return EventResult.Success(session, "Created a ${type.displayName} event. Open registration with /event open.")
     }
 
-    fun open(): EventResult {
+    /**
+     * Opens registration. With [autoStartSeconds] (`/event start <type>`, issue #1248) the session
+     * gets its automatic-start deadline and the broadcast says how long registration stays open.
+     */
+    fun open(autoStartSeconds: Long? = null): EventResult {
         val session = current ?: return noEvent()
         when (session.state) {
             EventState.OPEN -> return EventResult.Failure("Registration for ${session.type.displayName} is already open.")
@@ -103,10 +107,16 @@ class EventSessions(
         }
         if (!move(session, EventState.OPEN)) return invalid(session, EventState.OPEN)
         session.openedAt = System.currentTimeMillis()
+        session.autoStartAtNanos = autoStartSeconds?.let { RegistrationCountdown.deadline(System.nanoTime(), it) }
         val failure = runHook(session, "open") { it.onOpen(session) }
+        val headline = if (autoStartSeconds != null) {
+            "An event is starting! ${session.type.displayName} registration is now open for ${RegistrationCountdown.describe(autoStartSeconds)}! "
+        } else {
+            "${session.type.displayName} registration is now open! "
+        }
         comms.broadcast(
             Component.text("Community Event: ", NamedTextColor.GOLD)
-                .append(Component.text("${session.type.displayName} registration is now open! ", NamedTextColor.YELLOW))
+                .append(Component.text(headline, NamedTextColor.YELLOW))
                 .append(
                     Component.text("[Click to join]", NamedTextColor.GREEN)
                         .clickEvent(ClickEvent.runCommand("/event join"))
@@ -134,6 +144,9 @@ class EventSessions(
         startCheck?.invoke(session)?.let { return EventResult.Failure(it) }
         if (!move(session, EventState.RUNNING)) return invalid(session, EventState.RUNNING)
         session.startedAt = System.currentTimeMillis()
+        // Started by hand during an automatic countdown counts too: the countdown sees the state change and ends.
+        val autoStartAt = session.autoStartAtNanos
+        session.autoStartAtNanos = null
         session.roster = session.participants.associateWith { Bukkit.getPlayer(it)?.name ?: Bukkit.getOfflinePlayer(it).name ?: it.toString().take(8) }
         val failure = runHook(session, "start") { it.onStart(session) }
         if (failure != null) {
@@ -141,6 +154,7 @@ class EventSessions(
             session.cancelTasks()
             session.state = EventState.OPEN
             session.startedAt = null
+            session.autoStartAtNanos = autoStartAt
             session.roster = emptyMap()
             changed()
             return EventResult.Failure("The ${session.type.displayName} event failed to start: $failure. Registration is still open.")
@@ -156,7 +170,8 @@ class EventSessions(
         return EventResult.Success(session, "${session.type.displayName} started with ${session.participantCount} participant(s).")
     }
 
-    fun stop(): EventResult {
+    /** Ends the event. [cancelMessage] replaces the "cancelled" broadcast for an event stopped during registration. */
+    fun stop(cancelMessage: String? = null): EventResult {
         val session = active ?: return if (current != null) {
             EventResult.Failure("The ${current!!.type.displayName} event has already finished.")
         } else noEvent()
@@ -171,7 +186,7 @@ class EventSessions(
                 CommunicationsManager.Category.EVENT,
             )
             EventState.OPEN -> comms.broadcast(
-                Component.text("The ${session.type.displayName} event was cancelled. Registration is closed.", NamedTextColor.YELLOW),
+                Component.text(cancelMessage ?: "The ${session.type.displayName} event was cancelled. Registration is closed.", NamedTextColor.YELLOW),
                 CommunicationsManager.Category.EVENT,
             )
             else -> {} // CREATED was never announced, so ending it stays quiet.
@@ -211,6 +226,7 @@ class EventSessions(
         session.openedAt = null
         session.startedAt = null
         session.endedAt = null
+        session.autoStartAtNanos = null
         session.roster = emptyMap()
         session.detected = null
         session.rewards = emptyList()
@@ -261,8 +277,21 @@ class EventSessions(
 
     // ── Registration ──────────────────────────────────────
 
+    /**
+     * Drops a session that never opened registration, as if it was never created. Used by
+     * `/event start <type>` (issue #1248) when a step after creating it fails, so no partial event stays behind.
+     */
+    fun abandon(session: EventSession) {
+        if (current !== session || session.state != EventState.CREATED) return
+        current = null
+        plugin.logger.info("[Event] Discarded the unopened ${session.type.displayName} event (${session.id}).")
+        changed()
+    }
+
     fun join(player: Player): EventResult {
-        val session = active ?: return EventResult.Failure("There is no event to join right now.")
+        val session = active ?: return EventResult.Failure(
+            current?.let { "Registration is closed: the ${it.type.displayName} event has ended." } ?: "There is no event to join right now."
+        )
         if (session.state != EventState.OPEN) {
             return EventResult.Failure(
                 if (session.state == EventState.RUNNING) "${session.type.displayName} has already started."
@@ -271,7 +300,8 @@ class EventSessions(
         }
         if (!session.register(player.uniqueId)) return EventResult.Failure("You're already registered for ${session.type.displayName}.")
         changed()
-        return EventResult.Success(session, "You're registered for ${session.type.displayName}! (${session.participantCount} registered)")
+        val startsIn = session.autoStartRemainingSeconds()?.let { " It starts in ${RegistrationCountdown.describe(it)}." } ?: ""
+        return EventResult.Success(session, "You're registered for ${session.type.displayName}! (${session.participantCount} registered)$startsIn")
     }
 
     fun leave(player: Player): EventResult {
@@ -333,6 +363,7 @@ class EventSessions(
     /** Cancels the session's tasks and runs the stop hook. Returns the cleanup error, if any. */
     private fun finish(session: EventSession): String? {
         session.endedAt = System.currentTimeMillis()
+        session.autoStartAtNanos = null
         val hookFailure = runHook(session, "stop") { it.onStop(session) }
         val taskFailure = runCatching { session.cancelTasks() }.exceptionOrNull()
         session.clearParticipants()
@@ -366,7 +397,7 @@ class EventSessions(
         }
     }
 
-    private fun noEvent() = EventResult.Failure("There is no event. Create one with /event create <type>.")
+    private fun noEvent() = EventResult.Failure("There is no event. Host one with /event start <type>.")
 
     private fun invalid(session: EventSession, next: EventState) =
         EventResult.Failure("Can't move the ${session.type.displayName} event from ${session.state.label} to ${next.label}.")

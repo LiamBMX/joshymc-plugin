@@ -72,7 +72,24 @@ abstract class MinigameGame(protected val games: HostedGames, val type: EventTyp
     // ── Subclass hooks ────────────────────────────────────
 
     /** Why [session] can't start, or null. Runs before the session moves to RUNNING. */
-    abstract fun startProblem(session: EventSession, arena: EventArena): String?
+    fun startProblem(session: EventSession, arena: EventArena): String? =
+        setupProblem(arena) ?: playerProblem(session.participantCount)
+
+    /**
+     * Why [arena] and this game's settings (kit, config, floor storage) aren't ready, or null.
+     * Ignores registrations, so `/event start <type>` (issue #1248) checks it before registration opens.
+     */
+    abstract fun setupProblem(arena: EventArena): String?
+
+    /** The configured minimum number of registered players. */
+    abstract fun minPlayers(): Int
+
+    /** Why [registered] players aren't enough, or null. */
+    fun playerProblem(registered: Int): String? {
+        val min = minPlayers()
+        if (registered >= min) return null
+        return "${type.displayName} needs at least $min registered player${if (min == 1) "" else "s"} ($registered registered)."
+    }
 
     /** A competitor moved to [to] while the round is ACTIVE. */
     abstract fun onActiveMove(player: Player, to: Location)

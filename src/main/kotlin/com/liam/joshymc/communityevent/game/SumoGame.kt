@@ -34,12 +34,12 @@ class SumoGame(games: HostedGames) : MinigameGame(games, EventType.SUMO) {
     /** Last knockback each competitor took, for the hit cooldown. */
     private val lastHit = HashMap<UUID, Long>()
 
-    override fun startProblem(session: EventSession, arena: EventArena): String? {
-        val s = SumoSettings.read(plugin.config.getConfigurationSection("hosted-events"))
+    override fun minPlayers(): Int = SumoSettings.read(plugin.config.getConfigurationSection("hosted-events")).minPlayers
+
+    override fun setupProblem(arena: EventArena): String? {
         if (arena.point(ArenaField.SPAWN_1) == null) return "Arena '${arena.displayName}' has no Competitor Spawn 1. Set it with /event sumo setspawn1."
         if (arena.point(ArenaField.SPAWN_2) == null) return "Arena '${arena.displayName}' has no Competitor Spawn 2. Set it with /event sumo setspawn2."
         if (arena.height(ArenaField.LOSE_HEIGHT) == null) return "Arena '${arena.displayName}' has no Elimination Height. Set it with /event sumo setlose."
-        if (session.participantCount < s.minPlayers) return "Sumo needs at least ${s.minPlayers} registered players (${session.participantCount} registered)."
         return null
     }
 

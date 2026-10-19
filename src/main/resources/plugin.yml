@@ -438,7 +438,7 @@ commands:
     usage: /arena <wand|create|delete|list|info|enable|disable|points|undo|clear|tp|buildwand|resetbuild|clearbuild>
   event:
     description: Event Manager for hosted community events, plus event-world setup
-    usage: /event [join|leave|stats|create <type>|open|start|stop|reset [confirm]|status|result ...|rewards ...|history|hoststats|arena ...|<type> set...|wand|save|pvp|build|break|setworld]
+    usage: /event [join|leave|stats|start <type>|create <type>|open|start|stop|reset [confirm]|status|result ...|rewards ...|history|hoststats|arena ...|<type> set...|wand|save|pvp|build|break|setworld]
   portal:
     description: Manage custom portals
     usage: /portal <wand|create|delete|action|cooldown|message|list|info|tp>
