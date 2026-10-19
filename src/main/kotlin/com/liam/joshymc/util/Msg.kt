@@ -23,8 +23,17 @@ object Msg {
 
     private val serializer = LegacyComponentSerializer.legacyAmpersand()
 
+    /** The pre-#1265 default of config.yml's `prefix`, still present in existing installs. */
+    private const val OLD_DEFAULT_PREFIX = "&b&lJoshyMC &8» &r"
+
+    /**
+     * config.yml's `prefix` when an admin customized it; otherwise (blank, missing, or the
+     * old JoshyMC default) the standard "SERVER » " prefix from [CommunicationsManager].
+     */
     fun prefix(): Component {
-        val raw = Joshymc.instance.config.getString("prefix") ?: "&b&lJoshyMC &8» &r"
+        val plugin = Joshymc.instance
+        val raw = plugin.config.getString("prefix")
+        if (raw.isNullOrBlank() || raw == OLD_DEFAULT_PREFIX) return plugin.commsManager.standardPrefix()
         return serializer.deserialize(raw)
     }
 
