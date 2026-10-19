@@ -62,6 +62,14 @@ class SettingsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             else -> !plugin.settingsManager.getSetting(sender, setting.key)
         }
 
+        if (newValue && !plugin.settingsManager.getSetting(sender, setting.key)) {
+            val blocked = setting.enableBlockedReason?.invoke(sender)
+            if (blocked != null) {
+                Msg.error(sender, blocked, CommunicationsManager.Category.SETTINGS)
+                return true
+            }
+        }
+
         plugin.settingsManager.setSetting(sender, setting.key, newValue)
         setting.onToggle?.invoke(sender, newValue)
 

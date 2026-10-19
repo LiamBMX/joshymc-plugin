@@ -1306,6 +1306,19 @@ class Joshymc : JavaPlugin() {
             disabledMaterial = org.bukkit.Material.GRAY_DYE,
             default = true
         ))
+        // Same switch as /team chat on|off (issue #1263); TeamManager reads it.
+        settingsManager.register(SettingsManager.SettingDef(
+            key = TeamManager.TEAM_CHAT_SETTING_KEY,
+            displayName = "Team Chat",
+            description = "Send your chat messages to your team only",
+            material = org.bukkit.Material.OAK_SIGN,
+            disabledMaterial = org.bukkit.Material.GRAY_DYE,
+            default = false,
+            permission = "joshymc.team",
+            enableBlockedReason = { player ->
+                if (teamManager.getPlayerTeam(player.uniqueId) == null) "You must be in a team to use Team Chat." else null
+            }
+        ))
     }
 
     /**

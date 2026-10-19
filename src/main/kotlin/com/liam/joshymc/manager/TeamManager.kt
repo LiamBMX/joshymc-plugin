@@ -33,6 +33,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         // Same ceiling OrderManager uses for escrow — keeps GUI increments/custom
         // input from overflowing into Infinity/NaN territory (issue #556).
         const val MAX_BOUNTY_AMOUNT = 1.0e15
+        const val TEAM_CHAT_SETTING_KEY = "team_chat"
     }
 
     data class TeamInfo(val name: String, val displayName: String, val ownerUuid: String, val createdAt: Long)
@@ -66,7 +67,6 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     // Identity set of inventories opened via openTeamEchestReadOnly (issue #976)
     // — any InventoryClickEvent/InventoryDragEvent against one of these is cancelled.
     private val readOnlyEchestViews = mutableSetOf<Inventory>()
-    private val teamChatEnabled = mutableSetOf<UUID>()
 
     // Bounty GUI session state — AsyncChatEvent runs off the main thread, so these
     // must be thread-safe (issue #556).
@@ -185,7 +185,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
 
     fun deleteTeam(name: String): Boolean {
         val team = getTeam(name) ?: return false
-        getTeamMembers(name).forEach { teamChatEnabled.remove(UUID.fromString(it.uuid)) }
+        getTeamMembers(name).forEach { setTeamChat(UUID.fromString(it.uuid), false) }
         plugin.databaseManager.execute("DELETE FROM team_invites WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_members WHERE team_name = ?", name)
         plugin.databaseManager.execute("DELETE FROM team_balances WHERE team_name = ?", name)
@@ -286,7 +286,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
 
         if (member == "owner") return false
 
-        teamChatEnabled.remove(uuid)
+        setTeamChat(uuid, false)
         plugin.databaseManager.execute(
             "DELETE FROM team_members WHERE uuid = ? AND team_name = ?",
             uuid.toString(), teamName
@@ -298,7 +298,7 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         val role = getPlayerRole(uuid) ?: return false
         if (role == "owner") return false
 
-        teamChatEnabled.remove(uuid)
+        setTeamChat(uuid, false)
         plugin.databaseManager.execute("DELETE FROM team_members WHERE uuid = ?", uuid.toString())
         return true
     }
@@ -657,7 +657,6 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onEchestQuit(event: PlayerQuitEvent) {
         val player = event.player
-        teamChatEnabled.remove(player.uniqueId)
         clearBountySession(player.uniqueId)
         if (readOnlyEchestViews.remove(player.openInventory.topInventory)) return
         val teamName = openEchests.remove(player.uniqueId) ?: return
@@ -872,6 +871,9 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             return
         }
 
+        // Staff chat toggle, mutes etc. cancel at LOWEST; never reroute those to the team.
+        if (event.isCancelled) return
+
         val plainMessage = PlainTextComponentSerializer.plainText().serialize(event.message())
 
         if (plainMessage.startsWith("!")) {
@@ -886,9 +888,9 @@ class TeamManager(private val plugin: Joshymc) : Listener {
             return
         }
 
-        if (player.uniqueId in teamChatEnabled) {
+        if (plugin.settingsManager.getSetting(player, TEAM_CHAT_SETTING_KEY)) {
             val teamName = getPlayerTeam(player.uniqueId) ?: run {
-                teamChatEnabled.remove(player.uniqueId)
+                setTeamChat(player.uniqueId, false)
                 return
             }
             event.isCancelled = true
@@ -896,10 +898,14 @@ class TeamManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    fun isTeamChatEnabled(uuid: UUID): Boolean = uuid in teamChatEnabled
+    // Team Chat mode is the "team_chat" player setting (issue #1263), so it shows
+    // in /settings and survives reconnects and restarts. It's cleared whenever the
+    // player stops being a team member.
+    fun isTeamChatEnabled(player: Player): Boolean =
+        plugin.settingsManager.getSetting(player, TEAM_CHAT_SETTING_KEY)
 
     fun setTeamChat(uuid: UUID, enabled: Boolean) {
-        if (enabled) teamChatEnabled.add(uuid) else teamChatEnabled.remove(uuid)
+        plugin.settingsManager.setSetting(uuid, TEAM_CHAT_SETTING_KEY, enabled)
     }
 
     fun sendTeamMessage(sender: Player, teamName: String, message: String) {
