@@ -7,6 +7,7 @@ import com.liam.joshymc.communityevent.EventResult
 import com.liam.joshymc.communityevent.EventSessions
 import com.liam.joshymc.communityevent.EventState
 import com.liam.joshymc.communityevent.EventType
+import com.liam.joshymc.communityevent.EventWorldLoader
 import com.liam.joshymc.communityevent.arena.ArenaCommands
 import com.liam.joshymc.communityevent.arena.ArenaMenu
 import com.liam.joshymc.communityevent.arena.EventArenas
@@ -178,6 +179,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
 
     private fun loadConfig() {
         eventWorldName = cfg.getString("world", "event") ?: "event"
+        // Before anything resolves the world: the zone below, then arenas.load() and games.start().
+        loadEventWorld()
         pvpEnabled = cfg.getBoolean("pvp", false)
         buildEnabled = cfg.getBoolean("build", false)
         breakEnabled = cfg.getBoolean("break-blocks", false)
@@ -189,6 +192,34 @@ class EventManager(private val plugin: Joshymc) : Listener {
             if (world != null) {
                 zoneMin = Location(world, min.getDouble("x"), min.getDouble("y"), min.getDouble("z"))
                 zoneMax = Location(world, max.getDouble("x"), max.getDouble("y"), max.getDouble("z"))
+            }
+        }
+    }
+
+    /** Why the event world isn't available, or null once it's loaded. */
+    var eventWorldProblem: String? = null
+        private set
+
+    /**
+     * Loads the configured event world if it exists and isn't loaded yet (issue #1245). Runs once at
+     * start and on `/event setworld`, never on a timer; a missing world is logged, never created.
+     */
+    private fun loadEventWorld() {
+        when (val result = EventWorldLoader.load(eventWorldName)) {
+            is EventWorldLoader.Result.Loaded -> {
+                eventWorldProblem = null
+                plugin.logger.info(
+                    "[Event] Event world '${result.world.name}' " +
+                        if (result.reused) "was already loaded, using it." else "loaded from disk."
+                )
+            }
+            is EventWorldLoader.Result.Unavailable -> {
+                eventWorldProblem = result.reason
+                plugin.logger.severe(
+                    "[Event] Event world '$eventWorldName' could not be loaded: ${result.reason}. " +
+                        "No world was created. Hosted events can't start until it exists " +
+                        "(fix the folder and restart, or point /event setworld at the right world)."
+                )
             }
         }
     }
@@ -984,7 +1015,8 @@ class EventManager(private val plugin: Joshymc) : Listener {
             "(${zoneMin!!.blockX},${zoneMin!!.blockY},${zoneMin!!.blockZ}) to (${zoneMax!!.blockX},${zoneMax!!.blockY},${zoneMax!!.blockZ})"
         } else "not set"
         return listOf(
-            Component.text("World: ", NamedTextColor.GRAY).append(Component.text(eventWorldName, NamedTextColor.WHITE)),
+            Component.text("World: ", NamedTextColor.GRAY).append(Component.text(eventWorldName, NamedTextColor.WHITE))
+                .append(if (eventWorldProblem != null) Component.text(" (not loaded)", NamedTextColor.RED) else Component.empty()),
             Component.text("Zone: ", NamedTextColor.GRAY).append(Component.text(zone, NamedTextColor.WHITE)),
             onOff("PvP", pvpEnabled), onOff("Build", buildEnabled), onOff("Break", breakEnabled),
         )
@@ -1176,7 +1208,11 @@ class EventManager(private val plugin: Joshymc) : Listener {
                     if (args.size < 2) { comms.send(sender, Component.text("Usage: /event setworld <world>", NamedTextColor.RED)); return }
                     eventWorldName = args[1]
                     saveConfig()
+                    loadEventWorld()
                     comms.send(sender, Component.text("Event world: $eventWorldName", NamedTextColor.GREEN))
+                    eventWorldProblem?.let {
+                        comms.send(sender, Component.text("That world isn't loaded: $it.", NamedTextColor.RED))
+                    }
                 }
             }
         }
