@@ -3,10 +3,8 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.event.ClickEvent
-import net.kyori.adventure.text.event.HoverEvent
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextDecoration
+import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -86,18 +84,8 @@ class PromoteCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             setCooldown(sender.uniqueId)
         }
 
-        val message = Component.text("[LIVE] ", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
-            .append(Component.text("${sender.name} is now live on ${platform.label}!\n", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.BOLD, false).decoration(TextDecoration.ITALIC, false))
-            .append(Component.text("Click here to watch: ", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
-            .append(
-                Component.text(url, NamedTextColor.AQUA)
-                    .decoration(TextDecoration.UNDERLINED, true)
-                    .decoration(TextDecoration.ITALIC, false)
-                    .clickEvent(ClickEvent.openUrl(url))
-                    .hoverEvent(HoverEvent.showText(Component.text("Click to open ${platform.label}", NamedTextColor.GRAY)))
-            )
-
-        plugin.commsManager.broadcast(message)
+        // No chat prefix: the announcement's own header is its first line.
+        Bukkit.broadcast(LiveAnnouncement.build(sender.name, platform.label, url))
         return true
     }
 
