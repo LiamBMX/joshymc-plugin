@@ -350,9 +350,11 @@ abstract class MinigameGame(protected val games: HostedGames, val type: EventTyp
         winners: List<UUID>,
         summary: String,
         second: List<UUID> = emptyList(),
+        third: List<UUID> = emptyList(),
     ) {
         val s = session ?: return
-        if (s.reportResult(com.liam.joshymc.communityevent.DetectedResult(outcome, winners.distinct(), second.distinct() - winners.toSet(), summary = summary))) {
+        val firstTwo = winners.toSet() + second
+        if (s.reportResult(com.liam.joshymc.communityevent.DetectedResult(outcome, winners.distinct(), second.distinct() - winners.toSet(), third.distinct() - firstTwo, summary = summary))) {
             plugin.logger.info("[Event] ${type.displayName} result detected: ${outcome.name}, winners ${winners.joinToString { nameOf(it) }.ifEmpty { "none" }}.")
         }
     }

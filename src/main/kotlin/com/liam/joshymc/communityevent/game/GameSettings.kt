@@ -78,6 +78,8 @@ data class SharksSettings(
     val catchCooldownMs: Long,
     /** Seconds after a crossing before players are moved back to their spawns for the next one. */
     val transitionDelaySeconds: Int,
+    /** Seconds after the line-up before the next crossing starts by itself. 0 = staff start it with /event sharks next. */
+    val autoNextSeconds: Int,
 ) {
     companion object {
         fun read(root: ConfigurationSection?): SharksSettings {
@@ -89,6 +91,7 @@ data class SharksSettings(
                 crossingTimeLimitSeconds = (c?.getInt("crossing-time-limit-seconds", 60) ?: 60).coerceIn(0, 3600),
                 catchCooldownMs = (c?.getLong("catch-cooldown-ms", 300L) ?: 300L).coerceIn(0L, 5_000L),
                 transitionDelaySeconds = (c?.getInt("round-transition-delay-seconds", 3) ?: 3).coerceIn(0, 60),
+                autoNextSeconds = (c?.getInt("auto-next-seconds", 5) ?: 5).coerceIn(0, 120),
             )
         }
     }

@@ -1315,8 +1315,9 @@ hosted-events:
     # Seconds before the next match starts by itself (with its countdown). 0 = staff start
     # every match with /event sumo next or the Game Controls menu.
     auto-next-seconds: 0
-  # Sharks and Minnows: one Shark hit catches a crossing Minnow; caught Minnows are Sharks from
-  # the next crossing. Staff start each crossing after the first with /event sharks next.
+  # Sharks and Minnows: one Shark hit catches a crossing Minnow, who is a Shark from then on.
+  # Minnows who make it cross again until the last Minnow finishes a crossing (1st place) or
+  # every Minnow is caught (no 1st place). Everyone caught in the same crossing shares a place.
   sharks:
     countdown-seconds: 5
     min-players: 3
@@ -1328,6 +1329,9 @@ hosted-events:
     catch-cooldown-ms: 300
     # Seconds after a crossing before everyone is lined up on their spawn again.
     round-transition-delay-seconds: 3
+    # Seconds after the line-up before the next crossing starts by itself (with its countdown).
+    # 0 = staff start every crossing with /event sharks next or the Game Controls menu.
+    auto-next-seconds: 5
   # Crystal PvP: single-elimination 1v1 with the kit saved by /event cpvp setkit. Staff start
   # each match after the first with /event cpvp next.
   cpvp:
