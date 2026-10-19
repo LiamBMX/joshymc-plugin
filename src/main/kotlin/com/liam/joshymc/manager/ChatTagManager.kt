@@ -2,6 +2,7 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.gui.GuiStyle
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -274,17 +275,14 @@ class ChatTagManager(private val plugin: Joshymc) {
         if (category == VOUCHER_CATEGORY) "Special Chat Tags" else category.replaceFirstChar { it.uppercase() }
 
     fun openCategoryMenu(player: Player) {
-        val size = 54
+        // Issue #1273: a centered grid (ChatTagLayout), no filler panes, Remove Tag in the bottom-row center.
+        val shown = categories.take(ChatTagLayout.PAGE_SIZE)
+        val size = ChatTagLayout.size(shown.size)
         val gui = CustomGui(
             Component.text("Chat Tags", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
             size
         )
-
-        // Fill + border
-        val filler = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
-        val border = ItemStack(Material.YELLOW_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
-        for (i in 0 until size) gui.inventory.setItem(i, filler)
-        for (i in 0..8) { gui.inventory.setItem(i, border); gui.inventory.setItem(size - 9 + i, border) }
+        val equippedCategory = getPlayerTag(player)?.category
 
         // Category icons
         val catMaterials = mapOf(
@@ -302,11 +300,9 @@ class ChatTagManager(private val plugin: Joshymc) {
             VOUCHER_CATEGORY to Material.NAME_TAG
         )
 
-        val slots = mutableListOf<Int>()
-        for (row in 1..3) for (col in 1..7) slots.add(row * 9 + col)
+        val slots = ChatTagLayout.slots(shown.size)
 
-        for ((index, category) in categories.withIndex()) {
-            if (index >= slots.size) break
+        for ((index, category) in shown.withIndex()) {
             val slot = slots[index]
             val tagCount = getTagsByCategory(category).size
             val mat = catMaterials[category] ?: Material.BOOK
@@ -317,59 +313,74 @@ class ChatTagManager(private val plugin: Joshymc) {
                     Component.text(categoryDisplayName(category), NamedTextColor.GOLD)
                         .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
                 )
-                meta.lore(listOf(
+                val lore = mutableListOf(
                     Component.empty(),
-                    Component.text("  $tagCount tags", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                    Component.empty(),
-                    Component.text("  Click to browse", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)
-                ))
+                    Component.text("  $tagCount tags", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+                )
+                if (category == equippedCategory) {
+                    lore.add(Component.text("  Your equipped tag is here", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
+                    meta.setEnchantmentGlintOverride(true)
+                }
+                lore.add(Component.empty())
+                lore.add(Component.text("  Click to browse", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+                meta.lore(lore)
             }
 
             val capturedCat = category
             gui.setItem(slot, item) { p, _ -> openTagList(p, capturedCat, 0) }
         }
 
-        // Remove tag button
-        val removeItem = ItemStack(Material.BARRIER)
-        removeItem.editMeta { meta ->
-            meta.displayName(Component.text("Remove Tag", NamedTextColor.RED).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false))
-        }
-        gui.setItem(49, removeItem) { p, _ ->
-            setPlayerTag(p.uniqueId, null)
-            plugin.commsManager.send(p, Component.text("Chat tag removed.", NamedTextColor.GREEN))
-            p.playSound(p.location, Sound.ENTITY_ITEM_PICKUP, 0.5f, 1.0f)
-            p.closeInventory()
-        }
+        addRemoveTagButton(gui, player, GuiStyle.closeSlot(size))
 
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
+    /** The unequip button: a barrier named "Remove Tag" that also shows what's equipped right now. */
+    private fun addRemoveTagButton(gui: CustomGui, player: Player, slot: Int) {
+        val current = getPlayerTag(player)
+        val removeItem = ItemStack(Material.BARRIER)
+        removeItem.editMeta { meta ->
+            meta.displayName(Component.text("Remove Tag", NamedTextColor.RED).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false))
+            val equippedLine = if (current != null) {
+                Component.text("  Equipped: ", NamedTextColor.GRAY).append(plugin.commsManager.parseLegacy(current.display.trimEnd()))
+            } else {
+                Component.text("  No tag equipped", NamedTextColor.GRAY)
+            }
+            meta.lore(listOf(
+                Component.empty(),
+                equippedLine.decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("  Click to unequip your tag", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)
+            ))
+        }
+        gui.setItem(slot, removeItem) { p, _ ->
+            setPlayerTag(p.uniqueId, null)
+            plugin.commsManager.send(p, Component.text("Chat tag removed.", NamedTextColor.GREEN))
+            p.playSound(p.location, Sound.ENTITY_ITEM_PICKUP, 0.5f, 1.0f)
+            p.closeInventory()
+        }
+    }
+
     fun openTagList(player: Player, category: String, page: Int) {
         val categoryTags = getTagsByCategory(category)
-        val pageSize = 28
-        val startIndex = page * pageSize
-        val pageTags = categoryTags.drop(startIndex).take(pageSize)
-        val totalPages = maxOf(1, (categoryTags.size + pageSize - 1) / pageSize)
+        val pageSize = ChatTagLayout.PAGE_SIZE
+        val totalPages = ChatTagLayout.totalPages(categoryTags.size)
+        val currentPage = page.coerceIn(0, totalPages - 1)
+        val pageTags = categoryTags.drop(currentPage * pageSize).take(pageSize)
 
         val currentTag = getPlayerTag(player)?.id
-        val size = 54
+        // Same chest size and grid pattern on every page of this category (issue #1273).
+        val size = ChatTagLayout.pagedSize(categoryTags.size)
         val gui = CustomGui(
             Component.text(categoryDisplayName(category), NamedTextColor.GOLD)
                 .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
             size
         )
 
-        val filler = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
-        val border = ItemStack(Material.YELLOW_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
-        for (i in 0 until size) gui.inventory.setItem(i, filler)
-        for (i in 0..8) { gui.inventory.setItem(i, border); gui.inventory.setItem(size - 9 + i, border) }
-
-        val slots = mutableListOf<Int>()
-        for (row in 1..4) for (col in 1..7) slots.add(row * 9 + col)
+        val slots = ChatTagLayout.slots(pageTags.size)
 
         for ((index, tag) in pageTags.withIndex()) {
-            if (index >= slots.size) break
             val slot = slots[index]
             val canUse = canUse(player, tag)
             val isEquipped = tag.id == currentTag
@@ -402,6 +413,7 @@ class ChatTagManager(private val plugin: Joshymc) {
                     }
                 }
                 meta.lore(lore)
+                if (isEquipped) meta.setEnchantmentGlintOverride(true)
             }
 
             val capturedTag = tag
@@ -420,21 +432,20 @@ class ChatTagManager(private val plugin: Joshymc) {
             }
         }
 
-        // Back button
-        val back = ItemStack(Material.ARROW)
-        back.editMeta { it.displayName(Component.text("Back", NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false)) }
-        gui.setItem(49, back) { p, _ -> openCategoryMenu(p) }
-
-        // Pagination
-        if (page > 0) {
-            val prev = ItemStack(Material.ARROW)
-            prev.editMeta { it.displayName(Component.text("Previous", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)) }
-            gui.setItem(46, prev) { p, _ -> openTagList(p, category, page - 1) }
+        // Bottom row in the shared GuiStyle slots: Back, Previous, Remove Tag (center), Next.
+        gui.setItem(GuiStyle.backSlot(size), GuiStyle.back("Back to Chat Tags")) { p, _ -> openCategoryMenu(p) }
+        if (currentPage > 0) {
+            gui.setItem(GuiStyle.prevSlot(size), GuiStyle.previousPage(currentPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
+                openTagList(p, category, currentPage - 1)
+            }
         }
-        if (page < totalPages - 1) {
-            val next = ItemStack(Material.ARROW)
-            next.editMeta { it.displayName(Component.text("Next", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)) }
-            gui.setItem(52, next) { p, _ -> openTagList(p, category, page + 1) }
+        addRemoveTagButton(gui, player, GuiStyle.closeSlot(size))
+        if (currentPage < totalPages - 1) {
+            gui.setItem(GuiStyle.nextSlot(size), GuiStyle.nextPage(currentPage, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
+                openTagList(p, category, currentPage + 1)
+            }
         }
 
         plugin.guiManager.open(player, gui)
