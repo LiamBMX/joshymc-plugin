@@ -88,6 +88,15 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     companion object {
         private const val PLACED_META = "joshymc_quest_placed"
 
+        /** /settings toggle for the quest progress action bar (issue #1278); on by default. */
+        const val PROGRESS_NOTIFY_SETTING_KEY = "quest_progress_notifications"
+
+        /** A progress notification waits while another system's action bar is this recent. */
+        private const val OTHER_ACTION_BAR_GRACE_MS = 2000L
+
+        /** How many recent fishing hooks are remembered so one catch never counts twice. */
+        private const val COUNTED_HOOKS_MAX = 512
+
         /** Credits for finishing every Daily / every Weekly quest of a cycle (issue #1223). */
         const val DEFAULT_DAILY_COMPLETION_CREDITS = 250.0
         const val DEFAULT_WEEKLY_COMPLETION_CREDITS = 750.0
@@ -152,6 +161,9 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     private var requireWeeklyCompletion = true
     private var questMasterCommands: List<String> = emptyList()
 
+    private var progressNotificationsEnabled = true
+    private var progressNotifier = QuestProgressThrottle<UUID>(3000L)
+
     private fun loadConfig() {
         val cfg = plugin.config
         zone = runCatching { ZoneId.of(cfg.getString("quests.timezone", "America/New_York")) }
@@ -180,7 +192,17 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         requiredDailySets = cfg.getInt("quests.quest-master.required-daily-sets", 5)
         requireWeeklyCompletion = cfg.getBoolean("quests.quest-master.require-weekly-completion", true)
         questMasterCommands = cfg.getStringList("quests.quest-master.reward.commands")
+
+        progressNotificationsEnabled = cfg.getBoolean("quests.progress-notifications.enabled", true)
+        val intervalMs = (cfg.getDouble("quests.progress-notifications.interval-seconds", 3.0) * 1000).toLong().coerceAtLeast(500L)
+        progressNotifier = QuestProgressThrottle(intervalMs)
     }
+
+    /** Credits for finishing every Daily quest of a cycle, or null when that completion reward is off. */
+    fun dailyCompletionCreditsReward(): Double? = if (dailyCompletionRewardEnabled) dailyCompletionCredits else null
+
+    /** Credits for finishing every Weekly quest of a cycle, or null when that completion reward is off. */
+    fun weeklyCompletionCreditsReward(): Double? = if (weeklyCompletionRewardEnabled) weeklyCompletionCredits else null
 
     // ── Quest definitions ──────────────────────────────────────
 
@@ -405,6 +427,10 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         // credits its Quest Master Daily Set to the OLD weekly cycle — before the new week begins.
         val newDaily = currentDailyCycleId(now).toString()
         if (newDaily != dailyCycleIdState) {
+            // Save cached progress under the OLD cycle ids before the cache is dropped, or
+            // weekly progress made since the last periodic flush is lost (issue #1278).
+            // Queued DB work runs before any later read, so the reload sees these rows.
+            flushAllProgress()
             dailyCycleIdState = newDaily
             dailyQuestIdsState = generateDailyPool(newDaily)
             persistCycleState("daily", newDaily, dailyQuestIdsState)
@@ -416,6 +442,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
 
         val newWeekly = currentWeeklyCycleId(now).toString()
         if (newWeekly != weeklyCycleIdState) {
+            flushAllProgress()
             weeklyCycleIdState = newWeekly
             weeklyQuestIdsState = generateWeeklyPool(newWeekly)
             persistCycleState("weekly", newWeekly, weeklyQuestIdsState)
@@ -500,6 +527,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
 
     /** Re-rolls the pool for the CURRENT cycle without waiting for the real boundary. Admin/testing use. */
     fun forceDailyReset() {
+        flushAllProgress()
         dailyQuestIdsState = generateDailyPool(dailyCycleIdState)
         persistCycleState("daily", dailyCycleIdState, dailyQuestIdsState)
         progressCache.clear()
@@ -508,6 +536,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     }
 
     fun forceWeeklyReset() {
+        flushAllProgress()
         weeklyQuestIdsState = generateWeeklyPool(weeklyCycleIdState)
         persistCycleState("weekly", weeklyCycleIdState, weeklyQuestIdsState)
         progressCache.clear()
@@ -525,6 +554,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         tasks += Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickOpenGuis() }, 100L, 100L)
         // Snapshot on the main thread (the cached maps are mutated there); the write is queued on the DB thread.
         tasks += Bukkit.getScheduler().runTaskTimer(plugin, Runnable { flushAllProgress() }, 6000L, 6000L)
+        tasks += Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tickProgressNotifications() }, 5L, 5L)
 
         plugin.logger.info(
             "[QuestCycle] Started. Daily cycle=$dailyCycleIdState (${dailyQuestIdsState.size} quests), " +
@@ -540,6 +570,9 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         travelAcc.clear()
         travelNetherAcc.clear()
         trackedGuiPlayers.clear()
+        progressNotifier.forgetAll()
+        hookCatches.clear()
+        countedHooks.clear()
     }
 
     /**
@@ -662,18 +695,69 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         val map = progressCache.getOrPut(uuid) { loadProgress(uuid) }
         val current = map[quest.id] ?: CycleProgress(0, false, false)
         if (current.completed) return
-        val target = plugin.boosterManager.applyQuestBooster(plugin.resurgeManager.getEffectiveAmount(uuid, quest.amount))
+        val target = effectiveTarget(uuid, quest)
         val newProgress = (current.progress + amount).coerceIn(0, target)
         val completed = newProgress >= target
         map[quest.id] = current.copy(progress = newProgress, completed = completed)
-        if (completed) onQuestCompleted(player, quest)
+        if (completed) {
+            // The completion chat message covers it; drop a pending progress update for this quest.
+            progressNotifier.discard(uuid, quest.id)
+            onQuestCompleted(player, quest)
+        } else if (progressNotificationsEnabled) {
+            progressNotifier.offer(uuid, quest.id)
+        }
+    }
+
+    /**
+     * The one requirement a player must reach on [quest] (issue #1278): the base amount
+     * scaled by their Resurge multiplier, then lowered by an active quest booster. Progress
+     * tracking, the GUI, quest details, the admin commands and notifications all use it.
+     */
+    fun effectiveTarget(uuid: UUID, quest: CycleQuest): Int =
+        plugin.boosterManager.applyQuestBooster(plugin.resurgeManager.getEffectiveAmount(uuid, quest.amount))
+
+    /**
+     * Shows each player's most recently advanced quest on the action bar, at most once per
+     * configured interval (issue #1278). Skipped for players who turned it off in /settings,
+     * and held back while they're combat-tagged or another system's action bar is recent,
+     * so those aren't overwritten.
+     */
+    private fun tickProgressNotifications() {
+        if (!progressNotificationsEnabled) return
+        val now = System.currentTimeMillis()
+        for ((uuid, questId) in progressNotifier.due(now)) {
+            val player = Bukkit.getPlayer(uuid)
+            val quest = questsById[questId]
+            if (player == null || quest == null || (questId !in dailyQuestIdsState && questId !in weeklyQuestIdsState) ||
+                !plugin.settingsManager.getSetting(player, PROGRESS_NOTIFY_SETTING_KEY)
+            ) {
+                progressNotifier.clear(uuid)
+                continue
+            }
+            if (plugin.combatManager.isTagged(player)) continue
+            if (now - plugin.commsManager.lastActionBarAt(player) < OTHER_ACTION_BAR_GRACE_MS) continue
+
+            val progress = getProgress(uuid, quest)
+            if (progress.completed) {
+                progressNotifier.clear(uuid)
+                continue
+            }
+            val target = effectiveTarget(uuid, quest)
+            val shown = QuestProgressDisplay.shownProgress(progress.progress, target, false)
+            player.sendActionBar(
+                Component.text("Quest Progress: ", NamedTextColor.GOLD)
+                    .append(Component.text(quest.name, NamedTextColor.YELLOW))
+                    .append(Component.text(" $shown/$target", NamedTextColor.WHITE))
+            )
+            progressNotifier.markSent(uuid, now)
+        }
     }
 
     /** Admin/testing: directly set a player's progress on one of the currently active quests. */
     fun setProgress(uuid: UUID, questId: String, amount: Int): Boolean {
         val quest = questsById[questId.lowercase()] ?: return false
         val map = progressCache.getOrPut(uuid) { loadProgress(uuid) }
-        val target = plugin.boosterManager.applyQuestBooster(quest.amount)
+        val target = effectiveTarget(uuid, quest)
         val clamped = amount.coerceIn(0, target)
         val wasCompleted = map[quest.id]?.completed == true
         map[quest.id] = CycleProgress(clamped, clamped >= target, map[quest.id]?.rewardClaimed ?: false)
@@ -723,15 +807,17 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     // ── Rewards ─────────────────────────────────────────────────
 
     /** Atomically claims a quest's individual reward exactly once (survives restarts/reconnects/duplicate ticks). */
-    private fun claimQuestRewardOnce(uuid: String, quest: CycleQuest): Boolean {
+    private fun claimQuestRewardOnce(uuid: UUID, quest: CycleQuest): Boolean {
         val cycleId = cycleIdFor(quest)
+        // The player's real (Resurge/booster) target, so a reloaded completed quest reads N/N.
+        val target = effectiveTarget(uuid, quest)
         plugin.databaseManager.execute(
             "INSERT OR IGNORE INTO quest_cycle_progress (uuid, quest_id, cycle_id, progress, completed, reward_claimed) VALUES (?, ?, ?, ?, 1, 0)",
-            uuid, quest.id, cycleId, quest.amount
+            uuid.toString(), quest.id, cycleId, target
         )
         return plugin.databaseManager.executeUpdate(
             "UPDATE quest_cycle_progress SET completed = 1, progress = ?, reward_claimed = 1 WHERE uuid = ? AND quest_id = ? AND cycle_id = ? AND reward_claimed = 0",
-            quest.amount, uuid, quest.id, cycleId
+            target, uuid.toString(), quest.id, cycleId
         ) > 0
     }
 
@@ -781,7 +867,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun onQuestCompleted(player: Player, quest: CycleQuest) {
-        if (!claimQuestRewardOnce(player.uniqueId.toString(), quest)) return
+        if (!claimQuestRewardOnce(player.uniqueId, quest)) return
 
         plugin.economyManager.deposit(player.uniqueId, quest.reward)
         plugin.commsManager.send(
@@ -1049,8 +1135,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     /** Admin/testing: force-complete an active quest for a player. */
     fun completeQuest(player: Player, questId: String): Boolean {
         val quest = questsById[questId.lowercase()] ?: return false
-        val target = plugin.boosterManager.applyQuestBooster(quest.amount)
-        return setProgress(player.uniqueId, quest.id, target)
+        return setProgress(player.uniqueId, quest.id, effectiveTarget(player.uniqueId, quest))
     }
 
     // ── Anti-exploit / matching helpers ─────────────────────────
@@ -1093,8 +1178,11 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     fun onBlockBreak(event: BlockBreakEvent) {
         val player = event.player
         if (isExempt(player)) return
-        val block = event.block
+        processBrokenBlock(player, event.block)
+    }
 
+    /** Mining/log progress plus crop harvests for one block about to be broken. */
+    private fun processBrokenBlock(player: Player, block: org.bukkit.block.Block) {
         processMinedBlock(player, block)
 
         val name = block.type.name
@@ -1128,10 +1216,15 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    /** External hook for listeners (e.g. Veinminer) that break blocks without firing a real BlockBreakEvent. */
+    /**
+     * External hook for blocks broken without a real BlockBreakEvent: Veinminer, Void Drill,
+     * Tree Feller and the Explosive enchant (issue #1278). Call it right before the block is
+     * broken, once per block. Air (already broken by something else) never counts, and the
+     * usual rules apply: creative/spectator players and player-placed blocks don't count.
+     */
     fun recordBlockBreak(player: Player, block: org.bukkit.block.Block) {
-        if (isExempt(player)) return
-        processMinedBlock(player, block)
+        if (block.type.isAir || isExempt(player)) return
+        processBrokenBlock(player, block)
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -1180,13 +1273,43 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    /** What vanilla pulled up on each hook, read before FishingManager swaps in a custom fish. */
+    private val hookCatches = HashMap<UUID, Material>()
+
+    /** Hooks whose catch already counted, so a catch never counts twice (double-fired events, fallback). */
+    private val countedHooks = object : LinkedHashMap<UUID, Boolean>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<UUID, Boolean>?): Boolean = size > COUNTED_HOOKS_MAX
+    }
+
+    /**
+     * FishingManager (HIGHEST) replaces every catch with a custom fish whose base item has
+     * nothing to do with the species, so the species is read here first (issue #1278).
+     */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    fun onFishCaptureSpecies(event: PlayerFishEvent) {
+        if (event.state != PlayerFishEvent.State.CAUGHT_FISH) return
+        val type = (event.caught as? org.bukkit.entity.Item)?.itemStack?.type ?: return
+        hookCatches[event.hook.uniqueId] = type
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
     fun onFish(event: PlayerFishEvent) {
         if (event.state != PlayerFishEvent.State.CAUGHT_FISH) return
-        val player = event.player
+        val species = hookCatches.remove(event.hook.uniqueId)
+        if (event.isCancelled) return
+        recordFishCatch(event.player, event.hook.uniqueId, species ?: (event.caught as? org.bukkit.entity.Item)?.itemStack?.type)
+    }
+
+    /**
+     * Counts one catch on [hookId] toward CATCH_FISH quests: every catch counts for "ANY",
+     * and [species] (the vanilla catch, or for FishingManager's high-Luck fallback the
+     * custom fish's base item) decides Cod/Salmon quests. A hook counts at most once.
+     */
+    fun recordFishCatch(player: Player, hookId: UUID, species: Material?) {
         if (isExempt(player)) return
-        val caughtName = (event.caught as? org.bukkit.entity.Item)?.itemStack?.type?.name
-        for (quest in matchingActiveQuests(CycleObjective.CATCH_FISH) { target -> caughtName != null && target.equals(caughtName, true) }) {
+        if (countedHooks.put(hookId, true) != null) return
+        val name = species?.name
+        for (quest in matchingActiveQuests(CycleObjective.CATCH_FISH) { target -> name != null && target.equals(name, true) }) {
             incrementProgress(player, quest, 1)
         }
     }
@@ -1297,6 +1420,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         travelAcc.remove(uuid)
         travelNetherAcc.remove(uuid)
         trackedGuiPlayers.remove(uuid)
+        progressNotifier.forget(uuid)
     }
 
     // ── GUI ─────────────────────────────────────────────────────
@@ -1348,7 +1472,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         for ((i, quest) in dailyPool.withIndex()) {
             if (i >= dailySlots.size) break
             val progress = getProgress(uuid, quest)
-            gui.setItem(dailySlots[i], buildQuestItem(quest, progress)) { p, _ -> showQuestDetails(p, quest, getProgress(p.uniqueId, quest)) }
+            gui.setItem(dailySlots[i], buildQuestItem(quest, progress, effectiveTarget(uuid, quest))) { p, _ -> showQuestDetails(p, quest, getProgress(p.uniqueId, quest)) }
         }
         val dailyDone = dailyPool.count { getProgress(uuid, it).completed }
         gui.setItem(46, bonusItem("Daily Completion", dailyDone, dailyPool.size, 1, if (dailyCompletionRewardEnabled) dailyCompletionCredits else 0.0, isDailyBonusClaimed(uuid, dailyCycleIdState)))
@@ -1359,7 +1483,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         for ((i, quest) in weeklyPool.withIndex()) {
             if (i >= weeklySlots.size) break
             val progress = getProgress(uuid, quest)
-            gui.setItem(weeklySlots[i], buildQuestItem(quest, progress)) { p, _ -> showQuestDetails(p, quest, getProgress(p.uniqueId, quest)) }
+            gui.setItem(weeklySlots[i], buildQuestItem(quest, progress, effectiveTarget(uuid, quest))) { p, _ -> showQuestDetails(p, quest, getProgress(p.uniqueId, quest)) }
         }
         val weeklyDone = weeklyPool.count { getProgress(uuid, it).completed }
         gui.setItem(52, bonusItem("Weekly Completion", weeklyDone, weeklyPool.size, 1, if (weeklyCompletionRewardEnabled) weeklyCompletionCredits else 0.0, isWeeklyBonusClaimed(uuid, weeklyCycleIdState)))
@@ -1371,11 +1495,12 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun showQuestDetails(player: Player, quest: CycleQuest, progress: CycleProgress) {
-        val target = plugin.boosterManager.applyQuestBooster(quest.amount)
+        val target = effectiveTarget(player.uniqueId, quest)
+        val shown = QuestProgressDisplay.shownProgress(progress.progress, target, progress.completed)
         plugin.commsManager.send(player, plugin.commsManager.parseLegacy("&e--- ${quest.name} ---"))
         plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  &7${quest.description}"))
         plugin.commsManager.send(player, plugin.commsManager.parseLegacy(
-            "  &7Progress: &a${progress.progress}&7/&a$target ${if (progress.completed) "&a✔ COMPLETED" else ""}"
+            "  &7Progress: &a$shown&7/&a$target ${if (progress.completed) "&a✔ COMPLETED" else ""}"
         ))
         plugin.commsManager.send(player, plugin.commsManager.parseLegacy("  &7Reward: &6\$${plugin.economyManager.formatShort(quest.reward)}"))
         player.playSound(player.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
@@ -1393,8 +1518,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         return item
     }
 
-    private fun buildQuestItem(quest: CycleQuest, progress: CycleProgress): ItemStack {
-        val target = plugin.boosterManager.applyQuestBooster(quest.amount)
+    private fun buildQuestItem(quest: CycleQuest, progress: CycleProgress, target: Int): ItemStack {
         val item = ItemStack(quest.icon)
         item.editMeta { meta ->
             val color = when (quest.type) {
@@ -1408,9 +1532,11 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
             lore += Component.empty()
             lore += Component.text("  ${quest.description}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
             lore += Component.empty()
-            val filled = if (target > 0) ((progress.progress.toDouble() / target) * 10).toInt().coerceIn(0, 10) else 10
+            val cells = QuestProgressDisplay.BAR_CELLS
+            val filled = QuestProgressDisplay.filledCells(progress.progress, target, progress.completed)
+            val shown = QuestProgressDisplay.shownProgress(progress.progress, target, progress.completed)
             lore += plugin.commsManager.parseLegacy(
-                "  &a${"█".repeat(filled)}&7${"░".repeat(10 - filled)} &f${progress.progress}/$target"
+                "  &a${"█".repeat(filled)}&7${"░".repeat(cells - filled)} &f$shown/$target"
             ).decoration(TextDecoration.ITALIC, false)
             lore += Component.empty()
             lore += Component.text("  Reward: ", NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false)

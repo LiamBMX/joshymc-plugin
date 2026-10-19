@@ -11,7 +11,16 @@ import org.bukkit.Sound
 class AnnouncementManager(private val plugin: Joshymc) {
 
     /** A configured announcement: a message and an optional per-message sound. */
-    data class AnnouncementEntry(val message: String, val sound: Sound?, val volume: Float, val pitch: Float)
+    data class AnnouncementEntry(
+        val message: String,
+        val sound: Sound?,
+        val volume: Float,
+        val pitch: Float,
+        /** False skips the "ANNOUNCEMENT" header (`header: false` in config). */
+        val header: Boolean = true,
+        /** Builds the whole message at broadcast time instead of parsing [message] (the QUESTS entry). */
+        val build: (() -> Component?)? = null
+    )
 
     private var taskId: Int = -1
     private var currentIndex: Int = 0
@@ -69,11 +78,27 @@ class AnnouncementManager(private val plugin: Joshymc) {
                     val sound = soundName?.let { parseSound(it) }
                     val volume = (item["volume"] as? Number)?.toFloat() ?: 0.7f
                     val pitch = (item["pitch"] as? Number)?.toFloat() ?: 1.0f
-                    list.add(AnnouncementEntry(text, sound, volume, pitch))
+                    val header = item["header"] as? Boolean ?: true
+                    list.add(AnnouncementEntry(text, sound, volume, pitch, header))
                 }
             }
         }
+        if (list.isNotEmpty()) questsEntry()?.let { list.add(it) }
         return list
+    }
+
+    /**
+     * The QUESTS reminder (issue #1278), one more stop in the same rotation with no header.
+     * Built when it's broadcast, so it always names the configured completion rewards.
+     */
+    private fun questsEntry(): AnnouncementEntry? {
+        if (!plugin.config.getBoolean("announcements.quests.enabled", true)) return null
+        if (!plugin.isFeatureEnabled("quests")) return null
+        val sound = parseSound(plugin.config.getString("announcements.quests.sound"))
+        return AnnouncementEntry("", sound, 0.7f, 1.0f, header = false) {
+            val quests = plugin.questCycleManager
+            QuestAnnouncement.build(quests.dailyCompletionCreditsReward(), quests.weeklyCompletionCreditsReward())
+        }
     }
 
     private fun parseSound(name: String?): Sound? {
@@ -105,7 +130,8 @@ class AnnouncementManager(private val plugin: Joshymc) {
     /** Broadcast an entry with its configured sound (or the default if none set). */
     fun broadcastEntry(entry: AnnouncementEntry) {
         // Header and body go out as one message so they always arrive together.
-        val component = format(entry.message, plugin.commsManager::parseLegacy) ?: return
+        val component = (if (entry.build != null) entry.build.invoke() else format(entry.message, plugin.commsManager::parseLegacy, entry.header))
+            ?: return
         Bukkit.broadcast(component)
 
         val sound = entry.sound ?: defaultSound
@@ -122,18 +148,19 @@ class AnnouncementManager(private val plugin: Joshymc) {
         val HEADER: Component = Component.text("▸ ANNOUNCEMENT ◂", HEADER_COLOR, TextDecoration.BOLD)
 
         /**
-         * The announcement as one component: the header, then each non-blank
-         * line of [message] (split on `\n`) parsed with [parse], white unless
-         * the text colours itself. Body lines are siblings of the header, so
-         * `&` codes in the text can't restyle it. Null when the message has
-         * no visible text.
+         * The announcement as one component: the header (unless [header] is
+         * false), then each non-blank line of [message] (split on `\n`) parsed
+         * with [parse], white unless the text colours itself. Body lines are
+         * siblings of the header, so `&` codes in the text can't restyle it.
+         * Null when the message has no visible text.
          */
-        fun format(message: String, parse: (String) -> Component): Component? {
+        fun format(message: String, parse: (String) -> Component, header: Boolean = true): Component? {
             val lines = message.split("\\n", "\n").map { it.trim() }.filter { it.isNotEmpty() }
             if (lines.isEmpty()) return null
-            val builder = Component.text().append(HEADER)
-            for (line in lines) {
-                builder.append(Component.newline())
+            val builder = Component.text()
+            if (header) builder.append(HEADER)
+            for ((i, line) in lines.withIndex()) {
+                if (header || i > 0) builder.append(Component.newline())
                 builder.append(parse(line).colorIfAbsent(NamedTextColor.WHITE))
             }
             return builder.build()

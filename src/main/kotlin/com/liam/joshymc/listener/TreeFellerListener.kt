@@ -55,6 +55,9 @@ class TreeFellerListener(private val plugin: Joshymc) : Listener {
         try {
             // Break logs first (apply durability)
             for (log in logs) {
+                // No BlockBreakEvent fires here, so count the log for Daily/Weekly Quests
+                // before it changes. Leaves are cleanup, not chopping, and never count.
+                plugin.questCycleManager.recordBlockBreak(player, log)
                 log.breakNaturally(tool)
                 applyDurability(player, tool)
                 if (isToolBroken(tool)) break

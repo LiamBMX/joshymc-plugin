@@ -97,7 +97,7 @@ class CommunicationsManager(private val plugin: Joshymc) {
     }
 
     fun broadcastActionBar(message: Component) {
-        Bukkit.getOnlinePlayers().forEach { it.sendActionBar(message) }
+        Bukkit.getOnlinePlayers().forEach { sendActionBar(it, message) }
     }
 
     fun send(player: Player, message: Component, category: Category = Category.DEFAULT) {
@@ -109,8 +109,18 @@ class CommunicationsManager(private val plugin: Joshymc) {
     }
 
     fun sendActionBar(player: Player, message: Component) {
+        lastActionBar[player] = System.currentTimeMillis()
         player.sendActionBar(message)
     }
+
+    /**
+     * When an action bar last went to [player] through [sendActionBar] (0 if never), so
+     * low-priority action bars (quest progress, issue #1278) can wait instead of
+     * overwriting one that's still on screen. Weak keys: quitting players drop out.
+     */
+    private val lastActionBar: MutableMap<Player, Long> = java.util.Collections.synchronizedMap(java.util.WeakHashMap())
+
+    fun lastActionBarAt(player: Player): Long = lastActionBar[player] ?: 0L
 
     /**
      * Whether [player] wants to receive OPTIONAL personal/direct messages

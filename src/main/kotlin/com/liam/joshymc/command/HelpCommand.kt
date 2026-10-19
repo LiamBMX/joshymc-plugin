@@ -96,6 +96,7 @@ class HelpCommand(private val plugin: Joshymc) : CommandExecutor {
             HelpEntry("/sellwand", "Use a sell wand on a chest")
         )),
         Category(Material.PAPER, "Info", NamedTextColor.WHITE, listOf(
+            HelpEntry("/quests", "Daily & Weekly quests for money, Credits and crate keys"),
             HelpEntry("/playtime", "View your playtime"),
             HelpEntry("/playtimetop", "View the top playtimes"),
             HelpEntry("/settings", "Open the player settings GUI")

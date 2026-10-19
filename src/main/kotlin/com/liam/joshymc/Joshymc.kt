@@ -1306,6 +1306,15 @@ class Joshymc : JavaPlugin() {
             disabledMaterial = org.bukkit.Material.GRAY_DYE,
             default = true
         ))
+        // Action-bar quest progress (issue #1278); QuestCycleManager reads it.
+        settingsManager.register(SettingsManager.SettingDef(
+            key = com.liam.joshymc.manager.QuestCycleManager.PROGRESS_NOTIFY_SETTING_KEY,
+            displayName = "Quest Progress",
+            description = "Show quest progress above your hotbar",
+            material = org.bukkit.Material.WRITABLE_BOOK,
+            disabledMaterial = org.bukkit.Material.BOOK,
+            default = true
+        ))
         // Same switch as /team chat on|off (issue #1263); TeamManager reads it.
         settingsManager.register(SettingsManager.SettingDef(
             key = TeamManager.TEAM_CHAT_SETTING_KEY,
