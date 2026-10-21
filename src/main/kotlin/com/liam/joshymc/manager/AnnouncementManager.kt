@@ -10,7 +10,14 @@ import org.bukkit.Sound
 class AnnouncementManager(private val plugin: Joshymc) {
 
     /** A configured announcement: a message and an optional per-message sound. */
-    data class AnnouncementEntry(val message: String, val sound: Sound?, val volume: Float, val pitch: Float)
+    data class AnnouncementEntry(
+        val message: String,
+        val sound: Sound?,
+        val volume: Float,
+        val pitch: Float,
+        /** Builds the whole message at broadcast time instead of parsing [message] (the QUESTS entry). */
+        val build: (() -> Component?)? = null
+    )
 
     private var taskId: Int = -1
     private var currentIndex: Int = 0
@@ -72,7 +79,22 @@ class AnnouncementManager(private val plugin: Joshymc) {
                 }
             }
         }
+        if (list.isNotEmpty()) questsEntry()?.let { list.add(it) }
         return list
+    }
+
+    /**
+     * The QUESTS reminder (issue #1278), one more stop in the same rotation.
+     * Built when it's broadcast, so it always names the configured completion rewards.
+     */
+    private fun questsEntry(): AnnouncementEntry? {
+        if (!plugin.config.getBoolean("announcements.quests.enabled", true)) return null
+        if (!plugin.isFeatureEnabled("quests")) return null
+        val sound = parseSound(plugin.config.getString("announcements.quests.sound"))
+        return AnnouncementEntry("", sound, 0.7f, 1.0f) {
+            val quests = plugin.questCycleManager
+            QuestAnnouncement.build(quests.dailyCompletionCreditsReward(), quests.weeklyCompletionCreditsReward())
+        }
     }
 
     private fun parseSound(name: String?): Sound? {
@@ -104,7 +126,8 @@ class AnnouncementManager(private val plugin: Joshymc) {
     /** Broadcast an entry with its configured sound (or the default if none set). */
     fun broadcastEntry(entry: AnnouncementEntry) {
         // All lines go out as one message so they always arrive together.
-        val component = format(entry.message, plugin.commsManager::parseLegacy) ?: return
+        val component = (if (entry.build != null) entry.build.invoke() else format(entry.message, plugin.commsManager::parseLegacy))
+            ?: return
         Bukkit.broadcast(component)
 
         val sound = entry.sound ?: defaultSound

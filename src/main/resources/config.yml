@@ -805,6 +805,11 @@ announcements:
     - "&fUSE &6/TPA &fTO TELEPORT TO FRIENDS!"
     - "&fPROTECT YOUR BUILDS WITH &6/CLAIM WAND&f!"
     - "&fSELL ITEMS QUICKLY WITH &6/SELL&f!"
+  # Built-in QUESTS reminder added to the rotation above,
+  # naming the Daily/Weekly completion rewards from quests.*.completion-reward.
+  quests:
+    enabled: true
+    sound: ENTITY_EXPERIENCE_ORB_PICKUP
 
 # Rotating BossBar — one shared bar that cycles through messages and drains over each interval
 # color: PINK, BLUE, RED, GREEN, YELLOW, PURPLE, WHITE
@@ -1070,6 +1075,13 @@ quests:
       # Credits paid once per weekly cycle for finishing all Weekly Quests (with the key).
       credits: 750
       commands: []
+
+  # Action-bar "Quest Progress: <quest> 250/500" when Daily/Weekly progress goes up.
+  # Players can turn it off in /settings (Quest Progress). One update per player at
+  # most every interval-seconds, showing the quest that moved last.
+  progress-notifications:
+    enabled: true
+    interval-seconds: 3
 
   quest-master:
     enabled: true

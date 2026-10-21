@@ -74,11 +74,11 @@ class QuestCycleCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 sender.sendMessage(Component.text("--- Quest Progress: ${target.name ?: args[1]} ---", NamedTextColor.GOLD))
                 for (q in mgr.getDailyPool()) {
                     val p = mgr.getProgress(uuid, q)
-                    sender.sendMessage(Component.text("  [Daily] ${q.name}: ${p.progress}/${q.amount} ${if (p.completed) "✔" else ""}", NamedTextColor.GRAY))
+                    sender.sendMessage(Component.text("  [Daily] ${q.name}: ${p.progress}/${mgr.effectiveTarget(uuid, q)} ${if (p.completed) "✔" else ""}", NamedTextColor.GRAY))
                 }
                 for (q in mgr.getWeeklyPool()) {
                     val p = mgr.getProgress(uuid, q)
-                    sender.sendMessage(Component.text("  [Weekly] ${q.name}: ${p.progress}/${q.amount} ${if (p.completed) "✔" else ""}", NamedTextColor.GRAY))
+                    sender.sendMessage(Component.text("  [Weekly] ${q.name}: ${p.progress}/${mgr.effectiveTarget(uuid, q)} ${if (p.completed) "✔" else ""}", NamedTextColor.GRAY))
                 }
                 val qm = mgr.getQuestMasterProgress(uuid, mgr.weeklyCycleId())
                 sender.sendMessage(Component.text("  [Quest Master] Daily Sets: ${qm.dailySets}, Weekly Complete: ${qm.weeklyComplete}, Rewarded: ${qm.rewarded}", NamedTextColor.LIGHT_PURPLE))

@@ -241,8 +241,10 @@ class FishingManager(private val plugin: Joshymc) : Listener {
                 recentlyCaught.remove(playerId)
             }, 10L)
 
-            // Generate our own fish
-            giveCustomFish(event.player)
+            // Generate our own fish. No CAUGHT_FISH fires for it, so report it to Daily/Weekly
+            // Quests here (once per hook; the custom fish's base item decides Cod/Salmon).
+            val fish = giveCustomFish(event.player) ?: return
+            plugin.questCycleManager.recordFishCatch(event.player, event.hook.uniqueId, fish.material)
             return
         }
     }
@@ -310,14 +312,14 @@ class FishingManager(private val plugin: Joshymc) : Listener {
      * Give a custom fish directly to a player (used when vanilla loot table produces nothing,
      * e.g., with very high Luck of the Sea levels).
      */
-    private fun giveCustomFish(player: Player) {
+    private fun giveCustomFish(player: Player): CustomFish? {
         val rarity = rollRarity(player)
         val biomeName = player.location.block.biome.key.key.uppercase()
         val candidates = fishByRarity[rarity]?.filter { fish ->
             fish.biomes == null || fish.biomes.any { biomeName.contains(it, ignoreCase = true) }
         } ?: emptyList()
         val pool = candidates.ifEmpty { fishByRarity[rarity] ?: emptyList() }
-        if (pool.isEmpty()) return
+        if (pool.isEmpty()) return null
 
         val fish = pool[ThreadLocalRandom.current().nextInt(pool.size)]
         val weight = generateWeight(rarity)
@@ -349,6 +351,7 @@ class FishingManager(private val plugin: Joshymc) : Listener {
         }
 
         saveCatch(player, fish.id, weight)
+        return fish
     }
 
     // ── Rarity Rolling ──────────────────────────────────────────────────
