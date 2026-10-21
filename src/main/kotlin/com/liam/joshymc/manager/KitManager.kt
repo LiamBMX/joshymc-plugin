@@ -33,9 +33,6 @@ class KitManager(private val plugin: Joshymc) {
         private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
             editMeta { it.displayName(Component.empty()) }
         }
-        private val BORDER = ItemStack(Material.CYAN_STAINED_GLASS_PANE).apply {
-            editMeta { it.displayName(Component.empty()) }
-        }
 
         // /editkit GUI layout: content area mirrors the 36-slot /createkit inventory
         // (so slot keys stay identical), plus a bottom control row.
@@ -46,55 +43,6 @@ class KitManager(private val plugin: Joshymc) {
         const val EDIT_RELOAD_SLOT = 40
         const val EDIT_SAVE_SLOT = 42
         const val EDIT_CANCEL_SLOT = 44
-
-        /**
-         * Shape-based centering for the /kit content area (rows 1-3, cols 1-7 of the
-         * 45-slot GUI), mirroring the compact-formation approach used by the crate
-         * preview/pick-a-reward GUIs (see CrateManager.CrateLayout).
-         */
-        private object KitLayout {
-            const val CONTENT_ROWS = 3
-            const val CONTENT_COLS = 7
-            const val CAPACITY = CONTENT_ROWS * CONTENT_COLS
-
-            /**
-             * Column indices (0..6) that evenly spread [rowLen] items across a 7-wide row,
-             * bucketing the row into [rowLen] equal-width slices and taking each slice's
-             * center. This keeps a gap between neighboring icons whenever the row isn't
-             * completely full, instead of clustering items into tight adjacent pairs.
-             */
-            private fun columnIndices(rowLen: Int): List<Int> {
-                if (rowLen <= 0) return emptyList()
-                if (rowLen >= CONTENT_COLS) return (0 until CONTENT_COLS).toList()
-                val binWidth = CONTENT_COLS.toDouble() / rowLen
-                return (0 until rowLen).map { i -> (i * binWidth + binWidth / 2).toInt() }
-            }
-
-            /** Per-row item counts (top to bottom), balanced across as few rows as needed. */
-            private fun rowCounts(count: Int): List<Int> {
-                if (count <= 0) return emptyList()
-                if (count <= CONTENT_COLS) return listOf(count)
-                val capped = count.coerceAtMost(CAPACITY)
-                val rows = ((capped - 1) / CONTENT_COLS + 1).coerceAtMost(CONTENT_ROWS)
-                val base = capped / rows
-                val remainder = capped % rows
-                return (0 until rows).map { r -> if (r < remainder) base + 1 else base }
-            }
-
-            /** Absolute GUI slots (within the 45-slot inventory) for [count] kit icons, centered. */
-            fun slots(count: Int): List<Int> {
-                val rows = rowCounts(count)
-                val verticalOffset = (CONTENT_ROWS - rows.size).coerceAtLeast(0) / 2
-                val result = mutableListOf<Int>()
-                for ((i, rowLen) in rows.withIndex()) {
-                    val physicalRow = 1 + verticalOffset + i
-                    for (col in columnIndices(rowLen)) {
-                        result.add(physicalRow * 9 + (1 + col))
-                    }
-                }
-                return result
-            }
-        }
 
         /** Capitalizes each word of a kit's internal id for display only (e.g. "trail_blazer" -> "Trail Blazer"). */
         fun displayName(kitName: String): String =
@@ -345,24 +293,16 @@ class KitManager(private val plugin: Joshymc) {
             "[KitManager] openKitGui for ${player.name}: ${kits.size} kit(s) known, " +
             "items/kit=${kits.values.joinToString(",") { "${it.name}=${it.items.size}" }}"
         )
-        val size = 45 // 5 rows
+        // Plain chest, no filler (issue #1280): kit icons centered in the middle
+        // row (see KitGuiLayout), Close barrier alone at the bottom center.
+        val size = KitGuiLayout.size(kits.size)
         val gui = CustomGui(KIT_GUI_TITLE, size)
 
-        // Fill with black glass
-        for (i in 0 until size) gui.inventory.setItem(i, FILLER.clone())
-        // Border with cyan glass (top and bottom rows)
-        for (i in 0..8) { gui.inventory.setItem(i, BORDER.clone()); gui.inventory.setItem(36 + i, BORDER.clone()) }
-        // Side borders (rows 1-3)
-        for (row in 1..3) { gui.inventory.setItem(row * 9, BORDER.clone()); gui.inventory.setItem(row * 9 + 8, BORDER.clone()) }
-
-        // Close button, centered on the bottom control row.
         val close = ItemStack(Material.BARRIER)
         close.editMeta { it.displayName(Component.text("Close", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false)) }
-        gui.setItem(40, close) { p, _ -> p.closeInventory() }
+        gui.setItem(KitGuiLayout.closeSlot(kits.size), close) { p, _ -> p.closeInventory() }
 
-        // Centered, shape-based icon placement (see KitLayout) so the layout stays
-        // balanced whether there are 1 or 21 kits, instead of a fixed grid with gaps.
-        val slots = KitLayout.slots(kits.size)
+        val slots = KitGuiLayout.slots(kits.size)
 
         var rendered = 0
         for ((idx, kitDef) in kits.values.withIndex()) {
