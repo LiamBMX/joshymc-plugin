@@ -2,9 +2,8 @@ package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.JoinConfiguration
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextColor
-import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.Sound
 
@@ -132,6 +131,8 @@ class AnnouncementManager(private val plugin: Joshymc) {
         // Header and body go out as one message so they always arrive together.
         val component = (if (entry.build != null) entry.build.invoke() else format(entry.message, plugin.commsManager::parseLegacy, entry.header))
             ?: return
+        // All lines go out as one message so they always arrive together.
+        val component = format(entry.message, plugin.commsManager::parseLegacy) ?: return
         Bukkit.broadcast(component)
 
         val sound = entry.sound ?: defaultSound
@@ -141,18 +142,17 @@ class AnnouncementManager(private val plugin: Joshymc) {
     }
 
     companion object {
-        /** Coral red used for the header (issue #1253). */
-        val HEADER_COLOR: TextColor = TextColor.color(0xFF5A4F)
-
-        /** "▸ ANNOUNCEMENT ◂" in bold coral. */
-        val HEADER: Component = Component.text("▸ ANNOUNCEMENT ◂", HEADER_COLOR, TextDecoration.BOLD)
-
         /**
          * The announcement as one component: the header (unless [header] is
          * false), then each non-blank line of [message] (split on `\n`) parsed
          * with [parse], white unless the text colours itself. Body lines are
          * siblings of the header, so `&` codes in the text can't restyle it.
          * Null when the message has no visible text.
+         * The announcement as one component: each non-blank line of [message]
+         * (split on `\n`) parsed with [parse], white unless the text colours
+         * itself, joined by newlines. No header above it (issue #1276). Lines
+         * are siblings, so `&` codes in one line can't restyle the next. Null
+         * when the message has no visible text.
          */
         fun format(message: String, parse: (String) -> Component, header: Boolean = true): Component? {
             val lines = message.split("\\n", "\n").map { it.trim() }.filter { it.isNotEmpty() }
@@ -164,6 +164,10 @@ class AnnouncementManager(private val plugin: Joshymc) {
                 builder.append(parse(line).colorIfAbsent(NamedTextColor.WHITE))
             }
             return builder.build()
+            return Component.join(
+                JoinConfiguration.newlines(),
+                lines.map { parse(it).colorIfAbsent(NamedTextColor.WHITE) }
+            )
         }
     }
 
