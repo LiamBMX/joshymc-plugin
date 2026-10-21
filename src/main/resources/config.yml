@@ -805,9 +805,8 @@ announcements:
     - "&fUSE &6/TPA &fTO TELEPORT TO FRIENDS!"
     - "&fPROTECT YOUR BUILDS WITH &6/CLAIM WAND&f!"
     - "&fSELL ITEMS QUICKLY WITH &6/SELL&f!"
-  # Built-in QUESTS reminder added to the rotation above (no ANNOUNCEMENT header),
+  # Built-in QUESTS reminder added to the rotation above,
   # naming the Daily/Weekly completion rewards from quests.*.completion-reward.
-  # Entries in messages can also skip the header with "header: false".
   quests:
     enabled: true
     sound: ENTITY_EXPERIENCE_ORB_PICKUP
