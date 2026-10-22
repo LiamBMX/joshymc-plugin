@@ -142,6 +142,12 @@ object ArenaValidator {
                 if (!boundary.contains(p)) problems += "Mob spawn #${i + 1} is outside the Arena Boundary"
             }
         }
+
+        // Spectators watch from outside the fight (issue #1284): never inside the boundary or on the floor.
+        arena.point(ArenaField.VIEWING)?.let { view ->
+            if (boundary != null && boundary.contains(view)) problems += "Viewing Area is inside the Arena Boundary; spectators would be in the fight"
+            arena.region(ArenaField.FLOOR)?.let { if (it.contains(view)) problems += "Viewing Area is inside the Floor Region; spectators would stand on the floor" }
+        }
         return problems
     }
 }

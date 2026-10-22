@@ -363,12 +363,12 @@ class EventManager(private val plugin: Joshymc) : Listener {
     /**
      * The only exceptions to the event-world command lock below `joshymc.event`: hosts and arena
      * setup staff may run `/event` (the executor still gates each subcommand), and players may
-     * `/event join` or `/event leave`.
+     * `/event join`, `/event leave` or `/event spectate`.
      */
     private fun isAllowedEventCommand(player: Player, cmd: String, sub: String?): Boolean {
         if (cmd != "event") return false
         if (EventPermissions.canHost(player) || EventPermissions.canSetupArenas(player)) return true
-        return sub == "join" || sub == "leave"
+        return sub == "join" || sub == "leave" || sub == "spectate" || sub == "watch"
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -1056,6 +1056,11 @@ class EventManager(private val plugin: Joshymc) : Listener {
                     if (!sender.hasPermission(EventPermissions.JOIN)) { Msg.noPermission(sender, category); return true }
                     reply(sender, if (sub == "join") sessions.join(sender) else sessions.leave(sender))
                 }
+                "spectate", "watch" -> {
+                    if (sender !is Player) { Msg.playersOnly(sender); return true }
+                    if (!sender.hasPermission(EventPermissions.JOIN)) { Msg.noPermission(sender, category); return true }
+                    reply(sender, games.spectate(sender))
+                }
                 "create" -> {
                     if (!host(sender)) return true
                     val id = args.getOrNull(1) ?: run { Msg.usage(sender, "/event create <${EventType.ids.joinToString("|")}>", category); return true }
@@ -1243,6 +1248,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
             if (sender.hasPermission(EventPermissions.JOIN)) {
                 lines += "&e/event join &7- Register for the open event"
                 lines += "&e/event leave &7- Leave the event"
+                lines += "&e/event spectate &7- Watch the event from its arena's viewing area"
             }
             if (EventPermissions.canHost(sender)) {
                 lines += "&e/event &7- Open the Event Manager"
@@ -1277,7 +1283,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
             val host = EventPermissions.canHost(sender)
             return when (args.size) {
                 1 -> buildList {
-                    if (sender.hasPermission(EventPermissions.JOIN)) addAll(listOf("join", "leave", "stats"))
+                    if (sender.hasPermission(EventPermissions.JOIN)) addAll(listOf("join", "leave", "spectate", "stats"))
                     if (host) addAll(hostSubs)
                     if (host) addAll(resultCommands.subcommands - "stats")
                     if (arenaCommands.canView(sender)) add("arena")

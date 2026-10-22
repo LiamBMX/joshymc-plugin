@@ -262,7 +262,7 @@ class SpleefGame(games: HostedGames) : MinigameGame(games, EventType.SPLEEF) {
 
     private fun safeSpotFor(arena: EventArena): Location? {
         val w = Bukkit.getWorld(arena.world) ?: return null
-        return arena.point(ArenaField.LOBBY)?.let { toLocation(it, w) } ?: w.spawnLocation
+        return arena.spectatorPoint()?.let { toLocation(it, w) } ?: w.spawnLocation
     }
 
     // ── Leaving ───────────────────────────────────────────

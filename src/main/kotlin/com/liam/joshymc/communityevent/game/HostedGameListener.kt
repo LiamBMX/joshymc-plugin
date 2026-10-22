@@ -13,7 +13,9 @@ import org.bukkit.event.Event
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockExplodeEvent
+import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.block.BlockIgniteEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
@@ -213,6 +215,18 @@ class HostedGameListener(private val games: HostedGames) : Listener {
         event.isCancelled = true
     }
 
+    /** Issue #1284: a competitor's End Crystal inside the boundary is placed even if another protection refused it first. */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    fun onMatchCrystal(event: EntityPlaceEvent) {
+        if (!event.isCancelled) return
+        val player = event.player ?: return
+        val entity = event.entity as? EnderCrystal ?: return
+        val cpvp = games.cpvp
+        if (games.running !== cpvp || !cpvp.isPlaying(player) || !cpvp.canPlaceCrystal(player, event.block)) return
+        event.isCancelled = false
+        entity.isPersistent = false
+    }
+
     /** Explosions of the arena's crystals only break blocks inside the boundary, never block entities, and drop nothing. */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onEntityExplode(event: EntityExplodeEvent) {
@@ -312,15 +326,73 @@ class HostedGameListener(private val games: HostedGames) : Listener {
      * Spleef and Crystal PvP players are in survival; they don't get to use arena blocks. Crystal
      * PvP competitors in an ACTIVE match keep item use on blocks (placing crystals and the kit's
      * blocks), which the place handlers here and in EventManager still limit to the arena.
+     *
+     * Issue #1284: denying the clicked block also skips the held item's use on it (the server
+     * answers the click without placing anything), which is what stopped competitors from placing
+     * obsidian and End Crystals. Their clicks on plain blocks are left alone; only blocks with
+     * their own use (chests, doors, buttons...) are still denied.
      */
     @EventHandler(priority = EventPriority.HIGH)
     fun onInteract(event: PlayerInteractEvent) {
         if (event.action != Action.RIGHT_CLICK_BLOCK && event.action != Action.PHYSICAL) return
         if (games.running?.isPlaying(event.player) != true) return
-        event.setUseInteractedBlock(Event.Result.DENY)
+        val fighter = games.cpvp.isFighting(event.player.uniqueId)
+        if (!fighter || event.action == Action.PHYSICAL || opensBlock(event)) event.setUseInteractedBlock(Event.Result.DENY)
         // Mob Waves participants keep using their kit (food, bows, potions) while looking at a block; placing is still refused.
-        val usesItems = games.cpvp.isFighting(event.player.uniqueId) || (games.running === games.mobs && games.mobs.isCompeting(event.player.uniqueId))
+        val usesItems = fighter || (games.running === games.mobs && games.mobs.isCompeting(event.player.uniqueId))
         if (event.action == Action.RIGHT_CLICK_BLOCK && !usesItems) event.setUseItemInHand(Event.Result.DENY)
+    }
+
+    /**
+     * Crystal PvP (issue #1284): another protection (a region plugin's build deny on the event world,
+     * for one) may have refused a competitor's click before us. Inside the boundary, during their
+     * ACTIVE match, a left click on an allowed block (to mine it) and a right click that places an
+     * allowed block or an End Crystal go through; the place/break events below still decide.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    fun onMatchInteract(event: PlayerInteractEvent) {
+        val cpvp = games.cpvp
+        if (games.running !== cpvp) return
+        val player = event.player
+        val clicked = event.clickedBlock ?: return
+        if (!cpvp.isFighting(player.uniqueId) || !cpvp.isPlaying(player)) return
+        when (event.action) {
+            Action.LEFT_CLICK_BLOCK -> if (event.useInteractedBlock() == Event.Result.DENY && cpvp.canBuild(player, clicked)) {
+                event.setUseInteractedBlock(Event.Result.DEFAULT)
+            }
+            Action.RIGHT_CLICK_BLOCK -> {
+                val item = event.item ?: return
+                if (opensBlock(event) || !cpvp.placesInArena(player, clicked, event.blockFace, item)) return
+                if (event.useInteractedBlock() == Event.Result.DENY) event.setUseInteractedBlock(Event.Result.DEFAULT)
+                if (event.useItemInHand() == Event.Result.DENY) event.setUseItemInHand(Event.Result.DEFAULT)
+            }
+            else -> {}
+        }
+    }
+
+    /** The click would use the block itself (open a chest, flip a lever): vanilla skips that when sneaking with an item. */
+    private fun opensBlock(event: PlayerInteractEvent): Boolean {
+        val block = event.clickedBlock ?: return false
+        if (!block.type.isInteractable) return false
+        val inv = event.player.inventory
+        return !(event.player.isSneaking && (!inv.itemInMainHand.isEmpty || !inv.itemInOffHand.isEmpty))
+    }
+
+    /** Issue #1284: a competitor's allowed block inside the boundary is placed even if another protection refused it first. */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    fun onMatchPlace(event: BlockPlaceEvent) {
+        if (!event.isCancelled || games.running !== games.cpvp) return
+        if (games.placeDecision(event.player, event.block) == true) event.isCancelled = false
+    }
+
+    /** Issue #1284: same for breaking an allowed block inside the boundary; it drops nothing and is restored after the match. */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    fun onMatchBreak(event: BlockBreakEvent) {
+        if (!event.isCancelled || games.running !== games.cpvp) return
+        if (games.breakDecision(event.player, event.block) != true) return
+        event.isCancelled = false
+        event.isDropItems = false
+        event.expToDrop = 0
     }
 
     // ── Leaving ───────────────────────────────────────────

@@ -39,7 +39,7 @@ class ArenaCommands(
 
     private val viewSubs = listOf("list", "info", "show", "menu")
     private val hostSubs = listOf("select", "unselect")
-    private val setupSubs = listOf("create", "edit", "delete", "setlobby", "setspawn", "wand", "pos1", "pos2", "unset")
+    private val setupSubs = listOf("create", "edit", "delete", "setlobby", "setviewing", "setspawn", "wand", "pos1", "pos2", "unset")
 
     // ── /event arena ──────────────────────────────────────
 
@@ -89,6 +89,12 @@ class ArenaCommands(
                 val player = player(sender) ?: return
                 val arena = target(player) ?: return
                 edited(player, arenas.setPoint(player, arena, ArenaField.LOBBY))
+            }
+            "setviewing" -> {
+                // Issue #1284: `/event arena setviewing [arena]` saves this exact spot (with facing) for that arena only.
+                val player = player(sender) ?: return
+                val arena = args.getOrNull(2)?.let { named(sender, it) ?: return } ?: target(player) ?: return
+                edited(player, arenas.setPoint(player, arena, ArenaField.VIEWING))
             }
             "setspawn" -> {
                 val player = player(sender) ?: return
@@ -255,6 +261,7 @@ class ArenaCommands(
     /** The command that sets [field]. */
     fun setCommand(arena: EventArena, field: ArenaField): String = when (field) {
         ArenaField.LOBBY -> "/event arena setlobby"
+        ArenaField.VIEWING -> "/event arena setviewing ${arena.displayName}"
         else -> arena.layout.commandFor(field)?.let { "/event ${arena.type.id} $it" } ?: "/event arena menu"
     }
 
@@ -283,7 +290,7 @@ class ArenaCommands(
 
     private fun nextSteps(sender: CommandSender, arena: EventArena) {
         val steps = arena.layout.required.joinToString(", ") { setCommand(arena, it) }
-        Msg.reply(sender, Component.text("Next: $steps. Optional: /event arena setlobby.", NamedTextColor.GRAY), category)
+        Msg.reply(sender, Component.text("Next: $steps. Optional: /event arena setlobby, /event arena setviewing.", NamedTextColor.GRAY), category)
     }
 
     private fun edited(player: Player, result: ArenaResult) {
@@ -321,6 +328,7 @@ class ArenaCommands(
             lines += "&e/event arena edit <name> &7- Choose the arena your set-commands change"
             lines += "&e/event arena delete <name> [confirm] &7- Delete an arena's settings"
             lines += "&e/event arena setlobby &7- Lobby at your position"
+            lines += "&e/event arena setviewing [name] &7- Spectator viewing area at your position"
             lines += "&e/event arena setspawn &7- Player spawn at your position (spleef, mobs)"
             lines += "&e/event arena wand &7- Selection wand; or &e/event arena pos1|pos2"
             lines += "&e/event arena unset <setting> &7- Clear one setting"
@@ -366,7 +374,7 @@ class ArenaCommands(
             3 -> when (args[1].lowercase()) {
                 "info", "show" -> if (view) names() else emptyList()
                 "select" -> if (host) sessions.active?.let { s -> arenas.ofType(s.type).map { it.displayName } } ?: names() else emptyList()
-                "edit", "delete" -> if (setup) names() else emptyList()
+                "edit", "delete", "setviewing" -> if (setup) names() else emptyList()
                 "list" -> if (view) EventType.ids else emptyList()
                 "create" -> if (setup) EventType.ids else emptyList()
                 "unset" -> if (setup) (sender as? Player)?.let { arenas.editTarget(it) }?.layout?.fields?.map { it.key } ?: emptyList() else emptyList()
