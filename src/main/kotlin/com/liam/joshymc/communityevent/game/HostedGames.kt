@@ -109,6 +109,36 @@ class HostedGames(
         return game.startProblem(session, arena)
     }
 
+    // ── Spectating (issue #1284) ──────────────────────────
+
+    /**
+     * `/event spectate`: takes [player] to the Viewing Area of the arena the current event uses
+     * (its lobby when no Viewing Area is set). Never another arena's spot, and never the event world
+     * spawn: without a spot for this arena it refuses. Entering the event world goes through
+     * EventManager as usual, so their real inventory is saved and they're in adventure mode.
+     */
+    fun spectate(player: Player): EventResult {
+        val session = sessions.active ?: return EventResult.Failure("There is no event to watch right now.")
+        if (session.state != EventState.OPEN && session.state != EventState.RUNNING) {
+            return EventResult.Failure("${session.type.displayName} hasn't opened yet.")
+        }
+        val game = gameFor(session.type) ?: return EventResult.Failure("${session.type.displayName} can't be watched.")
+        if (game.isCompeting(player.uniqueId)) return EventResult.Failure("You're competing right now.")
+        val arena = arenas.selectedFor(session)
+            ?: return EventResult.Failure("${session.type.displayName} has no arena selected yet, so there's nowhere to watch from.")
+        val point = arena.spectatorPoint()
+            ?: return EventResult.Failure("The arena '${arena.displayName}' has no viewing area yet. Staff can set one with /event arena setviewing ${arena.displayName}.")
+        val world = Bukkit.getWorld(arena.world)
+        if (world == null || world.name != eventWorldName) return EventResult.Failure("The event world isn't loaded right now.")
+        if (!inEventWorld(player) && plugin.combatManager.isTagged(player)) return EventResult.Failure("You can't go watch while you're in combat.")
+        if (player.isInsideVehicle) player.leaveVehicle()
+        player.fallDistance = 0f
+        if (!player.teleport(org.bukkit.Location(world, point.x, point.y, point.z, point.yaw, point.pitch)) || player.world.name != eventWorldName) {
+            return EventResult.Failure("You couldn't be teleported to the viewing area.")
+        }
+        return EventResult.Success(session, "You're watching ${session.type.displayName} in '${arena.displayName}'. Use /spawn to leave.")
+    }
+
     // ── Rules used by EventManager's listeners ────────────
 
     /**

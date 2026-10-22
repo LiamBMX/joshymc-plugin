@@ -131,6 +131,10 @@ abstract class MinigameGame(protected val games: HostedGames, val type: EventTyp
             cleanup(session)
             throw e
         }
+        if (arena.point(ArenaField.VIEWING) == null) {
+            val fallback = if (arena.point(ArenaField.LOBBY) != null) "its lobby" else "the event world spawn"
+            tellStaff(Component.text("Arena '${arena.displayName}' has no Viewing Area, so spectators and knocked-out players go to $fallback. Set one with /event arena setviewing ${arena.displayName}.", NamedTextColor.YELLOW))
+        }
     }
 
     /** Puts the registered players in the event world and starts the first round/match. Throw to cancel the start. */
@@ -212,10 +216,14 @@ abstract class MinigameGame(protected val games: HostedGames, val type: EventTyp
         return player.teleport(to)
     }
 
-    /** Where players wait between rounds and after being knocked out: the arena lobby, else the event world spawn. */
+    /**
+     * Where players wait between rounds, and where knocked-out players and spectators watch:
+     * this run's arena's Viewing Area, else its lobby (issue #1284), else the event world spawn.
+     * Always the arena of the current run, so one event never sends anyone to another arena's spot.
+     */
     fun waitingLocation(): Location? {
         val w = world ?: Bukkit.getWorld(games.eventWorldName) ?: return null
-        return arena?.point(ArenaField.LOBBY)?.let { toLocation(it, w) } ?: w.spawnLocation
+        return arena?.spectatorPoint()?.let { toLocation(it, w) } ?: w.spawnLocation
     }
 
     protected fun toLocation(point: ArenaPoint, w: World? = world): Location? =

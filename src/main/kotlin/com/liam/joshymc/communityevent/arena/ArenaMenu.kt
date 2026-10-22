@@ -317,6 +317,7 @@ class ArenaMenu(
         ArenaField.SPAWN_2 -> Material.BLUE_BANNER
         ArenaField.REGION -> Material.IRON_BARS
         ArenaField.MOB_SPAWNS -> Material.SPAWNER
+        ArenaField.VIEWING -> Material.SPYGLASS
     }
 
     // ── Delete confirmation ───────────────────────────────

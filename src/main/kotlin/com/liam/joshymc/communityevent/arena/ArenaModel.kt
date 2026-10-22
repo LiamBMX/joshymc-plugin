@@ -84,6 +84,8 @@ enum class ArenaField(val key: String, val label: String, val kind: ArenaFieldKi
     SPAWN_2("spawn2", "Competitor Spawn 2", ArenaFieldKind.POINT, "Where the second competitor starts."),
     REGION("region", "Arena Boundary", ArenaFieldKind.REGION, "The area the fight stays inside."),
     MOB_SPAWNS("mobspawns", "Mob Spawn Points", ArenaFieldKind.POINT_LIST, "Where mobs will spawn. Add several."),
+    /** Issue #1284: every arena's own spectator spot, so one arena's spot is never used for another. */
+    VIEWING("viewing", "Viewing Area", ArenaFieldKind.POINT, "Where spectators and knocked-out players watch from."),
     ;
 
     companion object {
@@ -104,7 +106,7 @@ class ArenaLayout(
 
     fun isRequired(field: ArenaField): Boolean = field in required
 
-    /** The type subcommand that sets [field], if any (lobby is set with `/event arena setlobby`). */
+    /** The type subcommand that sets [field], if any (lobby and viewing area are set with `/event arena setlobby|setviewing`). */
     fun commandFor(field: ArenaField): String? = commands.entries.firstOrNull { it.value == field }?.key
 }
 
@@ -112,28 +114,28 @@ object ArenaLayouts {
     private val layouts: Map<EventType, ArenaLayout> = mapOf(
         EventType.SPLEEF to ArenaLayout(
             required = listOf(ArenaField.SPAWN, ArenaField.FLOOR, ArenaField.LOSE_HEIGHT),
-            optional = listOf(ArenaField.LOBBY),
+            optional = listOf(ArenaField.LOBBY, ArenaField.VIEWING),
             commands = linkedMapOf("setspawn" to ArenaField.SPAWN, "setfloor" to ArenaField.FLOOR, "setlose" to ArenaField.LOSE_HEIGHT),
         ),
         EventType.SHARKS to ArenaLayout(
             required = listOf(ArenaField.SHARK_SPAWN, ArenaField.MINNOW_SPAWN, ArenaField.FINISH),
-            optional = listOf(ArenaField.LOBBY),
+            optional = listOf(ArenaField.LOBBY, ArenaField.VIEWING),
             commands = linkedMapOf("setshark" to ArenaField.SHARK_SPAWN, "setminnow" to ArenaField.MINNOW_SPAWN, "setfinish" to ArenaField.FINISH),
         ),
         EventType.SUMO to ArenaLayout(
             required = listOf(ArenaField.SPAWN_1, ArenaField.SPAWN_2, ArenaField.LOSE_HEIGHT),
             // Optional boundary (issue #1187): stepping outside it horizontally loses the match.
-            optional = listOf(ArenaField.LOBBY, ArenaField.REGION),
+            optional = listOf(ArenaField.LOBBY, ArenaField.VIEWING, ArenaField.REGION),
             commands = linkedMapOf("setspawn1" to ArenaField.SPAWN_1, "setspawn2" to ArenaField.SPAWN_2, "setlose" to ArenaField.LOSE_HEIGHT, "setregion" to ArenaField.REGION),
         ),
         EventType.CPVP to ArenaLayout(
             required = listOf(ArenaField.SPAWN_1, ArenaField.SPAWN_2, ArenaField.REGION),
-            optional = listOf(ArenaField.LOBBY),
+            optional = listOf(ArenaField.LOBBY, ArenaField.VIEWING),
             commands = linkedMapOf("setspawn1" to ArenaField.SPAWN_1, "setspawn2" to ArenaField.SPAWN_2, "setregion" to ArenaField.REGION),
         ),
         EventType.MOBS to ArenaLayout(
             required = listOf(ArenaField.SPAWN, ArenaField.MOB_SPAWNS, ArenaField.REGION),
-            optional = listOf(ArenaField.LOBBY),
+            optional = listOf(ArenaField.LOBBY, ArenaField.VIEWING),
             commands = linkedMapOf("setplayers" to ArenaField.SPAWN, "setspawn" to ArenaField.MOB_SPAWNS, "setregion" to ArenaField.REGION),
         ),
     )
@@ -179,6 +181,12 @@ data class EventArena(
     fun points(field: ArenaField): List<ArenaPoint> = (values[field] as? ArenaValue.Points)?.points ?: emptyList()
     fun region(field: ArenaField): ArenaRegion? = (values[field] as? ArenaValue.Region)?.region
     fun height(field: ArenaField): Int? = (values[field] as? ArenaValue.Height)?.y
+
+    /**
+     * Where this arena's spectators and knocked-out players go (issue #1284): its Viewing Area,
+     * else its own lobby. Null when neither is set; it never borrows another arena's spot.
+     */
+    fun spectatorPoint(): ArenaPoint? = point(ArenaField.VIEWING) ?: point(ArenaField.LOBBY)
 
     fun isSet(field: ArenaField): Boolean = when (val v = values[field]) {
         null -> false

@@ -14,11 +14,14 @@ import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.Location
+import org.bukkit.Material
 import org.bukkit.Sound
 import org.bukkit.attribute.Attribute
 import org.bukkit.block.Block
+import org.bukkit.block.BlockFace
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
+import org.bukkit.inventory.ItemStack
 import org.bukkit.scheduler.BukkitTask
 import java.util.UUID
 
@@ -242,6 +245,19 @@ class CrystalPvpGame(games: HostedGames) : MinigameGame(games, EventType.CPVP) {
     fun canPlaceCrystal(player: Player, base: Block): Boolean =
         isFighting(player.uniqueId) && inArena(base) && inArena(base.getRelative(0, 1, 0))
 
+    /**
+     * A competitor right-clicking [clicked] on [face] with [item] would place an End Crystal or an
+     * allowed block inside the boundary (issue #1284). Only used to keep that click from being
+     * refused before the place events run; those still decide with [canPlaceCrystal]/[canBuild].
+     */
+    fun placesInArena(player: Player, clicked: Block, face: BlockFace, item: ItemStack): Boolean {
+        if (!isFighting(player.uniqueId)) return false
+        if (item.type == Material.END_CRYSTAL) return canPlaceCrystal(player, clicked)
+        if (item.type !in settings.allowedBlocks) return false
+        val target = if (clicked.isReplaceable) clicked else clicked.getRelative(face)
+        return inArena(target)
+    }
+
     override fun onActiveMove(player: Player, to: Location) {
         val r = boundary() ?: return
         if (to.blockX !in r.minX..r.maxX || to.blockZ !in r.minZ..r.maxZ || to.blockY < r.minY) lose(player.uniqueId, "left the arena")
@@ -382,7 +398,7 @@ class CrystalPvpGame(games: HostedGames) : MinigameGame(games, EventType.CPVP) {
 
     private fun safeSpotFor(arena: EventArena): Location? {
         val w = Bukkit.getWorld(arena.world) ?: return null
-        return arena.point(ArenaField.LOBBY)?.let { toLocation(it, w) } ?: w.spawnLocation
+        return arena.spectatorPoint()?.let { toLocation(it, w) } ?: w.spawnLocation
     }
 
     fun arenaState(arena: EventArena): String = when {
