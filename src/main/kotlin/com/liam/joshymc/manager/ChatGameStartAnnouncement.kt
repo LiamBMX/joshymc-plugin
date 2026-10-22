@@ -6,12 +6,16 @@ import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 
 /**
- * The chat game start announcement (issue #1254): three lines in one
- * component, so it is broadcast once and can never arrive out of order.
+ * The chat game start announcement (issue #1254): one component, so it is
+ * broadcast once and can never arrive out of order. Blank lines frame it and
+ * set the prompt apart from the header (issue #1282):
+ *
  *
  *   ✧ CHAT GAMES
  *   A chat game has started! Type the following:
+ *
  *   ▸ Type: 'JoshyMC is the BEST' ◂
+ *
  *
  * Math games read "Solve the following:" and `▸ Solve: 12 + 34 ◂`. The
  * reward and time limit sit in the prompt line's hover. Prompts are plain
@@ -43,6 +47,8 @@ object ChatGameStartAnnouncement {
             .build()
 
         return Component.text()
+            .append(ChatGameSpacing.BLANK_LINE)
+            .append(Component.newline())
             .append(Component.text("✧ ", ACCENT))
             .append(Component.text("CHAT GAMES", HEADER).decoration(TextDecoration.BOLD, true))
             .append(Component.newline())
@@ -52,7 +58,11 @@ object ChatGameStartAnnouncement {
             .append(Component.text("$verb the following", ACTION))
             .append(Component.text(":", TEXT))
             .append(Component.newline())
+            .append(ChatGameSpacing.BLANK_LINE)
+            .append(Component.newline())
             .append(promptLine(verb, challenge(type, prompt)).hoverEvent(HoverEvent.showText(hover)))
+            .append(Component.newline())
+            .append(ChatGameSpacing.BLANK_LINE)
             .build()
     }
 
