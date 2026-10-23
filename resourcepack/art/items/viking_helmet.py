@@ -41,7 +41,7 @@ RIM = (9.6, 11.6)             # the brass brow band (y)
 def textures() -> None:
     save_set_materials(skip=("leather", "wool", "hem", "fur", "strap"))
     # the moustache catches the light: the beard's locks a step brighter
-    swatch("beard_light", lambda a: paint_hair(a, seed=8, bias=0.7))
+    swatch("beard_light", lambda a: paint_hair(a, seed=8, bias=0.15))
 
 
 # ======================================================================================
@@ -310,15 +310,15 @@ def moustache() -> list[dict]:
     """The moustache: two full lobes under the nose, drooping past the mouth corners and
     down into the beard."""
     right = []
-    z0, z1 = Z0 - 2.0, Z0 - 0.6
+    z0, z1 = Z0 - 2.7, Z0 - 0.9
     sh = {"down": "beard_shade", "south": "beard_shade"}
     # the lobe under the nose, swelling out from the centre
-    right.append(box((8.0, 3.8, z0 + 0.15), (10.6, 4.9, z1), "beard_light", faces=sh, offset=(2, 3)))
+    right.append(box((8.0, 3.6, z0 + 0.15), (10.8, 4.9, z1), "beard_light", faces=sh, offset=(2, 3)))
     right.append(box((8.2, 4.9, z0 + 0.35), (10.2, 5.35, z1), "beard_light", faces=sh, offset=(6, 1)))
     # sweeping out and drooping past the mouth corner, down into the beard
-    for p0, p1, w, d in (((10.0, 4.4, z0 + 0.75), (12.7, 3.2, z0 + 0.8), 1.35, 1.25),
-                         ((12.4, 3.6, z0 + 0.85), (13.3, 0.8, z0 + 0.9), 1.15, 1.1),
-                         ((13.2, 1.1, z0 + 0.9), (13.4, -0.8, z0 + 0.95), 0.8, 0.85)):
+    for p0, p1, w, d in (((10.0, 4.4, z0 + 0.6), (12.7, 3.1, z0 + 0.7), 1.9, 1.6),
+                         ((12.4, 3.6, z0 + 0.75), (13.4, 0.6, z0 + 0.85), 1.6, 1.4),
+                         ((13.3, 1.0, z0 + 0.85), (13.5, -1.2, z0 + 0.95), 1.1, 1.1)):
         right.append(bar(p0, p1, w, d, "beard_light", faces=sh, offset=(int(p0[0]) % 12, 4)))
     # a dark parting down the middle
     right.append(box((7.85, 3.9, z0 + 0.05), (8.15, 5.2, z1), "beard_shade", offset=(3, 3)))
