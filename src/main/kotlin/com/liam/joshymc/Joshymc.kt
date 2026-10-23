@@ -243,6 +243,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var stuckRecoveryManager: com.liam.joshymc.recovery.StuckRecoveryManager
         private set
+    lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
+        private set
     lateinit var rankManager: RankManager
         private set
     lateinit var claimManager: ClaimManager
@@ -478,10 +480,13 @@ class Joshymc : JavaPlugin() {
         saleManager = com.liam.joshymc.manager.SaleManager(this)
         candyShopManager = com.liam.joshymc.candyshop.CandyShopManager(this)
         stuckRecoveryManager = com.liam.joshymc.recovery.StuckRecoveryManager(this)
+        gamemodeLockManager = com.liam.joshymc.gamemode.GamemodeLockManager(this)
 
         itemManager.registerAll()
         recipeManager.registerAll()
         commandManager.registerAll()
+        // Right after the commands get their executors: it wraps the gamemode-assigned ones.
+        gamemodeLockManager.start()
         listenerManager.registerAll()
         linkManager.load()
         warpManager.start()
@@ -764,6 +769,7 @@ class Joshymc : JavaPlugin() {
 
         // 7. Commands just get new instances (executors are swapped, not re-registered)
         safe("commandManager.registerAll") { commandManager.registerAll() }
+        safe("gamemodeLockManager.start") { gamemodeLockManager.start() }
 
         // 8. Restart Discord
         safe("discordManager.start") { discordManager.start(announceStartup = false) }

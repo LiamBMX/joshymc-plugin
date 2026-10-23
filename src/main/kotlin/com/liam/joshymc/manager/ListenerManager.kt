@@ -84,6 +84,9 @@ class ListenerManager(private val plugin: Joshymc) {
         // GUI framework — registered FIRST so it catches clicks before anything else
         pm.registerEvents(plugin.guiManager, plugin)
 
+        // Issue #1289: gamemode lock checks for typed commands + command-list hiding.
+        pm.registerEvents(com.liam.joshymc.gamemode.GamemodeLockListener(plugin), plugin)
+
         // Existing
         pm.registerEvents(DrillMiningListener(plugin), plugin)
         pm.registerEvents(EditKitListener(plugin), plugin)

@@ -58,6 +58,18 @@ stuck-recovery:
   # After a flying kick, a login within this many minutes starts at a safe spot instead.
   login-recovery-window-minutes: 15
 
+# Gamemode isolation locks (issue #1289), toggled with /jgamemode lock|unlock <gamemode> confirm.
+# While a gamemode is locked, the commands and features assigned to it only work on that gamemode.
+# Unassigned commands are never affected.
+gamemode-lock:
+  # Which gamemode this server runs: survival or lifesteal.
+  server-gamemode: survival
+  # Worlds on this server that run a different gamemode, e.g. "lifesteal_world: lifesteal".
+  worlds: {}
+  # Extra command assignments by command name: survival, lifesteal or network.
+  # Commands JoshyMC itself assigns can't be reassigned here.
+  commands: {}
+
 # Mob Stacking — merges nearby mobs of the same type into a single entity
 mob-stacking:
   # Radius (in blocks) to search for nearby mobs to merge
