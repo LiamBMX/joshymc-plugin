@@ -183,6 +183,10 @@ commands:
   overflow:
     description: View items held in your persistent Overflow storage
     usage: /overflow
+  jgamemode:
+    description: Lock or unlock Survival/Lifesteal command isolation
+    usage: /jgamemode <lock|unlock> <survival|lifesteal> confirm
+    permission: joshymc.jgm.lock;joshymc.jgm.unlock
   unstuck:
     description: Get out of a spot where you're frozen midair or the world didn't load
     usage: /unstuck [player]
@@ -878,6 +882,12 @@ permissions:
   joshymc.overflow:
     description: View your persistent Overflow storage
     default: true
+  joshymc.jgm.lock:
+    description: See and run /jgamemode lock <survival|lifesteal> confirm (restrict a gamemode's commands and features to that gamemode)
+    default: false
+  joshymc.jgm.unlock:
+    description: See and run /jgamemode unlock <survival|lifesteal> confirm (lift a gamemode's isolation lock)
+    default: false
   joshymc.unstuck:
     description: Use /unstuck when genuinely stuck (frozen midair or in chunks that didn't load)
     default: true

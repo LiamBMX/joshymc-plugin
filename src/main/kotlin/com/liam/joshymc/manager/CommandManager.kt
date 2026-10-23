@@ -151,6 +151,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
+        // Issue #1289: gamemode isolation locks.
+        plugin.getCommand("jgamemode")?.let {
+            val cmd = com.liam.joshymc.command.JGamemodeCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
         plugin.getCommand("link")?.setExecutor(LinkCommand(plugin))
         plugin.getCommand("unlink")?.setExecutor(UnlinkCommand(plugin))
 
