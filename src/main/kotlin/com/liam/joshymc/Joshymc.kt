@@ -629,6 +629,7 @@ class Joshymc : JavaPlugin() {
         listenerManager.quickHitListener?.stop()
         listenerManager.thrownTridentVisualListener?.stop()
         listenerManager.greatPumpkinPieListener?.stop()
+        listenerManager.furnitureListener?.stop()
         // Before discordManager.shutdown(), so the last mining summaries still go out.
         listenerManager.ancientDebrisMonitorListener?.stop()
         claimManager.stop()

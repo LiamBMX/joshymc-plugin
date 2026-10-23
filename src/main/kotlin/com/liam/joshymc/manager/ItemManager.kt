@@ -58,6 +58,12 @@ class ItemManager(private val plugin: Joshymc) {
         register(BoneRattler())
         register(PumpkinPummel())
         register(GreatPumpkinPie())
+        // Treasure decorations (placeable furniture, issue #1286)
+        register(SmallGoldPile())
+        register(LargeGoldPile())
+        register(GemstonePile())
+        register(MixedTreasurePile())
+        register(OverflowingTreasureChest())
         // September Autumn Collection
         register(AutumnsEdge())
         register(HarvestScythe())

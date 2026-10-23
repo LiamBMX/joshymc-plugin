@@ -42,6 +42,7 @@ import com.liam.joshymc.listener.WrittenBookListener
 import com.liam.joshymc.listener.ClaimProtectionListener
 import com.liam.joshymc.listener.BubbleButtListener
 import com.liam.joshymc.listener.CustomArmorListener
+import com.liam.joshymc.listener.FurnitureListener
 import com.liam.joshymc.listener.GreatPumpkinPieListener
 import com.liam.joshymc.listener.ThrownTridentVisualListener
 import com.liam.joshymc.listener.AuctionBidListener
@@ -70,6 +71,9 @@ class ListenerManager(private val plugin: Joshymc) {
         private set
 
     var greatPumpkinPieListener: GreatPumpkinPieListener? = null
+        private set
+
+    var furnitureListener: FurnitureListener? = null
         private set
 
     var ancientDebrisMonitorListener: AncientDebrisMonitorListener? = null
@@ -278,6 +282,10 @@ class ListenerManager(private val plugin: Joshymc) {
             pm.registerEvents(it, plugin)
         }
         greatPumpkinPieListener = GreatPumpkinPieListener(plugin).also {
+            it.start()
+            pm.registerEvents(it, plugin)
+        }
+        furnitureListener = FurnitureListener(plugin).also {
             it.start()
             pm.registerEvents(it, plugin)
         }
