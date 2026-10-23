@@ -674,10 +674,17 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
     private fun loadProgress(uuid: UUID): MutableMap<String, CycleProgress> {
         val map = mutableMapOf<String, CycleProgress>()
         plugin.databaseManager.query(
-            "SELECT quest_id, progress, completed, reward_claimed FROM quest_cycle_progress WHERE uuid = ? AND cycle_id IN (?, ?)",
+            "SELECT quest_id, cycle_id, progress, completed, reward_claimed FROM quest_cycle_progress WHERE uuid = ? AND cycle_id IN (?, ?)",
             uuid.toString(), dailyCycleIdState, weeklyCycleIdState
         ) { rs ->
-            map[rs.getString("quest_id")] = CycleProgress(
+            // On the weekly reset day the daily and weekly cycle ids are the same date, so the
+            // IN above also matches that day's daily rows for the rest of the week. Keep a row
+            // only when it belongs to its quest's own current cycle, or an old day's daily
+            // progress would carry over onto a quest picked again later (issue #1292).
+            val questId = rs.getString("quest_id")
+            val quest = questsById[questId] ?: return@query
+            if (rs.getString("cycle_id") != cycleIdFor(quest)) return@query
+            map[questId] = CycleProgress(
                 rs.getInt("progress"), rs.getInt("completed") == 1, rs.getInt("reward_claimed") == 1
             )
         }
@@ -1352,7 +1359,8 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    // ignoreCancelled: a trade another plugin cancelled never happened, so it never counts (issue #1292).
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onTrade(event: PlayerTradeEvent) {
         val player = event.player
         if (isExempt(player)) return
