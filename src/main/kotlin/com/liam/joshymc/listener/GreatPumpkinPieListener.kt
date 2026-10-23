@@ -97,6 +97,11 @@ class GreatPumpkinPieListener(private val plugin: Joshymc) : Listener {
             if (pos(block) in pies) event.isCancelled = true
             return
         }
+        // Nor may a pie go where a piece of furniture stands (issue #1286).
+        if (plugin.listenerManager.furnitureListener?.occupies(block) == true) {
+            event.isCancelled = true
+            return
+        }
         // The pie is never a cake block; the vanilla placement only picks the spot and runs
         // the protection checks.
         event.isCancelled = true
@@ -335,6 +340,9 @@ class GreatPumpkinPieListener(private val plugin: Joshymc) : Listener {
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
+
+    /** True when a pie stands in [block] (furniture checks this before it's placed). */
+    fun occupies(block: Block): Boolean = pos(block) in pies
 
     private fun pos(block: Block) = BlockPos(block.world.uid, block.x, block.y, block.z)
 

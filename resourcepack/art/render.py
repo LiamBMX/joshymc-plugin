@@ -37,7 +37,7 @@ COUNTERPART = {
     "trident": ("item/trident", "generated"), "shield": (None, None),
     "helmet": ("item/golden_helmet", "generated"), "boots": ("item/diamond_boots", "generated"),
     "elytra": ("item/elytra", "generated"), "food": ("item/pumpkin_pie", "generated"),
-    "cake": ("item/cake", "generated"), "item": (None, None),
+    "cake": ("item/cake", "generated"), "item": (None, None), "furniture": ("item/gold_ingot", "generated"),
     "leggings": ("item/diamond_leggings", "generated"),
     "chestplate": ("item/diamond_chestplate", "generated"),
 }
@@ -608,6 +608,22 @@ def sheet(module, models: dict, textures: dict, layers: dict) -> list[Path]:
                          (0, 0, 0), (340, 340), fov=40)
         extra.append(row([label(scale_shot, "placed next to a player"), label(night, "placed, at night"),
                           label(top_down, "3 of 8 eaten, from above")]))
+    if kind == "furniture":
+        # Placed on the floor like the plugin's ItemDisplay, model +Z toward the camera.
+        front = scene(floor() + placed(main, textures, (-0.5, 0, -0.5)), (0.0, 1.0, 1.9), (0, 0.3, 0), (300, 260), fov=45)
+        three_q = scene(floor() + placed(main, textures, (-0.5, 0, -0.5)), (1.5, 1.3, 1.5), (0, 0.3, 0), (300, 260),
+                        fov=45)
+        back = scene(floor() + placed(main, textures, (-0.5, 0, -0.5)), (-1.2, 1.2, -1.6), (0, 0.3, 0), (300, 260),
+                     fov=45)
+        extra.append(row([label(front, "placed, front"), label(three_q, "placed, 3/4"), label(back, "placed, back")]))
+        scale_shot = scene(floor() + player({}) + placed(main, textures, (0.4, 0, 0.9)), (-1.6, 1.8, 3.6),
+                           (0.4, 0.8, 0.6), (420, 340))
+        night = scene(floor() + placed(main, textures, (-0.5, 0, -0.5)), (1.2, 1.2, 1.7), (0, 0.35, 0),
+                      (420, 340), night=True)
+        top_down = scene(floor() + placed(main, textures, (-0.5, 0, -0.5)), (0.01, 2.4, 0.35),
+                         (0, 0, 0), (340, 340), fov=40)
+        extra.append(row([label(scale_shot, "placed next to a player"), label(night, "placed, at night"),
+                          label(top_down, "from above")]))
     for name in (() if kind == "cake" else names[1:]) + tuple(n for n in kit.OPTIONAL_MODELS if n in models and n != "gui"):
         m = models[name]
         state_pose = kit.pose_for(kind, name)

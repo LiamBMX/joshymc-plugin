@@ -75,6 +75,7 @@ KINDS: dict[str, tuple[str, ...]] = {
     "elytra": ("main",),
     "food": ("main",),
     "cake": ("main",) + tuple(f"bite_{i}" for i in range(1, 8)),
+    "furniture": ("main",),
     "item": ("main",),
     "leggings": ("main",),
 }
@@ -997,7 +998,7 @@ def display(kind: str, elements, grip=None, size: float = 1.0, gui_rotation=None
         out["ground"] = fit(elements, (0, 0, 0), 8.0, lift=2.0)
         out["fixed"] = fit(elements, (0, 180, 0), 14.0)
         out["on_shelf"] = fit(elements, (0, 180, 0), 12.0)
-    else:  # chestplate, boots, elytra, food, item, leggings
+    else:  # chestplate, boots, elytra, food, furniture, item, leggings
         out["thirdperson_righthand"] = place({"y": (0, 1, 0), "z": (0, 0, -1)}, grip or centre, "fist", 0.45 * size)
         out["firstperson_righthand"] = place({"y": (0, 1, 0), "z": (0.35, 0, 1)}, grip or centre,
                                              (0.5, -0.42, -0.85), 0.55 * size, pose=None)
