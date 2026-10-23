@@ -4,6 +4,8 @@ import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.JoinConfiguration
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextColor
+import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.Sound
 
@@ -123,6 +125,16 @@ class AnnouncementManager(private val plugin: Joshymc) {
         broadcastEntry(AnnouncementEntry(message, null, 0.7f, 1.0f))
     }
 
+    /**
+     * A staff `/broadcast` (`/announce`, `/bc`): [message] under the
+     * announcement header, spaced off from chat by [formatBroadcast]
+     * (issue #1287). Rotating announcements stay header-less (issue #1276).
+     */
+    fun broadcastAnnouncement(message: String) {
+        val body = format(message, plugin.commsManager::parseLegacy) ?: return
+        broadcastEntry(AnnouncementEntry(message, null, 0.7f, 1.0f) { formatBroadcast(body) })
+    }
+
     /** Broadcast an entry with its configured sound (or the default if none set). */
     fun broadcastEntry(entry: AnnouncementEntry) {
         // All lines go out as one message so they always arrive together.
@@ -137,6 +149,28 @@ class AnnouncementManager(private val plugin: Joshymc) {
     }
 
     companion object {
+        /** Coral red of the announcement header (issue #1253). */
+        val HEADER_COLOR: TextColor = TextColor.color(0xFF5A4F)
+
+        /** "★ Announcement ★" in bold coral, above every `/broadcast` (issue #1287). */
+        val HEADER: Component = Component.text("★ Announcement ★", HEADER_COLOR, TextDecoration.BOLD)
+
+        /**
+         * One blank chat line. A single space rather than an empty string, so a
+         * leading or trailing line break can't be trimmed away.
+         */
+        private val BLANK_LINE: Component = Component.text(" ")
+
+        /**
+         * A `/broadcast` as one component (issue #1287): two blank lines, the
+         * [HEADER], a blank line, [body], then one blank line. The body is a
+         * sibling of the header, so its `&` codes can't restyle it.
+         */
+        fun formatBroadcast(body: Component): Component = Component.join(
+            JoinConfiguration.newlines(),
+            BLANK_LINE, BLANK_LINE, HEADER, BLANK_LINE, body, BLANK_LINE
+        )
+
         /**
          * The announcement as one component: each non-blank line of [message]
          * (split on `\n`) parsed with [parse], white unless the text colours

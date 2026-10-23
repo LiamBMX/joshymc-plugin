@@ -28,10 +28,10 @@ class AnnounceCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
         if (templateMatch != null && args.size == 1) {
             // Send the template
-            plugin.announcementManager.broadcast(templateMatch)
+            plugin.announcementManager.broadcastAnnouncement(templateMatch)
         } else {
             // Send the raw message
-            plugin.announcementManager.broadcast(args.joinToString(" "))
+            plugin.announcementManager.broadcastAnnouncement(args.joinToString(" "))
         }
 
         return true
