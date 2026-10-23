@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.item.impl.VIKING_SET_IDS
 import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
@@ -76,6 +77,30 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             }
             sender.sendMessage(
                 Component.text("Gave ${eggs.size} eggs (x$amount) to ${target.name}", NamedTextColor.GREEN)
+            )
+            return
+        }
+
+        // Special "viking_set" keyword: all four Viking pieces (issue #1217)
+        if (itemId.equals("viking_set", ignoreCase = true)) {
+            val target: Player = if (args.size >= 4) {
+                plugin.playerResolver.online(args[3]) ?: run {
+                    Msg.playerNotFound(sender, args[3])
+                    return
+                }
+            } else if (sender is Player) {
+                sender
+            } else {
+                sender.sendMessage(Component.text("Specify a player when running from console.", NamedTextColor.RED))
+                return
+            }
+
+            val pieces = VIKING_SET_IDS.mapNotNull { plugin.itemManager.getItem(it) }
+            for (piece in pieces) {
+                plugin.giveItemSafely(target, piece.createItemStack(amount))
+            }
+            sender.sendMessage(
+                Component.text("Gave the Viking set (x$amount) to ${target.name}", NamedTextColor.GREEN)
             )
             return
         }
@@ -160,7 +185,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             1 -> listOf("give", "reload").filter { it.startsWith(args[0], ignoreCase = true) }
             2 -> when {
                 args[0].equals("give", ignoreCase = true) ->
-                    (plugin.itemManager.getAllItems().map { it.id } + listOf("eggs")).filter { it.startsWith(args[1], ignoreCase = true) }
+                    (plugin.itemManager.getAllItems().map { it.id } + listOf("eggs", "viking_set")).filter { it.startsWith(args[1], ignoreCase = true) }
                 args[0].equals("reload", ignoreCase = true) ->
                     listOf("hard").filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
