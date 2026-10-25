@@ -281,7 +281,8 @@ class RankVoucherManager(private val plugin: Joshymc) : Listener {
 
     /** True while [uuid] has an unconfirmed voucher redemption or Credit Shop rank purchase. */
     private fun hasPendingDonorGrant(uuid: UUID): Boolean =
-        hasPendingRedemption(uuid) || plugin.voucherManager.hasPendingRankPurchase(uuid)
+        hasPendingRedemption(uuid) || plugin.voucherManager.hasPendingRankPurchase(uuid) ||
+            plugin.freeRankManager.hasPending(uuid)
 
     fun hasPendingRedemption(uuid: UUID): Boolean =
         plugin.databaseManager.queryFirst(

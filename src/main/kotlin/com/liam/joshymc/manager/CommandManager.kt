@@ -157,6 +157,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
+        // Issue #1295: free starter rank of the current gamemode.
+        plugin.getCommand("freerank")?.let {
+            val cmd = com.liam.joshymc.command.FreeRankCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
         plugin.getCommand("link")?.setExecutor(LinkCommand(plugin))
         plugin.getCommand("unlink")?.setExecutor(UnlinkCommand(plugin))
 

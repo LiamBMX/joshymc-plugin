@@ -187,6 +187,10 @@ commands:
     description: Lock or unlock Survival/Lifesteal command isolation
     usage: /jgamemode <lock|unlock> <survival|lifesteal> confirm
     permission: joshymc.jgm.lock;joshymc.jgm.unlock
+  freerank:
+    description: Claim the free starter rank of the gamemode you're playing
+    usage: /freerank
+    permission: joshymc.freerank
   unstuck:
     description: Get out of a spot where you're frozen midair or the world didn't load
     usage: /unstuck [player]
@@ -888,6 +892,9 @@ permissions:
   joshymc.jgm.unlock:
     description: See and run /jgamemode unlock <survival|lifesteal> confirm (lift a gamemode's isolation lock)
     default: false
+  joshymc.freerank:
+    description: Use /freerank to claim the current gamemode's free starter rank (once per gamemode)
+    default: true
   joshymc.unstuck:
     description: Use /unstuck when genuinely stuck (frozen midair or in chunks that didn't load)
     default: true
