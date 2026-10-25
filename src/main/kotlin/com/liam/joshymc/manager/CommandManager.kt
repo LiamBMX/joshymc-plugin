@@ -163,6 +163,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
+        // Issue #1303: read-only remaining flight time (Survival only).
+        plugin.getCommand("flytime")?.let {
+            val cmd = com.liam.joshymc.command.FlyTimeCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
         plugin.getCommand("link")?.setExecutor(LinkCommand(plugin))
         plugin.getCommand("unlink")?.setExecutor(UnlinkCommand(plugin))
 

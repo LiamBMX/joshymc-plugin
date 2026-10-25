@@ -19,5 +19,7 @@ object GamemodeAssignments {
         "freerank" to GamemodeScope.NETWORK,
         // Issue #1299: the Event Shop sells Survival items for Survival Money only.
         "eventshop" to GamemodeScope.SURVIVAL,
+        // Issue #1303: reports Survival flight access only.
+        "flytime" to GamemodeScope.SURVIVAL,
     )
 }
