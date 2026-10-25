@@ -102,6 +102,11 @@ class ItemManager(private val plugin: Joshymc) {
         register(VikingChestplate())
         register(VikingLeggings())
         register(VikingBoots())
+        // Krampus set (Survival only, issue #1306)
+        register(KrampusHelmet())
+        register(KrampusChestplate())
+        register(KrampusLeggings())
+        register(KrampusBoots())
 
         // Retextured Trial Keys
         register(JanuaryKey())
