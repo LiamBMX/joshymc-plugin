@@ -189,11 +189,11 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
             if (idx >= 45) break
             val percentage = "%.1f".format(reward.weight.toDouble() / totalWeight * 100)
 
-            // Use serialized item if present (preserves trims/custom items),
-            // otherwise build a plain item from the material.
-            val item = plugin.crateManager.deserializeItem(reward.itemBase64)
+            // The same item the crate hands out, custom enchant lore included (issue #1300).
+            val item = plugin.crateManager.rewardTemplate(reward)
                 ?: ItemStack(reward.material, reward.amount.coerceIn(1, 64))
             item.amount = reward.amount.coerceIn(1, 64)
+            val existingLore = item.itemMeta?.lore() ?: emptyList()
             item.editMeta { meta ->
                 meta.displayName(
                     Component.text(reward.displayName, TextColor.color(0xFFAA00))
@@ -213,7 +213,10 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
                         .append(Component.text(" ($percentage%)", NamedTextColor.YELLOW))
                         .decoration(TextDecoration.ITALIC, false)
                 )
-                if (reward.enchantments.isNotEmpty()) {
+                if (existingLore.isNotEmpty()) {
+                    lore.add(Component.empty())
+                    lore.addAll(existingLore)
+                } else if (reward.enchantments.isNotEmpty()) {
                     lore.add(Component.empty())
                     lore.add(Component.text("  Enchantments:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
                     for ((ench, level) in reward.enchantments) {
@@ -276,6 +279,14 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
             val held = p.inventory.itemInMainHand
             if (held.type == Material.AIR) {
                 plugin.commsManager.send(p, Component.text("Hold the item you want as a reward in your main hand!", NamedTextColor.RED))
+                p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                return@setItem
+            }
+            // Custom enchants travel in the snapshot's PDC; refuse ones the crate couldn't hand
+            // out (unregistered, past max level, wrong item, conflicting) (issue #1300).
+            val enchantProblems = plugin.customEnchantManager.enchantProblems(held)
+            if (enchantProblems.isNotEmpty()) {
+                plugin.commsManager.send(p, Component.text("Can't add that item: ${enchantProblems.joinToString("; ")}.", NamedTextColor.RED))
                 p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
                 return@setItem
             }
