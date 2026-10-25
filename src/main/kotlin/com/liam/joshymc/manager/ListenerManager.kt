@@ -215,6 +215,9 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(CreditVoucherListener(plugin), plugin)
         pm.registerEvents(RankVoucherListener(plugin), plugin)
         pm.registerEvents(ChatTagVoucherListener(plugin), plugin)
+        // Issue #1304: Fly Vouchers + Survival flight time join/quit/world tracking
+        pm.registerEvents(com.liam.joshymc.listener.FlyVoucherListener(plugin), plugin)
+        pm.registerEvents(com.liam.joshymc.listener.FlightTimeListener(plugin), plugin)
         pm.registerEvents(SellWandAnvilListener(plugin), plugin)
         pm.registerEvents(CustomArmorAnvilListener(plugin), plugin)
         pm.registerEvents(ItemRenameListener(plugin), plugin)

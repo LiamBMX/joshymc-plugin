@@ -297,7 +297,7 @@ commands:
     usage: /cshop [additem|removeitem|category|list] [args...]
     aliases: [creditshop]
   voucher:
-    description: Configure virtual voucher packages redeemable in the Credit Shop, and give physical money/Chat Tag vouchers
+    description: Configure virtual voucher packages redeemable in the Credit Shop, and give physical money/Chat Tag/Fly vouchers (/voucher give <player> fly:<duration> [amount])
     usage: /voucher <create|delete|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload|give> [args...]
     permission: joshymc.vouchers
   creditvoucher:
@@ -1093,7 +1093,7 @@ permissions:
     description: Change others' gamemode
     default: op
   joshymc.fly:
-    description: Toggle flight
+    description: Toggle flight (players with Survival flight time from Fly Vouchers can toggle their own flight without it)
     default: op
   joshymc.flytime.use:
     description: Use /flytime to check your remaining or permanent flight time

@@ -243,6 +243,10 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var chatTagVoucherManager: com.liam.joshymc.manager.ChatTagVoucherManager
         private set
+    lateinit var flightTimeManager: com.liam.joshymc.flight.FlightTimeManager
+        private set
+    lateinit var flyVoucherManager: com.liam.joshymc.flight.FlyVoucherManager
+        private set
     lateinit var purchaseFulfillmentManager: com.liam.joshymc.manager.PurchaseFulfillmentManager
         private set
     lateinit var stuckRecoveryManager: com.liam.joshymc.recovery.StuckRecoveryManager
@@ -472,6 +476,8 @@ class Joshymc : JavaPlugin() {
         rankVoucherManager = com.liam.joshymc.manager.RankVoucherManager(this)
         freeRankManager = com.liam.joshymc.freerank.FreeRankManager(this)
         chatTagVoucherManager = com.liam.joshymc.manager.ChatTagVoucherManager(this)
+        flightTimeManager = com.liam.joshymc.flight.FlightTimeManager(this)
+        flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
         eventManager = com.liam.joshymc.manager.EventManager(this)
         resurgeManager = com.liam.joshymc.manager.ResurgeManager(this)
@@ -551,6 +557,8 @@ class Joshymc : JavaPlugin() {
         rankVoucherManager.start()
         freeRankManager.start()
         chatTagVoucherManager.start()
+        flightTimeManager.start()
+        flyVoucherManager.start()
 
         marketManager = MarketManager(this)
         if (isFeatureEnabled("market")) marketManager.start()
@@ -638,6 +646,7 @@ class Joshymc : JavaPlugin() {
         purchaseFulfillmentManager.stop()
         candyShopManager.stop()
         eventShopManager.stop()
+        flightTimeManager.stop()
         stuckRecoveryManager.stop()
         spawnDecorationManager.stop()
         listenerManager.passiveEnchantListener?.stop()
@@ -747,6 +756,8 @@ class Joshymc : JavaPlugin() {
         safe("linkManager.load") { linkManager.load() }
         // WarpManager uses DB directly, no reload needed
         safe("physicalVoucherManager.reload") { physicalVoucherManager.reload() }
+        // Its countdown task was cancelled above; restart it and reload online balances.
+        safe("flightTimeManager.start") { flightTimeManager.start() }
         // Re-registers its join listener (unregistered above) and settles pending claims.
         safe("freeRankManager.start") { freeRankManager.start() }
         safe("kitManager.start") { kitManager.start() }
