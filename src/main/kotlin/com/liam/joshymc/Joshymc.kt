@@ -227,6 +227,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var candyShopManager: com.liam.joshymc.candyshop.CandyShopManager
         private set
+    lateinit var eventShopManager: com.liam.joshymc.eventshop.EventShopManager
+        private set
     lateinit var creditShopManager: com.liam.joshymc.manager.CreditShopManager
         private set
     lateinit var voucherManager: com.liam.joshymc.manager.VoucherManager
@@ -482,6 +484,7 @@ class Joshymc : JavaPlugin() {
         sellPriceManager.start()
         saleManager = com.liam.joshymc.manager.SaleManager(this)
         candyShopManager = com.liam.joshymc.candyshop.CandyShopManager(this)
+        eventShopManager = com.liam.joshymc.eventshop.EventShopManager(this)
         stuckRecoveryManager = com.liam.joshymc.recovery.StuckRecoveryManager(this)
         gamemodeLockManager = com.liam.joshymc.gamemode.GamemodeLockManager(this)
 
@@ -582,6 +585,8 @@ class Joshymc : JavaPlugin() {
         eventManager.start()
         // After items (it sells registered candies), economy, Mod Mode and the event world.
         if (isFeatureEnabled("candy-shop")) candyShopManager.start()
+        // Same dependencies as the Candy Shop, plus the gamemode locks (Survival only).
+        if (isFeatureEnabled("event-shop")) eventShopManager.start()
         // Reads the feature flag itself: its listener is always registered.
         stuckRecoveryManager.start()
 
@@ -632,6 +637,7 @@ class Joshymc : JavaPlugin() {
         voteManager.stop()
         purchaseFulfillmentManager.stop()
         candyShopManager.stop()
+        eventShopManager.stop()
         stuckRecoveryManager.stop()
         spawnDecorationManager.stop()
         listenerManager.passiveEnchantListener?.stop()
@@ -705,6 +711,7 @@ class Joshymc : JavaPlugin() {
         safe("casinoManager.stop") { casinoManager.stop() }
         safe("orderManager.stop") { orderManager.stop() }
         safe("candyShopManager.stop") { candyShopManager.stop() }
+        safe("eventShopManager.stop") { eventShopManager.stop() }
         safe("stuckRecoveryManager.stop") { stuckRecoveryManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
         safe("questCycleManager.stop") { questCycleManager.stop() }
@@ -772,6 +779,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("login-streaks")) safe("loginStreakManager.start") { loginStreakManager.start() }
         safe("resourcePackManager.start") { resourcePackManager.start() }
         if (isFeatureEnabled("candy-shop")) safe("candyShopManager.start") { candyShopManager.start() }
+        if (isFeatureEnabled("event-shop")) safe("eventShopManager.start") { eventShopManager.start() }
         safe("stuckRecoveryManager.start") { stuckRecoveryManager.start() }
 
         // 7. Commands just get new instances (executors are swapped, not re-registered)

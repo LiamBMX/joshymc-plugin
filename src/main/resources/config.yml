@@ -38,6 +38,7 @@ features:
   gift: true
   casino: true
   candy-shop: true
+  event-shop: true
   stuck-recovery: true
 
 # Stuck-player recovery (issue #1241). Paper kicks "Flying is not enabled on this server" after a
@@ -1196,6 +1197,31 @@ candy-shop:
     resumed: "&d&l🍬 Candy Man&d: &f\"I've arrived with some sweet surprises! The Candy Shop is &a&lOPEN&f for {minutes} more minutes! Use &d/candy&f to see what's for sale!\""
     close: "&d&l🍬 Candy Man&d: &f\"That's all for now! The Candy Shop is &c&lCLOSED&f. I'll be back with more treats!\""
     closed-info: "&dThe Candy Man isn't around right now! Come back when the Candy Shop opens."
+
+# Event Shop (issue #1299, Survival only): /eventshop (alias /eshop) opens six times a day for
+# exactly 2 hours, selling 7 different listings picked at random from the pool for Money. Every
+# player sees the same 7 until the window closes; restarts resume the same items. Admins add the
+# held item (vanilla or custom, all metadata kept) with /eventshop admin add <price> [quantity].
+# Applies on /joshymc reload or /eventshop admin reload.
+event-shop:
+  # IANA time zone the schedule follows. Empty = America/New_York.
+  timezone: ""
+  # Exactly 6 daily start times (24-hour HH:mm), each on :00 or :30. Each window lasts 2 hours,
+  # so they must be at least 2 hours apart, including the last one into the next day's first.
+  # An invalid schedule is rejected (logged and shown in /eventshop admin status) and no
+  # scheduled openings happen until it is fixed. Daylight saving: a start skipped by the
+  # spring-forward hour opens right after it; a repeated one opens at its first occurrence.
+  schedule:
+    - "00:00"
+    - "04:00"
+    - "08:00"
+    - "12:00"
+    - "16:00"
+    - "20:00"
+  # Announcements to Survival players. & colour codes; {count} = items, {duration} = time open.
+  messages:
+    open: "&6&lEVENT SHOP IS NOW OPEN!\n&f{count} random items are available for the next {duration}.\n&7Use &6/eventshop &7or &6/eshop &7to browse!"
+    close: "&6&lThe Event Shop has closed!\n&7Check back for the next rotation."
 
 # Peanut Butter Cup (issue #1198): a custom candy that eats like a Cookie. Eating one also gives
 # a short effect that its name and lore deliberately keep secret (default Speed III for 6 seconds).

@@ -17,5 +17,7 @@ object GamemodeAssignments {
         "jgamemode" to GamemodeScope.NETWORK,
         // Available in both gamemodes; it grants only the current gamemode's own starter rank.
         "freerank" to GamemodeScope.NETWORK,
+        // Issue #1299: the Event Shop sells Survival items for Survival Money only.
+        "eventshop" to GamemodeScope.SURVIVAL,
     )
 }

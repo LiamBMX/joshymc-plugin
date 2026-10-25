@@ -180,6 +180,10 @@ commands:
     description: Open the Candy Man's rotating Candy Shop
     usage: /candy [admin <additem|removeitem|setprice|setchance|enable|disable|list|schedule>]
     aliases: [trickortreat]
+  eventshop:
+    description: Open the Survival Event Shop's current rotation
+    usage: /eventshop [admin <add|remove|list|edit|enable|disable|reload|status|rotate|open|close>]
+    aliases: [eshop]
   overflow:
     description: View items held in your persistent Overflow storage
     usage: /overflow
@@ -882,6 +886,12 @@ permissions:
     default: true
   joshymc.candy.admin:
     description: Manage the Candy Shop's item pool and view its schedule (/candy admin)
+    default: op
+  joshymc.eventshop.use:
+    description: Use the Survival Event Shop (/eventshop, /eshop)
+    default: true
+  joshymc.eventshop.admin:
+    description: Manage the Event Shop's listings, rotations and manual open/close (/eventshop admin)
     default: op
   joshymc.overflow:
     description: View your persistent Overflow storage
