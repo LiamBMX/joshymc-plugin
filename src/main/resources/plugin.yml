@@ -525,8 +525,8 @@ commands:
     description: View punishment history
     usage: /history <player>
   punish:
-    description: Unified moderation command (ban/tempban/tempmute/unban/unmute/warn/unwarn)
-    usage: /punish <player> [<ban|tempban|tempmute|unban|unmute|warn|unwarn> [duration] <reason>] | /punish reload
+    description: Rule-based moderation with automatic escalation (plus the older ban/tempban/tempmute/unban/unmute/warn/unwarn forms)
+    usage: /punish <player> <rule> [evidence] | /punish <history|preview|rules|confirm|cancel|overturn|review|reload> ...
   playerdata:
     description: Reset a banned player's inventory, ender chest, vaults, claims, and homes
     usage: /playerdata reset <player> <reason>
@@ -1309,8 +1309,49 @@ permissions:
     description: Base access to the unified /punish command (each joshymc.punish.<type> permission is still checked independently)
     default: true
   joshymc.punish.reload:
-    description: Reload punishment-presets.yml via /punish reload
+    description: Reload punish-rules.yml via /punish reload
     default: op
+  joshymc.punish.trainee:
+    description: "/punish level Trainee: warnings for minor chat rules (spam, advertising, filter-bypass, harassment, inappropriate-content)"
+    default: false
+  joshymc.punish.helper:
+    description: "/punish level Helper: Trainee + encouraging-violations; warnings and temporary mutes"
+    default: false
+    children:
+      joshymc.punish.trainee: true
+  joshymc.punish.jrmod:
+    description: "/punish level Jr Mod: Helper + overturning warnings; warnings and temporary mutes"
+    default: false
+    children:
+      joshymc.punish.helper: true
+  joshymc.punish.mod:
+    description: "/punish level Mod: Jr Mod + PvP/claim/region/kit/staff rules; kicks and bans up to 7 days"
+    default: false
+    children:
+      joshymc.punish.jrmod: true
+  joshymc.punish.leadmod:
+    description: "/punish level Lead Mod: Mod + account/alt/item/listing rules; bans up to 30 days"
+    default: false
+    children:
+      joshymc.punish.mod: true
+  joshymc.punish.jradmin:
+    description: "/punish level Jr Admin: Lead Mod + hacking/duping/economy/credit/crate rules; bans up to 30 days, no permanent bans"
+    default: false
+    children:
+      joshymc.punish.leadmod: true
+  joshymc.punish.admin:
+    description: "/punish level Admin: Every enforceable rule, permanent gamemode bans, emergency network suspensions up to 24h"
+    default: false
+    children:
+      joshymc.punish.jradmin: true
+  joshymc.punish.sradmin:
+    description: "/punish level Sr Admin: Admin + tier overrides, emergency reviews, overturning any punishment, audit checks"
+    default: false
+    children:
+      joshymc.punish.admin: true
+  joshymc.punish.network:
+    description: Approve network-wide /punish mutes and bans (Manager / Owner). Needs a joshymc.punish.<level> too
+    default: false
   joshymc.punish.ban:
     description: Permanently ban players via /punish
     default: op
@@ -1372,6 +1413,7 @@ permissions:
     description: Trainee rank - staff chat tools, mute, warn
     default: false
     children:
+      joshymc.punish.trainee: true
       joshymc.staff.chat: true
       joshymc.staff.mute: true
       joshymc.staff.warn: true
@@ -1379,6 +1421,7 @@ permissions:
     description: Helper rank - staff chat tools, mute, warn
     default: false
     children:
+      joshymc.punish.helper: true
       joshymc.staff.chat: true
       joshymc.staff.mute: true
       joshymc.staff.warn: true
@@ -1386,6 +1429,7 @@ permissions:
     description: Jr Mod rank - staff chat tools, mute, warn, ban
     default: false
     children:
+      joshymc.punish.jrmod: true
       joshymc.staff.chat: true
       joshymc.staff.mute: true
       joshymc.staff.warn: true
@@ -1394,6 +1438,7 @@ permissions:
     description: Mod rank - staff chat tools, mute, warn, unban
     default: false
     children:
+      joshymc.punish.mod: true
       joshymc.staff.chat: true
       joshymc.staff.mute: true
       joshymc.staff.warn: true
@@ -1402,6 +1447,7 @@ permissions:
     description: Lead Mod rank - staff chat tools, mute, warn, ban, unban
     default: false
     children:
+      joshymc.punish.leadmod: true
       joshymc.staff.chat: true
       joshymc.staff.mute: true
       joshymc.staff.warn: true

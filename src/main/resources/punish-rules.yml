@@ -1,0 +1,268 @@
+# /punish rules (issue #1298). Staff run /punish <player> <rule>; the rule's next tier is
+# picked from the player's earlier offenses of that rule and shown for confirmation first.
+# Apply edits without a restart with /punish reload.
+#
+# Rule ids and keywords are fixed (history is stored by id). Per rule you may set:
+#   tiers:     exactly five tiers, offense 1 to 5 (offenses after the fifth keep tier 5):
+#                W      warning              K       kick (player must be online)
+#                M<len> mute, e.g. M10m      B<len>  temporary ban, e.g. B7d
+#                PB     permanent ban        +B<len> extend the active ban by <len>
+#                EXT    extend the active ban by its own original length
+#              "W|B1d" offers an alternative staff may pick with `alt` plus a written justification.
+#              Lengths: s, m, h, d, w, mo (30 days).
+#   name:      the reason players see (never the keyword).
+#   gamemodes: [survival, lifesteal] - where the rule can be punished.
+#   window:    minor | serious - which escalation window counts earlier offenses.
+# Informational rules (no tiers) can never be punished. A rule left out of this file, or with
+# invalid values, uses the built-in defaults (logged at load).
+#
+# Who may punish what (joshymc.punish.<level>, each level inherits the ones below):
+#   trainee  warnings only            helper / jrmod  warnings + temporary mutes
+#   mod      + kicks, bans up to 7d   leadmod / jradmin  bans up to 30d
+#   admin    + permanent bans         sradmin  + tier overrides, reviews, any reversal
+#   joshymc.punish.network (Managers/Owner): approve network-wide mutes/bans. Admins may
+#   only issue emergency network-wide suspensions up to emergency-network-max-hours.
+settings:
+  # How long a /punish confirmation stays usable.
+  confirmation-expiry-seconds: 120
+  # Earlier offenses older than this stop counting towards the next tier (audit history is kept).
+  escalation-window-days:
+    minor: 90
+    serious: 365
+  emergency-network-max-hours: 24
+  emergency-review-hours: 6
+  # Bans (and network-wide, overridden or alternative punishments) need evidence or a reference.
+  require-evidence-for-bans: true
+
+rules:
+  # ── General Gameplay ──
+  hacking:  # #1
+    name: "Hacking or Cheating"
+    tiers: [B7d, B14d, B30d, B90d, PB]
+  automation:  # #2
+    name: "Unauthorized Gameplay Automation"
+    tiers: [W, B1d, B7d, B30d, PB]
+  duping:  # #3
+    name: "Duplication or Exploitation"
+    tiers: [B7d, B30d, B60d, B90d, PB]
+  exploit-concealment:  # #4
+    name: "Concealing Serious Exploits"
+    tiers: [B3d, B7d, B30d, B90d, PB]
+  aiding-cheaters:  # #5
+    name: "Aiding Cheaters or Exploiters"
+    tiers: [B1d, B7d, B14d, B30d, PB]
+  # ── Account Rules ──
+  account-limit:  # #6
+    name: "Exceeding Account Limit"
+    tiers: [W, B1d, B3d, B7d, B30d]
+  alt-abuse:  # #7
+    name: "Alt Account Abuse"
+    tiers: [W, B3d, B7d, B30d, PB]
+  ban-evasion:  # #8
+    name: "Punishment Evasion"
+    tiers: [EXT, "+B7d", "+B14d", "+B30d", PB]
+  # ── Economy ──
+  economy-abuse:  # #9
+    name: "Economy Abuse"
+    tiers: [B3d, B7d, B30d, B90d, PB]
+  market-manipulation:  # #10
+    name: "Artificial Market Manipulation"
+    tiers: [W, B3d, B7d, B30d, PB]
+  auction-abuse:  # #11
+    name: "Auction House Abuse"
+    tiers: [B1d, B3d, B7d, B30d, PB]
+  buy-order-abuse:  # #12
+    name: "Buy Order Abuse"
+    tiers: [B1d, B3d, B7d, B30d, PB]
+  selling-abuse:  # #13
+    name: "Selling System Abuse"
+    tiers: [W, B1d, B7d, B30d, PB]
+  irl-trading:  # #14
+    name: "Unauthorized IRL Trading"
+    tiers: [B7d, B14d, B30d, B90d, PB]
+  # ── Credits, Ranks & Vouchers ──
+  credit-abuse:  # #15
+    name: "Credit Abuse"
+    tiers: [B3d, B7d, B30d, B90d, PB]
+  credit-voucher-abuse:  # #16
+    name: "Credit Voucher Abuse"
+    tiers: [B7d, B14d, B30d, B90d, PB]
+  rank-voucher-abuse:  # #17
+    name: "Rank Voucher Abuse"
+    tiers: [B7d, B14d, B30d, B90d, PB]
+  tag-voucher-abuse:  # #18
+    name: "Chat Tag Voucher Abuse"
+    tiers: [W, B1d, B7d, B30d, PB]
+  # ── Crates ──
+  crate-abuse:  # #19
+    name: "Crate Abuse"
+    tiers: [B3d, B7d, B14d, B30d, PB]
+  fake-crate-keys:  # #20
+    name: "Forged or Duplicated Crate Keys"
+    tiers: [B3d, B7d, B30d, B90d, PB]
+  crate-selection-abuse:  # #21
+    name: "Crate Selection Abuse"
+    tiers: [B1d, B3d, B7d, B30d, PB]
+  # ── Spawners ──
+  spawner-info:  # #22, Informational Only
+    informational: true
+  spawner-abuse:  # #23
+    name: "Spawner Abuse"
+    tiers: [B1d, B3d, B7d, B30d, PB]
+  spawner-stealing:  # #24
+    name: "Bypassing Spawner Ownership"
+    tiers: [W, B1d, B3d, B14d, B30d]
+  # ── Claims & Building ──
+  claim-abuse:  # #25
+    name: "Claim Abuse"
+    tiers: [W, B1d, B3d, B14d, B30d]
+  protected-griefing:  # #26
+    name: "Griefing Protected Areas"
+    tiers: [B1d, B3d, B7d, B30d, PB]
+  block-protection-abuse:  # #27
+    name: "Block Protection Abuse"
+    tiers: [W, B1d, B3d, B14d, B30d]
+  inappropriate-build:  # #28
+    name: "Inappropriate Builds"
+    tiers: [W, B1d, B3d, B14d, B30d]
+  # ── Regions ──
+  region-info:  # #29, Informational Only
+    informational: true
+  region-abuse:  # #30
+    name: "Region Boundary Abuse"
+    tiers: [W, B1d, B3d, B14d, B30d]
+  safe-zone-abuse:  # #31
+    name: "Safe Zone Abuse"
+    tiers: [B1d, B3d, B7d, B30d, PB]
+  arena-info:  # #32, Informational Only
+    informational: true
+  # ── PvP ──
+  combat-logging:  # #33
+    name: "Combat Logging"
+    tiers: [W, B1h, B6h, B1d, B3d]
+  stat-boosting:  # #34
+    name: "Stat Boosting"
+    tiers: [W, B1d, B3d, B7d, B30d]
+  bounty-farming:  # #35
+    name: "Bounty Farming"
+    tiers: [W, B1d, B3d, B7d, B30d]
+  # ── Teams ──
+  team-abuse:  # #36
+    name: "Team System Abuse"
+    tiers: [W, B1d, B3d, B14d, B30d]
+  team-bank-abuse:  # #37
+    name: "Team Bank Abuse"
+    tiers: [B3d, B7d, B14d, B30d, PB]
+  team-boosting:  # #38
+    name: "Team Kill Boosting"
+    tiers: [W, B1d, B3d, B7d, B30d]
+  # ── Kits ──
+  kit-abuse:  # #39
+    name: "Kit Cooldown Abuse"
+    tiers: [W, B1d, B3d, B7d, B30d]
+  kit-duping:  # #40
+    name: "Kit Duplication"
+    tiers: [B3d, B7d, B14d, B30d, PB]
+  staff-kit-abuse:  # #41
+    name: "Unauthorized Staff Kit Editing"
+    tiers: [B7d, B14d, B30d, B90d, PB]
+  # ── Quests ──
+  quest-abuse:  # #42
+    name: "Quest Exploitation"
+    tiers: [W, B1d, B3d, B7d, B30d]
+  streak-abuse:  # #43
+    name: "Login Streak Abuse"
+    tiers: [W, B1d, B3d, B7d, B30d]
+  quest-master-abuse:  # #44
+    name: "Quest Master Reward Abuse"
+    tiers: [B1d, B3d, B7d, B30d, PB]
+  # ── Stock Market ──
+  stock-info:  # #45, Informational Only
+    informational: true
+  stock-abuse:  # #46
+    name: "Stock Market Exploitation"
+    tiers: [B3d, B7d, B14d, B30d, PB]
+  stock-alt-abuse:  # #47
+    name: "Stock Alt Account Abuse"
+    tiers: [W, B1d, B3d, B14d, B30d]
+  # ── Auctions & Buy Orders ──
+  illegal-listing:  # #48
+    name: "Illegal Auction Listings"
+    tiers: [W, B1d, B3d, B14d, B30d]
+  escrow-abuse:  # #49
+    name: "Escrow or Refund Abuse"
+    tiers: [B3d, B7d, B14d, B30d, PB]
+  rank-limit-abuse:  # #50
+    name: "Bypassing Rank Limits"
+    tiers: [W, B1d, B3d, B7d, B30d]
+  # ── Chat ──
+  harassment:  # #51
+    name: "Harassment or Disrespect"
+    tiers: [W, M30m, M2h, M12h, M3d]
+  spam:  # #52
+    name: "Spamming"
+    tiers: [W, M10m, M30m, M1h, M6h]
+  advertising:  # #53
+    name: "Unauthorized Advertising"
+    tiers: [W, M1h, M6h, M1d, M7d]
+  filter-bypass:  # #54
+    name: "Chat Filter Bypassing"
+    tiers: [W, M10m, M30m, M2h, M12h]
+  inappropriate-content:  # #55
+    name: "Inappropriate Content"
+    tiers: [W, M1h, M6h, B1d, B7d]
+  # ── Commands & GUIs ──
+  command-abuse:  # #56
+    name: "Command Abuse"
+    tiers: [W, B30m, B3h, B1d, B7d]
+  gui-abuse:  # #57
+    name: "GUI Exploitation"
+    tiers: [B1d, B3d, B7d, B30d, PB]
+  command-exploit:  # #58
+    name: "Command Exploitation"
+    tiers: [W, B1d, B3d, B14d, B30d]
+  # ── Items ──
+  illegal-items:  # #59
+    name: "Illegal Items"
+    tiers: [W, B1d, B7d, B30d, PB]
+  item-data-abuse:  # #60
+    name: "Custom Item Data Manipulation"
+    tiers: [B3d, B7d, B14d, B30d, PB]
+  hidden-illegal-items:  # #61
+    name: "Concealing Illegal Items"
+    tiers: [W, B1d, B3d, B14d, B30d]
+  # ── Server Performance ──
+  lag-machine:  # #62
+    name: "Intentional Lag Machines"
+    tiers: [B1d, B3d, B7d, B30d, PB]
+  laggy-farm:  # #63
+    name: "Excessively Laggy Farms"
+    tiers: [W, B1d, B3d, B7d, B30d]
+  server-crashing:  # #64
+    name: "Intentional Server Crashing"
+    tiers: [PB, PB, PB, PB, PB]
+  # ── Staff & Enforcement ──
+  staff-disrespect:  # #65
+    name: "Refusing Staff Instructions"
+    tiers: [W, K, B1h, B1d, B7d]
+  false-evidence:  # #66
+    name: "False Evidence During Investigations"
+    tiers: [W, B1d, B3d, B14d, B30d]
+  staff-interference:  # #67
+    name: "Interfering With Moderation"
+    tiers: [W, K, B1d, B3d, B14d]
+  appeal-info:  # #68, Informational Only
+    informational: true
+  # ── Loopholes ──
+  rule-intent:  # #69, Informational Only
+    informational: true
+  loophole-info:  # #70, Informational Only
+    informational: true
+  attempted-exploit:  # #71
+    name: "Attempted Exploitation"
+    tiers: ["W|B1d", B3d, B7d, B30d, PB]
+  encouraging-violations:  # #72
+    name: "Encouraging Rule Breaking"
+    tiers: [W, M1h, M1d, B3d, B30d]
+  reversal-guideline:  # #73, Informational Only
+    informational: true

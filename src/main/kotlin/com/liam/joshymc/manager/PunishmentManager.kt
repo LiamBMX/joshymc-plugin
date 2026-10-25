@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gamemode.ServerGamemode
 import io.papermc.paper.event.player.AsyncChatEvent
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -9,7 +10,10 @@ import org.bukkit.Bukkit
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.entity.Player
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent
+import org.bukkit.event.player.PlayerChangedWorldEvent
+import org.bukkit.event.player.PlayerJoinEvent
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -22,7 +26,11 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         val expiresAt: Long?,
         val punisherName: String,
         val id: Int = 0,
-        val durationMs: Long? = null
+        val durationMs: Long? = null,
+        /** Gamemode id the punishment is limited to; null = every gamemode (all older rows). */
+        val scope: String? = null,
+        /** /punish rule offense number (issue #1298); null for punishments issued any other way. */
+        val offense: Int? = null
     )
 
     /** Result of inserting a new punishment row - callers need the id + resolved expiry to build the branded disconnect message. */
@@ -79,6 +87,10 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_by_uuid TEXT") } catch (_: Exception) {}
         try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_reason TEXT") } catch (_: Exception) {}
         try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN revoked_at INTEGER") } catch (_: Exception) {}
+        // Issue #1298: rule-based /punish punishments can be limited to one gamemode (NULL = every
+        // gamemode, which is what every older row means) and remember their offense number.
+        try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN scope TEXT") } catch (_: Exception) {}
+        try { plugin.databaseManager.execute("ALTER TABLE punishments ADD COLUMN offense INTEGER") } catch (_: Exception) {}
         // Issue #1161: punishments.discord_thread_id is no longer added; the per-player thread
         // lives in punishment_discord_threads. Older databases keep the unused column (harmless).
 
@@ -130,21 +142,36 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    fun isBanned(targetUuid: UUID): ActivePunishment? {
+    /** The player's longest active ban in any gamemode (permanent first). */
+    fun isBanned(targetUuid: UUID): ActivePunishment? = activeOf(targetUuid, BAN_TYPES, null)
+
+    /** The longest active ban that applies in [gamemode]: unscoped bans plus ones limited to it. */
+    fun isBannedIn(targetUuid: UUID, gamemode: ServerGamemode): ActivePunishment? = activeOf(targetUuid, BAN_TYPES, gamemode)
+
+    /**
+     * The longest still-running punishment of [types] (permanent first, then latest expiry), so a
+     * shorter punishment issued later never hides a longer one. [gamemode] limits it to rows that
+     * apply there (unscoped or scoped to it); null means any scope.
+     */
+    private fun activeOf(targetUuid: UUID, types: String, gamemode: ServerGamemode?): ActivePunishment? {
         val now = System.currentTimeMillis()
+        val scopeFilter = if (gamemode == null) "" else " AND (scope IS NULL OR scope = ?)"
+        val params: Array<Any?> = if (gamemode == null) arrayOf(targetUuid.toString()) else arrayOf(targetUuid.toString(), gamemode.id)
         return plugin.databaseManager.queryFirst(
-            "SELECT id, reason, expires_at, punisher_name, duration_ms FROM punishments WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1 ORDER BY created_at DESC LIMIT 1",
-            targetUuid.toString()
+            "SELECT id, reason, expires_at, punisher_name, duration_ms, scope, offense FROM punishments WHERE target_uuid = ? AND type IN ($types) AND active = 1$scopeFilter ORDER BY (expires_at IS NULL) DESC, expires_at DESC, created_at DESC LIMIT 1",
+            *params
         ) { rs ->
             val expiresAt = rs.getLong("expires_at").takeIf { !rs.wasNull() }
-            // If it's a temp ban and expired, it's not active
+            // If it's temporary and expired, it's not active
             if (expiresAt != null && expiresAt <= now) return@queryFirst null
             ActivePunishment(
                 id = rs.getInt("id"),
                 reason = rs.getString("reason"),
                 expiresAt = expiresAt,
                 punisherName = rs.getString("punisher_name"),
-                durationMs = rs.getLong("duration_ms").takeIf { !rs.wasNull() }
+                durationMs = rs.getLong("duration_ms").takeIf { !rs.wasNull() },
+                scope = rs.getString("scope"),
+                offense = rs.getInt("offense").takeIf { !rs.wasNull() }
             )
         }
     }
@@ -191,21 +218,11 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    fun isMuted(targetUuid: UUID): ActivePunishment? {
-        val now = System.currentTimeMillis()
-        return plugin.databaseManager.queryFirst(
-            "SELECT reason, expires_at, punisher_name FROM punishments WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1 ORDER BY created_at DESC LIMIT 1",
-            targetUuid.toString()
-        ) { rs ->
-            val expiresAt = rs.getLong("expires_at").takeIf { !rs.wasNull() }
-            if (expiresAt != null && expiresAt <= now) return@queryFirst null
-            ActivePunishment(
-                reason = rs.getString("reason"),
-                expiresAt = expiresAt,
-                punisherName = rs.getString("punisher_name")
-            )
-        }
-    }
+    /** The player's longest active mute in any gamemode. */
+    fun isMuted(targetUuid: UUID): ActivePunishment? = activeOf(targetUuid, MUTE_TYPES, null)
+
+    /** The longest active mute that applies in [gamemode]. */
+    fun isMutedIn(targetUuid: UUID, gamemode: ServerGamemode): ActivePunishment? = activeOf(targetUuid, MUTE_TYPES, gamemode)
 
     // ── Warns ───────────────────────────────────────────────
 
@@ -262,6 +279,57 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         insert(targetUuid, targetName, punisherName, punisherUuid, "KICK", reason, null)
     }
 
+    // ── Rule-based punishments (issue #1298) ────────────────
+
+    /**
+     * Inserts one /punish rule punishment row ([type] WARN/TEMPMUTE/KICK/TEMPBAN/BAN) limited to
+     * [scope] (a gamemode, or null for every gamemode). [expiresAt] overrides `now + durationMs`
+     * (ban extensions). Joins the caller's transaction and throws rather than returning -1, so the
+     * caller's incident row rolls back with it.
+     */
+    fun insertRulePunishment(
+        targetUuid: UUID,
+        targetName: String,
+        punisherName: String,
+        punisherUuid: UUID?,
+        type: String,
+        reason: String,
+        durationMs: Long?,
+        scope: ServerGamemode?,
+        offense: Int,
+        expiresAt: Long? = null
+    ): InsertedPunishment {
+        val inserted = insert(targetUuid, targetName, punisherName, punisherUuid, type, reason, durationMs, scope?.id, offense, expiresAt)
+        check(inserted.id != -1) { "punishment row was not inserted" }
+        return inserted
+    }
+
+    /**
+     * Lifts one punishment row by id (an overturned /punish incident), recording who and why and
+     * logging the removal to Discord. False when it was already inactive.
+     */
+    fun revokeById(punishmentId: Int, revokerName: String, revokerUuid: UUID?, revokeReason: String): Boolean {
+        var revoked = false
+        plugin.databaseManager.transaction {
+            val row = plugin.databaseManager.queryFirst(
+                "SELECT id, type, reason, punisher_name, created_at, expires_at, active, target_uuid FROM punishments WHERE id = ? AND active = 1",
+                punishmentId
+            ) { rs -> mapRecord(rs) to UUID.fromString(rs.getString("target_uuid")) } ?: return@transaction
+            revoked = plugin.databaseManager.executeUpdate(
+                "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE id = ? AND active = 1",
+                revokerName, revokerUuid?.toString(), revokeReason, System.currentTimeMillis(), punishmentId
+            ) == 1
+            val action = when (row.first.type) {
+                "WARN" -> "UNWARN"
+                "MUTE", "TEMPMUTE" -> "UNMUTE"
+                "BAN", "TEMPBAN" -> "UNBAN"
+                else -> null
+            }
+            if (revoked && action != null) logRevocation(action, row.second, listOf(row.first), revokerName, revokeReason)
+        }
+        return revoked
+    }
+
     // ── History ─────────────────────────────────────────────
 
     fun getHistory(targetUuid: UUID): List<PunishmentRecord> {
@@ -289,14 +357,38 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         // that lapsed since the last periodic sweep should let the player back in.
         checkExpired()
 
-        val ban = isBanned(event.uniqueId) ?: return
-        val message = buildBanMessage(ban.id, event.uniqueId, ban.reason, ban.punisherName, ban.durationMs, ban.expiresAt)
-        event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, message)
+        // A ban limited to another gamemode (issue #1298) doesn't keep the player off this server.
+        val ban = isBannedIn(event.uniqueId, plugin.gamemodeLockManager.serverGamemode) ?: return
+        event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, banMessageFor(event.uniqueId, ban))
     }
+
+    /**
+     * On a server whose worlds run different gamemodes, a gamemode-limited ban can't be checked
+     * at login (the world isn't known yet), so it is checked once the player is in a world.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onJoinScopedBan(event: PlayerJoinEvent) = enforceScopedBan(event.player)
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onWorldScopedBan(event: PlayerChangedWorldEvent) = enforceScopedBan(event.player)
+
+    private fun enforceScopedBan(player: Player) {
+        val locks = plugin.gamemodeLockManager
+        if (!locks.hasWorldOverrides) return
+        val gamemode = locks.gamemodeOf(player.world)
+        if (gamemode == locks.serverGamemode) return
+        val ban = isBannedIn(player.uniqueId, gamemode) ?: return
+        val message = banMessageFor(player.uniqueId, ban)
+        plugin.server.scheduler.runTask(plugin, Runnable { if (player.isOnline) player.kick(message) })
+    }
+
+    fun banMessageFor(targetUuid: UUID, ban: ActivePunishment): Component =
+        buildBanMessage(ban.id, targetUuid, ban.reason, ban.punisherName, ban.durationMs, ban.expiresAt, ban.offense, ban.scope)
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     fun onChat(event: AsyncChatEvent) {
-        val mute = isMuted(event.player.uniqueId) ?: return
+        // A mute limited to one gamemode (issue #1298) only silences the player there.
+        val mute = isMutedIn(event.player.uniqueId, plugin.gamemodeLockManager.gamemodeOf(event.player.world)) ?: return
         event.isCancelled = true
 
         val msg = Component.text()
@@ -326,16 +418,19 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         punisherUuid: UUID?,
         type: String,
         reason: String?,
-        durationMs: Long?
+        durationMs: Long?,
+        scope: String? = null,
+        offense: Int? = null,
+        expiresAtOverride: Long? = null
     ): InsertedPunishment {
         val now = System.currentTimeMillis()
-        val expiresAt = if (durationMs != null) now + durationMs else null
+        val expiresAt = expiresAtOverride ?: if (durationMs != null) now + durationMs else null
         var id = -1
 
         // One transaction, so the punishment and its Discord log are stored together (issue #1157).
         plugin.databaseManager.transaction {
             id = plugin.databaseManager.insertReturningId(
-                "INSERT INTO punishments (target_uuid, target_name, punisher_uuid, punisher_name, type, reason, duration_ms, created_at, expires_at, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+                "INSERT INTO punishments (target_uuid, target_name, punisher_uuid, punisher_name, type, reason, duration_ms, created_at, expires_at, active, scope, offense) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
                 targetUuid.toString(),
                 targetName,
                 punisherUuid?.toString(),
@@ -344,7 +439,9 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
                 reason,
                 durationMs,
                 now,
-                expiresAt
+                expiresAt,
+                scope,
+                offense
             ) ?: -1
 
             if (id != -1) {
@@ -418,7 +515,9 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         reason: String?,
         punisherName: String,
         durationMs: Long?,
-        expiresAt: Long?
+        expiresAt: Long?,
+        offense: Int? = null,
+        scope: String? = null
     ): Component {
         val configKey = if (expiresAt == null) "punishments.ban-message" else "punishments.tempban-message"
         val lines = try {
@@ -443,14 +542,21 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
                 "%duration%" to (durationMs?.let { formatDuration(it) } ?: "Permanent"),
                 "%remaining%" to (expiresAt?.let { formatDuration(it - now) } ?: ""),
                 "%expires%" to (expiresAt?.let { formatTimestamp(it, plugin.timezoneManager.zoneFor(targetUuid)) } ?: ""),
-                "%punishment_id%" to punishmentId.toString()
+                "%punishment_id%" to punishmentId.toString(),
+                "%offense%" to (offense?.toString() ?: ""),
+                "%scope%" to (if (offense == null) "" else ServerGamemode.fromId(scope)?.displayName ?: "All Gamemodes")
             )
 
             val builder = Component.text()
-            lines.forEachIndexed { index, rawLine ->
+            var first = true
+            for (rawLine in lines) {
+                // %offense% / %scope% only exist for /punish rule punishments (issue #1298);
+                // their lines are left out of every other ban screen.
+                if (offense == null && OPTIONAL_PLACEHOLDERS.any { rawLine.contains(it) }) continue
                 var line = rawLine
                 for ((key, value) in replacements) line = line.replace(key, value)
-                if (index > 0) builder.append(Component.newline())
+                if (!first) builder.append(Component.newline())
+                first = false
                 builder.append(plugin.commsManager.parseLegacy(line))
             }
             builder.build()
@@ -490,6 +596,12 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
 
         /** Punisher name on automatic punishments, shown in /history and the Discord log. */
         const val AUTOMOD_NAME = "AutoMod"
+
+        private const val BAN_TYPES = "'BAN', 'TEMPBAN'"
+        private const val MUTE_TYPES = "'MUTE', 'TEMPMUTE'"
+
+        /** Ban-screen placeholders only rule punishments fill in. */
+        private val OPTIONAL_PLACEHOLDERS = listOf("%offense%", "%scope%")
 
         private val TIMESTAMP_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a")
 
