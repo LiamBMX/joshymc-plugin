@@ -1,6 +1,7 @@
 package com.liam.joshymc.item
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gamemode.GamemodeScope
 import net.kyori.adventure.text.Component
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
@@ -30,6 +31,13 @@ abstract class CustomItem {
 
     /** Whether this item is a candy the Candy Shop may sell (issue #1211). */
     open val isCandy: Boolean = false
+
+    /**
+     * The gamemode this item belongs to (issue #1289), or null for items every gamemode
+     * shares. `/joshymc give` refuses to hand a scoped item out where its gamemode is
+     * locked away (`gamemodeLockManager.isAllowed(scope, world)`).
+     */
+    open val gamemodeScope: GamemodeScope? = null
 
     /**
      * Builds the final ItemStack with PDC tag, display name, lore, and glint.

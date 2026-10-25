@@ -97,6 +97,11 @@ class ItemManager(private val plugin: Joshymc) {
         register(SharkChestplate())
         register(SharkLeggings())
         register(SharkBoots())
+        // Viking set (Survival only, issue #1294)
+        register(VikingHelmet())
+        register(VikingChestplate())
+        register(VikingLeggings())
+        register(VikingBoots())
 
         // Retextured Trial Keys
         register(JanuaryKey())

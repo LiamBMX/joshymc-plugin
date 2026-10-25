@@ -100,6 +100,14 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
 
+        // Gamemode-scoped items (e.g. the Survival-only Viking set) never go out where
+        // their gamemode is locked away (issue #1294).
+        val scope = customItem.gamemodeScope
+        if (scope != null && !plugin.gamemodeLockManager.isAllowed(scope, target.world)) {
+            Msg.error(sender, "${customItem.id} is only available on ${scope.gamemode?.displayName ?: scope.id}.")
+            return
+        }
+
         plugin.giveItemSafely(target, customItem.createItemStack(amount))
         sender.sendMessage(
             Component.text("Gave ", NamedTextColor.GREEN)
