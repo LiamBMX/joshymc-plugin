@@ -391,6 +391,10 @@ commands:
   fly:
     description: Toggle flight
     usage: /fly [player]
+  flytime:
+    description: Check how much flight time you have left (Survival)
+    usage: /flytime
+    permission: joshymc.flytime.use
   heal:
     description: Heal a player
     usage: /heal [player]
@@ -1091,6 +1095,9 @@ permissions:
   joshymc.fly:
     description: Toggle flight
     default: op
+  joshymc.flytime.use:
+    description: Use /flytime to check your remaining or permanent flight time
+    default: true
   joshymc.fly.others:
     description: Toggle flight for other players
     default: op
