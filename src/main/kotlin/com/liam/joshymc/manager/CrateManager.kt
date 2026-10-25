@@ -132,7 +132,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
          * used for the actual reward (preserves trims, custom items, PDC, etc.)
          * The other fields are still used for display purposes.
          */
-        val itemBase64: String? = null
+        val itemBase64: String? = null,
+        /**
+         * JoshyMC custom enchants (id -> level) for rewards written by hand in crates.yml
+         * (`custom-enchantments:`) without a snapshot. Snapshot rewards already carry theirs in
+         * the item's PDC, so this stays empty for them (issue #1300).
+         */
+        val customEnchantments: Map<String, Int> = emptyMap()
     )
 
     enum class CrateMode { RANDOM, SELECT, SELECT_3 }
@@ -371,7 +377,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                         }
                     }
 
-                    rewards.add(CrateReward(mat, amount, weight, rewardDisplayName, enchantments, itemBase64))
+                    // Resolved when the reward is built: custom enchants register after crates load.
+                    val customEnchantments = mutableMapOf<String, Int>()
+                    rewardSection.getConfigurationSection("custom-enchantments")?.let { section ->
+                        for (enchId in section.getKeys(false)) customEnchantments[enchId.lowercase()] = section.getInt(enchId)
+                    }
+
+                    rewards.add(CrateReward(mat, amount, weight, rewardDisplayName, enchantments, itemBase64, customEnchantments))
                 }
             }
 
@@ -580,6 +592,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     for ((ench, level) in reward.enchantments) {
                         cratesConfig.set("$rewardPath.enchantments.${ench.key.key}", level)
                     }
+                }
+                for ((enchId, level) in reward.customEnchantments) {
+                    cratesConfig.set("$rewardPath.custom-enchantments.$enchId", level)
                 }
                 if (reward.itemBase64 != null) {
                     cratesConfig.set("$rewardPath.item-base64", reward.itemBase64)
@@ -815,6 +830,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         crate.rewards.withIndex().firstOrNull { it.value.itemBase64 != null && deserializeItem(it.value.itemBase64) == null }?.let {
             return "reward #${it.index} (${it.value.displayName}) has an item-base64 snapshot that can't be decoded"
         }
+        for ((index, reward) in crate.rewards.withIndex()) {
+            rewardEnchantProblem(reward)?.let { return "reward #$index (${reward.displayName}) $it" }
+        }
         if (crate.mode == CrateMode.SELECT_3 && crate.rewards.size < 3) {
             return "Select 3 mode needs at least 3 rewards (has ${crate.rewards.size})"
         }
@@ -823,6 +841,23 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 return "reward #${it.index} (${it.value.displayName}) has negative weight ${it.value.weight}"
             }
             if (crate.rewards.sumOf { it.weight } <= 0) return "reward weights add up to 0"
+        }
+        return null
+    }
+
+    /**
+     * Why [crate] can't be opened where [player] stands because of the gamemode locks, or null.
+     * A reward that's a gamemode-scoped custom item (e.g. the Survival-only Viking set) never
+     * goes out where its gamemode is locked away, the same rule `/joshymc give` follows, so a
+     * crate can't carry items across gamemodes (issues #1294, #1300).
+     */
+    private fun gamemodeProblem(player: Player, crate: CrateDef): String? {
+        for ((index, reward) in crate.rewards.withIndex()) {
+            val item = rewardTemplate(reward) ?: continue
+            val scope = plugin.itemManager.getCustomItemId(item)?.let { plugin.itemManager.getItem(it) }?.gamemodeScope ?: continue
+            if (!plugin.gamemodeLockManager.isAllowed(scope, player.world)) {
+                return "reward #$index (${reward.displayName}) is only available on ${scope.gamemode?.displayName ?: scope.id}"
+            }
         }
         return null
     }
@@ -837,6 +872,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             "crate type '$crateType' is not defined in crates.yml"
         } else {
             crateProblem(crate, randomDraw = massOpen || crate.mode == CrateMode.RANDOM)
+                ?: gamemodeProblem(player, crate)
         } ?: return crate
 
         plugin.commsManager.send(
@@ -940,7 +976,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val slot = (row + 1) * 9 + (col + 1)
 
             // Use the actual stored item (preserves trims, custom items)
-            val item = deserializeItem(reward.itemBase64)
+            val item = rewardTemplate(reward)
                 ?: ItemStack(reward.material, reward.amount.coerceIn(1, 64))
             item.amount = reward.amount.coerceIn(1, 64)
             val existingLore = item.itemMeta?.lore() ?: emptyList()
@@ -1091,7 +1127,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val slot = (row + 1) * 9 + (col + 1)
             val isSelected = session.selectedIndices.contains(globalIndex)
 
-            val item = deserializeItem(reward.itemBase64)
+            val item = rewardTemplate(reward)
                 ?: ItemStack(reward.material, reward.amount.coerceIn(1, 64))
             item.amount = reward.amount.coerceIn(1, 64)
             val existingLore = item.itemMeta?.lore() ?: emptyList()
@@ -1674,7 +1710,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     private fun buildRewardDisplay(reward: CrateReward): ItemStack {
         // If we have a serialized item (custom items, trims), use it as the base
         // and overwrite the display name/lore for clarity in the GUI.
-        val base = deserializeItem(reward.itemBase64) ?: ItemStack(reward.material, reward.amount)
+        val base = rewardTemplate(reward) ?: ItemStack(reward.material, reward.amount)
         if (base.amount != reward.amount) base.amount = reward.amount
 
         val existingLore = base.itemMeta?.lore() ?: emptyList()
@@ -1698,11 +1734,63 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return base
     }
 
+    /**
+     * The item [reward] hands out, before per-delivery changes (fresh voucher ids): the stored
+     * snapshot (every component, PDC value and custom enchant kept as captured), or for a
+     * hand-written crates.yml reward its material with the configured vanilla and custom
+     * enchants. Custom enchant lore is rebuilt from the item's PDC levels, so previews and
+     * the delivered item always list exactly the enchants that work. Null when the snapshot
+     * can't be decoded. Every crate GUI previews this and [buildRewardItem] delivers it, so
+     * what a player sees is what they get (issue #1300).
+     */
+    fun rewardTemplate(reward: CrateReward): ItemStack? {
+        val item = if (reward.itemBase64 != null) {
+            deserializeItem(reward.itemBase64) ?: return null
+        } else {
+            ItemStack(reward.material).also { built ->
+                if (reward.enchantments.isNotEmpty()) {
+                    built.editMeta { meta ->
+                        for ((ench, level) in reward.enchantments) {
+                            meta.addEnchant(ench, level, true)
+                        }
+                    }
+                }
+                // applyEnchant validates target, level and conflicts; rewardEnchantProblem
+                // refuses the crate when one of these didn't take.
+                for ((enchId, level) in reward.customEnchantments) {
+                    plugin.customEnchantManager.applyEnchant(built, enchId, level)
+                }
+            }
+        }
+        item.amount = reward.amount
+        // Only touch items that carry custom enchants: updateLore also resets the glint override.
+        if (plugin.customEnchantManager.getEnchants(item).isNotEmpty()) {
+            plugin.customEnchantManager.updateLore(item)
+        }
+        return item
+    }
+
+    /**
+     * Why [reward]'s custom enchants can't be handed out, or null when they're fine: a stored
+     * enchant that isn't registered, is past its max level, doesn't fit the item or conflicts
+     * ([CustomEnchantManager.enchantProblems]), or a crates.yml `custom-enchantments` entry
+     * that couldn't be applied. Such a crate is refused before any key is used.
+     */
+    private fun rewardEnchantProblem(reward: CrateReward): String? {
+        val item = rewardTemplate(reward) ?: return null // undecodable snapshots are reported separately
+        plugin.customEnchantManager.enchantProblems(item).firstOrNull()?.let { return "has an invalid custom enchant: $it" }
+        for ((enchId, level) in reward.customEnchantments) {
+            if (plugin.customEnchantManager.getLevel(item, enchId) != level) {
+                return "has custom enchant '$enchId' level $level that can't be applied to ${reward.material.name.lowercase()}"
+            }
+        }
+        return null
+    }
+
     private fun buildRewardItem(reward: CrateReward): ItemStack {
         // Prefer the serialized item if available — preserves trims, custom items, PDC, NBT
-        val serialized = deserializeItem(reward.itemBase64)
+        val serialized = if (reward.itemBase64 != null) rewardTemplate(reward) else null
         if (serialized != null) {
-            serialized.amount = reward.amount
             // The stored reward template is a Base64 snapshot of whatever voucher was held
             // when the reward was configured — including that voucher's unique voucher_uuid.
             // Handing out the same snapshot verbatim would give every winner an item with an
@@ -1723,15 +1811,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // crateProblem refuses such crates before any key is taken, so this is a last guard.
         check(reward.itemBase64 == null) { "crate reward '${reward.displayName}' has an item-base64 snapshot that can't be decoded" }
 
-        val item = ItemStack(reward.material, reward.amount)
-        if (reward.enchantments.isNotEmpty()) {
-            item.editMeta { meta ->
-                for ((ench, level) in reward.enchantments) {
-                    meta.addEnchant(ench, level, true)
-                }
-            }
-        }
-        return item
+        return checkNotNull(rewardTemplate(reward))
     }
 
     /**
@@ -1813,7 +1893,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val percentage = (reward.weight.toDouble() / totalWeight * 100).let { "%.1f".format(it) }
 
             // Use serialized item if present (preserves trims, custom items)
-            val item = deserializeItem(reward.itemBase64) ?: ItemStack(reward.material, reward.amount)
+            val item = rewardTemplate(reward) ?: ItemStack(reward.material, reward.amount)
             item.amount = reward.amount.coerceIn(1, 64)
             val existingLore = item.itemMeta?.lore() ?: emptyList()
             item.editMeta { meta ->

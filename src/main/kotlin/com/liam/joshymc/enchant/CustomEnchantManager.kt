@@ -101,6 +101,41 @@ class CustomEnchantManager(private val plugin: Joshymc) : Listener {
     }
 
     /**
+     * Why [item]'s custom enchants aren't legitimate, or an empty list when they are. Reads every
+     * `joshymc:enchant_<id>` key, registered or not, and checks it the way [applyEnchant] would:
+     * a registered enchant, a level in 1..max, a fitting item and no conflicts. Crates use it so
+     * a reward never hands out an enchant that wouldn't work (issue #1300).
+     */
+    fun enchantProblems(item: ItemStack): List<String> {
+        val meta = item.itemMeta ?: return emptyList()
+        val pdc = meta.persistentDataContainer
+        val namespace = keyFor("").namespace
+        val problems = mutableListOf<String>()
+        val stored = mutableMapOf<String, Int>()
+        for (key in pdc.keys) {
+            if (key.namespace != namespace || !key.key.startsWith(PDC_PREFIX)) continue
+            val id = key.key.removePrefix(PDC_PREFIX)
+            val level = if (pdc.has(key, PersistentDataType.INTEGER)) pdc.get(key, PersistentDataType.INTEGER) else null
+            if (level == null) {
+                problems.add("custom enchant '$id' has an unreadable level")
+                continue
+            }
+            stored[id] = level
+        }
+        for ((id, level) in stored) {
+            val enchant = enchants[id]
+            when {
+                enchant == null -> problems.add("unknown custom enchant '$id'")
+                level < 1 || level > enchant.maxLevel -> problems.add("${enchant.displayName} level $level (allowed 1-${enchant.maxLevel})")
+                !enchant.canApplyTo(item) -> problems.add("${enchant.displayName} can't go on ${item.type.name.lowercase()}")
+                stored.keys.any { it != id && (it in enchant.conflicts || id in (enchants[it]?.conflicts ?: emptySet())) } ->
+                    problems.add("${enchant.displayName} conflicts with another enchant on the item")
+            }
+        }
+        return problems
+    }
+
+    /**
      * Apply a custom enchant to an item at the given level.
      * Returns false if the enchant can't be applied (wrong target, conflict, max level exceeded).
      */

@@ -11,6 +11,9 @@
 #   Purely cosmetic — the key is still identified by its internal crate ID. Omit to keep the
 #   default vanilla appearance for key-material. Falls back safely if the model key is invalid.
 # weight: whole number, 1 or more. Values below 1 are treated as 1 (with a console warning).
+# enchantments: vanilla enchants (e.g. sharpness: 5). custom-enchantments: JoshyMC custom enchants
+#   by id (e.g. lifesteal: 3), checked like /ce add (registered, level 1-max, fits the item).
+#   Rewards added from your hand in the crate editor keep every enchant (vanilla and custom) as is.
 #
 ## Renamed crates:
 # Keys remember the crate ID they were made for. If you rename or replace a crate ID, map the old
