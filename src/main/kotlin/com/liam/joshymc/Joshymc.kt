@@ -237,6 +237,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var rankVoucherManager: com.liam.joshymc.manager.RankVoucherManager
         private set
+    lateinit var freeRankManager: com.liam.joshymc.freerank.FreeRankManager
+        private set
     lateinit var chatTagVoucherManager: com.liam.joshymc.manager.ChatTagVoucherManager
         private set
     lateinit var purchaseFulfillmentManager: com.liam.joshymc.manager.PurchaseFulfillmentManager
@@ -466,6 +468,7 @@ class Joshymc : JavaPlugin() {
         physicalVoucherManager = com.liam.joshymc.manager.PhysicalVoucherManager(this)
         creditVoucherManager = com.liam.joshymc.manager.CreditVoucherManager(this)
         rankVoucherManager = com.liam.joshymc.manager.RankVoucherManager(this)
+        freeRankManager = com.liam.joshymc.freerank.FreeRankManager(this)
         chatTagVoucherManager = com.liam.joshymc.manager.ChatTagVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
         eventManager = com.liam.joshymc.manager.EventManager(this)
@@ -543,6 +546,7 @@ class Joshymc : JavaPlugin() {
         physicalVoucherManager.start()
         creditVoucherManager.start()
         rankVoucherManager.start()
+        freeRankManager.start()
         chatTagVoucherManager.start()
 
         marketManager = MarketManager(this)
@@ -736,6 +740,8 @@ class Joshymc : JavaPlugin() {
         safe("linkManager.load") { linkManager.load() }
         // WarpManager uses DB directly, no reload needed
         safe("physicalVoucherManager.reload") { physicalVoucherManager.reload() }
+        // Re-registers its join listener (unregistered above) and settles pending claims.
+        safe("freeRankManager.start") { freeRankManager.start() }
         safe("kitManager.start") { kitManager.start() }
         safe("storageManager.start") { storageManager.start() }
         safe("overflowManager.start") { overflowManager.start() }

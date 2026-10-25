@@ -15,5 +15,7 @@ object GamemodeAssignments {
 
     val COMMANDS: Map<String, GamemodeScope> = mapOf(
         "jgamemode" to GamemodeScope.NETWORK,
+        // Available in both gamemodes; it grants only the current gamemode's own starter rank.
+        "freerank" to GamemodeScope.NETWORK,
     )
 }

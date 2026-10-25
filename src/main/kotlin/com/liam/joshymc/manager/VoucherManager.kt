@@ -368,7 +368,8 @@ class VoucherManager(private val plugin: Joshymc) : Listener {
         }
         var handedOff = false
         try {
-            if (hasPendingRankPurchase(uuid) || plugin.rankVoucherManager.hasPendingRedemption(uuid)) {
+            if (hasPendingRankPurchase(uuid) || plugin.rankVoucherManager.hasPendingRedemption(uuid) ||
+                plugin.freeRankManager.hasPending(uuid)) {
                 send(player, "A previous rank purchase is still being confirmed. Try again in a moment.", NamedTextColor.RED)
                 logAttempt(player, voucher, success = false, reason = "pending_rank_change")
                 return false
