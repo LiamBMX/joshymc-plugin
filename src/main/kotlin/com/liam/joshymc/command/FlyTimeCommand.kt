@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.flight.FlightTime
 import com.liam.joshymc.flight.SurvivalFlight
+import com.liam.joshymc.flight.LuckPermsFlight
 import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
@@ -18,6 +19,11 @@ import java.time.Duration
  * `/flytime` (issue #1303, Survival only): how much `/fly` access the player has left.
  * Read-only: it never touches flight, permissions or ranks. See [FlightTime], and
  * [SurvivalFlight] for Fly Voucher time (issue #1304).
+import java.time.Instant
+
+/**
+ * `/flytime` (issue #1303, Survival only): how much `/fly` access the player has left.
+ * Read-only: it never touches flight, permissions or ranks. See [FlightTime].
  */
 class FlyTimeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
@@ -63,6 +69,19 @@ class FlyTimeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 Msg.error(sender, "You do not have any flight time available.")
                 return true
             }
+        val grants = try {
+            LuckPermsFlight.current()?.flyGrants(sender.uniqueId)
+        } catch (e: Exception) {
+            plugin.logger.warning("[FlyTime] Couldn't read LuckPerms flight nodes: ${e.message}")
+            null
+        }
+        val value = when (val access = FlightTime.resolve(sender.hasPermission("joshymc.fly"), grants, Instant.now())) {
+            FlightTime.Access.None -> {
+                Msg.error(sender, "You do not have any flight time available.")
+                return true
+            }
+            FlightTime.Access.Permanent -> Component.text("Permanent", NamedTextColor.GREEN)
+            is FlightTime.Access.Temporary -> Component.text(FlightTime.format(access.remaining), NamedTextColor.YELLOW)
         }
         plugin.commsManager.send(sender, Component.text("Flight Time Remaining: ", NamedTextColor.GRAY).append(value))
         return true
