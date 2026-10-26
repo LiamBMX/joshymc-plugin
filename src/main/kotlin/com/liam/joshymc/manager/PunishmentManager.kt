@@ -553,6 +553,8 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
                 // %offense% / %scope% only exist for /punish rule punishments (issue #1298);
                 // their lines are left out of every other ban screen.
                 if (offense == null && OPTIONAL_PLACEHOLDERS.any { rawLine.contains(it) }) continue
+                // Older temp bans may have no stored length; never call them "Permanent".
+                if (expiresAt != null && durationMs == null && rawLine.contains("%duration%")) continue
                 var line = rawLine
                 for ((key, value) in replacements) line = line.replace(key, value)
                 if (!first) builder.append(Component.newline())

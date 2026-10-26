@@ -257,6 +257,7 @@ class RulePunishManager(private val plugin: Joshymc) {
         val scope = if (plan.network) null else plan.gamemode
         var incidentId = -1
         var appliedDurationMs: Long? = null
+        var kickPunishmentId: Int? = null
         try {
             plugin.databaseManager.transaction {
                 if (!store.claimConfirmation(c.id, key, now)) throw Abort("That punishment was already confirmed.", "DUPLICATE_PREVENTED", null)
@@ -272,7 +273,10 @@ class RulePunishManager(private val plugin: Joshymc) {
                 var punishmentId: Int? = null
                 when (plan.tier.action) {
                     PunishAction.WARN -> punishmentId = pm.insertRulePunishment(target.uuid, target.name, sender.name, staffUuid, "WARN", reason, null, scope, plan.offense).id
-                    PunishAction.KICK -> punishmentId = pm.insertRulePunishment(target.uuid, target.name, sender.name, staffUuid, "KICK", reason, null, scope, plan.offense).id
+                    PunishAction.KICK -> {
+                        punishmentId = pm.insertRulePunishment(target.uuid, target.name, sender.name, staffUuid, "KICK", reason, null, scope, plan.offense).id
+                        kickPunishmentId = punishmentId
+                    }
                     PunishAction.MUTE -> {
                         appliedDurationMs = plan.tier.durationMs
                         punishmentId = pm.insertRulePunishment(target.uuid, target.name, sender.name, staffUuid, "TEMPMUTE", reason, appliedDurationMs, scope, plan.offense).id
@@ -323,7 +327,7 @@ class RulePunishManager(private val plugin: Joshymc) {
             return
         }
 
-        applyToPlayer(target, plan, incidentId, sender)
+        applyToPlayer(target, plan, incidentId, kickPunishmentId, sender)
         announce(sender, target, plan, incidentId, appliedDurationMs)
     }
 
@@ -339,7 +343,7 @@ class RulePunishManager(private val plugin: Joshymc) {
     }
 
     /** Messages / kicks the punished player after the records are committed. */
-    private fun applyToPlayer(target: Target, plan: PunishPlan, incidentId: Int, sender: CommandSender) {
+    private fun applyToPlayer(target: Target, plan: PunishPlan, incidentId: Int, kickPunishmentId: Int?, sender: CommandSender) {
         val online = Bukkit.getPlayer(target.uuid)
         val name = plan.rule.displayName
         when (plan.tier.action) {
@@ -349,6 +353,8 @@ class RulePunishManager(private val plugin: Joshymc) {
                     store.setStatus(incidentId, PunishStore.Status.EXECUTING, PunishStore.Status.ENFORCED)
                 } catch (e: Exception) {
                     store.setStatus(incidentId, PunishStore.Status.EXECUTING, PunishStore.Status.FAILED, e.message)
+                    // The kick never happened, so its punishments row mustn't read as one in /history.
+                    kickPunishmentId?.let { plugin.punishmentManager.revokeById(it, sender.name, (sender as? Player)?.uniqueId, "Kick failed: ${e.message}") }
                     Msg.error(sender, "The kick failed (${e.message}); incident #$incidentId is marked FAILED and doesn't count.")
                     audit(sender, "FAILED", target, incidentId, plan.rule, "kick failed: ${e.message}")
                 }
