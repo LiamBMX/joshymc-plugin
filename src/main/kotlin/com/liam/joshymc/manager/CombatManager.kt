@@ -157,7 +157,7 @@ class CombatManager(private val plugin: Joshymc) {
             player.allowFlight = true
             return
         }
-        if (player.hasPermission("joshymc.fly")) {
+        if (player.hasPermission("joshymc.fly") || plugin.flightTimeManager.hasTemporaryFlight(player)) {
             player.allowFlight = true
         }
     }

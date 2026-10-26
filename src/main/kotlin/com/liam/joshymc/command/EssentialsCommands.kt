@@ -172,7 +172,10 @@ class GamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
 
 class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (!sender.hasPermission("joshymc.fly")) {
+        // Survival flight time (Fly Vouchers, issue #1304) lets a player toggle their own
+        // flight, including during the landing grace, without joshymc.fly.
+        val selfOnTemporaryFlight = sender is Player && args.isEmpty() && plugin.flightTimeManager.hasTemporaryFlight(sender)
+        if (!sender.hasPermission("joshymc.fly") && !selfOnTemporaryFlight) {
             Msg.noPermission(sender)
             return true
         }
