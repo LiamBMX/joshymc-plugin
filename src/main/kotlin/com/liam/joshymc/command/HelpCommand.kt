@@ -123,6 +123,8 @@ class HelpCommand(private val plugin: Joshymc) : CommandExecutor {
             HelpEntry("/warn <player> [reason]", "Warn a player", staffOnly = true),
             HelpEntry("/pkick <player> [reason]", "Kick a player", staffOnly = true),
             HelpEntry("/history <player>", "View a player's punishment history", staffOnly = true),
+            HelpEntry("/punish <player> <rule>", "Punish a rule break (next tier picked automatically)", staffOnly = true),
+            HelpEntry("/punish rules", "Browse the server rules by category", staffOnly = true),
             HelpEntry("/report <player> <reason>", "Report a player"),
             HelpEntry("/reports", "View pending reports", staffOnly = true)
         )),

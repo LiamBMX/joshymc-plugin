@@ -17,6 +17,8 @@ object GamemodeAssignments {
         "jgamemode" to GamemodeScope.NETWORK,
         // Available in both gamemodes; it grants only the current gamemode's own starter rank.
         "freerank" to GamemodeScope.NETWORK,
+        // Moderation works on both gamemodes; each punishment carries its own gamemode scope.
+        "punish" to GamemodeScope.NETWORK,
         // Issue #1299: the Event Shop sells Survival items for Survival Money only.
         "eventshop" to GamemodeScope.SURVIVAL,
         // Issue #1303: reports Survival flight access only.

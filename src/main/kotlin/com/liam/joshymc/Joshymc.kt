@@ -259,9 +259,9 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var punishmentManager: PunishmentManager
         private set
-    lateinit var punishPresetManager: com.liam.joshymc.manager.PunishPresetManager
+    lateinit var rulePunishManager: com.liam.joshymc.punish.RulePunishManager
         private set
-    lateinit var punishGui: com.liam.joshymc.gui.PunishGui
+    lateinit var punishMenus: com.liam.joshymc.punish.PunishMenus
         private set
     lateinit var altManager: com.liam.joshymc.manager.AltManager
         private set
@@ -430,8 +430,8 @@ class Joshymc : JavaPlugin() {
         antiCheatManager = AntiCheatManager(this)
         claimManager = ClaimManager(this)
         punishmentManager = PunishmentManager(this)
-        punishPresetManager = com.liam.joshymc.manager.PunishPresetManager(this)
-        punishGui = com.liam.joshymc.gui.PunishGui(this)
+        rulePunishManager = com.liam.joshymc.punish.RulePunishManager(this)
+        punishMenus = com.liam.joshymc.punish.PunishMenus(this)
         altManager = com.liam.joshymc.manager.AltManager(this)
         resourceWorldManager = ResourceWorldManager(this)
         timezoneManager = TimezoneManager(this)
@@ -536,7 +536,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("anticheat")) antiCheatManager.start()
         claimManager.start()
         punishmentManager.start()
-        punishPresetManager.start()
+        rulePunishManager.start()
         altManager.start()
         if (isFeatureEnabled("resource-world")) resourceWorldManager.start()
         scoreboardManager.start()

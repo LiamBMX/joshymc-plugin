@@ -771,6 +771,24 @@ joshymc.punishment.notify
 Allows receiving punishment notifications.
 Default: OP
 
+joshymc.punish.trainee / helper / jrmod / mod / leadmod / jradmin / admin / sradmin
+Staff level for `/punish <player> <rule>` (issue #1298). Each level is a child of the
+next one up, so higher levels inherit every lower level's rules; the highest held level
+decides. Trainee: warnings for spam/advertising/filter-bypass/harassment/inappropriate-
+content. Helper: + encouraging-violations, temporary mutes. Jr Mod: + overturning
+warnings. Mod: + PvP/claim/region/kit/staff rules, kicks, bans up to 7 days. Lead Mod:
++ account/alt/item/listing rules, bans up to 30 days. Jr Admin: + hacking/duping/economy/
+credit/crate/quest/stock rules, still 30 days max. Admin: every enforceable rule,
+permanent gamemode bans, emergency network suspensions up to 24h. Sr Admin: + tier
+overrides, emergency reviews, overturning any punishment, `/punish audit verify`.
+joshymc.staff.<trainee|helper|jrmod|mod|leadmod> include the matching level.
+Default: false (not even OPs; the console acts as Sr Admin)
+
+joshymc.punish.network
+Approves network-wide /punish mutes and bans (Managers / Owner). Needs a
+joshymc.punish.<level> as well. Not part of any bundle.
+Default: false
+
 joshymc.modmode
 Allows using Moderator Mode with `/modmode [on|off]` (Moderator and higher).
 Default: OP

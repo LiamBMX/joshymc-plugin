@@ -1112,6 +1112,9 @@ quests:
 # safe built-in fallback message is shown instead - a banned player never slips through.
 #
 # Placeholders: %player% %reason% %staff% %duration% %remaining% %expires% %punishment_id%
+#   %offense% %scope% - offense number and gamemode of a /punish <player> <rule> ban. Lines
+#   using either are left out of every other ban screen (/ban, /tempban, admin panel, old bans).
+#   On a temp ban, lines using %duration% are left out when the ban has no stored length.
 # - ban-message is shown for permanent bans issued through /punish, /ban, or the admin panel.
 # - tempban-message is shown for temporary bans and always reflects the CURRENT remaining
 #   time, even on rejoin - never the original duration from when the ban was issued.
@@ -1123,6 +1126,7 @@ punishments:
     - ""
     - "&#E8BF73Reason"
     - "&f%reason%"
+    - "&#E8BF73Offense &f#%offense% &8• &#E8BF73Applies To &f%scope%"
     - ""
     - "&#E8BF73Banned By"
     - "&f%staff%"
@@ -1141,6 +1145,8 @@ punishments:
     - ""
     - "&#E8BF73Reason"
     - "&f%reason%"
+    - "&#E8BF73Duration &f%duration%"
+    - "&#E8BF73Offense &f#%offense% &8• &#E8BF73Applies To &f%scope%"
     - ""
     - "&#E8BF73Banned By"
     - "&f%staff%"
