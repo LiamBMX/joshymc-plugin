@@ -163,6 +163,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
+        // Issue #1303: read-only remaining flight time (Survival only).
+        plugin.getCommand("flytime")?.let {
+            val cmd = com.liam.joshymc.command.FlyTimeCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
         plugin.getCommand("link")?.setExecutor(LinkCommand(plugin))
         plugin.getCommand("unlink")?.setExecutor(UnlinkCommand(plugin))
 
@@ -413,6 +419,12 @@ class CommandManager(private val plugin: Joshymc) {
 
         plugin.getCommand("candy")?.let {
             val cmd = com.liam.joshymc.command.CandyCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
+        plugin.getCommand("eventshop")?.let {
+            val cmd = com.liam.joshymc.command.EventShopCommand(plugin)
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
@@ -848,6 +860,7 @@ class CommandManager(private val plugin: Joshymc) {
         "orders" to "joshymc.orders",
         "order" to "joshymc.orders",
         "candy" to "joshymc.candy",
+        "eventshop" to "joshymc.eventshop.use",
         "overflow" to "joshymc.overflow",
         "unstuck" to "joshymc.unstuck",
         "eco" to "joshymc.eco",

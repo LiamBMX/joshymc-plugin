@@ -227,6 +227,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var candyShopManager: com.liam.joshymc.candyshop.CandyShopManager
         private set
+    lateinit var eventShopManager: com.liam.joshymc.eventshop.EventShopManager
+        private set
     lateinit var creditShopManager: com.liam.joshymc.manager.CreditShopManager
         private set
     lateinit var voucherManager: com.liam.joshymc.manager.VoucherManager
@@ -240,6 +242,10 @@ class Joshymc : JavaPlugin() {
     lateinit var freeRankManager: com.liam.joshymc.freerank.FreeRankManager
         private set
     lateinit var chatTagVoucherManager: com.liam.joshymc.manager.ChatTagVoucherManager
+        private set
+    lateinit var flightTimeManager: com.liam.joshymc.flight.FlightTimeManager
+        private set
+    lateinit var flyVoucherManager: com.liam.joshymc.flight.FlyVoucherManager
         private set
     lateinit var purchaseFulfillmentManager: com.liam.joshymc.manager.PurchaseFulfillmentManager
         private set
@@ -470,6 +476,8 @@ class Joshymc : JavaPlugin() {
         rankVoucherManager = com.liam.joshymc.manager.RankVoucherManager(this)
         freeRankManager = com.liam.joshymc.freerank.FreeRankManager(this)
         chatTagVoucherManager = com.liam.joshymc.manager.ChatTagVoucherManager(this)
+        flightTimeManager = com.liam.joshymc.flight.FlightTimeManager(this)
+        flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
         eventManager = com.liam.joshymc.manager.EventManager(this)
         resurgeManager = com.liam.joshymc.manager.ResurgeManager(this)
@@ -482,6 +490,7 @@ class Joshymc : JavaPlugin() {
         sellPriceManager.start()
         saleManager = com.liam.joshymc.manager.SaleManager(this)
         candyShopManager = com.liam.joshymc.candyshop.CandyShopManager(this)
+        eventShopManager = com.liam.joshymc.eventshop.EventShopManager(this)
         stuckRecoveryManager = com.liam.joshymc.recovery.StuckRecoveryManager(this)
         gamemodeLockManager = com.liam.joshymc.gamemode.GamemodeLockManager(this)
 
@@ -548,6 +557,8 @@ class Joshymc : JavaPlugin() {
         rankVoucherManager.start()
         freeRankManager.start()
         chatTagVoucherManager.start()
+        flightTimeManager.start()
+        flyVoucherManager.start()
 
         marketManager = MarketManager(this)
         if (isFeatureEnabled("market")) marketManager.start()
@@ -582,6 +593,8 @@ class Joshymc : JavaPlugin() {
         eventManager.start()
         // After items (it sells registered candies), economy, Mod Mode and the event world.
         if (isFeatureEnabled("candy-shop")) candyShopManager.start()
+        // Same dependencies as the Candy Shop, plus the gamemode locks (Survival only).
+        if (isFeatureEnabled("event-shop")) eventShopManager.start()
         // Reads the feature flag itself: its listener is always registered.
         stuckRecoveryManager.start()
 
@@ -632,6 +645,8 @@ class Joshymc : JavaPlugin() {
         voteManager.stop()
         purchaseFulfillmentManager.stop()
         candyShopManager.stop()
+        eventShopManager.stop()
+        flightTimeManager.stop()
         stuckRecoveryManager.stop()
         spawnDecorationManager.stop()
         listenerManager.passiveEnchantListener?.stop()
@@ -705,6 +720,7 @@ class Joshymc : JavaPlugin() {
         safe("casinoManager.stop") { casinoManager.stop() }
         safe("orderManager.stop") { orderManager.stop() }
         safe("candyShopManager.stop") { candyShopManager.stop() }
+        safe("eventShopManager.stop") { eventShopManager.stop() }
         safe("stuckRecoveryManager.stop") { stuckRecoveryManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
         safe("questCycleManager.stop") { questCycleManager.stop() }
@@ -740,6 +756,8 @@ class Joshymc : JavaPlugin() {
         safe("linkManager.load") { linkManager.load() }
         // WarpManager uses DB directly, no reload needed
         safe("physicalVoucherManager.reload") { physicalVoucherManager.reload() }
+        // Its countdown task was cancelled above; restart it and reload online balances.
+        safe("flightTimeManager.start") { flightTimeManager.start() }
         // Re-registers its join listener (unregistered above) and settles pending claims.
         safe("freeRankManager.start") { freeRankManager.start() }
         safe("kitManager.start") { kitManager.start() }
@@ -772,6 +790,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("login-streaks")) safe("loginStreakManager.start") { loginStreakManager.start() }
         safe("resourcePackManager.start") { resourcePackManager.start() }
         if (isFeatureEnabled("candy-shop")) safe("candyShopManager.start") { candyShopManager.start() }
+        if (isFeatureEnabled("event-shop")) safe("eventShopManager.start") { eventShopManager.start() }
         safe("stuckRecoveryManager.start") { stuckRecoveryManager.start() }
 
         // 7. Commands just get new instances (executors are swapped, not re-registered)

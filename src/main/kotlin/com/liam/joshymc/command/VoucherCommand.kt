@@ -1,6 +1,9 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.flight.FlyVoucherManager
+import com.liam.joshymc.flight.SurvivalFlight
+import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.manager.ChatTagManager
 import com.liam.joshymc.manager.DonorTiers
 import com.liam.joshymc.util.Msg
@@ -21,7 +24,8 @@ import org.bukkit.entity.Player
  * only ever happens by clicking it in `/cshop` — this command never redeems
  * those. `/voucher give` is the one exception: it hands out physical money
  * voucher items (see [com.liam.joshymc.manager.PhysicalVoucherManager]),
- * still gated behind `joshymc.vouchers` so only admins can create them.
+ * Chat Tag vouchers, and Survival Fly Vouchers (`fly:<duration>`, issue #1304,
+ * see [com.liam.joshymc.flight.FlyVoucherManager]), still gated behind `joshymc.vouchers` so only admins can create them.
  */
 class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
@@ -417,13 +421,28 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val targetName = args.getOrNull(1)
         val voucherId = args.getOrNull(2)?.lowercase()
         if (targetName == null || voucherId == null) {
-            Msg.usage(sender, "/voucher give <player> <voucher-id> [amount]")
+            Msg.usage(sender, "/voucher give <player> <voucher-id|fly:<duration>> [amount]")
             return
         }
 
         val target = Bukkit.getPlayerExact(targetName)
         if (target == null) {
             Msg.error(sender, "Player '$targetName' is not online.")
+            return
+        }
+
+        // Fly Vouchers: `fly:<duration> [amount]` or `fly <duration> [amount]`.
+        if (voucherId.startsWith(FLY_VOUCHER_PREFIX)) {
+            handleGiveFlyVoucher(sender, target, voucherId.removePrefix(FLY_VOUCHER_PREFIX), args.getOrNull(3))
+            return
+        }
+        if (voucherId == "fly") {
+            val duration = args.getOrNull(3)
+            if (duration == null) {
+                Msg.usage(sender, "/voucher give <player> fly <duration> [amount]")
+                return
+            }
+            handleGiveFlyVoucher(sender, target, duration, args.getOrNull(4))
             return
         }
 
@@ -459,6 +478,46 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 Component.text("You received ", NamedTextColor.GREEN)
                     .append(Component.text("${amount}x ", NamedTextColor.AQUA))
                     .append(voucherName)
+                    .append(Component.text(" from an admin.", NamedTextColor.GREEN)),
+                com.liam.joshymc.manager.CommunicationsManager.Category.ECONOMY
+            )
+        }
+    }
+
+    /** `/voucher give <player> fly:<duration> [amount]` (issue #1304): Survival Fly Vouchers. */
+    private fun handleGiveFlyVoucher(sender: CommandSender, target: Player, durationArg: String, amountArg: String?) {
+        val seconds = when (val parsed = SurvivalFlight.parseDuration(durationArg)) {
+            is SurvivalFlight.DurationParse.Ok -> parsed.seconds
+            is SurvivalFlight.DurationParse.Invalid -> {
+                Msg.error(sender, "Invalid Fly Voucher duration '$durationArg': ${parsed.reason}")
+                return
+            }
+        }
+        val amount = if (amountArg == null) 1 else amountArg.toIntOrNull()
+        if (amount == null || amount <= 0 || amount > FlyVoucherManager.MAX_QUANTITY) {
+            Msg.error(sender, "Amount must be a whole number from 1 to ${FlyVoucherManager.MAX_QUANTITY}.")
+            return
+        }
+        if (plugin.gamemodeLockManager.gamemodeOf(target) != ServerGamemode.SURVIVAL) {
+            Msg.error(sender, "Fly Vouchers are Survival only, and ${target.name} isn't in Survival.")
+            return
+        }
+
+        plugin.flyVoucherManager.give(target, seconds, amount)
+        val label = "${SurvivalFlight.long(seconds)} Fly Voucher${if (amount == 1) "" else "s"}"
+        sender.sendMessage(
+            Component.text("Gave ", NamedTextColor.GREEN)
+                .append(Component.text("${target.name} ", NamedTextColor.WHITE))
+                .append(Component.text("${amount}x ", NamedTextColor.AQUA))
+                .append(Component.text(label, NamedTextColor.AQUA))
+                .append(Component.text(".", NamedTextColor.GREEN))
+        )
+        if (sender != target) {
+            plugin.commsManager.send(
+                target,
+                Component.text("You received ", NamedTextColor.GREEN)
+                    .append(Component.text("${amount}x ", NamedTextColor.AQUA))
+                    .append(Component.text(label, NamedTextColor.AQUA))
                     .append(Component.text(" from an admin.", NamedTextColor.GREEN)),
                 com.liam.joshymc.manager.CommunicationsManager.Category.ECONOMY
             )
@@ -527,7 +586,8 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             3 -> when (args[0].lowercase()) {
                 "setrank" -> (DonorTiers.ORDER + "none").filter { it.startsWith(args[2].lowercase()) }
                 "give" -> (plugin.physicalVoucherManager.getEnabledVoucherIds() +
-                        plugin.chatTagManager.getVoucherTagIds().map { "$CHAT_TAG_VOUCHER_PREFIX$it" })
+                        plugin.chatTagManager.getVoucherTagIds().map { "$CHAT_TAG_VOUCHER_PREFIX$it" } +
+                        "fly" + SurvivalFlight.SUGGESTED_DURATIONS.map { "$FLY_VOUCHER_PREFIX$it" })
                     .filter { it.startsWith(args[2].lowercase()) }
                 "tag" -> when (args[1].lowercase()) {
                     "delete" -> plugin.chatTagManager.getVoucherTagIds().filter { it.startsWith(args[2].lowercase()) }
@@ -537,6 +597,9 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 else -> emptyList()
             }
             4 -> when (args[0].lowercase()) {
+                "give" -> if (args[2].equals("fly", ignoreCase = true)) {
+                    SurvivalFlight.SUGGESTED_DURATIONS.filter { it.startsWith(args[3].lowercase()) }
+                } else emptyList()
                 "tag" -> when (args[1].lowercase()) {
                     "delete" -> listOf("confirm").filter { it.startsWith(args[3].lowercase()) }
                     "debug" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[3], ignoreCase = true) }
@@ -550,5 +613,6 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     companion object {
         private const val CHAT_TAG_VOUCHER_PREFIX = "chattag_"
+        private const val FLY_VOUCHER_PREFIX = "fly:"
     }
 }

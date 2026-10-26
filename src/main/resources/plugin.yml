@@ -180,6 +180,10 @@ commands:
     description: Open the Candy Man's rotating Candy Shop
     usage: /candy [admin <additem|removeitem|setprice|setchance|enable|disable|list|schedule>]
     aliases: [trickortreat]
+  eventshop:
+    description: Open the Survival Event Shop's current rotation
+    usage: /eventshop [admin <add|remove|list|edit|enable|disable|reload|status|rotate|open|close>]
+    aliases: [eshop]
   overflow:
     description: View items held in your persistent Overflow storage
     usage: /overflow
@@ -293,7 +297,7 @@ commands:
     usage: /cshop [additem|removeitem|category|list] [args...]
     aliases: [creditshop]
   voucher:
-    description: Configure virtual voucher packages redeemable in the Credit Shop, and give physical money/Chat Tag vouchers
+    description: Configure virtual voucher packages redeemable in the Credit Shop, and give physical money/Chat Tag/Fly vouchers (/voucher give <player> fly:<duration> [amount])
     usage: /voucher <create|delete|enable|disable|setname|setcategory|setprice|setrank|setcommand|setdescription|seticon|list|info|reload|give> [args...]
     permission: joshymc.vouchers
   creditvoucher:
@@ -387,6 +391,10 @@ commands:
   fly:
     description: Toggle flight
     usage: /fly [player]
+  flytime:
+    description: Check how much flight time you have left (Survival)
+    usage: /flytime
+    permission: joshymc.flytime.use
   heal:
     description: Heal a player
     usage: /heal [player]
@@ -883,6 +891,12 @@ permissions:
   joshymc.candy.admin:
     description: Manage the Candy Shop's item pool and view its schedule (/candy admin)
     default: op
+  joshymc.eventshop.use:
+    description: Use the Survival Event Shop (/eventshop, /eshop)
+    default: true
+  joshymc.eventshop.admin:
+    description: Manage the Event Shop's listings, rotations and manual open/close (/eventshop admin)
+    default: op
   joshymc.overflow:
     description: View your persistent Overflow storage
     default: true
@@ -1079,8 +1093,11 @@ permissions:
     description: Change others' gamemode
     default: op
   joshymc.fly:
-    description: Toggle flight
+    description: Toggle flight (players with Survival flight time from Fly Vouchers can toggle their own flight without it)
     default: op
+  joshymc.flytime.use:
+    description: Use /flytime to check your remaining or permanent flight time
+    default: true
   joshymc.fly.others:
     description: Toggle flight for other players
     default: op
