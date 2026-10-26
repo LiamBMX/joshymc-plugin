@@ -61,6 +61,10 @@ class BuildPvpManager(private val plugin: Joshymc) : Listener {
 
     private val comms get() = plugin.commsManager
 
+    private companion object {
+        const val RESET_NOTICE_WORLD = "pvp"
+    }
+
     // ── Lifecycle ─────────────────────────────────────────
 
     fun start() {
@@ -176,7 +180,8 @@ class BuildPvpManager(private val plugin: Joshymc) : Listener {
     // ── Reset cycle ───────────────────────────────────────
 
     fun resetArena() {
-        Bukkit.getOnlinePlayers().forEach { p ->
+        // Issue #1312: only players in the PvP world hear about the reset.
+        Bukkit.getOnlinePlayers().filter { it.world.name == RESET_NOTICE_WORLD }.forEach { p ->
             comms.send(p, Component.text("The Build PvP arena is resetting!", NamedTextColor.YELLOW))
         }
         restoreSnapshot()
