@@ -107,6 +107,11 @@ class ItemManager(private val plugin: Joshymc) {
         register(KrampusChestplate())
         register(KrampusLeggings())
         register(KrampusBoots())
+        // Snowman set (Survival only, winter holiday, issue #1316)
+        register(SnowmanHelmet())
+        register(SnowmanChestplate())
+        register(SnowmanLeggings())
+        register(SnowmanBoots())
 
         // Retextured Trial Keys
         register(JanuaryKey())

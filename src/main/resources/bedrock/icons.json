@@ -777,6 +777,26 @@
       "icon": "joshymc/small_gold_pile.png",
       "sha1": "6a234b1109d7f6d3567accee35dfbf3326660162"
     },
+    "joshymc:snowman_boots": {
+      "bedrock_name": "snowman_boots",
+      "icon": "joshymc/snowman_boots.png",
+      "sha1": "fba7c901168a59de5343ea3a8f14874b87fd1deb"
+    },
+    "joshymc:snowman_chestplate": {
+      "bedrock_name": "snowman_chestplate",
+      "icon": "joshymc/snowman_chestplate.png",
+      "sha1": "56b2d975f591e257bfa3b2347acca65269573337"
+    },
+    "joshymc:snowman_helmet": {
+      "bedrock_name": "snowman_helmet",
+      "icon": "joshymc/snowman_helmet.png",
+      "sha1": "2d83324bdc1e36bee6e2fb442d27bc2cf90d72c8"
+    },
+    "joshymc:snowman_leggings": {
+      "bedrock_name": "snowman_leggings",
+      "icon": "joshymc/snowman_leggings.png",
+      "sha1": "6ebbedf612e5cd0524f5105d7e5c1736ca05d515"
+    },
     "joshymc:snowveil_guard": {
       "bedrock_name": "snowveil_guard",
       "icon": "joshymc/snowveil_guard.png",
