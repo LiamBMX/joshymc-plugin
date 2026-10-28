@@ -29,7 +29,7 @@ installs them into Geyser on every startup.
 | Animated textures (eggs, keys, fish, drills...) | The first frame; Bedrock item icons can't animate. |
 | Oversized inventory models | Clipped to the slot. |
 | Great Pumpkin Pie bites / furniture models in the world | Those are display entities Geyser already shows with the base item; unchanged by this. |
-| Shields (Hearthkeeper) and elytras (Falling Leaf, Wings of the Blizzard) | **Not mapped** (`bedrock-pack.excluded-base-items`), so they keep the vanilla shield/elytra look on Bedrock. A Bedrock custom item can't block or glide like the vanilla one. |
+| Shields (Hearthkeeper) and elytras (Falling Leaf, Wings of the Blizzard, Bat Wings) | **Not mapped** (`bedrock-pack.excluded-base-items`), so they keep the vanilla shield/elytra look on Bedrock. A Bedrock custom item can't block or glide like the vanilla one. |
 | Bows, crossbows, tridents, eggs, snowballs, food, cake-based placeables | Mapped. Geyser gives custom items on these bases the base item's behavior (charging, throwing, eating), but that needs the manual check below. If one fails, add its base item to `excluded-base-items`. |
 
 ## How it works

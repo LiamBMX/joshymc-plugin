@@ -107,6 +107,8 @@ class ItemManager(private val plugin: Joshymc) {
         register(KrampusChestplate())
         register(KrampusLeggings())
         register(KrampusBoots())
+        // Bat Wings elytra (Survival only, issue #1317)
+        register(BatWings())
 
         // Retextured Trial Keys
         register(JanuaryKey())
