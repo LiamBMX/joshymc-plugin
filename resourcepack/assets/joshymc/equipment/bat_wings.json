@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "joshymc:bat_wings"
+      }
+    ],
+    "wings": [
+      {
+        "texture": "joshymc:bat_wings"
+      }
+    ]
+  }
+}
