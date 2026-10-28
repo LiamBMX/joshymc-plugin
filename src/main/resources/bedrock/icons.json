@@ -1,0 +1,871 @@
+{
+  "format_version": 1,
+  "icon_size": 64,
+  "items": {
+    "joshymc:april_key": {
+      "bedrock_name": "april_key",
+      "icon": "joshymc/april_key.png",
+      "sha1": "3e15c6adbf0fa8e7f851c450a1799edbc35f6f52"
+    },
+    "joshymc:august_key": {
+      "bedrock_name": "august_key",
+      "icon": "joshymc/august_key.png",
+      "sha1": "eeb63aaea9db4b0c8715ad259b2d02b35b588b77"
+    },
+    "joshymc:autumn_wanderer": {
+      "bedrock_name": "autumn_wanderer",
+      "icon": "joshymc/autumn_wanderer.png",
+      "sha1": "cf9c2cbb132c282cac406423efed91731deb5445"
+    },
+    "joshymc:autumns_edge": {
+      "bedrock_name": "autumns_edge",
+      "icon": "joshymc/autumns_edge.png",
+      "sha1": "cc9d671b1217e8b36b57f989a957804c94461f0a"
+    },
+    "joshymc:blindness_egg": {
+      "bedrock_name": "blindness_egg",
+      "icon": "joshymc/blindness_egg.png",
+      "sha1": "425170a3596b025e7169f3e318bb608f46858950"
+    },
+    "joshymc:bone_rattler": {
+      "bedrock_name": "bone_rattler",
+      "icon": "joshymc/bone_rattler.png",
+      "sha1": "bf73eb2a8184be82e0d1e36f6fcfdd775789a68b"
+    },
+    "joshymc:bubble_butt_leggings": {
+      "bedrock_name": "bubble_butt_leggings",
+      "icon": "joshymc/bubble_butt_leggings.png",
+      "sha1": "1dd1405cb753899117ddedacb943e41a874d4086"
+    },
+    "joshymc:cabin_key": {
+      "bedrock_name": "cabin_key",
+      "icon": "joshymc/cabin_key.png",
+      "sha1": "e4a1311d7b5dd27724d5c72451cb5db5914d1b75"
+    },
+    "joshymc:campfire_key": {
+      "bedrock_name": "campfire_key",
+      "icon": "joshymc/campfire_key.png",
+      "sha1": "89a1ae5e995b0e2f76f71dff0a6f7a61ff1fb861"
+    },
+    "joshymc:candy_corn": {
+      "bedrock_name": "candy_corn",
+      "icon": "joshymc/candy_corn.png",
+      "sha1": "1d8e5439fb614cb1a5852e168f7f6842082bcbca"
+    },
+    "joshymc:cobweb_egg": {
+      "bedrock_name": "cobweb_egg",
+      "icon": "joshymc/cobweb_egg.png",
+      "sha1": "f4b6d8c8482d2568d8b3c18080f1f16d2b03a87c"
+    },
+    "joshymc:confusion_egg": {
+      "bedrock_name": "confusion_egg",
+      "icon": "joshymc/confusion_egg.png",
+      "sha1": "00e67e892716d782b88d07ea5562c7fbdfb871dd"
+    },
+    "joshymc:credit_key": {
+      "bedrock_name": "credit_key",
+      "icon": "joshymc/credit_key.png",
+      "sha1": "7abac4bf66498d825ea9bf0b79202eb91b9631df"
+    },
+    "joshymc:december_key": {
+      "bedrock_name": "december_key",
+      "icon": "joshymc/december_key.png",
+      "sha1": "c0da57687de83a081535d5a4c6eb9e4b4a7f8936"
+    },
+    "joshymc:easter_egg": {
+      "bedrock_name": "easter_egg",
+      "icon": "joshymc/easter_egg.png",
+      "sha1": "49a6e02fbfca409eb8cbe1ca3c3b15bcee6741e0"
+    },
+    "joshymc:ender_egg": {
+      "bedrock_name": "ender_egg",
+      "icon": "joshymc/ender_egg.png",
+      "sha1": "81f8c713f77c86d4e60c1a41c88bc0855c8f2acc"
+    },
+    "joshymc:explosive_egg": {
+      "bedrock_name": "explosive_egg",
+      "icon": "joshymc/explosive_egg.png",
+      "sha1": "6d224b1b23f1ebe7cce47b5bd3295e4b35f1db9d"
+    },
+    "joshymc:falling_leaf": {
+      "bedrock_name": "falling_leaf",
+      "icon": "joshymc/falling_leaf.png",
+      "sha1": "4c8cea241bf7afe0483150ffb7f9b82d1fc657fd"
+    },
+    "joshymc:fast_hopper": {
+      "bedrock_name": "fast_hopper",
+      "icon": "joshymc/fast_hopper.png",
+      "sha1": "ee99f4681e29cc14dcb0c17465de7f4bdca2ea4d"
+    },
+    "joshymc:february_key": {
+      "bedrock_name": "february_key",
+      "icon": "joshymc/february_key.png",
+      "sha1": "c75e411fa68ae55d35e9e4c2bee1562f082eb007"
+    },
+    "joshymc:fish/abyssal_cod": {
+      "bedrock_name": "fish_abyssal_cod",
+      "icon": "joshymc/fish/abyssal_cod.png",
+      "sha1": "2b368b8e97f47fc69bad20dab14e7739ae355341"
+    },
+    "joshymc:fish/abyssal_lord": {
+      "bedrock_name": "fish_abyssal_lord",
+      "icon": "joshymc/fish/abyssal_lord.png",
+      "sha1": "82361a3a58f3be7fbb084a5694c5c8b9b7243415"
+    },
+    "joshymc:fish/anchovy": {
+      "bedrock_name": "fish_anchovy",
+      "icon": "joshymc/fish/anchovy.png",
+      "sha1": "20bf9c56399c252f24f7ec559530a2df650d790a"
+    },
+    "joshymc:fish/ancient_sturgeon": {
+      "bedrock_name": "fish_ancient_sturgeon",
+      "icon": "joshymc/fish/ancient_sturgeon.png",
+      "sha1": "faefb14e9c05dfba5bcc307e402099bf3320f839"
+    },
+    "joshymc:fish/bluegill": {
+      "bedrock_name": "fish_bluegill",
+      "icon": "joshymc/fish/bluegill.png",
+      "sha1": "4d85918316e3d4ba4957c891759558155fa4d595"
+    },
+    "joshymc:fish/bream": {
+      "bedrock_name": "fish_bream",
+      "icon": "joshymc/fish/bream.png",
+      "sha1": "d77e87334723bc7378d3ea472c26a18f7449f7e0"
+    },
+    "joshymc:fish/carp": {
+      "bedrock_name": "fish_carp",
+      "icon": "joshymc/fish/carp.png",
+      "sha1": "a8f09c653345af6db7bb91929897297885028905"
+    },
+    "joshymc:fish/celestial_marlin": {
+      "bedrock_name": "fish_celestial_marlin",
+      "icon": "joshymc/fish/celestial_marlin.png",
+      "sha1": "d807a786eece10378f646dcfd703a717e3052097"
+    },
+    "joshymc:fish/channel_catfish": {
+      "bedrock_name": "fish_channel_catfish",
+      "icon": "joshymc/fish/channel_catfish.png",
+      "sha1": "c17180a6560fc2374bd383d89478a4fbce818685"
+    },
+    "joshymc:fish/coral_wrasse": {
+      "bedrock_name": "fish_coral_wrasse",
+      "icon": "joshymc/fish/coral_wrasse.png",
+      "sha1": "fed929e2d8c39f2a3bc38696795048b7d5029cc7"
+    },
+    "joshymc:fish/crappie": {
+      "bedrock_name": "fish_crappie",
+      "icon": "joshymc/fish/crappie.png",
+      "sha1": "2fdb3ab4ddf23a140160b8202c9c5a0376830b67"
+    },
+    "joshymc:fish/creek_chub": {
+      "bedrock_name": "fish_creek_chub",
+      "icon": "joshymc/fish/creek_chub.png",
+      "sha1": "44609d46c92016d7b93280e9cf098280be8aea3e"
+    },
+    "joshymc:fish/crimson_angler": {
+      "bedrock_name": "fish_crimson_angler",
+      "icon": "joshymc/fish/crimson_angler.png",
+      "sha1": "4f7842f9a5b024a26c2989cba38ecabb1fbcc3ff"
+    },
+    "joshymc:fish/crystal_bass": {
+      "bedrock_name": "fish_crystal_bass",
+      "icon": "joshymc/fish/crystal_bass.png",
+      "sha1": "3771a845490933fa51f956e8fa263d7044fee19d"
+    },
+    "joshymc:fish/dace": {
+      "bedrock_name": "fish_dace",
+      "icon": "joshymc/fish/dace.png",
+      "sha1": "a491ffe66b1ae21a346c829c13f5153553bf4d76"
+    },
+    "joshymc:fish/dragon_koi": {
+      "bedrock_name": "fish_dragon_koi",
+      "icon": "joshymc/fish/dragon_koi.png",
+      "sha1": "33c2da4395b0bcf2ce5f2c020bef5f92a8a7522f"
+    },
+    "joshymc:fish/elder_guardians_eye": {
+      "bedrock_name": "fish_elder_guardians_eye",
+      "icon": "joshymc/fish/elder_guardians_eye.png",
+      "sha1": "9d750e240b8658d898f692f85e4963c1ed6a19f8"
+    },
+    "joshymc:fish/ember_catfish": {
+      "bedrock_name": "fish_ember_catfish",
+      "icon": "joshymc/fish/ember_catfish.png",
+      "sha1": "868230f5bd815dfe3725852c44831800a231d0e6"
+    },
+    "joshymc:fish/enchanted_koi": {
+      "bedrock_name": "fish_enchanted_koi",
+      "icon": "joshymc/fish/enchanted_koi.png",
+      "sha1": "a6bafb0046423acd9faf1886497919bcf811d4d7"
+    },
+    "joshymc:fish/end_bass": {
+      "bedrock_name": "fish_end_bass",
+      "icon": "joshymc/fish/end_bass.png",
+      "sha1": "47c29077806a0c5935057db26c37c41970299a29"
+    },
+    "joshymc:fish/flounder": {
+      "bedrock_name": "fish_flounder",
+      "icon": "joshymc/fish/flounder.png",
+      "sha1": "1c7c14020996226dae95030677dc83a199942c56"
+    },
+    "joshymc:fish/frost_pike": {
+      "bedrock_name": "fish_frost_pike",
+      "icon": "joshymc/fish/frost_pike.png",
+      "sha1": "46dd23091ab3d37edfecd67ac25d2d1b4571f818"
+    },
+    "joshymc:fish/glacial_swordfish": {
+      "bedrock_name": "fish_glacial_swordfish",
+      "icon": "joshymc/fish/glacial_swordfish.png",
+      "sha1": "4d8dd56b683a72ad6381f2d12120037d213f2d0a"
+    },
+    "joshymc:fish/gods_bait": {
+      "bedrock_name": "fish_gods_bait",
+      "icon": "joshymc/fish/gods_bait.png",
+      "sha1": "a79cfbf802c65bfc3939f6daee1cd1e451177ef8"
+    },
+    "joshymc:fish/golden_carp": {
+      "bedrock_name": "fish_golden_carp",
+      "icon": "joshymc/fish/golden_carp.png",
+      "sha1": "804c2c8e127cadfb88a2adf64fa9131e915bc858"
+    },
+    "joshymc:fish/grouper": {
+      "bedrock_name": "fish_grouper",
+      "icon": "joshymc/fish/grouper.png",
+      "sha1": "42369a13d925ded5c9609049d69b831593718ad7"
+    },
+    "joshymc:fish/gudgeon": {
+      "bedrock_name": "fish_gudgeon",
+      "icon": "joshymc/fish/gudgeon.png",
+      "sha1": "dbb3f9c5c4d46be84f27b9964edb69ae69c7524b"
+    },
+    "joshymc:fish/halibut": {
+      "bedrock_name": "fish_halibut",
+      "icon": "joshymc/fish/halibut.png",
+      "sha1": "aaa99e3ac2b897d7c7b110a85278a5367b4e3338"
+    },
+    "joshymc:fish/herring": {
+      "bedrock_name": "fish_herring",
+      "icon": "joshymc/fish/herring.png",
+      "sha1": "df456b83317de75e624ea470c9fd8e99d10ebfd3"
+    },
+    "joshymc:fish/infinity_carp": {
+      "bedrock_name": "fish_infinity_carp",
+      "icon": "joshymc/fish/infinity_carp.png",
+      "sha1": "17d101ad5a096c20aeea7feea393cf802a404b08"
+    },
+    "joshymc:fish/jade_perch": {
+      "bedrock_name": "fish_jade_perch",
+      "icon": "joshymc/fish/jade_perch.png",
+      "sha1": "bdce60821b11f00892d263d099502cc6776e495c"
+    },
+    "joshymc:fish/kraken_tentacle": {
+      "bedrock_name": "fish_kraken_tentacle",
+      "icon": "joshymc/fish/kraken_tentacle.png",
+      "sha1": "945dcda8eb382193bad73f389ac5f320600c8296"
+    },
+    "joshymc:fish/lake_perch": {
+      "bedrock_name": "fish_lake_perch",
+      "icon": "joshymc/fish/lake_perch.png",
+      "sha1": "78104825cdab54ad9e0569c2bac28df89cebc439"
+    },
+    "joshymc:fish/largemouth_bass": {
+      "bedrock_name": "fish_largemouth_bass",
+      "icon": "joshymc/fish/largemouth_bass.png",
+      "sha1": "850e98b727f2648523bac577a7774817e75463dc"
+    },
+    "joshymc:fish/lava_serpent": {
+      "bedrock_name": "fish_lava_serpent",
+      "icon": "joshymc/fish/lava_serpent.png",
+      "sha1": "0ef862cc342d87224def883da6d64272a5631c2e"
+    },
+    "joshymc:fish/leviathans_scale": {
+      "bedrock_name": "fish_leviathans_scale",
+      "icon": "joshymc/fish/leviathans_scale.png",
+      "sha1": "d802e68afad23b7e038fc607825763c9ef1296f2"
+    },
+    "joshymc:fish/mackerel": {
+      "bedrock_name": "fish_mackerel",
+      "icon": "joshymc/fish/mackerel.png",
+      "sha1": "f433828ccf25484b69fdcad3ada16eba7d02cb04"
+    },
+    "joshymc:fish/minnow": {
+      "bedrock_name": "fish_minnow",
+      "icon": "joshymc/fish/minnow.png",
+      "sha1": "631a6fa6938de07249634e2d4822d9a3588f94cf"
+    },
+    "joshymc:fish/moonfish": {
+      "bedrock_name": "fish_moonfish",
+      "icon": "joshymc/fish/moonfish.png",
+      "sha1": "93567b61d3c7f6f02e2915878b2ebd76a3392f0a"
+    },
+    "joshymc:fish/mud_catfish": {
+      "bedrock_name": "fish_mud_catfish",
+      "icon": "joshymc/fish/mud_catfish.png",
+      "sha1": "6660ee3b99fdd89cfe34451e7d891a78688288f3"
+    },
+    "joshymc:fish/nether_pike": {
+      "bedrock_name": "fish_nether_pike",
+      "icon": "joshymc/fish/nether_pike.png",
+      "sha1": "a957e6eb4aad4f46425f8cfe1b4c8b5cb1ccf858"
+    },
+    "joshymc:fish/northern_pike": {
+      "bedrock_name": "fish_northern_pike",
+      "icon": "joshymc/fish/northern_pike.png",
+      "sha1": "2b846cf56f8ca232fa63aae29f4cf2069e299e7e"
+    },
+    "joshymc:fish/obsidian_cod": {
+      "bedrock_name": "fish_obsidian_cod",
+      "icon": "joshymc/fish/obsidian_cod.png",
+      "sha1": "c15ea9af516be61e7409adb6603a19d762e5b5f8"
+    },
+    "joshymc:fish/phantom_shad": {
+      "bedrock_name": "fish_phantom_shad",
+      "icon": "joshymc/fish/phantom_shad.png",
+      "sha1": "daca98d8c4953e9dc0da3446a2d78478bfcfc828"
+    },
+    "joshymc:fish/phoenix_fin": {
+      "bedrock_name": "fish_phoenix_fin",
+      "icon": "joshymc/fish/phoenix_fin.png",
+      "sha1": "4eeb1d61297665a17f083ed24eff77ae9270cb41"
+    },
+    "joshymc:fish/pond_minnow": {
+      "bedrock_name": "fish_pond_minnow",
+      "icon": "joshymc/fish/pond_minnow.png",
+      "sha1": "bf6f2b6f9da7872306dd6d276c3d6e883d21ccc4"
+    },
+    "joshymc:fish/poseidons_trident_fish": {
+      "bedrock_name": "fish_poseidons_trident_fish",
+      "icon": "joshymc/fish/poseidons_trident_fish.png",
+      "sha1": "3249f6724d22c99761158b326481ef7e0fc1bc51"
+    },
+    "joshymc:fish/primordial_leviathan": {
+      "bedrock_name": "fish_primordial_leviathan",
+      "icon": "joshymc/fish/primordial_leviathan.png",
+      "sha1": "bd13ab37504844e05a5b352a38944e536ee0b317"
+    },
+    "joshymc:fish/rainbow_trout": {
+      "bedrock_name": "fish_rainbow_trout",
+      "icon": "joshymc/fish/rainbow_trout.png",
+      "sha1": "004cbab63c5b5887ea6092a4144d93387e63d1f0"
+    },
+    "joshymc:fish/red_snapper": {
+      "bedrock_name": "fish_red_snapper",
+      "icon": "joshymc/fish/red_snapper.png",
+      "sha1": "0a969e7c3c4dea78c1a1e024ddceb5784558e778"
+    },
+    "joshymc:fish/river_trout": {
+      "bedrock_name": "fish_river_trout",
+      "icon": "joshymc/fish/river_trout.png",
+      "sha1": "37c53e0f2e416bacce2734810aa9534e2f268d0a"
+    },
+    "joshymc:fish/roach": {
+      "bedrock_name": "fish_roach",
+      "icon": "joshymc/fish/roach.png",
+      "sha1": "58b888917104ee0c8ac9afde947b90d035b7cbb4"
+    },
+    "joshymc:fish/ruby_snapper": {
+      "bedrock_name": "fish_ruby_snapper",
+      "icon": "joshymc/fish/ruby_snapper.png",
+      "sha1": "86cf03b5f638b4e0a79e48299af9a995012e6218"
+    },
+    "joshymc:fish/rudd": {
+      "bedrock_name": "fish_rudd",
+      "icon": "joshymc/fish/rudd.png",
+      "sha1": "90708a4f3d2d3d5cc61bf6a368aeec6edb943a91"
+    },
+    "joshymc:fish/sapphire_marlin": {
+      "bedrock_name": "fish_sapphire_marlin",
+      "icon": "joshymc/fish/sapphire_marlin.png",
+      "sha1": "26952c47c7878ebe354c8fad4cfebeadcf139573"
+    },
+    "joshymc:fish/sardine": {
+      "bedrock_name": "fish_sardine",
+      "icon": "joshymc/fish/sardine.png",
+      "sha1": "9c6fad6f768a31ce69f01000cb0d18b8438cbb94"
+    },
+    "joshymc:fish/sea_bass": {
+      "bedrock_name": "fish_sea_bass",
+      "icon": "joshymc/fish/sea_bass.png",
+      "sha1": "78f09d701e42d497688f57bf02fbd98d0030aca0"
+    },
+    "joshymc:fish/shad": {
+      "bedrock_name": "fish_shad",
+      "icon": "joshymc/fish/shad.png",
+      "sha1": "d0b11cc0e82cd0bb007aaec8207c17d42de8dcc0"
+    },
+    "joshymc:fish/shadow_trout": {
+      "bedrock_name": "fish_shadow_trout",
+      "icon": "joshymc/fish/shadow_trout.png",
+      "sha1": "dff37af30335c13af982f88f3d8dd364a8a858eb"
+    },
+    "joshymc:fish/smallmouth_bass": {
+      "bedrock_name": "fish_smallmouth_bass",
+      "icon": "joshymc/fish/smallmouth_bass.png",
+      "sha1": "2deae4ab844f991028a5b8e1d63fefbf78c55c3e"
+    },
+    "joshymc:fish/smelt": {
+      "bedrock_name": "fish_smelt",
+      "icon": "joshymc/fish/smelt.png",
+      "sha1": "ed0e6824a972359119735f88bad6a047dec47e33"
+    },
+    "joshymc:fish/soul_salmon": {
+      "bedrock_name": "fish_soul_salmon",
+      "icon": "joshymc/fish/soul_salmon.png",
+      "sha1": "204c3ce857095272449e7c0521875c12006c9218"
+    },
+    "joshymc:fish/spectral_trout": {
+      "bedrock_name": "fish_spectral_trout",
+      "icon": "joshymc/fish/spectral_trout.png",
+      "sha1": "ab19c73839520857988fed776ae4d8e783f64c7a"
+    },
+    "joshymc:fish/storm_eel": {
+      "bedrock_name": "fish_storm_eel",
+      "icon": "joshymc/fish/storm_eel.png",
+      "sha1": "d5e43b80bda428c3e7fa9f2d268fbef2c884dbf3"
+    },
+    "joshymc:fish/sunfish": {
+      "bedrock_name": "fish_sunfish",
+      "icon": "joshymc/fish/sunfish.png",
+      "sha1": "199d9caf10cdbc6ecb7b9b701bf01455572a6bfe"
+    },
+    "joshymc:fish/the_one_fish": {
+      "bedrock_name": "fish_the_one_fish",
+      "icon": "joshymc/fish/the_one_fish.png",
+      "sha1": "6973dc41f76187ef22785461f0db7343d920df61"
+    },
+    "joshymc:fish/the_uncatchable": {
+      "bedrock_name": "fish_the_uncatchable",
+      "icon": "joshymc/fish/the_uncatchable.png",
+      "sha1": "ed05b25822f9d5fa7f812ee88e011c50daaf388b"
+    },
+    "joshymc:fish/thunder_barracuda": {
+      "bedrock_name": "fish_thunder_barracuda",
+      "icon": "joshymc/fish/thunder_barracuda.png",
+      "sha1": "ae3a9e3ab0dfa44064052d684814e08807f5f79d"
+    },
+    "joshymc:fish/tilapia": {
+      "bedrock_name": "fish_tilapia",
+      "icon": "joshymc/fish/tilapia.png",
+      "sha1": "5e8b22e6f95d8a0baf6b8dd6d2bd2a1a3485cd30"
+    },
+    "joshymc:fish/titans_catch": {
+      "bedrock_name": "fish_titans_catch",
+      "icon": "joshymc/fish/titans_catch.png",
+      "sha1": "4147603d47fa4bb4f558c1c7b416254f173c1a7a"
+    },
+    "joshymc:fish/twilight_salmon": {
+      "bedrock_name": "fish_twilight_salmon",
+      "icon": "joshymc/fish/twilight_salmon.png",
+      "sha1": "acb45774331db37e49b690f21ae50c50e37ad600"
+    },
+    "joshymc:fish/void_eel": {
+      "bedrock_name": "fish_void_eel",
+      "icon": "joshymc/fish/void_eel.png",
+      "sha1": "2569b755e58b7b8288429f029b2f5eb6ce7e030d"
+    },
+    "joshymc:fish/walleye": {
+      "bedrock_name": "fish_walleye",
+      "icon": "joshymc/fish/walleye.png",
+      "sha1": "4718c35ecbbc331c72006a1c37168636b2ccf7ef"
+    },
+    "joshymc:fish/wardens_catch": {
+      "bedrock_name": "fish_wardens_catch",
+      "icon": "joshymc/fish/wardens_catch.png",
+      "sha1": "b593d2acdbd463e09e5e1d9c32f402683bed025c"
+    },
+    "joshymc:fish/whitefish": {
+      "bedrock_name": "fish_whitefish",
+      "icon": "joshymc/fish/whitefish.png",
+      "sha1": "342149d43bc76fa4c5974b5725989965d5034f9a"
+    },
+    "joshymc:fish/world_serpent_scale": {
+      "bedrock_name": "fish_world_serpent_scale",
+      "icon": "joshymc/fish/world_serpent_scale.png",
+      "sha1": "310f2631414648cb8e7d5bfb5ae116fe25f465fa"
+    },
+    "joshymc:fish/yellowtail": {
+      "bedrock_name": "fish_yellowtail",
+      "icon": "joshymc/fish/yellowtail.png",
+      "sha1": "d4e190d47710e63dc00228907886af356d639cbb"
+    },
+    "joshymc:freeze_egg": {
+      "bedrock_name": "freeze_egg",
+      "icon": "joshymc/freeze_egg.png",
+      "sha1": "e4afca82412b8d4c761ede16c0c5463ccb6ce9fe"
+    },
+    "joshymc:frostbite": {
+      "bedrock_name": "frostbite",
+      "icon": "joshymc/frostbite.png",
+      "sha1": "2b2b783e23aa428e573740ccc66148c958c83441"
+    },
+    "joshymc:gemstone_pile": {
+      "bedrock_name": "gemstone_pile",
+      "icon": "joshymc/gemstone_pile.png",
+      "sha1": "eff25856034c8029efe35d38779c8532d0954cbe"
+    },
+    "joshymc:glacier_breaker": {
+      "bedrock_name": "glacier_breaker",
+      "icon": "joshymc/glacier_breaker.png",
+      "sha1": "d3553b0e2ec43f6bc12d5bcaa5bffbe3735b9987"
+    },
+    "joshymc:golden_crest": {
+      "bedrock_name": "golden_crest",
+      "icon": "joshymc/golden_crest.png",
+      "sha1": "0ee3dac3ea513f1aa7fab800ab9e179e2c7835a3"
+    },
+    "joshymc:gravedigger": {
+      "bedrock_name": "gravedigger",
+      "icon": "joshymc/gravedigger.png",
+      "sha1": "152b2c360d74b4c610dc15da6e6512498a42989f"
+    },
+    "joshymc:great_pumpkin_pie": {
+      "bedrock_name": "great_pumpkin_pie",
+      "icon": "joshymc/great_pumpkin_pie.png",
+      "sha1": "782e6086a41563da1b6cbca05bc14120b8f847ac"
+    },
+    "joshymc:gun": {
+      "bedrock_name": "gun",
+      "icon": "joshymc/gun.png",
+      "sha1": "be909da1b9f73b73b81bea6ac41cd38dd0abc4a5"
+    },
+    "joshymc:harvest_key": {
+      "bedrock_name": "harvest_key",
+      "icon": "joshymc/harvest_key.png",
+      "sha1": "3e3b439ba1941726e7909b4bf2c1dec83f070bb4"
+    },
+    "joshymc:harvest_scythe": {
+      "bedrock_name": "harvest_scythe",
+      "icon": "joshymc/harvest_scythe.png",
+      "sha1": "cb7939bd128178e84b73168be15409988d10f11f"
+    },
+    "joshymc:haunted_hollow_boots": {
+      "bedrock_name": "haunted_hollow_boots",
+      "icon": "joshymc/haunted_hollow_boots.png",
+      "sha1": "528fcaee06145d0209a893d11d6bc2acd88cb496"
+    },
+    "joshymc:haunted_hollow_chestplate": {
+      "bedrock_name": "haunted_hollow_chestplate",
+      "icon": "joshymc/haunted_hollow_chestplate.png",
+      "sha1": "ae3979429308e747c6d4f90689ba46d3d845d22d"
+    },
+    "joshymc:haunted_hollow_leggings": {
+      "bedrock_name": "haunted_hollow_leggings",
+      "icon": "joshymc/haunted_hollow_leggings.png",
+      "sha1": "28bf64df46039dd3a2faa26dea2e30a07118937e"
+    },
+    "joshymc:hearthkeeper": {
+      "bedrock_name": "hearthkeeper",
+      "icon": "joshymc/hearthkeeper.png",
+      "sha1": "73b9b80dca5b7b127546a9b712a422a0fd372038"
+    },
+    "joshymc:homestead_key": {
+      "bedrock_name": "homestead_key",
+      "icon": "joshymc/homestead_key.png",
+      "sha1": "30f8e6314765ee17de425fb26e11386c16f72edd"
+    },
+    "joshymc:ice_skates": {
+      "bedrock_name": "ice_skates",
+      "icon": "joshymc/ice_skates.png",
+      "sha1": "2dae002dabaedc076b568b2e30265d0c0874b0ea"
+    },
+    "joshymc:jack_o_lantern_mask": {
+      "bedrock_name": "jack_o_lantern_mask",
+      "icon": "joshymc/jack_o_lantern_mask.png",
+      "sha1": "1e214f0a50c77797c4cf4d4df479c90af018d983"
+    },
+    "joshymc:january_key": {
+      "bedrock_name": "january_key",
+      "icon": "joshymc/january_key.png",
+      "sha1": "fcfeb00f1be1b70d7fa4a744a6aa3c4ab436e76a"
+    },
+    "joshymc:joshees_bar": {
+      "bedrock_name": "joshees_bar",
+      "icon": "joshymc/joshees_bar.png",
+      "sha1": "9dde6c80ce2bb6dd192f8ccbadc7b497e16666db"
+    },
+    "joshymc:july_key": {
+      "bedrock_name": "july_key",
+      "icon": "joshymc/july_key.png",
+      "sha1": "e571cf7a45f7077d66c8de72f3b568fefaa28d6c"
+    },
+    "joshymc:june_key": {
+      "bedrock_name": "june_key",
+      "icon": "joshymc/june_key.png",
+      "sha1": "4e5123b24cb89e59e1dfddaae7b84b3a2f93c88e"
+    },
+    "joshymc:knockback_egg": {
+      "bedrock_name": "knockback_egg",
+      "icon": "joshymc/knockback_egg.png",
+      "sha1": "98f89cbb97a0d7946e79be4c41b6b951aaa7b187"
+    },
+    "joshymc:krampus_boots": {
+      "bedrock_name": "krampus_boots",
+      "icon": "joshymc/krampus_boots.png",
+      "sha1": "61a4eca296c44c758b9b567b0ada035d273f07b4"
+    },
+    "joshymc:krampus_chestplate": {
+      "bedrock_name": "krampus_chestplate",
+      "icon": "joshymc/krampus_chestplate.png",
+      "sha1": "82853471c55479aec752a0a7cfc54d48b0f203af"
+    },
+    "joshymc:krampus_helmet": {
+      "bedrock_name": "krampus_helmet",
+      "icon": "joshymc/krampus_helmet.png",
+      "sha1": "b5b18d1a9d6157da356d4a75a2f95ab8cbe0e474"
+    },
+    "joshymc:krampus_leggings": {
+      "bedrock_name": "krampus_leggings",
+      "icon": "joshymc/krampus_leggings.png",
+      "sha1": "397eb66e66a6c88d94908ed4d4c9af024d987a68"
+    },
+    "joshymc:large_gold_pile": {
+      "bedrock_name": "large_gold_pile",
+      "icon": "joshymc/large_gold_pile.png",
+      "sha1": "ffa6423831cfa0ec22ae18a9a3e83b6e9104e698"
+    },
+    "joshymc:levitation_egg": {
+      "bedrock_name": "levitation_egg",
+      "icon": "joshymc/levitation_egg.png",
+      "sha1": "285f4be176fb8325f00ee0f6efe5d673d818d39e"
+    },
+    "joshymc:lightning_egg": {
+      "bedrock_name": "lightning_egg",
+      "icon": "joshymc/lightning_egg.png",
+      "sha1": "79b6d6a6919f6fbe4bb41f56f195973dffaa4c90"
+    },
+    "joshymc:link_pop_blue": {
+      "bedrock_name": "link_pop_blue",
+      "icon": "joshymc/link_pop_blue.png",
+      "sha1": "88d91280219d054330f207172f2582920d2d28ce"
+    },
+    "joshymc:link_pop_green": {
+      "bedrock_name": "link_pop_green",
+      "icon": "joshymc/link_pop_green.png",
+      "sha1": "ddae19a6ebe4903ad8820fc587fdb6f4cf617c3d"
+    },
+    "joshymc:link_pop_orange": {
+      "bedrock_name": "link_pop_orange",
+      "icon": "joshymc/link_pop_orange.png",
+      "sha1": "922af06a7c7c665f2119a379c31845d87292f894"
+    },
+    "joshymc:link_pop_purple": {
+      "bedrock_name": "link_pop_purple",
+      "icon": "joshymc/link_pop_purple.png",
+      "sha1": "6499264e89774f35e36f4172f7a7cb6cc492d85f"
+    },
+    "joshymc:link_pop_red": {
+      "bedrock_name": "link_pop_red",
+      "icon": "joshymc/link_pop_red.png",
+      "sha1": "077671138c18d85d44d07c00b26806e9f979274f"
+    },
+    "joshymc:lumberjacks_legacy": {
+      "bedrock_name": "lumberjacks_legacy",
+      "icon": "joshymc/lumberjacks_legacy.png",
+      "sha1": "cdb038af42e63ad55f981e25db4284a55be47921"
+    },
+    "joshymc:maplefang": {
+      "bedrock_name": "maplefang",
+      "icon": "joshymc/maplefang.png",
+      "sha1": "15139865170284e35f4c9f71aba1addb9ca40bea"
+    },
+    "joshymc:march_key": {
+      "bedrock_name": "march_key",
+      "icon": "joshymc/march_key.png",
+      "sha1": "af997657620c3bf440145d634e96f740dd55c2a8"
+    },
+    "joshymc:may_key": {
+      "bedrock_name": "may_key",
+      "icon": "joshymc/may_key.png",
+      "sha1": "2a1124f8176bcfd22df9850ac71e3ede17f95213"
+    },
+    "joshymc:mixed_treasure_pile": {
+      "bedrock_name": "mixed_treasure_pile",
+      "icon": "joshymc/mixed_treasure_pile.png",
+      "sha1": "8b0fde98b43df7348245d5739cca2bb6656f940a"
+    },
+    "joshymc:money_key": {
+      "bedrock_name": "money_key",
+      "icon": "joshymc/money_key.png",
+      "sha1": "41c55eb5bd2a73d696b15c525804853d78c8fb38"
+    },
+    "joshymc:nordic_greaves": {
+      "bedrock_name": "nordic_greaves",
+      "icon": "joshymc/nordic_greaves.png",
+      "sha1": "fe696eaafb07884816e29e86ec3c74ac1bbe4697"
+    },
+    "joshymc:nordic_helm": {
+      "bedrock_name": "nordic_helm",
+      "icon": "joshymc/nordic_helm.png",
+      "sha1": "d340794b0fa6afac998db04b84339db329efb9da"
+    },
+    "joshymc:nordic_plate": {
+      "bedrock_name": "nordic_plate",
+      "icon": "joshymc/nordic_plate.png",
+      "sha1": "a2295c6fb0fb72c42db8c0fcb8a3a35ad146bb70"
+    },
+    "joshymc:november_key": {
+      "bedrock_name": "november_key",
+      "icon": "joshymc/november_key.png",
+      "sha1": "1ec11a358f6ec5a2790159122151a2f05d342797"
+    },
+    "joshymc:october_key": {
+      "bedrock_name": "october_key",
+      "icon": "joshymc/october_key.png",
+      "sha1": "76033787c4e3689ed65c7098decedad1ca3d37d2"
+    },
+    "joshymc:orchard_pickaxe": {
+      "bedrock_name": "orchard_pickaxe",
+      "icon": "joshymc/orchard_pickaxe.png",
+      "sha1": "83387dccd74b7cac08e798e6f37079e167eac2e3"
+    },
+    "joshymc:overflowing_treasure_chest": {
+      "bedrock_name": "overflowing_treasure_chest",
+      "icon": "joshymc/overflowing_treasure_chest.png",
+      "sha1": "5ff8ad48bb33e8871ac813bb57b07e9773857ab5"
+    },
+    "joshymc:peanut_butter_cup": {
+      "bedrock_name": "peanut_butter_cup",
+      "icon": "joshymc/peanut_butter_cup.png",
+      "sha1": "0da98dced22994eba9b840e9e7f71ad0e4c3dee3"
+    },
+    "joshymc:phantoms_grasp": {
+      "bedrock_name": "phantoms_grasp",
+      "icon": "joshymc/phantoms_grasp.png",
+      "sha1": "686b7dbbcd4e41f7cc4ca39c49966629d8ea946d"
+    },
+    "joshymc:pumpkin_pummel": {
+      "bedrock_name": "pumpkin_pummel",
+      "icon": "joshymc/pumpkin_pummel.png",
+      "sha1": "6b88f6faa152a7376e54b310e52f2656776066ea"
+    },
+    "joshymc:rurus": {
+      "bedrock_name": "rurus",
+      "icon": "joshymc/rurus.png",
+      "sha1": "0f73e5604ef5923c868f388929f5a7ba556bda57"
+    },
+    "joshymc:sell_wand": {
+      "bedrock_name": "sell_wand",
+      "icon": "joshymc/sell_wand.png",
+      "sha1": "a50b7db93c84583df6f4d40ee302d7b61bcafce0"
+    },
+    "joshymc:september_key": {
+      "bedrock_name": "september_key",
+      "icon": "joshymc/september_key.png",
+      "sha1": "2667f7330be15326aefdd17c80bb336469ec6f9b"
+    },
+    "joshymc:shark_boots": {
+      "bedrock_name": "shark_boots",
+      "icon": "joshymc/shark_boots.png",
+      "sha1": "4026e11c745194f5834818e3c8f467c1b6898580"
+    },
+    "joshymc:shark_chestplate": {
+      "bedrock_name": "shark_chestplate",
+      "icon": "joshymc/shark_chestplate.png",
+      "sha1": "aada5abf4be2c1bb1de32b816e7380e201a3707a"
+    },
+    "joshymc:shark_helmet": {
+      "bedrock_name": "shark_helmet",
+      "icon": "joshymc/shark_helmet.png",
+      "sha1": "6416bbf26a3f29e48cf5134af9f01fabd18dfcbf"
+    },
+    "joshymc:shark_leggings": {
+      "bedrock_name": "shark_leggings",
+      "icon": "joshymc/shark_leggings.png",
+      "sha1": "0d829bff7a0359836f0c78cd04def2c6d8b25db9"
+    },
+    "joshymc:small_gold_pile": {
+      "bedrock_name": "small_gold_pile",
+      "icon": "joshymc/small_gold_pile.png",
+      "sha1": "6a234b1109d7f6d3567accee35dfbf3326660162"
+    },
+    "joshymc:snowveil_guard": {
+      "bedrock_name": "snowveil_guard",
+      "icon": "joshymc/snowveil_guard.png",
+      "sha1": "b37e93ed22c41066a2a66182e2a83a741e60bd8f"
+    },
+    "joshymc:snowveil_hood": {
+      "bedrock_name": "snowveil_hood",
+      "icon": "joshymc/snowveil_hood.png",
+      "sha1": "57366cfd0d27ea1ec3a7c8b8e3d84c5dd6eb1c04"
+    },
+    "joshymc:snowveil_leggings": {
+      "bedrock_name": "snowveil_leggings",
+      "icon": "joshymc/snowveil_leggings.png",
+      "sha1": "a7ee4fcead0a1188be19ea9c69c72a8cc11fe454"
+    },
+    "joshymc:stockpile_key": {
+      "bedrock_name": "stockpile_key",
+      "icon": "joshymc/stockpile_key.png",
+      "sha1": "8e3fccc81ea67d6269ea64ea8db685098cafe0dd"
+    },
+    "joshymc:swap_egg": {
+      "bedrock_name": "swap_egg",
+      "icon": "joshymc/swap_egg.png",
+      "sha1": "a0dec32c23fb3c67c2f840660edb3a27564dcec6"
+    },
+    "joshymc:teleport_egg": {
+      "bedrock_name": "teleport_egg",
+      "icon": "joshymc/teleport_egg.png",
+      "sha1": "cda46a993d1991d282d4f4e9169ac12fe794f15c"
+    },
+    "joshymc:token": {
+      "bedrock_name": "token",
+      "icon": "joshymc/token.png",
+      "sha1": "9d81b9a87b9663180b9bbd13e6057b0abad46d8e"
+    },
+    "joshymc:tomato": {
+      "bedrock_name": "tomato",
+      "icon": "joshymc/tomato.png",
+      "sha1": "096daa201d04c26916549bfaf27ba2d45b7a29be"
+    },
+    "joshymc:viking_boomerang": {
+      "bedrock_name": "viking_boomerang",
+      "icon": "joshymc/viking_boomerang.png",
+      "sha1": "ca6349845a19a723dbbf22348625df78e4fe830b"
+    },
+    "joshymc:viking_boots": {
+      "bedrock_name": "viking_boots",
+      "icon": "joshymc/viking_boots.png",
+      "sha1": "6e091c716970aeb9f0c9557e6035496b03fcf479"
+    },
+    "joshymc:viking_chestplate": {
+      "bedrock_name": "viking_chestplate",
+      "icon": "joshymc/viking_chestplate.png",
+      "sha1": "a54cde5e7e78139a0b886d7a62c984c8f9b25dd1"
+    },
+    "joshymc:viking_helmet": {
+      "bedrock_name": "viking_helmet",
+      "icon": "joshymc/viking_helmet.png",
+      "sha1": "c376a14badccec6e61fcab116c34fc50d0b5c432"
+    },
+    "joshymc:viking_leggings": {
+      "bedrock_name": "viking_leggings",
+      "icon": "joshymc/viking_leggings.png",
+      "sha1": "f522b7476b38b97be42395c35f07e5b2b0bef29b"
+    },
+    "joshymc:void_drill": {
+      "bedrock_name": "void_drill",
+      "icon": "joshymc/void_drill.png",
+      "sha1": "c0d801dc83ba784a1603e374cecbfb6e635e4ea7"
+    },
+    "joshymc:void_drill_5x5": {
+      "bedrock_name": "void_drill_5x5",
+      "icon": "joshymc/void_drill_5x5.png",
+      "sha1": "6b1d7c776860ed268f7acc8da93843e05e027877"
+    },
+    "joshymc:wings_of_the_blizzard": {
+      "bedrock_name": "wings_of_the_blizzard",
+      "icon": "joshymc/wings_of_the_blizzard.png",
+      "sha1": "4ac39b9bb2e6103ad51e73880110e7905c210fa1"
+    },
+    "joshymc:winters_wrath": {
+      "bedrock_name": "winters_wrath",
+      "icon": "joshymc/winters_wrath.png",
+      "sha1": "40d9d5e6317f2eeed5330e878fea959cf84b8826"
+    },
+    "joshymc:woodland_hunter": {
+      "bedrock_name": "woodland_hunter",
+      "icon": "joshymc/woodland_hunter.png",
+      "sha1": "fcad7d2213f6a6c3ee80c768692adea9e4c69524"
+    }
+  }
+}
