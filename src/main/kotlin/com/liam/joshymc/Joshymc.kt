@@ -139,6 +139,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var resourcePackManager: ResourcePackManager
         private set
+    lateinit var bedrockPackManager: com.liam.joshymc.bedrock.BedrockPackManager
+        private set
     lateinit var databaseManager: DatabaseManager
         private set
     lateinit var playerDatabaseManager: PlayerDatabaseManager
@@ -424,6 +426,7 @@ class Joshymc : JavaPlugin() {
         killStreakManager = KillStreakManager(this)
         loginStreakManager = com.liam.joshymc.manager.LoginStreakManager(this)
         resourcePackManager = ResourcePackManager(this)
+        bedrockPackManager = com.liam.joshymc.bedrock.BedrockPackManager(this)
         discordManager = DiscordManager(this)
         lagCleanerManager = LagCleanerManager(this)
         afkManager = AFKManager(this)
@@ -571,6 +574,8 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("event-quests")) eventQuestManager.start()
         if (isFeatureEnabled("talismans")) talismanManager.start()
         if (isFeatureEnabled("custom-fishing")) fishingManager.start()
+        // After items, crates and fish: it maps their models for Geyser, which reads them when it starts.
+        bedrockPackManager.start()
         if (isFeatureEnabled("kill-effects")) killEffectManager.start()
         adminManager.start()
         modModeManager.start()
@@ -792,6 +797,8 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("candy-shop")) safe("candyShopManager.start") { candyShopManager.start() }
         if (isFeatureEnabled("event-shop")) safe("eventShopManager.start") { eventShopManager.start() }
         safe("stuckRecoveryManager.start") { stuckRecoveryManager.start() }
+        // Refreshes the exported files (crate keys may have changed); Geyser reads them on its next start.
+        safe("bedrockPackManager.start") { bedrockPackManager.start() }
 
         // 7. Commands just get new instances (executors are swapped, not re-registered)
         safe("commandManager.registerAll") { commandManager.registerAll() }

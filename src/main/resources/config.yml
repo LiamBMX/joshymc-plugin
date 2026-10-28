@@ -40,6 +40,21 @@ features:
   candy-shop: true
   event-shop: true
   stuck-recovery: true
+  bedrock-pack: true
+
+# Bedrock custom items through Geyser (issue #1314). On startup JoshyMC writes
+# packs/JoshyMC-Bedrock.mcpack and custom_mappings/joshymc.json into Geyser's folder (only
+# those two files, only when they changed) plus a copy in plugins/Joshymc/bedrock/.
+# Geyser loads them when it starts. See docs/bedrock-custom-items.md.
+bedrock-pack:
+  # Geyser's data folder, relative to the server folder. Empty = find the Geyser plugin.
+  geyser-folder: ""
+  # Base items whose custom looks stay vanilla on Bedrock, because a Bedrock custom item
+  # can't do what the vanilla one does there (blocking, gliding). Add more here if a
+  # Bedrock test shows a mapped item losing its vanilla behavior.
+  excluded-base-items:
+    - minecraft:shield
+    - minecraft:elytra
 
 # Stuck-player recovery (issue #1241). Paper kicks "Flying is not enabled on this server" after a
 # client reports floating for ~4s; a client that never received the chunk it stands in floats

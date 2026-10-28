@@ -7,6 +7,7 @@ For each item it writes textures to assets/joshymc/textures/item/<id>/, models t
 assets/joshymc/models/item/<id>/, the item definition assets/joshymc/items/<id>.json
 and, for wearables, assets/joshymc/equipment/<id>.json plus its worn textures.
 Items that fail art.check are skipped so one broken module never blocks the rest.
+Afterwards it refreshes the Bedrock icons (art.bedrock) for the whole pack.
 Gradle zips resourcepack/ into the plugin JAR, so run this before building the plugin.
 """
 from __future__ import annotations
@@ -17,7 +18,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from art import check, kit
+from art import bedrock, check, kit
 
 HERE = Path(__file__).resolve().parent
 ASSETS = HERE.parent / "assets" / kit.NAMESPACE
@@ -73,7 +74,8 @@ def main(argv: list[str]) -> int:
     ids = argv or sorted(m.name for m in pkgutil.iter_modules([str(HERE / "items")]) if not m.name.startswith("_"))
     built = sum(build(i) for i in ids)
     print(f"{built}/{len(ids)} items built")
-    return 0 if built == len(ids) else 1
+    icons = bedrock.main([])
+    return 0 if built == len(ids) and icons == 0 else 1
 
 
 if __name__ == "__main__":

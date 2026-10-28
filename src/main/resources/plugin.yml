@@ -4,6 +4,8 @@ main: com.liam.joshymc.Joshymc
 api-version: '26.2'
 description: Custom plugin for Joshy's server
 authors: [liam]
+# Geyser reads the Bedrock pack and item mappings JoshyMC writes on enable (issue #1314).
+loadbefore: [Geyser-Spigot]
 
 commands:
   joshymc:

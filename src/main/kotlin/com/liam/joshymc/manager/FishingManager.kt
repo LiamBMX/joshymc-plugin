@@ -95,6 +95,9 @@ class FishingManager(private val plugin: Joshymc) : Listener {
 
     // ── Fish Registration ───────────────────────────────────────────────
 
+    /** Every registered fish (empty until [start]), for the Bedrock item mappings (issue #1314). */
+    fun registeredFish(): List<CustomFish> = allFish.toList()
+
     private fun register(fish: CustomFish) {
         allFish.add(fish)
         fishById[fish.id] = fish
