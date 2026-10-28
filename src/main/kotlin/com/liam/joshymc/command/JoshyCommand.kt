@@ -108,7 +108,18 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
 
-        plugin.giveItemSafely(target, customItem.createItemStack(amount))
+        // Beacon potions (issue #1318) are made with the target's gamemode's duration and level.
+        val stack = if (customItem is com.liam.joshymc.potion.BeaconPotionItem) {
+            val gamemode = plugin.gamemodeLockManager.gamemodeOf(target.world)
+            if (!plugin.beaconPotionManager.settingsFor(gamemode).isEnabled(customItem.effect)) {
+                Msg.error(sender, "${customItem.id} is disabled on ${gamemode.displayName}.")
+                return
+            }
+            plugin.beaconPotionManager.create(customItem.effect, customItem.variant, gamemode, amount)
+        } else {
+            customItem.createItemStack(amount)
+        }
+        plugin.giveItemSafely(target, stack)
         sender.sendMessage(
             Component.text("Gave ", NamedTextColor.GREEN)
                 .append(customItem.displayName)

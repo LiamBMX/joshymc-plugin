@@ -249,6 +249,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var flyVoucherManager: com.liam.joshymc.flight.FlyVoucherManager
         private set
+    lateinit var beaconPotionManager: com.liam.joshymc.potion.BeaconPotionManager
+        private set
     lateinit var purchaseFulfillmentManager: com.liam.joshymc.manager.PurchaseFulfillmentManager
         private set
     lateinit var stuckRecoveryManager: com.liam.joshymc.recovery.StuckRecoveryManager
@@ -496,12 +498,15 @@ class Joshymc : JavaPlugin() {
         eventShopManager = com.liam.joshymc.eventshop.EventShopManager(this)
         stuckRecoveryManager = com.liam.joshymc.recovery.StuckRecoveryManager(this)
         gamemodeLockManager = com.liam.joshymc.gamemode.GamemodeLockManager(this)
+        beaconPotionManager = com.liam.joshymc.potion.BeaconPotionManager(this)
 
         itemManager.registerAll()
         recipeManager.registerAll()
         commandManager.registerAll()
         // Right after the commands get their executors: it wraps the gamemode-assigned ones.
         gamemodeLockManager.start()
+        // After the gamemode lock: brewing mixes are built for the server's gamemode.
+        beaconPotionManager.start()
         listenerManager.registerAll()
         linkManager.load()
         warpManager.start()
@@ -652,6 +657,7 @@ class Joshymc : JavaPlugin() {
         candyShopManager.stop()
         eventShopManager.stop()
         flightTimeManager.stop()
+        beaconPotionManager.stop()
         stuckRecoveryManager.stop()
         spawnDecorationManager.stop()
         listenerManager.passiveEnchantListener?.stop()
@@ -748,6 +754,7 @@ class Joshymc : JavaPlugin() {
         // 4. Clear registries
         safe("itemManager.clear") { itemManager.clear() }
         safe("recipeManager.clear") { recipeManager.clear() }
+        safe("beaconPotionManager.stop") { beaconPotionManager.stop() }
 
         // 5. Reload config from disk
         safe("reloadConfig") { reloadConfig() }
@@ -803,6 +810,7 @@ class Joshymc : JavaPlugin() {
         // 7. Commands just get new instances (executors are swapped, not re-registered)
         safe("commandManager.registerAll") { commandManager.registerAll() }
         safe("gamemodeLockManager.start") { gamemodeLockManager.start() }
+        safe("beaconPotionManager.start") { beaconPotionManager.start() }
 
         // 8. Restart Discord
         safe("discordManager.start") { discordManager.start(announceStartup = false) }
