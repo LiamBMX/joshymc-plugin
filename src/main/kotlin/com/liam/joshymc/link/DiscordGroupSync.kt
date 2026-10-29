@@ -36,6 +36,12 @@ class DiscordGroupSync(private val plugin: Joshymc, private val isLinked: (UUID)
     fun reload() {
         val section = plugin.config.getConfigurationSection("discord.linking.verified-group")
         enabled = section?.getBoolean("enabled", true) ?: true
+        // Issue #1323: only the primary server's links decide the group. A secondary's own
+        // (usually empty) link table would strip it again when LuckPerms is shared.
+        if (enabled && !plugin.networkIdentityManager.isPrimary) {
+            enabled = false
+            plugin.logger.info("[Link] Not syncing the Discord verification group: this is a secondary network instance.")
+        }
         group = section?.getString("group")?.trim()?.lowercase()?.takeIf { GROUP_NAME.matches(it) } ?: run {
             if (section?.getString("group") != null) {
                 plugin.logger.warning("[Link] discord.linking.verified-group.group is not a valid LuckPerms group name; using '$DEFAULT_GROUP'.")

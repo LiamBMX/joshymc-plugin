@@ -74,6 +74,21 @@ stuck-recovery:
   # After a flying kick, a login within this many minutes starts at a safe spot instead.
   login-recovery-window-minutes: 15
 
+# Network identity (issue #1323). Every JoshyMC Paper server has its own copy of this file
+# and its own database; nothing here is shared between servers. See docs/network.md.
+#   Survival SMP:  server-id: survival   primary: true    (gamemode-lock.server-gamemode: survival)
+#   Lifesteal:     server-id: lifesteal  primary: false   (gamemode-lock.server-gamemode: lifesteal)
+network:
+  # This server's id: 1-32 lower-case letters, digits, - or _. Must be different on every
+  # server. Read at startup; changing it needs a restart.
+  server-id: survival
+  # Exactly ONE server is primary. It runs the network-wide jobs: the Discord bot, update
+  # highlights and the Discord verification group sync. Gameplay works the same either way.
+  primary: true
+  # Secondary servers don't connect the Discord bot, so the same bot never runs twice.
+  # Set true on a secondary only if discord.token there is a different bot of its own.
+  secondary-discord-bot: false
+
 # Gamemode isolation locks (issue #1289), toggled with /jgamemode lock|unlock <gamemode> confirm.
 # While a gamemode is locked, the commands and features assigned to it only work on that gamemode.
 # Unassigned commands are never affected.
@@ -1243,6 +1258,47 @@ event-shop:
   messages:
     open: "&6&lEVENT SHOP IS NOW OPEN!\n&f{count} random items are available for the next {duration}.\n&7Use &6/eventshop &7or &6/eshop &7to browse!"
     close: "&6&lThe Event Shop has closed!\n&7Check back for the next rotation."
+
+# Drinkable beacon potions (issue #1318). Vanilla already brews Speed (Swiftness), Jump Boost
+# (Leaping), Strength and Regeneration, and those stay vanilla. JoshyMC adds the two beacon effects
+# with no drinkable potion, Haste and Resistance, brewed in ordinary brewing stands:
+#   Awkward Potion + ingredient      -> Potion of X         (normal)
+#   Potion of X    + Redstone Dust   -> Long Potion of X    (extended)
+#   Potion of X    + Glowstone Dust  -> Strong Potion of X  (enhanced)
+# Drinkable only: Gunpowder, Dragon's Breath and every other ingredient leave them unchanged.
+# Each gamemode has its own settings; a potion is stamped with the gamemode it was brewed for and
+# only works there. `level` is 1-based (2 = Haste II), capped at 5; durations are 1..3600 seconds.
+# An ingredient may not be a vanilla brewing ingredient or the other potion's ingredient.
+# Applies to newly brewed potions on /joshymc reload.
+beacon-potions:
+  survival:
+    enabled: true
+    haste:
+      enabled: true
+      ingredient: AMETHYST_SHARD
+      normal: { duration-seconds: 180, level: 1 }
+      extended: { duration-seconds: 480, level: 1 }
+      enhanced: { duration-seconds: 90, level: 2 }
+    resistance:
+      enabled: true
+      ingredient: ARMADILLO_SCUTE
+      normal: { duration-seconds: 180, level: 1 }
+      extended: { duration-seconds: 480, level: 1 }
+      enhanced: { duration-seconds: 90, level: 2 }
+  lifesteal:
+    enabled: true
+    haste:
+      enabled: true
+      ingredient: AMETHYST_SHARD
+      normal: { duration-seconds: 180, level: 1 }
+      extended: { duration-seconds: 480, level: 1 }
+      enhanced: { duration-seconds: 90, level: 2 }
+    resistance:
+      enabled: true
+      ingredient: ARMADILLO_SCUTE
+      normal: { duration-seconds: 180, level: 1 }
+      extended: { duration-seconds: 480, level: 1 }
+      enhanced: { duration-seconds: 90, level: 2 }
 
 # Peanut Butter Cup (issue #1198): a custom candy that eats like a Cookie. Eating one also gives
 # a short effect that its name and lore deliberately keep secret (default Speed III for 6 seconds).

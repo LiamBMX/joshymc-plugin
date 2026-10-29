@@ -22,6 +22,11 @@
       "icon": "joshymc/autumns_edge.png",
       "sha1": "cc9d671b1217e8b36b57f989a957804c94461f0a"
     },
+    "joshymc:bat_wings": {
+      "bedrock_name": "bat_wings",
+      "icon": "joshymc/bat_wings.png",
+      "sha1": "49a4dba7e289922db4d59c02644163d3e0d0a35e"
+    },
     "joshymc:blindness_egg": {
       "bedrock_name": "blindness_egg",
       "icon": "joshymc/blindness_egg.png",

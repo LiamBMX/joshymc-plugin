@@ -42,6 +42,11 @@ class ItemManager(private val plugin: Joshymc) {
         register(Rurus())
         register(CandyCorn())
 
+        // Drinkable beacon potions (issue #1318): Haste and Resistance, normal / long / strong
+        com.liam.joshymc.potion.BeaconPotionEffect.entries.forEach { effect ->
+            com.liam.joshymc.potion.BeaconPotionVariant.entries.forEach { register(com.liam.joshymc.potion.BeaconPotionItem(effect, it)) }
+        }
+
         // Throwables
         register(Tomato())
 
@@ -112,6 +117,8 @@ class ItemManager(private val plugin: Joshymc) {
         register(SnowmanChestplate())
         register(SnowmanLeggings())
         register(SnowmanBoots())
+        // Bat Wings elytra (Survival only, issue #1317)
+        register(BatWings())
 
         // Retextured Trial Keys
         register(JanuaryKey())

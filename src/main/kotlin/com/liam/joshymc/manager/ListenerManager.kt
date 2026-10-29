@@ -96,6 +96,8 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(EditKitListener(plugin), plugin)
         pm.registerEvents(EasterEggListener(plugin), plugin)
         pm.registerEvents(PeanutButterCupListener(plugin), plugin)
+        // Beacon potion brewing + drinking rules (issue #1318)
+        pm.registerEvents(plugin.beaconPotionManager, plugin)
         pm.registerEvents(LinkPopListener(plugin), plugin)
         pm.registerEvents(JosheesBarListener(plugin), plugin)
         pm.registerEvents(RurusListener(plugin), plugin)

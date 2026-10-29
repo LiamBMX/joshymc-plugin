@@ -29,6 +29,8 @@ class UpdateHighlightsAnnouncer(private val plugin: Joshymc) {
     fun announce(jda: JDA) {
         try {
             if (!enabled) return
+            // Every server runs the same release; only the primary announces it (issue #1323).
+            if (!plugin.networkIdentityManager.isPrimary) return
             val version = plugin.pluginMeta.version
             // Dev builds share the bot token in testing; only release builds announce.
             if (version.endsWith("-SNAPSHOT")) return

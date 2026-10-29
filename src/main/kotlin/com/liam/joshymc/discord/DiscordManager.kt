@@ -123,7 +123,7 @@ class DiscordManager(private val plugin: Joshymc) {
             if (staffMonitoringEnabled && (channelSet(DiscordConfig.Channel.STAFF_ANTICHEAT.key, staffAnticheatChannelId) or
                     channelSet(DiscordConfig.Channel.STAFF_REPORTS.key, staffReportsChannelId))) add("staff monitoring")
             if (punishmentSyncEnabled && channelSet("discord.channels.punishments-forum", punishmentForumChannelId)) add("punishment logs")
-            if (updateHighlights.enabled && channelSet("update-highlights.discord-channel", updateHighlights.channelId)) add("update highlights")
+            if (updateHighlights.enabled && plugin.networkIdentityManager.isPrimary && channelSet("update-highlights.discord-channel", updateHighlights.channelId)) add("update highlights")
             if (cfg.getBoolean("anti-dupe.enabled", true) && cfg.getBoolean("anti-dupe.discord.enabled", true) &&
                 channelSet("anti-dupe.discord.channel-id", cfg.getString("anti-dupe.discord.channel-id"))) add("anti-dupe alerts")
             if (cfg.getBoolean("combat-alerts.enabled", true) && cfg.getBoolean("combat-alerts.discord.enabled", true) &&
@@ -148,6 +148,12 @@ class DiscordManager(private val plugin: Joshymc) {
 
     /** [announceStartup] is true only for a real server start, so /joshymc reload doesn't post "Server started". */
     fun start(announceStartup: Boolean = true) {
+        // Issue #1323: one bot per network. A secondary connects only with its own bot token,
+        // opted into via network.secondary-discord-bot; its punishment logs stay in its database.
+        if (!plugin.networkIdentityManager.discordBotAllowed) {
+            plugin.logger.info("[Discord] Not connecting: this is a secondary network instance (network.primary: false). Set network.secondary-discord-bot: true only if discord.token is this server's own bot.")
+            return
+        }
         val token = plugin.config.getString("discord.token") ?: ""
         if (token.isEmpty() || token == "YOUR_BOT_TOKEN_HERE") {
             plugin.logger.warning("[Discord] Bot token not set in config.yml — integration disabled.")
