@@ -68,6 +68,7 @@ import com.liam.joshymc.manager.EndManager
 import com.liam.joshymc.manager.ChatManager
 import com.liam.joshymc.manager.BoosterManager
 import com.liam.joshymc.manager.MobStackManager
+import com.liam.joshymc.lifecycle.ShutdownSequence
 import com.liam.joshymc.util.ConfigUtil
 import com.liam.joshymc.util.ProfanityFilter
 import org.bukkit.Bukkit
@@ -77,6 +78,7 @@ import org.bukkit.World
 import org.bukkit.event.HandlerList
 import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 class Joshymc : JavaPlugin() {
 
@@ -99,7 +101,13 @@ class Joshymc : JavaPlugin() {
         )
 
         private const val MOB_WAVES_KEY = "hosted-events.mobs.waves"
+
+        /** How long onDisable waits for async tasks already running before closing the databases. */
+        private const val ASYNC_TASK_WAIT_SECONDS = 3L
     }
+
+    /** Set once onDisable starts, so a repeated call can't run the final saves twice. */
+    private var shutdownStarted = false
 
     fun isFeatureEnabled(feature: String): Boolean {
         return config.getBoolean("features.$feature", true)
@@ -353,6 +361,7 @@ class Joshymc : JavaPlugin() {
 
     override fun onEnable() {
         instance = this
+        shutdownStarted = false
 
         ConfigUtil.backupsDir(dataFolder)
 
@@ -633,70 +642,117 @@ class Joshymc : JavaPlugin() {
     }
 
     override fun onDisable() {
-        storageManager.saveOpenVaults()
-        overflowManager.closeOpenStorages()
-        enderChestManager.saveOpenSessions()
-        if (::sellCommand.isInitialized) sellCommand.resolveAllOpenSessions()
-        hologramManager.stop()
-        npcManager.stop()
-        crateManager.stop()
-        auctionManager.stop()
-        giveawayManager.stop()
-        giftManager.stop()
-        coinflipManager.stop()
-        creditsCoinflipManager.stop()
-        casinoMinesManager.stop()
-        casinoRouletteManager.stop()
-        casinoCrashManager.stop()
-        casinoTowersManager.stop()
-        casinoManager.stop()
-        orderManager.stop()
-        hopperPlusManager.stop()
-        spawnerManager.stop()
-        kitManager.stop()
-        afkManager.stop()
-        antiCheatManager.stop()
-        portalManager.stop()
-        voteManager.stop()
-        purchaseFulfillmentManager.stop()
-        candyShopManager.stop()
-        eventShopManager.stop()
-        flightTimeManager.stop()
-        beaconPotionManager.stop()
-        stuckRecoveryManager.stop()
-        spawnDecorationManager.stop()
-        listenerManager.passiveEnchantListener?.stop()
-        listenerManager.quickHitListener?.stop()
-        listenerManager.thrownTridentVisualListener?.stop()
-        listenerManager.greatPumpkinPieListener?.stop()
-        listenerManager.furnitureListener?.stop()
+        // Issue #1325: every step runs on its own, so one manager throwing (or never
+        // initialized because onEnable failed part way) can't keep the rest, and above all
+        // the two databases, from shutting down. Same order as before; see ShutdownSequence.
+        if (shutdownStarted) {
+            logger.warning("[Shutdown] onDisable called again; JoshyMC already shut down.")
+            return
+        }
+        shutdownStarted = true
+
+        val shutdown = ShutdownSequence(logger)
+        // Final saves first, while every manager they use is still up.
+        shutdown.step("storageManager.saveOpenVaults", { ::storageManager.isInitialized }) { storageManager.saveOpenVaults() }
+        shutdown.step("overflowManager.closeOpenStorages", { ::overflowManager.isInitialized }) { overflowManager.closeOpenStorages() }
+        shutdown.step("enderChestManager.saveOpenSessions", { ::enderChestManager.isInitialized }) { enderChestManager.saveOpenSessions() }
+        shutdown.step("sellCommand.resolveAllOpenSessions", { ::sellCommand.isInitialized }) { sellCommand.resolveAllOpenSessions() }
+        shutdown.step("hologramManager.stop", { ::hologramManager.isInitialized }) { hologramManager.stop() }
+        shutdown.step("npcManager.stop", { ::npcManager.isInitialized }) { npcManager.stop() }
+        shutdown.step("crateManager.stop", { ::crateManager.isInitialized }) { crateManager.stop() }
+        shutdown.step("auctionManager.stop", { ::auctionManager.isInitialized }) { auctionManager.stop() }
+        shutdown.step("giveawayManager.stop", { ::giveawayManager.isInitialized }) { giveawayManager.stop() }
+        shutdown.step("giftManager.stop", { ::giftManager.isInitialized }) { giftManager.stop() }
+        shutdown.step("coinflipManager.stop", { ::coinflipManager.isInitialized }) { coinflipManager.stop() }
+        shutdown.step("creditsCoinflipManager.stop", { ::creditsCoinflipManager.isInitialized }) { creditsCoinflipManager.stop() }
+        shutdown.step("casinoMinesManager.stop", { ::casinoMinesManager.isInitialized }) { casinoMinesManager.stop() }
+        shutdown.step("casinoRouletteManager.stop", { ::casinoRouletteManager.isInitialized }) { casinoRouletteManager.stop() }
+        shutdown.step("casinoCrashManager.stop", { ::casinoCrashManager.isInitialized }) { casinoCrashManager.stop() }
+        shutdown.step("casinoTowersManager.stop", { ::casinoTowersManager.isInitialized }) { casinoTowersManager.stop() }
+        shutdown.step("casinoManager.stop", { ::casinoManager.isInitialized }) { casinoManager.stop() }
+        shutdown.step("orderManager.stop", { ::orderManager.isInitialized }) { orderManager.stop() }
+        shutdown.step("hopperPlusManager.stop", { ::hopperPlusManager.isInitialized }) { hopperPlusManager.stop() }
+        shutdown.step("spawnerManager.stop", { ::spawnerManager.isInitialized }) { spawnerManager.stop() }
+        shutdown.step("kitManager.stop", { ::kitManager.isInitialized }) { kitManager.stop() }
+        shutdown.step("afkManager.stop", { ::afkManager.isInitialized }) { afkManager.stop() }
+        shutdown.step("antiCheatManager.stop", { ::antiCheatManager.isInitialized }) { antiCheatManager.stop() }
+        shutdown.step("portalManager.stop", { ::portalManager.isInitialized }) { portalManager.stop() }
+        shutdown.step("voteManager.stop", { ::voteManager.isInitialized }) { voteManager.stop() }
+        shutdown.step("purchaseFulfillmentManager.stop", { ::purchaseFulfillmentManager.isInitialized }) { purchaseFulfillmentManager.stop() }
+        shutdown.step("candyShopManager.stop", { ::candyShopManager.isInitialized }) { candyShopManager.stop() }
+        shutdown.step("eventShopManager.stop", { ::eventShopManager.isInitialized }) { eventShopManager.stop() }
+        shutdown.step("flightTimeManager.stop", { ::flightTimeManager.isInitialized }) { flightTimeManager.stop() }
+        shutdown.step("beaconPotionManager.stop", { ::beaconPotionManager.isInitialized }) { beaconPotionManager.stop() }
+        shutdown.step("stuckRecoveryManager.stop", { ::stuckRecoveryManager.isInitialized }) { stuckRecoveryManager.stop() }
+        shutdown.step("spawnDecorationManager.stop", { ::spawnDecorationManager.isInitialized }) { spawnDecorationManager.stop() }
+        shutdown.step("passiveEnchantListener.stop", { ::listenerManager.isInitialized }) { listenerManager.passiveEnchantListener?.stop() }
+        shutdown.step("quickHitListener.stop", { ::listenerManager.isInitialized }) { listenerManager.quickHitListener?.stop() }
+        shutdown.step("thrownTridentVisualListener.stop", { ::listenerManager.isInitialized }) { listenerManager.thrownTridentVisualListener?.stop() }
+        shutdown.step("greatPumpkinPieListener.stop", { ::listenerManager.isInitialized }) { listenerManager.greatPumpkinPieListener?.stop() }
+        shutdown.step("furnitureListener.stop", { ::listenerManager.isInitialized }) { listenerManager.furnitureListener?.stop() }
         // Before discordManager.shutdown(), so the last mining summaries still go out.
-        listenerManager.ancientDebrisMonitorListener?.stop()
-        claimManager.stop()
-        scoreboardManager.stop()
-        announcementManager.stop()
-        rotatingBossBarManager.stop()
-        autoRestartManager.stop()
-        playtimeManager.stop()
-        killStreakManager.stop()
-        loginStreakManager.stop()
-        creditsManager.stop()
-        questCycleManager.stop()
-        eventQuestManager.stop()
-        resourceWorldManager.stop()
-        buildPvpManager.stop()
-        combatManager.stop()
-        lagCleanerManager.stop()
-        mobStackManager.stop()
-        mutationsManager.stop()
-        modModeManager.stop()
-        hideStaffManager.stop()
-        eventManager.shutdown()
-        resourcePackManager.shutdown()
-        discordManager.shutdown()
-        playerDatabaseManager.shutdown()
-        databaseManager.shutdown()
-        logger.info("JoshyMC has been disabled!")
+        shutdown.step("ancientDebrisMonitor.stop", { ::listenerManager.isInitialized }) { listenerManager.ancientDebrisMonitorListener?.stop() }
+        shutdown.step("claimManager.stop", { ::claimManager.isInitialized }) { claimManager.stop() }
+        shutdown.step("scoreboardManager.stop", { ::scoreboardManager.isInitialized }) { scoreboardManager.stop() }
+        shutdown.step("announcementManager.stop", { ::announcementManager.isInitialized }) { announcementManager.stop() }
+        shutdown.step("rotatingBossBarManager.stop", { ::rotatingBossBarManager.isInitialized }) { rotatingBossBarManager.stop() }
+        shutdown.step("autoRestartManager.stop", { ::autoRestartManager.isInitialized }) { autoRestartManager.stop() }
+        shutdown.step("playtimeManager.stop", { ::playtimeManager.isInitialized }) { playtimeManager.stop() }
+        shutdown.step("killStreakManager.stop", { ::killStreakManager.isInitialized }) { killStreakManager.stop() }
+        shutdown.step("loginStreakManager.stop", { ::loginStreakManager.isInitialized }) { loginStreakManager.stop() }
+        shutdown.step("creditsManager.stop", { ::creditsManager.isInitialized }) { creditsManager.stop() }
+        shutdown.step("questCycleManager.stop", { ::questCycleManager.isInitialized }) { questCycleManager.stop() }
+        shutdown.step("eventQuestManager.stop", { ::eventQuestManager.isInitialized }) { eventQuestManager.stop() }
+        shutdown.step("resourceWorldManager.stop", { ::resourceWorldManager.isInitialized }) { resourceWorldManager.stop() }
+        shutdown.step("buildPvpManager.stop", { ::buildPvpManager.isInitialized }) { buildPvpManager.stop() }
+        shutdown.step("combatManager.stop", { ::combatManager.isInitialized }) { combatManager.stop() }
+        shutdown.step("lagCleanerManager.stop", { ::lagCleanerManager.isInitialized }) { lagCleanerManager.stop() }
+        shutdown.step("mobStackManager.stop", { ::mobStackManager.isInitialized }) { mobStackManager.stop() }
+        shutdown.step("mutationsManager.stop", { ::mutationsManager.isInitialized }) { mutationsManager.stop() }
+        shutdown.step("modModeManager.stop", { ::modModeManager.isInitialized }) { modModeManager.stop() }
+        shutdown.step("hideStaffManager.stop", { ::hideStaffManager.isInitialized }) { hideStaffManager.stop() }
+        shutdown.step("eventManager.shutdown", { ::eventManager.isInitialized }) { eventManager.shutdown() }
+        shutdown.step("resourcePackManager.shutdown", { ::resourcePackManager.isInitialized }) { resourcePackManager.shutdown() }
+        shutdown.step("discordManager.shutdown", { ::discordManager.isInitialized }) { discordManager.shutdown() }
+        // No new work for the databases: drop every timer that's still scheduled (market,
+        // leaderboards, punishment expiry...; Paper would only do this after onDisable) and
+        // give async runs already in flight a moment to finish their writes.
+        shutdown.step("scheduler.cancelTasks") { server.scheduler.cancelTasks(this) }
+        shutdown.step("awaitAsyncTasks") { awaitAsyncTasks() }
+        shutdown.step("playerDatabaseManager.shutdown", { ::playerDatabaseManager.isInitialized }) { playerDatabaseManager.shutdown() }
+        shutdown.step("databaseManager.shutdown", { ::databaseManager.isInitialized }) { databaseManager.shutdown() }
+
+        val report = shutdown.run()
+        if (report.ok) {
+            logger.info("JoshyMC has been disabled!")
+        } else {
+            logger.severe("JoshyMC disabled with ${report.failed.size} failed shutdown step(s): ${report.failed.joinToString()}")
+        }
+    }
+
+    /**
+     * Waits up to [ASYNC_TASK_WAIT_SECONDS] for this plugin's async scheduler runs that are
+     * already executing (their timers were just cancelled), so their writes land before the
+     * databases close. Throws if some are still running, then shutdown carries on.
+     */
+    private fun awaitAsyncTasks() {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(ASYNC_TASK_WAIT_SECONDS)
+        while (true) {
+            val running = server.scheduler.activeWorkers.filter { it.owner === this && it.thread !== Thread.currentThread() }
+            if (running.isEmpty()) return
+            if (System.nanoTime() >= deadline) {
+                throw IllegalStateException(
+                    "${running.size} async task(s) still running after ${ASYNC_TASK_WAIT_SECONDS}s " +
+                        "(task ids ${running.joinToString { it.taskId.toString() }}); closing the databases anyway"
+                )
+            }
+            try {
+                Thread.sleep(25)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            }
+        }
     }
 
     /**
