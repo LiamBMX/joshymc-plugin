@@ -112,6 +112,11 @@ class ItemManager(private val plugin: Joshymc) {
         register(KrampusChestplate())
         register(KrampusLeggings())
         register(KrampusBoots())
+        // Snowman set (Survival only, winter holiday, issue #1316)
+        register(SnowmanHelmet())
+        register(SnowmanChestplate())
+        register(SnowmanLeggings())
+        register(SnowmanBoots())
         // Bat Wings elytra (Survival only, issue #1317)
         register(BatWings())
 
