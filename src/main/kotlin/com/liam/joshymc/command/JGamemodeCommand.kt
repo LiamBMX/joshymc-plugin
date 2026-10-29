@@ -16,6 +16,8 @@ import org.bukkit.command.TabCompleter
  * `/jgamemode lock|unlock <survival|lifesteal> confirm` (issue #1289). Each subcommand has its
  * own permission (`joshymc.jgm.lock` / `joshymc.jgm.unlock`, default false); a sender only sees
  * and can run the ones they hold. Nothing changes unless the last argument is literally `confirm`.
+ * `/jgamemode` and `/jgamemode info` show the locks and this server's network identity
+ * (issue #1323) to anyone holding either permission.
  */
 class JGamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
@@ -30,6 +32,11 @@ class JGamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
         val allowed = allowedSubs(sender)
         if (allowed.isEmpty()) {
             Msg.noPermission(sender)
+            return true
+        }
+
+        if (args.getOrNull(0).equals("info", ignoreCase = true)) {
+            showStatus(sender, allowed)
             return true
         }
 
@@ -92,6 +99,15 @@ class JGamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
         for (gamemode in ServerGamemode.entries) {
             sender.sendMessage(GamemodeLockManager.statusLine(gamemode, locks.isLocked(gamemode)))
         }
+        val network = plugin.networkIdentityManager
+        sender.sendMessage(infoLine("Server ID", Component.text(network.serverId, NamedTextColor.WHITE)))
+        sender.sendMessage(infoLine("Server gamemode", Component.text(locks.serverGamemode.displayName, NamedTextColor.WHITE)))
+        sender.sendMessage(
+            infoLine(
+                "Primary network instance",
+                if (network.isPrimary) Component.text("yes", NamedTextColor.GREEN) else Component.text("no", NamedTextColor.RED)
+            )
+        )
         for (sub in allowed) {
             sender.sendMessage(
                 Component.text("/jgamemode ${sub.id} <survival|lifesteal> confirm", NamedTextColor.GRAY)
@@ -99,11 +115,14 @@ class JGamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
         }
     }
 
+    private fun infoLine(label: String, value: Component): Component =
+        Component.text("$label: ", NamedTextColor.GRAY).append(value)
+
     override fun onTabComplete(sender: CommandSender, command: Command, label: String, args: Array<out String>): List<String> {
         val allowed = allowedSubs(sender)
         if (allowed.isEmpty()) return emptyList()
         val options = when (args.size) {
-            1 -> allowed.map { it.id }
+            1 -> listOf("info") + allowed.map { it.id }
             2 -> if (allowed.any { it.id.equals(args[0], ignoreCase = true) }) ServerGamemode.entries.map { it.id } else emptyList()
             3 -> if (allowed.any { it.id.equals(args[0], ignoreCase = true) } && ServerGamemode.fromId(args[1]) != null) listOf("confirm") else emptyList()
             else -> emptyList()
