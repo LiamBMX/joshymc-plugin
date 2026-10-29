@@ -255,6 +255,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var stuckRecoveryManager: com.liam.joshymc.recovery.StuckRecoveryManager
         private set
+    lateinit var networkIdentityManager: com.liam.joshymc.network.NetworkIdentityManager
+        private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
     lateinit var rankManager: RankManager
@@ -356,6 +358,9 @@ class Joshymc : JavaPlugin() {
 
         saveDefaultConfig()
         migrateConfig()
+        // First, so every manager sees this server's id and primary flag (issue #1323).
+        networkIdentityManager = com.liam.joshymc.network.NetworkIdentityManager(this)
+        networkIdentityManager.load()
 
         ProfanityFilter.load(this)
 
@@ -758,6 +763,8 @@ class Joshymc : JavaPlugin() {
 
         // 5. Reload config from disk
         safe("reloadConfig") { reloadConfig() }
+        // Before anything that starts primary-only work (Discord group sync, the bot).
+        safe("networkIdentityManager.load") { networkIdentityManager.load() }
         safe("ProfanityFilter.load") { ProfanityFilter.load(this) }
 
         // 6. Re-register everything

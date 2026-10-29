@@ -190,8 +190,8 @@ commands:
     description: View items held in your persistent Overflow storage
     usage: /overflow
   jgamemode:
-    description: Lock or unlock Survival/Lifesteal command isolation
-    usage: /jgamemode <lock|unlock> <survival|lifesteal> confirm
+    description: Lock or unlock Survival/Lifesteal command isolation, or show this server's network info
+    usage: /jgamemode [info|<lock|unlock> <survival|lifesteal> confirm]
     permission: joshymc.jgm.lock;joshymc.jgm.unlock
   freerank:
     description: Claim the free starter rank of the gamemode you're playing

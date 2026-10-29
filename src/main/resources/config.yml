@@ -74,6 +74,21 @@ stuck-recovery:
   # After a flying kick, a login within this many minutes starts at a safe spot instead.
   login-recovery-window-minutes: 15
 
+# Network identity (issue #1323). Every JoshyMC Paper server has its own copy of this file
+# and its own database; nothing here is shared between servers. See docs/network.md.
+#   Survival SMP:  server-id: survival   primary: true    (gamemode-lock.server-gamemode: survival)
+#   Lifesteal:     server-id: lifesteal  primary: false   (gamemode-lock.server-gamemode: lifesteal)
+network:
+  # This server's id: 1-32 lower-case letters, digits, - or _. Must be different on every
+  # server. Read at startup; changing it needs a restart.
+  server-id: survival
+  # Exactly ONE server is primary. It runs the network-wide jobs: the Discord bot, update
+  # highlights and the Discord verification group sync. Gameplay works the same either way.
+  primary: true
+  # Secondary servers don't connect the Discord bot, so the same bot never runs twice.
+  # Set true on a secondary only if discord.token there is a different bot of its own.
+  secondary-discord-bot: false
+
 # Gamemode isolation locks (issue #1289), toggled with /jgamemode lock|unlock <gamemode> confirm.
 # While a gamemode is locked, the commands and features assigned to it only work on that gamemode.
 # Unassigned commands are never affected.
