@@ -4,11 +4,13 @@ import com.liam.joshymc.Joshymc
 import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
+import java.sql.SQLException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
+import java.util.logging.Logger
 import kotlin.concurrent.withLock
 
 /**
@@ -20,8 +22,14 @@ import kotlin.concurrent.withLock
  * single "JoshyMC-DB" thread instead of running them on the server thread. Queued work
  * keeps submit order: a synchronous call first runs anything still queued, so a read
  * always sees every write submitted before it (e.g. a quit flush followed by a rejoin load).
+ *
+ * [shutdown] runs once (issue #1325): it stops queueing, runs everything already queued,
+ * checkpoints the WAL and closes. After that every call fails with an [SQLException], and
+ * late [async] work is logged as not saved instead of vanishing.
  */
-class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
+class DatabaseManager(private val dataFolder: File, private val logger: Logger) : SqliteDatabase {
+
+    constructor(plugin: Joshymc) : this(plugin.dataFolder, plugin.logger)
 
     private lateinit var connection: Connection
 
@@ -34,14 +42,20 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
     private class PendingWork(val description: String, val block: () -> Unit)
     private val pending = ConcurrentLinkedQueue<PendingWork>()
     private val wakeup = Semaphore(0)
+    /** Held while reading [accepting] and adding to [pending], so nothing is queued after shutdown's final drain. */
+    private val queueLock = Any()
     @Volatile private var accepting = false
+    /** Set by [shutdown] while holding [lock]; no statement runs once it's true. */
+    @Volatile private var closed = false
     private var worker: Thread? = null
     /** Last time a failure was logged per description, so a broken DB doesn't spam every flush. */
     private val lastFailureLog = ConcurrentHashMap<String, Long>()
+    /** Queued work that failed after shutdown began (on the DB thread or inline), reported by [shutdown]. */
+    private val shutdownFailures = ConcurrentLinkedQueue<String>()
 
     fun start() {
-        val dbFile = File(plugin.dataFolder, "data.db")
-        plugin.dataFolder.mkdirs()
+        val dbFile = File(dataFolder, "data.db")
+        dataFolder.mkdirs()
 
         lock.withLock {
             connection = DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}")
@@ -56,35 +70,84 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
             start()
         }
 
-        plugin.logger.info("[Database] Loaded server database: ${dbFile.name}")
+        logger.info("[Database] Loaded server database: ${dbFile.name}")
     }
 
+    /**
+     * Runs every queued write, checkpoints the WAL and closes the connection. Safe to call
+     * again and when [start] never ran or failed. Never waits forever: if another thread
+     * still holds the connection after the timeouts, it is left open and this throws. Also
+     * throws (after closing) when a queued write failed or the close itself failed, so the
+     * caller reports a failed step instead of a clean shutdown.
+     */
     fun shutdown() {
         // Stop taking new queued work (later async() calls run inline), then let the
         // worker finish what's queued before the connection goes away.
-        accepting = false
+        val queued = synchronized(queueLock) {
+            accepting = false
+            pending.size
+        }
         worker?.let { thread ->
             wakeup.release()
-            thread.join(TimeUnit.SECONDS.toMillis(10))
-            if (thread.isAlive) plugin.logger.warning("[Database] DB thread still busy after 10s; finishing queued writes on shutdown.")
+            try {
+                thread.join(TimeUnit.SECONDS.toMillis(WORKER_JOIN_SECONDS))
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+            if (thread.isAlive) logger.warning("[Database] DB thread still busy after ${WORKER_JOIN_SECONDS}s; finishing queued writes on shutdown.")
         }
         worker = null
 
-        lock.withLock {
+        val acquired = try {
+            lock.tryLock(LOCK_WAIT_SECONDS, TimeUnit.SECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        if (!acquired) {
+            // Never close a connection another thread is still using. What it already
+            // committed is safe in data.db / data.db-wal; what is still queued is not.
+            throw IllegalStateException(
+                "data.db still in use after another ${LOCK_WAIT_SECONDS}s; left it open, " +
+                    "${pending.size} queued write(s) were NOT saved"
+            )
+        }
+        try {
+            if (closed) return
             drainPending()
-            if (::connection.isInitialized && !connection.isClosed) {
-                // Force WAL contents into data.db itself before closing. Without this,
-                // recently-committed rows only live in data.db-wal — if a restart/redeploy
-                // ever loses or skips that sidecar file (e.g. a backup step that only
-                // grabs data.db), the last writes before shutdown would appear to vanish.
-                try {
-                    connection.createStatement().use { it.execute("PRAGMA wal_checkpoint(TRUNCATE)") }
-                } catch (e: Exception) {
-                    plugin.logger.warning("[Database] WAL checkpoint on shutdown failed: ${e.message}")
+            closed = true
+            val failed = shutdownFailures.toList()
+            if (!::connection.isInitialized) return
+
+            var closeError: Exception? = null
+            try {
+                if (!connection.isClosed) {
+                    // Force WAL contents into data.db itself before closing. Without this,
+                    // recently-committed rows only live in data.db-wal — if a restart/redeploy
+                    // ever loses or skips that sidecar file (e.g. a backup step that only
+                    // grabs data.db), the last writes before shutdown would appear to vanish.
+                    try {
+                        connection.createStatement().use { it.execute("PRAGMA wal_checkpoint(TRUNCATE)") }
+                    } catch (e: Exception) {
+                        logger.warning("[Database] WAL checkpoint on shutdown failed (committed rows stay in data.db-wal): ${e.message}")
+                    }
+                    connection.close()
                 }
-                connection.close()
-                plugin.logger.info("[Database] Connection closed.")
+            } catch (e: Exception) {
+                closeError = e
             }
+
+            if (failed.isNotEmpty()) {
+                throw IllegalStateException(
+                    "${failed.size} write(s) failed during shutdown and were NOT saved: " +
+                        failed.distinct().joinToString(),
+                    closeError
+                )
+            }
+            if (closeError != null) throw IllegalStateException("closing data.db failed", closeError)
+            logger.info("[Database] Connection closed" + (if (queued > 0) " after running $queued queued write(s)." else "."))
+        } finally {
+            lock.unlock()
         }
     }
 
@@ -95,12 +158,21 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
      * Once shutdown has begun it runs inline, so late writes from onDisable still land.
      */
     fun async(description: String, block: () -> Unit) {
-        if (!accepting) {
-            lock.withLock { drainPending(); runLogged(PendingWork(description, block)) }
-            return
+        synchronized(queueLock) {
+            if (accepting) {
+                pending.add(PendingWork(description, block))
+                wakeup.release()
+                return
+            }
         }
-        pending.add(PendingWork(description, block))
-        wakeup.release()
+        lock.withLock {
+            if (closed) {
+                logRateLimited("closed:$description") { "[Database] '$description' was NOT saved: data.db is already closed." }
+                return
+            }
+            drainPending()
+            runLogged(PendingWork(description, block))
+        }
     }
 
     private fun workerLoop() {
@@ -129,21 +201,28 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
         }
     }
 
+    /** Runs [work]; a failure is logged (rate-limited per description) and, during shutdown, kept for [shutdown]'s report. */
     private fun runLogged(work: PendingWork) {
         try {
             work.block()
         } catch (e: Exception) {
-            val now = System.currentTimeMillis()
-            val last = lastFailureLog[work.description] ?: 0L
-            if (now - last >= 60_000L) {
-                lastFailureLog[work.description] = now
-                plugin.logger.warning("[Database] Queued '${work.description}' failed: ${e.message}")
-            }
+            if (!accepting) shutdownFailures.add(work.description)
+            logRateLimited(work.description) { "[Database] Queued '${work.description}' failed: ${e.message}" }
+        }
+    }
+
+    private inline fun logRateLimited(key: String, message: () -> String) {
+        val now = System.currentTimeMillis()
+        val last = lastFailureLog[key] ?: 0L
+        if (now - last >= 60_000L) {
+            lastFailureLog[key] = now
+            logger.warning(message())
         }
     }
 
     /** Every connection use goes through here: take the lock, run anything still queued, then [block]. */
     private inline fun <T> locked(block: () -> T): T = lock.withLock {
+        if (closed) throw SQLException("data.db is closed (the plugin has shut down)")
         drainPending()
         block()
     }
@@ -236,7 +315,7 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
                 try {
                     connection.rollback()
                 } catch (rollbackError: Exception) {
-                    plugin.logger.warning("[Database] Rollback failed: ${rollbackError.message}")
+                    logger.warning("[Database] Rollback failed: ${rollbackError.message}")
                 }
                 throw e
             } finally {
@@ -244,7 +323,7 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
                 try {
                     connection.autoCommit = true
                 } catch (e: Exception) {
-                    plugin.logger.warning("[Database] Could not restore autoCommit: ${e.message}")
+                    logger.warning("[Database] Could not restore autoCommit: ${e.message}")
                 }
             }
         }
@@ -257,5 +336,12 @@ class DatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
         locked {
             connection.createStatement().use { it.execute(sql) }
         }
+    }
+
+    private companion object {
+        /** How long shutdown lets the DB thread finish the queue on its own. */
+        const val WORKER_JOIN_SECONDS = 10L
+        /** How much longer shutdown waits for whoever still holds the connection. */
+        const val LOCK_WAIT_SECONDS = 20L
     }
 }

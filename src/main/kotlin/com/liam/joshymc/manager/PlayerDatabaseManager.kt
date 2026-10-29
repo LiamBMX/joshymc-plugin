@@ -5,7 +5,10 @@ import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
+import java.sql.SQLException
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
+import java.util.logging.Logger
 import kotlin.concurrent.withLock
 
 /**
@@ -13,8 +16,12 @@ import kotlin.concurrent.withLock
  * kept apart from the server-wide data.db (DatabaseManager). Systems migrate
  * over one at a time; each migration is recorded in playerdata_migrations so
  * it only runs once.
+ *
+ * [shutdown] runs once (issue #1325); after it every call fails with an [SQLException].
  */
-class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
+class PlayerDatabaseManager(private val dataFolder: File, private val logger: Logger) : SqliteDatabase {
+
+    constructor(plugin: Joshymc) : this(plugin.dataFolder, plugin.logger)
 
     private lateinit var connection: Connection
 
@@ -22,10 +29,12 @@ class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
     private val lock = ReentrantLock()
     /** Transaction nesting depth; only touched while holding [lock]. */
     private var transactionDepth = 0
+    /** Set by [shutdown] while holding [lock]; no statement runs once it's true. */
+    @Volatile private var closed = false
 
     fun start() {
-        val dbFile = File(plugin.dataFolder, "playerdata.db")
-        plugin.dataFolder.mkdirs()
+        val dbFile = File(dataFolder, "playerdata.db")
+        dataFolder.mkdirs()
 
         connection = DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}")
 
@@ -39,18 +48,47 @@ class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
             )
         """.trimIndent())
 
-        plugin.logger.info("[Database] Loaded player database: ${dbFile.name}")
+        logger.info("[Database] Loaded player database: ${dbFile.name}")
     }
 
-    fun shutdown() = lock.withLock {
-        if (::connection.isInitialized && !connection.isClosed) {
+    /**
+     * Checkpoints the WAL and closes the connection. Safe to call again and when [start]
+     * never ran or failed. Never waits forever for another thread holding the connection:
+     * after [LOCK_WAIT_SECONDS] it leaves it open and throws. Also throws when the close
+     * itself failed, so the caller reports a failed step.
+     */
+    fun shutdown() {
+        val acquired = try {
+            lock.tryLock(LOCK_WAIT_SECONDS, TimeUnit.SECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        if (!acquired) throw IllegalStateException("playerdata.db still in use after ${LOCK_WAIT_SECONDS}s; left it open")
+        try {
+            if (closed) return
+            closed = true
+            if (!::connection.isInitialized || connection.isClosed) return
             try {
                 connection.createStatement().use { it.execute("PRAGMA wal_checkpoint(TRUNCATE)") }
             } catch (e: Exception) {
-                plugin.logger.warning("[Database] WAL checkpoint on shutdown failed: ${e.message}")
+                logger.warning("[Database] WAL checkpoint on shutdown failed (committed rows stay in playerdata.db-wal): ${e.message}")
             }
-            connection.close()
+            try {
+                connection.close()
+            } catch (e: Exception) {
+                throw IllegalStateException("closing playerdata.db failed", e)
+            }
+            logger.info("[Database] Player database closed.")
+        } finally {
+            lock.unlock()
         }
+    }
+
+    /** Every connection use goes through here, and refuses once [shutdown] closed it. */
+    private inline fun <T> locked(block: () -> T): T = lock.withLock {
+        if (closed) throw SQLException("playerdata.db is closed (the plugin has shut down)")
+        block()
     }
 
     /**
@@ -71,7 +109,7 @@ class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
     }
 
     override fun execute(sql: String, vararg params: Any?) {
-        lock.withLock {
+        locked {
             connection.prepareStatement(sql).use { stmt ->
                 params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
                 stmt.executeUpdate()
@@ -79,14 +117,14 @@ class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
         }
     }
 
-    override fun executeUpdate(sql: String, vararg params: Any?): Int = lock.withLock {
+    override fun executeUpdate(sql: String, vararg params: Any?): Int = locked {
         connection.prepareStatement(sql).use { stmt ->
             params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
             stmt.executeUpdate()
         }
     }
 
-    override fun <T> query(sql: String, vararg params: Any?, mapper: (ResultSet) -> T): List<T> = lock.withLock {
+    override fun <T> query(sql: String, vararg params: Any?, mapper: (ResultSet) -> T): List<T> = locked {
         val results = mutableListOf<T>()
         connection.prepareStatement(sql).use { stmt ->
             params.forEachIndexed { index, param -> stmt.setObject(index + 1, param) }
@@ -105,7 +143,7 @@ class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
 
     /** Holds [lock] for the whole block; a nested call joins the outer transaction (see DatabaseManager). */
     override fun transaction(block: () -> Unit) {
-        lock.withLock {
+        locked {
             if (transactionDepth > 0) {
                 transactionDepth++
                 try {
@@ -124,7 +162,7 @@ class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
                 try {
                     connection.rollback()
                 } catch (rollbackError: Exception) {
-                    plugin.logger.warning("[Database] Rollback failed: ${rollbackError.message}")
+                    logger.warning("[Database] Rollback failed: ${rollbackError.message}")
                 }
                 throw e
             } finally {
@@ -132,15 +170,20 @@ class PlayerDatabaseManager(private val plugin: Joshymc) : SqliteDatabase {
                 try {
                     connection.autoCommit = true
                 } catch (e: Exception) {
-                    plugin.logger.warning("[Database] Could not restore autoCommit: ${e.message}")
+                    logger.warning("[Database] Could not restore autoCommit: ${e.message}")
                 }
             }
         }
     }
 
     override fun createTable(sql: String) {
-        lock.withLock {
+        locked {
             connection.createStatement().use { it.execute(sql) }
         }
+    }
+
+    private companion object {
+        /** How long shutdown waits for whoever still holds the connection. */
+        const val LOCK_WAIT_SECONDS = 20L
     }
 }
