@@ -347,6 +347,8 @@ class LoginStreakManager(private val plugin: Joshymc) : Listener {
     private fun tickAccrual() {
         if (!enabled) return
         for (player in Bukkit.getOnlinePlayers()) {
+            // Issue #1329: time outside Survival never counts once Survival is locked.
+            if (!plugin.gamemodeLockManager.isAllowed(com.liam.joshymc.gamemode.GamemodeFeature.LOGIN_STREAK, player.world)) continue
             val uuid = player.uniqueId
             val state = cache.getOrPut(uuid) { loadOrCreate(uuid) }
             var changed = ensureCurrentDay(state, player)

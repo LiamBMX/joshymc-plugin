@@ -193,7 +193,10 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
             // player's session (and the spawn teleport above) has settled.
             plugin.server.scheduler.runTaskLater(plugin, Runnable {
                 if (!player.isOnline) return@Runnable
-                val tutorialCommand = plugin.getCommand("tutorial")?.executor as? TutorialCommand
+                val command = plugin.getCommand("tutorial") ?: return@Runnable
+                // Issue #1329: /tutorial is Survival-scoped, so its executor may be wrapped in a gate.
+                if (!plugin.gamemodeLockManager.canUse(player, command)) return@Runnable
+                val tutorialCommand = com.liam.joshymc.gamemode.GamemodeLockManager.GatedCommand.unwrap(command.executor) as? TutorialCommand
                 tutorialCommand?.openForPlayer(player)
             }, FIRST_JOIN_TUTORIAL_DELAY_TICKS)
         }

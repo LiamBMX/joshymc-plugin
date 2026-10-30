@@ -91,7 +91,8 @@ network:
 
 # Gamemode isolation locks (issue #1289), toggled with /jgamemode lock|unlock <gamemode> confirm.
 # While a gamemode is locked, the commands and features assigned to it only work on that gamemode.
-# Unassigned commands are never affected.
+# Unassigned commands are never affected, and a lock never changes anything on its own gamemode.
+# Scope list and how to turn on Survival isolation on a Lifesteal server: docs/gamemode-scopes.md.
 gamemode-lock:
   # Which gamemode this server runs: survival or lifesteal.
   server-gamemode: survival
