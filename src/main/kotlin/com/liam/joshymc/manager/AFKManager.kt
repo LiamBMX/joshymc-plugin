@@ -500,6 +500,13 @@ class AFKManager(private val plugin: Joshymc) {
             val nextTime = nextRewardTime[uuid] ?: continue
             if (now < nextTime) continue
 
+            // Issue #1329: no Survival AFK rewards where Survival is locked away; the countdown
+            // restarts so time spent there is never paid out later.
+            if (!plugin.gamemodeLockManager.isAllowed(com.liam.joshymc.gamemode.GamemodeFeature.AFK_REWARDS, player.world)) {
+                nextRewardTime[uuid] = now + (rewardIntervalSeconds * 1000)
+                continue
+            }
+
             val granted = mutableListOf<String>()
 
             if (rewardMoney > 0.0) {

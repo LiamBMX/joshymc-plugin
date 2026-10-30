@@ -109,12 +109,26 @@ class GamemodeLockManager(private val plugin: Joshymc) {
         else -> serverGamemode
     }
 
-    /** For features: may something declared [scope] run in [world]? */
-    fun isAllowed(scope: GamemodeScope, world: World?): Boolean =
-        GamemodeIsolation.allowed(scope, gamemodeOf(world), locked)
+    /** Whether any gamemode is locked; while none is, nothing is ever restricted. */
+    val anyLocked: Boolean get() = locked.isNotEmpty()
 
-    fun isAllowed(scope: GamemodeScope, sender: CommandSender): Boolean =
-        GamemodeIsolation.allowed(scope, gamemodeOf(sender), locked)
+    /** For features: may something declared [scope] run in [world]? */
+    fun isAllowed(scope: GamemodeScope, world: World?): Boolean {
+        val current = locked
+        if (current.isEmpty()) return true
+        return GamemodeIsolation.allowed(scope, gamemodeOf(world), current)
+    }
+
+    fun isAllowed(scope: GamemodeScope, sender: CommandSender): Boolean {
+        val current = locked
+        if (current.isEmpty()) return true
+        return GamemodeIsolation.allowed(scope, gamemodeOf(sender), current)
+    }
+
+    /** For features without a command (issue #1329): may [feature] run in [world]? */
+    fun isAllowed(feature: GamemodeFeature, world: World?): Boolean = isAllowed(feature.scope, world)
+
+    fun isAllowed(feature: GamemodeFeature, sender: CommandSender): Boolean = isAllowed(feature.scope, sender)
 
     /** The gamemode scope of [command], or null when it was never assigned. */
     fun scopeOf(command: Command): GamemodeScope? {
@@ -139,6 +153,7 @@ class GamemodeLockManager(private val plugin: Joshymc) {
 
     /** Labels (names, aliases, namespaced forms) [player] may not use right now. */
     fun hiddenLabels(player: Player): Set<String> {
+        if (locked.isEmpty()) return emptySet()
         if (ownScopes.values.none { it.gamemode != null } && configScopes.values.none { it.gamemode != null }) return emptySet()
         val hidden = HashSet<String>()
         for ((label, command) in plugin.server.commandMap.knownCommands) {
@@ -219,6 +234,11 @@ class GamemodeLockManager(private val plugin: Joshymc) {
             if (!manager.canUse(sender, command)) return emptyList()
             val delegate = completer ?: executor as? TabCompleter ?: return null
             return delegate.onTabComplete(sender, command, label, args)
+        }
+
+        companion object {
+            /** The command's own executor, whether or not a gate wraps it. */
+            fun unwrap(executor: CommandExecutor): CommandExecutor = (executor as? GatedCommand)?.executor ?: executor
         }
     }
 

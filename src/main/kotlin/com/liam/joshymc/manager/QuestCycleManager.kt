@@ -698,6 +698,8 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
 
     private fun incrementProgress(player: Player, quest: CycleQuest, amount: Int) {
         if (amount <= 0) return
+        // Issue #1329: Survival quests never progress where Survival is locked away.
+        if (!plugin.gamemodeLockManager.isAllowed(com.liam.joshymc.gamemode.GamemodeFeature.QUESTS, player.world)) return
         val uuid = player.uniqueId
         val map = progressCache.getOrPut(uuid) { loadProgress(uuid) }
         val current = map[quest.id] ?: CycleProgress(0, false, false)

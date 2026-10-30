@@ -1,6 +1,8 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gamemode.GamemodeFeature
+import com.liam.joshymc.gamemode.GamemodeScopedListeners
 import com.liam.joshymc.listener.ChatItemListener
 import com.liam.joshymc.listener.EnderchestPreviewListener
 import com.liam.joshymc.listener.CombatListener
@@ -82,6 +84,13 @@ class ListenerManager(private val plugin: Joshymc) {
     lateinit var welcomeListener: WelcomeListener
         private set
 
+    /**
+     * Issue #1329: registers a Survival gameplay listener so its handlers skip events in worlds where
+     * that feature is locked away. No difference at all while nothing is locked.
+     */
+    private fun scoped(listener: org.bukkit.event.Listener, feature: GamemodeFeature) =
+        GamemodeScopedListeners.register(plugin, listener, feature)
+
     fun registerAll() {
         val pm = plugin.server.pluginManager
 
@@ -92,16 +101,16 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(com.liam.joshymc.gamemode.GamemodeLockListener(plugin), plugin)
 
         // Existing
-        pm.registerEvents(DrillMiningListener(plugin), plugin)
+        scoped(DrillMiningListener(plugin), GamemodeFeature.CUSTOM_ITEMS)
         pm.registerEvents(EditKitListener(plugin), plugin)
-        pm.registerEvents(EasterEggListener(plugin), plugin)
-        pm.registerEvents(PeanutButterCupListener(plugin), plugin)
+        scoped(EasterEggListener(plugin), GamemodeFeature.CUSTOM_ITEMS)
+        scoped(PeanutButterCupListener(plugin), GamemodeFeature.CUSTOM_ITEMS)
         // Beacon potion brewing + drinking rules (issue #1318)
         pm.registerEvents(plugin.beaconPotionManager, plugin)
-        pm.registerEvents(LinkPopListener(plugin), plugin)
-        pm.registerEvents(JosheesBarListener(plugin), plugin)
-        pm.registerEvents(RurusListener(plugin), plugin)
-        pm.registerEvents(CandyCornListener(plugin), plugin)
+        scoped(LinkPopListener(plugin), GamemodeFeature.CUSTOM_ITEMS)
+        scoped(JosheesBarListener(plugin), GamemodeFeature.CUSTOM_ITEMS)
+        scoped(RurusListener(plugin), GamemodeFeature.CUSTOM_ITEMS)
+        scoped(CandyCornListener(plugin), GamemodeFeature.CUSTOM_ITEMS)
         pm.registerEvents(TomatoListener(plugin), plugin)
         pm.registerEvents(VikingBoomerangListener(plugin), plugin)
         pm.registerEvents(MinecraftChatListener(plugin), plugin)
@@ -128,9 +137,9 @@ class ListenerManager(private val plugin: Joshymc) {
         }
 
         // Phase 3 — Mining
-        pm.registerEvents(VeinminerListener(plugin), plugin)
-        pm.registerEvents(AutoSmeltListener(plugin), plugin)
-        pm.registerEvents(TreeFellerListener(plugin), plugin)
+        scoped(VeinminerListener(plugin), GamemodeFeature.MINING_PERKS)
+        scoped(AutoSmeltListener(plugin), GamemodeFeature.MINING_PERKS)
+        scoped(TreeFellerListener(plugin), GamemodeFeature.MINING_PERKS)
         pm.registerEvents(MobVisibilityListener(plugin), plugin)
 
         // Phase 5 — Chat & AFK
@@ -169,9 +178,9 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // Custom Enchants
         pm.registerEvents(plugin.customEnchantManager, plugin)
-        pm.registerEvents(CombatEnchantListener(plugin), plugin)
-        pm.registerEvents(ToolEnchantListener(plugin), plugin)
-        pm.registerEvents(WeaponEnchantListener(plugin), plugin)
+        scoped(CombatEnchantListener(plugin), GamemodeFeature.CUSTOM_ENCHANTS)
+        scoped(ToolEnchantListener(plugin), GamemodeFeature.CUSTOM_ENCHANTS)
+        scoped(WeaponEnchantListener(plugin), GamemodeFeature.CUSTOM_ENCHANTS)
         passiveEnchantListener = PassiveEnchantListener(plugin)
         passiveEnchantListener!!.start()
         pm.registerEvents(passiveEnchantListener!!, plugin)
@@ -212,7 +221,7 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(StockTradeChatListener(plugin), plugin)
 
         // Sell Wand
-        pm.registerEvents(SellWandListener(plugin), plugin)
+        scoped(SellWandListener(plugin), GamemodeFeature.CUSTOM_ITEMS)
         pm.registerEvents(PhysicalVoucherListener(plugin), plugin)
         pm.registerEvents(CreditVoucherListener(plugin), plugin)
         pm.registerEvents(RankVoucherListener(plugin), plugin)

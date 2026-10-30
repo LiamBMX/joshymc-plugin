@@ -490,6 +490,8 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     /** Calls [block] for each event whose *current* quest is of [type], is open, and whose filter matches. */
     private inline fun forActive(player: Player, type: EventObjective, matches: (String?) -> Boolean, block: (EventDef, EventQuestDef) -> Unit) {
         if (!systemEnabled) return
+        // Issue #1329: Event Quests are Survival only once Survival is locked.
+        if (!plugin.gamemodeLockManager.isAllowed(com.liam.joshymc.gamemode.GamemodeFeature.EVENT_QUESTS, player.world)) return
         val candidates = byObjective[type] ?: return
         val now = ZonedDateTime.now(ZONE)
         for (event in candidates) {
