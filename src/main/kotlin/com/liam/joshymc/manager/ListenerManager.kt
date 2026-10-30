@@ -265,6 +265,8 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // Stuck-player recovery and flying-kick grace (issue #1241)
         pm.registerEvents(plugin.stuckRecoveryManager, plugin)
+        // Issue #1331: forgets a player's pending transfer and cooldown when they leave.
+        pm.registerEvents(plugin.transferManager, plugin)
 
         // Admin panel
         pm.registerEvents(plugin.adminManager, plugin)

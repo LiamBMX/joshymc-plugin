@@ -265,6 +265,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var networkIdentityManager: com.liam.joshymc.network.NetworkIdentityManager
         private set
+    lateinit var transferManager: com.liam.joshymc.network.transfer.TransferManager
+        private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
     lateinit var rankManager: RankManager
@@ -370,6 +372,7 @@ class Joshymc : JavaPlugin() {
         // First, so every manager sees this server's id and primary flag (issue #1323).
         networkIdentityManager = com.liam.joshymc.network.NetworkIdentityManager(this)
         networkIdentityManager.load()
+        transferManager = com.liam.joshymc.network.transfer.TransferManager(this)
 
         ProfanityFilter.load(this)
 
@@ -621,6 +624,8 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("event-shop")) eventShopManager.start()
         // Reads the feature flag itself: its listener is always registered.
         stuckRecoveryManager.start()
+        // Issue #1331: off (and silent) unless network.enabled; never blocks startup.
+        try { transferManager.start() } catch (e: Exception) { logger.severe("[Network] Transfer manager failed to start: ${e.message}") }
 
         discordManager.start()
 
@@ -684,6 +689,7 @@ class Joshymc : JavaPlugin() {
         shutdown.step("flightTimeManager.stop", { ::flightTimeManager.isInitialized }) { flightTimeManager.stop() }
         shutdown.step("beaconPotionManager.stop", { ::beaconPotionManager.isInitialized }) { beaconPotionManager.stop() }
         shutdown.step("stuckRecoveryManager.stop", { ::stuckRecoveryManager.isInitialized }) { stuckRecoveryManager.stop() }
+        shutdown.step("transferManager.stop", { ::transferManager.isInitialized }) { transferManager.stop() }
         shutdown.step("spawnDecorationManager.stop", { ::spawnDecorationManager.isInitialized }) { spawnDecorationManager.stop() }
         shutdown.step("passiveEnchantListener.stop", { ::listenerManager.isInitialized }) { listenerManager.passiveEnchantListener?.stop() }
         shutdown.step("quickHitListener.stop", { ::listenerManager.isInitialized }) { listenerManager.quickHitListener?.stop() }
@@ -794,6 +800,7 @@ class Joshymc : JavaPlugin() {
         safe("candyShopManager.stop") { candyShopManager.stop() }
         safe("eventShopManager.stop") { eventShopManager.stop() }
         safe("stuckRecoveryManager.stop") { stuckRecoveryManager.stop() }
+        safe("transferManager.stop") { transferManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
         safe("questCycleManager.stop") { questCycleManager.stop() }
         safe("eventQuestManager.stop") { eventQuestManager.stop() }
@@ -867,6 +874,7 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("candy-shop")) safe("candyShopManager.start") { candyShopManager.start() }
         if (isFeatureEnabled("event-shop")) safe("eventShopManager.start") { eventShopManager.start() }
         safe("stuckRecoveryManager.start") { stuckRecoveryManager.start() }
+        safe("transferManager.start") { transferManager.start() }
         // Refreshes the exported files (crate keys may have changed); Geyser reads them on its next start.
         safe("bedrockPackManager.start") { bedrockPackManager.start() }
 

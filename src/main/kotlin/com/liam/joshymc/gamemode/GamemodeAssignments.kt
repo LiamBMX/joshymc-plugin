@@ -38,6 +38,8 @@ object GamemodeAssignments {
         "help", "rules", "media", "discord", "ip",
         // Softlock recovery (issue #1241) is server infrastructure, not gameplay.
         "unstuck",
+        // Cross-server transfers (issue #1331) move players between gamemodes, so they work on all of them.
+        "lobby", "survival", "lifesteal",
     )
 
     private val SURVIVAL_COMMANDS = listOf(

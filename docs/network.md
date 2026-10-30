@@ -15,6 +15,10 @@ This page covers the settings that tell each installation which server it is.
 
 `gamemode-lock.server-gamemode` (issue #1289) still says which gamemode the server runs.
 
+Network mode behind a Velocity proxy and the `/lobby`, `/survival`, `/lifesteal` transfers
+(`network.enabled`, `network.proxy`, `network.servers`, `network.transfers`, all off by default)
+are covered in [network-transfers.md](network-transfers.md).
+
 ## Recommended configurations
 
 Survival SMP (these are the bundled defaults, so an existing Survival server needs no changes
@@ -110,7 +114,7 @@ Primary checks only stop duplicate jobs; they do not move data between servers.
 - **Discord messages from a secondary** without its own bot (chat, staff alerts) are not delivered.
 
 These need shared network infrastructure (shared database or proxy messaging), which is out of
-scope for this change.
+scope for this change. Proxy transfers (issue #1331) only move the player; they share no data.
 
 ## Testing
 

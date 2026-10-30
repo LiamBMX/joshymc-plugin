@@ -163,6 +163,14 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
+        // Issue #1331: cross-server transfers through the Velocity proxy.
+        for (destination in com.liam.joshymc.network.transfer.TransferDestination.entries) {
+            plugin.getCommand(destination.command)?.let {
+                val cmd = com.liam.joshymc.command.ServerTransferCommand(plugin, destination)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+        }
         // Issue #1303: read-only remaining flight time (Survival only).
         plugin.getCommand("flytime")?.let {
             val cmd = com.liam.joshymc.command.FlyTimeCommand(plugin)
