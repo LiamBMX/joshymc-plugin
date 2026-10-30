@@ -197,6 +197,19 @@ commands:
     description: Claim the free starter rank of the gamemode you're playing
     usage: /freerank
     permission: joshymc.freerank
+  lobby:
+    description: Go to the network lobby
+    usage: /lobby
+    aliases: [hub]
+    permission: joshymc.transfer.lobby
+  survival:
+    description: Go to Survival SMP
+    usage: /survival
+    permission: joshymc.transfer.survival
+  lifesteal:
+    description: Go to Lifesteal SMP
+    usage: /lifesteal
+    permission: joshymc.transfer.lifesteal
   unstuck:
     description: Get out of a spot where you're frozen midair or the world didn't load
     usage: /unstuck [player]
@@ -911,6 +924,25 @@ permissions:
   joshymc.freerank:
     description: Use /freerank to claim the current gamemode's free starter rank (once per gamemode)
     default: true
+  joshymc.transfer:
+    description: Use every cross-server transfer command (/lobby, /survival, /lifesteal)
+    default: true
+    children:
+      joshymc.transfer.lobby: true
+      joshymc.transfer.survival: true
+      joshymc.transfer.lifesteal: true
+  joshymc.transfer.lobby:
+    description: Use /lobby (/hub) to go to the network lobby
+    default: true
+  joshymc.transfer.survival:
+    description: Use /survival to go to Survival SMP
+    default: true
+  joshymc.transfer.lifesteal:
+    description: Use /lifesteal to go to Lifesteal SMP
+    default: true
+  joshymc.transfer.bypass-cooldown:
+    description: Skip the cross-server transfer cooldown
+    default: op
   joshymc.unstuck:
     description: Use /unstuck when genuinely stuck (frozen midair or in chunks that didn't load)
     default: true

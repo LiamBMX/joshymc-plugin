@@ -88,6 +88,26 @@ network:
   # Secondary servers don't connect the Discord bot, so the same bot never runs twice.
   # Set true on a secondary only if discord.token there is a different bot of its own.
   secondary-discord-bot: false
+  # Network mode (issue #1331): this server runs behind a Velocity proxy with the Lobby,
+  # Survival SMP and Lifesteal SMP. Off = standalone server, exactly as before: no proxy
+  # needed, no transfers attempted. Setup guide: docs/network-transfers.md.
+  enabled: false
+  proxy:
+    # Only velocity is supported.
+    type: velocity
+  # Proxy server names (the [servers] keys in velocity.toml) for each destination. Never an
+  # address. Leave one empty ("") while that server isn't deployed.
+  servers:
+    lobby: lobby
+    survival: survival
+    lifesteal: lifesteal
+  # /lobby (/hub), /survival and /lifesteal. Needs network.enabled too.
+  transfers:
+    enabled: false
+    # Seconds between two transfers by the same player (0-3600).
+    cooldown-seconds: 5
+    # Seconds before a transfer that didn't move the player is reported as failed (3-60).
+    timeout-seconds: 10
 
 # Gamemode isolation locks (issue #1289), toggled with /jgamemode lock|unlock <gamemode> confirm.
 # While a gamemode is locked, the commands and features assigned to it only work on that gamemode.
