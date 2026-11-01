@@ -1,7 +1,14 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.eventquest.EventQuestAccess
+import com.liam.joshymc.eventquest.EventQuestCategory
+import com.liam.joshymc.eventquest.EventQuestCategorySettings
+import com.liam.joshymc.eventquest.EventQuestCategorySummary
+import com.liam.joshymc.eventquest.EventQuestLayout
+import com.liam.joshymc.eventquest.EventQuestSetStatus
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.util.depositItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -71,7 +78,13 @@ data class EventDef(
     val rewardItem: ItemStack? = null,
     /** Repeatable sets reset for the player [repeatCooldownDays] real days after each completion. */
     val repeatable: Boolean = false,
-    val repeatCooldownDays: Int = 30
+    val repeatCooldownDays: Int = 30,
+    /** Issue #1335: the menu category; sets without a `category` key are FREE. */
+    val category: EventQuestCategory = EventQuestCategory.FREE,
+    /** Optional permission for this set on top of its category's permission. */
+    val permission: String? = null,
+    /** Optional `item-model` for the set's icon (namespace:path), e.g. a custom model for Elite sets. */
+    val itemModel: org.bukkit.NamespacedKey? = null
 )
 
 /**
@@ -143,6 +156,8 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     @Volatile private var systemEnabled = true
     @Volatile private var events: Map<String, EventDef> = emptyMap()
     @Volatile private var byObjective: Map<EventObjective, List<EventDef>> = emptyMap()
+    @Volatile private var categories: Map<EventQuestCategory, EventQuestCategorySettings> =
+        EventQuestCategory.entries.associateWith { EventQuestCategorySettings(it) }
 
     private val cache = ConcurrentHashMap<UUID, MutableMap<String, EventProgress>>()
     private val dirty = ConcurrentHashMap.newKeySet<Pair<UUID, String>>()
@@ -224,6 +239,13 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         }
 
         systemEnabled = cfg.getBoolean("event-quests.enabled", true)
+        // Issue #1335: a missing `categories` section (every file written before categories) gives the defaults.
+        categories = EventQuestCategory.entries.associateWith { c ->
+            val base = "event-quests.categories.${c.id}"
+            EventQuestCategorySettings.parse(
+                c, cfg.get("$base.enabled"), cfg.get("$base.display-name"), cfg.get("$base.permission"), cfg.get("$base.icon")
+            )
+        }
         val loaded = LinkedHashMap<String, EventDef>()
         val section = cfg.getConfigurationSection("event-quests.events")
         if (section == null) {
@@ -278,6 +300,16 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
 
         val displayItem = s.getString("display-item")?.let { Material.matchMaterial(it) }
 
+        val category = EventQuestCategory.parse(s.getString("category"))
+        if (category == null) {
+            eventError(id, "unknown category '${s.getString("category")}' (use ${EventQuestCategory.entries.joinToString(" or ") { it.id }})")
+            return null
+        }
+        val itemModel = s.getString("item-model")?.trim()?.takeIf { it.isNotEmpty() }?.let { raw ->
+            org.bukkit.NamespacedKey.fromString(raw.lowercase())
+                ?: run { plugin.logger.warning("[EventQuests] Event '$id': bad item-model '$raw', ignored."); null }
+        }
+
         val start = parseDate(id, s.getString("start"), false) ?: if (s.contains("start")) return null else null
         val end = parseDate(id, s.getString("end"), true) ?: if (s.contains("end")) return null else null
         if (start != null && end != null && !end.isAfter(start)) { eventError(id, "'end' must be after 'start'"); return null }
@@ -327,7 +359,10 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             quests = quests,
             rewardItem = heldItem,
             repeatable = s.getBoolean("repeatable", false),
-            repeatCooldownDays = s.getInt("repeat-cooldown-days", DEFAULT_COOLDOWN_DAYS).coerceIn(1, MAX_COOLDOWN_DAYS)
+            repeatCooldownDays = s.getInt("repeat-cooldown-days", DEFAULT_COOLDOWN_DAYS).coerceIn(1, MAX_COOLDOWN_DAYS),
+            category = category,
+            permission = s.getString("permission")?.trim()?.takeIf { it.isNotEmpty() },
+            itemModel = itemModel
         )
     }
 
@@ -372,6 +407,18 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
 
     fun getEvent(id: String): EventDef? = events[id.lowercase()]
     fun eventIds(): List<String> = events.keys.toList()
+
+    fun categorySettings(category: EventQuestCategory): EventQuestCategorySettings =
+        categories[category] ?: EventQuestCategorySettings(category)
+
+    fun eventsIn(category: EventQuestCategory): List<EventDef> = events.values.filter { it.category == category }
+
+    /** Issue #1335: why [player] can't see, progress or claim [event]; null = allowed. */
+    fun accessDenial(player: Player, event: EventDef): EventQuestAccess.Denial? =
+        EventQuestAccess.check(systemEnabled, categorySettings(event.category), event.permission) { player.hasPermission(it) }
+
+    fun categoryDenial(player: Player, category: EventQuestCategory): EventQuestAccess.Denial? =
+        EventQuestAccess.checkCategory(systemEnabled, categorySettings(category)) { player.hasPermission(it) }
 
     fun isOpen(event: EventDef, now: ZonedDateTime = ZonedDateTime.now(ZONE)): Boolean =
         (event.start == null || !now.isBefore(event.start)) && (event.end == null || now.isBefore(event.end))
@@ -496,6 +543,8 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         val now = ZonedDateTime.now(ZONE)
         for (event in candidates) {
             if (!isOpen(event, now)) continue
+            // Issue #1335: a disabled category or a missing category/set permission earns nothing.
+            if (accessDenial(player, event) != null) continue
             val state = currentState(player.uniqueId, event)
             if (state.completed || state.index >= event.quests.size) continue
             val quest = event.quests[state.index]
@@ -803,6 +852,11 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             ))
             return
         }
+        // Issue #1335: checked after the claimed branch, so an earned, claimed reward is still delivered.
+        accessDenial(player, event)?.let {
+            comms.send(player, Component.text(it.message, NamedTextColor.RED))
+            return
+        }
         if (!state.completed) {
             comms.send(player, Component.text("Complete every quest first.", NamedTextColor.RED))
             return
@@ -988,6 +1042,29 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         return null
     }
 
+    /**
+     * Issue #1335: moves a quest set to [category] by writing its `category` key, in whichever file
+     * defines it (like [setRepeatable]). Progress rows are keyed by set id, so they move with it.
+     * Returns an error message, or null on success.
+     */
+    fun setCategory(rawId: String, category: EventQuestCategory): String? {
+        val id = rawId.lowercase()
+        val custom = customConfig()
+        if (custom.contains("questlines.$id")) {
+            custom.set("questlines.$id.category", category.id)
+            saveCustom(custom)
+            return null
+        }
+        val file = plugin.configFile("event-quests.yml")
+        val main = if (file.exists()) YamlConfiguration.loadConfiguration(file) else return "Unknown quest set '$rawId'."
+        val key = main.getConfigurationSection("event-quests.events")?.getKeys(false)?.firstOrNull { it.lowercase() == id }
+            ?: return "Unknown quest set '$rawId'."
+        main.set("event-quests.events.$key.category", category.id)
+        main.save(file)
+        loadEvents()
+        return null
+    }
+
     /** "repeatable every 30 days" / "one-time" for admin feedback. */
     fun repeatSummary(id: String): String {
         val event = getEvent(id) ?: return "not loaded (draft or disabled)"
@@ -1070,22 +1147,92 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         return (fraction / event.quests.size * 100).toInt()
     }
 
+    private fun categoryColor(category: EventQuestCategory): NamedTextColor = when (category) {
+        EventQuestCategory.FREE -> NamedTextColor.GREEN
+        EventQuestCategory.ELITE -> NamedTextColor.GOLD
+    }
+
+    /** Issue #1335: /eq opens this 27-slot category menu, Free in slot 11 and Elite in slot 15. */
     fun openGui(player: Player) {
-        val list = events.values.toList()
-        val gui = CustomGui(plain("Event Quests", NamedTextColor.GOLD, true), 54)
-        gui.fill(FILLER)
-        if (!systemEnabled || list.isEmpty()) {
-            gui.setItem(22, ItemStack(Material.BARRIER).apply {
-                editMeta {
-                    it.displayName(plain("No events right now", NamedTextColor.RED, true))
-                    it.lore(listOf(plain("Check back soon!", NamedTextColor.GRAY)))
-                }
-            })
+        val gui = CustomGui(plain("Event Quests", NamedTextColor.GOLD, true), EventQuestLayout.MENU_SIZE)
+        for (category in EventQuestCategory.entries) {
+            gui.setItem(EventQuestLayout.categorySlot(category), categoryIcon(player, category)) { p, _ ->
+                openCategoryGui(p, category)
+            }
         }
-        val slots = (10..16) + (19..25) + (28..34) + (37..43)
-        list.take(slots.size).forEachIndexed { i, event -> gui.setItem(slots[i], eventIcon(player, event)) { p, _ -> openEventGui(p, event) } }
+        gui.setItem(EventQuestLayout.MENU_CLOSE_SLOT, GuiStyle.close()) { p, _ -> p.closeInventory() }
+        gui.fill(FILLER)
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    private fun categoryIcon(player: Player, category: EventQuestCategory): ItemStack {
+        val settings = categorySettings(category)
+        val color = categoryColor(category)
+        val denial = categoryDenial(player, category)
+        val material = Material.matchMaterial(settings.icon)?.takeIf { it.isItem && !it.isAir }
+            ?: Material.matchMaterial(category.defaultIcon)!!
+        val lore = mutableListOf<Component>()
+        lore += when (category) {
+            EventQuestCategory.FREE -> plain("Free for every player", NamedTextColor.GREEN)
+            EventQuestCategory.ELITE -> plain("Exclusive Elite quest sets", NamedTextColor.LIGHT_PURPLE)
+        }
+        lore += Component.empty()
+        if (denial != null) {
+            lore += plain(denial.message, NamedTextColor.RED)
+        } else {
+            val summary = EventQuestCategorySummary.of(eventsIn(category).map { ev ->
+                val allowed = accessDenial(player, ev) == null
+                EventQuestSetStatus(
+                    open = isOpen(ev),
+                    completed = allowed && currentState(player.uniqueId, ev).completed,
+                    accessible = allowed
+                )
+            })
+            if (summary.total == 0) {
+                lore += plain(if (category == EventQuestCategory.ELITE) "Coming soon" else "No quests right now", NamedTextColor.GRAY)
+            } else {
+                lore += plain("Available quests: ", NamedTextColor.GRAY).append(plain("${summary.available}", NamedTextColor.WHITE))
+                lore += plain("Completed: ", NamedTextColor.GRAY).append(plain("${summary.completed}/${summary.total}", NamedTextColor.YELLOW))
+            }
+            lore += Component.empty()
+            lore += plain("Click to open", NamedTextColor.YELLOW)
+        }
+        return ItemStack(material).apply {
+            editMeta { m ->
+                m.displayName(plain(settings.displayName, color, true))
+                m.lore(lore)
+                if (category == EventQuestCategory.ELITE && denial == null) m.setEnchantmentGlintOverride(true)
+            }
+        }
+    }
+
+    /** One category page: the sets of [category] the player may open, Back to the category menu, Close. */
+    fun openCategoryGui(player: Player, category: EventQuestCategory) {
+        categoryDenial(player, category)?.let {
+            plugin.commsManager.send(player, Component.text(it.message, NamedTextColor.RED))
+            GuiStyle.errorSound(player)
+            return
+        }
+        val settings = categorySettings(category)
+        val list = eventsIn(category).filter { accessDenial(player, it) == null }
+        val gui = CustomGui(plain(settings.displayName.take(28), categoryColor(category), true), EventQuestLayout.PAGE_SIZE)
+        if (list.isEmpty()) {
+            val empty = if (category == EventQuestCategory.ELITE)
+                GuiStyle.item(Material.CLOCK, plain("Coming Soon", NamedTextColor.GOLD, true),
+                    listOf(plain("No Elite quests are available yet.", NamedTextColor.GRAY), plain("Check back soon!", NamedTextColor.GRAY)))
+            else
+                GuiStyle.item(Material.BARRIER, plain("No Quests Available", NamedTextColor.RED, true),
+                    listOf(plain("Check back soon!", NamedTextColor.GRAY)))
+            gui.setItem(EventQuestLayout.EMPTY_SLOT, empty)
+        }
+        val slots = EventQuestLayout.SET_SLOTS
+        list.take(slots.size).forEachIndexed { i, event -> gui.setItem(slots[i], eventIcon(player, event)) { p, _ -> openEventGui(p, event) } }
+        gui.setItem(EventQuestLayout.PAGE_BACK_SLOT, GuiStyle.back("Back to Event Quests")) { p, _ -> GuiStyle.clickSound(p); openGui(p) }
+        gui.setItem(EventQuestLayout.PAGE_CLOSE_SLOT, GuiStyle.close()) { p, _ -> p.closeInventory() }
+        gui.fill(FILLER)
+        plugin.guiManager.open(player, gui)
+        GuiStyle.clickSound(player)
     }
 
     private fun eventIcon(player: Player, event: EventDef): ItemStack {
@@ -1101,6 +1248,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             else -> ItemStack(Material.NETHER_STAR)
         }
         item.editMeta { m ->
+            event.itemModel?.let { m.setItemModel(it) }
             m.displayName(plain(event.name, NamedTextColor.GOLD, true))
             val lore = mutableListOf<Component>()
             if (event.description.isNotBlank()) lore += plain(event.description, NamedTextColor.GRAY)
@@ -1145,6 +1293,11 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         } ?: pretty(event.rewardItemId) ?: event.rewardItemId
 
     fun openEventGui(player: Player, event: EventDef) {
+        accessDenial(player, event)?.let {
+            plugin.commsManager.send(player, Component.text(it.message, NamedTextColor.RED))
+            GuiStyle.errorSound(player)
+            return
+        }
         val gui = CustomGui(plain(event.name.take(26), NamedTextColor.GOLD, true), 54)
         gui.fill(FILLER)
         val s = currentState(player.uniqueId, event)
@@ -1214,7 +1367,9 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             }
         }
         gui.setItem(40, info)
-        gui.setItem(49, ItemStack(Material.ARROW).apply { editMeta { it.displayName(plain("Back", NamedTextColor.GRAY, true)) } }) { p, _ -> openGui(p) }
+        // Issue #1335: Back returns to the set's category page; Close sits in the GuiStyle close slot.
+        gui.setItem(EventQuestLayout.PAGE_BACK_SLOT, GuiStyle.back()) { p, _ -> GuiStyle.clickSound(p); openCategoryGui(p, event.category) }
+        gui.setItem(EventQuestLayout.PAGE_CLOSE_SLOT, GuiStyle.close()) { p, _ -> p.closeInventory() }
         plugin.guiManager.open(player, gui)
     }
 

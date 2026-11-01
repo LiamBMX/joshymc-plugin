@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.eventquest.EventQuestCategory
 import com.liam.joshymc.manager.EventObjective
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
@@ -13,7 +14,8 @@ import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 
 /**
- * /eventquests (/eq) — opens the Event Quests GUI for everyone.
+ * /eventquests (/eq, /eventquest) — opens the Event Quests category menu for everyone (issue #1335);
+ * /eq free and /eq elite open a category page directly.
  *
  * Admin (joshymc.eventquests.admin, also usable from console):
  *   /eq admin reload | progress <player> <event> | reset <player> <event>
@@ -25,7 +27,7 @@ import org.bukkit.entity.Player
  */
 class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
-    private val adminSubs = listOf("reload", "progress", "reset", "create", "additem", "setquest", "repeatable", "cooldown")
+    private val adminSubs = listOf("reload", "progress", "reset", "create", "additem", "setquest", "repeatable", "cooldown", "category")
 
     private fun msg(sender: CommandSender, text: String, color: NamedTextColor) {
         val c = Component.text(text, color)
@@ -50,7 +52,13 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             Msg.noPermission(sender)
             return true
         }
-        plugin.eventQuestManager.openGui(sender)
+        val category = args.getOrNull(0)?.let { EventQuestCategory.fromId(it) }
+        if (args.isNotEmpty() && category == null) {
+            Msg.usage(sender, "/eventquests [free|elite]")
+            return true
+        }
+        if (category != null) plugin.eventQuestManager.openCategoryGui(sender, category)
+        else plugin.eventQuestManager.openGui(sender)
         return true
     }
 
@@ -135,19 +143,29 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 if (err != null) msg(sender, err, NamedTextColor.RED)
                 else msg(sender, "'${args[2].lowercase()}' cooldown set to $days day(s); it is ${mgr.repeatSummary(args[2])}.", NamedTextColor.GREEN)
             }
-            else -> Msg.usage(sender, "/eq admin <reload|progress|reset|create|additem|setquest|repeatable|cooldown>")
+            "category" -> {
+                val category = EventQuestCategory.fromId(args.getOrNull(3))
+                if (args.size != 4 || category == null) { Msg.usage(sender, "/eq admin category <quest-set-name> <free|elite>"); return }
+                val err = mgr.setCategory(args[2], category)
+                if (err != null) msg(sender, err, NamedTextColor.RED)
+                else msg(sender, "'${args[2].lowercase()}' is now in ${mgr.categorySettings(category).displayName}. Player progress was not changed.", NamedTextColor.GREEN)
+            }
+            else -> Msg.usage(sender, "/eq admin <reload|progress|reset|create|additem|setquest|repeatable|cooldown|category>")
         }
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (!sender.hasPermission("joshymc.eventquests.admin")) return emptyList()
+        val categories = EventQuestCategory.entries.map { it.id }
+        if (!sender.hasPermission("joshymc.eventquests.admin")) {
+            return if (args.size == 1 && sender.hasPermission("joshymc.eventquests")) categories.filter { it.startsWith(args[0], true) } else emptyList()
+        }
         val isAdmin = args.isNotEmpty() && args[0].equals("admin", true)
         val sub = args.getOrNull(1)?.lowercase()
         val playerSub = sub == "progress" || sub == "reset"
         val mgr = plugin.eventQuestManager
         val last = args.last()
         val options: List<String> = when {
-            args.size == 1 -> listOf("admin")
+            args.size == 1 -> categories + "admin"
             !isAdmin -> emptyList()
             args.size == 2 -> adminSubs
             playerSub && args.size == 3 -> Bukkit.getOnlinePlayers().map { it.name }
@@ -161,10 +179,11 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
                 if (type == null) emptyList() else mgr.targetSuggestions(type).map { it.lowercase() } + "<amount>"
             }
             sub == "setquest" && args.size == 6 -> listOf("<amount>")
-            (sub == "repeatable" || sub == "cooldown") && args.size == 3 -> (mgr.eventIds() + mgr.customQuestlineIds()).distinct()
+            (sub == "repeatable" || sub == "cooldown" || sub == "category") && args.size == 3 -> (mgr.eventIds() + mgr.customQuestlineIds()).distinct()
             sub == "repeatable" && args.size == 4 -> listOf("true", "false")
             sub == "repeatable" && args.size == 5 -> listOf("30")
             sub == "cooldown" && args.size == 4 -> listOf("30")
+            sub == "category" && args.size == 4 -> categories
             else -> emptyList()
         }
         return options.filter { it.startsWith(last, true) }.take(50)
