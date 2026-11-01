@@ -1,7 +1,9 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gamemode.DedicatedServerFeatures
 import com.liam.joshymc.gamemode.GamemodeLockManager
+import com.liam.joshymc.lifesteal.LifestealConfigManager
 import com.liam.joshymc.gamemode.GamemodeLockManager.ChangeResult
 import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.util.Msg
@@ -86,6 +88,13 @@ class JGamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
             ChangeResult.ALREADY -> Msg.error(sender, "${gamemode.displayName} is already $verb.")
             ChangeResult.FAILED -> Msg.error(sender, "Couldn't save the lock state, so nothing was changed. Check the console.")
         }
+        if (!sub.lock && locks.isImplied(gamemode)) {
+            Msg.error(
+                sender,
+                "${gamemode.displayName} stays isolated anyway: this dedicated ${locks.serverGamemode.displayName} server doesn't run it " +
+                    "(gamemode-lock.server-gamemode / gamemode-lock.worlds in config.yml, restart to change)."
+            )
+        }
         return true
     }
 
@@ -97,22 +106,86 @@ class JGamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
                 .append(Component.text("(this server: ${locks.serverGamemode.displayName})", NamedTextColor.GRAY))
         )
         for (gamemode in ServerGamemode.entries) {
-            sender.sendMessage(GamemodeLockManager.statusLine(gamemode, locks.isLocked(gamemode)))
+            var line = GamemodeLockManager.statusLine(gamemode, locks.isLocked(gamemode))
+            if (locks.isImplied(gamemode)) line = line.append(Component.text(" (dedicated server, automatic)", NamedTextColor.GRAY))
+            sender.sendMessage(line)
         }
         val network = plugin.networkIdentityManager
         sender.sendMessage(infoLine("Server ID", Component.text(network.serverId, NamedTextColor.WHITE)))
-        sender.sendMessage(infoLine("Server gamemode", Component.text(locks.serverGamemode.displayName, NamedTextColor.WHITE)))
+        var gamemodeValue = Component.text(locks.serverGamemode.displayName, NamedTextColor.WHITE)
+        if (!network.gamemodeValid) {
+            gamemodeValue = gamemodeValue.append(
+                Component.text(" (gamemode-lock.server-gamemode is invalid, see the console)", NamedTextColor.RED)
+            )
+        }
+        sender.sendMessage(infoLine("Server gamemode", gamemodeValue))
         sender.sendMessage(
             infoLine(
                 "Primary network instance",
                 if (network.isPrimary) Component.text("yes", NamedTextColor.GREEN) else Component.text("no", NamedTextColor.RED)
             )
         )
+        showBootstrap(sender)
         for (sub in allowed) {
             sender.sendMessage(
                 Component.text("/jgamemode ${sub.id} <survival|lifesteal> confirm", NamedTextColor.GRAY)
             )
         }
+    }
+
+    /** Issue #1336: dedicated-server state, Lifesteal settings and the essential services. No secrets. */
+    private fun showBootstrap(sender: CommandSender) {
+        val network = plugin.networkIdentityManager
+        val isolated = network.isolatedGamemodes
+        if (ServerGamemode.SURVIVAL in isolated) {
+            val off = DedicatedServerFeatures.SURVIVAL_ONLY.keys
+            sender.sendMessage(
+                infoLine("Survival-only startup features kept off", Component.text("${off.size}", NamedTextColor.WHITE))
+                    .hoverEvent(Component.text(off.joinToString(", "), NamedTextColor.GRAY))
+            )
+        }
+
+        val lifesteal = plugin.lifestealConfigManager
+        val lifestealValue = when (lifesteal.status) {
+            LifestealConfigManager.Status.READY -> {
+                val s = lifesteal.settings!!
+                Component.text("loaded", NamedTextColor.GREEN).append(
+                    Component.text(
+                        " (hearts ${s.hearts.starting}, ${s.hearts.minimum}-${s.hearts.maximum}; teams up to ${s.teams.maxSize}; " +
+                            "${s.seasons.lengthMonths}-month seasons)",
+                        NamedTextColor.GRAY
+                    )
+                )
+            }
+            LifestealConfigManager.Status.INVALID -> Component.text(
+                "invalid (${lifesteal.problems.count { it.severe }} error(s), see the console)", NamedTextColor.RED
+            )
+            LifestealConfigManager.Status.NOT_HOSTED -> Component.text("not used on this server", NamedTextColor.GRAY)
+        }
+        sender.sendMessage(infoLine("Lifesteal settings (lifesteal.yml)", lifestealValue))
+
+        sender.sendMessage(
+            infoLine(
+                "Database",
+                if (plugin.databaseManager.isOpen) Component.text("open (local to this server)", NamedTextColor.GREEN)
+                else Component.text("closed", NamedTextColor.RED)
+            )
+        )
+        val transfers = plugin.transferManager.settings
+        sender.sendMessage(
+            infoLine(
+                "Network transfers",
+                if (transfers.active) Component.text("on (Velocity)", NamedTextColor.GREEN)
+                else Component.text("off (standalone)", NamedTextColor.GRAY)
+            )
+        )
+        sender.sendMessage(
+            infoLine(
+                "Discord bot",
+                if (network.discordBotAllowed) Component.text("runs on this server", NamedTextColor.WHITE)
+                else Component.text("left to the primary server", NamedTextColor.GRAY)
+            )
+        )
     }
 
     private fun infoLine(label: String, value: Component): Component =

@@ -109,14 +109,17 @@ gamemode-lock:
   server-gamemode: lifesteal
 ```
 
-then, once the server is up, run `/jgamemode lock survival confirm` (needs `joshymc.jgm.lock`). The
-lock is stored in that server's database and survives restarts. From then on every SURVIVAL command
-and feature above is refused/skipped there, and NETWORK and unassigned ones keep working. Undo with
-`/jgamemode unlock survival confirm`. `/jgamemode info` shows the state.
+Since issue #1336 that is all: a dedicated Lifesteal server (no world mapped to `survival`)
+isolates Survival automatically at startup, as if `/jgamemode lock survival confirm` had been run,
+and also keeps the Survival-only `features.*` managers and the `pvp`/`dungeon` worlds off. From
+then on every SURVIVAL command and feature above is refused/skipped there, and NETWORK and
+unassigned ones keep working. This automatic lock can't be unlocked (change the config and
+restart). `/jgamemode info` shows the state. Full guide: `docs/lifesteal-server.md`.
 
 On one server that hosts both gamemodes in different worlds, map the Lifesteal worlds under
-`gamemode-lock.worlds` (e.g. `lifesteal_world: lifesteal`) and lock Survival; the rules then apply per
-world.
+`gamemode-lock.worlds` (e.g. `lifesteal_world: lifesteal`) and lock Survival by hand
+(`/jgamemode lock survival confirm`, stored in that server's database); the rules then apply per
+world. Nothing is isolated automatically there.
 
 ## Limitations and future work
 

@@ -1,0 +1,57 @@
+# JoshyMC Lifesteal settings (issue #1336).
+#
+# Only servers that run Lifesteal (config.yml > gamemode-lock.server-gamemode: lifesteal, or a
+# world mapped to lifesteal under gamemode-lock.worlds) create and read this file. The Survival
+# server never does. Every Paper server keeps its own copy; nothing here is shared.
+#
+# These are the approved Lifesteal Master Blueprint v1.1 defaults. Nothing uses them yet:
+# hearts, heart stealing, teams, Ranked Team Wars, seasons and the launch unlocks are added by
+# later updates, which read these values. Check the file with /jgamemode info after editing it.
+#
+# A key left out uses the default below (a console warning). A value that is wrong (not a whole
+# number, out of range, starting hearts above the maximum, ...) is a console error, and then the
+# whole file counts as invalid: Lifesteal features refuse to start rather than guess.
+#
+# Fixed rules, not settings: no permanent elimination, no revival, players never lose their final
+# heart, killing a player with 1 heart gives and drops no heart, Ranked Team Wars use the players'
+# own gear (inventory restored afterwards) with hearts still at risk, and individual and team Elo
+# are separate.
+
+# Layout version of this file. Don't change it.
+config-version: 1
+
+# Hearts are whole hearts (1 heart = 2 health points).
+hearts:
+  # Hearts a new player starts with.
+  starting: 10
+  # The most hearts a player can have.
+  maximum: 20
+  # Players never drop below this (at least 1: nobody loses their final heart).
+  minimum: 1
+
+pvp:
+  # Anti heart-farming: killing the same victim again within this many minutes gives no heart.
+  # 0 = no cooldown.
+  same-victim-cooldown-minutes: 30
+
+teams:
+  # The most players in one Lifesteal team.
+  max-size: 5
+
+ranked-team-wars:
+  # Supported team sizes per side (2 = 2v2 ... 5 = 5v5). Each must be 2..teams.max-size.
+  team-sizes: [2, 3, 4, 5]
+
+seasons:
+  # How long a season lasts, in months.
+  length-months: 3
+
+# Launch progression, counted from the season launch. Day 1 is the launch day, so day 3 means
+# 48 hours after launch. Unlock days must fall inside the season.
+progression:
+  # Grace period after launch, in hours. 0 = none.
+  grace-period-hours: 24
+  # Season day Ranked Team Wars unlock.
+  ranked-team-wars-unlock-day: 3
+  # Season day the End dimension unlocks.
+  end-unlock-day: 7

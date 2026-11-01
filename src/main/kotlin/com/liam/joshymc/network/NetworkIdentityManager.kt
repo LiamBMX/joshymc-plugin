@@ -1,7 +1,10 @@
 package com.liam.joshymc.network
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gamemode.DedicatedServer
+import com.liam.joshymc.gamemode.DedicatedServerFeatures
 import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.gamemode.ServerGamemodeConfig
 
 /**
  * This server's network identity (issue #1323), from `network.server-id` / `network.primary`.
@@ -23,8 +26,29 @@ class NetworkIdentityManager(private val plugin: Joshymc) {
         private set
     @Volatile var gamemode: ServerGamemode = ServerGamemode.SURVIVAL
         private set
+    /** False when `gamemode-lock.server-gamemode` wasn't a gamemode and [gamemode] is a fallback (issue #1336). */
+    @Volatile var gamemodeValid: Boolean = true
+        private set
+    @Volatile var gamemodeProblems: List<String> = emptyList()
+        private set
+    /** The server gamemode plus every gamemode `gamemode-lock.worlds` maps a world to. */
+    @Volatile var hostedGamemodes: Set<ServerGamemode> = setOf(ServerGamemode.SURVIVAL)
+        private set
+    /**
+     * Gamemodes this dedicated instance runs nowhere and isolates automatically (issue #1336,
+     * [DedicatedServer]). Always empty on a Survival server. Fixed until restart.
+     */
+    @Volatile var isolatedGamemodes: Set<ServerGamemode> = emptySet()
+        private set
     @Volatile private var secondaryDiscordBot = false
     private var loaded = false
+
+    /** `features.<flag>` as configured, except Survival-only flags on a server that isolates Survival. */
+    fun featureEnabled(flag: String, configured: Boolean): Boolean =
+        DedicatedServerFeatures.enabled(flag, configured, isolatedGamemodes)
+
+    private fun describe(gamemodes: Set<ServerGamemode>): String =
+        if (gamemodes.isEmpty()) "nothing" else gamemodes.joinToString { it.displayName }
 
     val serverId: String get() = identity.serverId
     val isPrimary: Boolean get() = identity.primary
@@ -36,9 +60,16 @@ class NetworkIdentityManager(private val plugin: Joshymc) {
     fun load() {
         try {
             val cfg = plugin.config
-            val rawGamemode = cfg.getString("gamemode-lock.server-gamemode", "survival")
-            // Same fallback as GamemodeLockManager, which logs the unknown value itself.
-            val currentGamemode = ServerGamemode.fromId(rawGamemode) ?: ServerGamemode.SURVIVAL
+            // Issue #1336: resolved here once; GamemodeLockManager and the feature flags read it.
+            val gamemodeResult = ServerGamemodeConfig.resolve(
+                cfg.get("gamemode-lock.server-gamemode", null),
+                cfg.get("network.server-id", null)
+            )
+            for (problem in gamemodeResult.problems) plugin.logger.severe("[Network] $problem")
+            val currentGamemode = gamemodeResult.gamemode
+            val worldGamemodes = ServerGamemodeConfig.worldGamemodes(
+                cfg.getConfigurationSection("gamemode-lock.worlds")?.getValues(false)?.values ?: emptyList()
+            )
             // get(path, null) ignores the bundled defaults, so a missing key is seen as missing.
             val result = NetworkIdentityConfig.resolve(
                 cfg.get("network.server-id", null),
@@ -58,12 +89,31 @@ class NetworkIdentityManager(private val plugin: Joshymc) {
             }
             identity = next
             gamemode = currentGamemode
+            gamemodeValid = gamemodeResult.valid
+            gamemodeProblems = gamemodeResult.problems
+            hostedGamemodes = worldGamemodes + currentGamemode
+            // Fixed until restart, like the server id: the managers it keeps off were decided at startup.
+            val isolated = DedicatedServer.isolatedGamemodes(currentGamemode, worldGamemodes)
+            if (!loaded) {
+                isolatedGamemodes = isolated
+            } else if (isolated != isolatedGamemodes) {
+                plugin.logger.warning(
+                    "[Network] The gamemode settings now isolate ${describe(isolated)} automatically; that only changes on a restart, " +
+                        "still isolating ${describe(isolatedGamemodes)}."
+                )
+            }
             secondaryDiscordBot = cfg.getBoolean("network.secondary-discord-bot", false)
 
             if (!loaded) {
                 plugin.logger.info("Network Server ID: ${next.serverId}")
                 plugin.logger.info("Server Gamemode: ${currentGamemode.name}")
                 plugin.logger.info("Primary Network Instance: ${next.primary}")
+                if (isolatedGamemodes.isNotEmpty()) {
+                    plugin.logger.info(
+                        "[Network] Dedicated ${currentGamemode.displayName} server: ${describe(isolatedGamemodes)} isolated " +
+                            "automatically; its commands, features and startup tasks stay off here."
+                    )
+                }
                 if (!next.primary) {
                     plugin.logger.info(
                         if (secondaryDiscordBot) "[Network] Secondary instance: update highlights and the Discord verification group sync are left to the primary server; this server connects its own Discord bot (network.secondary-discord-bot)."

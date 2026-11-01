@@ -110,7 +110,17 @@ class Joshymc : JavaPlugin() {
     private var shutdownStarted = false
 
     fun isFeatureEnabled(feature: String): Boolean {
-        return config.getBoolean("features.$feature", true)
+        val configured = config.getBoolean("features.$feature", true)
+        // Issue #1336: Survival-only features never start on a dedicated non-Survival server.
+        if (!::networkIdentityManager.isInitialized) return configured
+        return networkIdentityManager.featureEnabled(feature, configured)
+    }
+
+    /** False on a dedicated server that isolates Survival (issue #1336): its `pvp`/`dungeon` worlds aren't created. */
+    private fun survivalWorldsAllowed(): Boolean {
+        val allowed = com.liam.joshymc.gamemode.DedicatedServerFeatures.survivalWorldsAllowed(networkIdentityManager.isolatedGamemodes)
+        if (!allowed) logger.info("[Network] Dedicated server: not creating or loading the Survival 'pvp'/'dungeon' worlds.")
+        return allowed
     }
 
     /**
@@ -267,6 +277,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var transferManager: com.liam.joshymc.network.transfer.TransferManager
         private set
+    lateinit var lifestealConfigManager: com.liam.joshymc.lifesteal.LifestealConfigManager
+        private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
     lateinit var rankManager: RankManager
@@ -372,6 +384,9 @@ class Joshymc : JavaPlugin() {
         // First, so every manager sees this server's id and primary flag (issue #1323).
         networkIdentityManager = com.liam.joshymc.network.NetworkIdentityManager(this)
         networkIdentityManager.load()
+        // Issue #1336: lifesteal.yml, only on servers that run Lifesteal. No database, never fails startup.
+        lifestealConfigManager = com.liam.joshymc.lifesteal.LifestealConfigManager(this)
+        lifestealConfigManager.load()
         transferManager = com.liam.joshymc.network.transfer.TransferManager(this)
 
         ProfanityFilter.load(this)
@@ -608,8 +623,9 @@ class Joshymc : JavaPlugin() {
         chatManager.start()
         // Start spawn world BEFORE arenas so the world exists when arena ticks begin
         spawnWorldManager.start()
-        // Auto-import the pvp world BEFORE arenas so it's loaded when arena ticks begin
-        WorldCommand.ensurePvpWorld(this)
+        // Auto-import the pvp world BEFORE arenas so it's loaded when arena ticks begin.
+        // Survival PvP only: a dedicated Lifesteal server never creates it (issue #1336).
+        if (survivalWorldsAllowed()) WorldCommand.ensurePvpWorld(this)
 
         if (isFeatureEnabled("arenas")) arenaManager.start()
         buildPvpManager.start()
@@ -629,8 +645,8 @@ class Joshymc : JavaPlugin() {
 
         discordManager.start()
 
-        // Ensure dungeon void world exists
-        WorldCommand.ensureDungeonWorld(this)
+        // Ensure dungeon void world exists (Survival only, issue #1336)
+        if (survivalWorldsAllowed()) WorldCommand.ensureDungeonWorld(this)
 
         // Apply world borders and game rules on a 1-tick delay (after all worlds are loaded)
         server.scheduler.runTaskLater(this, Runnable { applyWorldSettings() }, 1L)
@@ -828,6 +844,7 @@ class Joshymc : JavaPlugin() {
         safe("reloadConfig") { reloadConfig() }
         // Before anything that starts primary-only work (Discord group sync, the bot).
         safe("networkIdentityManager.load") { networkIdentityManager.load() }
+        safe("lifestealConfigManager.load") { lifestealConfigManager.load() }
         safe("ProfanityFilter.load") { ProfanityFilter.load(this) }
 
         // 6. Re-register everything

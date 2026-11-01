@@ -53,6 +53,9 @@ class DatabaseManager(private val dataFolder: File, private val logger: Logger) 
     /** Queued work that failed after shutdown began (on the DB thread or inline), reported by [shutdown]. */
     private val shutdownFailures = ConcurrentLinkedQueue<String>()
 
+    /** Started and not shut down (for `/jgamemode info`, issue #1336). */
+    val isOpen: Boolean get() = accepting && !closed
+
     fun start() {
         val dbFile = File(dataFolder, "data.db")
         dataFolder.mkdirs()
