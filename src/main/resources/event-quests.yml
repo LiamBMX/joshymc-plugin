@@ -1,5 +1,5 @@
 # ============================================================
-# Event Quests — /eventquests (/eq)
+# Event Quests — /eventquests (/eq, /eventquest)
 # ============================================================
 # Each event is a chain of 2-10 quests that must be completed IN ORDER.
 # Finishing the whole chain unlocks a one-time claim of the final reward.
@@ -7,7 +7,12 @@
 #
 # Event fields:
 #   name / description / enabled
-#   display-item    - icon in the main GUI (defaults to the reward item itself, custom model included)
+#   category        - free (default; every set without this key is Free) or elite. Also settable
+#                     in-game: /eq admin category <set> <free|elite>. Progress is kept per set, so
+#                     moving a set never resets it.
+#   permission      - optional permission needed to see, progress and claim this set
+#   display-item    - icon in the category page (defaults to the reward item itself, custom model included)
+#   item-model      - optional item model for that icon, e.g. "joshymc:frostbite"
 #   start / end     - optional dates, "yyyy-MM-dd" or "yyyy-MM-dd HH:mm" (America/New_York)
 #   claim-after-end - allow claiming a finished chain after the event ends (default false)
 #   repeatable      - default false (one-time). true = once the reward is claimed, the chain resets
@@ -30,6 +35,23 @@
 #     name / description - optional display overrides
 event-quests:
   enabled: true
+
+  # /eq opens a menu with these two categories. A missing section uses these defaults.
+  #   enabled      - false hides the category's sets: no progress, no claims (progress is kept)
+  #   display-name - icon name and page title
+  #   permission   - optional; "" = everyone. Elite has no access rule by default.
+  #   icon         - material for the category icon
+  categories:
+    free:
+      enabled: true
+      display-name: "Free Event Quests"
+      permission: ""
+      icon: EMERALD
+    elite:
+      enabled: true
+      display-name: "Elite Event Quests"
+      permission: ""
+      icon: ENCHANTED_GOLDEN_APPLE
 
   events:
     forgotten-blade:
