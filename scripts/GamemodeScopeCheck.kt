@@ -81,6 +81,7 @@ fun main() {
     check("punish NETWORK", scopeOf("punish") == NETWORK)
     check("eventshop SURVIVAL", scopeOf("eventshop") == SURVIVAL)
     check("flytime SURVIVAL", scopeOf("flytime") == SURVIVAL)
+    check("freetag SURVIVAL", scopeOf("freetag") == SURVIVAL)
 
     // Survival gameplay.
     for (name in listOf(

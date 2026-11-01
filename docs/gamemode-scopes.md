@@ -53,7 +53,7 @@ never restricts its own gamemode, so **nothing changes on the Survival server**,
 | Economy / currencies | `eco`, `balance`, `pay`, `baltop`, `tokens`, `credits`, `creditspay`, `cshop`, `worth`, `sell`, `sellwand` |
 | Markets, shops, auctions, orders, trading | `shop`, `market`, `invest`, `stock`, `ah`, `orders`, `order`, `chestshop`, `trade`, `overflow`, `candy`, `eventshop` |
 | Gambling | `coinflip`, `ccoinflip`, `casino`, `mines`, `roulette`, `crash`, `towers` |
-| Giveaways, gifts, vouchers, crates, kits | `giveaway`, `gift`, `voucher`, `creditvoucher`, `rankvoucher`, `crate`, `crateeditor`, `kit`, `createkit`, `editkit`, `deletekit` |
+| Giveaways, gifts, vouchers, crates, kits | `giveaway`, `gift`, `voucher`, `creditvoucher`, `rankvoucher`, `freetag`, `crate`, `crateeditor`, `kit`, `createkit`, `editkit`, `deletekit` |
 | Claims, teams, storage | `claim`, `unclaim`, `subclaim`, `team`, `pv`, `enderchest`, `hopper`, `spawner` |
 | Quests, progression, streaks, votes | `quests`, `daily`, `eventquests`, `resurge`, `booster`, `loginstreak`, `mcr`, `jvote`, `talisman`, `fish` |
 | Cosmetics and chat perks | `cosmetics`, `killeffect`, `tag`, `chatcolor`, `signitem`, `skull` |

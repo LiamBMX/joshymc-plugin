@@ -52,6 +52,8 @@ object GamemodeAssignments {
         "coinflip", "ccoinflip", "casino", "mines", "roulette", "crash", "towers",
         // Giveaways, gifts, vouchers, crates, kits.
         "giveaway", "gift", "voucher", "creditvoucher", "rankvoucher", "crate", "crateeditor",
+        // The free [JoshyMC] Chat Tag Voucher (issue #1339), a Survival chat tag.
+        "freetag",
         "kit", "createkit", "editkit", "deletekit",
         // Claims, teams, storage, hoppers, spawners.
         "claim", "unclaim", "subclaim", "team", "pv", "enderchest", "hopper", "spawner",

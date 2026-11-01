@@ -251,6 +251,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var freeRankManager: com.liam.joshymc.freerank.FreeRankManager
         private set
+    lateinit var freeTagManager: com.liam.joshymc.freetag.FreeTagManager
+        private set
     lateinit var chatTagVoucherManager: com.liam.joshymc.manager.ChatTagVoucherManager
         private set
     lateinit var flightTimeManager: com.liam.joshymc.flight.FlightTimeManager
@@ -498,6 +500,7 @@ class Joshymc : JavaPlugin() {
         rankVoucherManager = com.liam.joshymc.manager.RankVoucherManager(this)
         freeRankManager = com.liam.joshymc.freerank.FreeRankManager(this)
         chatTagVoucherManager = com.liam.joshymc.manager.ChatTagVoucherManager(this)
+        freeTagManager = com.liam.joshymc.freetag.FreeTagManager(this)
         flightTimeManager = com.liam.joshymc.flight.FlightTimeManager(this)
         flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
@@ -582,6 +585,7 @@ class Joshymc : JavaPlugin() {
         rankVoucherManager.start()
         freeRankManager.start()
         chatTagVoucherManager.start()
+        freeTagManager.start()
         flightTimeManager.start()
         flyVoucherManager.start()
 
