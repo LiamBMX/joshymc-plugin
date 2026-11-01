@@ -163,6 +163,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
+        // Issue #1339: free [JoshyMC] Chat Tag Voucher, once per player (Survival only).
+        plugin.getCommand("freetag")?.let {
+            val cmd = com.liam.joshymc.command.FreeTagCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
         // Issue #1331: cross-server transfers through the Velocity proxy.
         for (destination in com.liam.joshymc.network.transfer.TransferDestination.entries) {
             plugin.getCommand(destination.command)?.let {

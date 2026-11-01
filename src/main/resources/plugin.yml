@@ -197,6 +197,10 @@ commands:
     description: Claim the free starter rank of the gamemode you're playing
     usage: /freerank
     permission: joshymc.freerank
+  freetag:
+    description: Claim your free [JoshyMC] chat tag voucher (once per player, Survival only)
+    usage: /freetag
+    permission: joshymc.freetag.use
   lobby:
     description: Go to the network lobby
     usage: /lobby
@@ -923,6 +927,9 @@ permissions:
     default: false
   joshymc.freerank:
     description: Use /freerank to claim the current gamemode's free starter rank (once per gamemode)
+    default: true
+  joshymc.freetag.use:
+    description: Use /freetag to claim the free [JoshyMC] chat tag voucher (once per player, Survival only)
     default: true
   joshymc.transfer:
     description: Use every cross-server transfer command (/lobby, /survival, /lifesteal)
