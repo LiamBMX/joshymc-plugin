@@ -14,6 +14,12 @@ assets/minecraft/font/default.json maps them to two sizes:
 \\uF801 is a -1 space that closes the 1 px gap Minecraft leaves after every glyph.
 Each half is 192 texels wide so it lands on a whole number of GUI pixels at both
 sizes (54 and 48), and the halves meet without a seam.
+
+Bedrock players (Geyser) can't use Java fonts (issue #1333), so the same logo is also
+cut into three square cells of a Bedrock glyph sheet,
+src/main/resources/bedrock/font/glyph_E9.png (\\uE900 \\uE901 \\uE902), which
+BedrockPackManager adds to the Geyser pack. Bedrock draws every glyph one text line
+tall from a 16x16 grid of square cells, so the 3:1 logo needs three cells side by side.
 """
 from __future__ import annotations
 
@@ -31,6 +37,10 @@ HALF_W, H = 192, 128
 # (left char, right char, rendered height, ascent). Glyph top = 7 - ascent within its line.
 SIZES = {"tab": ("\uE001", "\uE002", 36, 7), "sidebar": ("\uE003", "\uE004", 32, 6)}
 NEG1 = "\uF801"
+# Bedrock glyph sheet: a 16x16 grid, the logo in the first BEDROCK_CELLS cells of row 0.
+BEDROCK_SHEET = HERE.parent.parent / "src" / "main" / "resources" / "bedrock" / "font" / "glyph_E9.png"
+BEDROCK_CELL = 32
+BEDROCK_CELLS = 3
 
 
 def build() -> None:
@@ -45,6 +55,8 @@ def build() -> None:
     small.putalpha(alpha)
     sheet = Image.new("RGBA", (2 * HALF_W, H), (0, 0, 0, 0))
     sheet.alpha_composite(small, ((2 * HALF_W - size[0]) // 2, (H - size[1]) // 2))
+    BEDROCK_SHEET.parent.mkdir(parents=True, exist_ok=True)
+    bedrock_sheet(sheet).save(BEDROCK_SHEET, optimize=True)
     left = sheet.crop((0, 0, HALF_W, H))
     right = sheet.crop((HALF_W, 0, 2 * HALF_W, H))
     # Minecraft trims empty columns off a glyph's right edge; the left half must not
@@ -67,7 +79,25 @@ def build() -> None:
     providers.append({"type": "space", "advances": {NEG1: -1}})
     font["providers"] = providers
     FONT_JSON.write_text(json.dumps(font, indent=2) + "\n", encoding="utf-8")
-    print(f"logo {size[0]}x{size[1]} -> {FONT_TEXTURES / 'logo_left.png'}, logo_right.png; {FONT_JSON}")
+    print(f"logo {size[0]}x{size[1]} -> {FONT_TEXTURES / 'logo_left.png'}, logo_right.png; {FONT_JSON}; {BEDROCK_SHEET}")
+
+
+def bedrock_sheet(sheet: Image.Image) -> Image.Image:
+    """The Bedrock glyph sheet from the 384x128 Java logo: three square cells in row 0."""
+    width, height = BEDROCK_CELLS * BEDROCK_CELL, BEDROCK_CELL
+    small = sheet.convert("RGBa").resize((width, height), Image.LANCZOS).convert("RGBA")
+    alpha = small.getchannel("A").point(lambda a: 0 if a < 40 else (255 if a >= 200 else a))
+    small.putalpha(alpha)
+    out = Image.new("RGBA", (16 * BEDROCK_CELL, 16 * BEDROCK_CELL), (0, 0, 0, 0))
+    for i in range(BEDROCK_CELLS):
+        cell = small.crop((i * BEDROCK_CELL, 0, (i + 1) * BEDROCK_CELL, height))
+        # Bedrock trims empty columns off a glyph's sides; keep every cell full width so
+        # the three pieces line up (an alpha-1 texel is invisible).
+        for x in (0, BEDROCK_CELL - 1):
+            if not any(cell.getpixel((x, y))[3] for y in range(height)):
+                cell.putpixel((x, height // 2), (0, 0, 0, 1))
+        out.paste(cell, (i * BEDROCK_CELL, 0))
+    return out
 
 
 if __name__ == "__main__":

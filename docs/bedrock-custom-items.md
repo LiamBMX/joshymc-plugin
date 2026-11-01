@@ -89,6 +89,37 @@ logs that Geyser isn't installed and only writes `plugins/Joshymc/bedrock/`. Cop
 its `custom_mappings/` folder after each JoshyMC update that changes items, then restart
 Geyser. Delete any older copy of the two files with a different name.
 
+## Scoreboard logo (issue #1333)
+
+Java players see the JoshyMC logo at the top of the sidebar through Java **font glyphs**
+(`\uE003\uF801\uE004`, `assets/minecraft/font/default.json`, built by
+`python3 -m art.logo`). Bedrock clients never read Java fonts, so before this they got
+the sidebar with no logo. Bedrock has its own glyph mechanism: a resource pack may hold
+`font/glyph_<XX>.png` sheets, a 16x16 grid of square cells, and the client draws the
+private-use character `U+XXyy` from cell `yy` of sheet `XX`.
+
+- `python3 -m art.logo` now also cuts the same logo into three 32x32 cells of
+  `src/main/resources/bedrock/font/glyph_E9.png` (`\uE900 \uE901 \uE902`), keeping its
+  colors and transparency. Page E9 is used because vanilla Bedrock's own icon sheets
+  live on the E0/E1 pages and a pack replaces a whole sheet.
+- `BedrockPackManager` adds that sheet to the same `JoshyMC-Bedrock.mcpack` as the item
+  icons (as `font/glyph_E9.png`). Item icons, `item_texture.json` and the mappings are
+  unchanged; the pack version is a content hash, so Bedrock players download the pack
+  once more and then keep it cached.
+- `ScoreboardManager` gives Bedrock players (Floodgate detection, `BedrockUtil`) the
+  `\uE900\uE901\uE902` title and leaves out the three blank rows the Java logo hangs
+  over, since the Bedrock logo sits on the title line itself. Every information line is
+  identical on both platforms, and Java players see exactly what they saw before.
+- If the sheet is missing from the JAR or `features.bedrock-pack` is off (so no pack
+  carries it), Bedrock players get a bold gold `JOSHYMC` title instead of empty boxes.
+
+**What Bedrock can't match:** Bedrock draws every glyph one text line tall and has no
+negative spaces or custom glyph heights, so the logo is about one line tall (Java's is
+four lines tall) and the client leaves its usual 1 px gap between the three pieces,
+which can show as two faint vertical seams. Bedrock may also draw its text shadow under
+the glyphs. None of this has been checked on a real Bedrock client yet; see step 7 of
+the manual verification below.
+
 ## Adding a new custom item
 
 Nothing Bedrock-specific is needed:
@@ -134,4 +165,11 @@ Do this on a test server (or a quiet moment on the live one) with Geyser + Flood
    Anything that lost its vanilla behavior on Bedrock: add its base item to
    `excluded-base-items`, restart, and report it.
 5. Check a Java player at the same time still sees every item exactly as before.
-6. Note the result (device, Geyser build, what passed/failed) on the issue.
+6. Scoreboard logo (issue #1333): the Bedrock player's sidebar shows the JoshyMC logo
+   on its title line (not `JOSHYMC` text, not boxes), with the player name/ping line
+   right under it and the same information lines as a Java player. Check it on a phone
+   and on Windows, and that it doesn't flicker over a minute of play. A Java player
+   still sees the big logo hanging over three blank rows. If it shows boxes, check the
+   console for a `[Bedrock] bedrock/font/glyph_E9.png is missing` warning and that
+   Geyser loaded `JoshyMC Custom Items`.
+7. Note the result (device, Geyser build, what passed/failed) on the issue.

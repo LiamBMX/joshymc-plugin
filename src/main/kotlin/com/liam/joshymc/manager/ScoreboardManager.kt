@@ -1,9 +1,12 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.bedrock.BedrockLogo
+import com.liam.joshymc.util.BedrockUtil
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.ShadowColor
+import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -133,7 +136,7 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val objective = board.registerNewObjective(
             "joshymc_sidebar",
             org.bukkit.scoreboard.Criteria.DUMMY,
-            logo(SIDEBAR_LOGO)
+            sidebarTitle(player)
         )
         objective.displaySlot = DisplaySlot.SIDEBAR
         // Hide the red score numbers
@@ -192,6 +195,10 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
             return
         }
         if (objective.displaySlot != DisplaySlot.SIDEBAR) objective.displaySlot = DisplaySlot.SIDEBAR
+        // Only differs once, e.g. when the Bedrock pack was built after this board was set up.
+        val title = sidebarTitle(player)
+        if (objective.displayName() != title) objective.displayName(title)
+        val bedrock = BedrockUtil.isBedrockPlayer(player)
 
         val balance = plugin.economyManager.formatShort(plugin.economyManager.getBalance(player))
         val credits = plugin.creditsManager.format(plugin.creditsManager.getBalance(player))
@@ -207,9 +214,10 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
         val dateTime = java.time.ZonedDateTime.now(plugin.timezoneManager.zoneFor(player)).format(DATE_TIME_FMT)
 
         val lines = mutableListOf<Component>()
-        // The title logo hangs down over the top rows, inside the sidebar background.
+        // The Java title logo hangs down over the top rows, inside the sidebar background.
         // The client draws at most 15 lines, so there is no room for more rows below.
-        repeat(LOGO_ROWS) { lines.add(Component.empty()) }
+        // Bedrock's logo is one line tall and sits in the title itself (issue #1333).
+        if (!bedrock) repeat(LOGO_ROWS) { lines.add(Component.empty()) }
         lines.add(plugin.commsManager.parseLegacy("&b${player.name} &7[&f$ping&7]"))
         lines.add(plugin.commsManager.parseLegacy("&f$dateTime"))
         lines.add(Component.empty())
@@ -428,6 +436,22 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
                 "&e» &fEveryone online received &a5 Money Keys &f+ &b1 Credit Key&f!"
             )
         )
+    }
+
+    /**
+     * The sidebar title: the Java font logo, or for Bedrock players (Geyser/Floodgate) the
+     * Bedrock glyph-sheet logo from the JoshyMC Bedrock pack (issue #1333). Bedrock can't
+     * draw Java font glyphs, and without the pack it would draw empty boxes, so then it
+     * gets a plain bold title instead.
+     */
+    private fun sidebarTitle(player: Player): Component {
+        if (!BedrockUtil.isBedrockPlayer(player)) return logo(SIDEBAR_LOGO)
+        val packHasLogo = plugin.bedrockPackManager.logoAvailable
+        return if (packHasLogo) {
+            logo(BedrockLogo.SIDEBAR_TITLE)
+        } else {
+            Component.text(BedrockLogo.FALLBACK_TITLE, NamedTextColor.GOLD, TextDecoration.BOLD)
+        }
     }
 
     /** A logo string from the resource pack font, untinted and without the text shadow. */

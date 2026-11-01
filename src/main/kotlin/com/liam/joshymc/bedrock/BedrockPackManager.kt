@@ -34,7 +34,17 @@ class BedrockPackManager(private val plugin: Joshymc) {
         private val GEYSER_PLUGIN_NAMES = listOf("Geyser-Spigot", "Geyser-Paper")
     }
 
+    /**
+     * True once a Bedrock pack holding the logo glyph sheet ([BedrockLogo]) was built this
+     * startup, so the sidebar may show the logo glyphs to Bedrock players (issue #1333).
+     * False means they get [BedrockLogo.FALLBACK_TITLE] instead of empty boxes.
+     */
+    @Volatile
+    var logoAvailable: Boolean = false
+        private set
+
     fun start() {
+        logoAvailable = false
         if (!plugin.isFeatureEnabled("bedrock-pack")) return
         try {
             generate()
@@ -56,7 +66,13 @@ class BedrockPackManager(private val plugin: Joshymc) {
 
         val result = GeyserMappings.build(sources(), icons, excluded)
         val problems = result.problems.toMutableList()
-        val pack = BedrockPack.build(result.icons) { path ->
+        val logoSheet = plugin.getResource(BedrockLogo.SHEET_RESOURCE)?.use { it.readBytes() }
+        if (logoSheet == null) {
+            problems += "${BedrockLogo.SHEET_RESOURCE} is missing from the JAR; run `py -m art.logo` in resourcepack/ and rebuild " +
+                "(Bedrock players get a plain-text sidebar title)"
+        }
+        val extraFiles = logoSheet?.let { mapOf(BedrockLogo.SHEET_PACK_PATH to it) } ?: emptyMap()
+        val pack = BedrockPack.build(result.icons, extraFiles) { path ->
             val bytes = plugin.getResource("bedrock/icons/$path")?.use { it.readBytes() }
                 ?: throw IllegalStateException("icon bedrock/icons/$path is missing from the JAR; rebuild the plugin")
             val expected = icons.items.values.firstOrNull { it.icon == path }?.sha1
@@ -68,6 +84,7 @@ class BedrockPackManager(private val plugin: Joshymc) {
         val export = File(plugin.dataFolder, "bedrock")
         writeIfChanged(File(export, PACK_FILE), pack)
         writeIfChanged(File(export, MAPPINGS_FILE), mappings)
+        logoAvailable = logoSheet != null
 
         result.skipped.forEach { plugin.logger.info("[Bedrock] $it") }
         problems.forEach { plugin.logger.warning("[Bedrock] $it") }
