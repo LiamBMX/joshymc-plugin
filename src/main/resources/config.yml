@@ -114,7 +114,9 @@ network:
 # Unassigned commands are never affected, and a lock never changes anything on its own gamemode.
 # Scope list and how to turn on Survival isolation on a Lifesteal server: docs/gamemode-scopes.md.
 gamemode-lock:
-  # Which gamemode this server runs: survival or lifesteal.
+  # Which gamemode this server runs: survival or lifesteal. A lifesteal server that maps no world
+  # to survival is a dedicated Lifesteal server: Survival is isolated there automatically and its
+  # Survival-only features don't start (issue #1336, docs/lifesteal-server.md).
   server-gamemode: survival
   # Worlds on this server that run a different gamemode, e.g. "lifesteal_world: lifesteal".
   worlds: {}

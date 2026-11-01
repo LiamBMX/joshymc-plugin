@@ -33,6 +33,11 @@ class GamemodeLockManager(private val plugin: Joshymc) {
 
     private val store = GamemodeLockStore(plugin.databaseManager)
 
+    /** Locks stored in the database (`/jgamemode lock|unlock`). */
+    @Volatile private var storedLocks: Set<ServerGamemode> = emptySet()
+    /** Gamemodes a dedicated server isolates automatically (issue #1336); can't be unlocked. */
+    @Volatile private var implied: Set<ServerGamemode> = emptySet()
+    /** Every lock in effect: the stored ones plus [implied]. */
     @Volatile private var locked: Set<ServerGamemode> = emptySet()
 
     var serverGamemode: ServerGamemode = ServerGamemode.SURVIVAL
@@ -50,10 +55,11 @@ class GamemodeLockManager(private val plugin: Joshymc) {
         store.createTables()
         loadConfig()
         try {
-            locked = store.lockedGamemodes()
+            storedLocks = store.lockedGamemodes()
         } catch (e: Exception) {
             plugin.logger.severe("[GamemodeLock] Could not load lock states (keeping ${describeLocks()}): ${e.message}")
         }
+        locked = storedLocks + implied
         applyCommandGates()
         refreshCommands()
         plugin.logger.info("[GamemodeLock] This server runs ${serverGamemode.displayName}; locked: ${describeLocks()}.")
@@ -61,11 +67,9 @@ class GamemodeLockManager(private val plugin: Joshymc) {
 
     private fun loadConfig() {
         val cfg = plugin.config
-        val rawServer = cfg.getString("gamemode-lock.server-gamemode", "survival")
-        serverGamemode = ServerGamemode.fromId(rawServer) ?: run {
-            plugin.logger.warning("[GamemodeLock] Unknown gamemode-lock.server-gamemode '$rawServer', using survival.")
-            ServerGamemode.SURVIVAL
-        }
+        // Resolved (and any bad value logged) by the network identity, read right before (issue #1336).
+        serverGamemode = plugin.networkIdentityManager.gamemode
+        implied = plugin.networkIdentityManager.isolatedGamemodes
 
         val worlds = mutableMapOf<String, ServerGamemode>()
         cfg.getConfigurationSection("gamemode-lock.worlds")?.let { section ->
@@ -99,6 +103,9 @@ class GamemodeLockManager(private val plugin: Joshymc) {
     // ── Queries ─────────────────────────────────────────────
 
     fun isLocked(gamemode: ServerGamemode): Boolean = gamemode in locked
+
+    /** Locked automatically because this dedicated server doesn't run [gamemode] (issue #1336). */
+    fun isImplied(gamemode: ServerGamemode): Boolean = gamemode in implied
 
     fun gamemodeOf(world: World?): ServerGamemode =
         world?.let { worldGamemodes[it.name.lowercase()] } ?: serverGamemode
@@ -163,7 +170,8 @@ class GamemodeLockManager(private val plugin: Joshymc) {
     }
 
     fun describeLocks(): String =
-        if (locked.isEmpty()) "none" else ServerGamemode.entries.filter { it in locked }.joinToString { it.id }
+        if (locked.isEmpty()) "none"
+        else ServerGamemode.entries.filter { it in locked }.joinToString { if (it in implied) "${it.id} (dedicated server)" else it.id }
 
     // ── Lock / unlock ───────────────────────────────────────
 
@@ -178,12 +186,10 @@ class GamemodeLockManager(private val plugin: Joshymc) {
             plugin.logger.severe("[GamemodeLock] $actor tried to ${if (lock) "lock" else "unlock"} ${gamemode.id}, but saving failed: ${e.message}")
             return ChangeResult.FAILED
         }
-        if (!changed) {
-            // Keep memory in step with the database even if they ever disagreed.
-            locked = if (lock) locked + gamemode else locked - gamemode
-            return ChangeResult.ALREADY
-        }
-        locked = if (lock) locked + gamemode else locked - gamemode
+        // Keep memory in step with the database even if they ever disagreed.
+        storedLocks = if (lock) storedLocks + gamemode else storedLocks - gamemode
+        locked = storedLocks + implied
+        if (!changed) return ChangeResult.ALREADY
         plugin.logger.info("[GamemodeLock] $actor ${if (lock) "LOCKED" else "UNLOCKED"} ${gamemode.displayName} isolation (locked now: ${describeLocks()}).")
         refreshCommands()
         return ChangeResult.CHANGED
