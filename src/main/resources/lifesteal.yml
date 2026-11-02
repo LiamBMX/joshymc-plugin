@@ -6,8 +6,9 @@
 #
 # These are the approved Lifesteal Master Blueprint v1.1 defaults. The heart system uses the
 # hearts, pvp and heart-items sections (docs/lifesteal-hearts.md), the team system the teams section
-# (docs/lifesteal-teams.md), combat logging the combat-logging section (docs/lifesteal-combat.md); Ranked Team Wars, seasons and the launch unlocks are added by later
-# updates, which read these values. Check the file with
+# (docs/lifesteal-teams.md), combat logging the combat-logging section (docs/lifesteal-combat.md), the launch
+# schedule the progression section (docs/lifesteal-progression.md); Ranked Team Wars and seasons are
+# added by later updates, which read these values. Check the file with
 # /jgamemode info after editing it. While the file is invalid, hearts are paused (nothing is
 # granted, stolen or changed, and stored hearts are kept as they are).
 #
@@ -76,15 +77,37 @@ seasons:
   # How long a season lasts, in months.
   length-months: 3
 
-# Launch progression, counted from the season launch. Day 1 is the launch day, so day 3 means
-# 48 hours after launch. Unlock days must fall inside the season.
+# Launch progression (docs/lifesteal-progression.md). Counted in real hours from the season's
+# launch time, never calendar dates: Day 0 launch (grace starts), +24h grace ends, +72h Ranked
+# Team Wars unlock, +168h the End unlocks. Downtime counts: the countdown never pauses or restarts.
+# Before launch and during the grace period, players can't hurt each other and no heart is stolen;
+# the End stays closed until it unlocks. Must keep grace <= ranked <= end, inside one season.
 progression:
+  # false = no launch schedule on this server: nothing is held back (no grace, End open).
+  enabled: true
+  # The launch time, only used while no season has been started yet. Leave it empty and use
+  # /lifesteal admin launch schedule|activate instead, or set an ISO-8601 time WITH an offset, in
+  # quotes, e.g. "2026-12-01T18:00:00Z" or "2026-12-01T13:00:00-05:00". Once a season exists, the
+  # stored launch time wins and a different value here is only logged.
+  launch-timestamp: ""
   # Grace period after launch, in hours. 0 = none.
   grace-period-hours: 24
-  # Season day Ranked Team Wars unlock.
-  ranked-team-wars-unlock-day: 3
-  # Season day the End dimension unlocks.
-  end-unlock-day: 7
+  # Hours after launch Ranked Team Wars unlock (they only open once the ranked system exists).
+  ranked-team-wars-unlock-after-hours: 72
+  # Hours after launch the End dimension unlocks.
+  end-unlock-after-hours: 168
+  # One chat line on join while PvP is still off (before launch / during grace).
+  join-reminder: true
+  # Milestone broadcasts, to Lifesteal players only (& colour codes, \n for a new line). Each is
+  # sent once per season; after downtime only the latest milestone is announced.
+  announcements:
+    enabled: true
+    launch: "&a&lLifesteal is open!\n&7The &e24-hour grace period &7has started: no PvP and no heart stealing until it ends."
+    grace-ended: "&c&lThe grace period is over!\n&7PvP is on and kills now steal hearts."
+    ranked-unlocked: "&6&lRanked Team Wars are unlocked!"
+    # Used instead while the ranked system isn't installed and enabled.
+    ranked-unlocked-unavailable: "&6&lRanked Team Wars are unlocked by schedule.\n&7They open as soon as the ranked system is ready."
+    end-unlocked: "&5&lThe End is now open!\n&7End portals work from now on."
 
 # Physical Heart items (docs/lifesteal-hearts.md, "Heart items"). /withdrawheart turns one of your
 # hearts into a Heart item; right-clicking a Heart item adds it back. The minimum and maximum

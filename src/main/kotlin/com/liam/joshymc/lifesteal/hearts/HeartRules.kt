@@ -1,6 +1,7 @@
 package com.liam.joshymc.lifesteal.hearts
 
 import com.liam.joshymc.lifesteal.LifestealSettings
+import com.liam.joshymc.lifesteal.progression.ProgressionRules
 import com.liam.joshymc.lifesteal.teams.TeamCombatRules
 import java.util.UUID
 
@@ -118,12 +119,19 @@ object HeartRules {
         data object Teammates : Decision
         /** Team membership couldn't be read, so nothing is transferred (issue #1348). */
         data object TeamUnknown : Decision
+        /** The season hasn't launched yet (issue #1352): no heart moves. */
+        data object NotLaunched : Decision
+        /** Inside the launch grace period (issue #1352): no heart moves. */
+        data object GracePeriod : Decision
+        /** The launch progression state is unknown (issue #1352): no heart moves. */
+        data object ProgressionUnknown : Decision
     }
 
     val Decision.changesHearts: Boolean get() = this is Decision.Transfer || this is Decision.VictimLosesOnly
 
     /**
-     * Fixed order: the team check first ([team], issue #1348: teammates never move hearts unless
+     * Fixed order: the launch progression first ([window], issue #1352: before launch, during the
+     * grace period and while the state is unknown no heart moves), then the team check ([team], issue #1348: teammates never move hearts unless
      * the team policy allows it, and unknown membership never does), then the victim's last heart
      * (it is never at risk), then the anti-farming cooldown, then the killer's maximum. [victimHearts] and [killerHearts] are the stored values;
      * they are clamped into [limits] first, so a lowered maximum never lets anyone exceed it.
@@ -135,7 +143,14 @@ object HeartRules {
         limits: Limits,
         policy: KillerAtMaximumPolicy = KILLER_AT_MAXIMUM,
         team: TeamCombatRules.HeartCheck = TeamCombatRules.HeartCheck.ELIGIBLE,
+        window: ProgressionRules.HeartWindow = ProgressionRules.HeartWindow.OPEN,
     ): Decision {
+        when (window) {
+            ProgressionRules.HeartWindow.NOT_LAUNCHED -> return Decision.NotLaunched
+            ProgressionRules.HeartWindow.GRACE_PERIOD -> return Decision.GracePeriod
+            ProgressionRules.HeartWindow.UNKNOWN -> return Decision.ProgressionUnknown
+            ProgressionRules.HeartWindow.OPEN -> {}
+        }
         when (team) {
             TeamCombatRules.HeartCheck.TEAMMATES -> return Decision.Teammates
             TeamCombatRules.HeartCheck.UNKNOWN -> return Decision.TeamUnknown

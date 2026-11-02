@@ -23,6 +23,11 @@ object HeartMessages {
     const val VICTIM_TEAMMATE = "&7{killer} is your teammate, so you kept your heart."
     const val TEAM_UNKNOWN = "&7Team membership couldn't be checked just now, so no heart was stolen."
 
+    // Launch progression (issue #1352).
+    const val GRACE_PERIOD = "&7It's the grace period, so no heart was stolen."
+    const val NOT_LAUNCHED = "&7Lifesteal hasn't launched yet, so no heart was stolen."
+    const val PROGRESSION_UNKNOWN = "&7The launch schedule couldn't be checked just now, so no heart was stolen."
+
     const val TRANSFER_FAILED = "&cYour hearts couldn't be updated just now, so nothing changed."
 
     const val ADMIN_CHANGED_TARGET = "&7Your hearts are now &c{hearts}❤&7."
