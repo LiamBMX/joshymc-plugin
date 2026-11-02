@@ -26,6 +26,8 @@ Velocity proxy
 Hearts and PvP heart stealing are implemented since issue #1341 (`docs/lifesteal-hearts.md`).
 Teams (create, invite, leave, kick, transfer, disband; up to 5 players) are implemented since issue
 #1346 (`docs/lifesteal-teams.md`); `/team` on Lifesteal opens them, Survival keeps its own teams.
+Combat logging (tag notifications, disconnect classification, incident records, no heart
+penalty) is implemented since issue #1350 (`docs/lifesteal-combat.md`).
 Elimination and revival never exist (fixed rules). Ranked Team Wars, Elo, seasons, the
 grace period and the End unlock aren't implemented yet; `lifesteal.yml` holds the settings those
 later features will read. Nothing here has been tested on a real Lifesteal server yet (see "Testing").

@@ -27,6 +27,61 @@ class CombatManager(private val plugin: Joshymc) {
     val tagDurationMillis: Long get() = combatDurationMs
     private var tickTaskId: Int = -1
 
+    /**
+     * Optional listener for tag transitions (issue #1350). Only the Lifesteal combat-log system sets
+     * it, and only on a server that hosts Lifesteal; on Survival it stays null, so every path below
+     * behaves exactly as before. Each call is isolated: an observer failure never breaks tagging.
+     */
+    interface TagObserver {
+        /** Both players were just tagged by an eligible PvP hit (the same hit [CombatListener] tags). */
+        fun onPvpTag(attacker: Player, victim: Player, expiresAt: Long)
+        /** [player]'s tag ran out on its own. */
+        fun onTagExpired(player: Player)
+        /** [uuid]'s tag was removed for another reason (death, quit, arena, offline sweep). */
+        fun onTagCleared(uuid: UUID)
+        /**
+         * [player] is quitting while tagged. Returns whether the existing combat-log NPC should still
+         * be spawned (false for disconnects the server caused, such as a shutdown or a staff kick).
+         */
+        fun onTaggedQuit(player: Player, reason: org.bukkit.event.player.PlayerQuitEvent.QuitReason): Boolean
+    }
+
+    @Volatile var tagObserver: TagObserver? = null
+
+    /** Tag expiry (epoch millis) of [uuid], or null when not tagged. */
+    fun tagExpiresAt(uuid: UUID): Long? = combatTags[uuid]?.takeIf { System.currentTimeMillis() < it }
+
+    private inline fun observe(what: String, block: (TagObserver) -> Unit) {
+        val observer = tagObserver ?: return
+        try {
+            block(observer)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Combat] Tag observer failed ($what): ${e.message}")
+        }
+    }
+
+    /** Tags both players of an eligible PvP hit and tells the observer (issue #1350). */
+    fun tagPvp(attacker: Player, victim: Player) {
+        tag(attacker)
+        tag(victim)
+        val expiresAt = combatTags[victim.uniqueId] ?: return
+        observe("pvp tag") { it.onPvpTag(attacker, victim, expiresAt) }
+    }
+
+    /**
+     * Quit while tagged: asks the observer whether to leave the combat-log NPC (always yes without
+     * one, i.e. on Survival).
+     */
+    fun shouldSpawnCombatLogNpc(player: Player, reason: org.bukkit.event.player.PlayerQuitEvent.QuitReason): Boolean {
+        val observer = tagObserver ?: return true
+        return try {
+            observer.onTaggedQuit(player, reason)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Combat] Tag observer failed (quit): ${e.message}")
+            true
+        }
+    }
+
     var allowElytraInCombat: Boolean = false
     var allowEnderpearlInCombat: Boolean = false
 
@@ -58,6 +113,7 @@ class CombatManager(private val plugin: Joshymc) {
                 val player = plugin.server.getPlayer(uuid)
                 if (player == null) {
                     combatTags.remove(uuid)
+                    observe("offline sweep") { it.onTagCleared(uuid) }
                     continue
                 }
 
@@ -69,6 +125,7 @@ class CombatManager(private val plugin: Joshymc) {
                     plugin.commsManager.sendActionBar(player,
                         Component.text("You are no longer in combat.", NamedTextColor.GREEN)
                     )
+                    observe("expiry") { it.onTagExpired(player) }
                 } else {
                     // Show countdown
                     val remainingMs = expiry - now
@@ -142,6 +199,7 @@ class CombatManager(private val plugin: Joshymc) {
 
     fun untag(player: Player) {
         combatTags.remove(player.uniqueId)
+        observe("untag") { it.onTagCleared(player.uniqueId) }
         plugin.rankManager.refreshCollisionIfChanged(player)
         restoreFlightIfEligible(player)
     }

@@ -277,6 +277,10 @@ class ListenerManager(private val plugin: Joshymc) {
             // Issue #1348: Lifesteal friendly fire (victims in Lifesteal worlds only; Survival never sees it).
             pm.registerEvents(com.liam.joshymc.lifesteal.teams.LifestealTeamCombatListener(plugin), plugin)
         }
+        // Issue #1350: Lifesteal combat-log kick causes and quit cleanup. Never registered where Lifesteal isn't hosted.
+        if (plugin.lifestealCombatManager.hosted) {
+            pm.registerEvents(com.liam.joshymc.lifesteal.combat.LifestealCombatListener(plugin.lifestealCombatManager), plugin)
+        }
 
         // Admin panel
         pm.registerEvents(plugin.adminManager, plugin)

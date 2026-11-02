@@ -16,6 +16,7 @@ data class LifestealSettings(
     val seasons: Seasons = Seasons(),
     val progression: LaunchProgression = LaunchProgression(),
     val heartItems: HeartItems = HeartItems(),
+    val combatLogging: CombatLogging = CombatLogging(),
 ) {
     /** Hearts are whole hearts (2 health points each). */
     data class Hearts(val starting: Int = 10, val maximum: Int = 20, val minimum: Int = 1)
@@ -94,8 +95,50 @@ data class LifestealSettings(
         val redeemFailed: String = "&cUnable to redeem this heart. Please try again.",
     )
 
+    /**
+     * Combat logging (issue #1350, `lifesteal/combat/`). The combat-tag duration is not here: it is
+     * the existing `config.yml > combat.tag-duration-seconds` (the blueprint defines none). The
+     * blueprint defines no combat-log penalty, so [heartPenalty] can only be [CombatLogHeartPenalty.NONE]
+     * and the only consequence is the combat-log NPC every server already had ([leaveNpc]).
+     */
+    data class CombatLogging(
+        /** Record combat-log incidents and apply the Lifesteal disconnect rules. */
+        val enabled: Boolean = true,
+        /** Counted disconnects still leave the existing combat-log NPC (unchanged behaviour). */
+        val leaveNpc: Boolean = true,
+        /** Connection timeouts count as combat logs (Paper can't tell a pulled cable from a crash). */
+        val countTimeouts: Boolean = true,
+        val heartPenalty: CombatLogHeartPenalty = CombatLogHeartPenalty.NONE,
+        /** Chat lines when combat starts and ends (the action-bar countdown is always shown). */
+        val notifications: Boolean = true,
+        /** Incidents older than this are deleted at startup (1..3650 days). */
+        val retentionDays: Int = 90,
+        /** One console line per incident. */
+        val diagnosticLogging: Boolean = false,
+        val messages: CombatMessages = CombatMessages(),
+    )
+
+    /** `&` colour codes. */
+    data class CombatMessages(
+        val tagged: String = "&cYou are now in combat! Do not disconnect.",
+        val expired: String = "&aYou are no longer in combat.",
+    )
+
     companion object {
         val DEFAULTS = LifestealSettings()
+    }
+}
+
+/**
+ * Heart penalties for combat logging (issue #1350). Blueprint v1.1 defines none, so [NONE] is the
+ * only value; a later approved penalty is added here (and applied through the heart store, which
+ * keeps the 1-heart minimum) instead of being invented.
+ */
+enum class CombatLogHeartPenalty(val id: String) {
+    NONE("none");
+
+    companion object {
+        fun fromId(raw: String?): CombatLogHeartPenalty? = entries.firstOrNull { it.id.equals(raw?.trim(), ignoreCase = true) }
     }
 }
 
@@ -206,6 +249,7 @@ object LifestealConfigParser {
         if (endDay > shortestSeasonDays) problems += Problem(true, "progression.end-unlock-day ($endDay) is after the end of a $months-month season.")
 
         val heartItems = heartItems(get, problems)
+        val combatLogging = combatLogging(get, problems)
 
         if (problems.any { it.severe }) return Result(null, problems)
         return Result(
@@ -217,6 +261,7 @@ object LifestealConfigParser {
                 seasons = LifestealSettings.Seasons(months),
                 progression = LifestealSettings.LaunchProgression(grace, rankedDay, endDay),
                 heartItems = heartItems,
+                combatLogging = combatLogging,
             ),
             problems
         )
@@ -281,6 +326,62 @@ object LifestealConfigParser {
             redeemFailed = text("heart-items.messages.redeem-failed", m.redeemFailed),
         )
         return LifestealSettings.HeartItems(withdraw, redeem, name, model, glint, cooldown, messages)
+    }
+
+    const val MAX_RETENTION_DAYS = 3_650
+
+    /**
+     * The `combat-logging` section (issue #1350). A file from before it existed has no section: one
+     * warning and the defaults. An unknown heart penalty is severe (never guessed).
+     */
+    private fun combatLogging(get: (String) -> Any?, problems: MutableList<Problem>): LifestealSettings.CombatLogging {
+        val d = LifestealSettings.CombatLogging()
+        if (get("combat-logging") == null) {
+            problems += Problem(false, "combat-logging is not set; using the default combat-logging settings.")
+            return d
+        }
+        fun bool(key: String, default: Boolean): Boolean {
+            val path = "combat-logging.$key"
+            return when (val raw = get(path)) {
+                null -> { problems += Problem(false, "$path is not set; using the default $default."); default }
+                is Boolean -> raw
+                else -> { problems += Problem(true, "$path '$raw' must be true or false."); default }
+            }
+        }
+        fun text(path: String, default: String): String = when (val raw = get(path)) {
+            null -> { problems += Problem(false, "$path is not set; using the default."); default }
+            is String -> if (raw.isBlank()) { problems += Problem(true, "$path is empty."); default } else raw
+            else -> { problems += Problem(true, "$path must be text."); default }
+        }
+        val enabled = bool("enabled", d.enabled)
+        val npc = bool("leave-npc", d.leaveNpc)
+        val timeouts = bool("count-timeouts", d.countTimeouts)
+        val penalty = when (val raw = get("combat-logging.heart-penalty")) {
+            null -> { problems += Problem(false, "combat-logging.heart-penalty is not set; using none."); d.heartPenalty }
+            else -> CombatLogHeartPenalty.fromId(raw.toString()) ?: run {
+                problems += Problem(
+                    true, "combat-logging.heart-penalty '$raw' is not allowed: blueprint v1.1 defines no combat-log heart penalty, so the only value is none."
+                )
+                d.heartPenalty
+            }
+        }
+        val notifications = bool("notifications", d.notifications)
+        val retention = when (val raw = get("combat-logging.retention-days")) {
+            null -> { problems += Problem(false, "combat-logging.retention-days is not set; using the default ${d.retentionDays}."); d.retentionDays }
+            else -> {
+                val value = wholeNumber(raw)
+                if (value == null || value < 1 || value > MAX_RETENTION_DAYS) {
+                    problems += Problem(true, "combat-logging.retention-days '$raw' must be a whole number from 1 to $MAX_RETENTION_DAYS.")
+                    d.retentionDays
+                } else value.toInt()
+            }
+        }
+        val diagnostics = bool("diagnostic-logging", d.diagnosticLogging)
+        val messages = LifestealSettings.CombatMessages(
+            tagged = text("combat-logging.messages.tagged", d.messages.tagged),
+            expired = text("combat-logging.messages.expired", d.messages.expired),
+        )
+        return LifestealSettings.CombatLogging(enabled, npc, timeouts, penalty, notifications, retention, diagnostics, messages)
     }
 
     const val MIN_INVITE_SECONDS = 10

@@ -6,7 +6,7 @@
 #
 # These are the approved Lifesteal Master Blueprint v1.1 defaults. The heart system uses the
 # hearts, pvp and heart-items sections (docs/lifesteal-hearts.md), the team system the teams section
-# (docs/lifesteal-teams.md); Ranked Team Wars, seasons and the launch unlocks are added by later
+# (docs/lifesteal-teams.md), combat logging the combat-logging section (docs/lifesteal-combat.md); Ranked Team Wars, seasons and the launch unlocks are added by later
 # updates, which read these values. Check the file with
 # /jgamemode info after editing it. While the file is invalid, hearts are paused (nothing is
 # granted, stolen or changed, and stored hearts are kept as they are).
@@ -114,3 +114,30 @@ heart-items:
     maximum: "&cYou have already reached the maximum of {maximum} hearts!"
     inventory-full: "&cYou need inventory space to withdraw a heart!"
     redeem-failed: "&cUnable to redeem this heart. Please try again."
+
+# Combat logging (docs/lifesteal-combat.md). The combat-tag duration is the existing
+# config.yml > combat.tag-duration-seconds (the blueprint defines none). Blueprint v1.1 defines no
+# combat-log penalty, so nobody loses a heart for logging out in combat: incidents are recorded for
+# staff (/lifesteal combat), and counted disconnects keep the combat-log NPC every server already
+# had. Server shutdowns, staff kicks and bans and server-side errors are never counted.
+combat-logging:
+  # Record incidents and apply these rules (false = the plain server-wide behaviour).
+  enabled: true
+  # A counted combat log leaves the existing combat-log NPC (the player dies, the NPC holds the
+  # items for 60 seconds). No heart moves when the NPC or the player dies this way.
+  leave-npc: true
+  # Connection timeouts count as combat logs. Paper can't tell a pulled cable from a crash or a
+  # Bedrock network drop; false records them without counting them.
+  count-timeouts: true
+  # Heart penalty for a counted combat log. Only "none": the blueprint defines no penalty.
+  heart-penalty: none
+  # Chat lines when combat starts and ends (the action-bar countdown is always shown).
+  notifications: true
+  # Incidents older than this many days are deleted at startup (1 to 3650).
+  retention-days: 90
+  # One console line per incident.
+  diagnostic-logging: false
+  # Player messages (& colour codes).
+  messages:
+    tagged: "&cYou are now in combat! Do not disconnect."
+    expired: "&aYou are no longer in combat."
