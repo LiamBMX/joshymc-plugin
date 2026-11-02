@@ -267,6 +267,10 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.stuckRecoveryManager, plugin)
         // Issue #1331: forgets a player's pending transfer and cooldown when they leave.
         pm.registerEvents(plugin.transferManager, plugin)
+        // Issue #1341: Lifesteal hearts. Never registered on a server that doesn't run Lifesteal.
+        if (plugin.lifestealHeartManager.hosted) {
+            pm.registerEvents(com.liam.joshymc.lifesteal.hearts.LifestealHeartListener(plugin.lifestealHeartManager), plugin)
+        }
 
         // Admin panel
         pm.registerEvents(plugin.adminManager, plugin)
