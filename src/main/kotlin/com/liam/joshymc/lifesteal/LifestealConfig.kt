@@ -38,6 +38,17 @@ data class LifestealSettings(
         val nameMinLength: Int = 3,
         val nameMaxLength: Int = 16,
         val reservedNames: List<String> = emptyList(),
+        /**
+         * `teams.friendly-fire.enabled` (issue #1348). The blueprint defines no team PvP rule, so
+         * this is a setting: false (default) = teammates can't damage each other, true = they can.
+         */
+        val friendlyFire: Boolean = false,
+        /**
+         * `teams.friendly-fire.heart-transfers` (issue #1348): whether killing a teammate can steal
+         * a heart. Only used while [friendlyFire] is true. The blueprint leaves it open (a gameplay
+         * decision still needing approval), so the conservative default is false.
+         */
+        val teammateHeartTransfers: Boolean = false,
     )
 
     /** Team sizes per side: 2 = 2v2 ... 5 = 5v5. Sorted, distinct. */
@@ -278,6 +289,7 @@ object LifestealConfigParser {
     const val MAX_TEAM_NAME_LENGTH = 16
     private val TEAM_KEYS = listOf(
         "enabled", "invite-expiration-seconds", "allow-creation", "allow-disbanding", "name-min-length", "name-max-length", "reserved-names",
+        "friendly-fire.enabled", "friendly-fire.heart-transfers",
     )
 
     /**
@@ -322,7 +334,12 @@ object LifestealConfigParser {
             }
             else -> { problems += Problem(true, "teams.reserved-names must be a list of names."); d.reservedNames }
         }
-        return LifestealSettings.Teams(maxSize, enabled, invite, creation, disbanding, minLength, maxLength, reserved)
+        val friendlyFire = bool("friendly-fire.enabled", d.friendlyFire)
+        val heartTransfers = bool("friendly-fire.heart-transfers", d.teammateHeartTransfers)
+        if (heartTransfers && !friendlyFire) {
+            problems += Problem(false, "teams.friendly-fire.heart-transfers is true but friendly fire is off, so it has no effect (teammates can't hurt each other).")
+        }
+        return LifestealSettings.Teams(maxSize, enabled, invite, creation, disbanding, minLength, maxLength, reserved, friendlyFire, heartTransfers)
     }
 
     private fun teamSizes(raw: Any?, maxTeam: Int, default: List<Int>, problems: MutableList<Problem>): List<Int> {

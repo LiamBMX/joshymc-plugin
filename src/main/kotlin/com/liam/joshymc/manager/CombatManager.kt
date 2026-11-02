@@ -23,6 +23,8 @@ class CombatManager(private val plugin: Joshymc) {
 
     private val combatTags = ConcurrentHashMap<UUID, Long>()
     private var combatDurationMs: Long = 15_000
+    /** The configured combat-tag duration (`combat.tag-duration-seconds`), read-only for other systems. */
+    val tagDurationMillis: Long get() = combatDurationMs
     private var tickTaskId: Int = -1
 
     var allowElytraInCombat: Boolean = false

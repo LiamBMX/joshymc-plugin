@@ -94,6 +94,7 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
             text("Leader: ", NamedTextColor.GRAY).append(text(teams.nameOf(team.leader), NamedTextColor.WHITE)),
             text("Members: ", NamedTextColor.GRAY).append(text("${team.size}/${teams.maxSize}", NamedTextColor.WHITE)),
             text("Online: ", NamedTextColor.GRAY).append(text("$online", NamedTextColor.GREEN)),
+            text("Friendly fire: ", NamedTextColor.GRAY).append(text(teams.friendlyFireSummary(), NamedTextColor.WHITE)),
             if (team.leader == viewer) text("You lead this team.", NamedTextColor.GOLD) else null,
         )
     }

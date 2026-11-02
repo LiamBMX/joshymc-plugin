@@ -604,8 +604,8 @@ private fun wiring() {
     for (forbidden in listOf("lifesteal_hearts", "economyManager", "inventory.clear", "heartManager")) {
         check("team code never touches $forbidden", forbidden !in manager && forbidden !in store)
     }
-    // Heart stealing/friendly fire stay out of scope (the blueprint defines no team PvP rule).
-    check("heart system has no team rule", "lifestealTeamManager" !in source("lifesteal/hearts/LifestealHeartManager.kt"))
+    // Team PvP (issue #1348) only reads membership through the manager; scripts/LifestealTeamCombatCheck.kt covers it.
+    check("heart system reads team membership only through heartCheck", "lifestealTeamManager" !in source("lifesteal/hearts/LifestealHeartManager.kt").replace("plugin.lifestealTeamManager.heartCheck(", ""))
 
     // Ranked Team Wars / Elo are later issues: no Elo values are created here.
     check("no Elo columns", Regex("""\w*elo\w*\s+(INTEGER|REAL)""", RegexOption.IGNORE_CASE).find(store) == null)

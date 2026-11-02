@@ -1,6 +1,7 @@
 package com.liam.joshymc.lifesteal.hearts
 
 import com.liam.joshymc.lifesteal.LifestealSettings
+import com.liam.joshymc.lifesteal.teams.TeamCombatRules
 import java.util.UUID
 
 /**
@@ -113,13 +114,18 @@ object HeartRules {
         data object KillerAtMaximum : Decision
         /** This killer took a heart from this victim too recently. */
         data class Cooldown(val remainingMillis: Long) : Decision
+        /** Teammates (or just were) and the team policy allows no teammate heart transfer (issue #1348). */
+        data object Teammates : Decision
+        /** Team membership couldn't be read, so nothing is transferred (issue #1348). */
+        data object TeamUnknown : Decision
     }
 
     val Decision.changesHearts: Boolean get() = this is Decision.Transfer || this is Decision.VictimLosesOnly
 
     /**
-     * Fixed order: the victim's last heart first (it is never at risk), then the anti-farming
-     * cooldown, then the killer's maximum. [victimHearts] and [killerHearts] are the stored values;
+     * Fixed order: the team check first ([team], issue #1348: teammates never move hearts unless
+     * the team policy allows it, and unknown membership never does), then the victim's last heart
+     * (it is never at risk), then the anti-farming cooldown, then the killer's maximum. [victimHearts] and [killerHearts] are the stored values;
      * they are clamped into [limits] first, so a lowered maximum never lets anyone exceed it.
      */
     fun decide(
@@ -128,7 +134,13 @@ object HeartRules {
         cooldownRemainingMillis: Long,
         limits: Limits,
         policy: KillerAtMaximumPolicy = KILLER_AT_MAXIMUM,
+        team: TeamCombatRules.HeartCheck = TeamCombatRules.HeartCheck.ELIGIBLE,
     ): Decision {
+        when (team) {
+            TeamCombatRules.HeartCheck.TEAMMATES -> return Decision.Teammates
+            TeamCombatRules.HeartCheck.UNKNOWN -> return Decision.TeamUnknown
+            TeamCombatRules.HeartCheck.ELIGIBLE -> {}
+        }
         val victim = limits.clamp(victimHearts)
         val killer = limits.clamp(killerHearts)
         if (victim - HEARTS_PER_KILL < limits.minimum) return Decision.VictimAtMinimum
