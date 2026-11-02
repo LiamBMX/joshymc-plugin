@@ -169,6 +169,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
+        // Issue #1344: Lifesteal heart withdrawal into a physical Heart item.
+        plugin.getCommand("withdrawheart")?.let {
+            val cmd = com.liam.joshymc.lifesteal.hearts.WithdrawHeartCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
         // Issue #1331: cross-server transfers through the Velocity proxy.
         for (destination in com.liam.joshymc.network.transfer.TransferDestination.entries) {
             plugin.getCommand(destination.command)?.let {

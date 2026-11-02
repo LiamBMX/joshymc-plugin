@@ -77,7 +77,389 @@ fun main() {
     concurrency()
     rollback()
     wiring()
+    heartItemSettings()
+    heartItemRules()
+    heartItemStore()
+    heartItemConcurrency()
+    heartItemRollback()
+    heartItemWiring()
     println("OK: $checks Lifesteal heart checks passed.")
+}
+
+// ── Heart items (issue #1344) ────────────────────────────────
+
+private fun bundledLifestealYml(): Map<String, Any?> {
+    val text = InputStreamReader(Thread.currentThread().contextClassLoader.getResourceAsStream("lifesteal.yml")!!, Charsets.UTF_8).readText()
+    return Yaml().load(text)
+}
+
+private fun parseWith(map: Map<String, Any?>) =
+    LifestealConfigParser.parse { p -> p.split('.').fold<String, Any?>(map) { node, key -> (node as? Map<*, *>)?.get(key) } }
+
+@Suppress("UNCHECKED_CAST")
+private fun withHeartItems(edit: (MutableMap<String, Any?>) -> Unit): Map<String, Any?> {
+    val map = bundledLifestealYml().toMutableMap()
+    val section = (map["heart-items"] as Map<String, Any?>).toMutableMap()
+    section["messages"] = (section["messages"] as Map<String, Any?>).toMutableMap()
+    edit(section)
+    map["heart-items"] = section
+    return map
+}
+
+private fun heartItemSettings() {
+    val parsed = parseWith(bundledLifestealYml())
+    val items = parsed.settings!!.heartItems
+    check("bundled heart-items = defaults", items == LifestealSettings.HeartItems())
+    check("bundled file has no problems", parsed.problems.isEmpty())
+    check("withdraw and redeem on by default", items.withdrawEnabled && items.redeemEnabled)
+    check("no item model by default", items.itemModel == null)
+    check("issue's withdraw message", items.messages.withdrawn == "&aYou withdrew &c1 Heart&a!")
+    check("issue's redeem message", items.messages.redeemed == "&aYou redeemed &c1 Heart&a!")
+    check("issue's final heart message", items.messages.finalHeart == "&cYou cannot withdraw your final heart!")
+    check("issue's maximum message", items.messages.maximum == "&cYou have already reached the maximum of {maximum} hearts!")
+    check("issue's inventory message", items.messages.inventoryFull == "&cYou need inventory space to withdraw a heart!")
+    check("issue's failure message", items.messages.redeemFailed == "&cUnable to redeem this heart. Please try again.")
+
+    val old = bundledLifestealYml().toMutableMap().apply { remove("heart-items") }
+    val oldParsed = parseWith(old)
+    check("a lifesteal.yml from before heart items still loads", oldParsed.settings?.heartItems == LifestealSettings.HeartItems())
+    check("missing section is one warning", oldParsed.problems.size == 1 && !oldParsed.problems[0].severe)
+
+    check("item model accepted", parseWith(withHeartItems { it["item-model"] = "joshymc:lifesteal_heart" }).settings?.heartItems?.itemModel == "joshymc:lifesteal_heart")
+    check("bad item model refused", parseWith(withHeartItems { it["item-model"] = "Not A Key" }).settings == null)
+    check("non-boolean toggle refused", parseWith(withHeartItems { it["withdraw-enabled"] = "yes" }).settings == null)
+    check("negative cooldown refused", parseWith(withHeartItems { it["action-cooldown-millis"] = -5 }).settings == null)
+    check("huge cooldown refused", parseWith(withHeartItems { it["action-cooldown-millis"] = 3_600_000 }).settings == null)
+    check("withdraw can be turned off", parseWith(withHeartItems { it["withdraw-enabled"] = false }).settings?.heartItems?.withdrawEnabled == false)
+    @Suppress("UNCHECKED_CAST")
+    check("empty message refused", parseWith(withHeartItems { (it["messages"] as MutableMap<String, Any?>)["redeemed"] = " " }).settings == null)
+    // Nothing in heart-items touches the limits: the final heart stays protected whatever it says.
+    check("no heart-items key can change the limits", parseWith(withHeartItems { it["minimum"] = 0; it["allow-final-heart"] = true }).settings!!.hearts == LifestealSettings.Hearts())
+}
+
+private fun heartItemRules() {
+    check("10 hearts withdraw to 9 (18 health)", HeartRules.withdraw(10, LIMITS) == HeartRules.WithdrawDecision.Withdraw(9) && HeartRules.healthFor(9) == 18.0)
+    check("2 hearts withdraw to 1", HeartRules.withdraw(2, LIMITS) == HeartRules.WithdrawDecision.Withdraw(1))
+    check("1 heart can't withdraw", HeartRules.withdraw(1, LIMITS) == HeartRules.WithdrawDecision.AtMinimum)
+    check("below-minimum row can't withdraw", HeartRules.withdraw(0, LIMITS) == HeartRules.WithdrawDecision.AtMinimum)
+    check("above-maximum row withdraws from the maximum", HeartRules.withdraw(25, LIMITS) == HeartRules.WithdrawDecision.Withdraw(19))
+    check("8 hearts redeem to 9 (18 health)", HeartRules.redeem(8, LIMITS) == HeartRules.RedeemDecision.Redeem(9))
+    check("19 hearts redeem to 20", HeartRules.redeem(19, LIMITS) == HeartRules.RedeemDecision.Redeem(20))
+    check("20 hearts can't redeem", HeartRules.redeem(20, LIMITS) == HeartRules.RedeemDecision.AtMaximum)
+    check("above-maximum row can't redeem", HeartRules.redeem(30, LIMITS) == HeartRules.RedeemDecision.AtMaximum)
+    val serial = UUID.randomUUID().toString()
+    check("issued serial parses", HeartRules.parseSerial(serial) == serial)
+    check("upper-case serial refused", HeartRules.parseSerial(serial.uppercase()) == null)
+    check("short serial refused", HeartRules.parseSerial("1-1-1-1-1") == null)
+    check("garbage serial refused", HeartRules.parseSerial("Heart") == null && HeartRules.parseSerial("") == null && HeartRules.parseSerial(null) == null)
+    check("cooldown: first action allowed", HeartRules.cooldownPassed(null, T0, 500))
+    check("cooldown: rapid repeat refused", !HeartRules.cooldownPassed(T0, T0 + 100, 500))
+    check("cooldown: after the gap allowed", HeartRules.cooldownPassed(T0, T0 + 500, 500))
+    check("cooldown: clock going back refused", !HeartRules.cooldownPassed(T0 + 1_000, T0, 500))
+    check("cooldown 0 = off", HeartRules.cooldownPassed(T0, T0, 0))
+}
+
+private fun serial() = UUID.randomUUID().toString()
+
+private fun heartItemStore() {
+    val dir = Files.createTempDirectory("joshymc-heart-items").toFile()
+    try {
+        val alice = JAVA
+        val bob = BEDROCK
+        val withdrawn = mutableListOf<String>()
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            store.ensure(alice, 10, T0)
+            store.ensure(bob, 10, T0)
+
+            // Withdrawal.
+            val s1 = serial()
+            val w1 = store.withdraw(alice, s1, LIMITS, T0)
+            check("withdraw 10 -> 9", w1 is HeartStore.WithdrawResult.Withdrawn && w1.before == 10 && w1.after == 9 && store.load(alice)!!.hearts == 9)
+            val item = store.loadItem(s1)!!
+            check("withdrawn item is ISSUED to the player", item.status == HeartStore.ItemStatus.ISSUED && item.source == HeartStore.ItemSource.WITHDRAW && item.issuedTo == alice)
+            val tx = (w1 as HeartStore.WithdrawResult.Withdrawn).transactionId
+            check("withdraw audit row", store.audit(alice).any { it.operation == "WITHDRAW" && it.previous == 10 && it.next == 9 && it.itemQuantity == 1 && it.itemSerial == s1 && it.transactionId == tx })
+            check("record points at the withdrawal", store.load(alice)!!.lastTransaction == tx)
+            check("a serial can't be withdrawn twice", runCatching { store.withdraw(alice, s1, LIMITS, T0) }.isFailure && store.load(alice)!!.hearts == 9)
+            check("non-serial refused before touching the database", runCatching { store.withdraw(alice, "not-a-serial", LIMITS, T0) }.isFailure)
+            withdrawn += s1
+
+            // Down to 2, then 1, then refused.
+            store.adminChange(bob, AdminOp.SET, 2, LIMITS, "console", "Console", T0)
+            val w2 = store.withdraw(bob, serial(), LIMITS, T0)
+            check("withdraw 2 -> 1", w2 is HeartStore.WithdrawResult.Withdrawn && w2.after == 1 && store.load(bob)!!.hearts == 1)
+            val atMin = serial()
+            val w3 = store.withdraw(bob, atMin, LIMITS, T0)
+            check("withdraw at 1 refused", w3 == HeartStore.WithdrawResult.AtMinimum(1) && store.load(bob)!!.hearts == 1)
+            check("no item for a refused withdrawal", store.loadItem(atMin) == null)
+            check("refused withdrawal audited", store.audit(bob).any { it.operation == "WITHDRAW_REJECTED" && it.reason == "FINAL_HEART" && it.itemQuantity == 0 })
+            check("no record: refused", store.withdraw(UUID.randomUUID(), serial(), LIMITS, T0) is HeartStore.WithdrawResult.Unavailable)
+
+            // Redemption, by another player (trading): the item isn't tied to who withdrew it.
+            val r1 = store.redeem(bob, s1, LIMITS, T0 + 1)
+            check("bob redeems alice's heart 1 -> 2", r1 is HeartStore.RedeemResult.Redeemed && r1.before == 1 && r1.after == 2 && store.load(bob)!!.hearts == 2)
+            check("item now REDEEMED by bob", store.loadItem(s1)!!.let { it.status == HeartStore.ItemStatus.REDEEMED && it.closedBy == bob.toString() })
+            check("redeem audit row", store.audit(bob).any { it.operation == "REDEEM" && it.previous == 1 && it.next == 2 && it.itemQuantity == 1 && it.itemSerial == s1 })
+            check("alice unaffected by the trade", store.load(alice)!!.hearts == 9)
+
+            // A copy of a redeemed item (dupe, creative clone, rollback) is refused.
+            val again = store.redeem(bob, s1, LIMITS, T0 + 2)
+            check("second redemption of one serial refused", again is HeartStore.RedeemResult.AlreadyRedeemed && store.load(bob)!!.hearts == 2)
+            check("copy refused for others too", store.redeem(alice, s1, LIMITS, T0 + 2) is HeartStore.RedeemResult.AlreadyRedeemed && store.load(alice)!!.hearts == 9)
+            check("duplicate attempt audited", store.audit(alice).any { it.operation == "REDEEM_REJECTED" && it.reason == "ALREADY_REDEEMED" })
+
+            // Forged / invalid items: no row was ever issued.
+            check("forged serial refused", store.redeem(alice, serial(), LIMITS, T0) == HeartStore.RedeemResult.UnknownItem && store.load(alice)!!.hearts == 9)
+            check("garbage serial refused", store.redeem(alice, "renamed nether star", LIMITS, T0) == HeartStore.RedeemResult.UnknownItem)
+            check("forgery audited", store.audit(alice).any { it.operation == "REDEEM_REJECTED" && it.reason == "UNKNOWN_SERIAL" })
+
+            // Maximum.
+            store.adminChange(alice, AdminOp.SET, 20, LIMITS, "console", "Console", T0)
+            val held = serial().also { store.withdraw(bob, it, LIMITS, T0) } // bob 2 -> 1, holds one item
+            val atMax = store.redeem(alice, held, LIMITS, T0)
+            check("redeem at 20 refused", atMax == HeartStore.RedeemResult.AtMaximum(20) && store.load(alice)!!.hearts == 20)
+            check("refused item stays valid", store.loadItem(held)!!.status == HeartStore.ItemStatus.ISSUED)
+            check("refusal at maximum audited", store.audit(alice).any { it.operation == "REDEEM_REJECTED" && it.reason == "AT_MAXIMUM" })
+            store.adminChange(alice, AdminOp.SET, 19, LIMITS, "console", "Console", T0)
+            check("redeem at 19 -> 20", (store.redeem(alice, held, LIMITS, T0) as? HeartStore.RedeemResult.Redeemed)?.after == 20)
+
+            // Several items, each exactly one heart.
+            store.adminChange(alice, AdminOp.SET, 10, LIMITS, "console", "Console", T0)
+            val three = List(3) { serial().also { s -> store.withdraw(alice, s, LIMITS, T0) } }
+            check("three withdrawals -> 7", store.load(alice)!!.hearts == 7 && three.all { store.loadItem(it)!!.status == HeartStore.ItemStatus.ISSUED })
+            for (s in three) store.redeem(alice, s, LIMITS, T0)
+            check("three redemptions -> 10", store.load(alice)!!.hearts == 10 && three.all { store.loadItem(it)!!.status == HeartStore.ItemStatus.REDEEMED })
+            withdrawn += three
+
+            // Staff grants: recorded, hearts unchanged.
+            val grantSerials = List(3) { serial() }
+            val g = store.grantItems(bob, grantSerials, "console", "Console", T0)
+            check("grant of 3", g is HeartStore.GrantResult.Granted && grantSerials.all { store.loadItem(it)!!.source == HeartStore.ItemSource.ADMIN })
+            check("grant doesn't change hearts", store.load(bob)!!.hearts == 1)
+            check("grant audited with quantity", store.audit(bob).any { it.operation == "ADMIN_GRANT_ITEM" && it.itemQuantity == 3 && it.actor == "console" })
+            check("grant of 0 refused", store.grantItems(bob, emptyList(), "console", "Console", T0) is HeartStore.GrantResult.Invalid)
+            check("grant above the cap refused", store.grantItems(bob, List(HeartRules.MAX_ADMIN_ITEM_GRANT + 1) { serial() }, "console", "Console", T0) is HeartStore.GrantResult.Invalid)
+            check("grant needs a record", store.grantItems(UUID.randomUUID(), listOf(serial()), "console", "Console", T0) == HeartStore.GrantResult.NoRecord)
+            check("granted item redeems", store.redeem(bob, grantSerials[0], LIMITS, T0) is HeartStore.RedeemResult.Redeemed && store.load(bob)!!.hearts == 2)
+
+            // Recovery: void (with refund for a withdrawn item, never for a staff one).
+            val lost = serial().also { store.withdraw(alice, it, LIMITS, T0) } // alice 10 -> 9
+            check("outstanding list shows the lost item", store.outstandingItems(alice).any { it.serial == lost })
+            check("staff item can't be refunded", store.voidItem(grantSerials[1], true, LIMITS, "console", "Console", T0) is HeartStore.VoidResult.Refused)
+            val v = store.voidItem(lost.uppercase(), true, LIMITS, "console", "Console", T0)
+            check("void + refund", v is HeartStore.VoidResult.Voided && v.refunded && v.after == 10 && store.load(alice)!!.hearts == 10)
+            check("voided item can't be redeemed", store.redeem(alice, lost, LIMITS, T0) == HeartStore.RedeemResult.Voided && store.load(alice)!!.hearts == 10)
+            check("void is once", store.voidItem(lost, false, LIMITS, "console", "Console", T0) is HeartStore.VoidResult.NotOutstanding)
+            check("void audited", store.audit(alice).any { it.operation == "ITEM_VOID" } && store.audit(alice).any { it.operation == "ITEM_REFUND" && it.previous == 9 && it.next == 10 })
+            check("void without refund", store.voidItem(grantSerials[1], false, LIMITS, "console", "Console", T0) is HeartStore.VoidResult.Voided)
+            check("unknown void", store.voidItem(serial(), false, LIMITS, "console", "Console", T0) == HeartStore.VoidResult.UnknownItem)
+            store.adminChange(alice, AdminOp.SET, 20, LIMITS, "console", "Console", T0)
+            val maxed = serial().also { store.withdraw(alice, it, LIMITS, T0) }
+            store.adminChange(alice, AdminOp.SET, 20, LIMITS, "console", "Console", T0)
+            check("refund never passes the maximum", store.voidItem(maxed, true, LIMITS, "console", "Console", T0) is HeartStore.VoidResult.Refused &&
+                store.loadItem(maxed)!!.status == HeartStore.ItemStatus.ISSUED && store.load(alice)!!.hearts == 20)
+            withdrawn += maxed
+        }
+
+        // Restart: hearts, item states and dedupe all persist; an outstanding item still works.
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            check("hearts persist across restarts", store.load(alice)!!.hearts == 20 && store.load(bob)!!.hearts == 2)
+            check("redeemed stays redeemed after restart", store.loadItem(withdrawn[0])!!.status == HeartStore.ItemStatus.REDEEMED &&
+                store.redeem(bob, withdrawn[0], LIMITS, T0) is HeartStore.RedeemResult.AlreadyRedeemed)
+            store.adminChange(bob, AdminOp.SET, 5, LIMITS, "console", "Console", T0)
+            check("outstanding item redeems after restart", store.redeem(bob, withdrawn.last(), LIMITS, T0) is HeartStore.RedeemResult.Redeemed && store.load(bob)!!.hearts == 6)
+        }
+
+        // An audit table from issue #1341 (no item columns) is migrated in place.
+        val legacyDir = Files.createTempDirectory("joshymc-heart-items-legacy").toFile()
+        try {
+            withDb(legacyDir) { db ->
+                db.createTable("CREATE TABLE lifesteal_heart_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, transaction_id TEXT, uuid TEXT NOT NULL, operation TEXT NOT NULL, previous_hearts INTEGER, new_hearts INTEGER, actor TEXT, reason TEXT, created_at INTEGER NOT NULL)")
+                db.execute("INSERT INTO lifesteal_heart_audit (uuid, operation, created_at) VALUES (?, 'INITIAL', ?)", alice.toString(), T0)
+                val store = HeartStore(db)
+                store.createTables()
+                store.createTables()
+                store.ensure(alice, 10, T0)
+                store.withdraw(alice, serial(), LIMITS, T0)
+                check("legacy audit rows kept", store.audit(alice).first().let { it.operation == "INITIAL" && it.itemQuantity == 0 && it.itemSerial == null })
+                check("migrated audit records items", store.audit(alice).any { it.operation == "WITHDRAW" && it.itemQuantity == 1 })
+            }
+        } finally {
+            legacyDir.deleteRecursively()
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+}
+
+private fun heartItemConcurrency() {
+    val dir = Files.createTempDirectory("joshymc-heart-items-concurrency").toFile()
+    try {
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+
+            // 40 withdrawals at once from a 10-heart player: exactly 9 succeed, 9 items exist.
+            val p = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+            val pool = Executors.newFixedThreadPool(8)
+            val start = CountDownLatch(1)
+            val ok = AtomicInteger()
+            val errors = Collections.synchronizedList(mutableListOf<Throwable>())
+            val serials = Collections.synchronizedList(mutableListOf<String>())
+            repeat(40) {
+                pool.execute {
+                    start.await()
+                    try {
+                        val r = store.withdraw(p, serial(), LIMITS, T0)
+                        if (r is HeartStore.WithdrawResult.Withdrawn) { ok.incrementAndGet(); serials += r.serial }
+                    } catch (e: Throwable) { errors += e }
+                }
+            }
+            start.countDown()
+            pool.shutdown()
+            check("concurrent withdrawals finished", pool.awaitTermination(60, TimeUnit.SECONDS))
+            check("no errors in concurrent withdrawals", errors.isEmpty())
+            check("exactly 9 concurrent withdrawals", ok.get() == 9 && store.load(p)!!.hearts == 1)
+            check("exactly 9 items issued", store.itemCount(HeartStore.ItemStatus.ISSUED) == 9)
+
+            // The same item redeemed from 32 threads (spam clicks, two hands, two players with a duplicated copy): once.
+            val target = serials.first()
+            val redeemers = List(4) { UUID.randomUUID().also { u -> store.ensure(u, 10, T0) } }
+            val pool2 = Executors.newFixedThreadPool(8)
+            val redeemed = AtomicInteger()
+            repeat(32) { i ->
+                pool2.execute {
+                    if (store.redeem(redeemers[i % 4], target, LIMITS, T0) is HeartStore.RedeemResult.Redeemed) redeemed.incrementAndGet()
+                }
+            }
+            pool2.shutdown()
+            check("same-item redemptions finished", pool2.awaitTermination(60, TimeUnit.SECONDS))
+            check("one item, one heart", redeemed.get() == 1 && redeemers.sumOf { store.load(it)!!.hearts!! } == 41)
+
+            // Hearts are conserved: every withdrawn heart is either still an item or back on a player.
+            val all = (serials - target)
+            val pool3 = Executors.newFixedThreadPool(8)
+            for (s in all) pool3.execute { store.redeem(p, s, LIMITS, T0) }
+            pool3.shutdown()
+            check("remaining redemptions finished", pool3.awaitTermination(60, TimeUnit.SECONDS))
+            check("withdrawer back to 9 from their own 8 items", store.load(p)!!.hearts == 9 && store.itemCount(HeartStore.ItemStatus.ISSUED) == 0)
+
+            // A player at 19 redeeming 10 items at once only reaches 20; the other 9 stay valid.
+            val near = UUID.randomUUID().also { store.ensure(it, 19, T0) }
+            val grant = List(10) { serial() }
+            store.grantItems(near, grant, "console", "Console", T0)
+            val pool4 = Executors.newFixedThreadPool(8)
+            for (s in grant) pool4.execute { store.redeem(near, s, LIMITS, T0) }
+            pool4.shutdown()
+            check("max race finished", pool4.awaitTermination(60, TimeUnit.SECONDS))
+            check("never past the maximum under concurrency", store.load(near)!!.hearts == 20 && store.itemCount(HeartStore.ItemStatus.ISSUED) == 9)
+
+            // Withdrawals racing PvP losses never take the final heart.
+            val mixed = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+            val pool5 = Executors.newFixedThreadPool(8)
+            repeat(20) {
+                pool5.execute { store.withdraw(mixed, serial(), LIMITS, T0) }
+                pool5.execute {
+                    val k = UUID.randomUUID()
+                    store.ensure(k, 10, T0)
+                    store.transferPvp(pvp(k, mixed, T0))
+                }
+            }
+            pool5.shutdown()
+            check("withdraw/pvp race finished", pool5.awaitTermination(60, TimeUnit.SECONDS))
+            check("final heart kept under withdraw/pvp race", store.load(mixed)!!.hearts == 1)
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+}
+
+private fun heartItemRollback() {
+    val dir = Files.createTempDirectory("joshymc-heart-items-rollback").toFile()
+    try {
+        withDb(dir) { real ->
+            val db = FailingDb(real)
+            val store = HeartStore(db)
+            store.createTables()
+            val p = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+
+            // Database failure after the heart was written: nothing is left behind.
+            val s = serial()
+            db.failOn = "withdrew 1 heart"
+            check("withdraw failure surfaces", runCatching { store.withdraw(p, s, LIMITS, T0) }.isFailure)
+            db.failOn = null
+            check("failed withdrawal took no heart", store.load(p)!!.hearts == 10 && store.load(p)!!.version == 0L)
+            check("failed withdrawal issued no item", store.loadItem(s) == null)
+            check("same withdrawal can be retried", store.withdraw(p, s, LIMITS, T0) is HeartStore.WithdrawResult.Withdrawn)
+
+            // Interrupted redemption (another writer changes the row between read and write): rolled back.
+            db.beforeHeartUpdate = {
+                real.executeUpdate("UPDATE lifesteal_hearts SET version = version + 1 WHERE uuid = ?", p.toString())
+            }
+            val stale = runCatching { store.redeem(p, s, LIMITS, T0) }
+            check("stale redemption refused", stale.exceptionOrNull() is HeartStore.StaleWriteException)
+            check("stale redemption kept the item valid", store.loadItem(s)!!.status == HeartStore.ItemStatus.ISSUED && store.load(p)!!.hearts == 9)
+            check("item redeems after the failed attempt", store.redeem(p, s, LIMITS, T0) is HeartStore.RedeemResult.Redeemed && store.load(p)!!.hearts == 10)
+
+            // Failure while writing the redemption's audit row.
+            val s2 = serial().also { store.withdraw(p, it, LIMITS, T0) }
+            db.failOn = s2
+            check("redeem failure surfaces", runCatching { store.redeem(p, s2, LIMITS, T0) }.isFailure)
+            db.failOn = null
+            check("failed redemption changed nothing", store.loadItem(s2)!!.status == HeartStore.ItemStatus.ISSUED && store.load(p)!!.hearts == 9)
+        }
+
+        // Shutdown: a closed database refuses withdrawals and redemptions instead of half-applying them.
+        val closed = DatabaseManager(dir, quietLogger()).also { it.start(); it.shutdown() }
+        check("closed database refuses withdrawals", runCatching { HeartStore(closed).withdraw(UUID.randomUUID(), serial(), LIMITS, T0) }.isFailure)
+        check("closed database refuses redemptions", runCatching { HeartStore(closed).redeem(UUID.randomUUID(), serial(), LIMITS, T0) }.isFailure)
+    } finally {
+        dir.deleteRecursively()
+    }
+}
+
+private fun heartItemWiring() {
+    val manager = source("lifesteal/hearts/LifestealHeartManager.kt")
+    val withdraw = manager.substringAfter("fun withdraw(player: Player)").substringBefore("private fun deliver(")
+    check("withdraw checks the session first", "itemProblem(player)" in withdraw && "!loaded.containsKey(player.uniqueId) -> HeartMessages.NOT_LOADED" in manager)
+    check("withdraw checks inventory space before the transaction", withdraw.indexOf("player.inventory.firstEmpty() < 0") in 0 until withdraw.indexOf("store.withdraw("))
+    check("withdraw refuses re-entry", "if (!busy.add(uuid)) return" in withdraw)
+    check("item handed over only after the commit", withdraw.indexOf("store.withdraw(") < withdraw.indexOf("deliver(player"))
+    check("player data saved after a heart item change", "player.saveData()" in manager)
+    val redeem = manager.substringAfter("fun redeem(player: Player, hand: EquipmentSlot)").substringBefore("private fun removeRedeemed(")
+    check("one redemption attempt per tick", "lastRedeemTick.put(uuid, tick) == tick" in redeem)
+    check("item taken only after the commit", redeem.indexOf("store.redeem(") < redeem.indexOf("removeRedeemed(player, hand, serial)"))
+    check("failed redemption keeps the item", redeem.substringAfter("catch (e: Exception)").substringBefore("when (result)").let { "removeRedeemed" !in it })
+    check("heart items only for Lifesteal players", "!hosted -> HeartMessages.NOT_LIFESTEAL_SERVER" in manager && "!isLifesteal(player) -> HeartMessages.NOT_IN_LIFESTEAL" in manager)
+    check("quit clears the item safeguards", manager.substringAfter("fun onQuit(player: Player)").substringBefore("}").let { "lastRedeemTick.remove" in it && "lastWithdrawAt.remove" in it })
+
+    val item = source("lifesteal/hearts/HeartItem.kt")
+    check("identified by persistent data, not name or lore", "pdc.get(serialKey" in item && "displayName()" !in item && ".lore()" !in item)
+    check("renamed Nether Stars are not hearts", "if (id != ITEM_ID && !hasSerial) return Read.NotHeart" in item)
+    check("stacks refused", "if (stack.amount != 1) return Read.Malformed" in item)
+    check("never stacks", "meta.setMaxStackSize(1)" in item)
+    check("not a /joshymc give item (no serial-less hearts)", "HeartItem" !in source("manager/ItemManager.kt") && "lifesteal_heart" !in source("manager/ItemManager.kt"))
+
+    val listener = source("lifesteal/hearts/LifestealHeartListener.kt")
+    check("off hand skipped when the main hand holds a heart", "if (hand == EquipmentSlot.OFF_HAND && hearts.items.isHeart(player.inventory.itemInMainHand)) return" in listener)
+    check("heart never used as a vanilla item", "event.setUseItemInHand(Event.Result.DENY)" in listener)
+    check("hearts can't be crafted with", "PrepareItemCraftEvent" in listener)
+
+    val command = source("lifesteal/hearts/WithdrawHeartCommand.kt")
+    check("withdraw is player-only", "if (sender !is Player)" in command)
+    check("withdraw permission", "joshymc.lifesteal.withdraw" in command)
+    val pluginYml = File("src/main/resources/plugin.yml").readText()
+    check("withdraw permission default true", Regex("""(?m)^  joshymc\.lifesteal\.withdraw:\n    description: .*\n    default: true$""").containsMatchIn(pluginYml))
+    check("give permission op-only", Regex("""(?m)^  joshymc\.lifesteal\.hearts\.give:\n    description: .*\n    default: op$""").containsMatchIn(pluginYml))
+    check("withdrawheart registered", "plugin.getCommand(\"withdrawheart\")" in source("manager/CommandManager.kt"))
+    check("withdrawheart is a Lifesteal command", com.liam.joshymc.gamemode.GamemodeAssignments.COMMANDS["withdrawheart"] == com.liam.joshymc.gamemode.GamemodeScope.LIFESTEAL)
+    val admin = source("lifesteal/hearts/LifestealHeartsCommand.kt")
+    check("give checks its own permission", Regex("""private fun give\(sender: CommandSender, args: List<String>\) \{\s+if \(!sender\.hasPermission\(GIVE_PERMISSION\)\)""").containsMatchIn(admin))
+    check("items/void need the admin permission", admin.indexOf("if (!sender.hasPermission(PERMISSION))") < admin.indexOf("\"items\" -> return items(sender, args)"))
 }
 
 // ── Settings ─────────────────────────────────────────────────
@@ -513,7 +895,10 @@ private fun wiring() {
     check("/lifesteal hearts routed to the heart command", "args.firstOrNull()?.equals(\"hearts\", ignoreCase = true) == true" in transfer)
     check("plain /lifesteal still transfers", "plugin.transferManager.request(sender, destination)" in transfer)
     val command = source("lifesteal/hearts/LifestealHeartsCommand.kt")
-    check("admin command checks its permission first", Regex("""fun execute\(sender: CommandSender, args: List<String>\) \{\s+if \(!sender\.hasPermission\(PERMISSION\)\)""").containsMatchIn(command))
+    // Only `give` (issue #1344, its own permission) is routed before the admin permission check.
+    check("admin command checks its permission first", Regex(
+        """fun execute\(sender: CommandSender, args: List<String>\) \{\s+// .*\n\s+if \(args\.firstOrNull\(\)\?\.equals\("give", ignoreCase = true\) == true\) \{\s+give\(sender, args\)\s+return\s+\}\s+if \(!sender\.hasPermission\(PERMISSION\)\)"""
+    ).containsMatchIn(command))
     check("admin command refuses off Lifesteal", "if (!hearts.hosted)" in command)
     check("offline players resolved without Mojang lookups", "plugin.playerResolver.resolve(" in command && "getOfflinePlayer(" !in command)
     val pluginYml = File("src/main/resources/plugin.yml").readText()
@@ -524,5 +909,6 @@ private fun wiring() {
     check("victim message", "You lost 1 heart to &f{killer}&c!" in messages)
 
     val all = File("src/main/kotlin/com/liam/joshymc/lifesteal/hearts").listFiles()!!.joinToString("\n") { it.readText() }
-    check("no elimination, revival, items or recipes", listOf("ban(", "ShapedRecipe", "ItemStack(", "revive").none { it in all })
+    // Heart items exist since issue #1344, but still no crafting recipe, shop or elimination.
+    check("no elimination, revival or recipes", listOf("ban(", "ShapedRecipe", "ShapelessRecipe", "revive").none { it in all })
 }

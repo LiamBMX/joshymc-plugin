@@ -212,8 +212,12 @@ commands:
     permission: joshymc.transfer.survival
   lifesteal:
     description: Go to Lifesteal SMP (admins on the Lifesteal server also manage hearts with /lifesteal hearts)
-    usage: /lifesteal [hearts <get|set|add|remove> <player> [amount]]
+    usage: /lifesteal [hearts <get|set|add|remove|give|items|void> ...]
     permission: joshymc.transfer.lifesteal
+  withdrawheart:
+    description: Turn one of your permanent hearts into a Heart item (Lifesteal only)
+    usage: /withdrawheart
+    permission: joshymc.lifesteal.withdraw
   unstuck:
     description: Get out of a spot where you're frozen midair or the world didn't load
     usage: /unstuck [player]
@@ -948,8 +952,14 @@ permissions:
     description: Use /lifesteal to go to Lifesteal SMP
     default: true
   joshymc.lifesteal.hearts.admin:
-    description: Use /lifesteal hearts get|set|add|remove on the Lifesteal server (admin heart management)
+    description: Use /lifesteal hearts get|set|add|remove|items|void on the Lifesteal server (admin heart management and lost Heart item recovery)
     default: op
+  joshymc.lifesteal.hearts.give:
+    description: Use /lifesteal hearts give to make recorded Heart items for an online Lifesteal player
+    default: op
+  joshymc.lifesteal.withdraw:
+    description: Use /withdrawheart to turn one of your hearts into a Heart item (Lifesteal only)
+    default: true
   joshymc.transfer.bypass-cooldown:
     description: Skip the cross-server transfer cooldown
     default: op

@@ -15,6 +15,7 @@ data class LifestealSettings(
     val rankedTeamWars: RankedTeamWars = RankedTeamWars(),
     val seasons: Seasons = Seasons(),
     val progression: LaunchProgression = LaunchProgression(),
+    val heartItems: HeartItems = HeartItems(),
 ) {
     /** Hearts are whole hearts (2 health points each). */
     data class Hearts(val starting: Int = 10, val maximum: Int = 20, val minimum: Int = 1)
@@ -37,6 +38,34 @@ data class LifestealSettings(
         val gracePeriodHours: Int = 24,
         val rankedTeamWarsUnlockDay: Int = 3,
         val endUnlockDay: Int = 7,
+    )
+
+    /**
+     * Physical Heart items (issue #1344): `/withdrawheart` and right-click redemption. The
+     * blueprint doesn't define the item's look or any safeguard timing, so those are settings;
+     * the heart limits always come from [Hearts] (nothing here can let the final heart go).
+     */
+    data class HeartItems(
+        val withdrawEnabled: Boolean = true,
+        val redeemEnabled: Boolean = true,
+        /** `&` colour codes. Only new items use it; existing items are identified by their serial. */
+        val displayName: String = "&c&lHeart",
+        /** Optional item model (`namespace:path`) for a resource-pack look, or null for the plain item. */
+        val itemModel: String? = null,
+        val glint: Boolean = true,
+        /** Minimum time between two withdrawals or two redemptions by one player. */
+        val actionCooldownMillis: Int = 500,
+        val messages: HeartItemMessages = HeartItemMessages(),
+    )
+
+    /** `&` colour codes; `{maximum}` and `{hearts}` are filled in as plain text. */
+    data class HeartItemMessages(
+        val withdrawn: String = "&aYou withdrew &c1 Heart&a!",
+        val redeemed: String = "&aYou redeemed &c1 Heart&a!",
+        val finalHeart: String = "&cYou cannot withdraw your final heart!",
+        val maximum: String = "&cYou have already reached the maximum of {maximum} hearts!",
+        val inventoryFull: String = "&cYou need inventory space to withdraw a heart!",
+        val redeemFailed: String = "&cUnable to redeem this heart. Please try again.",
     )
 
     companion object {
@@ -144,6 +173,8 @@ object LifestealConfigParser {
         if (rankedDay > shortestSeasonDays) problems += Problem(true, "progression.ranked-team-wars-unlock-day ($rankedDay) is after the end of a $months-month season.")
         if (endDay > shortestSeasonDays) problems += Problem(true, "progression.end-unlock-day ($endDay) is after the end of a $months-month season.")
 
+        val heartItems = heartItems(get, problems)
+
         if (problems.any { it.severe }) return Result(null, problems)
         return Result(
             LifestealSettings(
@@ -153,9 +184,71 @@ object LifestealConfigParser {
                 rankedTeamWars = LifestealSettings.RankedTeamWars(sizes),
                 seasons = LifestealSettings.Seasons(months),
                 progression = LifestealSettings.LaunchProgression(grace, rankedDay, endDay),
+                heartItems = heartItems,
             ),
             problems
         )
+    }
+
+    const val MAX_ACTION_COOLDOWN_MILLIS = 60_000
+    private val ITEM_MODEL = Regex("[a-z0-9_.-]+:[a-z0-9_./-]+")
+
+    /**
+     * The `heart-items` section (issue #1344). A file from before it existed has no section at all:
+     * that is one warning and the defaults, not one warning per key.
+     */
+    private fun heartItems(get: (String) -> Any?, problems: MutableList<Problem>): LifestealSettings.HeartItems {
+        val d = LifestealSettings.HeartItems()
+        if (get("heart-items") == null) {
+            problems += Problem(false, "heart-items is not set; using the default Heart item settings.")
+            return d
+        }
+        fun bool(key: String, default: Boolean): Boolean {
+            val path = "heart-items.$key"
+            return when (val raw = get(path)) {
+                null -> { problems += Problem(false, "$path is not set; using the default $default."); default }
+                is Boolean -> raw
+                else -> { problems += Problem(true, "$path '$raw' must be true or false."); default }
+            }
+        }
+        fun text(path: String, default: String): String = when (val raw = get(path)) {
+            null -> { problems += Problem(false, "$path is not set; using the default."); default }
+            is String -> if (raw.isBlank()) { problems += Problem(true, "$path is empty."); default } else raw
+            else -> { problems += Problem(true, "$path must be text."); default }
+        }
+
+        val withdraw = bool("withdraw-enabled", d.withdrawEnabled)
+        val redeem = bool("redeem-enabled", d.redeemEnabled)
+        val name = text("heart-items.display-name", d.displayName)
+        val model = when (val raw = get("heart-items.item-model")) {
+            null -> null
+            is String -> raw.trim().ifEmpty { null }?.let {
+                if (ITEM_MODEL.matches(it)) it
+                else { problems += Problem(true, "heart-items.item-model '$it' is not a namespace:path item model (or leave it empty)."); null }
+            }
+            else -> { problems += Problem(true, "heart-items.item-model must be text (namespace:path) or empty."); null }
+        }
+        val glint = bool("glint", d.glint)
+        val cooldown = when (val raw = get("heart-items.action-cooldown-millis")) {
+            null -> { problems += Problem(false, "heart-items.action-cooldown-millis is not set; using the default ${d.actionCooldownMillis}."); d.actionCooldownMillis }
+            else -> {
+                val value = wholeNumber(raw)
+                if (value == null || value < 0 || value > MAX_ACTION_COOLDOWN_MILLIS) {
+                    problems += Problem(true, "heart-items.action-cooldown-millis '$raw' must be a whole number from 0 to $MAX_ACTION_COOLDOWN_MILLIS.")
+                    d.actionCooldownMillis
+                } else value.toInt()
+            }
+        }
+        val m = d.messages
+        val messages = LifestealSettings.HeartItemMessages(
+            withdrawn = text("heart-items.messages.withdrawn", m.withdrawn),
+            redeemed = text("heart-items.messages.redeemed", m.redeemed),
+            finalHeart = text("heart-items.messages.final-heart", m.finalHeart),
+            maximum = text("heart-items.messages.maximum", m.maximum),
+            inventoryFull = text("heart-items.messages.inventory-full", m.inventoryFull),
+            redeemFailed = text("heart-items.messages.redeem-failed", m.redeemFailed),
+        )
+        return LifestealSettings.HeartItems(withdraw, redeem, name, model, glint, cooldown, messages)
     }
 
     private fun teamSizes(raw: Any?, maxTeam: Int, default: List<Int>, problems: MutableList<Problem>): List<Int> {

@@ -77,8 +77,15 @@ object GamemodeAssignments {
         "fakebase", "spawnstash", "tutorial",
     )
 
+    private val LIFESTEAL_COMMANDS = listOf(
+        // Heart withdrawal into a physical Heart item (issue #1344). Its executor also refuses
+        // anywhere the heart system doesn't run: a LIFESTEAL scope only blocks while Lifesteal is locked.
+        "withdrawheart",
+    )
+
     val COMMANDS: Map<String, GamemodeScope> =
-        NETWORK_COMMANDS.associateWith { GamemodeScope.NETWORK } + SURVIVAL_COMMANDS.associateWith { GamemodeScope.SURVIVAL }
+        NETWORK_COMMANDS.associateWith { GamemodeScope.NETWORK } + SURVIVAL_COMMANDS.associateWith { GamemodeScope.SURVIVAL } +
+            LIFESTEAL_COMMANDS.associateWith { GamemodeScope.LIFESTEAL }
 
     /**
      * Commands deliberately left unassigned (never affected by a lock), with why. These are shared
