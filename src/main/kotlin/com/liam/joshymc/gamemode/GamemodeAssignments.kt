@@ -40,6 +40,10 @@ object GamemodeAssignments {
         "unstuck",
         // Cross-server transfers (issue #1331) move players between gamemodes, so they work on all of them.
         "lobby", "survival", "lifesteal",
+        // Issue #1346: /team exists in both gamemodes. TeamCommandRouter sends Lifesteal senders to the
+        // Lifesteal team system and everyone else to the Survival TeamCommand, applying the SURVIVAL
+        // scope (and joshymc.team) itself, so Survival teams behave exactly as before.
+        "team",
     )
 
     private val SURVIVAL_COMMANDS = listOf(
@@ -55,8 +59,8 @@ object GamemodeAssignments {
         // The free [JoshyMC] Chat Tag Voucher (issue #1339), a Survival chat tag.
         "freetag",
         "kit", "createkit", "editkit", "deletekit",
-        // Claims, teams, storage, hoppers, spawners.
-        "claim", "unclaim", "subclaim", "team", "pv", "enderchest", "hopper", "spawner",
+        // Claims, storage, hoppers, spawners (/team is routed per gamemode, see NETWORK_COMMANDS).
+        "claim", "unclaim", "subclaim", "pv", "enderchest", "hopper", "spawner",
         // Quests, progression, streaks, votes.
         "quests", "daily", "eventquests", "resurge", "booster", "loginstreak", "mcr", "jvote", "talisman", "fish",
         // Cosmetics and chat perks unlocked through Survival crates, ranks and shops.

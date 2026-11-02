@@ -631,7 +631,7 @@ commands:
     usage: /spawner [shop|give|list]
     aliases: [spawners]
   team:
-    description: Team management
+    description: Team management (Survival teams on Survival, Lifesteal teams on Lifesteal)
     usage: /team <subcommand>
     aliases: [t, teams]
   bounty:
@@ -1586,6 +1586,15 @@ permissions:
     default: op
   joshymc.team.admin.echest:
     description: View any team's Ender Chest read-only via /team admin echest
+    default: op
+  joshymc.lifesteal.team.use:
+    description: Use Lifesteal teams on the Lifesteal server (/team, invitations, leave, info, list); leader actions also need team leadership
+    default: true
+  joshymc.lifesteal.team.create:
+    description: Create a Lifesteal team with /team create (on Lifesteal)
+    default: true
+  joshymc.lifesteal.team.admin:
+    description: Lifesteal team staff actions (/team admin info|disband|transfer); never makes anyone a team leader
     default: op
   joshymc.rank:
     description: Use rank commands

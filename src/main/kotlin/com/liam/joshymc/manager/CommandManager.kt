@@ -499,8 +499,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        // Issue #1346: /team routes to the Lifesteal team system in Lifesteal and to the unchanged
+        // Survival TeamCommand everywhere else (TeamCommandRouter applies Survival's scope + permission).
         plugin.getCommand("team")?.let {
-            val cmd = TeamCommand(plugin)
+            val cmd = com.liam.joshymc.command.TeamCommandRouter(
+                plugin, TeamCommand(plugin), com.liam.joshymc.lifesteal.teams.LifestealTeamCommand(plugin),
+            )
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
@@ -890,7 +894,8 @@ class CommandManager(private val plugin: Joshymc) {
         "killtop" to "joshymc.killtop",
         "deathstop" to "joshymc.deathstop",
         "chestshop" to "joshymc.shop",
-        "team" to "joshymc.team",
+        // Either team system's basic permission; TeamCommandRouter checks the one that applies.
+        "team" to com.liam.joshymc.command.TeamCommandRouter.COMMAND_PERMISSION,
         "bounty" to "joshymc.bounty",
         "killstreak" to "joshymc.killstreak",
         "loginstreak" to "joshymc.loginstreak",

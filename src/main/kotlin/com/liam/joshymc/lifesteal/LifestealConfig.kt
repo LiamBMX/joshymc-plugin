@@ -23,7 +23,22 @@ data class LifestealSettings(
     /** Same-victim heart-farming cooldown: a killer gains no heart from the same victim again within it. */
     data class Pvp(val sameVictimCooldownMinutes: Int = 30)
 
-    data class Teams(val maxSize: Int = 5)
+    /**
+     * Lifesteal teams (issue #1346, `lifesteal/teams/`). [maxSize] can never exceed
+     * [LifestealRules.MAX_TEAM_MEMBERS] (the blueprint's five-player limit; the team store and a
+     * database trigger enforce it too). Names are letters, digits and `_`, compared by their
+     * lower-case canonical form; [reservedNames] adds to the built-in protected names.
+     */
+    data class Teams(
+        val maxSize: Int = 5,
+        val enabled: Boolean = true,
+        val inviteExpirationSeconds: Int = 60,
+        val allowCreation: Boolean = true,
+        val allowDisbanding: Boolean = true,
+        val nameMinLength: Int = 3,
+        val nameMaxLength: Int = 16,
+        val reservedNames: List<String> = emptyList(),
+    )
 
     /** Team sizes per side: 2 = 2v2 ... 5 = 5v5. Sorted, distinct. */
     data class RankedTeamWars(val teamSizes: List<Int> = listOf(2, 3, 4, 5))
@@ -94,6 +109,10 @@ object LifestealRules {
     const val RANKED_RESTORES_INVENTORY = true
     /** Hearts can still be lost in ranked matches. */
     const val RANKED_HEARTS_AT_RISK = true
+    /** The approved five-player team limit; `teams.max-size` may lower it, never raise it (issue #1346). */
+    const val MAX_TEAM_MEMBERS = 5
+    /** Teams have exactly one leader and plain members: the blueprint defines no officer rank. */
+    const val TEAM_OFFICERS = false
 }
 
 /** Reads and validates `lifesteal.yml`, Bukkit-free. */
@@ -103,7 +122,8 @@ object LifestealConfigParser {
     const val CONFIG_VERSION = 1
 
     const val MAX_HEARTS = 100
-    const val MAX_TEAM_SIZE = 100
+    /** 100 before issue #1346; the approved blueprint limit is five players. */
+    const val MAX_TEAM_SIZE = LifestealRules.MAX_TEAM_MEMBERS
     const val MAX_COOLDOWN_MINUTES = 525_600 // one year
     const val MAX_SEASON_MONTHS = 24
     const val MAX_GRACE_HOURS = 720 // 30 days
@@ -160,7 +180,8 @@ object LifestealConfigParser {
 
         val cooldown = int("pvp.same-victim-cooldown-minutes", d.pvp.sameVictimCooldownMinutes, 0, MAX_COOLDOWN_MINUTES, "minutes before killing the same victim can give a heart again")
 
-        val maxTeam = int("teams.max-size", d.teams.maxSize, 1, MAX_TEAM_SIZE, "most players in one team")
+        val maxTeam = int("teams.max-size", d.teams.maxSize, 1, MAX_TEAM_SIZE, "most players in one team; the approved limit is $MAX_TEAM_SIZE")
+        val teams = teams(get, maxTeam, problems)
 
         val sizes = teamSizes(get("ranked-team-wars.team-sizes"), maxTeam, d.rankedTeamWars.teamSizes, problems)
 
@@ -180,7 +201,7 @@ object LifestealConfigParser {
             LifestealSettings(
                 hearts = LifestealSettings.Hearts(starting, maximum, minimum),
                 pvp = LifestealSettings.Pvp(cooldown),
-                teams = LifestealSettings.Teams(maxTeam),
+                teams = teams,
                 rankedTeamWars = LifestealSettings.RankedTeamWars(sizes),
                 seasons = LifestealSettings.Seasons(months),
                 progression = LifestealSettings.LaunchProgression(grace, rankedDay, endDay),
@@ -249,6 +270,59 @@ object LifestealConfigParser {
             redeemFailed = text("heart-items.messages.redeem-failed", m.redeemFailed),
         )
         return LifestealSettings.HeartItems(withdraw, redeem, name, model, glint, cooldown, messages)
+    }
+
+    const val MIN_INVITE_SECONDS = 10
+    const val MAX_INVITE_SECONDS = 3_600
+    /** Longest team name allowed at all (chat, GUI titles and lists stay readable). */
+    const val MAX_TEAM_NAME_LENGTH = 16
+    private val TEAM_KEYS = listOf(
+        "enabled", "invite-expiration-seconds", "allow-creation", "allow-disbanding", "name-min-length", "name-max-length", "reserved-names",
+    )
+
+    /**
+     * The team-system keys of `teams` (issue #1346). A file from before them only has `max-size`:
+     * that is one warning listing the missing keys, not one per key.
+     */
+    private fun teams(get: (String) -> Any?, maxSize: Int, problems: MutableList<Problem>): LifestealSettings.Teams {
+        val d = LifestealSettings.Teams()
+        val missing = TEAM_KEYS.filter { get("teams.$it") == null }
+        if (missing.isNotEmpty()) {
+            problems += Problem(false, "teams: ${missing.joinToString()} not set; using the default team settings for them.")
+        }
+        fun bool(key: String, default: Boolean): Boolean = when (val raw = get("teams.$key")) {
+            null -> default
+            is Boolean -> raw
+            else -> { problems += Problem(true, "teams.$key '$raw' must be true or false."); default }
+        }
+        fun number(key: String, default: Int, min: Int, max: Int, meaning: String): Int {
+            val raw = get("teams.$key") ?: return default
+            val value = wholeNumber(raw)
+            if (value == null || value < min || value > max) {
+                problems += Problem(true, "teams.$key '$raw' must be a whole number from $min to $max ($meaning).")
+                return default
+            }
+            return value.toInt()
+        }
+        val enabled = bool("enabled", d.enabled)
+        val invite = number("invite-expiration-seconds", d.inviteExpirationSeconds, MIN_INVITE_SECONDS, MAX_INVITE_SECONDS, "seconds before a team invitation expires")
+        val creation = bool("allow-creation", d.allowCreation)
+        val disbanding = bool("allow-disbanding", d.allowDisbanding)
+        val minLength = number("name-min-length", d.nameMinLength, 1, MAX_TEAM_NAME_LENGTH, "shortest team name")
+        val maxLength = number("name-max-length", d.nameMaxLength, 1, MAX_TEAM_NAME_LENGTH, "longest team name")
+        if (minLength > maxLength) problems += Problem(true, "teams.name-min-length ($minLength) is more than teams.name-max-length ($maxLength).")
+        val reserved = when (val raw = get("teams.reserved-names")) {
+            null -> d.reservedNames
+            is List<*> -> raw.mapNotNull { entry ->
+                val text = (entry as? String)?.trim()
+                if (text.isNullOrEmpty()) {
+                    problems += Problem(true, "teams.reserved-names entry '$entry' must be a name.")
+                    null
+                } else text
+            }
+            else -> { problems += Problem(true, "teams.reserved-names must be a list of names."); d.reservedNames }
+        }
+        return LifestealSettings.Teams(maxSize, enabled, invite, creation, disbanding, minLength, maxLength, reserved)
     }
 
     private fun teamSizes(raw: Any?, maxTeam: Int, default: List<Int>, problems: MutableList<Problem>): List<Int> {

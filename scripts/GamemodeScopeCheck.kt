@@ -83,12 +83,18 @@ fun main() {
     check("eventshop SURVIVAL", scopeOf("eventshop") == SURVIVAL)
     check("flytime SURVIVAL", scopeOf("flytime") == SURVIVAL)
     check("freetag SURVIVAL", scopeOf("freetag") == SURVIVAL)
+    // Issue #1346: /team exists in both gamemodes, so it is NETWORK and its router applies the
+    // SURVIVAL scope to the Survival team system itself (Survival behavior unchanged).
+    check("team NETWORK (routed per gamemode)", scopeOf("team") == NETWORK)
+    val teamRouter = source("command/TeamCommandRouter.kt")
+    check("team router applies the Survival scope to Survival teams", "isAllowed(GamemodeScope.SURVIVAL, sender)" in teamRouter)
+    check("team router refuses with the gate's message", "That command is only available on \${ServerGamemode.SURVIVAL.displayName}." in teamRouter)
 
     // Survival gameplay.
     for (name in listOf(
         "claim", "unclaim", "subclaim", "balance", "pay", "eco", "baltop", "ah", "orders", "order", "market", "invest",
         "shop", "sell", "chestshop", "crate", "crateeditor", "quests", "daily", "eventquests", "loginstreak", "kit",
-        "customenchant", "fly", "voucher", "rankvoucher", "candy", "spawner", "hopper", "team", "leaderboard", "event",
+        "customenchant", "fly", "voucher", "rankvoucher", "candy", "spawner", "hopper", "leaderboard", "event",
         "home", "warp", "rtp", "pv", "tokens", "credits", "cshop", "resurge", "jvote", "tutorial",
     )) check("/$name is SURVIVAL", scopeOf(name) == SURVIVAL)
 
