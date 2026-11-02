@@ -4,9 +4,11 @@
 # world mapped to lifesteal under gamemode-lock.worlds) create and read this file. The Survival
 # server never does. Every Paper server keeps its own copy; nothing here is shared.
 #
-# These are the approved Lifesteal Master Blueprint v1.1 defaults. Nothing uses them yet:
-# hearts, heart stealing, teams, Ranked Team Wars, seasons and the launch unlocks are added by
-# later updates, which read these values. Check the file with /jgamemode info after editing it.
+# These are the approved Lifesteal Master Blueprint v1.1 defaults. The heart system uses the
+# hearts and pvp sections (docs/lifesteal-hearts.md); teams, Ranked Team Wars, seasons and the
+# launch unlocks are added by later updates, which read these values. Check the file with
+# /jgamemode info after editing it. While the file is invalid, hearts are paused (nothing is
+# granted, stolen or changed, and stored hearts are kept as they are).
 #
 # A key left out uses the default below (a console warning). A value that is wrong (not a whole
 # number, out of range, starting hearts above the maximum, ...) is a console error, and then the

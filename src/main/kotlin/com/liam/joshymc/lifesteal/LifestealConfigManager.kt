@@ -6,9 +6,9 @@ import org.bukkit.configuration.file.YamlConfiguration
 
 /**
  * Loads `lifesteal.yml` (issue #1336) on servers that run Lifesteal, and only there: a Survival
- * server never creates or reads the file. Nothing consumes the settings yet; future Lifesteal
- * systems read [settings] and must refuse to start while it is null ([status] INVALID).
- * No database tables: this phase stores nothing.
+ * server never creates or reads the file. Lifesteal systems (the heart system, issue #1341) read
+ * [settings] and must refuse to start while it is null ([status] INVALID). This loader itself
+ * has no database tables; the hearts' tables are in `lifesteal/hearts/HeartStore`.
  */
 class LifestealConfigManager(private val plugin: Joshymc) {
 

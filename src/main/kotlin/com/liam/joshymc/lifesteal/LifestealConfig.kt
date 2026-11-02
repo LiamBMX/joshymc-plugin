@@ -2,9 +2,9 @@ package com.liam.joshymc.lifesteal
 
 /**
  * Lifesteal gameplay settings (issue #1336), read from `lifesteal.yml` on servers that run
- * Lifesteal. Nothing uses them yet: hearts, PvP heart stealing, teams, Ranked Team Wars, seasons
- * and the launch unlocks are later issues, which read these values (and [LifestealRules])
- * instead of adding their own. Bukkit-free.
+ * Lifesteal. Hearts and PvP heart stealing (issue #1341, `lifesteal/hearts/`) read [Hearts] and
+ * [Pvp]; teams, Ranked Team Wars, seasons and the launch unlocks are later issues, which read
+ * these values (and [LifestealRules]) instead of adding their own. Bukkit-free.
  *
  * Defaults are the approved Lifesteal Master Blueprint v1.1 values.
  */

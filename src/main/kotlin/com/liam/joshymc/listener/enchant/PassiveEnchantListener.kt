@@ -320,6 +320,11 @@ class PassiveEnchantListener(private val plugin: Joshymc) : Listener {
     private fun handleOverload(player: Player) {
         val chestplate = player.inventory.chestplate
         val uuid = player.uniqueId
+        // Issue #1341: in Lifesteal the heart system owns the max health base value.
+        if (plugin.lifestealHeartManager.managesHealthIn(player.world)) {
+            overloadPlayers.remove(uuid)
+            return
+        }
 
         if (chestplate != null) {
             val level = plugin.customEnchantManager.getLevel(chestplate, "overload")

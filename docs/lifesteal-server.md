@@ -23,9 +23,10 @@ Velocity proxy
 | `/jgamemode info` diagnostics | Copying (or not copying) worlds, backups, the Discord bot token |
 | A local SQLite database per server (unchanged) | Anything shared between servers (nothing is, by design) |
 
-No hearts, heart stealing, elimination, revival, teams, Ranked Team Wars, Elo, seasons, grace
-period or End unlock is implemented yet. `lifesteal.yml` only holds the settings those later
-features will read. Nothing here has been tested on a real Lifesteal server yet (see "Testing").
+Hearts and PvP heart stealing are implemented since issue #1341 (`docs/lifesteal-hearts.md`).
+Elimination and revival never exist (fixed rules). Teams, Ranked Team Wars, Elo, seasons, the
+grace period and the End unlock aren't implemented yet; `lifesteal.yml` holds the settings those
+later features will read. Nothing here has been tested on a real Lifesteal server yet (see "Testing").
 
 ## Requirements
 

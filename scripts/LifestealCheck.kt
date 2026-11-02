@@ -243,8 +243,9 @@ private fun wiring() {
 
     val manager = source("lifesteal/LifestealConfigManager.kt")
     check("lifesteal.yml only on lifesteal servers", "ServerGamemode.LIFESTEAL !in plugin.networkIdentityManager.hostedGamemodes" in manager)
-    val lifestealSources = File("src/main/kotlin/com/liam/joshymc/lifesteal").listFiles()!!.joinToString("\n") { it.readText() }
-    check("no lifesteal tables in this phase", "createTable" !in lifestealSources && "databaseManager" !in lifestealSources)
+    // The bootstrap's own files (config only). The heart tables (issue #1341) live in lifesteal/hearts/.
+    val lifestealSources = File("src/main/kotlin/com/liam/joshymc/lifesteal").listFiles()!!.filter { it.isFile }.joinToString("\n") { it.readText() }
+    check("no tables in the lifesteal config bootstrap", "createTable" !in lifestealSources && "databaseManager" !in lifestealSources)
 
     val locks = source("gamemode/GamemodeLockManager.kt")
     check("locks read the resolved gamemode", "serverGamemode = plugin.networkIdentityManager.gamemode" in locks)
