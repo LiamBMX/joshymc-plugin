@@ -236,16 +236,20 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         }
         if (attribution != HeartRules.Attribution.PVP_KILL || killer == null) return
 
+        // One timestamp for the cooldown and the launch progression (issue #1352): the window is the
+        // one at the moment of death, however late the transaction runs.
+        val now = System.currentTimeMillis()
         val request = HeartStore.PvpRequest(
             dedupeKey = "pvp:$bootId:${victim.uniqueId}:${Bukkit.getCurrentTick()}",
             killer = killer.uniqueId,
             victim = victim.uniqueId,
-            now = System.currentTimeMillis(),
+            now = now,
             cooldownMillis = HeartRules.cooldownMillis(cooldownMinutes),
             limits = limits,
             // Issue #1348: decided at death time from the membership cache plus the recent-teammate
             // window, so a team change after the fatal hit (or in the same tick) can't unlock a transfer.
             team = plugin.lifestealTeamManager.heartCheck(killer.uniqueId, victim.uniqueId),
+            window = plugin.lifestealProgressionManager.heartWindow(now),
         )
         val result = try {
             store.transferPvp(request)
@@ -305,6 +309,19 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 plugin.logger.warning("[Hearts] " + killer.name + " killed " + victim.name + ", but Lifesteal team membership couldn't be read; no hearts changed.")
                 send(killer, HeartMessages.TEAM_UNKNOWN, names)
                 send(victim, HeartMessages.TEAM_UNKNOWN, names)
+            }
+            HeartRules.Decision.GracePeriod -> {
+                send(killer, HeartMessages.GRACE_PERIOD, names)
+                send(victim, HeartMessages.GRACE_PERIOD, names)
+            }
+            HeartRules.Decision.NotLaunched -> {
+                send(killer, HeartMessages.NOT_LAUNCHED, names)
+                send(victim, HeartMessages.NOT_LAUNCHED, names)
+            }
+            HeartRules.Decision.ProgressionUnknown -> {
+                plugin.logger.warning("[Hearts] " + killer.name + " killed " + victim.name + ", but the launch progression state is unknown; no hearts changed.")
+                send(killer, HeartMessages.PROGRESSION_UNKNOWN, names)
+                send(victim, HeartMessages.PROGRESSION_UNKNOWN, names)
             }
         }
     }

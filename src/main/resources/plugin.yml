@@ -212,7 +212,7 @@ commands:
     permission: joshymc.transfer.survival
   lifesteal:
     description: Go to Lifesteal SMP (admins on the Lifesteal server also manage hearts with /lifesteal hearts)
-    usage: /lifesteal [hearts <get|set|add|remove|give|items|void> ...|combat <status|logs|incident|failures> ...]
+    usage: /lifesteal [progress|hearts <get|set|add|remove|give|items|void> ...|combat <status|logs|incident|failures> ...|admin launch <status|schedule|activate|audit> ...]
     permission: joshymc.transfer.lifesteal
   withdrawheart:
     description: Turn one of your permanent hearts into a Heart item (Lifesteal only)
@@ -963,6 +963,15 @@ permissions:
   joshymc.lifesteal.combat.admin:
     description: Use /lifesteal combat status|logs|incident|failures on the Lifesteal server (read-only combat-log diagnostics)
     default: op
+  joshymc.lifesteal.progress:
+    description: Use /lifesteal progress on the Lifesteal server (launch phase, grace period, Ranked Team Wars and End unlock countdowns)
+    default: true
+  joshymc.lifesteal.progression.admin:
+    description: Use /lifesteal admin launch status|schedule|activate|audit on the Lifesteal server (set the season launch; changes need confirm and are audited)
+    default: op
+  joshymc.lifesteal.progression.end-bypass:
+    description: Enter the Lifesteal End before it unlocks (staff emergencies only; explicit grant, not given to ops by default)
+    default: false
   joshymc.transfer.bypass-cooldown:
     description: Skip the cross-server transfer cooldown
     default: op

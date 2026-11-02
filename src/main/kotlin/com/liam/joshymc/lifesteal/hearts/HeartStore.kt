@@ -1,6 +1,7 @@
 package com.liam.joshymc.lifesteal.hearts
 
 import com.liam.joshymc.lifesteal.hearts.HeartRules.changesHearts
+import com.liam.joshymc.lifesteal.progression.ProgressionRules
 import com.liam.joshymc.lifesteal.teams.TeamCombatRules
 import com.liam.joshymc.manager.SqliteDatabase
 import java.sql.ResultSet
@@ -224,6 +225,12 @@ class HeartStore(private val db: SqliteDatabase) {
         val policy: HeartRules.KillerAtMaximumPolicy = HeartRules.KILLER_AT_MAXIMUM,
         /** The team check made when the death happened (issue #1348); anything but ELIGIBLE moves no heart. */
         val team: TeamCombatRules.HeartCheck = TeamCombatRules.HeartCheck.ELIGIBLE,
+        /**
+         * The launch progression at the moment of death (issue #1352), taken from the same
+         * timestamp as [now]; anything but OPEN moves no heart, so a death that is processed a
+         * moment later can't land after the grace period ended.
+         */
+        val window: ProgressionRules.HeartWindow = ProgressionRules.HeartWindow.OPEN,
     )
 
     sealed interface PvpResult {
@@ -275,7 +282,7 @@ class HeartStore(private val db: SqliteDatabase) {
             }
 
             val remaining = HeartRules.cooldownRemaining(lastTransferAt(request.killer, request.victim), request.now, request.cooldownMillis)
-            val decision = HeartRules.decide(victimHearts, killerHearts, remaining, request.limits, request.policy, request.team)
+            val decision = HeartRules.decide(victimHearts, killerHearts, remaining, request.limits, request.policy, request.team, request.window)
             val victimBefore = request.limits.clamp(victimHearts)
             val killerBefore = request.limits.clamp(killerHearts)
             var victimAfter = victimBefore
@@ -628,6 +635,9 @@ class HeartStore(private val db: SqliteDatabase) {
         is HeartRules.Decision.Cooldown -> "COOLDOWN"
         HeartRules.Decision.Teammates -> "TEAMMATES"
         HeartRules.Decision.TeamUnknown -> "TEAM_UNKNOWN"
+        HeartRules.Decision.NotLaunched -> "NOT_LAUNCHED"
+        HeartRules.Decision.GracePeriod -> "GRACE_PERIOD"
+        HeartRules.Decision.ProgressionUnknown -> "PROGRESSION_UNKNOWN"
     }
 
     private fun record(rs: ResultSet): Record = Record(

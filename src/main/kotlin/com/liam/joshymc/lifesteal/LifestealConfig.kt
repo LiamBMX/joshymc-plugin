@@ -3,7 +3,7 @@ package com.liam.joshymc.lifesteal
 /**
  * Lifesteal gameplay settings (issue #1336), read from `lifesteal.yml` on servers that run
  * Lifesteal. Hearts and PvP heart stealing (issue #1341, `lifesteal/hearts/`) read [Hearts] and
- * [Pvp]; teams, Ranked Team Wars, seasons and the launch unlocks are later issues, which read
+ * [Pvp]; teams, the launch progression (issue #1352), and later Ranked Team Wars and seasons read
  * these values (and [LifestealRules]) instead of adding their own. Bukkit-free.
  *
  * Defaults are the approved Lifesteal Master Blueprint v1.1 values.
@@ -58,13 +58,32 @@ data class LifestealSettings(
     data class Seasons(val lengthMonths: Int = 3)
 
     /**
-     * Launch progression, counted from the season launch. Day 1 is the launch day, so
-     * "unlocks on day 3" means 48 hours after launch.
+     * Launch progression (issue #1352, `lifesteal/progression/`), counted in elapsed hours from the
+     * season's launch time, never calendar dates: Day 0 = launch, grace ends at +24h (Day 1),
+     * Ranked Team Wars unlock at +72h (Day 3), the End at +168h (Day 7). Always
+     * `grace <= ranked <= end`. [launchTimestamp] (UTC millis) only seeds a database that has no
+     * season yet; the stored season is authoritative after that.
      */
     data class LaunchProgression(
+        val enabled: Boolean = true,
+        val launchTimestamp: Long? = null,
         val gracePeriodHours: Int = 24,
-        val rankedTeamWarsUnlockDay: Int = 3,
-        val endUnlockDay: Int = 7,
+        val rankedTeamWarsUnlockAfterHours: Int = 72,
+        val endUnlockAfterHours: Int = 168,
+        val announcements: ProgressionAnnouncements = ProgressionAnnouncements(),
+        /** One chat line on join while the season hasn't reached normal PvP yet. */
+        val joinReminder: Boolean = true,
+    )
+
+    /** `&` colour codes. Broadcast to Lifesteal players only, under the announcement header. */
+    data class ProgressionAnnouncements(
+        val enabled: Boolean = true,
+        val launch: String = "&a&lLifesteal is open!\n&7The &e24-hour grace period &7has started: no PvP and no heart stealing until it ends.",
+        val graceEnded: String = "&c&lThe grace period is over!\n&7PvP is on and kills now steal hearts.",
+        val rankedUnlocked: String = "&6&lRanked Team Wars are unlocked!",
+        /** Used instead of [rankedUnlocked] while no ranked system is installed and enabled. */
+        val rankedUnlockedUnavailable: String = "&6&lRanked Team Wars are unlocked by schedule.\n&7They open as soon as the ranked system is ready.",
+        val endUnlocked: String = "&5&lThe End is now open!\n&7End portals work from now on.",
     )
 
     /**
@@ -241,12 +260,7 @@ object LifestealConfigParser {
 
         val months = int("seasons.length-months", d.seasons.lengthMonths, 1, MAX_SEASON_MONTHS, "season length in months")
 
-        val grace = int("progression.grace-period-hours", d.progression.gracePeriodHours, 0, MAX_GRACE_HOURS, "hours of launch grace period; 0 = none")
-        val shortestSeasonDays = months * MIN_DAYS_PER_MONTH
-        val rankedDay = int("progression.ranked-team-wars-unlock-day", d.progression.rankedTeamWarsUnlockDay, 1, Int.MAX_VALUE, "season day Ranked Team Wars unlock; day 1 = launch day")
-        val endDay = int("progression.end-unlock-day", d.progression.endUnlockDay, 1, Int.MAX_VALUE, "season day the End unlocks; day 1 = launch day")
-        if (rankedDay > shortestSeasonDays) problems += Problem(true, "progression.ranked-team-wars-unlock-day ($rankedDay) is after the end of a $months-month season.")
-        if (endDay > shortestSeasonDays) problems += Problem(true, "progression.end-unlock-day ($endDay) is after the end of a $months-month season.")
+        val progression = progression(get, months * MIN_DAYS_PER_MONTH * 24, problems)
 
         val heartItems = heartItems(get, problems)
         val combatLogging = combatLogging(get, problems)
@@ -259,7 +273,7 @@ object LifestealConfigParser {
                 teams = teams,
                 rankedTeamWars = LifestealSettings.RankedTeamWars(sizes),
                 seasons = LifestealSettings.Seasons(months),
-                progression = LifestealSettings.LaunchProgression(grace, rankedDay, endDay),
+                progression = progression,
                 heartItems = heartItems,
                 combatLogging = combatLogging,
             ),
@@ -326,6 +340,97 @@ object LifestealConfigParser {
             redeemFailed = text("heart-items.messages.redeem-failed", m.redeemFailed),
         )
         return LifestealSettings.HeartItems(withdraw, redeem, name, model, glint, cooldown, messages)
+    }
+
+    /** The day-numbered keys of issue #1336 ("day 1 = launch day"), replaced by hours from launch in issue #1352. */
+    private val LEGACY_UNLOCK_DAYS = listOf(
+        Triple("progression.ranked-team-wars-unlock-day", "progression.ranked-team-wars-unlock-after-hours", 3),
+        Triple("progression.end-unlock-day", "progression.end-unlock-after-hours", 7),
+    )
+
+    /**
+     * The `progression` section (issue #1352). Hours are elapsed time from the launch and must keep
+     * grace <= ranked <= end inside the shortest season ([maxHours]). The launch timestamp must be
+     * a quoted ISO-8601 time with an offset; anything else is severe (never guessed).
+     */
+    private fun progression(get: (String) -> Any?, maxHours: Int, problems: MutableList<Problem>): LifestealSettings.LaunchProgression {
+        val d = LifestealSettings.LaunchProgression()
+        if (get("progression") == null) {
+            problems += Problem(false, "progression is not set; using the default launch schedule (no launch time).")
+            return d
+        }
+        fun bool(path: String, default: Boolean): Boolean = when (val raw = get(path)) {
+            null -> { problems += Problem(false, "$path is not set; using the default $default."); default }
+            is Boolean -> raw
+            else -> { problems += Problem(true, "$path '$raw' must be true or false."); default }
+        }
+        fun hours(path: String, default: Int, min: Int, max: Int, meaning: String): Int {
+            val raw = get(path)
+            if (raw == null) {
+                problems += Problem(false, "$path is not set; using the default $default.")
+                return default
+            }
+            val value = wholeNumber(raw)
+            if (value == null || value < min || value > max) {
+                problems += Problem(true, "$path '$raw' must be a whole number of hours from $min to $max ($meaning).")
+                return default
+            }
+            return value.toInt()
+        }
+        fun text(path: String, default: String): String = when (val raw = get(path)) {
+            null -> { problems += Problem(false, "$path is not set; using the default."); default }
+            is String -> if (raw.isBlank()) { problems += Problem(true, "$path is empty."); default } else raw
+            else -> { problems += Problem(true, "$path must be text."); default }
+        }
+
+        val enabled = bool("progression.enabled", d.enabled)
+        val launch = when (val raw = get("progression.launch-timestamp")) {
+            null -> null
+            is String -> if (raw.isBlank()) null else com.liam.joshymc.lifesteal.progression.ProgressionRules.parseTimestamp(raw) ?: run {
+                problems += Problem(
+                    true, "progression.launch-timestamp '$raw' is not a valid launch time. Use an ISO-8601 time with an offset in quotes, " +
+                        "e.g. \"2026-12-01T18:00:00Z\" or \"2026-12-01T13:00:00-05:00\" (or leave it empty)."
+                )
+                null
+            }
+            is java.util.Date -> {
+                problems += Problem(true, "progression.launch-timestamp must be in quotes (YAML read it as a date without knowing its time zone), e.g. \"2026-12-01T18:00:00Z\".")
+                null
+            }
+            else -> { problems += Problem(true, "progression.launch-timestamp must be a quoted ISO-8601 time or empty."); null }
+        }
+        val grace = hours("progression.grace-period-hours", d.gracePeriodHours, 0, minOf(MAX_GRACE_HOURS, maxHours), "hours of launch grace period; 0 = none")
+        for ((legacy, replacement, legacyDefault) in LEGACY_UNLOCK_DAYS) {
+            val old = get(legacy) ?: continue
+            when {
+                get(replacement) != null -> problems += Problem(false, "$legacy is no longer read (it is replaced by $replacement); remove it.")
+                wholeNumber(old) == legacyDefault.toLong() -> problems += Problem(
+                    false, "$legacy is no longer read: the schedule now counts hours from launch. Using $replacement's default; replace the old key."
+                )
+                else -> problems += Problem(
+                    true, "$legacy ($old) is no longer read and counted days from \"day 1 = launch day\"; set $replacement (hours after launch) instead and remove it."
+                )
+            }
+        }
+        val ranked = hours("progression.ranked-team-wars-unlock-after-hours", d.rankedTeamWarsUnlockAfterHours, 0, maxHours, "hours after launch Ranked Team Wars unlock")
+        val end = hours("progression.end-unlock-after-hours", d.endUnlockAfterHours, 0, maxHours, "hours after launch the End unlocks")
+        if (ranked < grace) problems += Problem(true, "progression.ranked-team-wars-unlock-after-hours ($ranked) is before the grace period ends ($grace).")
+        if (end < ranked) problems += Problem(true, "progression.end-unlock-after-hours ($end) is before Ranked Team Wars unlock ($ranked).")
+
+        val a = d.announcements
+        val announcements = if (get("progression.announcements") == null) {
+            problems += Problem(false, "progression.announcements is not set; using the default milestone announcements.")
+            a
+        } else LifestealSettings.ProgressionAnnouncements(
+            enabled = bool("progression.announcements.enabled", a.enabled),
+            launch = text("progression.announcements.launch", a.launch),
+            graceEnded = text("progression.announcements.grace-ended", a.graceEnded),
+            rankedUnlocked = text("progression.announcements.ranked-unlocked", a.rankedUnlocked),
+            rankedUnlockedUnavailable = text("progression.announcements.ranked-unlocked-unavailable", a.rankedUnlockedUnavailable),
+            endUnlocked = text("progression.announcements.end-unlocked", a.endUnlocked),
+        )
+        val reminder = bool("progression.join-reminder", d.joinReminder)
+        return LifestealSettings.LaunchProgression(enabled, launch, grace, ranked, end, announcements, reminder)
     }
 
     const val MAX_RETENTION_DAYS = 3_650

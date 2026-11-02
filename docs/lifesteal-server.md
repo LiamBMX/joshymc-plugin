@@ -28,9 +28,10 @@ Teams (create, invite, leave, kick, transfer, disband; up to 5 players) are impl
 #1346 (`docs/lifesteal-teams.md`); `/team` on Lifesteal opens them, Survival keeps its own teams.
 Combat logging (tag notifications, disconnect classification, incident records, no heart
 penalty) is implemented since issue #1350 (`docs/lifesteal-combat.md`).
-Elimination and revival never exist (fixed rules). Ranked Team Wars, Elo, seasons, the
-grace period and the End unlock aren't implemented yet; `lifesteal.yml` holds the settings those
-later features will read. Nothing here has been tested on a real Lifesteal server yet (see "Testing").
+The launch progression (24h grace period, scheduled Ranked Team Wars and End unlocks, `/lifesteal
+progress`) is implemented since issue #1352 (`docs/lifesteal-progression.md`).
+Elimination and revival never exist (fixed rules). Ranked Team Wars, Elo and season rollover
+aren't implemented yet; `lifesteal.yml` holds the settings those later features will read. Nothing here has been tested on a real Lifesteal server yet (see "Testing").
 
 ## Requirements
 
@@ -152,9 +153,7 @@ server that runs Lifesteal:
 | `teams.*` (team system) | see `docs/lifesteal-teams.md` | enabled, invite expiry, creation/disbanding, name length, reserved names |
 | `ranked-team-wars.team-sizes` | [2, 3, 4, 5] | distinct sizes 2..teams.max-size |
 | `seasons.length-months` | 3 | 1..24 |
-| `progression.grace-period-hours` | 24 | 0..720 |
-| `progression.ranked-team-wars-unlock-day` | 3 | 1..season length (day 1 = launch day) |
-| `progression.end-unlock-day` | 7 | 1..season length |
+| `progression.*` (launch schedule) | see `docs/lifesteal-progression.md` | grace 24h, Ranked +72h, End +168h after launch; no launch time by default |
 
 `config-version: 1` is the file layout version. A newer version is refused.
 
