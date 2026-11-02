@@ -285,6 +285,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var lifestealTeamManager: com.liam.joshymc.lifesteal.teams.LifestealTeamManager
         private set
+    lateinit var lifestealCombatManager: com.liam.joshymc.lifesteal.combat.LifestealCombatManager
+        private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
     lateinit var rankManager: RankManager
@@ -524,6 +526,8 @@ class Joshymc : JavaPlugin() {
         lifestealHeartManager = com.liam.joshymc.lifesteal.hearts.LifestealHeartManager(this)
         // Issue #1346: Lifesteal teams (separate from Survival teams). Only does anything where Lifesteal runs.
         lifestealTeamManager = com.liam.joshymc.lifesteal.teams.LifestealTeamManager(this)
+        // Issue #1350: Lifesteal combat logging (an observer of the existing combat tag). Only does anything where Lifesteal runs.
+        lifestealCombatManager = com.liam.joshymc.lifesteal.combat.LifestealCombatManager(this)
         flightTimeManager = com.liam.joshymc.flight.FlightTimeManager(this)
         flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
@@ -611,6 +615,7 @@ class Joshymc : JavaPlugin() {
         freeTagManager.start()
         lifestealHeartManager.refresh()
         lifestealTeamManager.refresh()
+        lifestealCombatManager.refresh()
         flightTimeManager.start()
         flyVoucherManager.start()
 
@@ -723,6 +728,8 @@ class Joshymc : JavaPlugin() {
         shutdown.step("lifestealHeartManager.stop", { ::lifestealHeartManager.isInitialized }) { lifestealHeartManager.stop() }
         // Lets team changes already handed to its worker finish before the database closes.
         shutdown.step("lifestealTeamManager.stop", { ::lifestealTeamManager.isInitialized }) { lifestealTeamManager.stop() }
+        // No new combat-log decisions once shutdown begins; queued incident writes finish with the database.
+        shutdown.step("lifestealCombatManager.stop", { ::lifestealCombatManager.isInitialized }) { lifestealCombatManager.stop() }
         shutdown.step("spawnDecorationManager.stop", { ::spawnDecorationManager.isInitialized }) { spawnDecorationManager.stop() }
         shutdown.step("passiveEnchantListener.stop", { ::listenerManager.isInitialized }) { listenerManager.passiveEnchantListener?.stop() }
         shutdown.step("quickHitListener.stop", { ::listenerManager.isInitialized }) { listenerManager.quickHitListener?.stop() }
@@ -929,6 +936,8 @@ class Joshymc : JavaPlugin() {
         safe("commsManager.start") { commsManager.start() }
         safe("lagCleanerManager.start") { lagCleanerManager.start() }
         safe("combatManager.start") { combatManager.start() }
+        // After combatManager.start (reads its tag duration) and lifesteal.yml's reload.
+        safe("lifestealCombatManager.refresh") { lifestealCombatManager.refresh() }
         safe("autoRestartManager.start") { autoRestartManager.start() }
         safe("rotatingBossBarManager.start") { rotatingBossBarManager.start() }
         safe("afkManager.start") { afkManager.start() }

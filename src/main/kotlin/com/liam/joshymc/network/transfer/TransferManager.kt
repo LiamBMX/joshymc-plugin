@@ -43,6 +43,9 @@ class TransferManager(private val plugin: Joshymc) : Listener {
     /** One rejection log line per player per window, so spamming a command can't flood the console. */
     private val lastRejectionLog = ConcurrentHashMap<UUID, Long>()
 
+    /** Whether [uuid] has a transfer on its way (the Lifesteal combat-log rules read it on quit, issue #1350). */
+    fun isTransferPending(uuid: UUID): Boolean = tracker.isPending(uuid)
+
     private val proxyReady: Boolean get() = channelRegistered && velocityForwarding != false
 
     /** Reads the settings and registers the channel when transfers are on. Safe to call again on reload. */

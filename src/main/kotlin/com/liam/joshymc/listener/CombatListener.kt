@@ -124,9 +124,8 @@ class CombatListener(private val plugin: Joshymc) : Listener {
         if (plugin.modModeManager.isModMode(attacker)) return
         // Hosted Crystal PvP matches never tag: quitting mid-match must not combat-log the event inventory (issue #1189).
         if (plugin.eventManager.games.isMatchFight(attacker, victim)) return
-        val combat = plugin.combatManager
-        combat.tag(attacker)
-        combat.tag(victim)
+        // tagPvp = tag both + tell the Lifesteal combat-log observer (issue #1350; none on Survival).
+        plugin.combatManager.tagPvp(attacker, victim)
     }
 
     /**
@@ -261,7 +260,9 @@ class CombatListener(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
         val player = event.player
-        if (plugin.combatManager.isTagged(player)) {
+        // On Lifesteal the combat-log system records the incident and may skip the NPC for
+        // server-caused disconnects (issue #1350); without it (Survival) this is always true.
+        if (plugin.combatManager.isTagged(player) && plugin.combatManager.shouldSpawnCombatLogNpc(player, event.reason)) {
             plugin.combatManager.spawnCombatLogNPC(player)
         }
         plugin.combatManager.untag(player)

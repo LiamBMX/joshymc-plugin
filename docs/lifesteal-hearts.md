@@ -252,8 +252,9 @@ These are left for a later decision rather than invented:
    recipe.
 2. **Environmental deaths after PvP** (knocked into lava or the void, fall damage from a hit).
    Only the final damage counts: these cost no heart.
-3. **Combat logging.** A tagged player who logs out leaves the existing combat-log NPC. Killing
-   it doesn't move hearts.
+3. **Combat logging** (issue #1350, `docs/lifesteal-combat.md`). No heart penalty (the blueprint
+   defines none). A counted combat log leaves the existing combat-log NPC; server shutdowns, staff
+   kicks and server errors don't. Neither the NPC's nor the player's death moves a heart.
 4. **Pets and indirect kills.** A tamed wolf's kill isn't credited to its owner (the wolf is the
    causing entity). Kills by crystals, beds or anchors count only when Paper reports a causing
    player.

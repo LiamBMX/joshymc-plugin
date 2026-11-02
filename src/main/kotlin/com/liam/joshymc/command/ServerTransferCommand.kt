@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.lifesteal.combat.LifestealCombatCommand
 import com.liam.joshymc.lifesteal.hearts.LifestealHeartsCommand
 import com.liam.joshymc.network.transfer.TransferDestination
 import org.bukkit.command.Command
@@ -13,7 +14,8 @@ import org.bukkit.command.TabCompleter
  * server through the proxy. One instance per command; every check lives in the TransferManager.
  *
  * `/lifesteal hearts ...` (issue #1341) is the admin heart command, handled by
- * [LifestealHeartsCommand]; plain `/lifesteal` (and any other arguments) still transfers.
+ * [LifestealHeartsCommand], and `/lifesteal combat ...` (issue #1350) the read-only combat-log
+ * diagnostics, [LifestealCombatCommand]; plain `/lifesteal` (and any other arguments) still transfers.
  */
 class ServerTransferCommand(
     private val plugin: Joshymc,
@@ -21,10 +23,15 @@ class ServerTransferCommand(
 ) : CommandExecutor, TabCompleter {
 
     private val hearts = if (destination == TransferDestination.LIFESTEAL) LifestealHeartsCommand(plugin) else null
+    private val combat = if (destination == TransferDestination.LIFESTEAL) LifestealCombatCommand(plugin) else null
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (hearts != null && args.firstOrNull()?.equals("hearts", ignoreCase = true) == true) {
             hearts.execute(sender, args.drop(1))
+            return true
+        }
+        if (combat != null && args.firstOrNull()?.equals("combat", ignoreCase = true) == true) {
+            combat.execute(sender, args.drop(1))
             return true
         }
         plugin.transferManager.request(sender, destination)
@@ -32,9 +39,16 @@ class ServerTransferCommand(
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, label: String, args: Array<out String>): List<String> {
-        if (hearts == null || args.isEmpty() || !hearts.visibleTo(sender)) return emptyList()
-        if (args.size == 1) return if ("hearts".startsWith(args[0].lowercase())) listOf("hearts") else emptyList()
-        if (!args[0].equals("hearts", ignoreCase = true)) return emptyList()
-        return hearts.complete(sender, args.drop(1))
+        if (hearts == null || combat == null || args.isEmpty()) return emptyList()
+        val visible = buildList {
+            if (hearts.visibleTo(sender)) add("hearts")
+            if (combat.visibleTo(sender)) add("combat")
+        }
+        if (args.size == 1) return visible.filter { it.startsWith(args[0].lowercase()) }
+        return when (args[0].lowercase()) {
+            "hearts" -> if ("hearts" in visible) hearts.complete(sender, args.drop(1)) else emptyList()
+            "combat" -> if ("combat" in visible) combat.complete(sender, args.drop(1)) else emptyList()
+            else -> emptyList()
+        }
     }
 }
