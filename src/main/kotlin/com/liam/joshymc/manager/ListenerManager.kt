@@ -271,6 +271,10 @@ class ListenerManager(private val plugin: Joshymc) {
         if (plugin.lifestealHeartManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.hearts.LifestealHeartListener(plugin.lifestealHeartManager), plugin)
         }
+        // Issue #1346: Lifesteal team session bookkeeping. Never registered on a server that doesn't run Lifesteal.
+        if (plugin.lifestealTeamManager.hosted) {
+            pm.registerEvents(com.liam.joshymc.lifesteal.teams.LifestealTeamListener(plugin.lifestealTeamManager), plugin)
+        }
 
         // Admin panel
         pm.registerEvents(plugin.adminManager, plugin)

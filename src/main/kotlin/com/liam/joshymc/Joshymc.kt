@@ -283,6 +283,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var lifestealHeartManager: com.liam.joshymc.lifesteal.hearts.LifestealHeartManager
         private set
+    lateinit var lifestealTeamManager: com.liam.joshymc.lifesteal.teams.LifestealTeamManager
+        private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
     lateinit var rankManager: RankManager
@@ -520,6 +522,8 @@ class Joshymc : JavaPlugin() {
         freeTagManager = com.liam.joshymc.freetag.FreeTagManager(this)
         // Issue #1341: Lifesteal hearts. Only does anything on a server that runs Lifesteal.
         lifestealHeartManager = com.liam.joshymc.lifesteal.hearts.LifestealHeartManager(this)
+        // Issue #1346: Lifesteal teams (separate from Survival teams). Only does anything where Lifesteal runs.
+        lifestealTeamManager = com.liam.joshymc.lifesteal.teams.LifestealTeamManager(this)
         flightTimeManager = com.liam.joshymc.flight.FlightTimeManager(this)
         flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
@@ -606,6 +610,7 @@ class Joshymc : JavaPlugin() {
         chatTagVoucherManager.start()
         freeTagManager.start()
         lifestealHeartManager.refresh()
+        lifestealTeamManager.refresh()
         flightTimeManager.start()
         flyVoucherManager.start()
 
@@ -716,6 +721,8 @@ class Joshymc : JavaPlugin() {
         shutdown.step("stuckRecoveryManager.stop", { ::stuckRecoveryManager.isInitialized }) { stuckRecoveryManager.stop() }
         shutdown.step("transferManager.stop", { ::transferManager.isInitialized }) { transferManager.stop() }
         shutdown.step("lifestealHeartManager.stop", { ::lifestealHeartManager.isInitialized }) { lifestealHeartManager.stop() }
+        // Lets team changes already handed to its worker finish before the database closes.
+        shutdown.step("lifestealTeamManager.stop", { ::lifestealTeamManager.isInitialized }) { lifestealTeamManager.stop() }
         shutdown.step("spawnDecorationManager.stop", { ::spawnDecorationManager.isInitialized }) { spawnDecorationManager.stop() }
         shutdown.step("passiveEnchantListener.stop", { ::listenerManager.isInitialized }) { listenerManager.passiveEnchantListener?.stop() }
         shutdown.step("quickHitListener.stop", { ::listenerManager.isInitialized }) { listenerManager.quickHitListener?.stop() }
@@ -910,6 +917,7 @@ class Joshymc : JavaPlugin() {
         safe("gamemodeLockManager.start") { gamemodeLockManager.start() }
         // After the locks (world -> gamemode map) and lifesteal.yml are reloaded.
         safe("lifestealHeartManager.refresh") { lifestealHeartManager.refresh() }
+        safe("lifestealTeamManager.refresh") { lifestealTeamManager.refresh() }
         safe("beaconPotionManager.start") { beaconPotionManager.start() }
 
         // 8. Restart Discord

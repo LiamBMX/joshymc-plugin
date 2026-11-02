@@ -5,8 +5,9 @@
 # server never does. Every Paper server keeps its own copy; nothing here is shared.
 #
 # These are the approved Lifesteal Master Blueprint v1.1 defaults. The heart system uses the
-# hearts, pvp and heart-items sections (docs/lifesteal-hearts.md); teams, Ranked Team Wars, seasons and the
-# launch unlocks are added by later updates, which read these values. Check the file with
+# hearts, pvp and heart-items sections (docs/lifesteal-hearts.md), the team system the teams section
+# (docs/lifesteal-teams.md); Ranked Team Wars, seasons and the launch unlocks are added by later
+# updates, which read these values. Check the file with
 # /jgamemode info after editing it. While the file is invalid, hearts are paused (nothing is
 # granted, stolen or changed, and stored hearts are kept as they are).
 #
@@ -36,9 +37,25 @@ pvp:
   # 0 = no cooldown.
   same-victim-cooldown-minutes: 30
 
+# Lifesteal teams (docs/lifesteal-teams.md): /team on this server. Completely separate from the
+# Survival teams; nothing here changes Survival.
 teams:
-  # The most players in one Lifesteal team.
+  # The most players in one Lifesteal team, leader included. 1 to 5 (the approved limit is 5).
   max-size: 5
+  # Turn the team system off (stored teams are kept exactly as they are).
+  enabled: true
+  # Seconds before a team invitation expires (10 to 3600).
+  invite-expiration-seconds: 60
+  # Allow players to create new teams (existing teams keep working when false).
+  allow-creation: true
+  # Allow leaders to disband their own team (staff can always use /team admin disband).
+  allow-disbanding: true
+  # Team name length. Names are letters, digits and _ only, at most 16 characters.
+  name-min-length: 3
+  name-max-length: 16
+  # Extra names nobody may use, on top of the built-in staff and server names (admin, staff,
+  # owner, moderator, joshymc, console, ...). Matched ignoring case, _ and look-alike digits.
+  reserved-names: []
 
 ranked-team-wars:
   # Supported team sizes per side (2 = 2v2 ... 5 = 5v5). Each must be 2..teams.max-size.

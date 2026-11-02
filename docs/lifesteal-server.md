@@ -24,7 +24,9 @@ Velocity proxy
 | A local SQLite database per server (unchanged) | Anything shared between servers (nothing is, by design) |
 
 Hearts and PvP heart stealing are implemented since issue #1341 (`docs/lifesteal-hearts.md`).
-Elimination and revival never exist (fixed rules). Teams, Ranked Team Wars, Elo, seasons, the
+Teams (create, invite, leave, kick, transfer, disband; up to 5 players) are implemented since issue
+#1346 (`docs/lifesteal-teams.md`); `/team` on Lifesteal opens them, Survival keeps its own teams.
+Elimination and revival never exist (fixed rules). Ranked Team Wars, Elo, seasons, the
 grace period and the End unlock aren't implemented yet; `lifesteal.yml` holds the settings those
 later features will read. Nothing here has been tested on a real Lifesteal server yet (see "Testing").
 
@@ -144,7 +146,8 @@ server that runs Lifesteal:
 | `hearts.maximum` | 20 | 1..100 |
 | `hearts.minimum` | 1 | 1..100, never above starting (players never lose their final heart) |
 | `pvp.same-victim-cooldown-minutes` | 30 | 0..525600 (0 = none) |
-| `teams.max-size` | 5 | 1..100 |
+| `teams.max-size` | 5 | 1..5 (the approved limit; 1..100 before issue #1346) |
+| `teams.*` (team system) | see `docs/lifesteal-teams.md` | enabled, invite expiry, creation/disbanding, name length, reserved names |
 | `ranked-team-wars.team-sizes` | [2, 3, 4, 5] | distinct sizes 2..teams.max-size |
 | `seasons.length-months` | 3 | 1..24 |
 | `progression.grace-period-hours` | 24 | 0..720 |
