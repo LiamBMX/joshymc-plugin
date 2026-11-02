@@ -1,6 +1,7 @@
 package com.liam.joshymc.lifesteal.hearts
 
 import com.liam.joshymc.lifesteal.hearts.HeartRules.changesHearts
+import com.liam.joshymc.lifesteal.teams.TeamCombatRules
 import com.liam.joshymc.manager.SqliteDatabase
 import java.sql.ResultSet
 import java.util.UUID
@@ -221,6 +222,8 @@ class HeartStore(private val db: SqliteDatabase) {
         val cooldownMillis: Long,
         val limits: HeartRules.Limits,
         val policy: HeartRules.KillerAtMaximumPolicy = HeartRules.KILLER_AT_MAXIMUM,
+        /** The team check made when the death happened (issue #1348); anything but ELIGIBLE moves no heart. */
+        val team: TeamCombatRules.HeartCheck = TeamCombatRules.HeartCheck.ELIGIBLE,
     )
 
     sealed interface PvpResult {
@@ -242,8 +245,8 @@ class HeartStore(private val db: SqliteDatabase) {
     /**
      * One PvP death as one transaction: dedupe check, fresh read of both records and the pair's
      * cooldown, [HeartRules.decide], then (only for a transfer) both conditional updates, the
-     * cooldown, the transaction row and both audit rows. Rejections (last heart, cooldown, killer
-     * at maximum) are recorded too, without touching hearts or the cooldown. Any database error
+     * cooldown, the transaction row and both audit rows. Rejections (teammates or unknown team
+     * membership, last heart, cooldown, killer at maximum) are recorded too, without touching hearts or the cooldown. Any database error
      * rolls everything back and is rethrown: hearts are then exactly as before.
      */
     fun transferPvp(request: PvpRequest, transactionId: String = UUID.randomUUID().toString()): PvpResult {
@@ -272,7 +275,7 @@ class HeartStore(private val db: SqliteDatabase) {
             }
 
             val remaining = HeartRules.cooldownRemaining(lastTransferAt(request.killer, request.victim), request.now, request.cooldownMillis)
-            val decision = HeartRules.decide(victimHearts, killerHearts, remaining, request.limits, request.policy)
+            val decision = HeartRules.decide(victimHearts, killerHearts, remaining, request.limits, request.policy, request.team)
             val victimBefore = request.limits.clamp(victimHearts)
             val killerBefore = request.limits.clamp(killerHearts)
             var victimAfter = victimBefore
@@ -623,6 +626,8 @@ class HeartStore(private val db: SqliteDatabase) {
         HeartRules.Decision.VictimAtMinimum -> "VICTIM_AT_MINIMUM"
         HeartRules.Decision.KillerAtMaximum -> "KILLER_AT_MAXIMUM"
         is HeartRules.Decision.Cooldown -> "COOLDOWN"
+        HeartRules.Decision.Teammates -> "TEAMMATES"
+        HeartRules.Decision.TeamUnknown -> "TEAM_UNKNOWN"
     }
 
     private fun record(rs: ResultSet): Record = Record(

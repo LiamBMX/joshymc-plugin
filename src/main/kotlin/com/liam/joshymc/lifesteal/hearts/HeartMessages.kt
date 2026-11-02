@@ -18,6 +18,11 @@ object HeartMessages {
     const val KILLER_AT_MAXIMUM = "&7You're at the maximum of {maximum} hearts, so no heart was stolen."
     const val VICTIM_KILLER_AT_MAXIMUM = "&7{killer} is at the maximum hearts, so you kept your heart."
 
+    // Team PvP (issue #1348).
+    const val KILLER_TEAMMATE = "&7{victim} is your teammate, so no heart was stolen."
+    const val VICTIM_TEAMMATE = "&7{killer} is your teammate, so you kept your heart."
+    const val TEAM_UNKNOWN = "&7Team membership couldn't be checked just now, so no heart was stolen."
+
     const val TRANSFER_FAILED = "&cYour hearts couldn't be updated just now, so nothing changed."
 
     const val ADMIN_CHANGED_TARGET = "&7Your hearts are now &c{hearts}❤&7."

@@ -30,10 +30,14 @@ From `lifesteal.yml` (defaults = blueprint v1.1): `hearts.starting` 10, `hearts.
   vanilla), on entering a Lifesteal world, and right after every heart change.
 - A PvP kill (killer and victim both online, in a Lifesteal world, with a loaded record) moves 1
   heart from victim to killer, in this order of checks:
-  1. Victim at the minimum (1): nothing happens, nothing drops, no cooldown starts.
-  2. Same killer took a heart from this victim within the cooldown: nothing happens.
-  3. Killer at the maximum: nothing happens (see "Open decisions").
-  4. Otherwise victim −1, killer +1.
+  1. Teammates (issue #1348, `docs/lifesteal-teams.md`, "Team PvP"): killer and victim are in the
+     same Lifesteal team, or were until the combat-tag time ago, and the team policy doesn't allow
+     teammate heart transfers (the default); or team membership couldn't be read. Nothing happens,
+     no cooldown starts; recorded as `TEAMMATES` / `TEAM_UNKNOWN`.
+  2. Victim at the minimum (1): nothing happens, nothing drops, no cooldown starts.
+  3. Same killer took a heart from this victim within the cooldown: nothing happens.
+  4. Killer at the maximum: nothing happens (see "Open decisions").
+  5. Otherwise victim −1, killer +1.
 - Nobody is ever eliminated, banned or revived. Hearts never go below 1 or above the maximum.
 - Deaths with no causing player (fall, lava, drowning, suffocation, void, mobs, fire) are vanilla
   deaths: no heart changes.

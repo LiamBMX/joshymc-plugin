@@ -56,6 +56,17 @@ teams:
   # Extra names nobody may use, on top of the built-in staff and server names (admin, staff,
   # owner, moderator, joshymc, console, ...). Matched ignoring case, _ and look-alike digits.
   reserved-names: []
+  # Team PvP (docs/lifesteal-teams.md, "Team PvP"). The blueprint defines no team combat rule, so
+  # these are settings. Teammates are recognised by their stored team membership (never names,
+  # prefixes or scoreboard teams); this never changes Survival.
+  friendly-fire:
+    # false = teammates can't damage each other (melee, arrows, tridents, fireworks, harmful
+    # potions, TNT, End Crystals and other damage the game credits to a player), and a teammate
+    # kill never steals a heart. true = teammates can damage each other like anyone else.
+    enabled: false
+    # Only used while enabled is true: whether killing a teammate can steal a heart. false keeps
+    # teammates from farming hearts off each other (a gameplay decision still to be approved).
+    heart-transfers: false
 
 ranked-team-wars:
   # Supported team sizes per side (2 = 2v2 ... 5 = 5v5). Each must be 2..teams.max-size.

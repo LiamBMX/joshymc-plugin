@@ -66,6 +66,8 @@ class LifestealTeamManager(private val plugin: Joshymc) {
     /** Disbanded team id → its final version, so a late, older snapshot can't bring it back. */
     private val retired = ConcurrentHashMap<String, Long>()
     private val names = ConcurrentHashMap<UUID, String>()
+    /** Who left which team within the combat-tag duration (issue #1348, team PvP). */
+    private val combatMemory = TeamCombatMemory()
 
     @Volatile private var executor: ExecutorService? = null
     private var sweepTask: BukkitTask? = null
@@ -149,7 +151,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
     }
 
     private fun clearCache() {
-        teams.clear(); byPlayer.clear(); byName.clear(); invites.clear(); retired.clear()
+        teams.clear(); byPlayer.clear(); byName.clear(); invites.clear(); retired.clear(); combatMemory.clear()
         busy.clear(); lastAction.clear()
     }
 
@@ -188,6 +190,51 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         Bukkit.getPlayer(uuid)?.name ?: names[uuid]?.takeIf { it.isNotEmpty() } ?: Bukkit.getOfflinePlayer(uuid).name ?: uuid.toString().take(8)
 
     fun isOnline(uuid: UUID): Boolean = Bukkit.getPlayer(uuid)?.isOnline == true
+
+    // ── Team PvP (issue #1348; memory only, cheap enough for every damage event) ──
+
+    /** `lifesteal.yml > teams.friendly-fire`, or null while lifesteal.yml can't be read here. */
+    fun combatPolicy(): TeamCombatRules.Policy? =
+        settings?.takeIf { hosted }?.let { TeamCombatRules.Policy(it.friendlyFire, it.teammateHeartTransfers) }
+
+    /**
+     * Whether membership can be read: the cache is loaded, or teams are turned off in lifesteal.yml
+     * (then nobody counts as a teammate). False when loading failed: never "different teams".
+     */
+    private val membershipAvailable: Boolean
+        get() {
+            val config = settings ?: return false
+            return hosted && (!config.enabled || active)
+        }
+
+    /** How two players relate for combat and heart stealing right now (see [TeamCombatRules.relation]). */
+    fun combatRelation(a: UUID, b: UUID, now: Long = System.currentTimeMillis()): TeamCombatRules.Relation =
+        TeamCombatRules.relation(a, b, membershipAvailable, { byPlayer[it] }, { combatMemory.recent(it, now) })
+
+    /** Heart-transfer eligibility of a kill between these two (see [TeamCombatRules.heartCheck]). */
+    fun heartCheck(killer: UUID, victim: UUID): TeamCombatRules.HeartCheck =
+        TeamCombatRules.heartCheck(combatRelation(killer, victim), combatPolicy())
+
+    /**
+     * The current team PvP policy in player words, read live from lifesteal.yml (so it follows a
+     * reload). Shown by `/team info` and the team menu; players can't change it (only lifesteal.yml).
+     */
+    fun friendlyFireSummary(): String {
+        val policy = combatPolicy() ?: return "Unknown (server configuration)"
+        return when {
+            !policy.friendlyFire -> "Off - teammates can't damage each other"
+            policy.teammateHeartTransfers -> "On - teammates can damage each other and steal hearts"
+            else -> "On - teammates can damage each other, but never steal hearts"
+        }
+    }
+
+    /** The combat-tag duration: how long a former teammate still counts as one. */
+    private fun graceMillis(): Long = plugin.combatManager.tagDurationMillis
+
+    private fun inCombat(uuid: UUID): Boolean = Bukkit.getPlayer(uuid)?.let { it.isOnline && plugin.combatManager.isTagged(it) } == true
+
+    private fun combatRefusal(change: TeamCombatRules.TeamChange, involved: Iterable<UUID>): String? =
+        if (involved.any { inCombat(it) }) TeamCombatRules.combatMessage(change) else null
 
     // ── Checks shared by every action ───────────────────────
 
@@ -302,6 +349,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
             }
         }
         teamOf(player.uniqueId)?.let { return refuse(player, "You're already in ${it.name}. Leave it first.") }
+        combatRefusal(TeamCombatRules.TeamChange.ACCEPT, listOf(player.uniqueId))?.let { return refuse(player, it) }
         val uuid = player.uniqueId
         val playerName = player.name
         submit(player, uuid, { store.accept(uuid, playerName, name, maxSize, System.currentTimeMillis()) }) { result ->
@@ -351,6 +399,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         playerProblem(player)?.let { return refuse(player, it) }
         val team = teamOf(player.uniqueId) ?: return refuse(player, "You're not in a team.")
         if (team.leader == player.uniqueId) return refuse(player, leaderLeaveMessage(team))
+        combatRefusal(TeamCombatRules.TeamChange.LEAVE, listOf(player.uniqueId))?.let { return refuse(player, it) }
         val uuid = player.uniqueId
         val playerName = player.name
         submit(player, uuid, { store.leave(uuid, playerName, System.currentTimeMillis()) }) { result ->
@@ -378,6 +427,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         if (team.leader != player.uniqueId) return refuse(player, "Only the team leader can remove members.")
         val target = memberByName(team, targetName) ?: return refuse(player, "$targetName isn't in your team.")
         if (target == player.uniqueId) return refuse(player, "You can't remove yourself. Use /team leave or /team disband.")
+        combatRefusal(TeamCombatRules.TeamChange.KICK, listOf(player.uniqueId, target))?.let { return refuse(player, it) }
         val actor = Actor(player.uniqueId, player.name)
         submit(player, player.uniqueId, { store.kick(actor, target, System.currentTimeMillis()) }) { result ->
             val name = nameOf(target)
@@ -423,6 +473,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         val team = teamOf(player.uniqueId) ?: return refuse(player, "You're not in a team.")
         if (team.leader != player.uniqueId) return refuse(player, "Only the team leader can disband the team.")
         if (settings?.allowDisbanding != true) return refuse(player, "Disbanding teams is turned off right now.")
+        combatRefusal(TeamCombatRules.TeamChange.DISBAND, team.members.map { it.uuid })?.let { return refuse(player, it) }
         if (!confirmed) {
             return send(player, text("Disband ", NamedTextColor.RED).append(teamName(team))
                 .append(text("? All ${team.size} member(s) lose their membership. This can't be undone. ", NamedTextColor.RED))
@@ -526,6 +577,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
     /** Every second on the main thread: expired invitations leave the cache, then the database. */
     private fun sweepInvites() {
         val now = System.currentTimeMillis()
+        combatMemory.sweep(now)
         val due = invites.values.filter { it.expired(now) }
         if (due.isEmpty()) return
         for (invite in due) invites.remove(inviteKey(invite), invite)
@@ -602,7 +654,13 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         if (old != null && old.version > team.version) return
         teams[team.id] = team
         byName[team.canonicalName] = team.id
-        old?.members?.forEach { if (!team.isMember(it.uuid)) byPlayer.remove(it.uuid, team.id) }
+        val now = System.currentTimeMillis()
+        old?.members?.forEach {
+            if (!team.isMember(it.uuid)) {
+                byPlayer.remove(it.uuid, team.id)
+                combatMemory.record(it.uuid, team.id, now, graceMillis())
+            }
+        }
         for (member in team.members) {
             byPlayer[member.uuid] = team.id
             Bukkit.getPlayer(member.uuid)?.let { names[member.uuid] = it.name }
@@ -613,7 +671,11 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         retired[team.id] = team.version + 1
         val cached = teams.remove(team.id)
         byName.remove(team.canonicalName, team.id)
-        for (member in (cached?.members.orEmpty() + team.members)) byPlayer.remove(member.uuid, team.id)
+        val now = System.currentTimeMillis()
+        for (member in (cached?.members.orEmpty() + team.members)) {
+            byPlayer.remove(member.uuid, team.id)
+            combatMemory.record(member.uuid, team.id, now, graceMillis())
+        }
         invites.values.removeIf { it.teamId == team.id }
     }
 

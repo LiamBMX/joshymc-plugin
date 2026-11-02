@@ -243,6 +243,9 @@ class LifestealHeartManager(private val plugin: Joshymc) {
             now = System.currentTimeMillis(),
             cooldownMillis = HeartRules.cooldownMillis(cooldownMinutes),
             limits = limits,
+            // Issue #1348: decided at death time from the membership cache plus the recent-teammate
+            // window, so a team change after the fatal hit (or in the same tick) can't unlock a transfer.
+            team = plugin.lifestealTeamManager.heartCheck(killer.uniqueId, victim.uniqueId),
         )
         val result = try {
             store.transferPvp(request)
@@ -293,6 +296,15 @@ class LifestealHeartManager(private val plugin: Joshymc) {
             is HeartRules.Decision.Cooldown -> {
                 send(killer, HeartMessages.KILLER_COOLDOWN, names + ("{time}" to HeartRules.formatDuration(decision.remainingMillis)))
                 send(victim, HeartMessages.VICTIM_COOLDOWN, names)
+            }
+            HeartRules.Decision.Teammates -> {
+                send(killer, HeartMessages.KILLER_TEAMMATE, names)
+                send(victim, HeartMessages.VICTIM_TEAMMATE, names)
+            }
+            HeartRules.Decision.TeamUnknown -> {
+                plugin.logger.warning("[Hearts] " + killer.name + " killed " + victim.name + ", but Lifesteal team membership couldn't be read; no hearts changed.")
+                send(killer, HeartMessages.TEAM_UNKNOWN, names)
+                send(victim, HeartMessages.TEAM_UNKNOWN, names)
             }
         }
     }
@@ -512,6 +524,12 @@ class LifestealHeartManager(private val plugin: Joshymc) {
     }
 
     // ── Administration ──────────────────────────────────────
+
+    /** Time left on the same-victim cooldown of [killer] -> [victim] (0 = none), or null while hearts are off. */
+    fun pairCooldownRemaining(killer: UUID, victim: UUID): Long? {
+        if (!active) return null
+        return HeartRules.cooldownRemaining(store.lastTransferAt(killer, victim), System.currentTimeMillis(), HeartRules.cooldownMillis(cooldownMinutes))
+    }
 
     /** Fresh from the database (works for offline players), or null with no record. */
     fun storedRecord(uuid: UUID): HeartStore.Record? = store.load(uuid)

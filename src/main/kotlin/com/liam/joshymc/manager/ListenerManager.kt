@@ -274,6 +274,8 @@ class ListenerManager(private val plugin: Joshymc) {
         // Issue #1346: Lifesteal team session bookkeeping. Never registered on a server that doesn't run Lifesteal.
         if (plugin.lifestealTeamManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.teams.LifestealTeamListener(plugin.lifestealTeamManager), plugin)
+            // Issue #1348: Lifesteal friendly fire (victims in Lifesteal worlds only; Survival never sees it).
+            pm.registerEvents(com.liam.joshymc.lifesteal.teams.LifestealTeamCombatListener(plugin), plugin)
         }
 
         // Admin panel

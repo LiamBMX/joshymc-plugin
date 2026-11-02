@@ -83,8 +83,10 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
             lines += "/team admin info <team>" to "Staff: full team details"
             lines += "/team admin disband <team>" to "Staff: disband a team"
             lines += "/team admin transfer <team> <player>" to "Staff: change a team's leader"
+            lines += "/team admin pvp <player> <player>" to "Staff: team PvP and heart eligibility of two players"
         }
         Msg.reply(sender, text("Lifesteal Teams (up to ${teams.maxSize} players)", NamedTextColor.GOLD))
+        sender.sendMessage(text(" Friendly fire: ", NamedTextColor.GRAY).append(text(teams.friendlyFireSummary(), NamedTextColor.WHITE)))
         for ((usage, what) in lines) {
             sender.sendMessage(text(" $usage", NamedTextColor.YELLOW).append(text(" - $what", NamedTextColor.GRAY)))
         }
@@ -126,6 +128,7 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
         }
         sender.sendMessage(text("  ", NamedTextColor.GRAY).append(roster))
         line(sender, "Created", formatDate(team.createdAt, sender))
+        line(sender, "Friendly fire", teams.friendlyFireSummary())
         if (admin) {
             line(sender, "Team id", team.id)
             line(sender, "Version", team.version.toString())
@@ -182,8 +185,58 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
                 if (name == null || player == null) return Msg.usage(sender, "/team admin transfer <team> <player> [confirm]")
                 teams.adminTransfer(sender, name, player, args.getOrNull(3).equals("confirm", ignoreCase = true))
             }
-            else -> Msg.usage(sender, "/team admin <info|disband|transfer> <team> ...")
+            "pvp" -> {
+                val first = args.getOrNull(1)
+                val second = args.getOrNull(2)
+                if (first == null || second == null) return Msg.usage(sender, "/team admin pvp <player> <player>")
+                pvpDiagnostics(sender, first, second)
+            }
+            else -> Msg.usage(sender, "/team admin <info|disband|transfer|pvp> ...")
         }
+    }
+
+    /**
+     * `/team admin pvp <a> <b>` (issue #1348): read-only. The policy, how the two relate right now,
+     * whether a hit between them is blocked and whether a kill could move a heart (team check plus
+     * both same-victim cooldowns). Shows nothing but team relationship and cooldown times.
+     */
+    private fun pvpDiagnostics(sender: CommandSender, firstName: String, secondName: String) {
+        teams.unavailableReason()?.let { Msg.error(sender, it) }
+        val first = plugin.playerResolver.resolve(firstName) ?: return Msg.playerNotFound(sender, firstName)
+        val second = plugin.playerResolver.resolve(secondName) ?: return Msg.playerNotFound(sender, secondName)
+        val a = first.uniqueId
+        val b = second.uniqueId
+        val nameA = teams.nameOf(a)
+        val nameB = teams.nameOf(b)
+        val policy = teams.combatPolicy()
+        val relation = teams.combatRelation(a, b)
+        Msg.reply(sender, text("Team PvP: ", NamedTextColor.GRAY).append(text("$nameA / $nameB", NamedTextColor.WHITE)))
+        line(sender, "Friendly fire", teams.friendlyFireSummary())
+        line(sender, "Teams", "${teams.teamOf(a)?.name ?: "none"} / ${teams.teamOf(b)?.name ?: "none"}")
+        line(sender, "Relation", when (relation) {
+            TeamCombatRules.Relation.TEAMMATES -> "teammates"
+            TeamCombatRules.Relation.RECENT_TEAMMATES -> "recent teammates (left within the combat-tag time)"
+            TeamCombatRules.Relation.NOT_TEAMMATES -> if (a == b) "same player" else "not teammates"
+            TeamCombatRules.Relation.UNKNOWN -> "unknown (team data unavailable)"
+        })
+        val damage = TeamCombatRules.damage(a, b, relation, policy)
+        line(sender, "Damage between them", if (damage == TeamCombatRules.DamageDecision.BLOCK_FRIENDLY_FIRE) "blocked (friendly fire)" else "normal PvP rules")
+        line(sender, "Heart transfer (team check)", when (TeamCombatRules.heartCheck(relation, policy)) {
+            TeamCombatRules.HeartCheck.ELIGIBLE -> "allowed"
+            TeamCombatRules.HeartCheck.TEAMMATES -> "refused (teammates)"
+            TeamCombatRules.HeartCheck.UNKNOWN -> "refused (team data or settings unavailable)"
+        })
+        if (a == b) return
+        val hearts = plugin.lifestealHeartManager
+        val cooldownAB = try { hearts.pairCooldownRemaining(a, b) } catch (e: Exception) { null }
+        val cooldownBA = try { hearts.pairCooldownRemaining(b, a) } catch (e: Exception) { null }
+        fun cooldown(value: Long?): String = when {
+            value == null -> "unavailable (hearts paused)"
+            value <= 0 -> "none"
+            else -> com.liam.joshymc.lifesteal.hearts.HeartRules.formatDuration(value)
+        }
+        line(sender, "Cooldown $nameA -> $nameB", cooldown(cooldownAB))
+        line(sender, "Cooldown $nameB -> $nameA", cooldown(cooldownBA))
     }
 
     // ── Tab completion ──────────────────────────────────────
@@ -200,17 +253,22 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
                 "kick", "remove", "transfer", "promote" -> own?.members?.filter { it.uuid != player?.uniqueId }?.map { teams.nameOf(it.uuid) }.orEmpty()
                 "accept", "join", "deny", "decline" -> player?.let { p -> teams.invitesFor(p.uniqueId).mapNotNull { teams.team(it.teamId)?.name } }.orEmpty()
                 "info" -> teams.allTeams().map { it.name }
-                "admin" -> if (teams.canAdmin(sender)) listOf("info", "disband", "transfer") else emptyList()
+                "admin" -> if (teams.canAdmin(sender)) listOf("info", "disband", "transfer", "pvp") else emptyList()
                 else -> emptyList()
             }
             3 -> when {
+                args[0].equals("admin", true) && args[1].equals("pvp", true) && teams.canAdmin(sender) ->
+                    org.bukkit.Bukkit.getOnlinePlayers().map { it.name }
                 args[0].equals("admin", true) && teams.canAdmin(sender) -> teams.allTeams().map { it.name }
                 args[0].lowercase() in setOf("transfer", "promote") -> listOf("confirm")
                 else -> emptyList()
             }
-            4 -> if (args[0].equals("admin", true) && args[1].equals("transfer", true) && teams.canAdmin(sender)) {
-                teams.teamByName(args[2])?.members?.map { teams.nameOf(it.uuid) }.orEmpty()
-            } else emptyList()
+            4 -> when {
+                !args[0].equals("admin", true) || !teams.canAdmin(sender) -> emptyList()
+                args[1].equals("transfer", true) -> teams.teamByName(args[2])?.members?.map { teams.nameOf(it.uuid) }.orEmpty()
+                args[1].equals("pvp", true) -> org.bukkit.Bukkit.getOnlinePlayers().map { it.name }
+                else -> emptyList()
+            }
             else -> emptyList()
         }
         val prefix = args.lastOrNull()?.lowercase().orEmpty()
