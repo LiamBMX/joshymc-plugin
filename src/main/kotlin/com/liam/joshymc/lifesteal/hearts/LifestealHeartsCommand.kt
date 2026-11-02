@@ -18,13 +18,22 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
 
     /** Whether [sender] should see the subcommand at all (permission and a Lifesteal server). */
     fun visibleTo(sender: CommandSender): Boolean =
-        sender.hasPermission(PERMISSION) && plugin.lifestealHeartManager.hosted
+        (sender.hasPermission(PERMISSION) || sender.hasPermission(GIVE_PERMISSION)) && plugin.lifestealHeartManager.hosted
 
     /** [args] starts after `hearts`. */
     fun execute(sender: CommandSender, args: List<String>) {
+        // Heart item grants (issue #1344) have their own permission, checked before anything else.
+        if (args.firstOrNull()?.equals("give", ignoreCase = true) == true) {
+            give(sender, args)
+            return
+        }
         if (!sender.hasPermission(PERMISSION)) {
             Msg.noPermission(sender)
             return
+        }
+        when (args.firstOrNull()?.lowercase()) {
+            "items" -> return items(sender, args)
+            "void" -> return void(sender, args)
         }
         val hearts = plugin.lifestealHeartManager
         if (!hearts.hosted) {
@@ -110,17 +119,137 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         }
     }
 
+    /** Shared refusals for the Heart item subcommands; true = go on. */
+    private fun ready(sender: CommandSender): Boolean {
+        val hearts = plugin.lifestealHeartManager
+        if (!hearts.hosted) {
+            Msg.error(sender, "Hearts only exist on the Lifesteal server.")
+            return false
+        }
+        if (!hearts.active) {
+            Msg.error(sender, "Hearts are paused: lifesteal.yml is invalid (see the console and /jgamemode info).")
+            return false
+        }
+        return true
+    }
+
+    /** `give <player> <amount>`: recorded Heart items for an online Lifesteal player ([GIVE_PERMISSION]). */
+    private fun give(sender: CommandSender, args: List<String>) {
+        if (!sender.hasPermission(GIVE_PERMISSION)) {
+            Msg.noPermission(sender)
+            return
+        }
+        if (!ready(sender)) return
+        if (args.size != 3) {
+            Msg.usage(sender, GIVE_USAGE)
+            return
+        }
+        val target = plugin.playerResolver.online(args[1])
+        if (target == null) {
+            Msg.error(sender, "${args[1]} isn't online. Heart items can only be given to online players.")
+            return
+        }
+        val amount = HeartRules.parseAmount(args[2])
+        if (amount == null || amount < 1 || amount > HeartRules.MAX_ADMIN_ITEM_GRANT) {
+            Msg.error(sender, "The amount must be a whole number from 1 to ${HeartRules.MAX_ADMIN_ITEM_GRANT}.")
+            return
+        }
+        val actor = (sender as? Player)?.uniqueId?.toString() ?: "console"
+        val result = try {
+            plugin.lifestealHeartManager.grantItems(target, amount, actor, sender.name)
+        } catch (e: Exception) {
+            plugin.logger.severe("[Hearts] ${sender.name}: giving ${target.name} $amount Heart item(s) failed and was rolled back: ${e.message}")
+            Msg.error(sender, "The grant couldn't be saved, so no Heart items were made.")
+            return
+        }
+        when (result) {
+            is HeartStore.GrantResult.Granted -> Msg.success(sender, "Gave ${target.name} $amount Heart item(s).")
+            is HeartStore.GrantResult.Invalid -> Msg.error(sender, result.reason)
+            HeartStore.GrantResult.NoRecord -> Msg.error(sender, "${target.name} has no hearts yet (they haven't played Lifesteal here).")
+        }
+    }
+
+    /** `items <player>`: Heart items issued to a player that were never redeemed or voided. */
+    private fun items(sender: CommandSender, args: List<String>) {
+        if (!ready(sender)) return
+        if (args.size != 2) {
+            Msg.usage(sender, "/lifesteal hearts items <player>")
+            return
+        }
+        val target = plugin.playerResolver.resolve(args[1])
+        if (target == null) {
+            Msg.playerNotFound(sender, args[1])
+            return
+        }
+        val name = target.name ?: args[1]
+        val rows = try {
+            plugin.lifestealHeartManager.outstandingItems(target.uniqueId)
+        } catch (e: Exception) {
+            Msg.error(sender, "Couldn't read the Heart items: ${e.message}")
+            return
+        }
+        if (rows.isEmpty()) {
+            Msg.reply(sender, Component.text("$name has no outstanding Heart items.", NamedTextColor.GRAY))
+            return
+        }
+        Msg.reply(sender, Component.text("Outstanding Heart items issued to $name (newest first, up to 20):", NamedTextColor.GRAY))
+        val format = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(java.time.ZoneId.systemDefault())
+        for (row in rows) {
+            val source = if (row.source == HeartStore.ItemSource.ADMIN) "staff grant" else "withdrawn"
+            sender.sendMessage(
+                Component.text(" ${row.serial}", NamedTextColor.WHITE)
+                    .append(Component.text(" $source ${format.format(java.time.Instant.ofEpochMilli(row.issuedAt))}", NamedTextColor.GRAY))
+            )
+        }
+    }
+
+    /** `void <serial> [refund]`: recovery for a lost Heart item (see [HeartStore.voidItem]). */
+    private fun void(sender: CommandSender, args: List<String>) {
+        if (!ready(sender)) return
+        val refund = args.getOrNull(2)?.equals("refund", ignoreCase = true) == true
+        if (args.size !in 2..3 || (args.size == 3 && !refund)) {
+            Msg.usage(sender, "/lifesteal hearts void <serial> [refund]")
+            return
+        }
+        val actor = (sender as? Player)?.uniqueId?.toString() ?: "console"
+        val result = try {
+            plugin.lifestealHeartManager.voidItem(args[1], refund, actor, sender.name)
+        } catch (e: Exception) {
+            plugin.logger.severe("[Hearts] ${sender.name}: voiding Heart item ${args[1]} failed and was rolled back: ${e.message}")
+            Msg.error(sender, "The change couldn't be saved, so nothing changed.")
+            return
+        }
+        when (result) {
+            HeartStore.VoidResult.UnknownItem -> Msg.error(sender, "No Heart item with serial ${args[1]} was ever issued here.")
+            is HeartStore.VoidResult.NotOutstanding -> Msg.error(sender, "That Heart item is already ${result.status?.name?.lowercase() ?: "closed"}.")
+            is HeartStore.VoidResult.Refused -> Msg.error(sender, result.reason)
+            is HeartStore.VoidResult.Voided -> Msg.success(
+                sender,
+                if (result.refunded) "Voided it and refunded the heart (${result.before} -> ${result.after})." else "Voided it; it can no longer be redeemed."
+            )
+        }
+    }
+
     fun complete(sender: CommandSender, args: List<String>): List<String> {
         if (!visibleTo(sender)) return emptyList()
+        val admin = sender.hasPermission(PERMISSION)
         return when (args.size) {
-            1 -> listOf("get", "set", "add", "remove").filter { it.startsWith(args[0].lowercase()) }
-            2 -> plugin.server.onlinePlayers.map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+            1 -> buildList {
+                if (admin) addAll(listOf("get", "set", "add", "remove", "items", "void"))
+                if (sender.hasPermission(GIVE_PERMISSION)) add("give")
+            }.filter { it.startsWith(args[0].lowercase()) }
+            2 -> if (args[0].equals("void", ignoreCase = true)) emptyList()
+                else plugin.server.onlinePlayers.map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
+            3 -> if (args[0].equals("void", ignoreCase = true) && admin) listOf("refund").filter { it.startsWith(args[2].lowercase()) } else emptyList()
             else -> emptyList()
         }
     }
 
     companion object {
         const val PERMISSION = "joshymc.lifesteal.hearts.admin"
-        const val USAGE = "/lifesteal hearts <get|set|add|remove> <player> [amount]"
+        /** Making Heart items (issue #1344) is its own permission, not part of [PERMISSION]. */
+        const val GIVE_PERMISSION = "joshymc.lifesteal.hearts.give"
+        const val USAGE = "/lifesteal hearts <get|set|add|remove> <player> [amount] | items <player> | void <serial> [refund]"
+        const val GIVE_USAGE = "/lifesteal hearts give <player> <amount>"
     }
 }

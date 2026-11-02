@@ -73,7 +73,8 @@ fun main() {
     check("no command is both assigned and unassigned", table.keys.intersect(GamemodeAssignments.UNASSIGNED.keys).isEmpty())
     check("unassigned commands all say why", GamemodeAssignments.UNASSIGNED.values.all { it.isNotBlank() })
     check("keys are lower-case plugin.yml names", table.keys.all { it == it.lowercase() && !it.startsWith("/") })
-    check("no JoshyMC command is assigned to Lifesteal yet", table.values.none { it == GamemodeScope.LIFESTEAL })
+    // Issue #1344: /withdrawheart is the first (and so far only) Lifesteal command.
+    check("only /withdrawheart is assigned to Lifesteal", table.filterValues { it == GamemodeScope.LIFESTEAL }.keys == setOf("withdrawheart"))
 
     // Scopes set by earlier issues are unchanged.
     check("jgamemode NETWORK", scopeOf("jgamemode") == NETWORK)
@@ -133,15 +134,17 @@ fun main() {
 
     // ── Isolation scenarios ────────────────────────────────
     for ((name, scope) in table) {
-        // Survival server: nothing ever changes, locked or not (a lock never restricts its own gamemode).
+        // Survival server: Survival and network commands never change, locked or not (a lock never
+        // restricts its own gamemode); Lifesteal commands stop there once Lifesteal is locked.
         for (locks in listOf(NONE, SURVIVAL_LOCKED, LIFESTEAL_LOCKED, BOTH_LOCKED)) {
-            check("/$name works on Survival with locks $locks", allowed(scope, SURVIVAL_SERVER, locks))
+            val expected = scope != GamemodeScope.LIFESTEAL || ServerGamemode.LIFESTEAL !in locks
+            check("/$name on Survival with locks $locks", allowed(scope, SURVIVAL_SERVER, locks) == expected)
         }
         // Lifesteal server with nothing locked: backward compatible, everything still works.
         check("/$name works on unlocked Lifesteal", allowed(scope, LIFESTEAL_SERVER, NONE))
-        // Lifesteal with Survival isolation on: only network commands remain.
-        check("/$name on Lifesteal with Survival locked", allowed(scope, LIFESTEAL_SERVER, SURVIVAL_LOCKED) == (scope == NETWORK))
-        // Locking Lifesteal alone never blocks Survival or network commands anywhere.
+        // Lifesteal with Survival isolation on: Survival commands stop, network and Lifesteal ones remain.
+        check("/$name on Lifesteal with Survival locked", allowed(scope, LIFESTEAL_SERVER, SURVIVAL_LOCKED) == (scope != SURVIVAL))
+        // Locking Lifesteal never blocks anything on Lifesteal itself.
         check("/$name on Lifesteal with Lifesteal locked", allowed(scope, LIFESTEAL_SERVER, LIFESTEAL_LOCKED))
     }
     for (name in GamemodeAssignments.UNASSIGNED.keys) {

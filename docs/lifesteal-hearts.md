@@ -1,19 +1,22 @@
-# Lifesteal hearts (issue #1341)
+# Lifesteal hearts (issues #1341, #1344)
 
 The core Lifesteal heart system: permanent hearts per player, shown as their maximum health, and
-PvP heart stealing. Lifesteal only. It builds on the dedicated server bootstrap
-(`docs/lifesteal-server.md`, issue #1336) and reads `lifesteal.yml`; it adds no new settings.
+PvP heart stealing (issue #1341), plus physical Heart items: `/withdrawheart` and right-click
+redemption (issue #1344, see "Heart items" below). Lifesteal only. It builds on the dedicated
+server bootstrap (`docs/lifesteal-server.md`, issue #1336) and reads `lifesteal.yml`.
 
 Code: `src/main/kotlin/com/liam/joshymc/lifesteal/hearts/`
 
 | File | Role |
 |---|---|
-| `HeartRules.kt` | Bukkit-free rules: limits, kill attribution, transfer decision, cooldown arithmetic, admin changes |
-| `HeartStore.kt` | Bukkit-free SQLite store: records, transfers, admin changes, audit, all transactional |
-| `LifestealHeartManager.kt` | Sessions, max health, death handling, admin entry point |
-| `LifestealHeartListener.kt` | Join / quit / world change / post-respawn / death |
+| `HeartRules.kt` | Bukkit-free rules: limits, kill attribution, transfer decision, cooldown arithmetic, admin changes, withdraw/redeem decisions, serial format |
+| `HeartStore.kt` | Bukkit-free SQLite store: records, transfers, admin changes, Heart item registry, withdraw/redeem/grant/void, audit, all transactional |
+| `LifestealHeartManager.kt` | Sessions, max health, death handling, withdraw/redeem/grant/void entry points, admin entry point |
+| `LifestealHeartListener.kt` | Join / quit / world change / post-respawn / death / Heart item right-click / crafting block |
+| `HeartItem.kt` | Builds and reads the Heart item (persistent data only) |
+| `WithdrawHeartCommand.kt` | `/withdrawheart` |
 | `LifestealHeartsCommand.kt` | `/lifesteal hearts ...` |
-| `HeartMessages.kt` | Player messages |
+| `HeartMessages.kt` | Player messages (the six main Heart item messages are in `lifesteal.yml`) |
 
 ## Rules
 
@@ -60,8 +63,9 @@ All in the Lifesteal server's own `data.db` (Survival never creates these tables
 |---|---|
 | `lifesteal_hearts` | uuid (PK), hearts, initial_granted, version, created_at, updated_at, last_transaction |
 | `lifesteal_heart_cooldowns` | (killer, victim) PK, last_transfer_at |
-| `lifesteal_heart_transactions` | id (UUID), `dedupe_key` UNIQUE, type PVP/ADMIN, outcome, killer, victim, actor, time |
-| `lifesteal_heart_audit` | transaction id, uuid, operation (INITIAL, PVP_LOSS, PVP_GAIN, PVP_REJECTED, ADMIN_SET/ADD/REMOVE), previous/new hearts, actor, reason, time |
+| `lifesteal_heart_transactions` | id (UUID), `dedupe_key` UNIQUE, type PVP/ADMIN/WITHDRAW/REDEEM/ADMIN_GRANT/ADMIN_VOID, outcome, killer, victim, actor, time |
+| `lifesteal_heart_audit` | transaction id, uuid, operation (INITIAL, PVP_LOSS, PVP_GAIN, PVP_REJECTED, ADMIN_SET/ADD/REMOVE, WITHDRAW, WITHDRAW_REJECTED, REDEEM, REDEEM_REJECTED, ADMIN_GRANT_ITEM, ITEM_VOID, ITEM_REFUND), previous/new hearts, actor, reason, time, item_quantity, item_serial |
+| `lifesteal_heart_items` | serial (PK), status ISSUED/REDEEMED/VOIDED, source WITHDRAW/ADMIN, issued_to, issued_by, issue_transaction, issued_at, closed_by, close_transaction, closed_at |
 
 - **Atomic:** each kill or admin change is one `databaseManager.transaction`. It reads the rows
   fresh under the DB lock, decides, and writes with `WHERE version = <read version>`. A row that
@@ -89,8 +93,114 @@ All in the Lifesteal server's own `data.db` (Survival never creates these tables
   hearts and players' health stay as they are, and admin commands refuse. Fix the file, then
   `/joshymc reload`.
 
+## Heart items (issue #1344)
+
+A Heart item is one permanent heart in item form. Players make one with `/withdrawheart` and
+turn it back into a heart by right-clicking it. Heart items can be stored, dropped, picked up,
+put in chests and traded like any item; whoever redeems one gets the heart (it isn't tied to
+who withdrew it), and moving an item never changes anyone's hearts.
+
+### The item
+
+- A **Nether Star** named "Heart" (`heart-items.display-name`), with simple lore, an optional
+  glint and an optional resource-pack item model (`heart-items.item-model`, blank by default).
+- **Identity is server-side.** The item's persistent data holds `joshymc:custom_item_id =
+  lifesteal_heart`, a format version and a **serial** (a random UUID). The serial is written to
+  `lifesteal_heart_items` in the same transaction that took the heart. Redemption only accepts a
+  serial whose row is ISSUED, and moves it to REDEEMED in the same transaction that adds the heart.
+  So:
+  - a renamed Nether Star (or any item with the right name/lore) is not a Heart item at all;
+  - a hand-made item with a made-up serial (NBT editor, `/give` with components) has no row and is
+    refused ("forged", logged, AntiDupe alert);
+  - a copy of a real item (creative middle-click, a dupe glitch, an inventory rollback) shares
+    its serial, so only the first redemption works; later ones are refused as already redeemed
+    (CRITICAL AntiDupe alert). Copies are never deleted automatically, just worthless.
+  - No signature/HMAC is needed: the registry is stronger than signed data (it also catches
+    copies) and items stay valid across restarts, renames, look changes and plugin updates.
+- **Never stacks:** each serial is unique, and the item's max stack size is 1. Anything that
+  claims to be a stack of hearts is refused. One redemption = one item = one heart.
+- Not registered in the ItemManager, so `/joshymc give` can't make serial-less hearts. Staff use
+  `/lifesteal hearts give` (below).
+- Heart items are never crafting ingredients (a Nether Star is part of the beacon recipe), and
+  right-clicking one never uses it as a vanilla item.
+- **No recipe, shop, auction or trading GUI** exists (not in blueprint v1.1).
+
+### `/withdrawheart`
+
+Player-only, `joshymc.lifesteal.withdraw` (default true), scope LIFESTEAL. Checks, in order:
+this server runs Lifesteal, hearts aren't paused, the player is in a Lifesteal world, alive and
+online, their heart session is loaded, `heart-items.withdraw-enabled`, the anti-spam gap
+(`action-cooldown-millis`), they have more than the minimum (1) hearts, and they have an empty
+inventory slot (Heart items don't stack, so a free slot is needed; the withdrawal is refused
+otherwise: there's no other safe delivery for it). Then one transaction takes one heart (fresh
+read, conditional update, never below the minimum, so the store refuses the final heart even if
+the cached value were wrong) and issues the serial. Only after the commit is the item put into
+the free slot, max health updated (10 → 9 hearts = 18 health) and the player data saved.
+
+### Redemption
+
+Right-click (air, or a block that isn't interactable; sneak to redeem while looking at a chest or
+door). Paper fires the click once per hand, so only one hand is handled per click: the main hand
+when it holds a Heart item, otherwise the off hand. One attempt per player per tick and per
+`action-cooldown-millis`, and re-entry is refused. Then one transaction checks the serial,
+re-reads the hearts, refuses at the maximum (the store enforces it, not only the listener), marks
+the serial REDEEMED, adds the heart and audits it. The item in that hand is removed only after the
+commit; any refusal or failure leaves the item where it is. At 20 hearts the item is kept, nothing
+is created and the player is told.
+
+### Staff
+
+```
+/lifesteal hearts give <player> <amount>     # joshymc.lifesteal.hearts.give (op), online Lifesteal player, 1-36
+/lifesteal hearts items <player>             # outstanding (unredeemed) items issued to a player
+/lifesteal hearts void <serial> [refund]     # recovery, see below
+```
+
+`give` makes real, recorded items (source ADMIN) without changing anyone's hearts. It needs
+that many free slots, and the grant is one transaction with one ADMIN_GRANT audit row (quantity).
+
+### Consistency, and what isn't atomic
+
+SQLite can't make an inventory change atomic, so the order is: database first, inventory right
+after, in the same server tick, on the main thread. Nothing else (another click, a command, a
+disconnect, a shutdown) can run in between, because quits and shutdown are processed on the same
+thread. What remains:
+
+- **Crash after a withdrawal's commit, before the player's data file is saved:** the heart is
+  gone but the item isn't in the saved inventory. The player data is saved right after every
+  Heart item change (`player.saveData()`), which makes this window very small but not zero.
+  Recovery: `/lifesteal hearts items <player>` lists the serial, and
+  `/lifesteal hearts void <serial> refund` voids it (so the item can never be redeemed, should it
+  turn up) and gives the heart back in one transaction (only for withdrawn items, never past the
+  maximum).
+- **Crash after a redemption's commit:** the heart is saved; if the inventory rolls back, the
+  item comes back but its serial is already REDEEMED, so it can't be redeemed again. No dupe.
+- **Inventory rollbacks by staff tools** behave the same: rolled-back hearts can't be redeemed twice.
+- **Death:** Heart items drop like any item. Nothing in the heart system changes.
+- Database failure or shutdown: the transaction rolls back (or the closed database refuses), the
+  player is told nothing changed, and the item/heart stay as they were.
+
+### Settings (`lifesteal.yml > heart-items`)
+
+`withdraw-enabled`, `redeem-enabled`, `display-name`, `item-model`, `glint`,
+`action-cooldown-millis` (0-60000) and `messages.*` (withdrawn, redeemed, final-heart, maximum,
+inventory-full, redeem-failed; `{maximum}` is filled in). A file from before this section exists
+gets the defaults with one warning. Nothing here can change the heart limits.
+
+### Java and Bedrock
+
+Heart items are a vanilla Nether Star with a name, lore and persistent data, which Geyser
+translates as-is, so Bedrock players see a Nether Star named "Heart" (the visual fallback).
+A configured `item-model` is Java-only: the Bedrock pack (`BedrockPackManager`) only maps
+registered custom items, and the Heart item deliberately isn't one. Right-click on Bedrock
+arrives as the same `PlayerInteractEvent`, with the same one-hand/one-tick guards. No packets,
+no Geyser/NetherNet changes. **Not tested with real Bedrock clients yet.**
+
 ## Survival isolation
 
+- `/withdrawheart` refuses on servers and worlds without Lifesteal, and redemption only runs
+  there; on the Survival server the listener isn't even registered, so Survival inventories and
+  custom items are untouched.
 - The listener is registered only when this server hosts Lifesteal
   (`networkIdentityManager.hostedGamemodes`), and the tables are only created there.
 - Every handler also checks the player's world with `gamemodeLockManager.gamemodeOf(world)`.
@@ -117,6 +227,8 @@ subcommand. Plain `/lifesteal` still transfers.
 /lifesteal hearts remove <player> <amount>   # stops at the minimum (1) and says so
 ```
 
+Heart item staff commands (`give`, `items`, `void`) are described under "Heart items".
+
 These need `joshymc.lifesteal.hearts.admin` (default op) and only work on a server that runs
 Lifesteal. Offline players are found through the PlayerResolver (no Mojang lookups). A player
 with no row (never played Lifesteal here) is refused instead of getting one created. Every change
@@ -130,7 +242,10 @@ These are left for a later decision rather than invented:
 1. **Killer at the maximum.** Implemented: nothing happens to either player, and no cooldown
    starts. This is fixed in code (`HeartRules.KILLER_AT_MAXIMUM`), not configurable. The
    alternative "victim still loses, killer stays at max" is implemented but unused
-   (`VICTIM_LOSES_ONLY`). No heart item or other overflow reward exists.
+   (`VICTIM_LOSES_ONLY`). No Heart item drops and there's no other overflow reward.
+5. **Heart item look, stacking and recipes** (issue #1344). The blueprint defines none of them:
+   the look is configurable, items never stack because each has its own serial, and there is no
+   recipe.
 2. **Environmental deaths after PvP** (knocked into lava or the void, fall damage from a hit).
    Only the final damage counts: these cost no heart.
 3. **Combat logging.** A tagged player who logs out leaves the existing combat-log NPC. Killing
@@ -153,7 +268,17 @@ runs `scripts/LifestealHeartCheck.kt` against real SQLite. It covers:
 - concurrent kills on one victim (exactly 9 move, hearts conserved), duplicate deliveries,
   reconnect storms and admin changes racing PvP (no lost updates);
 - rollback on a mid-transaction failure and on a stale write, and a closed database;
-- the Lifesteal-only wiring.
+- the Lifesteal-only wiring;
+- Heart items (issue #1344): the `heart-items` settings (bundled defaults = the issue's messages,
+  an old file without the section, invalid values); withdrawals at 10, 2 and 1 hearts; redemption
+  at 8, 19 and 20; several items; trading (another player redeems); forged, garbage and copied
+  serials; admin grants (limits, no record, hearts unchanged); void with and without refund, never
+  past the maximum; restart persistence; migrating an issue #1341 audit table; 40 concurrent
+  withdrawals (exactly 9), one item redeemed from 32 threads (once), concurrent redemptions at 19
+  (stops at 20), withdrawals racing PvP (final heart kept); rollback of a failed withdrawal and
+  redemption and of a stale write (item stays valid); a closed database; and the source wiring
+  (session/inventory checks before the transaction, item handed over/taken only after the
+  commit, one hand per click, no ItemManager registration, permissions, LIFESTEAL scope).
 
 Manual, on a real Paper 26.2 Lifesteal server (not done yet, so gameplay is unverified):
 
@@ -167,3 +292,19 @@ Manual, on a real Paper 26.2 Lifesteal server (not done yet, so gameplay is unve
    input and an account without permission.
 7. On the Survival server: max health stays vanilla, `/lifesteal hearts` refuses, and no
    `lifesteal_*` tables exist in its `data.db`.
+
+Heart items (issue #1344), also not yet run on a live server:
+
+8. At 10 hearts, `/withdrawheart`: 9 hearts (18 health), one Heart item in a free slot. At 1
+   heart: refused, nothing made. With a full inventory: refused.
+9. Right-click the item at 8 hearts: 9, item gone. At 20: refused, item kept. Hold Heart items in
+   both hands and right-click: only one is redeemed. Hold right-click / spam-click: one per gap.
+10. Drop the item, have another player pick it up and redeem it. Store it in a chest, restart,
+    take it out, redeem it.
+11. Creative middle-click a Heart item to clone it, redeem both: the second is refused. Rename a
+    Nether Star "Heart" in an anvil: right-click does nothing. Try a beacon recipe with a Heart.
+12. Repeat 8-10 on a Bedrock client (Geyser + Floodgate): the item shows as a Nether Star named
+    Heart, redemption works once per tap.
+13. `/lifesteal hearts give <player> 3`, `items <player>`, `void <serial> refund`, and the same
+    commands without permission.
+14. On the Survival server, `/withdrawheart` says hearts only exist on Lifesteal.

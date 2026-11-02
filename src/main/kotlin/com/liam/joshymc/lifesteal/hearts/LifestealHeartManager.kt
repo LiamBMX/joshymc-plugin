@@ -2,7 +2,10 @@ package com.liam.joshymc.lifesteal.hearts
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.lifesteal.LifestealSettings
 import com.liam.joshymc.lifesteal.hearts.HeartRules.changesHearts
+import com.liam.joshymc.manager.AntiDupeManager
+import org.bukkit.inventory.EquipmentSlot
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.TextReplacementConfig
 import org.bukkit.Bukkit
@@ -51,6 +54,21 @@ class LifestealHeartManager(private val plugin: Joshymc) {
     @Volatile var cooldownMinutes: Int = 0
         private set
 
+    /** Heart item settings (issue #1344), from lifesteal.yml. */
+    @Volatile var itemSettings: LifestealSettings.HeartItems = LifestealSettings.HeartItems()
+        private set
+
+    /** Builds and reads physical Heart items. */
+    val items = HeartItem(plugin)
+
+    // Heart item safeguards (issue #1344), all main-thread state cleared on quit.
+    /** Players inside a withdrawal or redemption right now (re-entry is refused). */
+    private val busy = ConcurrentHashMap.newKeySet<UUID>()
+    private val lastWithdrawAt = ConcurrentHashMap<UUID, Long>()
+    private val lastRedeemAt = ConcurrentHashMap<UUID, Long>()
+    /** Server tick of each player's last redemption attempt: one attempt per tick, whatever the hand. */
+    private val lastRedeemTick = ConcurrentHashMap<UUID, Int>()
+
     /** This server runs Lifesteal (fixed per reload). The listener is only registered when true. */
     val hosted: Boolean get() = ServerGamemode.LIFESTEAL in plugin.networkIdentityManager.hostedGamemodes
 
@@ -97,6 +115,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         }
         limits = HeartRules.Limits.of(settings.hearts)
         cooldownMinutes = settings.pvp.sameVictimCooldownMinutes
+        itemSettings = settings.heartItems
         plugin.logger.info(
             "[Hearts] Heart system on: start ${settings.hearts.starting}, ${settings.hearts.minimum}-${settings.hearts.maximum} hearts, " +
                 "same-victim cooldown ${cooldownMinutes}m."
@@ -158,6 +177,9 @@ class LifestealHeartManager(private val plugin: Joshymc) {
     fun onQuit(player: Player) {
         loaded.remove(player.uniqueId)
         malformedLogged.remove(player.uniqueId)
+        lastWithdrawAt.remove(player.uniqueId)
+        lastRedeemAt.remove(player.uniqueId)
+        lastRedeemTick.remove(player.uniqueId)
     }
 
     /** Sets the max health base value to [hearts] × 2; modifiers (potions, items) stay on top. */
@@ -273,6 +295,220 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 send(victim, HeartMessages.VICTIM_COOLDOWN, names)
             }
         }
+    }
+
+    // ── Heart items (issue #1344) ───────────────────────────
+    //
+    // Everything below runs on the main thread, synchronously, in the same tick as the command or
+    // click: the database transaction commits first, then the inventory changes right away, so no
+    // disconnect, other click or other command can land in between. What SQLite can't cover is a
+    // server crash after the commit but before the player's data file is next saved; the player
+    // data is saved right after each change to keep that window small, and the remaining risk is
+    // handled by serials (see docs/lifesteal-hearts.md, "Heart items").
+
+    /** Why a heart-item action can't run for [player] right now, or null. */
+    private fun itemProblem(player: Player): String? = when {
+        !hosted -> HeartMessages.NOT_LIFESTEAL_SERVER
+        !active || limits == null -> HeartMessages.PAUSED
+        !isLifesteal(player) -> HeartMessages.NOT_IN_LIFESTEAL
+        !player.isOnline || player.isDead -> HeartMessages.NOT_NOW
+        !loaded.containsKey(player.uniqueId) -> HeartMessages.NOT_LOADED
+        else -> null
+    }
+
+    /** `/withdrawheart`: one permanent heart becomes one Heart item. */
+    fun withdraw(player: Player) {
+        val uuid = player.uniqueId
+        itemProblem(player)?.let { return send(player, it) }
+        val limits = limits ?: return
+        val settings = itemSettings
+        if (!settings.withdrawEnabled) return send(player, HeartMessages.WITHDRAW_DISABLED)
+        val now = System.currentTimeMillis()
+        if (!HeartRules.cooldownPassed(lastWithdrawAt[uuid], now, settings.actionCooldownMillis.toLong())) return
+        val cached = loaded[uuid] ?: return send(player, HeartMessages.NOT_LOADED)
+        if (HeartRules.withdraw(cached, limits) == HeartRules.WithdrawDecision.AtMinimum) return send(player, settings.messages.finalHeart)
+        if (player.inventory.firstEmpty() < 0) return send(player, settings.messages.inventoryFull)
+        if (!busy.add(uuid)) return
+        try {
+            lastWithdrawAt[uuid] = now
+            val serial = UUID.randomUUID().toString()
+            val result = try {
+                store.withdraw(uuid, serial, limits, now)
+            } catch (e: Exception) {
+                plugin.logger.severe("[Hearts] Heart withdrawal for ${player.name} failed and was rolled back; nothing changed: ${e.message}")
+                return send(player, HeartMessages.WITHDRAW_FAILED)
+            }
+            when (result) {
+                is HeartStore.WithdrawResult.AtMinimum -> {
+                    loaded[uuid] = result.hearts
+                    apply(player, result.hearts)
+                    send(player, settings.messages.finalHeart)
+                }
+                is HeartStore.WithdrawResult.Unavailable -> {
+                    plugin.logger.warning("[Hearts] ${player.name} couldn't withdraw a heart: ${result.reason}.")
+                    send(player, HeartMessages.WITHDRAW_FAILED)
+                }
+                is HeartStore.WithdrawResult.Withdrawn -> {
+                    loaded[uuid] = result.after
+                    apply(player, result.after)
+                    deliver(player, listOf(result.serial), settings, "withdrawal ${result.transactionId}")
+                    send(player, settings.messages.withdrawn, mapOf("{hearts}" to result.after.toString(), "{maximum}" to limits.maximum.toString()))
+                }
+            }
+        } finally {
+            busy.remove(uuid)
+        }
+    }
+
+    /**
+     * Puts freshly issued Heart items into empty slots (checked by the caller in the same tick), then
+     * saves the player's data. If a slot is somehow gone, the item drops at their feet rather than
+     * vanishing. Building an item can't fail for a valid serial; if it ever did, the serial stays
+     * ISSUED and is logged so staff can void and refund it.
+     */
+    private fun deliver(player: Player, serials: List<String>, settings: LifestealSettings.HeartItems, context: String) {
+        for (serial in serials) {
+            val stack = try {
+                items.create(serial, settings)
+            } catch (e: Exception) {
+                plugin.logger.severe("[Hearts] Couldn't build Heart item $serial for ${player.name} ($context): ${e.message}. Use /lifesteal hearts void $serial refund.")
+                continue
+            }
+            val slot = player.inventory.firstEmpty()
+            if (slot >= 0) player.inventory.setItem(slot, stack)
+            else {
+                player.world.dropItemNaturally(player.location, stack)
+                plugin.logger.warning("[Hearts] ${player.name}'s inventory was full, so Heart item $serial was dropped at their feet ($context).")
+            }
+        }
+        savePlayer(player)
+    }
+
+    /** Writes the player's data file now, so a crash right after a heart-item change can't roll their inventory back. */
+    private fun savePlayer(player: Player) {
+        try {
+            player.saveData()
+        } catch (e: Exception) {
+            plugin.logger.warning("[Hearts] Couldn't save ${player.name}'s player data right after a Heart item change: ${e.message}")
+        }
+    }
+
+    /**
+     * Right-click redemption of the Heart item in [hand]. The listener only calls this for one hand
+     * per click (main hand first). One attempt per player per tick, and at most one per
+     * `action-cooldown-millis`. The item is only taken after the transaction committed.
+     */
+    fun redeem(player: Player, hand: EquipmentSlot) {
+        val uuid = player.uniqueId
+        val serial = when (val read = items.read(player.inventory.getItem(hand))) {
+            HeartItem.Read.NotHeart -> return
+            is HeartItem.Read.Malformed -> {
+                plugin.logger.warning("[Hearts] ${player.name} tried to redeem a broken Heart item (${read.reason}).")
+                return send(player, HeartMessages.INVALID_ITEM)
+            }
+            is HeartItem.Read.Heart -> read.serial
+        }
+        val tick = Bukkit.getCurrentTick()
+        if (lastRedeemTick.put(uuid, tick) == tick) return
+        val settings = itemSettings
+        val now = System.currentTimeMillis()
+        if (!HeartRules.cooldownPassed(lastRedeemAt[uuid], now, settings.actionCooldownMillis.toLong())) return
+        lastRedeemAt[uuid] = now
+        itemProblem(player)?.let { return send(player, if (it == HeartMessages.NOT_LOADED) settings.messages.redeemFailed else it) }
+        val limits = limits ?: return
+        if (!settings.redeemEnabled) return send(player, HeartMessages.REDEEM_DISABLED)
+        val maximum = mapOf("{maximum}" to limits.maximum.toString())
+        val cached = loaded[uuid] ?: return send(player, settings.messages.redeemFailed)
+        if (HeartRules.redeem(cached, limits) == HeartRules.RedeemDecision.AtMaximum) return send(player, settings.messages.maximum, maximum)
+        if (!busy.add(uuid)) return
+        try {
+            val result = try {
+                store.redeem(uuid, serial, limits, now)
+            } catch (e: Exception) {
+                plugin.logger.severe("[Hearts] Redeeming Heart item $serial for ${player.name} failed and was rolled back; nothing changed: ${e.message}")
+                return send(player, settings.messages.redeemFailed)
+            }
+            when (result) {
+                is HeartStore.RedeemResult.Redeemed -> {
+                    removeRedeemed(player, hand, serial)
+                    loaded[uuid] = result.after
+                    apply(player, result.after)
+                    savePlayer(player)
+                    send(player, settings.messages.redeemed, maximum + ("{hearts}" to result.after.toString()))
+                }
+                is HeartStore.RedeemResult.AtMaximum -> {
+                    loaded[uuid] = result.hearts
+                    apply(player, result.hearts)
+                    send(player, settings.messages.maximum, maximum)
+                }
+                HeartStore.RedeemResult.UnknownItem -> {
+                    plugin.logger.warning("[Hearts] ${player.name} tried to redeem a Heart item whose serial $serial was never issued (forged).")
+                    plugin.antiDupeManager.record(player, "Forged Heart Item", AntiDupeManager.RiskLevel.HIGH, item = "Lifesteal Heart", amount = "1", source = "Heart redemption", transactionId = serial)
+                    send(player, HeartMessages.INVALID_ITEM)
+                }
+                is HeartStore.RedeemResult.AlreadyRedeemed -> {
+                    plugin.logger.warning("[Hearts] ${player.name} tried to redeem Heart item $serial, which was already redeemed by ${result.by} (a copy).")
+                    plugin.antiDupeManager.record(player, "Duplicate Heart Item Redemption", AntiDupeManager.RiskLevel.CRITICAL, item = "Lifesteal Heart", amount = "1", source = "Heart redemption", transactionId = serial)
+                    send(player, HeartMessages.ALREADY_REDEEMED)
+                }
+                HeartStore.RedeemResult.Voided -> send(player, HeartMessages.VOIDED_ITEM)
+                is HeartStore.RedeemResult.Unavailable -> {
+                    plugin.logger.warning("[Hearts] ${player.name} couldn't redeem Heart item $serial: ${result.reason}.")
+                    send(player, settings.messages.redeemFailed)
+                }
+            }
+        } finally {
+            busy.remove(uuid)
+        }
+    }
+
+    /** Takes exactly the redeemed item: the one in [hand], or wherever that serial is now (it can't have moved within the tick). */
+    private fun removeRedeemed(player: Player, hand: EquipmentSlot, serial: String) {
+        val inventory = player.inventory
+        if (items.read(inventory.getItem(hand)) == HeartItem.Read.Heart(serial)) {
+            inventory.setItem(hand, null)
+        } else {
+            val slot = inventory.contents.indexOfFirst { items.read(it) == HeartItem.Read.Heart(serial) }
+            if (slot >= 0) inventory.setItem(slot, null)
+            else plugin.logger.warning("[Hearts] Heart item $serial was redeemed by ${player.name} but had already left their inventory; that copy is now worthless.")
+        }
+        player.updateInventory()
+    }
+
+    /** `/lifesteal hearts give`: staff-made, recorded Heart items for an online Lifesteal player. */
+    fun grantItems(target: Player, amount: Int, actor: String, actorName: String): HeartStore.GrantResult {
+        if (amount < 1 || amount > HeartRules.MAX_ADMIN_ITEM_GRANT) {
+            return HeartStore.GrantResult.Invalid("The amount must be between 1 and ${HeartRules.MAX_ADMIN_ITEM_GRANT}.")
+        }
+        itemProblem(target)?.let { return HeartStore.GrantResult.Invalid("${target.name} can't receive Heart items right now (they must be online and loaded in Lifesteal).") }
+        val free = target.inventory.storageContents.count { it == null || it.type.isAir }
+        if (free < amount) return HeartStore.GrantResult.Invalid("${target.name} only has $free free inventory slot(s); Heart items don't stack.")
+        val serials = List(amount) { UUID.randomUUID().toString() }
+        val result = store.grantItems(target.uniqueId, serials, actor, actorName, System.currentTimeMillis())
+        if (result is HeartStore.GrantResult.Granted) {
+            deliver(target, result.serials, itemSettings, "staff grant ${result.transactionId}")
+            plugin.logger.info("[Hearts] $actorName gave ${target.name} $amount Heart item(s) (transaction ${result.transactionId}).")
+        }
+        return result
+    }
+
+    fun outstandingItems(uuid: UUID): List<HeartStore.ItemRow> = store.outstandingItems(uuid)
+
+    /** `/lifesteal hearts void <serial> [refund]`: staff recovery for a lost Heart item. */
+    fun voidItem(serial: String, refund: Boolean, actor: String, actorName: String): HeartStore.VoidResult {
+        val limits = limits ?: return HeartStore.VoidResult.Refused("Hearts are paused: lifesteal.yml is invalid.")
+        val result = store.voidItem(serial, refund, limits, actor, actorName, System.currentTimeMillis())
+        if (result is HeartStore.VoidResult.Voided) {
+            plugin.logger.info("[Hearts] $actorName voided Heart item $serial${if (result.refunded) " and refunded its heart (${result.before} -> ${result.after})" else ""} (transaction ${result.transactionId}).")
+            val after = result.after
+            val online = Bukkit.getPlayer(result.owner)
+            if (after != null && online != null && online.isOnline && isLifesteal(online)) {
+                loaded[result.owner] = after
+                apply(online, after)
+                send(online, HeartMessages.ADMIN_CHANGED_TARGET, mapOf("{hearts}" to after.toString()))
+            }
+        }
+        return result
     }
 
     // ── Administration ──────────────────────────────────────

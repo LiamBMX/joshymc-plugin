@@ -21,4 +21,17 @@ object HeartMessages {
     const val TRANSFER_FAILED = "&cYour hearts couldn't be updated just now, so nothing changed."
 
     const val ADMIN_CHANGED_TARGET = "&7Your hearts are now &c{hearts}❤&7."
+
+    // Heart items (issue #1344). The six main ones are in lifesteal.yml > heart-items.messages.
+    const val NOT_LIFESTEAL_SERVER = "&cHearts only exist on the Lifesteal server."
+    const val NOT_IN_LIFESTEAL = "&cHeart items only work in Lifesteal."
+    const val PAUSED = "&cHearts are paused right now. Please try again later."
+    const val NOT_NOW = "&cYou can't do that right now."
+    const val NOT_LOADED = "&cYour hearts haven't loaded yet. Please rejoin and try again."
+    const val WITHDRAW_DISABLED = "&cHeart withdrawal is disabled right now."
+    const val REDEEM_DISABLED = "&cRedeeming Heart items is disabled right now."
+    const val WITHDRAW_FAILED = "&cYour heart couldn't be withdrawn just now, so nothing changed. Please try again."
+    const val INVALID_ITEM = "&cThis Heart item isn't valid and can't be redeemed."
+    const val ALREADY_REDEEMED = "&cThis Heart item has already been redeemed."
+    const val VOIDED_ITEM = "&cThis Heart item was voided by staff and can't be redeemed."
 }

@@ -200,6 +200,57 @@ object HeartRules {
         }
     }
 
+    // ── Heart items (issue #1344) ───────────────────────────
+
+    /** Hearts one Heart item holds. */
+    const val HEARTS_PER_ITEM = 1
+
+    /** The most Heart items one admin grant creates (one inventory's worth of single items). */
+    const val MAX_ADMIN_ITEM_GRANT = 36
+
+    sealed interface WithdrawDecision {
+        data class Withdraw(val after: Int) : WithdrawDecision
+        /** Withdrawing would take the player below the minimum (their final heart). */
+        data object AtMinimum : WithdrawDecision
+    }
+
+    /** One heart out of [current] (the stored value, clamped first), never below the minimum. */
+    fun withdraw(current: Int, limits: Limits): WithdrawDecision {
+        val hearts = limits.clamp(current)
+        return if (hearts - HEARTS_PER_ITEM < limits.minimum) WithdrawDecision.AtMinimum
+        else WithdrawDecision.Withdraw(hearts - HEARTS_PER_ITEM)
+    }
+
+    sealed interface RedeemDecision {
+        data class Redeem(val after: Int) : RedeemDecision
+        /** Redeeming would take the player above the maximum: the item is kept. */
+        data object AtMaximum : RedeemDecision
+    }
+
+    /** One heart onto [current] (the stored value, clamped first), never above the maximum. */
+    fun redeem(current: Int, limits: Limits): RedeemDecision {
+        val hearts = limits.clamp(current)
+        return if (hearts + HEARTS_PER_ITEM > limits.maximum) RedeemDecision.AtMaximum
+        else RedeemDecision.Redeem(hearts + HEARTS_PER_ITEM)
+    }
+
+    /**
+     * A Heart item's serial as stored on the item, or null unless it is a canonical lower-case UUID
+     * (what [HeartStore] issues). Anything else is a forged or broken item.
+     */
+    fun parseSerial(raw: String?): String? {
+        if (raw == null || raw.length != 36) return null
+        val uuid = runCatching { UUID.fromString(raw) }.getOrNull() ?: return null
+        return raw.takeIf { it == uuid.toString() }
+    }
+
+    /** Whether one player may act again: [lastAt] null (never) or at least [cooldownMillis] ago. A clock going back counts as "just now". */
+    fun cooldownPassed(lastAt: Long?, now: Long, cooldownMillis: Long): Boolean {
+        if (lastAt == null || cooldownMillis <= 0) return true
+        if (lastAt > now) return false
+        return now - lastAt >= cooldownMillis
+    }
+
     /** Remaining cooldown for players: `30m`, `1m 31s`, `45s`, `2h 0m`. */
     fun formatDuration(millis: Long): String {
         val totalSeconds = ((millis + 999) / 1000).coerceAtLeast(1)

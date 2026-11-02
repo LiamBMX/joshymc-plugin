@@ -5,7 +5,7 @@
 # server never does. Every Paper server keeps its own copy; nothing here is shared.
 #
 # These are the approved Lifesteal Master Blueprint v1.1 defaults. The heart system uses the
-# hearts and pvp sections (docs/lifesteal-hearts.md); teams, Ranked Team Wars, seasons and the
+# hearts, pvp and heart-items sections (docs/lifesteal-hearts.md); teams, Ranked Team Wars, seasons and the
 # launch unlocks are added by later updates, which read these values. Check the file with
 # /jgamemode info after editing it. While the file is invalid, hearts are paused (nothing is
 # granted, stolen or changed, and stored hearts are kept as they are).
@@ -57,3 +57,32 @@ progression:
   ranked-team-wars-unlock-day: 3
   # Season day the End dimension unlocks.
   end-unlock-day: 7
+
+# Physical Heart items (docs/lifesteal-hearts.md, "Heart items"). /withdrawheart turns one of your
+# hearts into a Heart item; right-clicking a Heart item adds it back. The minimum and maximum
+# above always apply: the final heart can never be withdrawn, and nobody redeems past the maximum.
+# The blueprint doesn't define the item's look, so it is configured here. Every Heart item has a
+# server-side serial number, so changing the look never invalidates existing items.
+heart-items:
+  # Allow /withdrawheart.
+  withdraw-enabled: true
+  # Allow redeeming Heart items with right-click.
+  redeem-enabled: true
+  # Name of newly made Heart items (& colour codes).
+  display-name: "&c&lHeart"
+  # Optional resource pack item model (namespace:path) for Java players. Empty = the plain Nether
+  # Star, which is also what Bedrock players see.
+  item-model: ""
+  # Enchantment glint on Heart items.
+  glint: true
+  # Safeguard against click and command spam: minimum milliseconds between two withdrawals or two
+  # redemptions by one player (0 to 60000).
+  action-cooldown-millis: 500
+  # Player messages (& colour codes). {maximum} is the maximum hearts.
+  messages:
+    withdrawn: "&aYou withdrew &c1 Heart&a!"
+    redeemed: "&aYou redeemed &c1 Heart&a!"
+    final-heart: "&cYou cannot withdraw your final heart!"
+    maximum: "&cYou have already reached the maximum of {maximum} hearts!"
+    inventory-full: "&cYou need inventory space to withdraw a heart!"
+    redeem-failed: "&cUnable to redeem this heart. Please try again."
