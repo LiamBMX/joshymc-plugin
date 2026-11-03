@@ -113,6 +113,8 @@ class ListenerManager(private val plugin: Joshymc) {
         scoped(CandyCornListener(plugin), GamemodeFeature.CUSTOM_ITEMS)
         pm.registerEvents(TomatoListener(plugin), plugin)
         pm.registerEvents(VikingBoomerangListener(plugin), plugin)
+        // GUI icons are Sticks underneath: never craftable or burnable (issue #1355). Unscoped protection.
+        pm.registerEvents(com.liam.joshymc.listener.GuiIconListener(plugin), plugin)
         pm.registerEvents(MinecraftChatListener(plugin), plugin)
         // Before WelcomeListener (also NORMAL), so a blocked spam message never counts as a welcome.
         pm.registerEvents(com.liam.joshymc.listener.ChatSpamListener(plugin), plugin)
