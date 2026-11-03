@@ -4,6 +4,8 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.util.Msg
+import com.liam.joshymc.teleport.CombatTeleportGuard
+import com.liam.joshymc.teleport.CombatTeleportRules
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -320,6 +322,9 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             cooldowns[player.uniqueId] = System.currentTimeMillis()
             return
         }
+        // The safe-spot search ran over several ticks (and the RTP GUI may have stayed open), so
+        // the combat check from /rtp is re-run here and on every warmup tick (issue #1356).
+        if (CombatTeleportGuard.blocks(plugin, player)) return
         if (PvpTeleportGuard.blocks(plugin, player, destination)) return
 
         val startLoc = player.location.clone()
@@ -328,17 +333,22 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             var ticks = 0
 
             override fun run() {
-                if (!player.isOnline) {
-                    cancel()
-                    return
-                }
-
-                if (player.location.blockX != startLoc.blockX ||
+                val moved = player.location.blockX != startLoc.blockX ||
                     player.location.blockY != startLoc.blockY ||
-                    player.location.blockZ != startLoc.blockZ) {
-                    plugin.commsManager.sendActionBar(player, Component.text("Teleportation cancelled. You moved.", NamedTextColor.RED))
-                    cancel()
-                    return
+                    player.location.blockZ != startLoc.blockZ
+                when (CombatTeleportRules.warmupStep(player.isOnline, moved, plugin.combatManager.isTagged(player), ticks >= 60)) {
+                    CombatTeleportRules.WarmupStep.CANCEL_OFFLINE -> { cancel(); return }
+                    CombatTeleportRules.WarmupStep.CANCEL_MOVED -> {
+                        plugin.commsManager.sendActionBar(player, Component.text("Teleportation cancelled. You moved.", NamedTextColor.RED))
+                        cancel()
+                        return
+                    }
+                    CombatTeleportRules.WarmupStep.CANCEL_COMBAT -> {
+                        CombatTeleportGuard.notifyCancelled(plugin, player)
+                        cancel()
+                        return
+                    }
+                    CombatTeleportRules.WarmupStep.CONTINUE, CombatTeleportRules.WarmupStep.TELEPORT -> {}
                 }
 
                 val secondsLeft = 3 - (ticks / 20)

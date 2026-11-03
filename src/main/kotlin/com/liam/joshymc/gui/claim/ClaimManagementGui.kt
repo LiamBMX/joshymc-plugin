@@ -4,6 +4,7 @@ import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.ClaimManager
+import com.liam.joshymc.teleport.CombatTeleportGuard
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -106,6 +107,7 @@ object ClaimManagementGui {
         val y = world.getHighestBlockYAt(cx, cz) + 1
         val destination = Location(world, cx + 0.5, y.toDouble(), cz + 0.5)
         player.closeInventory()
+        if (CombatTeleportGuard.blocks(plugin, player)) return
         if (PvpTeleportGuard.blocks(plugin, player, destination)) return
         player.teleport(destination)
     }

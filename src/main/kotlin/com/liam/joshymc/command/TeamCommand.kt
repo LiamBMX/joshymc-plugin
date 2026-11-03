@@ -7,6 +7,7 @@ import com.liam.joshymc.gui.team.TeamTopGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.TeamManager
 import com.liam.joshymc.util.Msg
+import com.liam.joshymc.teleport.CombatTeleportGuard
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -771,6 +772,8 @@ class TeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
+        // Issue #1356: the combat command filter only sees "/team", so the subcommand checks itself.
+        if (CombatTeleportGuard.blocks(plugin, player)) return
         if (PvpTeleportGuard.blocks(plugin, player, home)) return
         if (!player.teleport(home)) return
         plugin.commsManager.send(player, Component.text("Teleported to team home.", NamedTextColor.GREEN), CommunicationsManager.Category.DEFAULT)
