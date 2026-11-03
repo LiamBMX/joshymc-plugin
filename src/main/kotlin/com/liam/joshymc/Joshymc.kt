@@ -90,6 +90,12 @@ class Joshymc : JavaPlugin() {
         // config.yml: these are admin-defined name->value maps (rank ids, purchasable-rank
         // keys) shipped with example entries, not fixed plugin schema. Restoring entries an
         // admin deleted from these breaks LuckPerms setups that reuse rank names. Issue #911.
+        // Issue #1359: the old hardcoded invite ServerBar line and its server-info replacement.
+        private const val OLD_INVITE_BOSSBAR_LINE =
+            "&a&lINVITE YOUR FRIENDS &8» &fIP: &eplay.joshymc.net &7| &fPort: &e25565"
+        private const val NEW_INVITE_BOSSBAR_LINE =
+            "&a&lINVITE YOUR FRIENDS &8» &fIP: &e{ip} &7| &fBedrock Port: &e{bedrock_port}"
+
         private val NO_BACKFILL_SECTION_PREFIXES = listOf(
             "ranks.list.",
             "homes.limits-by-rank.",
@@ -1554,6 +1560,15 @@ class Joshymc : JavaPlugin() {
         val questMasterRewardKey = "quests.quest-master.reward.commands"
         if (config.getStringList(questMasterRewardKey) == listOf("credits give {player} 100")) {
             config.set(questMasterRewardKey, listOf("credits give {player} 1000"))
+            changed++
+        }
+
+        // Issue #1359: the invite ServerBar line hardcoded the old port. Swap only the untouched
+        // old default line for the placeholder version, which reads server-info.
+        val bossBarKey = "rotating-bossbar.messages"
+        val bossBarMessages = config.getStringList(bossBarKey)
+        if (OLD_INVITE_BOSSBAR_LINE in bossBarMessages) {
+            config.set(bossBarKey, bossBarMessages.map { if (it == OLD_INVITE_BOSSBAR_LINE) NEW_INVITE_BOSSBAR_LINE else it })
             changed++
         }
 

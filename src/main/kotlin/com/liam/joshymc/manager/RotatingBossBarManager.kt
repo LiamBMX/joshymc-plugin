@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.util.ServerConnectionInfo
 import net.kyori.adventure.bossbar.BossBar
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
@@ -32,7 +33,12 @@ class RotatingBossBarManager(private val plugin: Joshymc) : Listener {
         stop()
         if (!plugin.config.getBoolean("rotating-bossbar.enabled", true)) return
 
-        messages = plugin.config.getStringList("rotating-bossbar.messages").filter { it.isNotBlank() }
+        // Issue #1359: {ip}, {java_port} and {bedrock_port} come from server-info, the same
+        // values /ip shows, so the address lives in one place. Filled once per start (and reload).
+        val connection = ServerConnectionInfo.from(plugin.config)
+        messages = plugin.config.getStringList("rotating-bossbar.messages")
+            .filter { it.isNotBlank() }
+            .map { connection.fill(it) }
         if (messages.isEmpty()) {
             plugin.logger.info("[RotatingBossBar] No messages configured, skipping.")
             return

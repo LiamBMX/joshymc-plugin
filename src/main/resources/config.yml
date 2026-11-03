@@ -201,10 +201,14 @@ chat:
     mute-duration-seconds: 3600
     mute-reason: "Spam"
 
-# Server connection info shown by /ip
+# Server connection info shown by /ip and the rotating ServerBar ({ip}, {java_port}, {bedrock_port}).
+# Display only: this never changes a listening port.
+#   port:         Java Edition port
+#   bedrock-port: Bedrock Edition (Geyser) port
 server-info:
   ip: "play.joshymc.net"
   port: 25565
+  bedrock-port: 8160
 
 discord:
   # Bot token from https://discord.com/developers/applications
@@ -890,7 +894,7 @@ rotating-bossbar:
   messages:
     - "&6&lJOSHYMC STORE &8» &fGet exclusive items at &estore.joshymc.net"
     - "&b&lJOIN OUR DISCORD &8» &fJoin our community at &bdiscord.gg/joshymc"
-    - "&a&lINVITE YOUR FRIENDS &8» &fIP: &eplay.joshymc.net &7| &fPort: &e25565"
+    - "&a&lINVITE YOUR FRIENDS &8» &fIP: &e{ip} &7| &fBedrock Port: &e{bedrock_port}"
 
 # Welcome / MOTD — join/leave messages
 welcome:
