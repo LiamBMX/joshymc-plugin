@@ -212,12 +212,16 @@ commands:
     permission: joshymc.transfer.survival
   lifesteal:
     description: Go to Lifesteal SMP (admins on the Lifesteal server also manage hearts with /lifesteal hearts)
-    usage: /lifesteal [progress|hearts <get|set|add|remove|give|items|void> ...|combat <status|logs|incident|failures> ...|admin launch <status|schedule|activate|audit> ...|admin arena <create|delete|list|info|setname|setcorner|setspawn|setspectator|clearspawns|sizes|enable|disable> ...|admin ranked <testmatch|list|info|cancel|remove|restore|spectate|unspectate> ...]
+    usage: /lifesteal [progress|hearts <get|set|add|remove|give|items|void> ...|combat <status|logs|incident|failures> ...|admin launch <status|schedule|activate|audit> ...|admin arena <create|delete|list|info|setname|setcorner|setspawn|setspectator|clearspawns|sizes|enable|disable> ...|admin ranked <testmatch|list|info|cancel|remove|restore|spectate|unspectate|queue|cancelqueue|cancelproposal|queuelog> ...]
     permission: joshymc.transfer.lifesteal
   withdrawheart:
     description: Turn one of your permanent hearts into a Heart item (Lifesteal only)
     usage: /withdrawheart
     permission: joshymc.lifesteal.withdraw
+  ranked:
+    description: Ranked Team Wars queues, match confirmations and team challenges (Lifesteal only)
+    usage: /ranked [queue <2v2|3v3|4v4|5v5> [teammates]|leave|status|accept|decline|challenge <team> <size> [teammates]|challenge accept|decline <team>|challenge cancel|challenges]
+    permission: joshymc.lifesteal.ranked.use
   unstuck:
     description: Get out of a spot where you're frozen midair or the world didn't load
     usage: /unstuck [player]
@@ -973,13 +977,16 @@ permissions:
     description: Enter the Lifesteal End before it unlocks (staff emergencies only; explicit grant, not given to ops by default)
     default: false
   joshymc.lifesteal.ranked.admin:
-    description: Ranked Team Wars staff tools on the Lifesteal server (/lifesteal admin arena ... and /lifesteal admin ranked testmatch|list|info|cancel|remove|restore|spectate)
+    description: Ranked Team Wars staff tools on the Lifesteal server (/lifesteal admin arena ... and /lifesteal admin ranked testmatch|list|info|cancel|remove|restore|spectate, and the matchmaking diagnostics queue|cancelqueue|cancelproposal|queuelog)
     default: op
     children:
       joshymc.lifesteal.ranked.spectate: true
   joshymc.lifesteal.ranked.spectate:
     description: Watch a running Ranked Team Wars match from its spectator point (/lifesteal admin ranked spectate|unspectate; no damage, no item pickup)
     default: op
+  joshymc.lifesteal.ranked.use:
+    description: Use /ranked on the Lifesteal server (queue with your team, accept matches, team challenges)
+    default: true
   joshymc.transfer.bypass-cooldown:
     description: Skip the cross-server transfer cooldown
     default: op

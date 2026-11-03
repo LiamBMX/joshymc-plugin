@@ -181,6 +181,8 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
     fun onQuit(event: PlayerQuitEvent) {
         lastHint.remove(event.player.uniqueId)
         ranked.onQuit(event.player)
+        // Issue #1363: a queued/confirming player's team entry ends (a created match stays the match manager's).
+        plugin.lifestealRankedQueueManager.onQuit(event.player)
     }
 
     // ── Movement, teleports, boundaries ─────────────────────

@@ -229,6 +229,26 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
                 ranked.unspectate(player)?.let { return Msg.error(sender, it) }
                 Msg.success(sender, "Stopped spectating.")
             }
+            // Issue #1363: matchmaking diagnostics (memory only, except queuelog).
+            "queue" -> queueOverview(sender)
+            "cancelqueue" -> {
+                val id = a.getOrNull(0) ?: return Msg.usage(sender, "/lifesteal admin ranked cancelqueue <entry|team> [confirm]")
+                if (!confirmed(a, 1)) return confirm(sender, "This ends queue entry/team '$id' (its players are told; nothing happens to inventories or hearts).", "/lifesteal admin ranked cancelqueue $id confirm")
+                plugin.lifestealRankedQueueManager.adminCancelEntry(sender.name, id)?.let { return Msg.error(sender, it) }
+                Msg.success(sender, "Queue entry '$id' cancelled.")
+            }
+            "cancelproposal" -> {
+                val id = a.getOrNull(0) ?: return Msg.usage(sender, "/lifesteal admin ranked cancelproposal <proposal> [confirm]")
+                if (!confirmed(a, 1)) return confirm(sender, "This ends found match '$id' and both of its queue entries (players can queue again at once).", "/lifesteal admin ranked cancelproposal $id confirm")
+                plugin.lifestealRankedQueueManager.adminCancelProposal(sender.name, id)?.let { return Msg.error(sender, it) }
+                Msg.success(sender, "Proposal '$id' cancelled.")
+            }
+            "queuelog" -> {
+                val rows = try { plugin.lifestealRankedQueueManager.recentAudit(15) } catch (e: Exception) { return Msg.error(sender, "Couldn't read the queue log: ${e.message}") }
+                sender.sendMessage(Component.text("Ranked queue log (newest first)", NamedTextColor.GOLD, TextDecoration.BOLD))
+                if (rows.isEmpty()) sender.sendMessage(Component.text("Nothing logged yet.", NamedTextColor.GRAY))
+                for (r in rows) sender.sendMessage(Component.text("${time(r.at)} ${r.kind} ${r.ref ?: ""} ${r.uuid?.let { plugin.lifestealTeamManager.nameOf(it) } ?: ""} ${r.detail ?: ""}".replace(Regex(" +"), " ").trim(), NamedTextColor.GRAY))
+            }
             else -> Msg.usage(sender, RANKED_USAGE)
         }
     }
@@ -249,8 +269,36 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
                 r.outcome == "CANCELLED" -> "cancelled: ${r.cancelReason ?: "?"}"
                 else -> r.state?.name ?: "?"
             }
-            sender.sendMessage(Component.text("${r.id} ${time(r.createdAt)} ${r.teamAName} vs ${r.teamBName} ${r.size}v${r.size}${if (r.test) " TEST" else ""}: $result (restore ${r.restoration})", NamedTextColor.GRAY))
+            sender.sendMessage(Component.text("${r.id} ${time(r.createdAt)} ${r.teamAName} vs ${r.teamBName} ${r.size}v${r.size} ${r.kind.name}: $result (restore ${r.restoration})", NamedTextColor.GRAY))
         }
+    }
+
+    private fun queueOverview(sender: CommandSender) {
+        val q = plugin.lifestealRankedQueueManager
+        val teams = plugin.lifestealTeamManager
+        val now = System.currentTimeMillis()
+        fun secs(ms: Long) = if (ms <= 0) 0 else (ms + 999) / 1000
+        sender.sendMessage(Component.text("Ranked matchmaking", NamedTextColor.GOLD, TextDecoration.BOLD))
+        line(sender, "State", q.unavailableReason(now) ?: "open", if (q.unavailableReason(now) == null) NamedTextColor.GREEN else NamedTextColor.RED)
+        line(sender, "Queues", q.allowedSizes.joinToString { "${it}v$it: ${q.waitingCount(it)} waiting" }.ifEmpty { "none" })
+        line(sender, "Reserved arenas", (q.reservedArenas().map { "$it (proposal)" } + ranked.heldArenaIds().map { "$it (match)" }).joinToString().ifEmpty { "none" })
+        line(sender, "Cooldowns", q.cooldownCounts())
+        val entries = q.entries()
+        if (entries.isEmpty()) sender.sendMessage(Component.text("No queue entries.", NamedTextColor.GRAY))
+        for (e in entries) {
+            val roster = e.participants.joinToString { teams.nameOf(it) + if (e.state == com.liam.joshymc.lifesteal.ranked.queue.QueueState.FORMING && it !in e.consented) "?" else "" }
+            val age = secs(now - e.stateSince)
+            sender.sendMessage(Component.text("${e.id} ${e.kind} ${e.teamName} ${e.size}v${e.size} ${e.state} ${age}s [$roster]${e.problem?.let { " paused: $it" } ?: ""}", if (age > STUCK_SECONDS && e.state != com.liam.joshymc.lifesteal.ranked.queue.QueueState.WAITING) NamedTextColor.RED else NamedTextColor.YELLOW))
+        }
+        for (p in q.proposals()) {
+            val a = q.entry(p.entryA)?.teamName ?: p.entryA
+            val b = q.entry(p.entryB)?.teamName ?: p.entryB
+            sender.sendMessage(Component.text("${p.id} ${p.kind} $a vs $b ${p.size}v${p.size} ${p.state} arena ${p.arenaId}, accepted ${p.accepted.size}/${p.participants.size}, ${secs(p.expiresAt - now)}s left", NamedTextColor.AQUA))
+        }
+        for (c in q.challenges()) {
+            sender.sendMessage(Component.text("${c.id} challenge ${c.fromTeamName} -> ${c.toTeamName} ${c.size}v${c.size} ${c.state}${if (c.state == com.liam.joshymc.lifesteal.ranked.queue.ChallengeState.PENDING) ", ${secs(c.expiresAt - now)}s left" else ""}", NamedTextColor.LIGHT_PURPLE))
+        }
+        sender.sendMessage(Component.text("Red = possibly stuck. /lifesteal admin ranked cancelqueue <entry|team> | cancelproposal <id> | queuelog", NamedTextColor.DARK_GRAY))
     }
 
     private fun matchInfo(sender: CommandSender, id: String) {
@@ -259,6 +307,7 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
         val live = ranked.match(id)
         sender.sendMessage(Component.text("Ranked match ${record.id}${if (record.test) " (TEST)" else ""}", NamedTextColor.GOLD, TextDecoration.BOLD))
         line(sender, "State", (live?.state ?: record.state)?.name ?: "?")
+        line(sender, "Kind", "${record.kind.label}${record.queueRef?.let { " ($it)" } ?: ""}")
         line(sender, "Season", record.seasonId)
         line(sender, "Arena", record.arenaId)
         line(sender, "Teams", "A ${record.teamAName} (${record.teamAId}) vs B ${record.teamBName} (${record.teamBId}), ${record.size}v${record.size}")
@@ -335,6 +384,8 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
                 group == "ranked" && args[1].lowercase() in setOf("info", "cancel", "spectate") -> filter(ranked.openMatches().map { it.id }, args[2])
                 group == "ranked" && admin && args[1].lowercase() in setOf("remove", "restore") -> filter(Bukkit.getOnlinePlayers().map { it.name }, args[2])
                 group == "ranked" && admin && args[1].equals("testmatch", true) -> filter(plugin.lifestealTeamManager.allTeams().map { it.name }, args[2])
+                group == "ranked" && admin && args[1].equals("cancelqueue", true) -> filter(plugin.lifestealRankedQueueManager.entries().flatMap { listOf(it.id, it.teamName) }, args[2])
+                group == "ranked" && admin && args[1].equals("cancelproposal", true) -> filter(plugin.lifestealRankedQueueManager.proposals().map { it.id }, args[2])
                 else -> emptyList()
             }
             4 -> when {
@@ -343,7 +394,7 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
                 group == "arena" && args[1].lowercase() == "setcorner" -> filter(listOf("1", "2"), args[3])
                 group == "arena" && args[1].lowercase() == "sizes" -> filter(listOf("2,3,4,5", "all"), args[3])
                 group == "arena" && args[1].lowercase() == "delete" -> filter(listOf("confirm"), args[3])
-                group == "ranked" && args[1].lowercase() in setOf("cancel", "remove") -> filter(listOf("confirm"), args[3])
+                group == "ranked" && args[1].lowercase() in setOf("cancel", "remove", "cancelqueue", "cancelproposal") -> filter(listOf("confirm"), args[3])
                 group == "ranked" && admin && args[1].equals("testmatch", true) -> filter(plugin.lifestealTeamManager.allTeams().map { it.name }, args[3])
                 else -> emptyList()
             }
@@ -355,9 +406,11 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
 
     companion object {
         const val ARENA_USAGE = "/lifesteal admin arena <create|delete|list|info|setname|setcorner|setspawn|setspectator|clearspawns|sizes|enable|disable> ..."
-        const val RANKED_USAGE = "/lifesteal admin ranked <testmatch <teamA> <teamB> <size> [arena]|list|info|cancel|remove|restore|spectate|unspectate> ..."
+        const val RANKED_USAGE = "/lifesteal admin ranked <testmatch <teamA> <teamB> <size> [arena]|list|info|cancel|remove|restore|spectate|unspectate|queue|cancelqueue|cancelproposal|queuelog> ..."
         private val ARENA_SUBS = listOf("create", "delete", "list", "info", "setname", "setcorner", "setspawn", "setspectator", "clearspawns", "sizes", "enable", "disable")
-        private val RANKED_SUBS = listOf("testmatch", "list", "info", "cancel", "remove", "restore", "spectate", "unspectate")
+        private val RANKED_SUBS = listOf("testmatch", "list", "info", "cancel", "remove", "restore", "spectate", "unspectate", "queue", "cancelqueue", "cancelproposal", "queuelog")
+        /** A queue entry this long in a state other than WAITING is shown as possibly stuck. */
+        private const val STUCK_SECONDS = 180L
         private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss'Z'").withZone(ZoneOffset.UTC)
     }
 }
