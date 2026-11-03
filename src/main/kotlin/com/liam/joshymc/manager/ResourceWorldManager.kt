@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.teleport.CombatTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -318,14 +319,23 @@ class ResourceWorldManager(private val plugin: Joshymc) : Listener {
             commsManager.send(player, Component.text("Resource world is not available right now.", NamedTextColor.RED))
             return
         }
+        if (CombatTeleportGuard.blocks(plugin, player)) return
 
         commsManager.send(player, Component.text("Finding a safe location...", NamedTextColor.GRAY))
         findSafeSpot(player, world, 0)
     }
 
+    /** The safe-spot search takes several ticks; a player tagged meanwhile stays put (issue #1356). */
+    private fun enteredCombat(player: Player): Boolean {
+        if (!plugin.combatManager.isTagged(player)) return false
+        CombatTeleportGuard.notifyCancelled(plugin, player)
+        return true
+    }
+
     private fun findSafeSpot(player: Player, world: org.bukkit.World, attempt: Int) {
         if (attempt >= 15) {
             // Fallback: teleport to world spawn
+            if (enteredCombat(player)) return
             player.teleport(world.spawnLocation)
             commsManager.send(player, Component.text("Teleported to resource world spawn.", NamedTextColor.GREEN))
             return
@@ -371,6 +381,7 @@ class ResourceWorldManager(private val plugin: Joshymc) : Listener {
 
                 val safeLoc = Location(world, x + 0.5, highestY + 1.0, z + 0.5,
                     player.location.yaw, player.location.pitch)
+                if (enteredCombat(player)) return@Runnable
                 player.teleport(safeLoc)
                 commsManager.send(player, Component.text("Teleported to the resource world!", NamedTextColor.GREEN))
             })

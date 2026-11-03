@@ -3,6 +3,8 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.util.Msg
+import com.liam.joshymc.teleport.CombatTeleportGuard
+import com.liam.joshymc.teleport.CombatTeleportRules
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -1039,10 +1041,7 @@ object TeleportChecks {
         }
 
         // Combat check
-        if (plugin.combatManager.isTagged(player)) {
-            plugin.commsManager.send(player, Component.text("You cannot teleport while in combat!", NamedTextColor.RED))
-            return true
-        }
+        if (CombatTeleportGuard.blocks(plugin, player)) return true
 
         if (!player.hasPermission("joshymc.tp.nocooldown")) {
             val now = System.currentTimeMillis()
@@ -1063,6 +1062,9 @@ object TeleportChecks {
      * Bypass warmup with joshymc.tp.nocooldown permission.
      */
     fun teleportWithWarmup(player: Player, destination: Location, plugin: com.liam.joshymc.Joshymc, onComplete: (() -> Unit)? = null) {
+        // Callers normally ran checkAndApply already; this covers any path that didn't, and the
+        // staff no-warmup branch below (issue #1356).
+        if (CombatTeleportGuard.blocks(plugin, player)) return
         if (PvpTeleportGuard.blocks(plugin, player, destination)) return
 
         if (!destination.isWorldLoaded) {
@@ -1076,44 +1078,48 @@ object TeleportChecks {
             return
         }
 
-        // Cancel any existing pending teleport
+        // Cancel any existing pending teleport (its countdown included, so no stray messages).
         pendingTeleports.remove(player.uniqueId)?.let { Bukkit.getScheduler().cancelTask(it) }
 
         val startLoc = player.location.clone()
         plugin.commsManager.send(player, Component.text("Teleporting in 3 seconds... don't move!", NamedTextColor.YELLOW))
 
-        // Show countdown
-        Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
-            if (!player.isOnline) return@scheduleSyncDelayedTask
-            if (hasMoved(player, startLoc)) { cancelWarmup(player, plugin); return@scheduleSyncDelayedTask }
-            plugin.commsManager.send(player, Component.text("Teleporting in 2...", NamedTextColor.YELLOW))
-        }, 20L)
-
-        Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
-            if (!player.isOnline) return@scheduleSyncDelayedTask
-            if (hasMoved(player, startLoc)) { cancelWarmup(player, plugin); return@scheduleSyncDelayedTask }
-            plugin.commsManager.send(player, Component.text("Teleporting in 1...", NamedTextColor.YELLOW))
-        }, 40L)
-
-        val taskId = Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
-            pendingTeleports.remove(player.uniqueId)
-            if (!player.isOnline) return@scheduleSyncDelayedTask
-            if (hasMoved(player, startLoc)) { cancelWarmup(player, plugin); return@scheduleSyncDelayedTask }
-            if (plugin.combatManager.isTagged(player)) {
-                plugin.commsManager.send(player, Component.text("Teleport cancelled — you entered combat!", NamedTextColor.RED))
-                return@scheduleSyncDelayedTask
+        // One task for the whole countdown, checked every second: whatever stops it (quit, moving,
+        // a combat tag) cancels it once, so the teleport can't run later and no message repeats.
+        var step = 0
+        var taskId = -1
+        taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, {
+            step++
+            val finished = step * 20L >= WARMUP_TICKS
+            val outcome = CombatTeleportRules.warmupStep(
+                online = player.isOnline,
+                moved = player.isOnline && hasMoved(player, startLoc),
+                tagged = player.isOnline && plugin.combatManager.isTagged(player),
+                finished = finished,
+            )
+            if (outcome != CombatTeleportRules.WarmupStep.CONTINUE) {
+                Bukkit.getScheduler().cancelTask(taskId)
+                pendingTeleports.remove(player.uniqueId, taskId)
             }
-            // Re-check: the player (or a /tpa partner) may have crossed into the PvP world during the warmup.
-            if (PvpTeleportGuard.blocks(plugin, player, destination)) return@scheduleSyncDelayedTask
-
-            teleportNow(player, destination, plugin) {
-                plugin.commsManager.send(player, Component.text("Teleported!", NamedTextColor.GREEN))
-                player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.2f)
-                onComplete?.invoke()
+            when (outcome) {
+                CombatTeleportRules.WarmupStep.CONTINUE ->
+                    plugin.commsManager.send(player, Component.text("Teleporting in ${(WARMUP_TICKS / 20) - step}...", NamedTextColor.YELLOW))
+                CombatTeleportRules.WarmupStep.CANCEL_OFFLINE -> {}
+                CombatTeleportRules.WarmupStep.CANCEL_MOVED -> cancelWarmup(player, plugin)
+                CombatTeleportRules.WarmupStep.CANCEL_COMBAT -> CombatTeleportGuard.notifyCancelled(plugin, player)
+                CombatTeleportRules.WarmupStep.TELEPORT -> {
+                    // Re-check: the player (or a /tpa partner) may have crossed into the PvP world during the warmup.
+                    if (PvpTeleportGuard.blocks(plugin, player, destination)) return@scheduleSyncRepeatingTask
+                    teleportNow(player, destination, plugin) {
+                        plugin.commsManager.send(player, Component.text("Teleported!", NamedTextColor.GREEN))
+                        player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.2f)
+                        onComplete?.invoke()
+                    }
+                }
             }
-        }, WARMUP_TICKS)
+        }, 20L, 20L)
 
-        pendingTeleports[player.uniqueId] = taskId
+        if (taskId != -1) pendingTeleports[player.uniqueId] = taskId
     }
 
     /**
