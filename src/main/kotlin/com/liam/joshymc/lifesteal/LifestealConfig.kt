@@ -52,8 +52,17 @@ data class LifestealSettings(
         val teammateHeartTransfers: Boolean = false,
     )
 
-    /** Team sizes per side: 2 = 2v2 ... 5 = 5v5. Sorted, distinct. */
-    data class RankedTeamWars(val teamSizes: List<Int> = listOf(2, 3, 4, 5))
+    /**
+     * Team sizes per side: 2 = 2v2 ... 5 = 5v5. Sorted, distinct. [countdownSeconds] and
+     * [maxMatchMinutes] are the match lifecycle settings of issue #1361 (`lifesteal/ranked/`): the
+     * countdown after everyone is in the arena, and the time limit after which a match is cancelled
+     * without a winner (infrastructure safety, not a ranked rule).
+     */
+    data class RankedTeamWars(
+        val teamSizes: List<Int> = listOf(2, 3, 4, 5),
+        val countdownSeconds: Int = 10,
+        val maxMatchMinutes: Int = 20,
+    )
 
     data class Seasons(val lengthMonths: Int = 3)
 
@@ -257,6 +266,8 @@ object LifestealConfigParser {
         val teams = teams(get, maxTeam, problems)
 
         val sizes = teamSizes(get("ranked-team-wars.team-sizes"), maxTeam, d.rankedTeamWars.teamSizes, problems)
+        val countdown = int("ranked-team-wars.countdown-seconds", d.rankedTeamWars.countdownSeconds, 3, 60, "seconds of countdown before a ranked match starts")
+        val maxMatch = int("ranked-team-wars.max-match-minutes", d.rankedTeamWars.maxMatchMinutes, 1, 120, "minutes before an unfinished ranked match is cancelled without a winner")
 
         val months = int("seasons.length-months", d.seasons.lengthMonths, 1, MAX_SEASON_MONTHS, "season length in months")
 
@@ -271,7 +282,7 @@ object LifestealConfigParser {
                 hearts = LifestealSettings.Hearts(starting, maximum, minimum),
                 pvp = LifestealSettings.Pvp(cooldown),
                 teams = teams,
-                rankedTeamWars = LifestealSettings.RankedTeamWars(sizes),
+                rankedTeamWars = LifestealSettings.RankedTeamWars(sizes, countdown, maxMatch),
                 seasons = LifestealSettings.Seasons(months),
                 progression = progression,
                 heartItems = heartItems,

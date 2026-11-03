@@ -1,0 +1,990 @@
+package com.liam.joshymc.lifesteal.ranked
+
+import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.lifesteal.LifestealSettings
+import com.liam.joshymc.lifesteal.progression.ProgressionRules
+import com.liam.joshymc.lifesteal.teams.LifestealTeamStore
+import com.liam.joshymc.recovery.SafeSpots
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.title.Title
+import org.bukkit.Bukkit
+import org.bukkit.GameMode
+import org.bukkit.Location
+import org.bukkit.World
+import org.bukkit.command.CommandSender
+import org.bukkit.entity.AbstractArrow
+import org.bukkit.entity.EnderCrystal
+import org.bukkit.entity.ExperienceOrb
+import org.bukkit.entity.Item
+import org.bukkit.entity.Player
+import org.bukkit.event.inventory.InventoryType
+import org.bukkit.event.player.PlayerTeleportEvent
+import org.bukkit.inventory.ItemStack
+import org.bukkit.scheduler.BukkitTask
+import org.bukkit.util.BoundingBox
+import java.time.Duration
+import java.util.Base64
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * Ranked Team Wars arena and match infrastructure (issue #1361). Lifesteal only: on a server that
+ * doesn't host Lifesteal it creates no tables, its listener isn't registered and every action
+ * refuses, so Survival teams, PvP, inventories, arenas and data are never touched.
+ *
+ * There is no public queue and no Elo yet: matches are created by staff (`/lifesteal admin ranked
+ * testmatch`) through the same lifecycle a future matchmaker will use ([createMatch]).
+ *
+ * **Inventory**: players fight with their real Lifesteal gear. Before anything happens to them,
+ * their whole inventory (36 storage slots, armor, off-hand, as Paper's lossless
+ * `serializeAsBytes`, so durability, enchantments, custom enchants, PDC custom item ids and Heart
+ * serials are kept exactly), held slot and return location are written to `data.db` in the same
+ * transaction as the match. Afterwards (win, loss, cancel, death, disconnect, crash) the inventory
+ * is *set* back to that snapshot exactly once (PENDING → RESTORED), so nothing used, dropped or
+ * picked up in the match is gained or lost. While a match holds a player, every way an item could
+ * leave their inventory for good (dropping, containers, ender chest, trades, commands, vouchers,
+ * Heart items, block placing) is refused, so restoring can never duplicate anything.
+ *
+ * **Hearts** are untouched by this system: kills go through the normal heart service
+ * ([com.liam.joshymc.lifesteal.hearts.LifestealHeartManager.onDeath]) with its limits, cooldown
+ * and team checks. Restoring an inventory never restores hearts.
+ *
+ * **Database work**: only at lifecycle edges (match creation, state changes, restorations), each one
+ * short transaction on the local SQLite file, like the heart system. Deaths and disconnects during
+ * combat are queued through `databaseManager.async`; nothing reads or writes per hit or per tick.
+ */
+class LifestealRankedManager(private val plugin: Joshymc) {
+
+    // ── Runtime model ───────────────────────────────────────
+
+    /** A match that is not over. Main thread only. Holds UUIDs, never Player references. */
+    inner class Match(
+        val id: String,
+        val arena: RankedArena,
+        val teamA: LifestealTeamStore.Team,
+        val teamB: LifestealTeamStore.Team,
+        val size: Int,
+        val test: Boolean,
+        val seasonId: String,
+        val createdBy: String,
+        val createdAt: Long,
+        var roster: MatchRoster,
+    ) {
+        var state: MatchState = MatchState.CREATED
+            internal set
+        var startedAt: Long? = null
+            internal set
+        val spectators = LinkedHashSet<UUID>()
+        internal val tasks = mutableListOf<BukkitTask>()
+        internal var decisionPending = false
+        /** Participants whose `allowFlight` this match turned off (given back afterwards). */
+        internal val flightTaken = HashSet<UUID>()
+
+        fun team(side: Side): LifestealTeamStore.Team = if (side == Side.A) teamA else teamB
+        val label: String get() = "${teamA.name} vs ${teamB.name} (${size}v$size${if (test) ", TEST" else ""})"
+
+        internal fun track(task: BukkitTask) {
+            tasks.removeIf { it.isCancelled }
+            tasks += task
+        }
+
+        internal fun cancelTasks() {
+            for (t in tasks) t.cancel()
+            tasks.clear()
+        }
+    }
+
+    private val store = RankedStore(plugin.databaseManager)
+
+    @Volatile private var tablesReady = false
+    @Volatile var settings: LifestealSettings.RankedTeamWars? = null
+        private set
+    private var recoveredThisBoot = false
+
+    private val arenas = LinkedHashMap<String, RankedStore.LoadedArena>()
+    private val matches = LinkedHashMap<String, Match>()
+    /** Participants currently held by a match (not defeated). */
+    private val held = HashMap<UUID, String>()
+    /** Staff spectating a match. */
+    private val spectating = HashMap<UUID, String>()
+    /** Players with a PENDING snapshot (loaded at startup, kept in step afterwards), so joins don't query the DB. */
+    private val pendingRestore: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
+    /** Snapshots of this session's matches, so restoring an online player doesn't read the DB. */
+    private val cachedSnapshots = HashMap<UUID, RankedStore.Snapshot>()
+    /** Players being restored right now (re-entry guard). */
+    private val restoring = HashSet<UUID>()
+    /** Teleports this system started, by player: the listener lets exactly these through. */
+    private val expectedTeleports = HashMap<UUID, Location>()
+
+    val hosted: Boolean get() = ServerGamemode.LIFESTEAL in plugin.networkIdentityManager.hostedGamemodes
+    val active: Boolean get() = hosted && tablesReady && settings != null
+
+    fun isLifesteal(world: World?): Boolean = plugin.gamemodeLockManager.gamemodeOf(world) == ServerGamemode.LIFESTEAL
+
+    // ── Read API (memory only; safe from listeners) ─────────
+
+    /** [uuid] is held by a match: inventory protected, teleports, commands and transfers restricted. */
+    fun holds(uuid: UUID): Boolean = held.containsKey(uuid)
+
+    fun holds(player: Player): Boolean = holds(player.uniqueId)
+
+    fun matchOf(uuid: UUID): Match? = held[uuid]?.let { matches[it] }
+
+    fun spectatorMatch(uuid: UUID): Match? = spectating[uuid]?.let { matches[it] }
+
+    fun isSpectator(uuid: UUID): Boolean = spectating.containsKey(uuid)
+
+    /** Both are still fighting in the same ACTIVE match (no combat tag, PvP toggles don't apply). */
+    fun isMatchFight(a: Player, b: Player): Boolean {
+        val m = matchOf(a.uniqueId) ?: return false
+        return m.state == MatchState.ACTIVE && held[b.uniqueId] == m.id && m.roster.isActive(a.uniqueId) && m.roster.isActive(b.uniqueId)
+    }
+
+    /** Fighting in an ACTIVE match right now. */
+    fun inActiveFight(player: Player): Boolean {
+        val m = matchOf(player.uniqueId) ?: return false
+        return m.state == MatchState.ACTIVE && m.roster.isActive(player.uniqueId)
+    }
+
+    fun hasPendingRestore(uuid: UUID): Boolean = pendingRestore.contains(uuid)
+
+    val anyMatch: Boolean get() = matches.isNotEmpty()
+
+    fun openMatches(): List<Match> = matches.values.toList()
+
+    fun match(id: String): Match? = matches[id]
+
+    /** Matches whose arena is in [world] and that hold players. */
+    fun heldArenasIn(world: World): List<Match> = matches.values.filter { it.state.holdsPlayers && it.arena.world == world.name }
+
+    fun isExpectedTeleport(uuid: UUID, to: Location): Boolean {
+        val expected = expectedTeleports[uuid] ?: return false
+        return expected.world == to.world && expected.distanceSquared(to) < 4.0
+    }
+
+    // ── Arenas ──────────────────────────────────────────────
+
+    fun arenaList(): List<RankedStore.LoadedArena> = arenas.values.toList()
+
+    fun arena(id: String): RankedStore.LoadedArena? = arenas[RankedArenaRules.canonicalId(id)]
+
+    fun holderOf(arenaId: String): Match? = matches.values.firstOrNull { it.arena.id == arenaId }
+
+    fun worldProblem(arena: RankedArena): String? {
+        val world = Bukkit.getWorld(arena.world) ?: return "the world '${arena.world}' isn't loaded (arenas never load or create worlds)"
+        if (!isLifesteal(world)) return "the world '${arena.world}' isn't a Lifesteal world"
+        return null
+    }
+
+    fun validation(loaded: RankedStore.LoadedArena): RankedArenaRules.Validation {
+        val v = RankedArenaRules.validate(loaded.arena, worldProblem(loaded.arena), arenas.values.map { it.arena }, settings?.teamSizes ?: emptyList())
+        val problem = loaded.problem ?: return v
+        return RankedArenaRules.Validation(ArenaReadiness.INVALID, listOf(problem) + v.problems)
+    }
+
+    fun availability(loaded: RankedStore.LoadedArena): ArenaAvailability =
+        RankedArenaRules.availability(loaded.arena, validation(loaded).ready, holderOf(loaded.arena.id)?.state)
+
+    sealed interface ArenaResult {
+        data class Done(val message: String) : ArenaResult
+        data class Refused(val reason: String) : ArenaResult
+        data class NeedsConfirmation(val preview: String) : ArenaResult
+    }
+
+    private fun arenaUnavailable(): String? = when {
+        !hosted -> "Ranked Team Wars only exist on the Lifesteal server."
+        !active -> "Ranked Team Wars are unavailable (lifesteal.yml invalid or the database failed); see the console."
+        else -> null
+    }
+
+    fun createArena(sender: CommandSender, rawId: String, rawName: String?, world: World): ArenaResult {
+        arenaUnavailable()?.let { return ArenaResult.Refused(it) }
+        val id = RankedArenaRules.canonicalId(rawId)
+        if (!RankedArenaRules.validId(id)) return ArenaResult.Refused("Arena ids are 1-32 characters: a-z, 0-9, _ and -.")
+        if (!isLifesteal(world)) return ArenaResult.Refused("Stand in a Lifesteal world to create an arena there.")
+        val name = RankedArenaRules.cleanName(rawName ?: id) ?: return ArenaResult.Refused("The display name must be 1-${RankedArenaRules.MAX_NAME_LENGTH} characters.")
+        val now = System.currentTimeMillis()
+        val created = try {
+            store.createArena(RankedArena(id, name, world.name, null, sizes = settings?.teamSizes?.toSet() ?: RankedArenaRules.ALL_SIZES), now)
+        } catch (e: Exception) {
+            return ArenaResult.Refused("The arena couldn't be saved (${e.message}); nothing changed.")
+        }
+        if (!created) return ArenaResult.Refused("An arena called '$id' already exists.")
+        reloadArena(id)
+        plugin.logger.info("[Ranked] ${sender.name} created arena $id in ${world.name}.")
+        return ArenaResult.Done("Arena '$id' created in ${world.name}. Next: setcorner 1/2, setspawn a/b, then enable.")
+    }
+
+    /** Applies [edit] to arena [rawId] (refused while a match holds it), saved conditionally on its version. */
+    fun editArena(sender: CommandSender, rawId: String, what: String, edit: (RankedArena) -> Pair<RankedArena?, String?>): ArenaResult {
+        arenaUnavailable()?.let { return ArenaResult.Refused(it) }
+        val loaded = arena(rawId) ?: return ArenaResult.Refused("No arena called '$rawId'.")
+        holderOf(loaded.arena.id)?.let { return ArenaResult.Refused("Match ${it.id} is using '${loaded.arena.id}'; edit it after the match.") }
+        val (next, problem) = edit(loaded.arena)
+        if (next == null) return ArenaResult.Refused(problem ?: "Nothing changed.")
+        try {
+            store.updateArena(next, System.currentTimeMillis())
+        } catch (e: RankedStore.StaleWriteException) {
+            reloadArena(loaded.arena.id)
+            return ArenaResult.Refused("The arena changed meanwhile; nothing changed. Try again.")
+        } catch (e: Exception) {
+            return ArenaResult.Refused("The arena couldn't be saved (${e.message}); nothing changed.")
+        }
+        reloadArena(loaded.arena.id)
+        plugin.logger.info("[Ranked] ${sender.name} changed arena ${loaded.arena.id}: $what.")
+        val after = arena(loaded.arena.id)
+        val v = after?.let { validation(it) }
+        // An enabled arena that an edit made unusable is switched off, never left selectable.
+        if (after != null && v != null && after.arena.enabled && !v.ready) {
+            try {
+                store.updateArena(after.arena.copy(enabled = false), System.currentTimeMillis())
+                reloadArena(after.arena.id)
+                return ArenaResult.Done("$what. The arena is no longer ready (${v.problems.joinToString("; ")}), so it was disabled.")
+            } catch (_: Exception) { }
+        }
+        return ArenaResult.Done(what + if (v != null && !v.ready) ". Not ready yet: ${v.problems.joinToString("; ")}" else ".")
+    }
+
+    fun setEnabled(sender: CommandSender, rawId: String, enabled: Boolean): ArenaResult = editArena(sender, rawId, if (enabled) "Enabled" else "Disabled") { arena ->
+        if (arena.enabled == enabled) return@editArena null to "It is already ${if (enabled) "enabled" else "disabled"}."
+        if (enabled) {
+            val v = validation(RankedStore.LoadedArena(arena.copy(enabled = true), arenas[arena.id]?.problem))
+            if (!v.ready) return@editArena null to "It can't be enabled: ${v.problems.joinToString("; ")}."
+        }
+        arena.copy(enabled = enabled) to null
+    }
+
+    fun deleteArena(sender: CommandSender, rawId: String, confirmed: Boolean): ArenaResult {
+        arenaUnavailable()?.let { return ArenaResult.Refused(it) }
+        val loaded = arena(rawId) ?: return ArenaResult.Refused("No arena called '$rawId'.")
+        holderOf(loaded.arena.id)?.let { return ArenaResult.Refused("Match ${it.id} is using '${loaded.arena.id}'; it can't be deleted until the match is over.") }
+        if (!confirmed) return ArenaResult.NeedsConfirmation("This deletes arena '${loaded.arena.id}' (${loaded.arena.displayName}). Match records that used it are kept. World blocks are never touched.")
+        val result = try {
+            store.deleteArena(loaded.arena.id, System.currentTimeMillis())
+        } catch (e: Exception) {
+            return ArenaResult.Refused("The arena couldn't be deleted (${e.message}); nothing changed.")
+        }
+        reloadArena(loaded.arena.id)
+        return when (result) {
+            RankedStore.DeleteResult.DELETED -> {
+                plugin.logger.warning("[Ranked] ${sender.name} deleted arena ${loaded.arena.id}.")
+                ArenaResult.Done("Arena '${loaded.arena.id}' deleted.")
+            }
+            RankedStore.DeleteResult.NOT_FOUND -> ArenaResult.Refused("No arena called '$rawId'.")
+            RankedStore.DeleteResult.IN_USE -> ArenaResult.Refused("A match that isn't over still uses '${loaded.arena.id}'.")
+        }
+    }
+
+    private fun reloadArena(id: String) {
+        try {
+            val loaded = store.arena(id)
+            if (loaded == null) arenas.remove(id) else arenas[id] = loaded
+        } catch (e: Exception) {
+            plugin.logger.warning("[Ranked] Couldn't reload arena $id: ${e.message}")
+        }
+    }
+
+    // ── Lifecycle ───────────────────────────────────────────
+
+    /** Startup and every reload, after lifestealConfigManager.load(). Running matches keep going. */
+    fun refresh() {
+        if (!hosted) {
+            settings = null
+            return
+        }
+        val lifesteal = plugin.lifestealConfigManager.settings
+        if (lifesteal == null) {
+            // Running matches finish normally; no new match can start until lifesteal.yml is fixed.
+            settings = null
+            plugin.logger.severe("[Ranked] lifesteal.yml is invalid, so no ranked match can start (inventories waiting to be restored are still restored).")
+        } else {
+            settings = lifesteal.rankedTeamWars
+        }
+        try {
+            store.createTables()
+            tablesReady = true
+        } catch (e: Exception) {
+            tablesReady = false
+            plugin.logger.severe("[Ranked] Could not create the ranked tables; Ranked Team Wars are off: ${e.message}")
+            return
+        }
+        if (!recoveredThisBoot) {
+            recoveredThisBoot = true
+            recover()
+        }
+        try {
+            val loaded = store.arenas()
+            arenas.clear()
+            for (a in loaded) arenas[a.arena.id] = a
+            pendingRestore.clear()
+            pendingRestore += store.pendingSnapshotOwners()
+        } catch (e: Exception) {
+            plugin.logger.severe("[Ranked] Could not read the ranked arenas/snapshots: ${e.message}")
+        }
+        for (a in arenas.values) a.problem?.let { plugin.logger.warning("[Ranked] Arena ${a.arena.id} is unreadable: $it") }
+        plugin.logger.info("[Ranked] ${arenas.size} arena(s), ${pendingRestore.size} inventory snapshot(s) waiting for their players.")
+        // Players already online (plugman / reload) who still have a snapshot waiting.
+        for (player in Bukkit.getOnlinePlayers()) if (!holds(player)) restoreIfPending(player, "startup")
+    }
+
+    /** No match survives a restart: inventories first, never resume a fight from a crash. */
+    private fun recover() {
+        val recovered = try {
+            store.recoverInterrupted(System.currentTimeMillis())
+        } catch (e: Exception) {
+            plugin.logger.severe("[Ranked] Could not recover interrupted matches: ${e.message}")
+            return
+        }
+        for (r in recovered) {
+            plugin.logger.warning("[Ranked] Match ${r.matchId} was interrupted (${r.from}); recorded as ${r.to}. Its players' inventories are restored when they're next online.")
+        }
+    }
+
+    /** Shutdown: cancel every match and restore everyone online now (synchronously, before the database closes). */
+    fun stop() {
+        for (m in matches.values.toList()) {
+            if (m.state == MatchState.FINISHING) complete(m, shutdown = true)
+            else cancel(m, "server shutdown", shutdown = true)
+        }
+        matches.clear()
+        held.clear()
+        spectating.clear()
+        expectedTeleports.clear()
+    }
+
+    // ── Match creation ──────────────────────────────────────
+
+    sealed interface CreateResult {
+        data class Started(val match: Match) : CreateResult
+        data class Refused(val problems: List<String>) : CreateResult
+    }
+
+    /**
+     * Creates and prepares a match between Lifesteal teams [teamAName] and [teamBName] with [size]
+     * players per side: the first [size] online members of each team (leader first, then by join
+     * time). Everything is validated before any player is touched.
+     */
+    fun createMatch(sender: CommandSender, teamAName: String, teamBName: String, size: Int, arenaId: String?, test: Boolean): CreateResult {
+        arenaUnavailable()?.let { return CreateResult.Refused(listOf(it)) }
+        val settings = settings ?: return CreateResult.Refused(listOf("lifesteal.yml is invalid."))
+        val teams = plugin.lifestealTeamManager
+        val teamA = teams.teamByName(teamAName)
+        val teamB = teams.teamByName(teamBName)
+        val now = System.currentTimeMillis()
+
+        val arenaChoice = chooseArena(arenaId, size)
+        val arena = arenaChoice.first
+        fun pick(team: LifestealTeamStore.Team?, side: Side): List<RankedMatchRules.ParticipantFacts> {
+            if (team == null) return emptyList()
+            val online = team.members.mapNotNull { Bukkit.getPlayer(it.uuid)?.takeIf { p -> p.isOnline } }
+            return online.take(size).map { facts(it, side, team) }
+        }
+        val participants = pick(teamA, Side.A) + pick(teamB, Side.B)
+        val heartLimits = plugin.lifestealHeartManager.limits
+        val request = RankedMatchRules.Request(
+            teamA = teamFacts(teamA, teamAName),
+            teamB = teamFacts(teamB, teamBName),
+            size = size,
+            allowedSizes = settings.teamSizes,
+            participants = participants,
+            heartLimits = heartLimits?.let { it.minimum..it.maximum },
+            rankedUnlocked = rankedUnlocked(now),
+            teamsAvailable = teams.active,
+            heartsAvailable = plugin.lifestealHeartManager.active,
+            arenaProblem = arenaChoice.second,
+        )
+        val problems = RankedMatchRules.validate(request).toMutableList()
+        if (problems.isEmpty() && arena != null) outsidersIn(arena, participants.map { it.uuid }.toSet())?.let { problems += it }
+        if (problems.isNotEmpty() || arena == null || teamA == null || teamB == null) {
+            return CreateResult.Refused(problems.ifEmpty { listOf("The match couldn't be validated.") })
+        }
+
+        val id = RankedMatchRules.newMatchId()
+        val roster = MatchRoster(participants.map { MatchParticipant(it.uuid, it.side, if (it.side == Side.A) teamA.id else teamB.id) })
+        val seasonId = plugin.lifestealProgressionManager.progress(now).season?.id ?: "none"
+        val match = Match(id, arena, teamA, teamB, size, test, seasonId, actorOf(sender), now, roster)
+        match.state = MatchState.VALIDATING
+
+        // Reserve: from here until the snapshot is stored nothing else can run (same tick), and the
+        // listener already protects these players.
+        val players = roster.uuids.mapNotNull { Bukkit.getPlayer(it) }
+        if (players.size != roster.uuids.size) return CreateResult.Refused(listOf("A participant went offline."))
+        val snapshots = try {
+            players.map { capture(it) }
+        } catch (e: Exception) {
+            plugin.logger.severe("[Ranked] Couldn't snapshot the inventories for a match ($id): ${e.message}")
+            return CreateResult.Refused(listOf("An inventory couldn't be saved (${e.message}); nothing changed."))
+        }
+        try {
+            store.insertMatch(
+                RankedStore.NewMatch(id, seasonId, arena.id, teamA.id, teamA.name, teamB.id, teamB.name, size, test, match.createdBy, now),
+                roster.participants, snapshots,
+            )
+        } catch (e: Exception) {
+            plugin.logger.warning("[Ranked] Match $id couldn't be recorded, so it didn't start: ${e.message}")
+            return CreateResult.Refused(listOf("The match couldn't be recorded (a player or the arena may already be in another match): ${e.message}"))
+        }
+        match.state = MatchState.PREPARING
+        matches[id] = match
+        for (s in snapshots) {
+            held[s.uuid] = id
+            pendingRestore += s.uuid
+            cachedSnapshots[s.uuid] = RankedStore.Snapshot(store.snapshotId(id, s.uuid), id, s.uuid, s.slots, s.heldSlot, s.returnWorld, s.returnPoint, "PENDING", now)
+        }
+        plugin.logger.info("[Ranked] ${sender.name} created match $id: ${match.label} in arena ${arena.id}.")
+        prepare(match)
+        return CreateResult.Started(match)
+    }
+
+    private fun teamFacts(team: LifestealTeamStore.Team?, name: String) = RankedMatchRules.TeamFacts(
+        id = team?.id ?: "", name = team?.name ?: name, exists = team != null,
+        onlineMembers = team?.members?.count { Bukkit.getPlayer(it.uuid)?.isOnline == true } ?: 0,
+    )
+
+    private fun facts(player: Player, side: Side, team: LifestealTeamStore.Team): RankedMatchRules.ParticipantFacts {
+        val uuid = player.uniqueId
+        val restricted = when {
+            safe { plugin.modModeManager.isModMode(player) } -> "is in Mod Mode"
+            safe { plugin.adminManager.isFrozen(uuid) } -> "is frozen"
+            safe { plugin.tradeManager.isTrading(player) } -> "is trading"
+            safe { plugin.eventManager.isInEventWorld(player) } -> "is in the event world"
+            else -> null
+        }
+        return RankedMatchRules.ParticipantFacts(
+            uuid = uuid,
+            name = player.name,
+            side = side,
+            member = plugin.lifestealTeamManager.teamOf(uuid)?.id == team.id,
+            online = player.isOnline,
+            inLifesteal = isLifesteal(player.world),
+            sessionLoaded = plugin.lifestealHeartManager.heartsOf(uuid) != null,
+            hearts = plugin.lifestealHeartManager.heartsOf(uuid),
+            inOtherMatch = holds(uuid) || isSpectator(uuid),
+            pendingRestore = pendingRestore.contains(uuid),
+            transferring = safe { plugin.transferManager.isTransferPending(uuid) },
+            combatTagged = plugin.combatManager.isTagged(player),
+            dead = player.isDead,
+            survivalMode = player.gameMode == GameMode.SURVIVAL,
+            restricted = restricted,
+        )
+    }
+
+    /** A check that throws (system not started) counts as true, so it refuses rather than lets through. */
+    private inline fun safe(check: () -> Boolean): Boolean = try { check() } catch (_: Exception) { true }
+
+    /** Unlocked by the season schedule (or the progression is disabled); unknown state = locked. */
+    fun rankedUnlocked(now: Long = System.currentTimeMillis()): Boolean =
+        plugin.lifestealProgressionManager.rankedStatus(now) != ProgressionRules.RankedStatus.LOCKED
+
+    /** The arena to use: [requested] if given, else the first AVAILABLE one that hosts [size]. */
+    private fun chooseArena(requested: String?, size: Int): Pair<RankedArena?, String?> {
+        if (requested != null) {
+            val loaded = arena(requested) ?: return null to "No arena called '$requested'."
+            return when (val a = availability(loaded)) {
+                ArenaAvailability.AVAILABLE ->
+                    if (size in loaded.arena.sizes) loaded.arena to null else null to "Arena '${loaded.arena.id}' doesn't host ${size}v$size."
+                ArenaAvailability.DISABLED -> null to "Arena '${loaded.arena.id}' is disabled or not ready" + validation(loaded).problems.takeIf { it.isNotEmpty() }?.joinToString("; ", " (", ")").orEmpty() + "."
+                else -> null to "Arena '${loaded.arena.id}' is ${a.label.lowercase()} (another match uses it)."
+            }
+        }
+        val found = arenas.values.firstOrNull { availability(it) == ArenaAvailability.AVAILABLE && size in it.arena.sizes }
+        return if (found != null) found.arena to null else null to "No available arena hosts ${size}v$size right now."
+    }
+
+    /** Refuses an arena that has other players standing in it (they'd be inside the fight). */
+    private fun outsidersIn(arena: RankedArena, participants: Set<UUID>): String? {
+        val world = Bukkit.getWorld(arena.world) ?: return "The arena world isn't loaded."
+        val box = arena.bounds ?: return "The arena has no boundary."
+        val inside = world.players.filter { it.uniqueId !in participants && box.contains(it.location.x, it.location.y, it.location.z) }
+        return if (inside.isEmpty()) null else "Players are standing inside the arena: ${inside.joinToString { it.name }}."
+    }
+
+    // ── Snapshots ───────────────────────────────────────────
+
+    /**
+     * The player's whole inventory, exactly. The cursor and 2x2 crafting grid are emptied into the
+     * inventory first (closing it), so nothing is outside the snapshot.
+     */
+    private fun capture(player: Player): RankedStore.SnapshotData {
+        // Always close: the server puts the cursor and 2x2 grid back into the inventory (anything that
+        // doesn't fit drops at their feet, before the match), so the snapshot holds everything they own.
+        player.closeInventory()
+        val inventory = player.inventory
+        val slots = inventory.contents.map { stack -> stack?.takeIf { !it.type.isAir && it.amount > 0 }?.let { Base64.getEncoder().encodeToString(it.serializeAsBytes()) } }
+        val loc = player.location
+        return RankedStore.SnapshotData(player.uniqueId, slots, inventory.heldItemSlot, loc.world?.name, Point(loc.x, loc.y, loc.z, loc.yaw, loc.pitch))
+    }
+
+    private fun decode(snapshot: RankedStore.Snapshot): Array<ItemStack?> =
+        snapshot.slots.map { it?.let { b64 -> ItemStack.deserializeBytes(Base64.getDecoder().decode(b64)) } }.toTypedArray()
+
+    /** Restores [player] from their PENDING snapshot (if any) and moves them back. */
+    fun restoreIfPending(player: Player, reason: String, moveBack: Boolean = true): Boolean {
+        if (!pendingRestore.contains(player.uniqueId) || holds(player) || player.isDead) return false
+        val snapshot = cachedSnapshots[player.uniqueId]?.takeIf { it.status == "PENDING" } ?: try {
+            store.pendingSnapshot(player.uniqueId)
+        } catch (e: Exception) {
+            plugin.logger.severe("[Ranked] Couldn't read ${player.name}'s ranked inventory snapshot: ${e.message}. It stays pending.")
+            return false
+        }
+        if (snapshot == null) {
+            pendingRestore.remove(player.uniqueId)
+            cachedSnapshots.remove(player.uniqueId)
+            return false
+        }
+        return restore(player, snapshot, reason, moveBack)
+    }
+
+    /**
+     * Sets the inventory back to [snapshot], saves the player, then marks it RESTORED. Applying it
+     * twice gives the same inventory (it is a set, not an add), so a crash between the save and the
+     * mark is harmless; if the snapshot can't be read nothing is changed and it stays PENDING.
+     */
+    private fun restore(player: Player, snapshot: RankedStore.Snapshot, reason: String, moveBack: Boolean): Boolean {
+        val uuid = player.uniqueId
+        if (!restoring.add(uuid)) return false
+        try {
+            val contents = try {
+                decode(snapshot)
+            } catch (e: Exception) {
+                plugin.logger.severe("[Ranked] ${player.name}'s snapshot ${snapshot.id} can't be read (${e.message}); nothing was changed and it stays pending. Staff: /lifesteal admin ranked restore ${player.name} after fixing it.")
+                tell(player, "Your ranked inventory couldn't be restored yet; staff have been notified. Nothing was lost.", NamedTextColor.RED)
+                return false
+            }
+            // Nothing outside the inventory: cursor and crafting grid are match items, discarded.
+            player.setItemOnCursor(null)
+            val top = player.openInventory.topInventory
+            if (top.type == InventoryType.CRAFTING) top.clear()
+            player.closeInventory()
+            val inventory = player.inventory
+            if (contents.size == inventory.contents.size) {
+                inventory.contents = contents
+            } else {
+                // Defensive: a different inventory layout. Same slots where they exist, never fewer items.
+                inventory.clear()
+                inventory.setArmorContents(arrayOfNulls(4))
+                inventory.setItemInOffHand(null)
+                for ((i, stack) in contents.withIndex()) if (stack != null) inventory.setItem(i, stack)
+            }
+            if (snapshot.heldSlot in 0..8) inventory.heldItemSlot = snapshot.heldSlot
+            player.updateInventory()
+            try { player.saveData() } catch (e: Exception) { plugin.logger.warning("[Ranked] Couldn't save ${player.name}'s data right after restoring: ${e.message}") }
+            val marked = try {
+                store.markRestored(snapshot.id, reason, System.currentTimeMillis())
+            } catch (e: Exception) {
+                plugin.logger.severe("[Ranked] Restored ${player.name}'s inventory but couldn't mark snapshot ${snapshot.id} restored: ${e.message}. It will be applied again on their next join (same items, nothing duplicated unless they change their inventory meanwhile).")
+                false
+            }
+            // Only forget it once the database agrees it's no longer pending (else the next join retries).
+            val settled = marked || try { store.snapshot(snapshot.id)?.status != "PENDING" } catch (_: Exception) { false }
+            if (settled) {
+                pendingRestore.remove(uuid)
+                cachedSnapshots.remove(uuid)
+            }
+            if (moveBack) moveToReturn(player, snapshot)
+            tell(player, "Your inventory and equipment were restored to how they were before the ranked match.", NamedTextColor.GREEN)
+            return true
+        } finally {
+            restoring.remove(uuid)
+        }
+    }
+
+    /** The authoritative return spot of [snapshot], or null when its world is gone. */
+    fun returnLocation(snapshot: RankedStore.Snapshot): Location? {
+        val world = snapshot.returnWorld?.let { Bukkit.getWorld(it) } ?: return null
+        val p = snapshot.returnPoint ?: return null
+        return Location(world, p.x, p.y, p.z, p.yaw, p.pitch)
+    }
+
+    fun pendingReturnLocation(uuid: UUID): Location? {
+        val snapshot = cachedSnapshots[uuid] ?: try { store.pendingSnapshot(uuid) } catch (_: Exception) { null } ?: return null
+        return returnLocation(snapshot)
+    }
+
+    /** A safe place in a Lifesteal world: the return spot, else the Lifesteal world's spawn. */
+    private fun fallbackLocation(): Location? {
+        val world = Bukkit.getWorlds().firstOrNull { isLifesteal(it) && it.environment == World.Environment.NORMAL } ?: Bukkit.getWorlds().firstOrNull()
+        return world?.spawnLocation
+    }
+
+    private fun moveToReturn(player: Player, snapshot: RankedStore.Snapshot) {
+        val target = returnLocation(snapshot) ?: fallbackLocation() ?: return
+        teleport(player, target).thenAccept { ok ->
+            if (ok == true) {
+                if (target.isChunkLoaded && SafeSpots.problem(player.location) != null) {
+                    // The return spot changed meanwhile (lava, blocks): go to spawn instead.
+                    fallbackLocation()?.let { teleport(player, it) }
+                }
+            } else {
+                fallbackLocation()?.let { teleport(player, it) }
+            }
+        }
+    }
+
+    /** A teleport this system makes (lets it past the listener's own teleport rules). */
+    private fun teleport(player: Player, target: Location): CompletableFuture<Boolean> {
+        val uuid = player.uniqueId
+        // A rider can't be teleported; get them off first.
+        if (player.isInsideVehicle) player.leaveVehicle()
+        expectedTeleports[uuid] = target.clone()
+        return player.teleportAsync(target, PlayerTeleportEvent.TeleportCause.PLUGIN).handle { ok, error ->
+            if (expectedTeleports[uuid] == target) expectedTeleports.remove(uuid)
+            if (error != null) plugin.logger.warning("[Ranked] Teleporting ${player.name} failed: ${error.message}")
+            error == null && ok == true
+        }
+    }
+
+    // ── Preparation ─────────────────────────────────────────
+
+    private fun prepare(match: Match) {
+        val world = Bukkit.getWorld(match.arena.world)
+        if (world == null) return cancel(match, "the arena world isn't loaded")
+        val targets = LinkedHashMap<UUID, Location>()
+        for (side in Side.entries) {
+            for ((i, p) in match.roster.side(side).withIndex()) {
+                val point = match.arena.spawnFor(side, i) ?: return cancel(match, "${side.label} has no spawn")
+                targets[p.uuid] = Location(world, point.x, point.y, point.z, point.yaw, point.pitch)
+            }
+        }
+        for (uuid in targets.keys) {
+            val player = Bukkit.getPlayer(uuid) ?: continue
+            if (player.allowFlight && player.gameMode == GameMode.SURVIVAL) {
+                player.isFlying = false
+                player.allowFlight = false
+                match.flightTaken += uuid
+            }
+            if (player.isGliding) player.isGliding = false
+            plugin.commsManager.send(player, Component.text("[Ranked] ", NamedTextColor.GOLD).append(Component.text("${match.label}: preparing the arena...", NamedTextColor.YELLOW)))
+        }
+        match.track(plugin.server.scheduler.runTaskLater(plugin, Runnable {
+            if (match.state == MatchState.PREPARING) cancel(match, "preparation timed out")
+        }, PREPARATION_TIMEOUT_TICKS))
+        val chunks = targets.values.map { it.blockX shr 4 to (it.blockZ shr 4) }.distinct()
+        val loads = chunks.map { (cx, cz) -> world.getChunkAtAsync(cx, cz, false) }
+        CompletableFuture.allOf(*loads.toTypedArray()).whenComplete { _, error ->
+            plugin.server.scheduler.runTask(plugin, Runnable {
+                if (match.state != MatchState.PREPARING) return@Runnable
+                if (error != null || loads.any { it.getNow(null) == null }) return@Runnable cancel(match, "the arena chunks couldn't be loaded")
+                val unsafe = targets.values.mapNotNull { loc -> SafeSpots.problem(loc)?.let { "(${loc.blockX}, ${loc.blockY}, ${loc.blockZ}) $it" } }
+                if (unsafe.isNotEmpty()) return@Runnable cancel(match, "unsafe spawn ${unsafe.first()}")
+                teleportIn(match, targets)
+            })
+        }
+    }
+
+    private fun teleportIn(match: Match, targets: Map<UUID, Location>) {
+        val futures = targets.map { (uuid, loc) ->
+            val player = Bukkit.getPlayer(uuid)
+            if (player == null || !player.isOnline || held[uuid] != match.id) CompletableFuture.completedFuture(false)
+            else teleport(player, loc)
+        }
+        CompletableFuture.allOf(*futures.toTypedArray()).whenComplete { _, _ ->
+            plugin.server.scheduler.runTask(plugin, Runnable {
+                if (match.state != MatchState.PREPARING) return@Runnable
+                if (futures.any { it.getNow(false) != true }) return@Runnable cancel(match, "a participant couldn't be moved into the arena")
+                startCountdown(match)
+            })
+        }
+    }
+
+    private fun move(match: Match, to: MatchState): Boolean {
+        val from = match.state
+        if (!from.canMoveTo(to)) {
+            plugin.logger.warning("[Ranked] Refused invalid transition $from -> $to for match ${match.id}.")
+            return false
+        }
+        val ok = try {
+            store.moveState(match.id, from, to, System.currentTimeMillis())
+        } catch (e: Exception) {
+            plugin.logger.severe("[Ranked] Couldn't record $from -> $to for match ${match.id}: ${e.message}")
+            false
+        }
+        if (!ok) return false
+        match.state = to
+        if (to == MatchState.ACTIVE) match.startedAt = System.currentTimeMillis()
+        return true
+    }
+
+    private fun startCountdown(match: Match) {
+        if (!move(match, MatchState.COUNTDOWN)) return cancel(match, "the countdown couldn't be recorded")
+        var left = settings?.countdownSeconds ?: 10
+        match.track(plugin.server.scheduler.runTaskTimer(plugin, Runnable {
+            if (match.state != MatchState.COUNTDOWN) return@Runnable
+            if (left <= 0) {
+                begin(match)
+                return@Runnable
+            }
+            title(match, Component.text(left.toString(), NamedTextColor.GOLD), Component.text(match.label, NamedTextColor.GRAY))
+            left--
+        }, 0L, 20L))
+    }
+
+    private fun begin(match: Match) {
+        if (!move(match, MatchState.ACTIVE)) return cancel(match, "the match start couldn't be recorded")
+        title(match, Component.text("FIGHT!", NamedTextColor.RED), Component.text("Hearts are at stake. Your gear comes back afterwards.", NamedTextColor.GRAY))
+        val minutes = settings?.maxMatchMinutes ?: 20
+        match.track(plugin.server.scheduler.runTaskLater(plugin, Runnable {
+            if (match.state == MatchState.ACTIVE) cancel(match, "time limit ($minutes min) reached without a winner")
+        }, minutes * 60L * 20L))
+        // A participant who left between the last teleport and now is decided at once.
+        scheduleDecision(match)
+    }
+
+    private fun title(match: Match, main: Component, sub: Component) {
+        val times = Title.Times.times(Duration.ZERO, Duration.ofMillis(1100), Duration.ofMillis(200))
+        for (uuid in match.roster.uuids + match.spectators) {
+            Bukkit.getPlayer(uuid)?.showTitle(Title.title(main, sub, times))
+        }
+    }
+
+    // ── During the match ────────────────────────────────────
+
+    /**
+     * A participant stopped fighting. The roster changes now; the record is queued (no database
+     * work during combat); who won is decided on the next tick, so deaths in the same tick count
+     * together.
+     */
+    fun defeat(match: Match, uuid: UUID, reason: DefeatReason) {
+        val next = match.roster.defeat(uuid, reason) ?: return
+        match.roster = next
+        held.remove(uuid)
+        val now = System.currentTimeMillis()
+        plugin.databaseManager.async("ranked defeat ${match.id}") { store.defeat(match.id, uuid, reason, now) }
+        val name = Bukkit.getPlayer(uuid)?.name ?: plugin.lifestealTeamManager.nameOf(uuid)
+        broadcast(match, Component.text("$name is out (${reason.label}).", NamedTextColor.GRAY))
+        scheduleDecision(match)
+    }
+
+    private fun scheduleDecision(match: Match) {
+        if (match.state != MatchState.ACTIVE || match.decisionPending) return
+        match.decisionPending = true
+        match.track(plugin.server.scheduler.runTask(plugin, Runnable {
+            match.decisionPending = false
+            if (match.state != MatchState.ACTIVE) return@Runnable
+            when (val d = RankedMatchRules.decide(match.roster)) {
+                RankedMatchRules.Decision.Continue -> Unit
+                RankedMatchRules.Decision.NoWinner -> cancel(match, "both teams were out at the same time (no reliable winner)")
+                is RankedMatchRules.Decision.Winner -> win(match, d.side)
+            }
+        }))
+    }
+
+    private fun win(match: Match, side: Side) {
+        val team = match.team(side)
+        val ok = try {
+            store.finish(match.id, side, team.id, System.currentTimeMillis())
+        } catch (e: Exception) {
+            plugin.logger.severe("[Ranked] Couldn't record the winner of ${match.id}: ${e.message}")
+            false
+        }
+        if (!ok) return cancel(match, "the result couldn't be recorded")
+        match.state = MatchState.FINISHING
+        broadcast(match, Component.text("${team.name} won the ranked match!", NamedTextColor.GOLD))
+        plugin.logger.info("[Ranked] Match ${match.id} (${match.label}) won by ${team.name}.")
+        complete(match, shutdown = false)
+    }
+
+    /** FINISHING → COMPLETED: cleanup, restore, record. */
+    private fun complete(match: Match, shutdown: Boolean) {
+        cleanup(match, shutdown)
+        val ok = try { store.complete(match.id, System.currentTimeMillis()) } catch (e: Exception) {
+            plugin.logger.severe("[Ranked] Couldn't record match ${match.id} as completed: ${e.message} (it is completed at the next start)."); false
+        }
+        match.state = MatchState.COMPLETED
+        release(match)
+        if (ok) plugin.logger.info("[Ranked] Match ${match.id} completed.")
+    }
+
+    /** Cancels [match] (no winner): restores everyone online, records why. Never used once FINISHING. */
+    fun cancel(match: Match, reason: String, shutdown: Boolean = false, leaving: UUID? = null) {
+        if (match.state.terminal) return
+        if (match.state == MatchState.FINISHING) return complete(match, shutdown)
+        val persisted = match.state != MatchState.CREATED && match.state != MatchState.VALIDATING
+        cleanup(match, shutdown, leaving)
+        if (persisted) {
+            try { store.cancel(match.id, reason, System.currentTimeMillis()) } catch (e: Exception) {
+                plugin.logger.severe("[Ranked] Couldn't record match ${match.id} as cancelled: ${e.message} (it is cancelled at the next start).")
+            }
+        }
+        match.state = MatchState.CANCELLED
+        broadcast(match, Component.text("The ranked match was cancelled: $reason. No winner.", NamedTextColor.RED))
+        plugin.logger.warning("[Ranked] Match ${match.id} (${match.label}) cancelled: $reason.")
+        release(match)
+    }
+
+    /** Ends tasks and protections, restores every online participant and clears the arena's loose entities. */
+    private fun cleanup(match: Match, shutdown: Boolean, leaving: UUID? = null) {
+        match.cancelTasks()
+        for (uuid in match.roster.uuids) held.remove(uuid)
+        for (uuid in match.roster.uuids) {
+            // A player who is disconnecting right now keeps their snapshot pending: restored (and
+            // moved out of the arena) when they log back in, never mid-quit.
+            if (uuid == leaving) continue
+            val player = Bukkit.getPlayer(uuid) ?: continue
+            if (!player.isOnline) continue
+            if (plugin.combatManager.isTagged(player)) plugin.combatManager.untag(player)
+            if (uuid in match.flightTaken && (player.hasPermission("joshymc.fly") || safe { plugin.flightTimeManager.hasTemporaryFlight(player) })) player.allowFlight = true
+            if (player.isDead) continue // restored when they respawn
+            if (shutdown) restoreForShutdown(player) else restoreIfPending(player, "match ${match.state.name.lowercase()}")
+        }
+        clearEntities(match)
+    }
+
+    /** Shutdown can't wait for an async teleport: set the inventory and move synchronously. */
+    private fun restoreForShutdown(player: Player) {
+        val snapshot = cachedSnapshots[player.uniqueId] ?: return
+        if (restore(player, snapshot, "server shutdown", moveBack = false)) {
+            (returnLocation(snapshot) ?: fallbackLocation())?.let {
+                expectedTeleports[player.uniqueId] = it
+                try { player.teleport(it, PlayerTeleportEvent.TeleportCause.PLUGIN) } finally { expectedTeleports.remove(player.uniqueId) }
+            }
+        }
+    }
+
+    /** Only loose match leftovers inside the boundary, in loaded chunks: items, arrows/tridents, crystals, XP. Never blocks. */
+    private fun clearEntities(match: Match) {
+        val world = Bukkit.getWorld(match.arena.world) ?: return
+        val b = match.arena.bounds ?: return
+        val box = BoundingBox(b.minX.toDouble(), b.minY.toDouble(), b.minZ.toDouble(), b.maxX + 1.0, b.maxY + 1.0, b.maxZ + 1.0)
+        var removed = 0
+        for (e in world.getNearbyEntities(box)) {
+            if (e is Item || e is AbstractArrow || e is EnderCrystal || e is ExperienceOrb) {
+                e.remove()
+                removed++
+            }
+        }
+        if (removed > 0) plugin.logger.info("[Ranked] Cleared $removed leftover entit${if (removed == 1) "y" else "ies"} from arena ${match.arena.id}.")
+    }
+
+    private fun release(match: Match) {
+        match.cancelTasks()
+        for (uuid in match.roster.uuids) {
+            held.remove(uuid)
+            expectedTeleports.remove(uuid)
+        }
+        for (uuid in match.spectators) {
+            spectating.remove(uuid)
+            Bukkit.getPlayer(uuid)?.let { tell(it, "The match you were watching is over.", NamedTextColor.GRAY) }
+        }
+        match.spectators.clear()
+        matches.remove(match.id)
+    }
+
+    private fun broadcast(match: Match, message: Component) {
+        val prefix = Component.text("[Ranked] ", NamedTextColor.GOLD)
+        for (uuid in match.roster.uuids + match.spectators) {
+            Bukkit.getPlayer(uuid)?.let { plugin.commsManager.send(it, prefix.append(message)) }
+        }
+    }
+
+    private fun tell(player: Player, text: String, color: NamedTextColor) {
+        plugin.commsManager.send(player, Component.text("[Ranked] ", NamedTextColor.GOLD).append(Component.text(text, color)))
+    }
+
+    // ── Player events (from the listener) ───────────────────
+
+    fun onJoin(player: Player) {
+        if (!hosted || !pendingRestore.contains(player.uniqueId)) return
+        // They logged in where they left (usually inside an arena). Dead players are restored at respawn.
+        restoreIfPending(player, "rejoined")
+    }
+
+    fun onQuit(player: Player) {
+        val uuid = player.uniqueId
+        spectating.remove(uuid)?.let { matches[it]?.spectators?.remove(uuid) }
+        val match = matchOf(uuid) ?: return
+        val now = System.currentTimeMillis()
+        plugin.databaseManager.async("ranked disconnect ${match.id}") { store.logEvent(match.id, "DISCONNECT", uuid, match.state.name, now) }
+        when (match.state) {
+            // Before the fight: the match can't start fair, cancel it. Their snapshot waits for their return.
+            MatchState.PREPARING, MatchState.COUNTDOWN -> {
+                held.remove(uuid)
+                cancel(match, "${player.name} disconnected before the start", leaving = uuid)
+            }
+            // In the fight: out of this match only (no heart penalty: none is approved). Restored on rejoin.
+            MatchState.ACTIVE -> defeat(match, uuid, DefeatReason.DISCONNECT)
+            else -> held.remove(uuid)
+        }
+    }
+
+    /**
+     * Death of a held participant: nothing drops (their real gear comes back from the snapshot),
+     * no XP orbs, and they are out of the match. Hearts are handled by the normal heart service.
+     */
+    fun onDeath(player: Player): Boolean {
+        val match = matchOf(player.uniqueId) ?: return false
+        if (match.state == MatchState.ACTIVE) defeat(match, player.uniqueId, DefeatReason.DEATH)
+        else {
+            held.remove(player.uniqueId)
+            cancel(match, "${player.name} died before the fight started")
+        }
+        return true
+    }
+
+    // ── Admin recovery ──────────────────────────────────────
+
+    /** Takes [target] out of their match now (restored and moved back), or cancels it before it starts. */
+    fun removeParticipant(sender: CommandSender, target: Player): String? {
+        val match = matchOf(target.uniqueId) ?: return "${target.name} isn't in a ranked match."
+        plugin.logger.warning("[Ranked] ${sender.name} removed ${target.name} from match ${match.id}.")
+        if (match.state == MatchState.ACTIVE) {
+            defeat(match, target.uniqueId, DefeatReason.REMOVED)
+            restoreIfPending(target, "removed by staff")
+        } else {
+            cancel(match, "staff removed ${target.name}")
+        }
+        return null
+    }
+
+    /** Restores a waiting snapshot for an online player who isn't in a match. */
+    fun adminRestore(target: Player): String? {
+        if (holds(target)) return "${target.name} is still in a match; use remove first."
+        if (target.isDead) return "${target.name} is dead; they're restored when they respawn."
+        if (!pendingRestore.contains(target.uniqueId)) {
+            // Re-read in case the memory set is behind the database.
+            val pending = try { store.pendingSnapshot(target.uniqueId) } catch (e: Exception) { return "Couldn't read the snapshot: ${e.message}" }
+            if (pending == null) return "${target.name} has no ranked inventory waiting to be restored."
+            pendingRestore += target.uniqueId
+        }
+        return if (restoreIfPending(target, "staff restore")) null else "The snapshot couldn't be restored; see the console."
+    }
+
+    fun spectate(staff: Player, matchId: String): String? {
+        val match = matches[matchId] ?: return "No running match '$matchId'."
+        if (holds(staff)) return "You're playing in a match."
+        if (match.state == MatchState.FINISHING) return "That match is finishing."
+        val point = match.arena.spectators.firstOrNull() ?: return "Arena '${match.arena.id}' has no spectator point (setspectator)."
+        val world = Bukkit.getWorld(match.arena.world) ?: return "The arena world isn't loaded."
+        spectating.remove(staff.uniqueId)?.let { matches[it]?.spectators?.remove(staff.uniqueId) }
+        spectating[staff.uniqueId] = match.id
+        match.spectators += staff.uniqueId
+        teleport(staff, Location(world, point.x, point.y, point.z, point.yaw, point.pitch))
+        return null
+    }
+
+    fun unspectate(staff: Player): String? {
+        val id = spectating.remove(staff.uniqueId) ?: return "You aren't spectating a match."
+        matches[id]?.spectators?.remove(staff.uniqueId)
+        return null
+    }
+
+    // ── Records ─────────────────────────────────────────────
+
+    fun recentMatches(limit: Int) = store.recentMatches(limit)
+    fun record(id: String) = store.match(id)
+    fun recordParticipants(id: String) = store.participants(id)
+    fun recordEvents(id: String, limit: Int) = store.events(id, limit)
+    fun recordSnapshots(id: String) = store.snapshotsOf(id)
+
+    private fun actorOf(sender: CommandSender): String = if (sender is Player) sender.uniqueId.toString() else sender.name
+
+    companion object {
+        const val ADMIN_PERMISSION = "joshymc.lifesteal.ranked.admin"
+        const val SPECTATE_PERMISSION = "joshymc.lifesteal.ranked.spectate"
+        /** Chunk loads and teleports into the arena must finish within this, or the match is cancelled. */
+        const val PREPARATION_TIMEOUT_TICKS = 20L * 20L
+    }
+}

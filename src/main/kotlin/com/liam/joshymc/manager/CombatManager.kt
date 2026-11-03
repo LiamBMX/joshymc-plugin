@@ -228,6 +228,8 @@ class CombatManager(private val plugin: Joshymc) {
         if (player.world.name == PVP_WORLD_NAME) return true
         // A competitor of an active hosted Crystal PvP match signed up to fight (issue #1189).
         if (plugin.eventManager.games.inCrystalMatch(player)) return true
+        // A participant of an active Ranked Team Wars match signed up to fight (issue #1361; Lifesteal only).
+        if (plugin.lifestealRankedManager.inActiveFight(player)) return true
         return plugin.settingsManager.getSetting(player, PVP_SETTING_KEY)
     }
 

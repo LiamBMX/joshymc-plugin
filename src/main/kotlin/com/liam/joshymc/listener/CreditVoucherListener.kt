@@ -19,6 +19,8 @@ class CreditVoucherListener(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.HIGH)
     fun onPlayerInteract(event: PlayerInteractEvent) {
         if (event.hand != EquipmentSlot.HAND) return
+        // Issue #1361: never redeemed inside a ranked match (the pre-match snapshot would give it back).
+        if (plugin.lifestealRankedManager.holds(event.player)) return
 
         val action = event.action
         if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return

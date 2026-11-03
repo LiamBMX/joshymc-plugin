@@ -11,6 +11,7 @@ enum class TransferBlocker(val message: String) {
     IN_EVENT("Leave the event first (/event leave or /spawn)."),
     FROZEN("You can't change servers while frozen."),
     TRADING("Finish or cancel your trade first."),
+    RANKED_MATCH("You can't change servers during a ranked match."),
 }
 
 enum class TransferRefusal {

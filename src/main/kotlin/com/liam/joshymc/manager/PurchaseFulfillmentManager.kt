@@ -269,6 +269,9 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         // The event world's inventory is temporary (issue #1199: winners are usually still there
         // when their event reward is confirmed). Stay PENDING; the sweep delivers once they leave.
         if (plugin.eventManager.isInEventWorld(player)) return
+        // Same for a Ranked Team Wars match (issue #1361): its inventory is replaced by the pre-match
+        // snapshot afterwards, which would overwrite anything delivered meanwhile.
+        if (plugin.lifestealRankedManager.holds(player)) return
         val probe = buildUnit(kind, snapshot.param)
             ?: return markFailed(snapshot, "the reward no longer exists on this server (${snapshot.describe()})")
         if (!canFitOne(player, probe)) {

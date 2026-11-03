@@ -283,6 +283,10 @@ class ListenerManager(private val plugin: Joshymc) {
         if (plugin.lifestealProgressionManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.progression.LifestealProgressionListener(plugin), plugin)
         }
+        // Issue #1361: Ranked Team Wars match rules (arenas, inventory protection, deaths, quits). Never registered where Lifesteal isn't hosted.
+        if (plugin.lifestealRankedManager.hosted) {
+            pm.registerEvents(com.liam.joshymc.lifesteal.ranked.LifestealRankedListener(plugin), plugin)
+        }
         // Issue #1350: Lifesteal combat-log kick causes and quit cleanup. Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealCombatManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.combat.LifestealCombatListener(plugin.lifestealCombatManager), plugin)

@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.lifesteal.combat.LifestealCombatCommand
 import com.liam.joshymc.lifesteal.hearts.LifestealHeartsCommand
 import com.liam.joshymc.lifesteal.progression.LifestealProgressCommand
+import com.liam.joshymc.lifesteal.ranked.LifestealRankedCommand
 import com.liam.joshymc.network.transfer.TransferDestination
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -18,7 +19,8 @@ import org.bukkit.command.TabCompleter
  * [LifestealHeartsCommand], and `/lifesteal combat ...` (issue #1350) the read-only combat-log
  * diagnostics, [LifestealCombatCommand]. `/lifesteal progress` and `/lifesteal admin launch ...` (issue
  * #1352) are the launch progression, [LifestealProgressCommand]; `progress` is only taken on a server
- * that hosts Lifesteal. Plain `/lifesteal` (and any other arguments) still transfers.
+ * that hosts Lifesteal. `/lifesteal admin arena|ranked ...` (issue #1361) are the Ranked Team Wars
+ * staff tools, [LifestealRankedCommand]. Plain `/lifesteal` (and any other arguments) still transfers.
  */
 class ServerTransferCommand(
     private val plugin: Joshymc,
@@ -28,6 +30,7 @@ class ServerTransferCommand(
     private val hearts = if (destination == TransferDestination.LIFESTEAL) LifestealHeartsCommand(plugin) else null
     private val combat = if (destination == TransferDestination.LIFESTEAL) LifestealCombatCommand(plugin) else null
     private val progression = if (destination == TransferDestination.LIFESTEAL) LifestealProgressCommand(plugin) else null
+    private val ranked = if (destination == TransferDestination.LIFESTEAL) LifestealRankedCommand(plugin) else null
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (hearts != null && args.firstOrNull()?.equals("hearts", ignoreCase = true) == true) {
@@ -40,6 +43,10 @@ class ServerTransferCommand(
         }
         if (progression != null) {
             val first = args.firstOrNull()?.lowercase()
+            if (first == "admin" && ranked != null && ranked.handles(args.getOrNull(1)?.lowercase())) {
+                ranked.execute(sender, args.drop(1))
+                return true
+            }
             if (first == "admin") {
                 progression.admin(sender, args.drop(1))
                 return true
@@ -55,18 +62,26 @@ class ServerTransferCommand(
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, label: String, args: Array<out String>): List<String> {
-        if (hearts == null || combat == null || progression == null || args.isEmpty()) return emptyList()
+        if (hearts == null || combat == null || progression == null || ranked == null || args.isEmpty()) return emptyList()
         val visible = buildList {
             if (hearts.visibleTo(sender)) add("hearts")
             if (combat.visibleTo(sender)) add("combat")
             if (progression.progressVisibleTo(sender)) add("progress")
-            if (progression.adminVisibleTo(sender)) add("admin")
+            if (progression.adminVisibleTo(sender) || ranked.visibleTo(sender)) add("admin")
         }
         if (args.size == 1) return visible.filter { it.startsWith(args[0].lowercase()) }
         return when (args[0].lowercase()) {
             "hearts" -> if ("hearts" in visible) hearts.complete(sender, args.drop(1)) else emptyList()
             "combat" -> if ("combat" in visible) combat.complete(sender, args.drop(1)) else emptyList()
-            "admin" -> if ("admin" in visible) progression.complete(sender, args.drop(1)) else emptyList()
+            "admin" -> when {
+                "admin" !in visible -> emptyList()
+                args.size == 2 -> buildList {
+                    if (progression.adminVisibleTo(sender)) add("launch")
+                    if (ranked.visibleTo(sender)) { add("arena"); add("ranked") }
+                }.filter { it.startsWith(args[1].lowercase()) }
+                ranked.handles(args[1].lowercase()) -> ranked.complete(sender, args.drop(1))
+                else -> progression.complete(sender, args.drop(1))
+            }
             else -> emptyList()
         }
     }
