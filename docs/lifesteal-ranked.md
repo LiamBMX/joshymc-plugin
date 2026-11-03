@@ -2,9 +2,10 @@
 
 Lifesteal only. This is the infrastructure Ranked Team Wars run on: arenas, the match state machine,
 participant validation, inventory snapshots, teleports in and out, death and disconnect handling,
-crash recovery and match records. **There is no public queue, no matchmaking, no Elo, no
-leaderboard and no reward yet**; staff start matches by hand (`testmatch`) through the same
-lifecycle a later matchmaker will use (`LifestealRankedManager.createMatch`).
+crash recovery and match records. **There is no Elo, no leaderboard and no reward yet.** Staff
+start test matches by hand (`testmatch`); public matchmaking, queues and team challenges (issue
+#1363, [lifesteal-ranked-queue.md](lifesteal-ranked-queue.md)) create theirs through the same
+lifecycle (`LifestealRankedManager.createQueuedMatch`, which shares every check with `createMatch`).
 
 Code: `src/main/kotlin/com/liam/joshymc/lifesteal/ranked/`
 
@@ -166,8 +167,9 @@ with the match. There's no public spectator mode or GUI yet.
 ## Records
 
 `lifesteal_ranked_matches` is the match record: id, season id, arena id, both team ids and names, size,
-test flag, state, creator, created/started/ended times, winner side and team, outcome (WIN /
-CANCELLED), cancel reason, restoration status. Participants (UUID, side, team, status, defeat reason)
+test flag, kind (`TEST` / `PUBLIC` / `CHALLENGE`, issue #1363; rows from before it are read as
+`TEST`) and the queue proposal that created it (`queue_ref`), state, creator, created/started/ended
+times, winner side and team, outcome (WIN / CANCELLED), cancel reason, restoration status. Participants (UUID, side, team, status, defeat reason)
 are in `lifesteal_ranked_participants`, every transition/defeat/disconnect/restore in
 `lifesteal_ranked_events`. Only UUIDs, team ids/names and coordinates are stored. Lifecycle edges
 (creation, transitions, restorations) are short synchronous transactions on the local SQLite file,

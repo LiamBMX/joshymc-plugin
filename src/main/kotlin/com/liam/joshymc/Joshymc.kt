@@ -297,6 +297,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var lifestealRankedManager: com.liam.joshymc.lifesteal.ranked.LifestealRankedManager
         private set
+    lateinit var lifestealRankedQueueManager: com.liam.joshymc.lifesteal.ranked.queue.LifestealRankedQueueManager
+        private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
     lateinit var rankManager: RankManager
@@ -542,6 +544,8 @@ class Joshymc : JavaPlugin() {
         lifestealProgressionManager = com.liam.joshymc.lifesteal.progression.LifestealProgressionManager(this)
         // Issue #1361: Ranked Team Wars arenas and match lifecycle. Only does anything where Lifesteal runs.
         lifestealRankedManager = com.liam.joshymc.lifesteal.ranked.LifestealRankedManager(this)
+        // Issue #1363: Ranked Team Wars matchmaking, queues and team challenges. Only does anything where Lifesteal runs.
+        lifestealRankedQueueManager = com.liam.joshymc.lifesteal.ranked.queue.LifestealRankedQueueManager(this)
         flightTimeManager = com.liam.joshymc.flight.FlightTimeManager(this)
         flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
@@ -632,6 +636,7 @@ class Joshymc : JavaPlugin() {
         lifestealCombatManager.refresh()
         lifestealProgressionManager.refresh()
         lifestealRankedManager.refresh()
+        lifestealRankedQueueManager.refresh()
         flightTimeManager.start()
         flyVoucherManager.start()
 
@@ -737,6 +742,8 @@ class Joshymc : JavaPlugin() {
         shutdown.step("purchaseFulfillmentManager.stop", { ::purchaseFulfillmentManager.isInitialized }) { purchaseFulfillmentManager.stop() }
         shutdown.step("candyShopManager.stop", { ::candyShopManager.isInitialized }) { candyShopManager.stop() }
         shutdown.step("eventShopManager.stop", { ::eventShopManager.isInitialized }) { eventShopManager.stop() }
+        // Ends every ranked queue entry, found match and challenge (none is resumed after a restart) before the matches stop.
+        shutdown.step("lifestealRankedQueueManager.stop", { ::lifestealRankedQueueManager.isInitialized }) { lifestealRankedQueueManager.stop() }
         // Cancels running ranked matches and restores everyone online while the database (and the systems it reads) are still running.
         shutdown.step("lifestealRankedManager.stop", { ::lifestealRankedManager.isInitialized }) { lifestealRankedManager.stop() }
         shutdown.step("flightTimeManager.stop", { ::flightTimeManager.isInitialized }) { flightTimeManager.stop() }
@@ -946,6 +953,7 @@ class Joshymc : JavaPlugin() {
         safe("lifestealTeamManager.refresh") { lifestealTeamManager.refresh() }
         safe("lifestealProgressionManager.refresh") { lifestealProgressionManager.refresh() }
         safe("lifestealRankedManager.refresh") { lifestealRankedManager.refresh() }
+        safe("lifestealRankedQueueManager.refresh") { lifestealRankedQueueManager.refresh() }
         safe("beaconPotionManager.start") { beaconPotionManager.start() }
 
         // 8. Restart Discord

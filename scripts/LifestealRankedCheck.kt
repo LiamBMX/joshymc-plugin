@@ -517,7 +517,8 @@ private fun wiring() {
     check("Survival teams never used (Lifesteal team manager only)", rankedSources.none { it.contains("plugin.teamManager") })
     check("/lifesteal admin arena|ranked routed in the existing executor", executor.contains("ranked.execute(sender, args.drop(1))") && executor.contains("progression.admin(sender, args.drop(1))"))
     check("ranked commands only exist on the /lifesteal executor of the Lifesteal destination", executor.contains("private val ranked = if (destination == TransferDestination.LIFESTEAL) LifestealRankedCommand(plugin) else null"))
-    check("no new plugin.yml command (subcommands of /lifesteal)", !Regex("""(?m)^  ranked:""").containsMatchIn(plugin))
+    // Staff tools stay subcommands of /lifesteal; /ranked (issue #1363) is the player queue command.
+    check("staff tools stay under /lifesteal admin", Regex("""(?m)^  ranked:\s*\n(\s{4}.*\n)*?\s{4}permission: joshymc\.lifesteal\.ranked\.use""").containsMatchIn(plugin))
     check("admin permission op only", Regex("""joshymc\.lifesteal\.ranked\.admin:\s*\n\s*description: [^\n]+\n\s*default: op""").containsMatchIn(plugin))
     check("spectate permission op only", Regex("""joshymc\.lifesteal\.ranked\.spectate:\s*\n\s*description: [^\n]+\n\s*default: op""").containsMatchIn(plugin))
 
@@ -568,8 +569,9 @@ private fun wiring() {
     check("spectators can't affect combat", listener.contains("if (ranked.isSpectator(victim.uniqueId)) return true") && listener.contains("ranked.isSpectator(attacker.uniqueId)"))
 
     // Scope limits of this issue.
-    check("no Elo, matchmaking, queues or rewards", rankedSources.none { Regex("""(fun|val|var|class) (\w*(Elo|Queue|Reward|Matchmak)|(elo|queue|reward|matchmak))""").containsMatchIn(it) })
-    check("doesn't register a playable ranked system yet (public queue is a later issue)", !manager.contains("rankedTeamWarsSystem ="))
+    check("no Elo or rewards", rankedSources.none { Regex("""(fun|val|var|class) (\w*(Elo|Reward)|(elo|reward))""").containsMatchIn(it) })
+    // Issue #1363: matchmaking lives in lifesteal/ranked/queue/ (scripts/LifestealRankedQueueCheck.kt); it registers the ranked system.
+    check("the match manager itself doesn't register the ranked system (the queue does)", !manager.contains("rankedTeamWarsSystem ="))
     check("no packet-level or Geyser code", rankedSources.none { it.contains("Geyser") || it.contains("packet") || it.contains("Floodgate") })
     check("database work during combat is queued, not synchronous", manager.contains("plugin.databaseManager.async(\"ranked defeat"))
 }

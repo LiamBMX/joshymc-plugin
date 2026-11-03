@@ -175,6 +175,17 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
+        // Issue #1363: Ranked Team Wars matchmaking (/ranked). Lifesteal only: released on servers
+        // that don't host Lifesteal, so Survival never has the command (another plugin may own it there).
+        if (plugin.lifestealRankedQueueManager.hosted) {
+            plugin.getCommand("ranked")?.let {
+                val cmd = com.liam.joshymc.lifesteal.ranked.queue.RankedCommand(plugin)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+        } else {
+            unregisterCommand("ranked")
+        }
         // Issue #1331: cross-server transfers through the Velocity proxy.
         for (destination in com.liam.joshymc.network.transfer.TransferDestination.entries) {
             plugin.getCommand(destination.command)?.let {

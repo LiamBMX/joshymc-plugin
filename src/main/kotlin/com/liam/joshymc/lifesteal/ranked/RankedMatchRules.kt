@@ -57,6 +57,24 @@ enum class DefeatReason(val label: String) {
 /** How a match ended. Elo is not calculated by this issue. */
 enum class MatchOutcome { WIN, CANCELLED }
 
+/**
+ * How a match came about, stored on every match record (issue #1363), so later systems can tell
+ * them apart. Whether a [CHALLENGE] result counts towards competitive Elo is an open policy
+ * decision: nothing here (and no Elo) exists yet, so no outcome is assumed for it.
+ */
+enum class MatchKind(val label: String) {
+    /** Staff `/lifesteal admin ranked testmatch`. */
+    TEST("test"),
+    /** Public matchmaking (`/ranked queue`). */
+    PUBLIC("ranked queue"),
+    /** A direct team challenge (`/ranked challenge`). */
+    CHALLENGE("team challenge");
+
+    companion object {
+        fun parse(raw: String?): MatchKind? = entries.firstOrNull { it.name == raw }
+    }
+}
+
 /** Restoration state of all participant snapshots of a match. */
 enum class RestorationStatus { PENDING, COMPLETE }
 
@@ -180,7 +198,8 @@ object RankedMatchRules {
         return problems
     }
 
-    private fun participantProblem(p: ParticipantFacts, limits: IntRange?): String? = when {
+    /** Why one participant can't play (null = can), the same rule a match start uses. Also used by the ranked queue. */
+    fun participantProblem(p: ParticipantFacts, limits: IntRange?): String? = when {
         !p.member -> "isn't a member of the team they'd represent"
         !p.online -> "isn't online"
         !p.inLifesteal -> "isn't in a Lifesteal world"

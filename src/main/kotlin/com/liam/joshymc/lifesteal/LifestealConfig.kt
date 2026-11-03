@@ -62,6 +62,30 @@ data class LifestealSettings(
         val teamSizes: List<Int> = listOf(2, 3, 4, 5),
         val countdownSeconds: Int = 10,
         val maxMatchMinutes: Int = 20,
+        val matchmaking: RankedMatchmaking = RankedMatchmaking(),
+    )
+
+    /**
+     * `ranked-team-wars.matchmaking` (issue #1363, `lifesteal/ranked/queue/`): timeouts and
+     * anti-spam limits of the ranked queue and team challenges. None of these are gameplay rules;
+     * they only decide how long a request waits and how often it can be repeated.
+     */
+    data class RankedMatchmaking(
+        val enabled: Boolean = true,
+        /** Selected teammates have this long to agree before a queue/challenge roster is dropped. */
+        val consentSeconds: Int = 60,
+        /** Everyone in a found match has this long to accept it. */
+        val confirmSeconds: Int = 30,
+        /** A team waits at most this long in a queue, then it is dropped (they can queue again). */
+        val queueTimeoutMinutes: Int = 30,
+        /** After a team leaves or loses its queue entry, it can queue again after this. */
+        val requeueCooldownSeconds: Int = 15,
+        /** A player who declines, ignores or disconnects from a found match waits this long to queue again. */
+        val declineCooldownSeconds: Int = 60,
+        /** An unanswered team challenge expires after this. */
+        val challengeExpireSeconds: Int = 120,
+        /** A team can send a new challenge this long after its last one. */
+        val challengeCooldownSeconds: Int = 60,
     )
 
     data class Seasons(val lengthMonths: Int = 3)
@@ -268,6 +292,7 @@ object LifestealConfigParser {
         val sizes = teamSizes(get("ranked-team-wars.team-sizes"), maxTeam, d.rankedTeamWars.teamSizes, problems)
         val countdown = int("ranked-team-wars.countdown-seconds", d.rankedTeamWars.countdownSeconds, 3, 60, "seconds of countdown before a ranked match starts")
         val maxMatch = int("ranked-team-wars.max-match-minutes", d.rankedTeamWars.maxMatchMinutes, 1, 120, "minutes before an unfinished ranked match is cancelled without a winner")
+        val matchmaking = rankedMatchmaking(get, ::int, problems)
 
         val months = int("seasons.length-months", d.seasons.lengthMonths, 1, MAX_SEASON_MONTHS, "season length in months")
 
@@ -282,7 +307,7 @@ object LifestealConfigParser {
                 hearts = LifestealSettings.Hearts(starting, maximum, minimum),
                 pvp = LifestealSettings.Pvp(cooldown),
                 teams = teams,
-                rankedTeamWars = LifestealSettings.RankedTeamWars(sizes, countdown, maxMatch),
+                rankedTeamWars = LifestealSettings.RankedTeamWars(sizes, countdown, maxMatch, matchmaking),
                 seasons = LifestealSettings.Seasons(months),
                 progression = progression,
                 heartItems = heartItems,
@@ -294,6 +319,38 @@ object LifestealConfigParser {
 
     const val MAX_ACTION_COOLDOWN_MILLIS = 60_000
     private val ITEM_MODEL = Regex("[a-z0-9_.-]+:[a-z0-9_./-]+")
+
+    /**
+     * `ranked-team-wars.matchmaking` (issue #1363). A file from before it existed has no section at
+     * all: that is one warning and the defaults. A bad value inside it is severe (never guessed).
+     */
+    private fun rankedMatchmaking(
+        get: (String) -> Any?,
+        int: (String, Int, Int, Int, String) -> Int,
+        problems: MutableList<Problem>,
+    ): LifestealSettings.RankedMatchmaking {
+        val d = LifestealSettings.RankedMatchmaking()
+        val base = "ranked-team-wars.matchmaking"
+        if (get(base) == null) {
+            problems += Problem(false, "$base is not set; using the default matchmaking settings.")
+            return d
+        }
+        val enabled = when (val raw = get("$base.enabled")) {
+            null -> { problems += Problem(false, "$base.enabled is not set; using the default ${d.enabled}."); d.enabled }
+            is Boolean -> raw
+            else -> { problems += Problem(true, "$base.enabled '$raw' must be true or false."); d.enabled }
+        }
+        return LifestealSettings.RankedMatchmaking(
+            enabled = enabled,
+            consentSeconds = int("$base.consent-seconds", d.consentSeconds, 10, 600, "seconds selected teammates have to agree"),
+            confirmSeconds = int("$base.confirm-seconds", d.confirmSeconds, 10, 120, "seconds everyone has to accept a found match"),
+            queueTimeoutMinutes = int("$base.queue-timeout-minutes", d.queueTimeoutMinutes, 1, 240, "minutes a team can wait in a queue"),
+            requeueCooldownSeconds = int("$base.requeue-cooldown-seconds", d.requeueCooldownSeconds, 0, 600, "seconds before a team can queue again"),
+            declineCooldownSeconds = int("$base.decline-cooldown-seconds", d.declineCooldownSeconds, 0, 1800, "seconds a player waits after declining or ignoring a found match"),
+            challengeExpireSeconds = int("$base.challenge-expire-seconds", d.challengeExpireSeconds, 30, 900, "seconds before an unanswered challenge expires"),
+            challengeCooldownSeconds = int("$base.challenge-cooldown-seconds", d.challengeCooldownSeconds, 0, 3600, "seconds between two challenges from one team"),
+        )
+    }
 
     /**
      * The `heart-items` section (issue #1344). A file from before it existed has no section at all:

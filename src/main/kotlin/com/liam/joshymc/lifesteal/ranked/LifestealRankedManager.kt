@@ -67,12 +67,13 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         val teamA: LifestealTeamStore.Team,
         val teamB: LifestealTeamStore.Team,
         val size: Int,
-        val test: Boolean,
+        val kind: MatchKind,
         val seasonId: String,
         val createdBy: String,
         val createdAt: Long,
         var roster: MatchRoster,
     ) {
+        val test: Boolean get() = kind == MatchKind.TEST
         var state: MatchState = MatchState.CREATED
             internal set
         var startedAt: Long? = null
@@ -84,7 +85,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         internal val flightTaken = HashSet<UUID>()
 
         fun team(side: Side): LifestealTeamStore.Team = if (side == Side.A) teamA else teamB
-        val label: String get() = "${teamA.name} vs ${teamB.name} (${size}v$size${if (test) ", TEST" else ""})"
+        val label: String get() = "${teamA.name} vs ${teamB.name} (${size}v$size${when (kind) { MatchKind.TEST -> ", TEST"; MatchKind.CHALLENGE -> ", challenge"; MatchKind.PUBLIC -> "" }})"
 
         internal fun track(task: BukkitTask) {
             tasks.removeIf { it.isCancelled }
@@ -369,20 +370,48 @@ class LifestealRankedManager(private val plugin: Joshymc) {
      */
     fun createMatch(sender: CommandSender, teamAName: String, teamBName: String, size: Int, arenaId: String?, test: Boolean): CreateResult {
         arenaUnavailable()?.let { return CreateResult.Refused(listOf(it)) }
-        val settings = settings ?: return CreateResult.Refused(listOf("lifesteal.yml is invalid."))
         val teams = plugin.lifestealTeamManager
         val teamA = teams.teamByName(teamAName)
         val teamB = teams.teamByName(teamBName)
+        fun online(team: LifestealTeamStore.Team?): List<UUID> =
+            team?.members?.mapNotNull { Bukkit.getPlayer(it.uuid)?.takeIf { p -> p.isOnline }?.uniqueId }?.take(size).orEmpty()
+        return startMatch(
+            actorOf(sender), sender.name, teamA, teamAName, teamB, teamBName, size, arenaId,
+            if (test) MatchKind.TEST else MatchKind.PUBLIC, null, online(teamA), online(teamB),
+        )
+    }
+
+    /**
+     * The ranked queue's way in (issue #1363): a match between the current Lifesteal teams
+     * [teamAId] and [teamBId] with exactly the players who accepted ([sideA], [sideB]) in [arenaId].
+     * Runs the very same validation, snapshot and preparation as every other match; the queue never
+     * touches inventories, positions or hearts itself.
+     */
+    fun createQueuedMatch(teamAId: String, teamBId: String, size: Int, arenaId: String, kind: MatchKind, sideA: List<UUID>, sideB: List<UUID>, reference: String): CreateResult {
+        require(kind != MatchKind.TEST) { "queued matches are PUBLIC or CHALLENGE" }
+        arenaUnavailable()?.let { return CreateResult.Refused(listOf(it)) }
+        val teams = plugin.lifestealTeamManager
+        val teamA = teams.team(teamAId)
+        val teamB = teams.team(teamBId)
+        return startMatch("queue:$reference", "matchmaking ($reference)", teamA, teamA?.name ?: teamAId, teamB, teamB?.name ?: teamBId, size, arenaId, kind, reference, sideA, sideB)
+    }
+
+    private fun startMatch(
+        createdBy: String, actorName: String,
+        teamA: LifestealTeamStore.Team?, teamAName: String, teamB: LifestealTeamStore.Team?, teamBName: String,
+        size: Int, arenaId: String?, kind: MatchKind, queueRef: String?, sideA: List<UUID>, sideB: List<UUID>,
+    ): CreateResult {
+        val settings = settings ?: return CreateResult.Refused(listOf("lifesteal.yml is invalid."))
+        val teams = plugin.lifestealTeamManager
         val now = System.currentTimeMillis()
 
         val arenaChoice = chooseArena(arenaId, size)
         val arena = arenaChoice.first
-        fun pick(team: LifestealTeamStore.Team?, side: Side): List<RankedMatchRules.ParticipantFacts> {
+        fun pick(uuids: List<UUID>, team: LifestealTeamStore.Team?, side: Side): List<RankedMatchRules.ParticipantFacts> {
             if (team == null) return emptyList()
-            val online = team.members.mapNotNull { Bukkit.getPlayer(it.uuid)?.takeIf { p -> p.isOnline } }
-            return online.take(size).map { facts(it, side, team) }
+            return uuids.mapNotNull { Bukkit.getPlayer(it)?.takeIf { p -> p.isOnline } }.map { facts(it, side, team) }
         }
-        val participants = pick(teamA, Side.A) + pick(teamB, Side.B)
+        val participants = pick(sideA, teamA, Side.A) + pick(sideB, teamB, Side.B)
         val heartLimits = plugin.lifestealHeartManager.limits
         val request = RankedMatchRules.Request(
             teamA = teamFacts(teamA, teamAName),
@@ -405,7 +434,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         val id = RankedMatchRules.newMatchId()
         val roster = MatchRoster(participants.map { MatchParticipant(it.uuid, it.side, if (it.side == Side.A) teamA.id else teamB.id) })
         val seasonId = plugin.lifestealProgressionManager.progress(now).season?.id ?: "none"
-        val match = Match(id, arena, teamA, teamB, size, test, seasonId, actorOf(sender), now, roster)
+        val match = Match(id, arena, teamA, teamB, size, kind, seasonId, createdBy, now, roster)
         match.state = MatchState.VALIDATING
 
         // Reserve: from here until the snapshot is stored nothing else can run (same tick), and the
@@ -420,7 +449,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         }
         try {
             store.insertMatch(
-                RankedStore.NewMatch(id, seasonId, arena.id, teamA.id, teamA.name, teamB.id, teamB.name, size, test, match.createdBy, now),
+                RankedStore.NewMatch(id, seasonId, arena.id, teamA.id, teamA.name, teamB.id, teamB.name, size, match.test, match.createdBy, now, kind, queueRef),
                 roster.participants, snapshots,
             )
         } catch (e: Exception) {
@@ -434,7 +463,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             pendingRestore += s.uuid
             cachedSnapshots[s.uuid] = RankedStore.Snapshot(store.snapshotId(id, s.uuid), id, s.uuid, s.slots, s.heldSlot, s.returnWorld, s.returnPoint, "PENDING", now)
         }
-        plugin.logger.info("[Ranked] ${sender.name} created match $id: ${match.label} in arena ${arena.id}.")
+        plugin.logger.info("[Ranked] $actorName created match $id: ${match.label} in arena ${arena.id}.")
         prepare(match)
         return CreateResult.Started(match)
     }
@@ -478,6 +507,32 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     /** Unlocked by the season schedule (or the progression is disabled); unknown state = locked. */
     fun rankedUnlocked(now: Long = System.currentTimeMillis()): Boolean =
         plugin.lifestealProgressionManager.rankedStatus(now) != ProgressionRules.RankedStatus.LOCKED
+
+    // ── For the ranked queue (issue #1363; memory only) ─────
+
+    /**
+     * Why [player] couldn't play for [team] right now (null = they could), by exactly the rules a
+     * match start applies ([RankedMatchRules.participantProblem]): membership, online, Lifesteal
+     * world, loaded hearts, combat tag, other match, waiting restore, transfer, death, game mode,
+     * staff states.
+     */
+    fun participantProblem(player: Player, team: LifestealTeamStore.Team): String? {
+        arenaUnavailable()?.let { return it }
+        val hearts = plugin.lifestealHeartManager
+        val limits = hearts.limits?.takeIf { hearts.active } ?: return "the heart system isn't running, so hearts couldn't be at stake"
+        return RankedMatchRules.participantProblem(facts(player, Side.A, team), limits.minimum..limits.maximum)
+    }
+
+    /** The first AVAILABLE arena hosting [size] that isn't in [exclude] (arenas other proposals are waiting on). */
+    fun availableArenaFor(size: Int, exclude: Set<String> = emptySet()): RankedArena? =
+        arenas.values.firstOrNull { it.arena.id !in exclude && size in it.arena.sizes && availability(it) == ArenaAvailability.AVAILABLE }?.arena
+
+    /** Some enabled, ready arena hosts [size] (it may be busy right now). */
+    fun hostsSize(size: Int): Boolean =
+        arenas.values.any { size in it.arena.sizes && availability(it) != ArenaAvailability.DISABLED }
+
+    /** Arenas a running match holds right now (for the queue diagnostics). */
+    fun heldArenaIds(): List<String> = matches.values.map { it.arena.id }
 
     /** The arena to use: [requested] if given, else the first AVAILABLE one that hosts [size]. */
     private fun chooseArena(requested: String?, size: Int): Pair<RankedArena?, String?> {

@@ -61,6 +61,8 @@ class RankedStore(private val db: SqliteDatabase) {
                 team_b_name TEXT NOT NULL,
                 size INTEGER NOT NULL,
                 test INTEGER NOT NULL DEFAULT 0,
+                kind TEXT,
+                queue_ref TEXT,
                 state TEXT NOT NULL,
                 created_by TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
@@ -75,6 +77,12 @@ class RankedStore(private val db: SqliteDatabase) {
             )
             """.trimIndent()
         )
+        // Issue #1363: how the match came about (TEST / PUBLIC / CHALLENGE) and the queue proposal that
+        // made it. Older databases get the columns here (SQLite throws when they already exist);
+        // older rows have no kind and are read by their test flag (they were all staff test matches).
+        for (column in listOf("kind TEXT", "queue_ref TEXT")) {
+            try { db.execute("ALTER TABLE lifesteal_ranked_matches ADD COLUMN $column") } catch (_: Exception) { }
+        }
         db.createTable("CREATE UNIQUE INDEX IF NOT EXISTS idx_lifesteal_ranked_matches_open_arena ON lifesteal_ranked_matches(arena_id) WHERE state NOT IN ('COMPLETED', 'CANCELLED')")
         db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_ranked_matches_created ON lifesteal_ranked_matches(created_at)")
         db.createTable(
@@ -243,6 +251,9 @@ class RankedStore(private val db: SqliteDatabase) {
         val test: Boolean,
         val createdBy: String,
         val createdAt: Long,
+        val kind: MatchKind = if (test) MatchKind.TEST else MatchKind.PUBLIC,
+        /** The ranked queue proposal that created it (null for staff test matches). */
+        val queueRef: String? = null,
     )
 
     /** One participant's pre-match state. [slots] are opaque serialized item stacks (null = empty slot). */
@@ -275,10 +286,10 @@ class RankedStore(private val db: SqliteDatabase) {
         require(participants.map { it.uuid }.toSet() == snapshots.map { it.uuid }.toSet()) { "every participant needs exactly one snapshot" }
         db.transaction {
             db.execute(
-                """INSERT INTO lifesteal_ranked_matches (match_id, season_id, arena_id, team_a_id, team_a_name, team_b_id, team_b_name, size, test, state, created_by, created_at, restoration, version)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PREPARING', ?, ?, 'PENDING', 1)""",
+                """INSERT INTO lifesteal_ranked_matches (match_id, season_id, arena_id, team_a_id, team_a_name, team_b_id, team_b_name, size, test, kind, queue_ref, state, created_by, created_at, restoration, version)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PREPARING', ?, ?, 'PENDING', 1)""",
                 match.id, match.seasonId, match.arenaId, match.teamAId, match.teamAName, match.teamBId, match.teamBName,
-                match.size, if (match.test) 1 else 0, match.createdBy, match.createdAt,
+                match.size, if (match.test) 1 else 0, match.kind.name, match.queueRef, match.createdBy, match.createdAt,
             )
             for (p in participants) {
                 db.execute(
@@ -295,7 +306,7 @@ class RankedStore(private val db: SqliteDatabase) {
                     match.createdAt,
                 )
             }
-            insertEvent(match.id, match.createdAt, "CREATED", null, "${match.teamAName} vs ${match.teamBName}, ${match.size}v${match.size}, arena ${match.arenaId}${if (match.test) ", test" else ""}")
+            insertEvent(match.id, match.createdAt, "CREATED", null, "${match.teamAName} vs ${match.teamBName}, ${match.size}v${match.size}, arena ${match.arenaId}, ${match.kind.label}${match.queueRef?.let { ", from $it" } ?: ""}")
             insertEvent(match.id, match.createdAt, "STATE", null, "CREATED -> VALIDATING -> PREPARING")
         }
     }
@@ -493,6 +504,8 @@ class RankedStore(private val db: SqliteDatabase) {
         val outcome: String?,
         val cancelReason: String?,
         val restoration: String,
+        val kind: MatchKind,
+        val queueRef: String?,
     )
 
     data class ParticipantRecord(val uuid: UUID, val side: Side, val teamId: String, val status: ParticipantStatus, val defeatReason: DefeatReason?, val open: Boolean)
@@ -543,6 +556,8 @@ class RankedStore(private val db: SqliteDatabase) {
         outcome = rs.getString("outcome"),
         cancelReason = rs.getString("cancel_reason"),
         restoration = rs.getString("restoration"),
+        kind = MatchKind.parse(rs.getString("kind")) ?: if (rs.getInt("test") == 1) MatchKind.TEST else MatchKind.PUBLIC,
+        queueRef = rs.getString("queue_ref"),
     )
 
     /** Appends one event row (callers queue this through `databaseManager.async` where it isn't part of a transition). */
