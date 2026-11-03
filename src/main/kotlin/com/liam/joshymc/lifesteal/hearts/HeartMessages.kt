@@ -38,6 +38,7 @@ object HeartMessages {
     const val PAUSED = "&cHearts are paused right now. Please try again later."
     const val NOT_NOW = "&cYou can't do that right now."
     const val NOT_LOADED = "&cYour hearts haven't loaded yet. Please rejoin and try again."
+    const val RANKED_MATCH = "&cHeart items can't be used or made during a ranked match."
     const val WITHDRAW_DISABLED = "&cHeart withdrawal is disabled right now."
     const val REDEEM_DISABLED = "&cRedeeming Heart items is disabled right now."
     const val WITHDRAW_FAILED = "&cYour heart couldn't be withdrawn just now, so nothing changed. Please try again."

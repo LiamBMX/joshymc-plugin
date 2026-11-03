@@ -210,6 +210,8 @@ class TransferManager(private val plugin: Joshymc) : Listener {
         if (safe { plugin.eventManager.isInEventWorld(player) }) list += TransferBlocker.IN_EVENT
         if (safe { plugin.adminManager.isFrozen(player.uniqueId) }) list += TransferBlocker.FROZEN
         if (safe { plugin.tradeManager.isTrading(player) }) list += TransferBlocker.TRADING
+        // Issue #1361: a ranked match holds its players (their inventory is restored here, on this server).
+        if (safe { plugin.lifestealRankedManager.holds(player) || plugin.lifestealRankedManager.hasPendingRestore(player.uniqueId) }) list += TransferBlocker.RANKED_MATCH
         return list
     }
 

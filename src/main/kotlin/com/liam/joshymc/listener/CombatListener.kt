@@ -124,6 +124,9 @@ class CombatListener(private val plugin: Joshymc) : Listener {
         if (plugin.modModeManager.isModMode(attacker)) return
         // Hosted Crystal PvP matches never tag: quitting mid-match must not combat-log the event inventory (issue #1189).
         if (plugin.eventManager.games.isMatchFight(attacker, victim)) return
+        // Ranked Team Wars fights never tag either (issue #1361): a disconnect is the match's to
+        // handle (inventory restored from the snapshot), never a combat-log NPC dropping real gear.
+        if (plugin.lifestealRankedManager.isMatchFight(attacker, victim)) return
         // tagPvp = tag both + tell the Lifesteal combat-log observer (issue #1350; none on Survival).
         plugin.combatManager.tagPvp(attacker, victim)
     }

@@ -212,7 +212,7 @@ commands:
     permission: joshymc.transfer.survival
   lifesteal:
     description: Go to Lifesteal SMP (admins on the Lifesteal server also manage hearts with /lifesteal hearts)
-    usage: /lifesteal [progress|hearts <get|set|add|remove|give|items|void> ...|combat <status|logs|incident|failures> ...|admin launch <status|schedule|activate|audit> ...]
+    usage: /lifesteal [progress|hearts <get|set|add|remove|give|items|void> ...|combat <status|logs|incident|failures> ...|admin launch <status|schedule|activate|audit> ...|admin arena <create|delete|list|info|setname|setcorner|setspawn|setspectator|clearspawns|sizes|enable|disable> ...|admin ranked <testmatch|list|info|cancel|remove|restore|spectate|unspectate> ...]
     permission: joshymc.transfer.lifesteal
   withdrawheart:
     description: Turn one of your permanent hearts into a Heart item (Lifesteal only)
@@ -972,6 +972,14 @@ permissions:
   joshymc.lifesteal.progression.end-bypass:
     description: Enter the Lifesteal End before it unlocks (staff emergencies only; explicit grant, not given to ops by default)
     default: false
+  joshymc.lifesteal.ranked.admin:
+    description: Ranked Team Wars staff tools on the Lifesteal server (/lifesteal admin arena ... and /lifesteal admin ranked testmatch|list|info|cancel|remove|restore|spectate)
+    default: op
+    children:
+      joshymc.lifesteal.ranked.spectate: true
+  joshymc.lifesteal.ranked.spectate:
+    description: Watch a running Ranked Team Wars match from its spectator point (/lifesteal admin ranked spectate|unspectate; no damage, no item pickup)
+    default: op
   joshymc.transfer.bypass-cooldown:
     description: Skip the cross-server transfer cooldown
     default: op

@@ -30,7 +30,10 @@ Combat logging (tag notifications, disconnect classification, incident records, 
 penalty) is implemented since issue #1350 (`docs/lifesteal-combat.md`).
 The launch progression (24h grace period, scheduled Ranked Team Wars and End unlocks, `/lifesteal
 progress`) is implemented since issue #1352 (`docs/lifesteal-progression.md`).
-Elimination and revival never exist (fixed rules). Ranked Team Wars, Elo and season rollover
+Ranked Team Wars arenas and the match lifecycle (staff test matches, inventory snapshots, restart
+recovery) are implemented since issue #1361 (`docs/lifesteal-ranked.md`); public matchmaking and Elo
+are not.
+Elimination and revival never exist (fixed rules). Ranked matchmaking, Elo and season rollover
 aren't implemented yet; `lifesteal.yml` holds the settings those later features will read. Nothing here has been tested on a real Lifesteal server yet (see "Testing").
 
 ## Requirements
@@ -152,6 +155,8 @@ server that runs Lifesteal:
 | `teams.max-size` | 5 | 1..5 (the approved limit; 1..100 before issue #1346) |
 | `teams.*` (team system) | see `docs/lifesteal-teams.md` | enabled, invite expiry, creation/disbanding, name length, reserved names |
 | `ranked-team-wars.team-sizes` | [2, 3, 4, 5] | distinct sizes 2..teams.max-size |
+| `ranked-team-wars.countdown-seconds` | 10 | 3..60 (see `docs/lifesteal-ranked.md`) |
+| `ranked-team-wars.max-match-minutes` | 20 | 1..120; an unfinished match is then cancelled with no winner |
 | `seasons.length-months` | 3 | 1..24 |
 | `progression.*` (launch schedule) | see `docs/lifesteal-progression.md` | grace 24h, Ranked +72h, End +168h after launch; no launch time by default |
 

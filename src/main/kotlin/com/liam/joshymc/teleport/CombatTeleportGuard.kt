@@ -19,10 +19,17 @@ object CombatTeleportGuard {
 
     /** Returns true (and tells the player once) when [player] is combat-tagged and must not teleport. */
     fun blocks(plugin: Joshymc, player: Player): Boolean {
+        // Ranked Team Wars (issue #1361): a match holds its players in the arena until they're out.
+        if (plugin.lifestealRankedManager.holds(player)) {
+            plugin.commsManager.send(player, Component.text(MSG_RANKED_MATCH, NamedTextColor.RED))
+            return true
+        }
         if (CombatTeleportRules.allowsRequest(plugin.combatManager.isTagged(player))) return false
         plugin.commsManager.send(player, Component.text(CombatTeleportRules.MSG_IN_COMBAT, NamedTextColor.RED))
         return true
     }
+
+    const val MSG_RANKED_MATCH = "You can't teleport during a ranked match."
 
     /** Tells [player] that their pending teleport was cancelled because they entered combat. */
     fun notifyCancelled(plugin: Joshymc, player: Player) {

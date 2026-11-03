@@ -72,6 +72,12 @@ teams:
 ranked-team-wars:
   # Supported team sizes per side (2 = 2v2 ... 5 = 5v5). Each must be 2..teams.max-size.
   team-sizes: [2, 3, 4, 5]
+  # Ranked match infrastructure (docs/lifesteal-ranked.md). Seconds of countdown once every player
+  # is in the arena (3 to 60); no damage is possible before it ends.
+  countdown-seconds: 10
+  # Minutes after which an unfinished match is cancelled with no winner (1 to 120). Inventories are
+  # restored either way; hearts already stolen in the match stay stolen.
+  max-match-minutes: 20
 
 seasons:
   # How long a season lasts, in months.

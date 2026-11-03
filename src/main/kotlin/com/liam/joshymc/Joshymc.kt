@@ -295,6 +295,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var lifestealProgressionManager: com.liam.joshymc.lifesteal.progression.LifestealProgressionManager
         private set
+    lateinit var lifestealRankedManager: com.liam.joshymc.lifesteal.ranked.LifestealRankedManager
+        private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
     lateinit var rankManager: RankManager
@@ -538,6 +540,8 @@ class Joshymc : JavaPlugin() {
         lifestealCombatManager = com.liam.joshymc.lifesteal.combat.LifestealCombatManager(this)
         // Issue #1352: Lifesteal launch progression (grace period, Ranked/End unlocks). Only does anything where Lifesteal runs.
         lifestealProgressionManager = com.liam.joshymc.lifesteal.progression.LifestealProgressionManager(this)
+        // Issue #1361: Ranked Team Wars arenas and match lifecycle. Only does anything where Lifesteal runs.
+        lifestealRankedManager = com.liam.joshymc.lifesteal.ranked.LifestealRankedManager(this)
         flightTimeManager = com.liam.joshymc.flight.FlightTimeManager(this)
         flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
@@ -627,6 +631,7 @@ class Joshymc : JavaPlugin() {
         lifestealTeamManager.refresh()
         lifestealCombatManager.refresh()
         lifestealProgressionManager.refresh()
+        lifestealRankedManager.refresh()
         flightTimeManager.start()
         flyVoucherManager.start()
 
@@ -732,6 +737,8 @@ class Joshymc : JavaPlugin() {
         shutdown.step("purchaseFulfillmentManager.stop", { ::purchaseFulfillmentManager.isInitialized }) { purchaseFulfillmentManager.stop() }
         shutdown.step("candyShopManager.stop", { ::candyShopManager.isInitialized }) { candyShopManager.stop() }
         shutdown.step("eventShopManager.stop", { ::eventShopManager.isInitialized }) { eventShopManager.stop() }
+        // Cancels running ranked matches and restores everyone online while the database (and the systems it reads) are still running.
+        shutdown.step("lifestealRankedManager.stop", { ::lifestealRankedManager.isInitialized }) { lifestealRankedManager.stop() }
         shutdown.step("flightTimeManager.stop", { ::flightTimeManager.isInitialized }) { flightTimeManager.stop() }
         shutdown.step("beaconPotionManager.stop", { ::beaconPotionManager.isInitialized }) { beaconPotionManager.stop() }
         shutdown.step("stuckRecoveryManager.stop", { ::stuckRecoveryManager.isInitialized }) { stuckRecoveryManager.stop() }
@@ -938,6 +945,7 @@ class Joshymc : JavaPlugin() {
         safe("lifestealHeartManager.refresh") { lifestealHeartManager.refresh() }
         safe("lifestealTeamManager.refresh") { lifestealTeamManager.refresh() }
         safe("lifestealProgressionManager.refresh") { lifestealProgressionManager.refresh() }
+        safe("lifestealRankedManager.refresh") { lifestealRankedManager.refresh() }
         safe("beaconPotionManager.start") { beaconPotionManager.start() }
 
         // 8. Restart Discord
