@@ -77,6 +77,11 @@
       "icon": "joshymc/december_key.png",
       "sha1": "c0da57687de83a081535d5a4c6eb9e4b4a7f8936"
     },
+    "joshymc:discord_icon": {
+      "bedrock_name": "discord_icon",
+      "icon": "joshymc/discord_icon.png",
+      "sha1": "1bddba773a103193e55f2be394b7f6405243e5e1"
+    },
     "joshymc:easter_egg": {
       "bedrock_name": "easter_egg",
       "icon": "joshymc/easter_egg.png",
@@ -891,6 +896,11 @@
       "bedrock_name": "woodland_hunter",
       "icon": "joshymc/woodland_hunter.png",
       "sha1": "fcad7d2213f6a6c3ee80c768692adea9e4c69524"
+    },
+    "joshymc:youtube_icon": {
+      "bedrock_name": "youtube_icon",
+      "icon": "joshymc/youtube_icon.png",
+      "sha1": "bea9cfe0884f8fe56e654c75de5f44bfee01b824"
     }
   }
 }

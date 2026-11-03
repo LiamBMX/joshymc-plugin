@@ -5,6 +5,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
+import org.bukkit.NamespacedKey
 import org.bukkit.OfflinePlayer
 import org.bukkit.Sound
 import org.bukkit.entity.Player
@@ -62,6 +63,27 @@ object GuiStyle {
             if (lore.isNotEmpty()) {
                 meta.lore(lore.map { it.decoration(TextDecoration.ITALIC, false) })
             }
+        }
+        return stack
+    }
+
+    /**
+     * A shared GUI icon (issue #1355), e.g. `GuiStyle.icon(GuiIcon.DISCORD, name, lore)`, for any
+     * gamemode's menus. Every call returns a new stack built from the registered custom item
+     * (its model, PDC id and default name), so it is safe to customize further. [name] replaces
+     * the item's name; the item's own lore is never shown, only [lore]. Click handling and
+     * protection are the menu's as usual: GuiManager cancels clicks on the GUI's own slots.
+     */
+    fun icon(icon: GuiIcon, name: Component? = null, lore: List<Component> = emptyList()): ItemStack {
+        val custom = Joshymc.instance.itemManager.getItem(icon.itemId)
+        val stack = custom?.createItemStack() ?: ItemStack(Material.STICK).also { fallback ->
+            // Not registered (shouldn't happen): still draw the icon's model, never a bare stick.
+            fallback.editMeta { it.setItemModel(NamespacedKey(GuiIcon.NAMESPACE, icon.itemId)) }
+        }
+        stack.editMeta { meta ->
+            val title = name ?: custom?.displayName
+            if (title != null) meta.displayName(title.decoration(TextDecoration.ITALIC, false))
+            meta.lore(if (lore.isEmpty()) null else lore.map { it.decoration(TextDecoration.ITALIC, false) })
         }
         return stack
     }

@@ -53,6 +53,10 @@ class ItemManager(private val plugin: Joshymc) {
         // Collectibles (looks only)
         register(Gun())
 
+        // Shared GUI icons, every gamemode (issue #1355; menus build them with GuiStyle.icon)
+        register(DiscordIcon())
+        register(YoutubeIcon())
+
         // October Halloween Collection
         register(PhantomsGrasp())
         register(Gravedigger())
