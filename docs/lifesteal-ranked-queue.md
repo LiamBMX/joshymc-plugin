@@ -5,7 +5,8 @@ pairs teams, everyone accepts the found match, and the match then runs through t
 Ranked Team Wars lifecycle ([lifesteal-ranked.md](lifesteal-ranked.md)): same validation, same
 arena reservation, same inventory snapshot and restore, same heart service. **No leaderboards,
 rewards, divisions or seasonal resets** are part of this; Player Elo and Team Elo came later (issue
-#1365, [lifesteal-ranked-elo.md](lifesteal-ranked-elo.md)), and matchmaking still pairs teams first
+#1365, [lifesteal-ranked-elo.md](lifesteal-ranked-elo.md)), leaderboards and divisions after that
+(issue #1367, [lifesteal-ranked-stats.md](lifesteal-ranked-stats.md)), and matchmaking still pairs teams first
 in, first out.
 
 Code: `src/main/kotlin/com/liam/joshymc/lifesteal/ranked/queue/`

@@ -47,6 +47,8 @@ class LifestealRatingManager(private val plugin: Joshymc) {
 
     val hosted: Boolean get() = ServerGamemode.LIFESTEAL in plugin.networkIdentityManager.hostedGamemodes
     val active: Boolean get() = hosted && tablesReady && policy() != null
+    /** The rating tables exist (issue #1367: the statistics read them). */
+    val ready: Boolean get() = hosted && tablesReady
 
     /** The current settings as a calculation policy, or null while lifesteal.yml is invalid. */
     fun policy(): RatingStore.Policy? {
@@ -155,6 +157,8 @@ class LifestealRatingManager(private val plugin: Joshymc) {
             is RatingStore.Finalized.Rated -> {
                 plugin.logger.info("[RankedElo] Rated ${result.matchId} (${result.teamAName} vs ${result.teamBName}, ${result.size}v${result.size}): " +
                     result.teams.entries.joinToString { (id, c) -> "${if (id == result.teamAId) result.teamAName else result.teamBName} ${c.before}->${c.after}" } + ".")
+                // Issue #1367: leaderboards never show a page read before this commit.
+                plugin.lifestealRankedStatsManager.onRatingsCommitted()
                 // Team Elo also changed for teammates who didn't play: drop their cached view too.
                 for (teamId in result.teams.keys) plugin.lifestealTeamManager.team(teamId)?.members?.forEach { profiles.remove(it.uuid) }
                 for (uuid in result.sides.keys) {
@@ -223,6 +227,8 @@ class LifestealRatingManager(private val plugin: Joshymc) {
         n.team?.let { t ->
             send(Component.text("${n.ownTeam} Team Elo: ", NamedTextColor.GRAY).append(Component.text(t.new.toString(), NamedTextColor.WHITE)).append(Component.text(" (${signed(t.delta)})", deltaColor(t.delta))))
         }
+        // Issue #1367: promotion / demotion lines, part of this once-only, committed-only notice.
+        for (line in plugin.lifestealRankedStatsManager.changeLines(n.row.previous, n.row.new, n.ownTeam, n.team?.previous, n.team?.new)) send(line)
     }
 
     fun onJoin(player: Player) {

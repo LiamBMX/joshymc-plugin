@@ -5,7 +5,8 @@ import com.liam.joshymc.lifesteal.ranked.queue.LifestealRankedQueueManager.Compa
 import com.liam.joshymc.lifesteal.ranked.queue.LifestealRankedQueueManager.Companion.seconds
 import com.liam.joshymc.lifesteal.ranked.queue.LifestealRankedQueueManager.Companion.text
 import com.liam.joshymc.lifesteal.ranked.rating.LifestealRatingManager
-import com.liam.joshymc.lifesteal.ranked.rating.RatingStore
+import com.liam.joshymc.lifesteal.ranked.rating.RatingType
+import com.liam.joshymc.lifesteal.ranked.stats.RankedStatsCommand
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -58,7 +59,12 @@ class RankedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             null, "menu" -> plugin.lifestealRatingManager.loadProfile(player.uniqueId) { _, _ -> if (player.isOnline) RankedQueueMenu(plugin).open(player) }
             "stats" -> stats(player, a.getOrNull(1), full = true)
             "rating" -> stats(player, null, full = false)
-            "history" -> history(player, a.getOrNull(1))
+            "history" -> history(player, a.drop(1))
+            // Issue #1367: leaderboards, team statistics, divisions and the season (read-only).
+            "top", "leaderboard", "lb" -> top(player, a.drop(1))
+            "teamstats", "team" -> teamStats(player, a.drop(1).joinToString(" ").ifBlank { null })
+            "divisions", "division" -> statsView.divisions(player)
+            "season" -> statsView.season(player)
             "queue", "join" -> {
                 val size = a.getOrNull(1)?.let { RankedQueueBook.parseSize(it) }
                 if (size == null) Msg.usage(player, "/ranked queue <2v2|3v3|4v4|5v5> [teammates...]")
@@ -86,54 +92,38 @@ class RankedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         return found.uniqueId to (found.name ?: name)
     }
 
+    /** Issue #1367: the statistics views (chat). Ratings are only read, never changed. */
+    private val statsView by lazy { RankedStatsCommand(plugin) }
+
     private fun stats(player: Player, name: String?, full: Boolean) {
         val (uuid, shown) = target(player, name) ?: return
-        val ratings = plugin.lifestealRatingManager
-        ratings.loadProfile(uuid) { profile, problem ->
-            if (!player.isOnline) return@loadProfile
-            if (profile == null) return@loadProfile Msg.error(player, problem ?: "No ratings.")
-            val send = { c: Component -> plugin.commsManager.send(player, c) }
-            fun stat(label: String, value: Component) = send(text("$label: ", NamedTextColor.GRAY).append(value))
-            val whose = if (uuid == player.uniqueId) "Your" else "$shown's"
-            send(text("Ranked Team Wars | $whose ratings", NamedTextColor.GOLD).decorate(TextDecoration.BOLD))
-            val unrated = if (profile.player == null) " (no rated matches yet)" else ""
-            stat("Player Elo", text(profile.playerRating.toString(), NamedTextColor.WHITE).append(text(unrated, NamedTextColor.DARK_GRAY)))
-            val teamName = profile.teamName
-            if (teamName == null) stat("Team Elo", text("not in a team", NamedTextColor.DARK_GRAY))
-            else {
-                val note = if (profile.team == null) ", no rated matches yet" else ""
-                stat("Team Elo", text("${profile.teamRating} ", NamedTextColor.WHITE).append(text("($teamName$note)", NamedTextColor.GRAY)))
-            }
-            if (!full) return@loadProfile
-            stat("Season", text(profile.seasonId, NamedTextColor.WHITE))
-            stat("Ranked matches", text("${profile.matches}  ", NamedTextColor.WHITE)
-                .append(text("W ${profile.wins}", NamedTextColor.GREEN)).append(text(" / ", NamedTextColor.GRAY)).append(text("L ${profile.losses}", NamedTextColor.RED))
-                .append(text("  win rate ${profile.winRate}", NamedTextColor.GRAY)))
-            if (profile.recent.isNotEmpty()) {
-                send(text("Recent changes:", NamedTextColor.GRAY))
-                for (h in profile.recent) send(historyLine(h))
-            }
-        }
+        statsView.stats(player, uuid, shown, full)
     }
 
-    private fun history(player: Player, name: String?) {
+    /** `/ranked history [player] [page]`: match results with their Elo changes (issue #1367). */
+    private fun history(player: Player, args: List<String>) {
+        val page = args.lastOrNull()?.toIntOrNull()
+        val name = (if (page != null) args.dropLast(1) else args).firstOrNull()
         val (uuid, shown) = target(player, name) ?: return
-        plugin.lifestealRatingManager.loadProfile(uuid, recentLimit = 10) { profile, problem ->
-            if (!player.isOnline) return@loadProfile
-            if (profile == null) return@loadProfile Msg.error(player, problem ?: "No ratings.")
-            val of = if (uuid == player.uniqueId) "" else " of $shown"
-            plugin.commsManager.send(player, text("Player Elo history$of (${profile.seasonId}, newest first)", NamedTextColor.GOLD).decorate(TextDecoration.BOLD))
-            if (profile.recent.isEmpty()) plugin.commsManager.send(player, text("No rated matches this season.", NamedTextColor.GRAY))
-            for (h in profile.recent) plugin.commsManager.send(player, historyLine(h))
-        }
+        statsView.history(player, uuid, shown, ((page ?: 1) - 1).coerceAtLeast(0))
     }
 
-    private fun historyLine(h: RatingStore.HistoryRow): Component {
-        val label = h.outcome?.label?.replaceFirstChar { it.uppercase() } ?: "?"
-        return text("  $label ", if (h.delta >= 0) NamedTextColor.GREEN else NamedTextColor.RED)
-            .append(text("${h.previous} -> ${h.new} ", NamedTextColor.WHITE))
-            .append(text("(${LifestealRatingManager.signed(h.delta)})", LifestealRatingManager.deltaColor(h.delta)))
-            .append(text("  ${LifestealRatingManager.ago(h.at)}", NamedTextColor.DARK_GRAY))
+    /** `/ranked top [players|teams] [page]`. */
+    private fun top(player: Player, args: List<String>) {
+        val type = when (args.firstOrNull()?.lowercase()) {
+            null, "players", "player", "p" -> RatingType.PLAYER_ELO
+            "teams", "team", "t" -> RatingType.TEAM_ELO
+            else -> if (args.first().toIntOrNull() != null) RatingType.PLAYER_ELO else return Msg.usage(player, "/ranked top [players|teams] [page]")
+        }
+        val page = args.lastOrNull()?.toIntOrNull() ?: 1
+        statsView.top(player, type, (page - 1).coerceAtLeast(0))
+    }
+
+    /** `/ranked teamstats [team]`: own team by default; other active teams are public. */
+    private fun teamStats(player: Player, name: String?) {
+        val team = if (name == null) teams.teamOf(player.uniqueId) ?: return Msg.error(player, "You aren't in a Lifesteal team. Use /ranked teamstats <team>.")
+        else teams.teamByName(name) ?: return Msg.error(player, "No active Lifesteal team is called '$name'.")
+        statsView.teamStats(player, team.id)
     }
 
     private fun challenge(player: Player, a: List<String>) {
@@ -228,6 +218,8 @@ class RankedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             args.size == 1 -> filter(SUBS, args[0])
             (first == "stats" || first == "history") && args.size == 2 && player.hasPermission(LifestealRatingManager.PERMISSION_STATS_OTHERS) ->
                 filter(Bukkit.getOnlinePlayers().map { it.name }, args[1])
+            first == "top" && args.size == 2 -> filter(listOf("players", "teams"), args[1])
+            first == "teamstats" && args.size == 2 -> filter(teams.allTeams().map { it.name }, args[1])
             first == "queue" && args.size == 2 -> filter(sizes, args[1])
             first == "queue" && args.size > 2 -> filter(mates - args.drop(2).toSet(), args.last())
             first == "challenge" && args.size == 2 -> filter(listOf("accept", "decline", "cancel") + otherTeams, args[1])
@@ -241,7 +233,7 @@ class RankedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     }
 
     companion object {
-        const val USAGE = "/ranked [queue <size> [teammates]|leave|status|accept|decline|challenge <team> <size> [teammates]|challenge accept|decline <team>|challenge cancel|challenges|stats [player]|rating|history [player]]"
-        private val SUBS = listOf("queue", "leave", "status", "accept", "decline", "challenge", "challenges", "stats", "rating", "history")
+        const val USAGE = "/ranked [queue <size> [teammates]|leave|status|accept|decline|challenge <team> <size> [teammates]|challenge accept|decline <team>|challenge cancel|challenges|stats [player]|rating|history [player] [page]|top [players|teams] [page]|teamstats [team]|divisions|season]"
+        private val SUBS = listOf("queue", "leave", "status", "accept", "decline", "challenge", "challenges", "stats", "rating", "history", "top", "teamstats", "divisions", "season")
     }
 }
