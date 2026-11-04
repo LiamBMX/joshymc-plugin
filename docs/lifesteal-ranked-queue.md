@@ -3,8 +3,10 @@
 Lifesteal only. Teams queue for 2v2, 3v3, 4v4 or 5v5, every picked player agrees, the matchmaker
 pairs teams, everyone accepts the found match, and the match then runs through the existing
 Ranked Team Wars lifecycle ([lifesteal-ranked.md](lifesteal-ranked.md)): same validation, same
-arena reservation, same inventory snapshot and restore, same heart service. **No Elo, team Elo,
-leaderboards, rewards, divisions or seasonal resets** are part of this.
+arena reservation, same inventory snapshot and restore, same heart service. **No leaderboards,
+rewards, divisions or seasonal resets** are part of this; Player Elo and Team Elo came later (issue
+#1365, [lifesteal-ranked-elo.md](lifesteal-ranked-elo.md)), and matchmaking still pairs teams first
+in, first out.
 
 Code: `src/main/kotlin/com/liam/joshymc/lifesteal/ranked/queue/`
 
@@ -77,8 +79,9 @@ above. A team has at most one open outgoing challenge, may send one every
 challenge match ends the whole challenge.
 
 **Match records**: queued matches are `kind = PUBLIC`, challenges `kind = CHALLENGE` (staff test
-matches `TEST`), with the proposal id in `queue_ref`. Whether challenge results count towards a
-future competitive Elo is an **open policy decision**; nothing assumes either way.
+matches `TEST`), with the proposal id in `queue_ref`. Elo (issue #1365): PUBLIC matches are rated,
+TEST never, CHALLENGE only with `ranked-team-wars.elo.rate-challenges: true` (off by default; see
+[lifesteal-ranked-elo.md](lifesteal-ranked-elo.md)).
 
 ## Safety
 
@@ -154,7 +157,8 @@ loads with the defaults and one warning; a bad value makes lifesteal.yml invalid
 ## Future Elo
 
 `LifestealRankedQueueManager.selector` is an `OpponentSelector`; a rating-based selector replaces
-`FirstInFirstOut` without changing the queue, confirmation or start.
+`FirstInFirstOut` without changing the queue, confirmation or start. The ratings exist since issue
+#1365 (`LifestealRatingManager`); matchmaking doesn't use them yet.
 
 ## Java and Bedrock
 

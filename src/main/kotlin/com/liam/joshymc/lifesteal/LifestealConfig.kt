@@ -63,6 +63,27 @@ data class LifestealSettings(
         val countdownSeconds: Int = 10,
         val maxMatchMinutes: Int = 20,
         val matchmaking: RankedMatchmaking = RankedMatchmaking(),
+        val elo: RankedElo = RankedElo(),
+    )
+
+    /**
+     * `ranked-team-wars.elo` (issue #1365, `lifesteal/ranked/rating/`). The blueprint requires
+     * separate individual and team Elo but gives no numbers, so these are the issue's proposed
+     * defaults (initial 1000, minimum 0, K 32), not blueprint values. Changing them never rewrites a
+     * stored rating: initial values only apply to players/teams that have never been rated in the
+     * season. [rateChallenges] = direct team challenges change Elo (off: they can be farmed between
+     * friendly teams). [sameOpponentLimit] rated matches between the same two teams per
+     * [sameOpponentWindowHours]; later ones are recorded as unrated (0 = no limit).
+     */
+    data class RankedElo(
+        val initialPlayerRating: Int = 1000,
+        val initialTeamRating: Int = 1000,
+        val minimumRating: Int = 0,
+        val maximumRating: Int = 5000,
+        val kFactor: Int = 32,
+        val rateChallenges: Boolean = false,
+        val sameOpponentLimit: Int = 3,
+        val sameOpponentWindowHours: Int = 24,
     )
 
     /**
@@ -293,6 +314,7 @@ object LifestealConfigParser {
         val countdown = int("ranked-team-wars.countdown-seconds", d.rankedTeamWars.countdownSeconds, 3, 60, "seconds of countdown before a ranked match starts")
         val maxMatch = int("ranked-team-wars.max-match-minutes", d.rankedTeamWars.maxMatchMinutes, 1, 120, "minutes before an unfinished ranked match is cancelled without a winner")
         val matchmaking = rankedMatchmaking(get, ::int, problems)
+        val elo = rankedElo(get, ::int, problems)
 
         val months = int("seasons.length-months", d.seasons.lengthMonths, 1, MAX_SEASON_MONTHS, "season length in months")
 
@@ -307,7 +329,7 @@ object LifestealConfigParser {
                 hearts = LifestealSettings.Hearts(starting, maximum, minimum),
                 pvp = LifestealSettings.Pvp(cooldown),
                 teams = teams,
-                rankedTeamWars = LifestealSettings.RankedTeamWars(sizes, countdown, maxMatch, matchmaking),
+                rankedTeamWars = LifestealSettings.RankedTeamWars(sizes, countdown, maxMatch, matchmaking, elo),
                 seasons = LifestealSettings.Seasons(months),
                 progression = progression,
                 heartItems = heartItems,
@@ -350,6 +372,44 @@ object LifestealConfigParser {
             challengeExpireSeconds = int("$base.challenge-expire-seconds", d.challengeExpireSeconds, 30, 900, "seconds before an unanswered challenge expires"),
             challengeCooldownSeconds = int("$base.challenge-cooldown-seconds", d.challengeCooldownSeconds, 0, 3600, "seconds between two challenges from one team"),
         )
+    }
+
+    /** Highest rating any Elo setting may name; ratings never get near Int overflow. */
+    const val MAX_ELO_RATING = 100_000
+
+    /**
+     * `ranked-team-wars.elo` (issue #1365). A file from before it existed has no section: one
+     * warning and the defaults. A bad value inside it is severe (never guessed).
+     */
+    private fun rankedElo(
+        get: (String) -> Any?,
+        int: (String, Int, Int, Int, String) -> Int,
+        problems: MutableList<Problem>,
+    ): LifestealSettings.RankedElo {
+        val d = LifestealSettings.RankedElo()
+        val base = "ranked-team-wars.elo"
+        if (get(base) == null) {
+            problems += Problem(false, "$base is not set; using the default Elo settings.")
+            return d
+        }
+        val rateChallenges = when (val raw = get("$base.rate-challenges")) {
+            null -> { problems += Problem(false, "$base.rate-challenges is not set; using the default ${d.rateChallenges}."); d.rateChallenges }
+            is Boolean -> raw
+            else -> { problems += Problem(true, "$base.rate-challenges '$raw' must be true or false."); d.rateChallenges }
+        }
+        val minimum = int("$base.minimum-rating", d.minimumRating, 0, MAX_ELO_RATING - 1, "lowest rating anyone can drop to")
+        val maximum = int("$base.maximum-rating", d.maximumRating, 1, MAX_ELO_RATING, "highest rating anyone can reach")
+        val player = int("$base.initial-player-rating", d.initialPlayerRating, 0, MAX_ELO_RATING, "Player Elo of a player's first rated match in a season")
+        val team = int("$base.initial-team-rating", d.initialTeamRating, 0, MAX_ELO_RATING, "Team Elo of a team's first rated match in a season")
+        val k = int("$base.k-factor", d.kFactor, 1, 200, "most rating one match can move")
+        val limit = int("$base.same-opponent-limit", d.sameOpponentLimit, 0, 100, "rated matches between the same two teams per window; 0 = no limit")
+        val window = int("$base.same-opponent-window-hours", d.sameOpponentWindowHours, 1, 720, "hours the same-opponent limit counts back")
+        if (minimum >= maximum) problems += Problem(true, "$base.minimum-rating ($minimum) must be below $base.maximum-rating ($maximum).")
+        else {
+            if (player !in minimum..maximum) problems += Problem(true, "$base.initial-player-rating ($player) must be between the minimum ($minimum) and maximum ($maximum) rating.")
+            if (team !in minimum..maximum) problems += Problem(true, "$base.initial-team-rating ($team) must be between the minimum ($minimum) and maximum ($maximum) rating.")
+        }
+        return LifestealSettings.RankedElo(player, team, minimum, maximum, k, rateChallenges, limit, window)
     }
 
     /**

@@ -2,7 +2,9 @@
 
 Lifesteal only. This is the infrastructure Ranked Team Wars run on: arenas, the match state machine,
 participant validation, inventory snapshots, teleports in and out, death and disconnect handling,
-crash recovery and match records. **There is no Elo, no leaderboard and no reward yet.** Staff
+crash recovery and match records. Player Elo and Team Elo are applied after a match is recorded
+COMPLETED (issue #1365, [lifesteal-ranked-elo.md](lifesteal-ranked-elo.md)); there is no
+leaderboard and no reward yet. Staff
 start test matches by hand (`testmatch`); public matchmaking, queues and team challenges (issue
 #1363, [lifesteal-ranked-queue.md](lifesteal-ranked-queue.md)) create theirs through the same
 lifecycle (`LifestealRankedManager.createQueuedMatch`, which shares every check with `createMatch`).
@@ -152,9 +154,10 @@ handles disconnects itself:
   blueprint defines none;
 - on rejoin: restored and moved back; they can't rejoin the match.
 
-**Open decision (not invented here)**: the blueprint has no ranked forfeiture rule. A future rule
-(e.g. counting a disconnect as a loss for Elo, or a cooldown on ranked entry) belongs with the
-matchmaking/Elo issue; this issue only records `DISCONNECT` in the participant row and the event log.
+**Open decision (not invented here)**: the blueprint has no ranked forfeiture rule. This issue only
+records `DISCONNECT` in the participant row and the event log. For Elo (issue #1365) a disconnect is
+an ordinary "out": the match result stands and the disconnected player is rated with their side, so
+quitting can't dodge a loss. No other forfeit penalty exists.
 
 ## Spectators
 

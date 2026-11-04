@@ -175,7 +175,11 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
-    fun onJoin(event: PlayerJoinEvent) = ranked.onJoin(event.player)
+    fun onJoin(event: PlayerJoinEvent) {
+        ranked.onJoin(event.player)
+        // Issue #1365: committed Elo results they haven't seen yet.
+        plugin.lifestealRatingManager.onJoin(event.player)
+    }
 
     @EventHandler(priority = EventPriority.LOW)
     fun onQuit(event: PlayerQuitEvent) {
@@ -183,6 +187,7 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
         ranked.onQuit(event.player)
         // Issue #1363: a queued/confirming player's team entry ends (a created match stays the match manager's).
         plugin.lifestealRankedQueueManager.onQuit(event.player)
+        plugin.lifestealRatingManager.onQuit(event.player)
     }
 
     // ── Movement, teleports, boundaries ─────────────────────
