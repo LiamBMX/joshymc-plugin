@@ -208,8 +208,15 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         }
 
     /** How two players relate for combat and heart stealing right now (see [TeamCombatRules.relation]). */
-    fun combatRelation(a: UUID, b: UUID, now: Long = System.currentTimeMillis()): TeamCombatRules.Relation =
-        TeamCombatRules.relation(a, b, membershipAvailable, { byPlayer[it] }, { combatMemory.recent(it, now) })
+    fun combatRelation(a: UUID, b: UUID, now: Long = System.currentTimeMillis()): TeamCombatRules.Relation {
+        // Issue #1371: inside a Ranked Team Wars match the roster's sides decide, so a team change
+        // racing the match start can't turn match teammates into enemies (or the other way round).
+        rankedSides(a, b)?.let { sameSide -> return TeamCombatRules.rankedRelation(sameSide) }
+        return TeamCombatRules.relation(a, b, membershipAvailable, { byPlayer[it] }, { combatMemory.recent(it, now) })
+    }
+
+    private fun rankedSides(a: UUID, b: UUID): Boolean? =
+        try { plugin.lifestealRankedManager.matchSides(a, b) } catch (_: UninitializedPropertyAccessException) { null }
 
     /** Heart-transfer eligibility of a kill between these two (see [TeamCombatRules.heartCheck]). */
     fun heartCheck(killer: UUID, victim: UUID): TeamCombatRules.HeartCheck =
@@ -234,7 +241,12 @@ class LifestealTeamManager(private val plugin: Joshymc) {
     private fun inCombat(uuid: UUID): Boolean = Bukkit.getPlayer(uuid)?.let { it.isOnline && plugin.combatManager.isTagged(it) } == true
 
     private fun combatRefusal(change: TeamCombatRules.TeamChange, involved: Iterable<UUID>): String? =
-        if (involved.any { inCombat(it) }) TeamCombatRules.combatMessage(change) else null
+        if (involved.any { inCombat(it) }) TeamCombatRules.combatMessage(change)
+        else TeamCombatRules.rankedRefusal(change, involved, ::inRankedMatch)
+
+    /** Issue #1371: held by a Ranked Team Wars match (memory only). False before the ranked manager exists. */
+    private fun inRankedMatch(uuid: UUID): Boolean =
+        try { plugin.lifestealRankedManager.holds(uuid) } catch (_: UninitializedPropertyAccessException) { false }
 
     // ── Checks shared by every action ───────────────────────
 
@@ -497,6 +509,11 @@ class LifestealTeamManager(private val plugin: Joshymc) {
     fun adminDisband(sender: CommandSender, teamName: String, confirmed: Boolean) {
         adminProblem(sender)?.let { return refuse(sender, it) }
         val team = teamByName(teamName) ?: return refuse(sender, "There's no team called $teamName.")
+        // Issue #1371: end the match through the match system first (restores everyone), never under it.
+        if (team.members.any { inRankedMatch(it.uuid) }) {
+            val matchId = team.members.firstNotNullOfOrNull { plugin.lifestealRankedManager.matchOf(it.uuid)?.id }
+            return refuse(sender, "${team.name} is playing a ranked match. Cancel it first: /lifesteal admin ranked cancel ${matchId ?: "<match>"} confirm")
+        }
         if (!confirmed) {
             return Msg.reply(sender, text("Admin: disband ", NamedTextColor.RED).append(teamName(team))
                 .append(text(" (${team.size} member(s))? Only its team data changes; hearts, inventories and balances are untouched. ", NamedTextColor.RED))
