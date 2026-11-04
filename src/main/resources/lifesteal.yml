@@ -120,6 +120,69 @@ ranked-team-wars:
     # are recorded as unrated.
     same-opponent-limit: 3
     same-opponent-window-hours: 24
+  # Ranked leaderboards (/ranked top players|teams, docs/lifesteal-ranked-stats.md). Only players /
+  # teams with at least this many rated matches this season are listed, so a fresh initial rating
+  # can't top the board. Ratings below the minimum are kept and shown in /ranked stats, just not
+  # ranked yet (0 to 1000).
+  leaderboards:
+    minimum-player-matches: 5
+    minimum-team-matches: 5
+    # Seconds a read leaderboard page may be reused (0 to 600). Every committed rating change
+    # clears it at once, so this only bounds staleness for edge cases.
+    cache-seconds: 30
+  # Competitive divisions: labels computed from the current Player Elo / Team Elo every time they
+  # are shown (nothing is stored, so changing a threshold never changes a rating). The blueprint
+  # names no divisions; these are proposed defaults. A division needs display-name, color (#RRGGBB
+  # or a colour name such as gold) and minimum-elo; team-minimum-elo (Team Elo threshold, defaults to
+  # minimum-elo), icon (an item name, menus only) and description are optional. Thresholds must
+  # strictly increase and the lowest one must be at or below elo.minimum-rating. A mistake here only
+  # turns divisions off (see the console); it never pauses the rest of Lifesteal. Divisions give no
+  # powers and no rewards.
+  divisions:
+    enabled: true
+    tiers:
+      bronze:
+        display-name: "Bronze"
+        color: "#CD7F32"
+        minimum-elo: 0
+        icon: COPPER_INGOT
+        description: "Everyone starts climbing here."
+      silver:
+        display-name: "Silver"
+        color: "#C0C0C0"
+        minimum-elo: 800
+        icon: IRON_INGOT
+        description: "Finding your footing."
+      gold:
+        display-name: "Gold"
+        color: gold
+        minimum-elo: 1000
+        icon: GOLD_INGOT
+        description: "Holding your own."
+      platinum:
+        display-name: "Platinum"
+        color: "#7FE0D8"
+        minimum-elo: 1200
+        icon: PRISMARINE_CRYSTALS
+        description: "A proven competitor."
+      diamond:
+        display-name: "Diamond"
+        color: aqua
+        minimum-elo: 1400
+        icon: DIAMOND
+        description: "Among the strongest."
+      master:
+        display-name: "Master"
+        color: light_purple
+        minimum-elo: 1600
+        icon: AMETHYST_SHARD
+        description: "Elite competition."
+      grandmaster:
+        display-name: "Grandmaster"
+        color: red
+        minimum-elo: 1800
+        icon: NETHERITE_INGOT
+        description: "The very top of Ranked Team Wars."
 
 seasons:
   # How long a season lasts, in months.

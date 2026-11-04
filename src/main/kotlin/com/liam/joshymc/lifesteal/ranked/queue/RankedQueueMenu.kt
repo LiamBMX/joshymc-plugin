@@ -6,6 +6,9 @@ import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.lifesteal.ranked.queue.LifestealRankedQueueManager.Companion.seconds
 import com.liam.joshymc.lifesteal.ranked.queue.LifestealRankedQueueManager.Companion.text
 import com.liam.joshymc.lifesteal.ranked.rating.LifestealRatingManager
+import com.liam.joshymc.lifesteal.ranked.rating.RatingType
+import com.liam.joshymc.lifesteal.ranked.stats.RankedMenuLayout
+import com.liam.joshymc.lifesteal.ranked.stats.RankedStatsMenu
 import com.liam.joshymc.lifesteal.teams.LifestealTeamStore.Team
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
@@ -39,7 +42,7 @@ class RankedQueueMenu(private val plugin: Joshymc) {
 
     fun open(player: Player) {
         val now = System.currentTimeMillis()
-        val gui = CustomGui(title("Ranked Team Wars"), SIZE)
+        val gui = CustomGui(title("Ranked Team Wars"), RankedMenuLayout.MAIN_SIZE)
         val team = teams.teamOf(player.uniqueId)
         val entry = queue.entryOf(player.uniqueId) ?: team?.takeIf { it.leader == player.uniqueId }?.let { queue.entryOfTeam(it.id) }
         val blocked = queue.playerProblem(player, now)
@@ -117,7 +120,8 @@ class RankedQueueMenu(private val plugin: Joshymc) {
             }
         }
 
-        gui.setItem(GuiStyle.closeSlot(SIZE), GuiStyle.close()) { p, _ -> p.closeInventory() }
+        gui.setItem(GuiStyle.closeSlot(RankedMenuLayout.MAIN_SIZE), GuiStyle.close()) { p, _ -> p.closeInventory() }
+        statsRow(gui, player, team)
         gui.setItem(24, GuiStyle.item(if (entry != null) Material.RED_CONCRETE else Material.GRAY_CONCRETE, text("Leave Queue", if (entry != null) NamedTextColor.RED else NamedTextColor.GRAY), listOf(
             text(if (entry != null) "Withdraw your team's ${queue.describe(entry)}." else "You aren't queued.", NamedTextColor.GRAY),
         ))) { p, _ ->
@@ -127,6 +131,44 @@ class RankedQueueMenu(private val plugin: Joshymc) {
             queue.leave(p)
         }
         plugin.guiManager.open(player, gui)
+    }
+
+    /**
+     * Issue #1367: the statistics row. Each button only opens a read-only view, which loads its
+     * data off the main thread and checks permission and Lifesteal again when clicked.
+     */
+    private fun statsRow(gui: CustomGui, player: Player, team: Team?) {
+        val menu = RankedStatsMenu(plugin)
+        fun hint(vararg lines: String) = lines.map { text(it, NamedTextColor.GRAY) } + Component.empty()
+        gui.setItem(RankedMenuLayout.PLAYER_STATS, GuiStyle.skull(player, text("Your Statistics", NamedTextColor.GOLD).decorate(TextDecoration.BOLD),
+            hint("Player Elo, division, record,", "streaks and ranking.") + text("Click to view", NamedTextColor.YELLOW))) { p, _ ->
+            GuiStyle.clickSound(p); menu.openPlayerStats(p, p.uniqueId)
+        }
+        gui.setItem(RankedMenuLayout.TEAM_STATS, GuiStyle.item(Material.WHITE_BANNER, text("Team Statistics", NamedTextColor.AQUA).decorate(TextDecoration.BOLD),
+            hint("Your team's own Team Elo,", "division, record and ranking.") + (if (team != null) text("Click to view", NamedTextColor.YELLOW) else text("Join a team first.", NamedTextColor.RED)))) { p, _ ->
+            val t = teams.teamOf(p.uniqueId) ?: run { GuiStyle.errorSound(p); Msg.error(p, "Join a Lifesteal team first."); return@setItem }
+            GuiStyle.clickSound(p); menu.openTeamStats(p, t.id)
+        }
+        gui.setItem(RankedMenuLayout.HISTORY, GuiStyle.item(Material.BOOK, text("Match History", NamedTextColor.GOLD).decorate(TextDecoration.BOLD),
+            hint("Your ranked results and", "Elo changes, newest first.") + text("Click to view", NamedTextColor.YELLOW))) { p, _ ->
+            GuiStyle.pageSound(p); menu.openPlayerHistory(p, p.uniqueId, 0)
+        }
+        gui.setItem(RankedMenuLayout.SEASON, GuiStyle.item(Material.CLOCK, text("Current Season", NamedTextColor.GOLD).decorate(TextDecoration.BOLD),
+            menu.seasonLore(player) + Component.empty() + text("Click for details", NamedTextColor.YELLOW))) { p, _ ->
+            GuiStyle.clickSound(p); menu.openSeason(p)
+        }
+        gui.setItem(RankedMenuLayout.DIVISIONS, GuiStyle.item(Material.NETHER_STAR, text("Ranked Divisions", NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD),
+            hint("Every division and the Elo", "it needs; your progress.") + text("Click to view", NamedTextColor.YELLOW))) { p, _ ->
+            GuiStyle.clickSound(p); menu.openDivisions(p)
+        }
+        gui.setItem(RankedMenuLayout.TOP_PLAYERS, GuiStyle.item(Material.GOLDEN_HELMET, text("Player Leaderboard", NamedTextColor.GOLD).decorate(TextDecoration.BOLD),
+            hint("Top Player Elo this season.") + text("Click to view", NamedTextColor.YELLOW))) { p, _ ->
+            GuiStyle.pageSound(p); menu.openLeaderboard(p, RatingType.PLAYER_ELO, 0)
+        }
+        gui.setItem(RankedMenuLayout.TOP_TEAMS, GuiStyle.item(Material.SHIELD, text("Team Leaderboard", NamedTextColor.AQUA).decorate(TextDecoration.BOLD),
+            hint("Top Team Elo this season.") + text("Click to view", NamedTextColor.YELLOW))) { p, _ ->
+            GuiStyle.pageSound(p); menu.openLeaderboard(p, RatingType.TEAM_ELO, 0)
+        }
     }
 
     private fun ratingItem(player: Player) = GuiStyle.item(Material.NETHER_STAR, text("Your Ranked Rating", NamedTextColor.GOLD).decorate(TextDecoration.BOLD), buildList {
