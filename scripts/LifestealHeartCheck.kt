@@ -83,6 +83,7 @@ fun main() {
     heartItemConcurrency()
     heartItemRollback()
     heartItemWiring()
+    heartItemConsumers()
     println("OK: $checks Lifesteal heart checks passed.")
 }
 
@@ -911,4 +912,20 @@ private fun wiring() {
     val all = File("src/main/kotlin/com/liam/joshymc/lifesteal/hearts").listFiles()!!.joinToString("\n") { it.readText() }
     // Heart items exist since issue #1344, but still no crafting recipe, shop or elimination.
     check("no elimination, revival or recipes", listOf("ban(", "ShapedRecipe", "ShapelessRecipe", "revive").none { it in all })
+}
+
+// Issue #1369: a Heart item is never used up as a plain Nether Star.
+private fun heartItemConsumers() {
+    val listener = source("lifesteal/hearts/LifestealHeartListener.kt")
+    check("crafting grids refuse Heart items", "fun onCraft(event: PrepareItemCraftEvent)" in listener)
+    check("Crafter blocks refuse Heart items (no PrepareItemCraftEvent there)", "fun onCrafter(event: CrafterCraftEvent)" in listener && "hearts.items.isHeart(it) }) event.isCancelled = true" in listener)
+    check("beacon payment slot refuses Heart items (click/shift/hotbar/offhand)", "fun onBeaconClick(event: InventoryClickEvent)" in listener && "InventoryType.BEACON" in listener && "ClickType.NUMBER_KEY" in listener && "ClickType.SWAP_OFFHAND" in listener)
+    check("beacon payment slot refuses dragged Heart items", "fun onBeaconDrag(event: InventoryDragEvent)" in listener)
+
+    // /lifesteal info: players can see their own hearts (from the cache, never a DB read on the command).
+    val info = source("lifesteal/LifestealInfoCommand.kt")
+    check("/lifesteal info shows the player's own hearts from the cache", "heartService.heartsOf(player.uniqueId)" in info && "storedRecord" !in info)
+    check("/lifesteal info changes nothing", listOf("adminChange", "withdraw(", "redeem(", "grantItems").none { it in info })
+    val transfer = source("command/ServerTransferCommand.kt")
+    check("/lifesteal info|help is only taken where Lifesteal is hosted", "(first == \"info\" || first == \"help\") && args.size == 1 && info != null && plugin.lifestealHeartManager.hosted" in transfer)
 }

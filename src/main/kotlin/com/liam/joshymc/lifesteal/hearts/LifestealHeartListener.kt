@@ -7,6 +7,12 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
 import org.bukkit.event.entity.PlayerDeathEvent
+import org.bukkit.block.Crafter
+import org.bukkit.event.block.CrafterCraftEvent
+import org.bukkit.event.inventory.ClickType
+import org.bukkit.event.inventory.InventoryClickEvent
+import org.bukkit.event.inventory.InventoryDragEvent
+import org.bukkit.event.inventory.InventoryType
 import org.bukkit.event.inventory.PrepareItemCraftEvent
 import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerInteractEvent
@@ -59,5 +65,41 @@ class LifestealHeartListener(private val hearts: LifestealHeartManager) : Listen
     @EventHandler(priority = EventPriority.HIGHEST)
     fun onCraft(event: PrepareItemCraftEvent) {
         if (event.inventory.matrix.any { hearts.items.isHeart(it) }) event.inventory.result = null
+    }
+
+    /**
+     * Issue #1369: the Crafter block crafts without a PrepareItemCraftEvent, so a hopper-fed Heart
+     * item could still become a beacon (the heart is gone, its serial stays ISSUED forever).
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    fun onCrafter(event: CrafterCraftEvent) {
+        val crafter = event.block.state as? Crafter ?: return
+        if (crafter.inventory.contents.any { hearts.items.isHeart(it) }) event.isCancelled = true
+    }
+
+    /**
+     * Issue #1369: a beacon takes a Nether Star as payment, which would use a Heart item up.
+     * Heart items can't be put into a beacon's payment slot (click, shift-click, hotbar key, drag).
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    fun onBeaconClick(event: InventoryClickEvent) {
+        val top = event.view.topInventory
+        if (top.type != InventoryType.BEACON) return
+        val intoBeacon = when {
+            event.isShiftClick -> event.clickedInventory != top && hearts.items.isHeart(event.currentItem)
+            event.clickedInventory != top -> false
+            event.click == ClickType.NUMBER_KEY ->
+                hearts.items.isHeart(event.whoClicked.inventory.getItem(event.hotbarButton))
+            event.click == ClickType.SWAP_OFFHAND -> hearts.items.isHeart(event.whoClicked.inventory.itemInOffHand)
+            else -> hearts.items.isHeart(event.cursor)
+        }
+        if (intoBeacon) event.isCancelled = true
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    fun onBeaconDrag(event: InventoryDragEvent) {
+        val top = event.view.topInventory
+        if (top.type != InventoryType.BEACON || !hearts.items.isHeart(event.oldCursor)) return
+        if (event.rawSlots.any { it < top.size }) event.isCancelled = true
     }
 }

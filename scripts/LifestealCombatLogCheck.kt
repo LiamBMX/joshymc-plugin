@@ -204,6 +204,10 @@ private fun classification() {
         check("player-provokable kick $cause = PLAYER_KICK (can't be used to spoof a staff kick)", c("KICKED", cause) == DisconnectKind.PLAYER_KICK)
     }
     check("KICKED with no kick event = PLAYER_KICK (unverified)", c("KICKED") == DisconnectKind.PLAYER_KICK)
+    // Issue #1369: the anticheat's kicks are provoked by the player, so they must not look like staff kicks.
+    check("anticheat kicks use ILLEGAL_ACTION (a tagged player can't escape by tripping a check)",
+        "PlayerKickEvent.Cause.ILLEGAL_ACTION" in source("manager/AntiCheatManager.kt"))
+    check("ILLEGAL_ACTION is never a staff cause", "ILLEGAL_ACTION" !in CombatLogRules.STAFF_KICK_CAUSES)
     check("restart command = SERVER_SHUTDOWN", c("KICKED", "RESTART_COMMAND") == DisconnectKind.SERVER_SHUTDOWN)
     for (reason in listOf("DISCONNECTED", "TIMED_OUT", "KICKED", "ERRONEOUS_STATE")) {
         check("server stopping wins over $reason", c(reason, "FLYING_PLAYER", stopping = true) == DisconnectKind.SERVER_SHUTDOWN)
@@ -412,8 +416,9 @@ private fun wiring() {
 
     // Transfers and teleports: the existing server-side gates (not only command cancellation).
     check("transfers refuse combat-tagged players (all of /lobby /hub /survival /lifesteal and future selectors)", transfer.contains("plugin.combatManager.isTagged(player) }) list += TransferBlocker.COMBAT_TAGGED"))
-    check("TeleportChecks refuses combat-tagged players", essentials.contains("You cannot teleport while in combat!"))
-    check("teleport warmups are cancelled on entering combat", essentials.contains("Teleport cancelled — you entered combat!"))
+    // Since issue #1356 the messages live in teleport/CombatTeleportRules and every path goes through CombatTeleportGuard.
+    check("TeleportChecks refuses combat-tagged players", essentials.contains("if (CombatTeleportGuard.blocks(plugin, player)) return true"))
+    check("teleport warmups are cancelled on entering combat", essentials.contains("CombatTeleportRules.WarmupStep.CANCEL_COMBAT -> CombatTeleportGuard.notifyCancelled(plugin, player)"))
     for (cmd in listOf("spawn", "home", "tpa", "tpaccept", "warp", "rtp", "back")) {
         check("/$cmd is blocked in combat", Regex("\"$cmd\"").containsMatchIn(combatListener.substringBefore("BLOCKED_COMBAT_PREFIXED")))
     }

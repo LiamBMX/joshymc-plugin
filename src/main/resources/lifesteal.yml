@@ -70,6 +70,11 @@ teams:
     heart-transfers: false
 
 ranked-team-wars:
+  # Master switch for players (issue #1369). false = /ranked is closed and hidden for players, even
+  # after the Day 3 unlock; staff with joshymc.lifesteal.ranked.admin can still set up arenas, run
+  # test matches and use /ranked. Turn it on only once Ranked Team Wars have been tested on this
+  # server. A missing key counts as false.
+  enabled: false
   # Supported team sizes per side (2 = 2v2 ... 5 = 5v5). Each must be 2..teams.max-size.
   team-sizes: [2, 3, 4, 5]
   # Ranked match infrastructure (docs/lifesteal-ranked.md). Seconds of countdown once every player

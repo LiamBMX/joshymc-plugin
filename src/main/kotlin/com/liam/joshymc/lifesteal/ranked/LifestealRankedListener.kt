@@ -85,6 +85,15 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
     /** Restricted while held by a match, or while spectating one. */
     private fun restricted(player: Player): Boolean = ranked.holds(player) || ranked.isSpectator(player.uniqueId)
 
+    // ── Command list ────────────────────────────────────────
+
+    /** Issue #1369: `/ranked` stays out of players' tab completion while Ranked Team Wars are closed. */
+    @EventHandler(priority = EventPriority.HIGH)
+    fun onCommandSend(event: org.bukkit.event.player.PlayerCommandSendEvent) {
+        if (plugin.lifestealRankedQueueManager.commandVisibleTo(event.player)) return
+        event.commands.removeAll(setOf("ranked", "joshymc:ranked"))
+    }
+
     // ── Damage ──────────────────────────────────────────────
 
     private fun attackerOf(event: EntityDamageEvent): Player? {

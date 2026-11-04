@@ -59,6 +59,13 @@ data class LifestealSettings(
      * without a winner (infrastructure safety, not a ranked rule).
      */
     data class RankedTeamWars(
+        /**
+         * Issue #1369: master switch for the player side of Ranked Team Wars (`/ranked`). Off by
+         * default and off when the key is missing, so passing the +72h schedule never opens an
+         * untested ranked system; staff turn it on explicitly once it has been tested. Staff tools
+         * (arenas, test matches, diagnostics) keep working either way.
+         */
+        val enabled: Boolean = false,
         val teamSizes: List<Int> = listOf(2, 3, 4, 5),
         val countdownSeconds: Int = 10,
         val maxMatchMinutes: Int = 20,
@@ -310,6 +317,11 @@ object LifestealConfigParser {
         val maxTeam = int("teams.max-size", d.teams.maxSize, 1, MAX_TEAM_SIZE, "most players in one team; the approved limit is $MAX_TEAM_SIZE")
         val teams = teams(get, maxTeam, problems)
 
+        val rankedEnabled = when (val raw = get("ranked-team-wars.enabled")) {
+            null -> { problems += Problem(false, "ranked-team-wars.enabled is not set; Ranked Team Wars stay closed to players (${d.rankedTeamWars.enabled})."); d.rankedTeamWars.enabled }
+            is Boolean -> raw
+            else -> { problems += Problem(true, "ranked-team-wars.enabled '$raw' must be true or false."); d.rankedTeamWars.enabled }
+        }
         val sizes = teamSizes(get("ranked-team-wars.team-sizes"), maxTeam, d.rankedTeamWars.teamSizes, problems)
         val countdown = int("ranked-team-wars.countdown-seconds", d.rankedTeamWars.countdownSeconds, 3, 60, "seconds of countdown before a ranked match starts")
         val maxMatch = int("ranked-team-wars.max-match-minutes", d.rankedTeamWars.maxMatchMinutes, 1, 120, "minutes before an unfinished ranked match is cancelled without a winner")
@@ -329,7 +341,7 @@ object LifestealConfigParser {
                 hearts = LifestealSettings.Hearts(starting, maximum, minimum),
                 pvp = LifestealSettings.Pvp(cooldown),
                 teams = teams,
-                rankedTeamWars = LifestealSettings.RankedTeamWars(sizes, countdown, maxMatch, matchmaking, elo),
+                rankedTeamWars = LifestealSettings.RankedTeamWars(rankedEnabled, sizes, countdown, maxMatch, matchmaking, elo),
                 seasons = LifestealSettings.Seasons(months),
                 progression = progression,
                 heartItems = heartItems,

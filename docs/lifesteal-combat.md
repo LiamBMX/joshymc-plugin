@@ -61,7 +61,9 @@ checks, in this order:
 
 Spoofing: a player can't choose a staff kick cause. Every cause a client can provoke counts.
 `PLUGIN` is exempt because JoshyMC punishments and most plugin kicks use it; a plugin that kicks for
-something the player triggers on purpose would also be exempt (limitation). An administrative
+something the player triggers on purpose would also be exempt (limitation). JoshyMC's own
+anticheat kicks with `ILLEGAL_ACTION` (issue #1369), so a tagged player can't escape a fight by
+tripping a check on purpose: that disconnect counts and leaves the NPC. An administrative
 *transfer* doesn't exist (only players start transfers).
 
 ## Penalty policy

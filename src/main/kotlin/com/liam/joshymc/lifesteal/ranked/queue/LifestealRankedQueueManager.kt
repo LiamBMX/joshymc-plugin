@@ -64,8 +64,20 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
 
     val hosted: Boolean get() = ServerGamemode.LIFESTEAL in plugin.networkIdentityManager.hostedGamemodes
 
+    /**
+     * Issue #1369: `lifesteal.yml > ranked-team-wars.enabled`. While false, `/ranked` is closed to
+     * players (only ranked staff can open it) and the progression reports Ranked as not playable,
+     * so the +72h unlock alone never opens it.
+     */
+    @Volatile var playerAccess: Boolean = false
+        private set
+
     /** Matchmaking can run (the season unlock is checked separately by the progression). */
-    val systemReady: Boolean get() = hosted && tablesReady && settings?.enabled == true && ranked.active
+    val systemReady: Boolean get() = hosted && playerAccess && tablesReady && settings?.enabled == true && ranked.active
+
+    /** [sender] may see and use `/ranked` right now (players only once it is enabled; ranked staff always). */
+    fun commandVisibleTo(sender: org.bukkit.command.CommandSender): Boolean =
+        hosted && (playerAccess || sender.hasPermission(LifestealRankedManager.ADMIN_PERMISSION))
 
     val allowedSizes: List<Int> get() = sizes
 
@@ -103,10 +115,15 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
         if (!hosted) {
             settings = null
             sizes = emptyList()
+            playerAccess = false
             progression.rankedTeamWarsSystem = null
             return
         }
         val lifesteal = plugin.lifestealConfigManager.settings
+        val wasOpen = playerAccess
+        playerAccess = lifesteal?.rankedTeamWars?.enabled == true
+        // The client's command list (tab completion) only changes when it is resent.
+        if (wasOpen != playerAccess) Bukkit.getOnlinePlayers().forEach { it.updateCommands() }
         settings = lifesteal?.rankedTeamWars?.matchmaking
         sizes = lifesteal?.rankedTeamWars?.teamSizes ?: emptyList()
         if (lifesteal == null) plugin.logger.severe("[RankedQueue] lifesteal.yml is invalid, so ranked matchmaking is off.")
@@ -126,6 +143,7 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
         val s = settings
         plugin.logger.info(
             if (s == null) "[RankedQueue] Matchmaking unavailable (lifesteal.yml)."
+            else if (!playerAccess) "[RankedQueue] Ranked Team Wars are closed to players (lifesteal.yml > ranked-team-wars.enabled: false); staff tools still work."
             else "[RankedQueue] Matchmaking ${if (s.enabled) "on" else "off"}: sizes ${sizes.joinToString { "${it}v$it" }}, agree ${s.consentSeconds}s, accept ${s.confirmSeconds}s, queue timeout ${s.queueTimeoutMinutes} min."
         )
     }
@@ -154,6 +172,7 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
     fun unavailableReason(now: Long = System.currentTimeMillis()): String? {
         if (!hosted) return "Ranked Team Wars only exist on the Lifesteal server."
         val s = settings ?: return "Ranked matchmaking is unavailable right now (server configuration). Please tell staff."
+        if (!playerAccess) return CLOSED_MESSAGE
         if (!s.enabled) return "Ranked matchmaking is turned off right now."
         if (!tablesReady || !ranked.active) return "Ranked Team Wars are unavailable right now. Please try again later."
         teams.unavailableReason()?.let { return it }
@@ -795,6 +814,8 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
         const val COOLDOWN_CAPACITY = 2000
         const val MAX_LISTED = 8
         const val STALE = "That ranked request is no longer valid (it was answered, replaced or expired)."
+        /** Issue #1369: shown while `ranked-team-wars.enabled` is false. */
+        const val CLOSED_MESSAGE = "Ranked Team Wars aren't open yet. Staff will announce when they start."
         const val LOCKED_MESSAGE = "Ranked Team Wars haven't unlocked for this season yet; they open on Day 3 (/lifesteal progress shows when)."
         private val PREFIX: Component = Component.text("[Ranked] ", NamedTextColor.GOLD)
 

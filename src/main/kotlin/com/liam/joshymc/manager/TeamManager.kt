@@ -926,6 +926,9 @@ class TeamManager(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onEntityDamage(event: EntityDamageByEntityEvent) {
         val victim = event.entity as? Player ?: return
+        // Issue #1369: Survival teams never decide Lifesteal PvP. Lifesteal worlds use their own
+        // team rules (lifesteal/teams/); Survival worlds are unchanged.
+        if (plugin.gamemodeLockManager.gamemodeOf(victim.world) == com.liam.joshymc.gamemode.ServerGamemode.LIFESTEAL) return
 
         val attacker: Player? = when (val damager = event.damager) {
             is Player -> damager

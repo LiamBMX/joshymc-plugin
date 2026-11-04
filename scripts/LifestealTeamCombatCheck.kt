@@ -68,6 +68,7 @@ fun main() {
     memory()
     store()
     wiring()
+    survivalTeamsStayOut()
     println("OK: $checks Lifesteal team combat checks passed.")
 }
 
@@ -369,4 +370,11 @@ private fun wiring() {
     check("admin diagnostics behind the admin permission", "\"pvp\" ->" in command && "if (!teams.canAdmin(sender)) return Msg.noPermission(sender)" in command)
     check("no command changes the policy", "friendlyFire =" !in command && "friendlyFire =" !in menu)
     check("lifesteal.yml documents both keys", "friendly-fire:\n" in yml && "    enabled: false\n" in yml && "    heart-transfers: false\n" in yml)
+}
+
+// Issue #1369: the Survival team PvP toggle never decides damage in a Lifesteal world.
+private fun survivalTeamsStayOut() {
+    val handler = source("manager/TeamManager.kt").substringAfter("fun onEntityDamage(event: EntityDamageByEntityEvent)").substringBefore("@EventHandler")
+    check("Survival team PvP skips Lifesteal victims", "gamemodeOf(victim.world) == com.liam.joshymc.gamemode.ServerGamemode.LIFESTEAL) return" in handler)
+    check("... before it can cancel anything", handler.indexOf("ServerGamemode.LIFESTEAL") in 0 until handler.indexOf("event.isCancelled = true"))
 }
