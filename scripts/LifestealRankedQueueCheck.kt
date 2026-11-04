@@ -522,7 +522,7 @@ private fun wiring() {
     // Survival isolation.
     check("/ranked is a LIFESTEAL command", GamemodeAssignments.COMMANDS["ranked"] == GamemodeScope.LIFESTEAL)
     check("/ranked only registered where Lifesteal is hosted, released elsewhere", Regex("""if \(plugin\.lifestealRankedQueueManager\.hosted\) \{[\s\S]*?getCommand\("ranked"\)[\s\S]*?\} else \{\s*\n\s*unregisterCommand\("ranked"\)""").containsMatchIn(commands))
-    check("manager does nothing where Lifesteal isn't hosted", Regex("""if \(!hosted\) \{\s*\n\s*settings = null\s*\n\s*sizes = emptyList\(\)\s*\n\s*progression\.rankedTeamWarsSystem = null\s*\n\s*return""").containsMatchIn(manager))
+    check("manager does nothing where Lifesteal isn't hosted", Regex("""if \(!hosted\) \{\s*\n\s*settings = null\s*\n\s*sizes = emptyList\(\)\s*\n\s*playerAccess = false\s*\n\s*progression\.rankedTeamWarsSystem = null\s*\n\s*return""").containsMatchIn(manager))
     check("every action refuses off Lifesteal and outside Lifesteal worlds", manager.contains("if (!hosted) return \"Ranked Team Wars only exist on the Lifesteal server.\"") && manager.contains("!isLifesteal(player) -> \"Ranked Team Wars only work in Lifesteal.\""))
     check("Survival teams, arenas and combat never used", queueSources.none { it.contains("plugin.teamManager") || it.contains("arenaManager") || it.contains("tagPvp(") || it.contains("untag(") })
     check("permission joshymc.lifesteal.ranked.use, default true", Regex("""joshymc\.lifesteal\.ranked\.use:\s*\n\s*description: [^\n]+\n\s*default: true""").containsMatchIn(plugin) && Regex("""(?m)^  ranked:\s*\n(\s{4}.*\n)*?\s{4}permission: joshymc\.lifesteal\.ranked\.use""").containsMatchIn(plugin))

@@ -79,9 +79,31 @@ fun main() {
     isolation()
     featureFlags()
     lifestealConfig()
+    rankedClosedByDefault()
     wiring()
     databases()
     println("OK: $checks Lifesteal bootstrap checks passed.")
+}
+
+// ── Ranked Team Wars master switch (issue #1369) ─────────────
+
+private fun rankedClosedByDefault() {
+    val line = "  enabled: false\n  # Supported team sizes"
+    check("bundled lifesteal.yml keeps Ranked closed to players", parse(withLine(line, line)).settings?.rankedTeamWars?.enabled == false)
+    parse(withLine(line, "  # Supported team sizes")).let {
+        check("missing ranked-team-wars.enabled = closed", it.settings?.rankedTeamWars?.enabled == false)
+        check("missing ranked-team-wars.enabled is only a warning", it.problems.any { p -> !p.severe && "ranked-team-wars.enabled" in p.message })
+    }
+    check("ranked-team-wars.enabled: true opens it", parse(withLine(line, "  enabled: true\n  # Supported team sizes")).settings?.rankedTeamWars?.enabled == true)
+    invalid("ranked-team-wars.enabled not a boolean", line, "  enabled: maybe\n  # Supported team sizes", "ranked-team-wars.enabled")
+    check("code default keeps Ranked closed", !LifestealSettings.DEFAULTS.rankedTeamWars.enabled)
+    val queue = source("lifesteal/ranked/queue/LifestealRankedQueueManager.kt")
+    check("systemReady requires the master switch", Regex("val systemReady: Boolean get\\(\\) = hosted && playerAccess").containsMatchIn(queue))
+    check("queueing refuses while closed", "if (!playerAccess) return CLOSED_MESSAGE" in queue)
+    val command = source("lifesteal/ranked/queue/RankedCommand.kt")
+    check("/ranked refuses players while closed", "if (!queue.commandVisibleTo(player))" in command)
+    check("/ranked tab completion is empty while closed", "if (!queue.commandVisibleTo(player) ||" in command)
+    check("/ranked is hidden from the command list while closed", "commandVisibleTo(event.player)" in source("lifesteal/ranked/LifestealRankedListener.kt"))
 }
 
 // ── Server gamemode and identity ─────────────────────────────

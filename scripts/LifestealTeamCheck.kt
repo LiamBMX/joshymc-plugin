@@ -105,6 +105,7 @@ fun main() {
     concurrency()
     rollback()
     wiring()
+    memberNames()
     println("OK: $checks Lifesteal team checks passed.")
 }
 
@@ -609,4 +610,13 @@ private fun wiring() {
 
     // Ranked Team Wars / Elo are later issues: no Elo values are created here.
     check("no Elo columns", Regex("""\w*elo\w*\s+(INTEGER|REAL)""", RegexOption.IGNORE_CASE).find(store) == null)
+}
+
+// Issue #1369: kick/transfer by name never guesses between members.
+private fun memberNames() {
+    val manager = source("lifesteal/teams/LifestealTeamManager.kt")
+    val lookup = manager.substringAfter("private fun memberByName(").substringBefore("\n    }\n")
+    check("an online member's current name wins", "Bukkit.getPlayerExact(name)?.uniqueId?.takeIf { team.isMember(it) }" in lookup)
+    check("a cached name is only used when exactly one member has it", "if (cached.size == 1) return cached.single().uuid" in lookup)
+    check("no first-match guessing", "firstOrNull" !in lookup)
 }

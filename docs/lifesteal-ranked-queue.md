@@ -139,6 +139,20 @@ Staff (`joshymc.lifesteal.ranked.admin`), next to the existing match tools:
 Staff cancels are logged and audited. They never change inventories or hearts; a match that
 already exists is cancelled with the existing `/lifesteal admin ranked cancel`.
 
+## Master switch (`lifesteal.yml > ranked-team-wars.enabled`, issue #1369)
+
+Default **false**, and a missing key also counts as false. While it is false:
+
+- `/ranked` refuses players ("Ranked Team Wars aren't open yet") and is left out of their tab
+  completion;
+- `systemReady` is false, so the progression reports Ranked as "unlocked by schedule" (not
+  AVAILABLE) even after +72h, and `canEnterRankedQueue()` stays false;
+- staff with `joshymc.lifesteal.ranked.admin` can still use `/ranked`, arenas and
+  `/lifesteal admin ranked testmatch` for testing.
+
+Set it to `true` only once Ranked Team Wars have been tested on the server, then reload. Players'
+command lists are resent when the switch changes.
+
 ## Settings (`lifesteal.yml > ranked-team-wars.matchmaking`)
 
 | Key | Default | Range |

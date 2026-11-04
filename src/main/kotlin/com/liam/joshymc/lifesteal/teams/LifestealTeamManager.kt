@@ -684,9 +684,14 @@ class LifestealTeamManager(private val plugin: Joshymc) {
     }
 
     /** A member of [team] by (last known) name; works for offline members. */
-    private fun memberByName(team: Team, name: String): UUID? =
-        team.members.firstOrNull { nameOf(it.uuid).equals(name, ignoreCase = true) }?.uuid
-            ?: plugin.playerResolver.resolve(name)?.uniqueId?.takeIf { team.isMember(it) }
+    private fun memberByName(team: Team, name: String): UUID? {
+        // Issue #1369: an online member's current name wins over a stale cached name, and two
+        // members sharing a cached name (one renamed while offline) are never guessed between.
+        Bukkit.getPlayerExact(name)?.uniqueId?.takeIf { team.isMember(it) }?.let { return it }
+        val cached = team.members.filter { nameOf(it.uuid).equals(name, ignoreCase = true) }
+        if (cached.size == 1) return cached.single().uuid
+        return plugin.playerResolver.resolve(name)?.uniqueId?.takeIf { team.isMember(it) }
+    }
 
     private fun inviteKey(invite: Invite) = "${invite.teamId}|${invite.target}"
 

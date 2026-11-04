@@ -356,8 +356,12 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
             data.violations[check] = 0.0
             Bukkit.getScheduler().scheduleSyncDelayedTask(plugin) {
                 if (player.isOnline) {
+                    // Issue #1369: ILLEGAL_ACTION, not the default PLUGIN cause. Lifesteal combat
+                    // logging treats PLUGIN as a staff kick (no NPC, not counted), so a tagged
+                    // player could otherwise escape a fight by tripping a check on purpose.
                     player.kick(
-                        Component.text("Kicked by AntiCheat: ${check.displayName}", NamedTextColor.RED)
+                        Component.text("Kicked by AntiCheat: ${check.displayName}", NamedTextColor.RED),
+                        org.bukkit.event.player.PlayerKickEvent.Cause.ILLEGAL_ACTION
                     )
                     plugin.logger.warning("[AntiCheat] Kicked ${player.name} for ${check.displayName} (VL reached ${"%.0f".format(kickVL)})")
                 }

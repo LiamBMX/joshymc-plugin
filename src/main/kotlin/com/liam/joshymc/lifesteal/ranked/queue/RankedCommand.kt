@@ -53,6 +53,11 @@ class RankedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             Msg.error(player, "Ranked Team Wars only exist on the Lifesteal server.")
             return true
         }
+        // Issue #1369: closed to players until lifesteal.yml > ranked-team-wars.enabled is true.
+        if (!queue.commandVisibleTo(player)) {
+            Msg.error(player, LifestealRankedQueueManager.CLOSED_MESSAGE)
+            return true
+        }
         val a = args.toList()
         when (a.firstOrNull()?.lowercase()) {
             // The rating is loaded first (async), so the menu opens with it filled in.
@@ -207,7 +212,7 @@ class RankedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     override fun onTabComplete(sender: CommandSender, command: Command, label: String, args: Array<out String>): List<String> {
         val player = sender as? Player ?: return emptyList()
-        if (!queue.hosted || !player.hasPermission(LifestealRankedQueueManager.PERMISSION_USE)) return emptyList()
+        if (!queue.commandVisibleTo(player) || !player.hasPermission(LifestealRankedQueueManager.PERMISSION_USE)) return emptyList()
         fun filter(options: Iterable<String>, typed: String) = options.filter { it.lowercase().startsWith(typed.lowercase()) }
         val sizes = queue.allowedSizes.map { "${it}v$it" }
         val team = teams.teamOf(player.uniqueId)

@@ -31,6 +31,7 @@ class ServerTransferCommand(
     private val combat = if (destination == TransferDestination.LIFESTEAL) LifestealCombatCommand(plugin) else null
     private val progression = if (destination == TransferDestination.LIFESTEAL) LifestealProgressCommand(plugin) else null
     private val ranked = if (destination == TransferDestination.LIFESTEAL) LifestealRankedCommand(plugin) else null
+    private val info = if (destination == TransferDestination.LIFESTEAL) com.liam.joshymc.lifesteal.LifestealInfoCommand(plugin) else null
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (hearts != null && args.firstOrNull()?.equals("hearts", ignoreCase = true) == true) {
@@ -56,6 +57,11 @@ class ServerTransferCommand(
                 progression.progress(sender)
                 return true
             }
+            // Issue #1369: own hearts, the heart rules and the Lifesteal commands (read only).
+            if ((first == "info" || first == "help") && args.size == 1 && info != null && plugin.lifestealHeartManager.hosted) {
+                info.execute(sender)
+                return true
+            }
         }
         plugin.transferManager.request(sender, destination)
         return true
@@ -67,6 +73,7 @@ class ServerTransferCommand(
             if (hearts.visibleTo(sender)) add("hearts")
             if (combat.visibleTo(sender)) add("combat")
             if (progression.progressVisibleTo(sender)) add("progress")
+            if (info?.visibleTo(sender) == true) add("info")
             if (progression.adminVisibleTo(sender) || ranked.visibleTo(sender)) add("admin")
         }
         if (args.size == 1) return visible.filter { it.startsWith(args[0].lowercase()) }
