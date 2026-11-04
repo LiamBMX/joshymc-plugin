@@ -31,10 +31,11 @@ penalty) is implemented since issue #1350 (`docs/lifesteal-combat.md`).
 The launch progression (24h grace period, scheduled Ranked Team Wars and End unlocks, `/lifesteal
 progress`) is implemented since issue #1352 (`docs/lifesteal-progression.md`).
 Ranked Team Wars arenas and the match lifecycle (staff test matches, inventory snapshots, restart
-recovery) are implemented since issue #1361 (`docs/lifesteal-ranked.md`); public matchmaking and Elo
-are not.
-Elimination and revival never exist (fixed rules). Ranked matchmaking, Elo and season rollover
-aren't implemented yet; `lifesteal.yml` holds the settings those later features will read. Nothing here has been tested on a real Lifesteal server yet (see "Testing").
+recovery) are implemented since issue #1361 (`docs/lifesteal-ranked.md`), public matchmaking and
+challenges since issue #1363 (`docs/lifesteal-ranked-queue.md`), and Player Elo / Team Elo since
+issue #1365 (`docs/lifesteal-ranked-elo.md`).
+Elimination and revival never exist (fixed rules). Ranked leaderboards, rewards and season
+rollover aren't implemented yet; `lifesteal.yml` holds the settings those later features will read. Nothing here has been tested on a real Lifesteal server yet (see "Testing").
 
 ## Requirements
 

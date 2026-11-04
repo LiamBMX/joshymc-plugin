@@ -23,6 +23,8 @@ import java.time.format.DateTimeFormatter
 class LifestealRankedCommand(private val plugin: Joshymc) {
 
     private val ranked get() = plugin.lifestealRankedManager
+    /** Issue #1365: Elo diagnostics (`/lifesteal admin ranked rating ...`). */
+    private val rating = com.liam.joshymc.lifesteal.ranked.rating.RatingAdminCommand(plugin)
 
     /** Corner 1/2 per arena until both are set (then written as the boundary). */
     private val corners = HashMap<String, Pair<IntArray?, IntArray?>>()
@@ -243,6 +245,7 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
                 plugin.lifestealRankedQueueManager.adminCancelProposal(sender.name, id)?.let { return Msg.error(sender, it) }
                 Msg.success(sender, "Proposal '$id' cancelled.")
             }
+            "rating" -> rating.execute(sender, a)
             "queuelog" -> {
                 val rows = try { plugin.lifestealRankedQueueManager.recentAudit(15) } catch (e: Exception) { return Msg.error(sender, "Couldn't read the queue log: ${e.message}") }
                 sender.sendMessage(Component.text("Ranked queue log (newest first)", NamedTextColor.GOLD, TextDecoration.BOLD))
@@ -373,6 +376,7 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
         val admin = sender.hasPermission(LifestealRankedManager.ADMIN_PERMISSION)
         val group = args.getOrNull(0)?.lowercase()
         fun filter(options: List<String>, typed: String) = options.filter { it.startsWith(typed.lowercase()) }
+        if (group == "ranked" && admin && args.size >= 3 && args[1].equals("rating", true)) return rating.complete(sender, args.drop(2))
         return when (args.size) {
             2 -> when (group) {
                 "arena" -> if (admin) filter(ARENA_SUBS, args[1]) else emptyList()
@@ -406,9 +410,9 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
 
     companion object {
         const val ARENA_USAGE = "/lifesteal admin arena <create|delete|list|info|setname|setcorner|setspawn|setspectator|clearspawns|sizes|enable|disable> ..."
-        const val RANKED_USAGE = "/lifesteal admin ranked <testmatch <teamA> <teamB> <size> [arena]|list|info|cancel|remove|restore|spectate|unspectate|queue|cancelqueue|cancelproposal|queuelog> ..."
+        const val RANKED_USAGE = "/lifesteal admin ranked <testmatch <teamA> <teamB> <size> [arena]|list|info|cancel|remove|restore|spectate|unspectate|queue|cancelqueue|cancelproposal|queuelog|rating> ..."
         private val ARENA_SUBS = listOf("create", "delete", "list", "info", "setname", "setcorner", "setspawn", "setspectator", "clearspawns", "sizes", "enable", "disable")
-        private val RANKED_SUBS = listOf("testmatch", "list", "info", "cancel", "remove", "restore", "spectate", "unspectate", "queue", "cancelqueue", "cancelproposal", "queuelog")
+        private val RANKED_SUBS = listOf("testmatch", "list", "info", "cancel", "remove", "restore", "spectate", "unspectate", "queue", "cancelqueue", "cancelproposal", "queuelog", "rating")
         /** A queue entry this long in a state other than WAITING is shown as possibly stuck. */
         private const val STUCK_SECONDS = 180L
         private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss'Z'").withZone(ZoneOffset.UTC)

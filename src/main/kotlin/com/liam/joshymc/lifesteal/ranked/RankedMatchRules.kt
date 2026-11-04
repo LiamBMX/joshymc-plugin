@@ -54,13 +54,14 @@ enum class DefeatReason(val label: String) {
     REMOVED("removed by staff"),
 }
 
-/** How a match ended. Elo is not calculated by this issue. */
+/** How a match ended. Only a WIN can change Elo (issue #1365); there is no draw outcome. */
 enum class MatchOutcome { WIN, CANCELLED }
 
 /**
  * How a match came about, stored on every match record (issue #1363), so later systems can tell
- * them apart. Whether a [CHALLENGE] result counts towards competitive Elo is an open policy
- * decision: nothing here (and no Elo) exists yet, so no outcome is assumed for it.
+ * them apart. Elo (issue #1365, `rating/RatingRules`): [PUBLIC] is rated, [TEST] never, [CHALLENGE]
+ * only with `ranked-team-wars.elo.rate-challenges: true` (off by default, so friendly teams can't
+ * farm each other). Players can't choose the kind: it comes from the code path that made the match.
  */
 enum class MatchKind(val label: String) {
     /** Staff `/lifesteal admin ranked testmatch`. */

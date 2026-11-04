@@ -35,8 +35,9 @@ import java.util.concurrent.ConcurrentHashMap
  * doesn't host Lifesteal it creates no tables, its listener isn't registered and every action
  * refuses, so Survival teams, PvP, inventories, arenas and data are never touched.
  *
- * There is no public queue and no Elo yet: matches are created by staff (`/lifesteal admin ranked
- * testmatch`) through the same lifecycle a future matchmaker will use ([createMatch]).
+ * Matches are created by staff (`/lifesteal admin ranked testmatch`, [createMatch]) or the ranked
+ * queue ([createQueuedMatch], issue #1363). Elo (issue #1365) is applied after a match is recorded
+ * COMPLETED, by [com.liam.joshymc.lifesteal.ranked.rating.LifestealRatingManager].
  *
  * **Inventory**: players fight with their real Lifesteal gear. Before anything happens to them,
  * their whole inventory (36 storage slots, armor, off-hand, as Paper's lossless
@@ -851,6 +852,9 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         match.state = MatchState.COMPLETED
         release(match)
         if (ok) plugin.logger.info("[Ranked] Match ${match.id} completed.")
+        // Issue #1365: Elo is computed from the stored record, off the main thread. At shutdown (or if
+        // the COMPLETED write failed) the rating sweep picks it up after the next start instead.
+        if (ok && !shutdown) plugin.lifestealRatingManager.onMatchCompleted(match.id)
     }
 
     /** Cancels [match] (no winner): restores everyone online, records why. Never used once FINISHING. */

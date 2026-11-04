@@ -5,6 +5,7 @@ import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.lifesteal.ranked.queue.LifestealRankedQueueManager.Companion.seconds
 import com.liam.joshymc.lifesteal.ranked.queue.LifestealRankedQueueManager.Companion.text
+import com.liam.joshymc.lifesteal.ranked.rating.LifestealRatingManager
 import com.liam.joshymc.lifesteal.teams.LifestealTeamStore.Team
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
@@ -26,6 +27,10 @@ import java.util.UUID
  * command, which checks permission, leadership, the season unlock and every player again. Accept
  * and Decline carry the id of the request the menu showed, so a stale menu can't answer a newer
  * request.
+ *
+ * Issue #1365: slot 4 shows the player's Player Elo and Team Elo from
+ * [com.liam.joshymc.lifesteal.ranked.rating.LifestealRatingManager.cachedProfile] (`/ranked` loads it
+ * first, off the main thread); the menu never calculates or changes a rating.
  */
 class RankedQueueMenu(private val plugin: Joshymc) {
 
@@ -66,6 +71,13 @@ class RankedQueueMenu(private val plugin: Joshymc) {
                 GuiStyle.clickSound(p)
                 openPicker(p, t, Pick.Queue(size), emptySet())
             }
+        }
+
+        // Issue #1365: the player's ratings (from the cache /ranked just filled; never computed here).
+        gui.setItem(4, ratingItem(player)) { p, _ ->
+            GuiStyle.clickSound(p)
+            p.closeInventory()
+            p.performCommand("ranked stats")
         }
 
         gui.setItem(15, statusItem(player, entry, blocked, now)) { p, _ ->
@@ -116,6 +128,36 @@ class RankedQueueMenu(private val plugin: Joshymc) {
         }
         plugin.guiManager.open(player, gui)
     }
+
+    private fun ratingItem(player: Player) = GuiStyle.item(Material.NETHER_STAR, text("Your Ranked Rating", NamedTextColor.GOLD).decorate(TextDecoration.BOLD), buildList {
+        val ratings = plugin.lifestealRatingManager
+        val profile = ratings.cachedProfile(player.uniqueId)
+        val reason = ratings.unavailableReason()
+        when {
+            reason != null -> add(text(reason, NamedTextColor.RED))
+            profile == null -> {
+                add(text("Loading... reopen /ranked to see it.", NamedTextColor.GRAY))
+                ratings.loadProfile(player.uniqueId) { _, _ -> }
+            }
+            else -> {
+                add(text("Season: ${profile.seasonId}", NamedTextColor.GRAY))
+                add(text("Player Elo: ${profile.playerRating}", NamedTextColor.WHITE))
+                val teamName = profile.teamName
+                add(if (teamName == null) text("Team Elo: not in a team", NamedTextColor.GRAY) else text("Team Elo: ${profile.teamRating} ($teamName)", NamedTextColor.WHITE))
+                add(text("Wins ${profile.wins} / Losses ${profile.losses}", NamedTextColor.GRAY))
+                if (profile.recent.isNotEmpty()) {
+                    add(Component.empty())
+                    add(text("Recent changes:", NamedTextColor.GRAY))
+                    for (h in profile.recent.take(3)) {
+                        val label = h.outcome?.label?.replaceFirstChar { it.uppercase() } ?: "?"
+                        add(text("$label ${h.previous} -> ${h.new} (${LifestealRatingManager.signed(h.delta)})", LifestealRatingManager.deltaColor(h.delta)))
+                    }
+                }
+            }
+        }
+        add(Component.empty())
+        add(text("Click for full stats", NamedTextColor.YELLOW))
+    })
 
     private fun statusItem(player: Player, entry: QueueEntry?, blocked: String?, now: Long) = GuiStyle.item(Material.CLOCK, text("Current Queue Status", NamedTextColor.YELLOW).decorate(TextDecoration.BOLD), buildList {
         if (blocked != null) add(text(blocked, NamedTextColor.RED))

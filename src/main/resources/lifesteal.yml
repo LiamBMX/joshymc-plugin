@@ -98,6 +98,28 @@ ranked-team-wars:
     challenge-expire-seconds: 120
     # Seconds between two challenges sent by the same team (0-3600).
     challenge-cooldown-seconds: 60
+  # Individual Player Elo and Team Elo (docs/lifesteal-ranked-elo.md). Two separate ratings per
+  # season: a player's own, and their team's (kept by the team, not its members). The blueprint
+  # gives no numbers; these are proposed defaults. Editing them never changes a stored rating:
+  # initial ratings only apply to a player/team's first rated match of a season.
+  elo:
+    # Rating of a player / team before their first rated match of the season (minimum..maximum).
+    initial-player-rating: 1000
+    initial-team-rating: 1000
+    # Ratings never go below / above these (0 to 100000, minimum below maximum).
+    minimum-rating: 0
+    maximum-rating: 5000
+    # How far one match can move a rating (1 to 200). Change = K x (result - expected result).
+    k-factor: 32
+    # true = direct team challenges (/ranked challenge) change Elo. false: only public matchmaking
+    # (/ranked queue) is rated, so two friendly teams can't farm each other. Staff test matches are
+    # never rated.
+    rate-challenges: false
+    # Anti-farming: at most this many rated matches between the same two teams in
+    # same-opponent-window-hours (0 = no limit). Matches past the limit still count as played but
+    # are recorded as unrated.
+    same-opponent-limit: 3
+    same-opponent-window-hours: 24
 
 seasons:
   # How long a season lasts, in months.
