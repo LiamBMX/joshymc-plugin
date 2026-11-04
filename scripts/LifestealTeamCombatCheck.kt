@@ -14,6 +14,10 @@ import com.liam.joshymc.lifesteal.hearts.HeartRules
 import com.liam.joshymc.lifesteal.hearts.HeartRules.Decision
 import com.liam.joshymc.lifesteal.hearts.HeartStore
 import com.liam.joshymc.lifesteal.hearts.HeartStore.PvpResult
+import com.liam.joshymc.lifesteal.ranked.MatchParticipant
+import com.liam.joshymc.lifesteal.ranked.MatchRoster
+import com.liam.joshymc.lifesteal.ranked.Side
+import com.liam.joshymc.lifesteal.ranked.DefeatReason
 import com.liam.joshymc.lifesteal.teams.TeamCombatMemory
 import com.liam.joshymc.lifesteal.teams.TeamCombatRules
 import com.liam.joshymc.lifesteal.teams.TeamCombatRules.DamageDecision
@@ -69,6 +73,7 @@ fun main() {
     store()
     wiring()
     survivalTeamsStayOut()
+    rankedTeamChanges()
     println("OK: $checks Lifesteal team combat checks passed.")
 }
 
@@ -377,4 +382,41 @@ private fun survivalTeamsStayOut() {
     val handler = source("manager/TeamManager.kt").substringAfter("fun onEntityDamage(event: EntityDamageByEntityEvent)").substringBefore("@EventHandler")
     check("Survival team PvP skips Lifesteal victims", "gamemodeOf(victim.world) == com.liam.joshymc.gamemode.ServerGamemode.LIFESTEAL) return" in handler)
     check("... before it can cancel anything", handler.indexOf("ServerGamemode.LIFESTEAL") in 0 until handler.indexOf("event.isCancelled = true"))
+}
+
+// Issue #1371: team membership can't change under a running ranked match, and inside a match the
+// roster's sides (not live membership) decide who is a teammate.
+private fun rankedTeamChanges() {
+    val inMatch = setOf(JAVA)
+    for (change in TeamCombatRules.TeamChange.entries) {
+        check("$change refused when a player is in a ranked match", TeamCombatRules.rankedRefusal(change, listOf(ENEMY, JAVA)) { it in inMatch } == TeamCombatRules.rankedMessage(change))
+        check("$change allowed when nobody is in a ranked match", TeamCombatRules.rankedRefusal(change, listOf(ENEMY, LONER)) { it in inMatch } == null)
+    }
+    check("ranked messages name the match", TeamCombatRules.TeamChange.entries.all { "ranked match" in TeamCombatRules.rankedMessage(it) })
+
+    // Roster sides: 2v2 with a Java + Bedrock pair on side A.
+    val b1 = UUID.randomUUID()
+    val roster = MatchRoster(listOf(
+        MatchParticipant(JAVA, Side.A, "wolves"), MatchParticipant(BEDROCK, Side.A, "wolves"),
+        MatchParticipant(ENEMY, Side.B, "bears"), MatchParticipant(b1, Side.B, "bears"),
+    ))
+    check("same side", roster.sameSide(JAVA, BEDROCK) == true)
+    check("opposite sides", roster.sameSide(JAVA, ENEMY) == false && roster.sameSide(b1, BEDROCK) == false)
+    check("self is no side relation", roster.sameSide(JAVA, JAVA) == null)
+    check("a player off the roster is no side relation", roster.sameSide(JAVA, LONER) == null)
+    val afterDeath = roster.defeat(BEDROCK, DefeatReason.DEATH)!!
+    check("a defeated player keeps their side (the kill is judged after the death)", afterDeath.sameSide(JAVA, BEDROCK) == true && afterDeath.sameSide(ENEMY, BEDROCK) == false)
+    check("same side = teammates", TeamCombatRules.rankedRelation(true) == Relation.TEAMMATES)
+    check("opposite sides = not teammates", TeamCombatRules.rankedRelation(false) == Relation.NOT_TEAMMATES)
+    // Even if a kick slipped through (live membership says strangers), match teammates stay protected.
+    check("roster teammates: friendly fire still off", TeamCombatRules.heartCheck(TeamCombatRules.rankedRelation(true), OFF) == HeartCheck.TEAMMATES)
+    check("roster enemies: hearts move as for any kill", TeamCombatRules.heartCheck(TeamCombatRules.rankedRelation(false), OFF) == HeartCheck.ELIGIBLE)
+
+    val manager = source("lifesteal/teams/LifestealTeamManager.kt")
+    val ranked = source("lifesteal/ranked/LifestealRankedManager.kt")
+    check("team changes ask the ranked manager", "TeamCombatRules.rankedRefusal(change, involved, ::inRankedMatch)" in manager && "plugin.lifestealRankedManager.holds(uuid)" in manager)
+    check("ranked check runs inside the shared combat refusal (accept/leave/kick/disband)", manager.substringAfter("private fun combatRefusal(").substringBefore("private fun inRankedMatch").contains("rankedRefusal"))
+    check("admin disband refused during a ranked match", manager.substringAfter("fun adminDisband(").substringBefore("if (!confirmed)").contains("inRankedMatch(it.uuid)"))
+    check("combat relation asks the match roster first", manager.substringAfter("fun combatRelation(").substringBefore("TeamCombatRules.relation(").contains("rankedSides(a, b)"))
+    check("roster lookup also finds defeated players", "it.roster.of(a) != null && it.roster.of(b) != null" in ranked)
 }

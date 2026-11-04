@@ -95,6 +95,18 @@ data class MatchRoster(val participants: List<MatchParticipant>) {
     fun isActive(uuid: UUID): Boolean = of(uuid)?.status == ParticipantStatus.ACTIVE
     val uuids: List<UUID> get() = participants.map { it.uuid }
 
+    /**
+     * Issue #1371: whether [a] and [b] fight on the same side of this match (null = they aren't
+     * both on the roster, or it is the same player). Defeated players keep their side, so a kill
+     * is judged by the roster the match started with, never by later team changes.
+     */
+    fun sameSide(a: UUID, b: UUID): Boolean? {
+        if (a == b) return null
+        val pa = of(a) ?: return null
+        val pb = of(b) ?: return null
+        return pa.side == pb.side
+    }
+
     /** Marks [uuid] defeated; a second defeat of the same player changes nothing (returns null). */
     fun defeat(uuid: UUID, reason: DefeatReason): MatchRoster? {
         val p = of(uuid) ?: return null

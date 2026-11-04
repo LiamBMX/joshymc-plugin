@@ -131,6 +131,27 @@ object TeamCombatRules {
         TeamChange.KICK -> "You can't remove a member while you or they are in combat."
         TeamChange.DISBAND -> "You can't disband your team while a member is in combat."
     }
+
+    /**
+     * Issue #1371: membership can't change while an involved player is fighting in a Ranked Team
+     * Wars match. Ranked hits never combat-tag, so the combat rule above doesn't cover them, and
+     * friendly fire / heart transfers between match players come from live team membership: a leader
+     * outside the arena kicking a participant (or disbanding the team) would turn teammates into
+     * enemies mid-match.
+     */
+    fun rankedMessage(change: TeamChange): String = when (change) {
+        TeamChange.ACCEPT -> "You can't join a team during a ranked match."
+        TeamChange.LEAVE -> "You can't leave your team during a ranked match."
+        TeamChange.KICK -> "You can't remove a member who is playing a ranked match. Wait until it's over."
+        TeamChange.DISBAND -> "You can't disband your team while a member is playing a ranked match. Wait until it's over."
+    }
+
+    /** Issue #1371: two players of one ranked match relate by their roster side only. */
+    fun rankedRelation(sameSide: Boolean): Relation = if (sameSide) Relation.TEAMMATES else Relation.NOT_TEAMMATES
+
+    /** The refusal for [change] when any involved player is held by a ranked match, else null. */
+    fun rankedRefusal(change: TeamChange, involved: Iterable<UUID>, inRankedMatch: (UUID) -> Boolean): String? =
+        if (involved.any(inRankedMatch)) rankedMessage(change) else null
 }
 
 /**

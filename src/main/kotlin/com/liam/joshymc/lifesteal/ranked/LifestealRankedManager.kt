@@ -151,6 +151,18 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         return m.state == MatchState.ACTIVE && m.roster.isActive(player.uniqueId)
     }
 
+    /**
+     * Issue #1371: same side (true) / opposite sides (false) of one open match, or null when [a]
+     * and [b] aren't both on its roster. Looked up by roster, not [held], so it still answers for a
+     * participant who was just defeated (the heart service runs after the death took them out).
+     */
+    fun matchSides(a: UUID, b: UUID): Boolean? {
+        if (matches.isEmpty()) return null
+        val id = held[a] ?: held[b]
+        val match = id?.let { matches[it] } ?: matches.values.firstOrNull { it.roster.of(a) != null && it.roster.of(b) != null }
+        return match?.roster?.sameSide(a, b)
+    }
+
     fun hasPendingRestore(uuid: UUID): Boolean = pendingRestore.contains(uuid)
 
     val anyMatch: Boolean get() = matches.isNotEmpty()
