@@ -3,6 +3,7 @@ package com.liam.joshymc.manager
 import io.papermc.paper.event.player.PlayerTradeEvent
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.quest.HarvestRules
 import com.liam.joshymc.util.depositItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -107,10 +108,6 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         private val LOG_FAMILIES = setOf(
             "OAK", "SPRUCE", "BIRCH", "JUNGLE", "ACACIA", "DARK_OAK", "MANGROVE",
             "CHERRY", "PALE_OAK", "CRIMSON", "WARPED"
-        )
-        private val ALWAYS_HARVESTABLE = setOf(
-            "MELON", "PUMPKIN", "SUGAR_CANE", "CACTUS", "BAMBOO", "NETHER_WART",
-            "COCOA", "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES", "WEEPING_VINES"
         )
 
         /**
@@ -1174,13 +1171,6 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         return null
     }
 
-    private fun normalizeHarvestName(name: String): String = when (name) {
-        "KELP_PLANT" -> "KELP"
-        "TWISTING_VINES_PLANT" -> "TWISTING_VINES"
-        "WEEPING_VINES_PLANT" -> "WEEPING_VINES"
-        else -> name
-    }
-
     // ── Event handlers ──────────────────────────────────────────
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -1192,14 +1182,14 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
 
     /** Mining/log progress plus crop harvests for one block about to be broken. */
     private fun processBrokenBlock(player: Player, block: org.bukkit.block.Block) {
+        // Read before processMinedBlock clears the placed marker (player-placed mushrooms never count, issue #1374).
+        val playerPlaced = block.hasMetadata(PLACED_META)
         processMinedBlock(player, block)
 
         val name = block.type.name
-        val normalized = normalizeHarvestName(name)
-        val blockData = block.blockData
-        val eligible = (blockData is Ageable && blockData.age == blockData.maximumAge) || normalized in ALWAYS_HARVESTABLE
-        if (eligible) {
-            for (quest in matchingActiveQuests(CycleObjective.HARVEST_CROP) { target -> target.equals(normalized, true) }) {
+        val blockData = block.blockData as? Ageable
+        if (HarvestRules.countsForCycleQuest(name, blockData?.age, blockData?.maximumAge, playerPlaced)) {
+            for (quest in matchingActiveQuests(CycleObjective.HARVEST_CROP) { target -> HarvestRules.matchesCycleTarget(target, name) }) {
                 incrementProgress(player, quest, 1)
             }
         }

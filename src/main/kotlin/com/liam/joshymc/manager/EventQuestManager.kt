@@ -9,6 +9,7 @@ import com.liam.joshymc.eventquest.EventQuestLayout
 import com.liam.joshymc.eventquest.EventQuestSetStatus
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.gui.GuiStyle
+import com.liam.joshymc.quest.HarvestRules
 import com.liam.joshymc.util.depositItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -125,10 +126,6 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         const val MAX_COOLDOWN_DAYS = 3650
         private val ZONE: ZoneId = ZoneId.of("America/New_York")
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy")
-        private val ALWAYS_HARVESTABLE = setOf(
-            "MELON", "PUMPKIN", "SUGAR_CANE", "CACTUS", "BAMBOO",
-            "CHORUS_FLOWER", "CHORUS_PLANT", "KELP", "TWISTING_VINES", "WEEPING_VINES"
-        )
         /** HARVEST_CROP filters name the crop block; admins often type the item it drops instead. */
         private val HARVEST_ITEM_TO_BLOCK = mapOf(
             "CARROT" to "CARROTS", "POTATO" to "POTATOES", "BEETROOT" to "BEETROOTS",
@@ -638,12 +635,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         return set
     }
 
-    private fun normalizeHarvestName(name: String): String = when (name) {
-        "KELP_PLANT" -> "KELP"
-        "TWISTING_VINES_PLANT" -> "TWISTING_VINES"
-        "WEEPING_VINES_PLANT" -> "WEEPING_VINES"
-        else -> name
-    }
+    private fun normalizeHarvestName(name: String): String = HarvestRules.normalize(name)
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onBlockBreak(event: BlockBreakEvent) {
@@ -665,15 +657,10 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         block.removeMetadata(PLACED_META, plugin)
 
         if (harvestCheck) {
-            val normalized = normalizeHarvestName(name)
-            val data = block.blockData
-            // Planting seeds is a BlockPlaceEvent, so every farmed crop is "player placed". A crop only
-            // reaches its maximum age by growing, so the place-then-break guard applies to the
-            // always-harvestable blocks (melons, cane, cactus...) but not to grown age-based crops.
-            val eligible = if (normalized in ALWAYS_HARVESTABLE) !playerPlaced
-                else data is Ageable && data.age == data.maximumAge
-            if (eligible) {
-                forActive(player, EventObjective.HARVEST_CROP, { it == null || it == normalized }) { ev, q -> advance(player, ev, q, 1) }
+            val data = block.blockData as? Ageable
+            // Rules (incl. mushrooms, issue #1374) live in the Bukkit-free HarvestRules.
+            if (HarvestRules.countsForEventQuest(name, data?.age, data?.maximumAge, playerPlaced)) {
+                forActive(player, EventObjective.HARVEST_CROP, { HarvestRules.matchesEventFilter(it, name) }) { ev, q -> advance(player, ev, q, 1) }
             }
         }
 
