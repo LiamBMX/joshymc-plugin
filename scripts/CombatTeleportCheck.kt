@@ -98,6 +98,12 @@ fun main() {
     check("warmup checks combat on every step", before(warmup, "CombatTeleportRules.warmupStep", "WarmupStep.TELEPORT ->"))
     check("warmup is one tracked task", warmup.contains("scheduleSyncRepeatingTask") && !warmup.contains("scheduleSyncDelayedTask"))
 
+    // Custom portals (issue #1373): walking in is player-initiated, and the "command" action runs as console.
+    val portal = body(source("manager/PortalManager.kt"), "triggerPortal")
+    check("portal checks combat before the cooldown", before(portal, "CombatTeleportGuard.blocks(plugin, player)", "lastPortalUse"))
+    check("portal re-checks combat after the animation",
+        before(portal.substringAfter("playPortalAnimation(player)"), "plugin.combatManager.isTagged(player)", "executeAction(player, portal)"))
+
     // Commands that already used checkAndApply keep doing so.
     for ((file, label) in listOf(
         "command/HomeCommand.kt" to "/home", "command/SpawnCommand.kt" to "/spawn", "command/WarpCommand.kt" to "/warp",

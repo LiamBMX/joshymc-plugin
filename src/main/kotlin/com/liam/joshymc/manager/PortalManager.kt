@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.teleport.CombatTeleportGuard
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -242,6 +243,11 @@ class PortalManager(private val plugin: Joshymc) : Listener {
         val uuid = player.uniqueId
         val now = System.currentTimeMillis()
 
+        // Issue #1373: walking into a custom portal is a player-initiated teleport, and its
+        // "command" action runs as console (past CombatListener's typed-command filter), so
+        // check combat here, before the cooldown, the message or the animation.
+        if (CombatTeleportGuard.blocks(plugin, player)) return
+
         // Cooldown check
         if (portal.cooldownSeconds > 0) {
             val cooldowns = lastPortalUse.getOrPut(uuid) { mutableMapOf() }
@@ -257,6 +263,11 @@ class PortalManager(private val plugin: Joshymc) : Listener {
 
         // Particle animation then execute action
         playPortalAnimation(player) {
+            // Combat that started during the 1s animation cancels the teleport.
+            if (plugin.combatManager.isTagged(player) || plugin.lifestealRankedManager.holds(player)) {
+                CombatTeleportGuard.notifyCancelled(plugin, player)
+                return@playPortalAnimation
+            }
             executeAction(player, portal)
         }
     }
