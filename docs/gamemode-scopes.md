@@ -45,6 +45,7 @@ never restricts its own gamemode, so **nothing changes on the Survival server**,
 | Communication / accounts | `link`, `unlink`, `msg`, `reply`, `messages`, `ignore`, `announce`, `live`, `promote`, `nick`, `timezone`, `settings`, `scoreboard`, `serverbar`, `jmc-ecview` |
 | Information | `help`, `rules`, `media`, `discord`, `ip` |
 | Recovery | `unstuck` |
+| Kits, filtered per gamemode (issue #1379) | `kit`, `createkit`, `editkit`, `deletekit`: every kit belongs to one gamemode (kits.yml `gamemode: survival\|lifesteal`, missing = Survival; `/createkit` records the creator's gamemode) and `/kit` only shows and claims kits of the sender's current gamemode |
 | Teams, routed per gamemode (issue #1346) | `team`: `TeamCommandRouter` runs the Lifesteal team system for senders in Lifesteal and the Survival `TeamCommand` everywhere else, applying the SURVIVAL scope (same refusal message) and `joshymc.team` to it itself, so Survival teams behave as before (`docs/lifesteal-teams.md`) |
 
 ### SURVIVAL commands
@@ -54,7 +55,7 @@ never restricts its own gamemode, so **nothing changes on the Survival server**,
 | Economy / currencies | `eco`, `balance`, `pay`, `baltop`, `tokens`, `credits`, `creditspay`, `cshop`, `worth`, `sell`, `sellwand` |
 | Markets, shops, auctions, orders, trading | `shop`, `market`, `invest`, `stock`, `ah`, `orders`, `order`, `chestshop`, `trade`, `overflow`, `candy`, `eventshop` |
 | Gambling | `coinflip`, `ccoinflip`, `casino`, `mines`, `roulette`, `crash`, `towers` |
-| Giveaways, gifts, vouchers, crates, kits | `giveaway`, `gift`, `voucher`, `creditvoucher`, `rankvoucher`, `freetag`, `crate`, `crateeditor`, `kit`, `createkit`, `editkit`, `deletekit` |
+| Giveaways, gifts, vouchers, crates | `giveaway`, `gift`, `voucher`, `creditvoucher`, `rankvoucher`, `freetag`, `crate`, `crateeditor` (kits are NETWORK, see below) |
 | Claims, storage | `claim`, `unclaim`, `subclaim`, `pv`, `enderchest`, `hopper`, `spawner` (`team` is NETWORK since issue #1346, see below) |
 | Quests, progression, streaks, votes | `quests`, `daily`, `eventquests`, `resurge`, `booster`, `loginstreak`, `mcr`, `jvote`, `talisman`, `fish` |
 | Cosmetics and chat perks | `cosmetics`, `killeffect`, `tag`, `chatcolor`, `signitem`, `skull` |

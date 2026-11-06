@@ -44,6 +44,10 @@ object GamemodeAssignments {
         // Lifesteal team system and everyone else to the Survival TeamCommand, applying the SURVIVAL
         // scope (and joshymc.team) itself, so Survival teams behave exactly as before.
         "team",
+        // Issue #1379: kits exist in both gamemodes. Every kit belongs to one gamemode in kits.yml
+        // (missing = Survival) and KitManager only shows/claims kits of the sender's current
+        // gamemode, so Survival kits never appear on Lifesteal and back.
+        "kit", "createkit", "editkit", "deletekit",
     )
 
     private val SURVIVAL_COMMANDS = listOf(
@@ -54,11 +58,10 @@ object GamemodeAssignments {
         "eventshop",
         // Gambling.
         "coinflip", "ccoinflip", "casino", "mines", "roulette", "crash", "towers",
-        // Giveaways, gifts, vouchers, crates, kits.
+        // Giveaways, gifts, vouchers, crates (kits are NETWORK since issue #1379).
         "giveaway", "gift", "voucher", "creditvoucher", "rankvoucher", "crate", "crateeditor",
         // The free [JoshyMC] Chat Tag Voucher (issue #1339), a Survival chat tag.
         "freetag",
-        "kit", "createkit", "editkit", "deletekit",
         // Claims, storage, hoppers, spawners (/team is routed per gamemode, see NETWORK_COMMANDS).
         "claim", "unclaim", "subclaim", "pv", "enderchest", "hopper", "spawner",
         // Quests, progression, streaks, votes.
