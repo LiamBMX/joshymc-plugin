@@ -553,7 +553,17 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
         for (uuid in p.participants) tell(uuid, text("Everyone accepted! Preparing ${arena.displayName}...", NamedTextColor.GREEN))
         // 4-7: reservation, match record, snapshots, preparation: all the existing match lifecycle.
         val kind = if (p.kind == EntryKind.CHALLENGE) MatchKind.CHALLENGE else MatchKind.PUBLIC
-        when (val result = ranked.createQueuedMatch(a.teamId, b.teamId, p.size, arena.id, kind, a.participants, b.participants, p.id)) {
+        // Issue #1377: an unexpected error here would leave both entries PREPARING forever (the tick,
+        // quits and staff cancels all skip PREPARING), so the teams could never queue again until a
+        // restart. Undo any half-created match (restoring its players) and release the entries.
+        val result = try {
+            ranked.createQueuedMatch(a.teamId, b.teamId, p.size, arena.id, kind, a.participants, b.participants, p.id)
+        } catch (e: Exception) {
+            plugin.logger.log(java.util.logging.Level.SEVERE, "[RankedQueue] Starting match ${p.id} failed unexpectedly", e)
+            p.participants.mapNotNull { ranked.matchOf(it) }.distinct().forEach { ranked.cancel(it, "the match couldn't be started (server error)") }
+            return fail(p, emptySet(), "a server error stopped the match from starting")
+        }
+        when (result) {
             is LifestealRankedManager.CreateResult.Started -> {
                 book.matched(p.id, now)
                 pausedNotice.remove(a.id); pausedNotice.remove(b.id)

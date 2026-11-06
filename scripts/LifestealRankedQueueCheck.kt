@@ -564,4 +564,8 @@ private fun wiring() {
     check("no Elo, leaderboards or rewards", queueSources.none { Regex("""(fun|val|var|class) \w*(Elo|elo|Leaderboard|Reward)""").containsMatchIn(it) })
     check("no packet, Geyser or Floodgate code", queueSources.none { Regex("""import .*(geysermc|floodgate|protocollib|netty|PacketEvent)""", RegexOption.IGNORE_CASE).containsMatchIn(it) })
     check("matching reads memory only (the database is only the async audit log)", !manager.contains("store.log(") || Regex("""databaseManager\.async\("ranked queue audit"\) \{ store\.log\(""").containsMatchIn(manager))
+    // Issue #1377: an unexpected error while creating the match can't leave both entries PREPARING forever.
+    val queueManager = source("lifesteal/ranked/queue/LifestealRankedQueueManager.kt")
+    val guarded = queueManager.substringAfter("val result = try {", "").substringBefore("when (result) {")
+    check("#1377: match creation errors cancel any half-made match and release the queue entries", guarded.contains("ranked.createQueuedMatch(") && guarded.contains("catch (e: Exception)") && guarded.contains("ranked.cancel(it,") && guarded.contains("return fail(p, emptySet()"))
 }

@@ -551,6 +551,15 @@ private fun wiring() {
     for (v in listOf("CreditVoucherListener", "RankVoucherListener", "PhysicalVoucherListener", "ChatTagVoucherListener", "FlyVoucherListener")) {
         check("$v refuses inside a ranked match", source("listener/$v.kt").contains("if (plugin.lifestealRankedManager.holds(event.player)) return"))
     }
+    // Issue #1377: a projectile fired in a match is never a second copy of the snapshot's item.
+    val pickup = RankedMatchRules::projectilePickup
+    check("#1377: ordinary arrows are untouched", pickup(null, null, false) == RankedMatchRules.ProjectilePickup.ALLOW && pickup(null, "rtw-000000000001", true) == RankedMatchRules.ProjectilePickup.ALLOW)
+    check("#1377: players of the same match may pick their arrows up", pickup("rtw-000000000001", "rtw-000000000001", true) == RankedMatchRules.ProjectilePickup.ALLOW)
+    check("#1377: an outsider can't take an arrow/trident shot over the boundary", pickup("rtw-000000000001", null, true) == RankedMatchRules.ProjectilePickup.DENY)
+    check("#1377: a player of another match can't take it either", pickup("rtw-000000000001", "rtw-000000000002", true) == RankedMatchRules.ProjectilePickup.DENY)
+    check("#1377: after the match it is removed (the owner got it back from the snapshot)", pickup("rtw-000000000001", null, false) == RankedMatchRules.ProjectilePickup.REMOVE && pickup("rtw-000000000001", "rtw-000000000001", false) == RankedMatchRules.ProjectilePickup.REMOVE)
+    check("#1377: arrows/tridents fired while held are tagged with their match", listener.contains("fun onLaunch(event: ProjectileLaunchEvent)") && listener.contains("arrow.persistentDataContainer.set(firedInKey, PersistentDataType.STRING, match.id)"))
+    check("#1377: arrow pickups go through the rule", listener.contains("fun onPickupArrow(event: PlayerPickupArrowEvent)") && listener.contains("RankedMatchRules.projectilePickup(") && listener.contains("arrow.remove()"))
     check("store deliveries wait until the match is over", fulfillment.contains("if (plugin.lifestealRankedManager.holds(player)) return"))
 
     // Combat, teleports, transfers.

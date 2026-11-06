@@ -243,6 +243,31 @@ object RankedMatchRules {
         return label in ALLOWED_COMMANDS
     }
 
+    // ── Match projectiles (issue #1377) ─────────────────────
+
+    enum class ProjectilePickup {
+        /** Not a match projectile, or picked up by a participant of the match that fired it. */
+        ALLOW,
+        /** Fired in a match that is still open, picked up by someone else: refused. */
+        DENY,
+        /** Fired in a match that is over: its owner already got it back from the snapshot. */
+        REMOVE,
+    }
+
+    /**
+     * Arrows and tridents fired by a held participant carry their match id ([firedIn]). The shooter's
+     * snapshot gives those items back after the match, so the projectile itself must never become a
+     * second copy: an arrow shot over the boundary picked up by a friend outside, or a Loyalty trident
+     * landing back in the shooter's restored inventory. [pickerMatch] is the match holding the player
+     * who touches it; [firedInOpen] whether the match it was fired in is still running.
+     */
+    fun projectilePickup(firedIn: String?, pickerMatch: String?, firedInOpen: Boolean): ProjectilePickup = when {
+        firedIn == null -> ProjectilePickup.ALLOW
+        !firedInOpen -> ProjectilePickup.REMOVE
+        pickerMatch == firedIn -> ProjectilePickup.ALLOW
+        else -> ProjectilePickup.DENY
+    }
+
     // ── Ids ─────────────────────────────────────────────────
 
     private val MATCH_ID = Regex("rtw-[0-9a-f]{12}")
