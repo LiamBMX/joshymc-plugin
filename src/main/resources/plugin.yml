@@ -661,7 +661,7 @@ commands:
     usage: /jmc-ecview <uuid>
   chatgame:
     description: Start a chat game on demand
-    usage: /chatgame [math|unscramble|type|reverse|status]
+    usage: /chatgame [math|type|unscramble|status]
     aliases: [chatgames, cg]
   leaderboard:
     description: Manage leaderboard holograms

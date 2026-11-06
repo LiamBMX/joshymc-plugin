@@ -486,7 +486,7 @@ integrations:
     auto-install: true
 
 # Chat games — periodic chat-typing puzzles for online players
-# Game types: math, type-the-phrase. Status is a utility-only check and is
+# Game types: math, type-the-phrase, unscramble. Status is a utility-only check and is
 # never randomly selected. An admin can manually trigger games with
 # /chatgame [type].
 chat-games:
@@ -503,6 +503,91 @@ chat-games:
   reward:
     # Credits (existing Credits economy) awarded to the winner.
     credits: 3
+  # Unscramble (issue #1395): players see a scrambled word and type the real
+  # word in public chat. Same schedule, time limit and reward as the other
+  # games; it never runs twice in a row while another game type can run.
+  unscramble:
+    enabled: true
+    # Letters A-Z only, 4-16 letters (case doesn't matter). Blank, invalid,
+    # duplicate entries, words the chat filter would censor, and anagrams of
+    # an earlier word (two right answers) are skipped with a console warning.
+    words:
+      - DIAMOND
+      - EMERALD
+      - NETHERITE
+      - CREEPER
+      - ENDERMAN
+      - REDSTONE
+      - OBSIDIAN
+      - PICKAXE
+      - VILLAGER
+      - ENCHANTING
+      - BEACON
+      - SHULKER
+      - ELYTRA
+      - CRAFTING
+      - FURNACE
+      - BLAZE
+      - WITHER
+      - GHAST
+      - COPPER
+      - AMETHYST
+      - SKELETON
+      - ZOMBIE
+      - SPIDER
+      - PHANTOM
+      - GUARDIAN
+      - PIGLIN
+      - STRIDER
+      - AXOLOTL
+      - WARDEN
+      - TRIDENT
+      - CROSSBOW
+      - SHIELD
+      - LANTERN
+      - COMPASS
+      - SADDLE
+      - ANVIL
+      - HOPPER
+      - DISPENSER
+      - OBSERVER
+      - PISTON
+      - BARREL
+      - CAMPFIRE
+      - SCAFFOLDING
+      - BAMBOO
+      - CACTUS
+      - PUMPKIN
+      - BEETROOT
+      - GLOWSTONE
+      - NETHERRACK
+      - DEEPSLATE
+      - BEDROCK
+      - PRISMARINE
+      - TERRACOTTA
+      - SANDSTONE
+      - MINECART
+      - TORCH
+      - BUCKET
+      - POTION
+      - SPAWNER
+      - GOLEM
+      - SNIFFER
+      - PARROT
+      - DOLPHIN
+      - OCELOT
+      - JUKEBOX
+      - CAULDRON
+      - BOOKSHELF
+      - SPYGLASS
+    # Optional custom messages. Empty = the standard chat game announcements.
+    # & colour codes, \n for a new line. Placeholders: {scrambled} {answer}
+    # {player} {time} {reward} {seconds}. Example start message:
+    #   "&6&lCHAT GAMES &8» &eUnscramble this word!\n&fScrambled Word: &b{scrambled}\n&7Type the correct word in chat to win!"
+    messages:
+      start: ""
+      win: ""
+      timeout: ""
 
 # Crates — debug toggles
 # debug-interactions: when true, every right-click on a registered crate (or
