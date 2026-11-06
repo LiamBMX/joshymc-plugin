@@ -945,7 +945,19 @@ class SudoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             Msg.playerNotFound(sender)
             return true
         }
-        val cmd = args.drop(1).joinToString(" ")
+        val cmd = args.drop(1).joinToString(" ").removePrefix("/")
+        // The command runs with the target's permissions (issue #1383): players may only sudo
+        // players below them, and never permission/operator/economy/console-type commands.
+        if (sender is Player) {
+            if (target.uniqueId != sender.uniqueId) {
+                plugin.staffRankManager.protectionProblem(sender, target.uniqueId)?.let { Msg.error(sender, it); return true }
+            }
+            if (com.liam.joshymc.staff.SudoRules.blocked(cmd)) {
+                Msg.error(sender, "/${com.liam.joshymc.staff.SudoRules.label(cmd)} can't be run through /sudo.")
+                return true
+            }
+        }
+        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "SUDO", target.uniqueId, target.name, "command=/${com.liam.joshymc.staff.SudoRules.label(cmd)}")
         target.performCommand(cmd)
         if (sender is Player) plugin.commsManager.send(sender, Component.text("Forced ${target.name} to run: /$cmd", NamedTextColor.GREEN))
         return true

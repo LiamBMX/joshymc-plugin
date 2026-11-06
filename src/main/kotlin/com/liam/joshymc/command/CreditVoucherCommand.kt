@@ -58,6 +58,7 @@ class CreditVoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
         }
 
         plugin.creditVoucherManager.give(target, amount, quantity)
+        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "CREDIT_VOUCHER_GIVE", target.uniqueId, target.name, "credits_each=$amount quantity=$quantity")
 
         val label2 = "$amount Credit Voucher${if (quantity == 1) "" else "s"}"
         sender.sendMessage(

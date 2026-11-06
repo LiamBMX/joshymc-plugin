@@ -5,6 +5,7 @@ import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
+import com.liam.joshymc.staff.PremiumVoucherRules
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
@@ -64,7 +65,10 @@ class CreditVoucherManager(private val plugin: Joshymc) {
             meta.persistentDataContainer.set(voucherTypeKey, PersistentDataType.STRING, "credit")
             meta.persistentDataContainer.set(voucherAmountKey, PersistentDataType.INTEGER, amount)
             meta.persistentDataContainer.set(voucherVersionKey, PersistentDataType.INTEGER, VOUCHER_VERSION)
-            meta.persistentDataContainer.set(voucherUuidKey, PersistentDataType.STRING, UUID.randomUUID().toString())
+            val voucherUuid = UUID.randomUUID().toString()
+            meta.persistentDataContainer.set(voucherUuidKey, PersistentDataType.STRING, voucherUuid)
+            // Signed so a Creative/modded client can't forge one (issue #1383).
+            plugin.premiumVoucherSigner.sign(meta, PremiumVoucherRules.Kind.CREDIT, VOUCHER_VERSION, voucherUuid, amount.toString())
         }
         return stack
     }
@@ -119,6 +123,15 @@ class CreditVoucherManager(private val plugin: Joshymc) {
                     CommunicationsManager.Category.ECONOMY
                 )
                 plugin.logger.warning("[CreditVouchers] ${player.name} attempted to redeem a malformed voucher (version=$version, amount=$amount, uuid=$voucherUuid).")
+                return
+            }
+
+            if (!plugin.premiumVoucherSigner.check(player, heldItem.itemMeta, PremiumVoucherRules.Kind.CREDIT, VOUCHER_VERSION, voucherUuid, amount.toString(), "Credit Voucher")) {
+                plugin.commsManager.send(
+                    player,
+                    Component.text("This voucher is invalid and cannot be redeemed.", NamedTextColor.RED),
+                    CommunicationsManager.Category.ECONOMY
+                )
                 return
             }
 

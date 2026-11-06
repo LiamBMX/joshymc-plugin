@@ -106,14 +106,14 @@ class RulePunishManager(private val plugin: Joshymc) {
         )
     }
 
-    /** Refuses self-punishment and punishing a higher rank. Null when allowed. */
+    /**
+     * Refuses self-punishment and punishing staff at or above the sender's rank (issue #1383:
+     * the full staff hierarchy from LuckPerms groups, not `ranks.list` weights). Null when allowed.
+     */
     private fun targetProblem(sender: CommandSender, target: Target): String? {
         if (sender !is Player) return null
         if (sender.uniqueId == target.uuid) return "You cannot punish yourself."
-        val senderWeight = plugin.rankManager.getPlayerRankById(sender.uniqueId)?.weight ?: 0
-        val targetWeight = plugin.rankManager.getPlayerRankById(target.uuid)?.weight ?: 0
-        if (targetWeight > senderWeight) return "You cannot punish a player with a higher rank than you."
-        return null
+        return plugin.staffRankManager.protectionProblem(sender, target.uuid)
     }
 
     /** `/punish preview`: shows what would happen, creates nothing. */

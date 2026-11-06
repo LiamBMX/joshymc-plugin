@@ -1,5 +1,6 @@
 package com.liam.joshymc.command
 
+import com.liam.joshymc.staff.LegacyPunishAuthority
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.PunishmentManager
@@ -184,19 +185,19 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
         val (targetUuid, targetName) = target
 
-        if (sender is Player && sender.uniqueId == targetUuid) {
-            Msg.error(sender, "You cannot punish yourself.")
-            return true
+        // Level caps + staff rank protection (issue #1383). Temporary bans/mutes are checked
+        // again with their duration once it is parsed.
+        val action = when (type) {
+            "ban" -> LegacyPunishAuthority.Action.BAN
+            "tempban" -> LegacyPunishAuthority.Action.TEMPBAN
+            "tempmute" -> LegacyPunishAuthority.Action.TEMPMUTE
+            "unban" -> LegacyPunishAuthority.Action.UNBAN
+            "unmute" -> LegacyPunishAuthority.Action.UNMUTE
+            "warn" -> LegacyPunishAuthority.Action.WARN
+            "unwarn" -> LegacyPunishAuthority.Action.UNWARN
+            else -> return true
         }
-
-        if (sender is Player) {
-            val senderWeight = plugin.rankManager.getPlayerRankById(sender.uniqueId)?.weight ?: 0
-            val targetWeight = plugin.rankManager.getPlayerRankById(targetUuid)?.weight ?: 0
-            if (targetWeight > senderWeight) {
-                Msg.error(sender, "You cannot punish a player with a higher rank than you.")
-                return true
-            }
-        }
+        if (!legacyGuard(plugin, sender, targetUuid, action)) return true
 
         val punisherUuid = (sender as? Player)?.uniqueId
         val punisherName = sender.name
@@ -246,6 +247,7 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             Msg.usage(sender, "/punish <player> tempban <duration> <reason>")
             return true
         }
+        if (!legacyGuard(plugin, sender, targetUuid, LegacyPunishAuthority.Action.TEMPBAN, durationMs)) return true
 
         val inserted = plugin.punishmentManager.tempban(targetUuid, targetName, punisherName, punisherUuid, reason, durationMs)
         Bukkit.getPlayer(targetUuid)?.kick(
@@ -274,6 +276,7 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             Msg.usage(sender, "/punish <player> tempmute <duration> <reason>")
             return true
         }
+        if (!legacyGuard(plugin, sender, targetUuid, LegacyPunishAuthority.Action.TEMPMUTE, durationMs)) return true
 
         plugin.punishmentManager.tempmute(targetUuid, targetName, punisherName, punisherUuid, reason, durationMs)
 
@@ -303,7 +306,8 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return true
         }
 
-        plugin.punishmentManager.unban(targetUuid, punisherName, punisherUuid, reason)
+        val result = plugin.punishmentManager.unban(targetUuid, punisherName, punisherUuid, reason)
+        if (!reportLegacyRevocation(sender, targetName, result, "ban")) return true
         val msg = Component.text("$targetName has been unbanned.", NamedTextColor.GREEN)
         Msg.reply(sender, msg)
         notifyStaff(sender, msg)
@@ -321,7 +325,8 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return true
         }
 
-        plugin.punishmentManager.unmute(targetUuid, punisherName, punisherUuid, reason)
+        val result = plugin.punishmentManager.unmute(targetUuid, punisherName, punisherUuid, reason)
+        if (!reportLegacyRevocation(sender, targetName, result, "mute")) return true
         val msg = Component.text("$targetName has been unmuted.", NamedTextColor.GREEN)
         Msg.reply(sender, msg)
         notifyStaff(sender, msg)
@@ -353,7 +358,13 @@ class PunishCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
     }
 
     private fun handleUnwarn(sender: CommandSender, args: Array<out String>, targetUuid: java.util.UUID, targetName: String, punisherUuid: java.util.UUID?, punisherName: String): Boolean {
-        val activeWarnings = plugin.punishmentManager.getActiveWarnings(targetUuid)
+        // Rule warnings (from /punish) are only removed by /punish overturn (issue #1383).
+        val ruleWarnings = plugin.punishmentManager.activeRuleWarningIds(targetUuid)
+        args.getOrNull(2)?.toIntOrNull()?.takeIf { it in ruleWarnings }?.let { id ->
+            Msg.error(sender, "Warning #$id was issued with /punish. Use /punish overturn so its incident is marked overturned.")
+            return true
+        }
+        val activeWarnings = plugin.punishmentManager.getActiveWarnings(targetUuid).filter { it.id !in ruleWarnings }
         val explicitId = args.getOrNull(2)?.toIntOrNull()?.takeIf { id -> activeWarnings.any { it.id == id } }
 
         val reasonArgs = if (explicitId != null) args.drop(3) else args.drop(2)

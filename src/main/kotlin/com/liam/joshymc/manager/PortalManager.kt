@@ -67,6 +67,14 @@ class PortalManager(private val plugin: Joshymc) : Listener {
         loadPortals()
         startDetectionTask()
         plugin.logger.info("[PortalManager] Loaded ${portals.size} portals.")
+        // Issue #1383: `command` actions used to run as the console and now run as the player.
+        // Name them so the Owner can re-set any that really need console authority.
+        for (portal in portals.filter { it.action.equals("command", ignoreCase = true) && it.actionData.isNotBlank() }) {
+            plugin.logger.info(
+                "[PortalManager] Portal '${portal.name}' runs its command with the player's own permissions. " +
+                    "If it needs console authority, set it from the console: portal action ${portal.name} console <command>"
+            )
+        }
     }
 
     fun stop() {
@@ -312,8 +320,16 @@ class PortalManager(private val plugin: Joshymc) : Listener {
         PvpTeleportGuard.forced {
             when (portal.action.lowercase()) {
                 "command" -> {
+                    // Runs with the player's own permissions (issue #1383): a portal can't be
+                    // used to run commands its builder couldn't.
                     if (portal.actionData.isBlank()) return
-                    val cmd = portal.actionData.replace("{player}", player.name)
+                    val cmd = portal.actionData.replace("{player}", player.name).removePrefix("/")
+                    player.performCommand(cmd)
+                }
+                "console" -> {
+                    // Only the server console can set this action (PortalCommand).
+                    if (portal.actionData.isBlank()) return
+                    val cmd = portal.actionData.replace("{player}", player.name).removePrefix("/")
                     Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd)
                 }
                 "tp" -> {

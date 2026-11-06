@@ -72,6 +72,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         // Use the target's standing block as the visual anchor for particles.
+        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "CRATE_FORCE_OPEN", target.uniqueId, target.name, "crate=$crateType")
         plugin.crateManager.openCrate(target, crateType, target.location.block)
         val msg = Component.text("Opening $crateType crate for ${target.name}.", NamedTextColor.GREEN)
         if (sender is Player) plugin.commsManager.send(sender, msg) else sender.sendMessage(msg)
@@ -333,7 +334,10 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
         var given = 0
         for (target in targets) {
-            if (plugin.crateManager.giveKey(target, crateType, amount)) given++
+            if (plugin.crateManager.giveKey(target, crateType, amount)) {
+                given++
+                com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "CRATE_KEY_GIVE", target.uniqueId, target.name, "crate=$crateType amount=$amount")
+            }
         }
 
         val crate = plugin.crateManager.getCrate(crateType)!!

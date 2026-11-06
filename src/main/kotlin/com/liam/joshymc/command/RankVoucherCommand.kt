@@ -64,6 +64,7 @@ class RankVoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComp
         }
 
         plugin.rankVoucherManager.give(target, rankArg, quantity)
+        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "RANK_VOUCHER_GIVE", target.uniqueId, target.name, "tier=$rankArg quantity=$quantity")
         val rankName = plugin.rankVoucherManager.displayName(rankArg)
         val label2 = "$rankName Rank Voucher${if (quantity == 1) "" else "s"}"
 

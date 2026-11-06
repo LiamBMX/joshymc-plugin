@@ -60,6 +60,7 @@ class TokensCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         plugin.giveItemSafely(target, tokenItem)
+        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "TOKENS_GIVE", target.uniqueId, target.name, "amount=$amount")
 
         target.sendMessage(
             Component.text("You received ", NamedTextColor.GOLD)

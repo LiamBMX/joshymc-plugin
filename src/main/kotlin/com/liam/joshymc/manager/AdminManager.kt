@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.staff.LegacyPunishAuthority
 import com.liam.joshymc.command.notifyStaff
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.util.PvpTeleportGuard
@@ -290,11 +291,17 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                     .decoration(TextDecoration.ITALIC, false)
             ))
         }
-        gui.setItem(49, restoreBtn) { p, _ ->
+        gui.guardedItem(Tier.ADMIN, 49, restoreBtn) { p, _ ->
             val targetPlayer = Bukkit.getPlayer(targetUuid)
             if (targetPlayer == null) {
                 plugin.commsManager.send(p, Component.text("Player is offline.", NamedTextColor.RED))
-                return@setItem
+                return@guardedItem
+            }
+            // Restoring your own older inventory duplicates everything stored or traded since,
+            // and staff may not overwrite the inventory of staff at or above them (issue #1383).
+            if (refused(p, plugin.staffRankManager.protectionProblem(p, targetUuid))) {
+                p.closeInventory()
+                return@guardedItem
             }
 
             // Warn if player has items that will be replaced
@@ -305,7 +312,8 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             saveSnapshot(targetPlayer, "rollback_source")
             val success = restoreSnapshot(targetPlayer, snapshotId)
             if (success) {
-                logAction(p, "RESTORE_INVENTORY", Bukkit.getOfflinePlayer(targetUuid), "Snapshot #$snapshotId")
+                logAction(p.uniqueId, p.name, "RESTORE_INVENTORY", targetUuid, targetName,
+                    "snapshot=$snapshotId type=$snapshotType target_uuid=$targetUuid")
                 plugin.commsManager.send(p, Component.text("Restored ${targetName}'s inventory from snapshot #$snapshotId", NamedTextColor.GREEN))
                 p.playSound(p.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.0f)
 
@@ -343,10 +351,11 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         plugin.guiManager.open(admin, gui)
     }
 
+    /** Restores [player]'s own snapshot [snapshotId]; another player's snapshot is never applied. */
     fun restoreSnapshot(player: Player, snapshotId: Int): Boolean {
         val data = plugin.databaseManager.queryFirst(
-            "SELECT inventory_data FROM inventory_snapshots WHERE id = ?",
-            snapshotId
+            "SELECT inventory_data FROM inventory_snapshots WHERE id = ? AND player_uuid = ?",
+            snapshotId, player.uniqueId.toString()
         ) { rs -> rs.getString("inventory_data") } ?: return false
 
         player.inventory.clear()
@@ -576,6 +585,46 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         const val PERM_HELPER = "joshymc.admin.helper"
     }
 
+    /** The three /admin tiers. Each includes the ones below it. */
+    enum class Tier { HELPER, MODERATE, ADMIN }
+
+    /** Live tier check, used when a button is built *and* again when it is clicked (issue #1383). */
+    fun hasTier(player: Player, tier: Tier): Boolean = when (tier) {
+        Tier.ADMIN -> player.hasPermission(PERM_ADMIN)
+        Tier.MODERATE -> player.hasPermission(PERM_MODERATE) || player.hasPermission(PERM_ADMIN)
+        Tier.HELPER -> hasAnyAdminPermission(player)
+    }
+
+    /**
+     * [CustomGui.setItem] whose click re-checks [tier] first, so someone demoted while the
+     * panel is open can't finish an action they no longer have (issue #1383).
+     */
+    private fun CustomGui.guardedItem(tier: Tier, slot: Int, item: ItemStack, onClick: (Player, org.bukkit.event.inventory.InventoryClickEvent) -> Unit) {
+        setItem(slot, item) { p, event ->
+            if (!hasTier(p, tier)) {
+                staleDenied(p)
+                return@setItem
+            }
+            onClick(p, event)
+        }
+    }
+
+    private fun mayGiveCreative(p: Player, target: Player): Boolean =
+        p.hasPermission("joshymc.gamemode.creative") && (target.uniqueId == p.uniqueId || p.hasPermission("joshymc.gamemode.others"))
+
+    private fun staleDenied(p: Player) {
+        plugin.commsManager.send(p, Component.text("You no longer have permission for that.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+        p.closeInventory()
+    }
+
+    /** Sends [problem] (if any) to [p]; true when there was one. */
+    private fun refused(p: Player, problem: String?): Boolean {
+        if (problem == null) return false
+        plugin.commsManager.send(p, Component.text(problem, NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+        p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.5f, 1.0f)
+        return true
+    }
+
     /** Returns true if player has any admin tier permission */
     fun hasAnyAdminPermission(player: Player): Boolean {
         return player.hasPermission(PERM_ADMIN)
@@ -611,6 +660,21 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         val targetName = pending.targetName
 
         Bukkit.getScheduler().runTask(plugin, Runnable {
+            // Re-check everything when the reason arrives (issue #1383): the viewer may have
+            // been demoted since the button was clicked, and the panel follows the same level
+            // caps and rank protection as /ban, /mute, /kick and /warn.
+            val tier = when (pending.type) { "ban" -> Tier.ADMIN; "kick" -> Tier.MODERATE; else -> Tier.HELPER }
+            if (!hasTier(admin, tier)) {
+                plugin.commsManager.send(admin, Component.text("You no longer have permission for that.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+                return@Runnable
+            }
+            val action = when (pending.type) {
+                "ban" -> if (pending.duration != null) LegacyPunishAuthority.Action.TEMPBAN else LegacyPunishAuthority.Action.BAN
+                "mute" -> if (pending.duration != null) LegacyPunishAuthority.Action.TEMPMUTE else LegacyPunishAuthority.Action.MUTE
+                "kick" -> LegacyPunishAuthority.Action.KICK
+                else -> LegacyPunishAuthority.Action.WARN
+            }
+            if (refused(admin, plugin.staffRankManager.legacyPunishProblem(admin, targetUuid, action, pending.duration))) return@Runnable
             when (pending.type) {
                 "ban" -> {
                     if (pending.duration != null) {
@@ -689,7 +753,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         // Row 2 (slots 10-16): Action Logs, Inventory Rollbacks, Ban List, Mute List
         // Action Logs — helper+
         if (admin.hasPermission(PERM_HELPER) || admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(11, buildItem(Material.BOOK, "Action Logs", NamedTextColor.YELLOW,
+            gui.guardedItem(Tier.HELPER, 11, buildItem(Material.BOOK, "Action Logs", NamedTextColor.YELLOW,
                 "View recent admin actions")) { p, _ ->
                 openLogViewer(p, 0)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
@@ -698,7 +762,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Inventory Rollbacks — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(12, buildItem(Material.CHEST, "Inventory Rollbacks", NamedTextColor.GOLD,
+            gui.guardedItem(Tier.ADMIN, 12, buildItem(Material.CHEST, "Inventory Rollbacks", NamedTextColor.GOLD,
                 "Restore player inventories")) { p, _ ->
                 openPlayerListForAction(p, "rollback")
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
@@ -707,7 +771,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Ban List — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(14, buildItem(Material.BARRIER, "Ban List", NamedTextColor.RED,
+            gui.guardedItem(Tier.ADMIN, 14, buildItem(Material.BARRIER, "Ban List", NamedTextColor.RED,
                 "View and manage active bans")) { p, _ ->
                 openBanList(p, 0)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
@@ -716,7 +780,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Mute List — helper+ (helpers can view it to unmute)
         if (admin.hasPermission(PERM_HELPER) || admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(15, buildItem(Material.BELL, "Mute List", NamedTextColor.LIGHT_PURPLE,
+            gui.guardedItem(Tier.HELPER, 15, buildItem(Material.BELL, "Mute List", NamedTextColor.LIGHT_PURPLE,
                 "View and manage active mutes")) { p, _ ->
                 openMuteList(p, 0)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
@@ -725,7 +789,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Anticheat — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(13, buildItem(Material.IRON_SWORD, "Anticheat", NamedTextColor.AQUA,
+            gui.guardedItem(Tier.ADMIN, 13, buildItem(Material.IRON_SWORD, "Anticheat", NamedTextColor.AQUA,
                 "Manage anticheat checks")) { p, _ ->
                 openAnticheatPanel(p)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
@@ -892,9 +956,9 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Heal (slot 10) — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(10, buildItem(Material.GREEN_WOOL, "Heal", NamedTextColor.GREEN, "Restore full health and hunger")) { p, _ ->
+            gui.guardedItem(Tier.ADMIN, 10, buildItem(Material.GREEN_WOOL, "Heal", NamedTextColor.GREEN, "Restore full health and hunger")) { p, _ ->
                 val tp = target.player
-                if (tp == null) { notOnline(p); return@setItem }
+                if (tp == null) { notOnline(p); return@guardedItem }
                 tp.health = tp.maxHealth
                 tp.foodLevel = 20
                 tp.saturation = 20f
@@ -907,9 +971,9 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Teleport To (slot 11) — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(11, buildItem(Material.YELLOW_WOOL, "Teleport To", NamedTextColor.YELLOW, "Teleport to this player")) { p, _ ->
+            gui.guardedItem(Tier.ADMIN, 11, buildItem(Material.YELLOW_WOOL, "Teleport To", NamedTextColor.YELLOW, "Teleport to this player")) { p, _ ->
                 val tp = target.player
-                if (tp == null) { notOnline(p); return@setItem }
+                if (tp == null) { notOnline(p); return@guardedItem }
                 PvpTeleportGuard.forced { p.teleport(tp.location) }
                 plugin.commsManager.send(p, Component.text("Teleported to ${tp.name}", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 logAction(p, "TELEPORT_TO", target)
@@ -922,9 +986,9 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Teleport Here (slot 12) — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(12, buildItem(Material.ORANGE_WOOL, "Teleport Here", NamedTextColor.GOLD, "Teleport this player to you")) { p, _ ->
+            gui.guardedItem(Tier.ADMIN, 12, buildItem(Material.ORANGE_WOOL, "Teleport Here", NamedTextColor.GOLD, "Teleport this player to you")) { p, _ ->
                 val tp = target.player
-                if (tp == null) { notOnline(p); return@setItem }
+                if (tp == null) { notOnline(p); return@guardedItem }
                 PvpTeleportGuard.forced { tp.teleport(p.location) }
                 plugin.commsManager.send(p, Component.text("Teleported ${tp.name} to you", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 logAction(p, "TELEPORT_HERE", target)
@@ -934,16 +998,16 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Kick (slot 13) — moderate+
         if (admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(13, buildItem(Material.RED_WOOL, "Kick", NamedTextColor.RED, "Kick this player")) { p, _ ->
+            gui.guardedItem(Tier.MODERATE, 13, buildItem(Material.RED_WOOL, "Kick", NamedTextColor.RED, "Kick this player")) { p, _ ->
                 val tp = target.player
-                if (tp == null) { notOnline(p); return@setItem }
+                if (tp == null) { notOnline(p); return@guardedItem }
                 promptForReason(p, "kick", target.uniqueId, targetName)
             }
         }
 
         // Ban (slot 14) — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(14, buildItem(Material.RED_CONCRETE, "Ban", NamedTextColor.DARK_RED, "Ban this player")) { p, _ ->
+            gui.guardedItem(Tier.ADMIN, 14, buildItem(Material.RED_CONCRETE, "Ban", NamedTextColor.DARK_RED, "Ban this player")) { p, _ ->
                 openDurationSelector(p, target.uniqueId, targetName, "ban", restricted)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
             }
@@ -951,7 +1015,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Mute (slot 15) — helper+ (helpers limited to tempmute; permanent mute requires moderate+)
         if (admin.hasPermission(PERM_HELPER) || admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(15, buildItem(Material.PURPLE_WOOL, "Mute", NamedTextColor.LIGHT_PURPLE, "Mute this player")) { p, _ ->
+            gui.guardedItem(Tier.HELPER, 15, buildItem(Material.PURPLE_WOOL, "Mute", NamedTextColor.LIGHT_PURPLE, "Mute this player")) { p, _ ->
                 openDurationSelector(p, target.uniqueId, targetName, "mute", restricted)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
             }
@@ -959,7 +1023,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Warn (slot 16) — moderate+ and helper+
         if (admin.hasPermission(PERM_HELPER) || admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(16, buildItem(Material.PAPER, "Warn", NamedTextColor.WHITE, "Warn this player")) { p, _ ->
+            gui.guardedItem(Tier.HELPER, 16, buildItem(Material.PAPER, "Warn", NamedTextColor.WHITE, "Warn this player")) { p, _ ->
                 promptForReason(p, "warn", target.uniqueId, targetName)
             }
         }
@@ -969,16 +1033,20 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         // Set Gamemode (slot 19) — admin only, never in a restricted (Mod Mode) panel
         if (!restricted && admin.hasPermission(PERM_ADMIN)) {
             val currentGm = target.player?.gameMode ?: GameMode.SURVIVAL
-            gui.setItem(19, buildItem(Material.DIAMOND_SWORD, "Set Gamemode", NamedTextColor.AQUA,
+            gui.guardedItem(Tier.ADMIN, 19, buildItem(Material.DIAMOND_SWORD, "Set Gamemode", NamedTextColor.AQUA,
                 "Current: ${currentGm.name}", "Click to cycle gamemodes")) { p, _ ->
                 val tp = target.player
-                if (tp == null) { notOnline(p); return@setItem }
-                val next = when (tp.gameMode) {
+                if (tp == null) { notOnline(p); return@guardedItem }
+                if (tp.uniqueId != p.uniqueId && refused(p, plugin.staffRankManager.protectionProblem(p, tp.uniqueId))) return@guardedItem
+                var next = when (tp.gameMode) {
                     GameMode.SURVIVAL -> GameMode.CREATIVE
                     GameMode.CREATIVE -> GameMode.ADVENTURE
                     GameMode.ADVENTURE -> GameMode.SPECTATOR
                     GameMode.SPECTATOR -> GameMode.SURVIVAL
                 }
+                // Creative only for staff who could use /gamemode creative on that player
+                // (issue #1383): it is skipped in the cycle for everyone else.
+                if (next == GameMode.CREATIVE && !mayGiveCreative(p, tp)) next = GameMode.ADVENTURE
                 tp.gameMode = next
                 logAction(p, "GAMEMODE", target, next.name)
                 plugin.commsManager.send(p, Component.text("Set ${tp.name}'s gamemode to ${next.name}", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
@@ -989,7 +1057,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Manage Ranks (slot 20) — admin only, never in a restricted (Mod Mode) panel
         if (!restricted && admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(20, buildItem(Material.GOLD_INGOT, "Manage Ranks", NamedTextColor.GOLD, "Add or remove individual ranks")) { p, _ ->
+            gui.guardedItem(Tier.ADMIN, 20, buildItem(Material.GOLD_INGOT, "Manage Ranks", NamedTextColor.GOLD, "Add or remove individual ranks")) { p, _ ->
                 openRankSelector(p, target.uniqueId, targetName)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
             }
@@ -997,17 +1065,17 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // View Inventory / Invsee (slot 21) — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(21, buildItem(Material.ENDER_CHEST, "View Inventory", NamedTextColor.DARK_PURPLE, "View this player's inventory")) { p, _ ->
+            gui.guardedItem(Tier.ADMIN, 21, buildItem(Material.ENDER_CHEST, "View Inventory", NamedTextColor.DARK_PURPLE, "View this player's inventory")) { p, _ ->
                 val tp = target.player
-                if (tp == null) { notOnline(p); return@setItem }
+                if (tp == null) { notOnline(p); return@guardedItem }
                 openInvsee(p, tp, restricted)
                 logAction(p, "INVSEE", target)
             }
         }
 
-        // Set Balance (slot 22) — admin only, never in a restricted (Mod Mode) panel
-        if (!restricted && admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(22, buildItem(Material.EXPERIENCE_BOTTLE, "Set Balance", NamedTextColor.GOLD,
+        // Set Balance (slot 22) — operators only (issue #1162/#1383), never in a restricted (Mod Mode) panel
+        if (!restricted && admin.hasPermission(PERM_ADMIN) && admin.isOp) {
+            gui.guardedItem(Tier.ADMIN, 22, buildItem(Material.EXPERIENCE_BOTTLE, "Set Balance", NamedTextColor.GOLD,
                 "Set preset balance amounts")) { p, _ ->
                 openBalanceSelector(p, target.uniqueId, targetName)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
@@ -1016,7 +1084,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Punishment History (slot 23) — helper+
         if (admin.hasPermission(PERM_HELPER) || admin.hasPermission(PERM_MODERATE) || admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(23, buildItem(Material.CLOCK, "Punishment History", NamedTextColor.YELLOW,
+            gui.guardedItem(Tier.HELPER, 23, buildItem(Material.CLOCK, "Punishment History", NamedTextColor.YELLOW,
                 "View punishment history")) { p, _ ->
                 openPunishmentHistory(p, target.uniqueId, targetName, 0, restricted)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
@@ -1025,7 +1093,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         // Inventory Snapshots (slot 24) — admin only
         if (admin.hasPermission(PERM_ADMIN)) {
-            gui.setItem(24, buildItem(Material.CHEST, "Inventory Snapshots", NamedTextColor.GOLD,
+            gui.guardedItem(Tier.ADMIN, 24, buildItem(Material.CHEST, "Inventory Snapshots", NamedTextColor.GOLD,
                 "View and restore inventory snapshots")) { p, _ ->
                 openSnapshotList(p, target.uniqueId, targetName, 0)
                 p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.5f, 1.0f)
@@ -1056,10 +1124,11 @@ class AdminManager(private val plugin: Joshymc) : Listener {
             val frozen = isFrozen(target.uniqueId)
             val freezeLabel = if (frozen) "Unfreeze" else "Freeze"
             val freezeColor = if (frozen) NamedTextColor.GREEN else NamedTextColor.AQUA
-            gui.setItem(25, buildItem(Material.BARRIER, freezeLabel, freezeColor,
+            gui.guardedItem(Tier.MODERATE, 25, buildItem(Material.BARRIER, freezeLabel, freezeColor,
                 if (frozen) "Click to unfreeze" else "Click to freeze")) { p, _ ->
                 val tp = target.player
-                if (tp == null) { notOnline(p); return@setItem }
+                if (tp == null) { notOnline(p); return@guardedItem }
+                if (!isFrozen(tp.uniqueId) && refused(p, plugin.staffRankManager.protectionProblem(p, tp.uniqueId))) return@guardedItem
                 val nowFrozen = toggleFreeze(tp)
                 logAction(p, if (nowFrozen) "FREEZE" else "UNFREEZE", target)
                 if (nowFrozen) {
@@ -1141,9 +1210,15 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                 lore.add(Component.text("Click to unban", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
                 meta.lore(lore)
             }
-            gui.setItem(index, head) { p, _ ->
-                plugin.punishmentManager.unban(ban.uuid, p.name, p.uniqueId)
-                logAction(p, "UNBAN", Bukkit.getOfflinePlayer(ban.uuid))
+            gui.guardedItem(Tier.ADMIN, index, head) { p, _ ->
+                if (refused(p, plugin.staffRankManager.legacyPunishProblem(p, ban.uuid, LegacyPunishAuthority.Action.UNBAN))) return@guardedItem
+                val result = plugin.punishmentManager.unban(ban.uuid, p.name, p.uniqueId)
+                if (result.ruleBasedLeft > 0) refused(p, "${ban.name} still has ${result.ruleBasedLeft} /punish ban(s); only /punish overturn lifts those.")
+                if (result.revoked == 0) {
+                    openBanList(p, currentPage)
+                    return@guardedItem
+                }
+                logAction(p, "UNBAN", Bukkit.getOfflinePlayer(ban.uuid), "revoked=${result.revoked}")
                 plugin.commsManager.send(p, Component.text("Unbanned ${ban.name}", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 p.playSound(p.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.0f)
                 openBanList(p, currentPage)
@@ -1224,9 +1299,15 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                 lore.add(Component.text("Click to unmute", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
                 meta.lore(lore)
             }
-            gui.setItem(index, head) { p, _ ->
-                plugin.punishmentManager.unmute(mute.uuid, p.name, p.uniqueId)
-                logAction(p, "UNMUTE", Bukkit.getOfflinePlayer(mute.uuid))
+            gui.guardedItem(Tier.HELPER, index, head) { p, _ ->
+                if (refused(p, plugin.staffRankManager.legacyPunishProblem(p, mute.uuid, LegacyPunishAuthority.Action.UNMUTE))) return@guardedItem
+                val result = plugin.punishmentManager.unmute(mute.uuid, p.name, p.uniqueId)
+                if (result.ruleBasedLeft > 0) refused(p, "${mute.name} still has ${result.ruleBasedLeft} /punish mute(s); only /punish overturn lifts those.")
+                if (result.revoked == 0) {
+                    openMuteList(p, currentPage)
+                    return@guardedItem
+                }
+                logAction(p, "UNMUTE", Bukkit.getOfflinePlayer(mute.uuid), "revoked=${result.revoked}")
                 plugin.commsManager.send(p, Component.text("Unmuted ${mute.name}", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 p.playSound(p.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.0f)
                 openMuteList(p, currentPage)
@@ -1512,7 +1593,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         // Center the 9 options in the middle row (slots 9-17)
         for ((index, option) in durations.withIndex()) {
             val slot = 9 + index
-            gui.setItem(slot, buildItem(option.material, option.label, option.color,
+            gui.guardedItem(if (type == "ban") Tier.ADMIN else Tier.HELPER, slot, buildItem(option.material, option.label, option.color,
                 "Click to ${type} for ${option.label.lowercase()}")) { p, _ ->
                 // After picking duration, prompt for reason via chat
                 promptForReason(p, type, targetUuid, targetName, option.ms)
@@ -1566,7 +1647,8 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                 ))
                 if (has) meta.setEnchantmentGlintOverride(true)
             }
-            gui.setItem(index, item) { p, _ ->
+            gui.guardedItem(Tier.ADMIN, index, item) { p, _ ->
+                if (!(isBase && has) && refused(p, plugin.staffRankManager.rankChangeProblem(p, targetUuid, rank.id))) return@guardedItem
                 when {
                     isBase && has -> p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.5f, 1.0f)
                     has -> openRankRemoveConfirm(p, targetUuid, targetName, rank)
@@ -1609,7 +1691,11 @@ class AdminManager(private val plugin: Joshymc) : Listener {
         }
         gui.setItem(13, info)
 
-        gui.setItem(11, buildItem(Material.LIME_CONCRETE, "Confirm", NamedTextColor.GREEN, "Remove ${rank.id} from $targetName")) { p, _ ->
+        gui.guardedItem(Tier.ADMIN, 11, buildItem(Material.LIME_CONCRETE, "Confirm", NamedTextColor.GREEN, "Remove ${rank.id} from $targetName")) { p, _ ->
+            if (refused(p, plugin.staffRankManager.rankChangeProblem(p, targetUuid, rank.id))) {
+                p.closeInventory()
+                return@guardedItem
+            }
             val change = plugin.rankManager.removeRankDetailed(targetUuid, rank.id)
             if (change.changed) logAction(p, "RANK_REMOVE", Bukkit.getOfflinePlayer(targetUuid), rank.id)
             sendRankChangeResult(p, change, "Removed ", rank, " from $targetName", "$targetName no longer has ")
@@ -1694,10 +1780,24 @@ class AdminManager(private val plugin: Joshymc) : Listener {
 
         for ((index, option) in options.withIndex()) {
             val slot = 9 + index
-            gui.setItem(slot, buildItem(option.material, option.label, NamedTextColor.GOLD,
+            gui.guardedItem(Tier.ADMIN, slot, buildItem(option.material, option.label, NamedTextColor.GOLD,
                 "Click to set balance")) { p, _ ->
-                plugin.economyManager.setBalance(targetUuid, option.amount)
-                logAction(p, "SET_BALANCE", Bukkit.getOfflinePlayer(targetUuid), option.label)
+                // Setting a balance is operator/console only, never a permission (issue #1162),
+                // and it is audited in the same transaction as /eco set (issue #1383).
+                if (!p.isOp) {
+                    refused(p, "Setting a balance is operator only. Use /eco set from the console.")
+                    return@guardedItem
+                }
+                try {
+                    plugin.economyManager.adminSet(targetUuid, option.amount) { change ->
+                        logAction(p.uniqueId, p.name, "BALANCE_SET", targetUuid, targetName,
+                            "currency=COINS op=SET source=admin_panel previous=${change.previous} new=${change.current} target_uuid=$targetUuid")
+                    }
+                } catch (e: Exception) {
+                    plugin.logger.severe("[Admin] Set balance for $targetName by ${p.name} failed: ${e.message}")
+                    refused(p, "Could not update the balance: database error. Nothing was changed.")
+                    return@guardedItem
+                }
                 plugin.commsManager.send(p, Component.text("Set $targetName's balance to ${option.label}", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
                 p.playSound(p.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.0f)
                 openPlayerPanel(p, Bukkit.getOfflinePlayer(targetUuid))
@@ -1873,7 +1973,7 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                 ))
             }
             val capturedId = snapshot.id
-            gui.setItem(index, item) { p, _ ->
+            gui.guardedItem(Tier.ADMIN, index, item) { p, _ ->
                 previewSnapshot(p, capturedId, targetUuid, targetName)
             }
         }

@@ -6,6 +6,8 @@ import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
+import com.liam.joshymc.staff.AdminAudit
+import com.liam.joshymc.staff.PortalActionRules
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -15,10 +17,14 @@ import org.bukkit.entity.Player
 class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     private val portalManager get() = plugin.portalManager
-    private val validActions = listOf("command", "tp", "rtp", "world", "warp")
+    private val validActions = listOf("command", "console", "tp", "rtp", "world", "warp")
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) { Msg.playersOnly(sender); return true }
+        // The console may set portal actions (the only way to set a `console` action, issue #1383).
+        if (sender !is Player) {
+            if (args.getOrNull(0)?.lowercase() == "action") handleAction(sender, args) else Msg.playersOnly(sender)
+            return true
+        }
         if (!sender.hasPermission("joshymc.portal")) {
             Msg.noPermission(sender)
             return true
@@ -98,9 +104,9 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
     }
 
-    private fun handleAction(sender: Player, args: Array<out String>) {
+    private fun handleAction(sender: CommandSender, args: Array<out String>) {
         if (args.size < 3) {
-            Msg.usage(sender, "/portal action <name> <command|tp|rtp|world|warp> [data]")
+            Msg.usage(sender, "/portal action <name> <command|console|tp|rtp|world|warp> [data]")
             return
         }
         val name = args[1]
@@ -110,16 +116,23 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             Msg.error(sender, "Invalid action. Use: ${validActions.joinToString(", ")}")
             return
         }
+        // `console` actions run as the server console, so only the console may set them;
+        // `command` actions run with the walking player's own permissions (issue #1383).
+        if (sender is Player && PortalActionRules.consoleOnly(action)) {
+            Msg.error(sender, "Console portal actions can only be set from the server console. Use 'command' to run a command as the player.")
+            return
+        }
 
         if (portalManager.getPortal(name) == null) {
-            plugin.commsManager.send(sender, Component.text("Portal '$name' not found.", NamedTextColor.RED))
+            Msg.error(sender, "Portal '$name' not found.")
             return
         }
 
         val data = if (args.size > 3) args.drop(3).joinToString(" ") else ""
 
         portalManager.setAction(name, action, data)
-        plugin.commsManager.send(sender,
+        AdminAudit.log(plugin, sender, "PORTAL_ACTION", details = "portal=$name action=$action")
+        Msg.reply(sender,
             Component.text("Portal '$name' action set to ", NamedTextColor.GREEN)
                 .append(Component.text(action, NamedTextColor.YELLOW))
                 .append(if (data.isNotBlank()) Component.text(" ($data)", NamedTextColor.GRAY) else Component.empty())

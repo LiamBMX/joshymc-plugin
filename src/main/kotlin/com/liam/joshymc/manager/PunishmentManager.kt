@@ -125,22 +125,13 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         return insert(targetUuid, targetName, punisherName, punisherUuid, "TEMPBAN", reason, durationMs)
     }
 
-    fun unban(targetUuid: UUID, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null) {
-        // One transaction, so the revocation and its Discord log are stored together (issue #1157).
-        plugin.databaseManager.transaction {
-            val revoked = plugin.databaseManager.query(
-                "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1",
-                targetUuid.toString()
-            ) { rs -> mapRecord(rs) }
-
-            plugin.databaseManager.execute(
-                "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE target_uuid = ? AND type IN ('BAN', 'TEMPBAN') AND active = 1",
-                revokerName, revokerUuid?.toString(), revokeReason, System.currentTimeMillis(), targetUuid.toString()
-            )
-
-            logRevocation("UNBAN", targetUuid, revoked, revokerName, revokeReason)
-        }
-    }
+    /**
+     * Lifts [targetUuid]'s active legacy bans (`/ban`, `/tempban`, the `/admin` panel). Rule
+     * punishments from `/punish` (rows with an offense number) are never lifted here: they
+     * are overturned with `/punish overturn`, which also marks the incident (issue #1383).
+     */
+    fun unban(targetUuid: UUID, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null): LegacyRevocation =
+        revokeLegacy("UNBAN", BAN_TYPES, targetUuid, revokerName, revokerUuid, revokeReason)
 
     /** The player's longest active ban in any gamemode (permanent first). */
     fun isBanned(targetUuid: UUID): ActivePunishment? = activeOf(targetUuid, BAN_TYPES, null)
@@ -201,21 +192,36 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         return inserted
     }
 
-    fun unmute(targetUuid: UUID, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null) {
+    /** Lifts [targetUuid]'s active legacy mutes; rule mutes need `/punish overturn` (see [unban]). */
+    fun unmute(targetUuid: UUID, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null): LegacyRevocation =
+        revokeLegacy("UNMUTE", MUTE_TYPES, targetUuid, revokerName, revokerUuid, revokeReason)
+
+    /** What a legacy unban/unmute did: rows lifted, and active rule punishments it left alone. */
+    data class LegacyRevocation(val revoked: Int, val ruleBasedLeft: Int)
+
+    private fun revokeLegacy(action: String, types: String, targetUuid: UUID, revokerName: String?, revokerUuid: UUID?, revokeReason: String?): LegacyRevocation {
+        var result = LegacyRevocation(0, 0)
         // One transaction, so the revocation and its Discord log are stored together (issue #1157).
         plugin.databaseManager.transaction {
             val revoked = plugin.databaseManager.query(
-                "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1",
+                "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE target_uuid = ? AND type IN ($types) AND active = 1 AND offense IS NULL",
                 targetUuid.toString()
             ) { rs -> mapRecord(rs) }
 
             plugin.databaseManager.execute(
-                "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE target_uuid = ? AND type IN ('MUTE', 'TEMPMUTE') AND active = 1",
+                "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE target_uuid = ? AND type IN ($types) AND active = 1 AND offense IS NULL",
                 revokerName, revokerUuid?.toString(), revokeReason, System.currentTimeMillis(), targetUuid.toString()
             )
 
-            logRevocation("UNMUTE", targetUuid, revoked, revokerName, revokeReason)
+            val left = plugin.databaseManager.queryFirst(
+                "SELECT COUNT(*) AS n FROM punishments WHERE target_uuid = ? AND type IN ($types) AND active = 1 AND offense IS NOT NULL",
+                targetUuid.toString()
+            ) { rs -> rs.getInt("n") } ?: 0
+
+            if (revoked.isNotEmpty()) logRevocation(action, targetUuid, revoked, revokerName, revokeReason)
+            result = LegacyRevocation(revoked.size, left)
         }
+        return result
     }
 
     /** The player's longest active mute in any gamemode. */
@@ -239,7 +245,16 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
 
     fun getActiveWarnings(targetUuid: UUID): List<PunishmentRecord> = getWarnings(targetUuid).filter { it.active }
 
-    /** Remove the most recent active warning, or a specific one by [warnId]. Returns true if a row was updated. */
+    /** Ids of [targetUuid]'s active rule warnings (issued by `/punish`, removable only by overturning). */
+    fun activeRuleWarningIds(targetUuid: UUID): Set<Int> = plugin.databaseManager.query(
+        "SELECT id FROM punishments WHERE target_uuid = ? AND type = 'WARN' AND active = 1 AND offense IS NOT NULL",
+        targetUuid.toString()
+    ) { rs -> rs.getInt("id") }.toSet()
+
+    /**
+     * Remove the most recent active legacy warning, or a specific one by [warnId]. Returns true
+     * if a row was updated. Rule warnings from `/punish` are only removed by `/punish overturn`.
+     */
     fun unwarn(targetUuid: UUID, warnId: Int? = null, revokerName: String? = null, revokerUuid: UUID? = null, revokeReason: String? = null): Boolean {
         val now = System.currentTimeMillis()
         var updated = false
@@ -247,17 +262,17 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         plugin.databaseManager.transaction {
             if (warnId != null) {
                 val record = plugin.databaseManager.queryFirst(
-                    "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE id = ? AND target_uuid = ? AND type = 'WARN' AND active = 1",
+                    "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE id = ? AND target_uuid = ? AND type = 'WARN' AND active = 1 AND offense IS NULL",
                     warnId, targetUuid.toString()
                 ) { rs -> mapRecord(rs) }
                 updated = plugin.databaseManager.executeUpdate(
-                    "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE id = ? AND target_uuid = ? AND type = 'WARN' AND active = 1",
+                    "UPDATE punishments SET active = 0, revoked_by = ?, revoked_by_uuid = ?, revoked_reason = ?, revoked_at = ? WHERE id = ? AND target_uuid = ? AND type = 'WARN' AND active = 1 AND offense IS NULL",
                     revokerName, revokerUuid?.toString(), revokeReason, now, warnId, targetUuid.toString()
                 ) > 0
                 if (updated && record != null) logRevocation("UNWARN", targetUuid, listOf(record), revokerName, revokeReason)
             } else {
                 val record = plugin.databaseManager.queryFirst(
-                    "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE target_uuid = ? AND type = 'WARN' AND active = 1 ORDER BY created_at DESC LIMIT 1",
+                    "SELECT id, type, reason, punisher_name, created_at, expires_at, active FROM punishments WHERE target_uuid = ? AND type = 'WARN' AND active = 1 AND offense IS NULL ORDER BY created_at DESC LIMIT 1",
                     targetUuid.toString()
                 ) { rs -> mapRecord(rs) }
                 if (record != null) {

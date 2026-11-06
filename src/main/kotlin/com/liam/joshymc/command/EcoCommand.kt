@@ -77,6 +77,7 @@ class EcoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         plugin.logger.info("[Economy] ${sender.name} gave $amount Coins to ${target.name} (${target.uniqueId}).")
+        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "ECO_GIVE", target.uniqueId, target.name, "currency=COINS amount=$amount")
         sender.sendMessage(
             Component.text("Gave ", NamedTextColor.GREEN)
                 .append(Component.text(plugin.economyManager.format(amount), NamedTextColor.GOLD))

@@ -36,6 +36,13 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         private val STAFF_LADDER = listOf("trainee", "helper", "jr_mod", "mod", "lead_mod")
     }
 
+    /** Rank protection for every change (issue #1383). Sends the reason and returns true when refused. */
+    private fun refusedChange(sender: CommandSender, targetUuid: java.util.UUID, rankId: String): Boolean {
+        val problem = plugin.staffRankManager.rankChangeProblem(sender, targetUuid, rankId) ?: return false
+        Msg.error(sender, problem)
+        return true
+    }
+
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.rank")) {
             Msg.noPermission(sender)
@@ -105,12 +112,12 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             sender.sendMessage(Component.text("Staff rank '$newRankId' is not configured. Check config.yml ranks.list.", NamedTextColor.RED))
             return
         }
+        // No self-promotion, no promoting staff at/above you, only to ranks below yours (issue #1383).
+        if (refusedChange(sender, target.uniqueId, newRankId)) return
 
         applyStaffRank(target.uniqueId, newRankId)
 
-        if (sender is Player) {
-            plugin.adminManager.logAction(sender, "RANK_PROMOTE", target, "${current ?: "none"} -> $newRankId")
-        }
+        plugin.adminManager.logAction((sender as? Player)?.uniqueId, sender.name, "RANK_PROMOTE", target.uniqueId, target.name, "${current ?: "none"} -> $newRankId")
 
         val tagDisplay = plugin.commsManager.parseLegacy(newRank.displayTag)
         reply(
@@ -158,12 +165,11 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val currentIndex = STAFF_LADDER.indexOf(current)
         val newRankId = if (currentIndex == 0) null else STAFF_LADDER[currentIndex - 1]
+        if (refusedChange(sender, target.uniqueId, current)) return
 
         applyStaffRank(target.uniqueId, newRankId)
 
-        if (sender is Player) {
-            plugin.adminManager.logAction(sender, "RANK_DEMOTE", target, "$current -> ${newRankId ?: "removed"} | Reason: $reason")
-        }
+        plugin.adminManager.logAction((sender as? Player)?.uniqueId, sender.name, "RANK_DEMOTE", target.uniqueId, target.name, "$current -> ${newRankId ?: "removed"} | Reason: $reason")
 
         val onlineTarget = Bukkit.getPlayer(playerName)
 
@@ -217,6 +223,8 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
+        if (refusedChange(sender, target.uniqueId, rankId)) return
+
         val tagDisplay = plugin.commsManager.parseLegacy(rank.displayTag)
         val added = plugin.rankManager.addRank(target.uniqueId, rankId)
         if (!added) {
@@ -229,9 +237,7 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        if (sender is Player) {
-            plugin.adminManager.logAction(sender, "RANK_ADD", target, rankId)
-        }
+        plugin.adminManager.logAction((sender as? Player)?.uniqueId, sender.name, "RANK_ADD", target.uniqueId, target.name, rankId)
 
         reply(
             sender,
@@ -273,6 +279,8 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
+        if (refusedChange(sender, target.uniqueId, rankId)) return
+
         val tagDisplay = rank?.let { plugin.commsManager.parseLegacy(it.displayTag) } ?: donorTag(rankId)
         val removed = plugin.rankManager.removeRank(target.uniqueId, rankId)
         if (!removed) {
@@ -285,9 +293,7 @@ class RankCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             return
         }
 
-        if (sender is Player) {
-            plugin.adminManager.logAction(sender, "RANK_REMOVE", target, rankId)
-        }
+        plugin.adminManager.logAction((sender as? Player)?.uniqueId, sender.name, "RANK_REMOVE", target.uniqueId, target.name, rankId)
 
         reply(
             sender,

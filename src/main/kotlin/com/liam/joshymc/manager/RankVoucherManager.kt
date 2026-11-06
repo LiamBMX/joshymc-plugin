@@ -6,6 +6,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
+import com.liam.joshymc.staff.PremiumVoucherRules
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
@@ -87,7 +88,10 @@ class RankVoucherManager(private val plugin: Joshymc) : Listener {
             meta.persistentDataContainer.set(voucherTypeKey, PersistentDataType.STRING, "rank")
             meta.persistentDataContainer.set(voucherRankKey, PersistentDataType.STRING, id)
             meta.persistentDataContainer.set(voucherVersionKey, PersistentDataType.INTEGER, VOUCHER_VERSION)
-            meta.persistentDataContainer.set(voucherUuidKey, PersistentDataType.STRING, UUID.randomUUID().toString())
+            val voucherUuid = UUID.randomUUID().toString()
+            meta.persistentDataContainer.set(voucherUuidKey, PersistentDataType.STRING, voucherUuid)
+            // Signed so a Creative/modded client can't forge one (issue #1383).
+            plugin.premiumVoucherSigner.sign(meta, PremiumVoucherRules.Kind.RANK, VOUCHER_VERSION, voucherUuid, id)
         }
         return stack
     }
@@ -132,6 +136,11 @@ class RankVoucherManager(private val plugin: Joshymc) : Listener {
         if (version != VOUCHER_VERSION || rankId == null || voucherUuid == null) {
             send(player, "This voucher is invalid and cannot be redeemed.", NamedTextColor.RED)
             plugin.logger.warning("[RankVouchers] ${player.name} attempted to redeem a malformed voucher (version=$version, rank=$rawRank, uuid=$voucherUuid).")
+            return
+        }
+
+        if (!plugin.premiumVoucherSigner.check(player, heldItem.itemMeta, PremiumVoucherRules.Kind.RANK, VOUCHER_VERSION, voucherUuid, rawRank!!, "Rank Voucher")) {
+            send(player, "This voucher is invalid and cannot be redeemed.", NamedTextColor.RED)
             return
         }
 

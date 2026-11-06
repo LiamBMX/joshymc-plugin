@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.PunishmentManager
+import com.liam.joshymc.staff.LegacyPunishAuthority
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -36,6 +37,7 @@ class BanCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             Msg.playerNotFound(sender, args[0])
             return true
         }
+        if (!legacyGuard(plugin, sender, target.first, LegacyPunishAuthority.Action.BAN)) return true
 
         val reason = if (args.size > 1) args.drop(1).joinToString(" ") else null
         val punisherUuid = (sender as? Player)?.uniqueId
@@ -85,6 +87,7 @@ class TempbanCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             Msg.error(sender, "Invalid duration: ${args[1]} (e.g. 1d, 2h30m, 7d)")
             return true
         }
+        if (!legacyGuard(plugin, sender, target.first, LegacyPunishAuthority.Action.TEMPBAN, durationMs)) return true
 
         val reason = if (args.size > 2) args.drop(2).joinToString(" ") else null
         val punisherUuid = (sender as? Player)?.uniqueId
@@ -133,7 +136,10 @@ class UnbanCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return true
         }
 
-        plugin.punishmentManager.unban(target.first, sender.name, (sender as? Player)?.uniqueId)
+        if (!legacyGuard(plugin, sender, target.first, LegacyPunishAuthority.Action.UNBAN)) return true
+
+        val result = plugin.punishmentManager.unban(target.first, sender.name, (sender as? Player)?.uniqueId)
+        if (!reportLegacyRevocation(sender, target.second, result, "ban")) return true
         val msg = Component.text("${target.second} has been unbanned.", NamedTextColor.GREEN)
         Msg.reply(sender, msg)
         notifyStaff(sender, msg)
@@ -165,6 +171,7 @@ class MuteCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             Msg.playerNotFound(sender, args[0])
             return true
         }
+        if (!legacyGuard(plugin, sender, target.first, LegacyPunishAuthority.Action.MUTE)) return true
 
         val reason = if (args.size > 1) args.drop(1).joinToString(" ") else null
         val punisherUuid = (sender as? Player)?.uniqueId
@@ -224,6 +231,8 @@ class TempmuteCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         val punisherUuid = (sender as? Player)?.uniqueId
         val punisherName = sender.name
 
+        if (!legacyGuard(plugin, sender, target.first, LegacyPunishAuthority.Action.TEMPMUTE, durationMs)) return true
+
         plugin.punishmentManager.tempmute(target.first, target.second, punisherName, punisherUuid, reason, durationMs)
 
         val durationStr = PunishmentManager.formatDuration(durationMs)
@@ -273,7 +282,10 @@ class UnmuteCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return true
         }
 
-        plugin.punishmentManager.unmute(target.first, sender.name, (sender as? Player)?.uniqueId)
+        if (!legacyGuard(plugin, sender, target.first, LegacyPunishAuthority.Action.UNMUTE)) return true
+
+        val result = plugin.punishmentManager.unmute(target.first, sender.name, (sender as? Player)?.uniqueId)
+        if (!reportLegacyRevocation(sender, target.second, result, "mute")) return true
         val msg = Component.text("${target.second} has been unmuted.", NamedTextColor.GREEN)
         Msg.reply(sender, msg)
         notifyStaff(sender, msg)
@@ -317,6 +329,8 @@ class WarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         val reason = if (args.size > 1) args.drop(1).joinToString(" ") else null
         val punisherUuid = (sender as? Player)?.uniqueId
         val punisherName = sender.name
+
+        if (!legacyGuard(plugin, sender, target.first, LegacyPunishAuthority.Action.WARN)) return true
 
         plugin.punishmentManager.warn(target.first, target.second, punisherName, punisherUuid, reason)
 
@@ -373,9 +387,15 @@ class UnwarnCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             parsed
         } else null
 
+        if (!legacyGuard(plugin, sender, target.first, LegacyPunishAuthority.Action.UNWARN)) return true
+        if (warnId != null && warnId in plugin.punishmentManager.activeRuleWarningIds(target.first)) {
+            Msg.error(sender, "Warning #$warnId was issued with /punish. Use /punish overturn so its incident is marked overturned.")
+            return true
+        }
+
         val removed = plugin.punishmentManager.unwarn(target.first, warnId, sender.name, (sender as? Player)?.uniqueId)
         if (!removed) {
-            val detail = if (warnId != null) "Warning #$warnId not found for ${target.second}." else "${target.second} has no active warnings."
+            val detail = if (warnId != null) "Warning #$warnId not found for ${target.second}." else "${target.second} has no active legacy warnings (warnings from /punish need /punish overturn)."
             sender.sendMessage(Component.text(detail, NamedTextColor.RED))
             return true
         }
@@ -425,6 +445,8 @@ class KickCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         val reason = if (args.size > 1) args.drop(1).joinToString(" ") else null
         val punisherUuid = (sender as? Player)?.uniqueId
         val punisherName = sender.name
+
+        if (!legacyGuard(plugin, sender, online.uniqueId, LegacyPunishAuthority.Action.KICK)) return true
 
         // Log the kick in history
         plugin.punishmentManager.kick(online.uniqueId, online.name, punisherName, punisherUuid, reason)
@@ -561,4 +583,44 @@ internal fun notifyStaff(sender: CommandSender, message: Component) {
             player.sendMessage(full)
         }
     }
+}
+
+/**
+ * The legacy punishment guard (issue #1383): the sender's `joshymc.punish.<level>` must allow
+ * [action] (and [durationMs] for temporary bans), and nobody may punish themselves or staff at
+ * or above their own rank. Sends the reason and returns false when refused.
+ */
+internal fun legacyGuard(
+    plugin: Joshymc,
+    sender: CommandSender,
+    targetUuid: UUID,
+    action: LegacyPunishAuthority.Action,
+    durationMs: Long? = null
+): Boolean {
+    val problem = plugin.staffRankManager.legacyPunishProblem(sender, targetUuid, action, durationMs) ?: return true
+    Msg.error(sender, problem)
+    return false
+}
+
+/**
+ * Tells [sender] about rule punishments a legacy unban/unmute left in place. Returns false
+ * when nothing legacy was lifted (the caller then reports nothing else).
+ */
+internal fun reportLegacyRevocation(
+    sender: CommandSender,
+    targetName: String,
+    result: PunishmentManager.LegacyRevocation,
+    kind: String
+): Boolean {
+    if (result.ruleBasedLeft > 0) {
+        Msg.error(
+            sender,
+            "$targetName still has ${result.ruleBasedLeft} active /punish $kind(s). Those are only lifted with /punish overturn."
+        )
+    }
+    if (result.revoked == 0) {
+        if (result.ruleBasedLeft == 0) Msg.error(sender, "$targetName has no active $kind.")
+        return false
+    }
+    return true
 }

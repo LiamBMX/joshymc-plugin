@@ -74,6 +74,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             for (egg in eggs) {
                 plugin.giveItemSafely(target, egg.createItemStack(amount))
             }
+            com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "ITEM_GIVE", target.uniqueId, target.name, "item=eggs count=${eggs.size} amount=$amount")
             sender.sendMessage(
                 Component.text("Gave ${eggs.size} eggs (x$amount) to ${target.name}", NamedTextColor.GREEN)
             )
@@ -120,6 +121,7 @@ class JoshyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             customItem.createItemStack(amount)
         }
         plugin.giveItemSafely(target, stack)
+        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "ITEM_GIVE", target.uniqueId, target.name, "item=${customItem.id} amount=$amount")
         sender.sendMessage(
             Component.text("Gave ", NamedTextColor.GREEN)
                 .append(customItem.displayName)
