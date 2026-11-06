@@ -512,6 +512,42 @@ chat-games:
 # production.
 crates:
   debug-interactions: false
+  # Custom crate chest models (issue #1389). Each registered crate block keeps working exactly
+  # as before; JoshyMC draws the crate's custom model over it (an ItemDisplay, no hitbox) for
+  # Java players whose JoshyMC resource pack has loaded. Bedrock players, players without the
+  # pack, and crates with no (or a broken/missing) model see the ordinary crate block.
+  # Works best on a chest / trapped chest / ender chest crate block; use scale for full blocks.
+  custom-models:
+    enabled: true
+    # Gamemodes (gamemode-lock worlds) where models show. Survival only for now; add
+    # "lifesteal" here once Lifesteal has crates.
+    gamemodes: [survival]
+    models:
+      # Keyed by crate id from crates.yml (not the display name).
+      #   enabled   false = this crate keeps the vanilla look
+      #   model     item model key in the resource pack (assets/<ns>/items/<path>.json)
+      #   offset    x/y/z in blocks from the block's centre, -1..1 (world axes)
+      #   rotation  auto = follow the crate block's facing, or degrees the front faces
+      #             (0 south, 90 west, 180 north, 270 east)
+      #   scale     0.5..2.0 (1.0 hides a chest exactly; the floor stays on the floor)
+      cabin:
+        enabled: true
+        model: "joshymc:cabin_crate"
+        offset: {x: 0.0, y: 0.0, z: 0.0}
+        rotation: auto
+        scale: 1.0
+      homestead:
+        enabled: true
+        model: "joshymc:homestead_crate"
+        offset: {x: 0.0, y: 0.0, z: 0.0}
+        rotation: auto
+        scale: 1.0
+      campfire:
+        enabled: true
+        model: "joshymc:campfire_crate"
+        offset: {x: 0.0, y: 0.0, z: 0.0}
+        rotation: auto
+        scale: 1.0
 
 # Lag Cleaner — entity-threshold-based, only clears when needed
 # Checks entity counts every check-interval-seconds

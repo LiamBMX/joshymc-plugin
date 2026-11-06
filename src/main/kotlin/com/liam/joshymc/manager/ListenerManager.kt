@@ -165,6 +165,8 @@ class ListenerManager(private val plugin: Joshymc) {
         // Holograms, NPCs, Crates
         pm.registerEvents(plugin.npcManager, plugin)
         pm.registerEvents(plugin.crateManager, plugin)
+        // Issue #1389: custom crate chest models (chunk + resource pack status events only).
+        pm.registerEvents(plugin.crateManager.models, plugin)
 
         // Sign Shops, Hoppers, Spawners, Teams
         pm.registerEvents(plugin.signShopManager, plugin)
