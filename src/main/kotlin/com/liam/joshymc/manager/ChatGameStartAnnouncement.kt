@@ -17,7 +17,8 @@ import net.kyori.adventure.text.format.TextDecoration
  *   ▸ Type: 'JoshyMC is the BEST' ◂
  *
  *
- * Math games read "Solve the following:" and `▸ Solve: 12 + 34 ◂`. The
+ * Math games read "Solve the following:" and `▸ Solve: 12 + 34 ◂`;
+ * Unscramble reads "Unscramble the following:" and `▸ Unscramble: NODMIAD ◂`. The
  * reward and time limit sit in the prompt line's hover. Prompts are plain
  * [Component.text], never parsed, so they can't carry formatting.
  */
@@ -37,6 +38,7 @@ object ChatGameStartAnnouncement {
         val verb = when (type) {
             ChatGamesManager.GameType.MATH -> "Solve"
             ChatGamesManager.GameType.TYPE -> "Type"
+            ChatGamesManager.GameType.UNSCRAMBLE -> "Unscramble"
         }
         val hover = Component.text()
             .append(Component.text("First correct answer wins ", TEXT))
@@ -73,6 +75,7 @@ object ChatGameStartAnnouncement {
     fun challenge(type: ChatGamesManager.GameType, prompt: String): String = when (type) {
         ChatGamesManager.GameType.MATH -> prompt.removePrefix(MATH_PREFIX)
         ChatGamesManager.GameType.TYPE -> "'$prompt'"
+        ChatGamesManager.GameType.UNSCRAMBLE -> prompt
     }
 
     private fun promptLine(verb: String, challenge: String): Component =

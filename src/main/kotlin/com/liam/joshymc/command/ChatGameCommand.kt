@@ -13,9 +13,10 @@ import org.bukkit.command.TabCompleter
 /**
  * `/chatgame [type]` — admin command to start a chat game on demand.
  *
- * - `/chatgame` — start a random game (Math or Type)
+ * - `/chatgame` — start a random game (Math, Type or Unscramble)
  * - `/chatgame math` — start a math game
  * - `/chatgame type` — start a type-the-phrase game
+ * - `/chatgame unscramble` — start an unscramble-the-word game (issue #1395)
  * - `/chatgame status` — utility only: show the active game (and answer,
  *   since it's admin). Never starts a game and is never randomly selected.
  */
@@ -53,12 +54,22 @@ class ChatGameCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
                 ?: run {
                     sender.sendMessage(
                         Component.text(
-                            "Usage: /chatgame [math|type|status]",
+                            "Usage: /chatgame [math|type|unscramble|status]",
                             NamedTextColor.RED
                         )
                     )
                     return true
                 }
+        }
+
+        if (type != null && !plugin.chatGamesManager.isAvailable(type)) {
+            sender.sendMessage(
+                Component.text(
+                    "${type.displayName} is disabled or has no valid words (chat-games.unscramble in config.yml).",
+                    NamedTextColor.RED
+                )
+            )
+            return true
         }
 
         val started = if (type == null) {
