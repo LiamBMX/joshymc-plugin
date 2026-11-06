@@ -74,19 +74,14 @@ class PlayerWarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         return true
     }
 
-    // Returns -1 for unlimited, otherwise the highest pwarp limit across all of this player's ranks.
-    private fun pwarpLimit(player: Player): Int {
-        val rankIds = plugin.rankManager.getPlayerRankIds(player.uniqueId).ifEmpty { setOf("default") }
-        var best = Int.MIN_VALUE
-        for (rankId in rankIds) {
-            val limit = plugin.config.getInt("warps.limits-by-rank.$rankId", Int.MIN_VALUE)
-            if (limit == Int.MIN_VALUE) continue
-            if (limit == -1 || best == -1) return -1
-            best = maxOf(best, limit)
-        }
-        return if (best != Int.MIN_VALUE) best
-               else plugin.config.getInt("warps.player-max-per-player", 3)
-    }
+    // Returns -1 for unlimited, otherwise the highest pwarp limit across this player's ranks and
+    // their donor tier (issue #1381: tiers live in LuckPerms, so getPlayerRankIds never has them).
+    private fun pwarpLimit(player: Player): Int = com.liam.joshymc.manager.RankLimits.resolve(
+        plugin.rankManager.getPlayerRankIds(player.uniqueId),
+        plugin.rankManager.currentDonorTier(player.uniqueId),
+        { rankId -> plugin.config.getInt("warps.limits-by-rank.$rankId", Int.MIN_VALUE).takeIf { it != Int.MIN_VALUE } },
+        plugin.config.getInt("warps.player-max-per-player", 3)
+    )
 
     private fun handleSet(sender: Player, args: Array<out String>) {
         if (!sender.hasPermission("joshymc.pwarp.set")) {

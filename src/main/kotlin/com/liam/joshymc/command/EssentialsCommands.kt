@@ -261,14 +261,21 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 class HealCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     companion object {
-        // Per-player cooldown for self-heal. Staff who use /heal <other> are
-        // not rate-limited, and `joshymc.heal.bypass` skips the cooldown.
+        // Per-player cooldown for self-heal. Staff who use /heal <other> (needs
+        // `joshymc.heal.others`) are not rate-limited, and `joshymc.heal.bypass` skips the cooldown.
         val cooldowns = ConcurrentHashMap<UUID, Long>()
         const val COOLDOWN_MS = 3 * 60 * 1000L
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.heal")) {
+            Msg.noPermission(sender)
+            return true
+        }
+
+        // Issue #1381: healing someone else is a staff action. Without this check a donor rank
+        // given /heal for itself could heal any player, with no cooldown (it only applies to self).
+        if (args.isNotEmpty() && !sender.hasPermission("joshymc.heal.others") && !isSelf(sender, args[0])) {
             Msg.noPermission(sender)
             return true
         }
@@ -326,7 +333,7 @@ class HealCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (args.size == 1) return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
+        if (args.size == 1 && sender.hasPermission("joshymc.heal.others")) return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
         return emptyList()
     }
 }
@@ -344,6 +351,12 @@ class FeedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("joshymc.feed")) {
+            Msg.noPermission(sender)
+            return true
+        }
+
+        // Issue #1381: feeding someone else is a staff action (see /heal).
+        if (args.isNotEmpty() && !sender.hasPermission("joshymc.feed.others") && !isSelf(sender, args[0])) {
             Msg.noPermission(sender)
             return true
         }
@@ -375,7 +388,7 @@ class FeedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (args.size == 1) return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
+        if (args.size == 1 && sender.hasPermission("joshymc.feed.others")) return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
         return emptyList()
     }
 }
@@ -1205,6 +1218,9 @@ private fun formatRemaining(ms: Long): String {
         else -> "${seconds}s"
     }
 }
+
+/** True when [name] is [sender]'s own name, so `/heal <own name>` stays a self-heal. */
+private fun isSelf(sender: CommandSender, name: String): Boolean = sender is Player && sender.name.equals(name, ignoreCase = true)
 
 private fun resolveTarget(sender: CommandSender, args: Array<out String>): Player? {
     return if (args.isNotEmpty()) {
