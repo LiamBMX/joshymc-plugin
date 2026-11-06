@@ -12,8 +12,8 @@ import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 
 /**
- * /quests — opens the unified Daily / Weekly / Quest Master GUI.
- * /daily is a plain alias into the same GUI (see DailyCommand).
+ * /quests — opens the quest main menu (issue #1385): Daily Quests, Weekly Quests and Event Quests.
+ * /daily opens the Daily Quests page and /eventquests the Event Quests page directly.
  *
  * Admin subcommands (joshymc.quests.admin, also usable from console):
  *   /quests forcedaily | forceweekly | rotation | progress <player> |

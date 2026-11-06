@@ -101,6 +101,8 @@ object EventQuestLayout {
     const val MENU_SIZE = 27
     const val FREE_SLOT = 11
     const val ELITE_SLOT = 15
+    /** Issue #1385: Back to the `/quests` main menu. */
+    const val MENU_BACK_SLOT = MENU_SIZE - 9
     const val MENU_CLOSE_SLOT = MENU_SIZE - 5
 
     const val PAGE_SIZE = 54

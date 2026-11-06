@@ -1139,7 +1139,11 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         EventQuestCategory.ELITE -> NamedTextColor.GOLD
     }
 
-    /** Issue #1335: /eq opens this 27-slot category menu, Free in slot 11 and Elite in slot 15. */
+    /**
+     * Issue #1335: /eq opens this 27-slot category menu, Free in slot 11 and Elite in slot 15.
+     * Issue #1385: it is also the Event Quests page of `/quests`, so (like the kit category pages)
+     * it has no filler, and Back returns to the `/quests` main menu for players who can open it.
+     */
     fun openGui(player: Player) {
         val gui = CustomGui(plain("Event Quests", NamedTextColor.GOLD, true), EventQuestLayout.MENU_SIZE)
         for (category in EventQuestCategory.entries) {
@@ -1147,11 +1151,41 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
                 openCategoryGui(p, category)
             }
         }
+        if (canOpenQuestMenu(player)) {
+            gui.setItem(EventQuestLayout.MENU_BACK_SLOT, GuiStyle.back("Back to Quests")) { p, _ ->
+                if (canOpenQuestMenu(p)) plugin.questCycleManager.openGui(p) else p.closeInventory()
+            }
+        }
         gui.setItem(EventQuestLayout.MENU_CLOSE_SLOT, GuiStyle.close()) { p, _ -> p.closeInventory() }
-        gui.fill(FILLER)
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
+
+    /** The same gates as `/quests`: its permission and the Survival quest scope. */
+    private fun canOpenQuestMenu(player: Player): Boolean =
+        player.hasPermission("joshymc.quests") &&
+            plugin.gamemodeLockManager.isAllowed(com.liam.joshymc.gamemode.GamemodeFeature.QUESTS, player)
+
+    /**
+     * Issue #1385: counts for the Event Quests icon of the `/quests` main menu, over every category
+     * the player may open (same rules as the category icons below). Read only.
+     */
+    fun menuSummary(player: Player): EventQuestCategorySummary {
+        val statuses = EventQuestCategory.entries
+            .filter { categoryDenial(player, it) == null }
+            .flatMap { setStatuses(player, it) }
+        return EventQuestCategorySummary.of(statuses)
+    }
+
+    private fun setStatuses(player: Player, category: EventQuestCategory): List<EventQuestSetStatus> =
+        eventsIn(category).map { ev ->
+            val allowed = accessDenial(player, ev) == null
+            EventQuestSetStatus(
+                open = isOpen(ev),
+                completed = allowed && currentState(player.uniqueId, ev).completed,
+                accessible = allowed
+            )
+        }
 
     private fun categoryIcon(player: Player, category: EventQuestCategory): ItemStack {
         val settings = categorySettings(category)
@@ -1168,14 +1202,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         if (denial != null) {
             lore += plain(denial.message, NamedTextColor.RED)
         } else {
-            val summary = EventQuestCategorySummary.of(eventsIn(category).map { ev ->
-                val allowed = accessDenial(player, ev) == null
-                EventQuestSetStatus(
-                    open = isOpen(ev),
-                    completed = allowed && currentState(player.uniqueId, ev).completed,
-                    accessible = allowed
-                )
-            })
+            val summary = EventQuestCategorySummary.of(setStatuses(player, category))
             if (summary.total == 0) {
                 lore += plain(if (category == EventQuestCategory.ELITE) "Coming soon" else "No quests right now", NamedTextColor.GRAY)
             } else {

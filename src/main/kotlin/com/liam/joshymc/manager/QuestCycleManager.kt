@@ -2,8 +2,11 @@ package com.liam.joshymc.manager
 
 import io.papermc.paper.event.player.PlayerTradeEvent
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gamemode.GamemodeFeature
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.quest.HarvestRules
+import com.liam.joshymc.quest.QuestMenuLayout
 import com.liam.joshymc.util.depositItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -566,7 +569,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         progressCache.clear()
         travelAcc.clear()
         travelNetherAcc.clear()
-        trackedGuiPlayers.clear()
+        trackedGuis.clear()
         progressNotifier.forgetAll()
         hookCatches.clear()
         countedHooks.clear()
@@ -1419,79 +1422,175 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         progressCache.remove(uuid)
         travelAcc.remove(uuid)
         travelNetherAcc.remove(uuid)
-        trackedGuiPlayers.remove(uuid)
+        trackedGuis.remove(uuid)
         progressNotifier.forget(uuid)
     }
 
     // ── GUI ─────────────────────────────────────────────────────
 
-    private val trackedGuiPlayers = mutableSetOf<UUID>()
+    /**
+     * Issue #1385: which quest menu each player has open, redrawn by [tickOpenGuis]. Keyed to the
+     * exact [CustomGui], so a menu the player has since left (another quest page, the Event Quests
+     * menu, any other GUI) is never redrawn with quest items.
+     */
+    private enum class QuestPage { MAIN, DAILY, WEEKLY }
+    private data class TrackedGui(val gui: CustomGui, val page: QuestPage)
+    private val trackedGuis = ConcurrentHashMap<UUID, TrackedGui>()
 
-    private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
-        editMeta { it.displayName(Component.empty()) }
-    }
-    private val BORDER = ItemStack(Material.GRAY_STAINED_GLASS_PANE).apply {
-        editMeta { it.displayName(Component.empty()) }
-    }
+    /** `/quests` main menu (issue #1385): Daily (11), Weekly (13), Event Quests (15), nothing else. */
+    fun openGui(player: Player) = openPage(player, QuestPage.MAIN)
 
-    fun openGui(player: Player) {
-        val gui = CustomGui(plugin.commsManager.parseLegacy("&6&lQuests"), 54)
-        renderInto(gui, player)
+    /** Daily Quests page (also `/daily`). */
+    fun openDailyGui(player: Player) = openPage(player, QuestPage.DAILY)
+
+    /** Weekly Quests page. */
+    fun openWeeklyGui(player: Player) = openPage(player, QuestPage.WEEKLY)
+
+    private fun openPage(player: Player, page: QuestPage) {
+        val gui = when (page) {
+            QuestPage.MAIN -> CustomGui(plugin.commsManager.parseLegacy("&6&lQuests"), QuestMenuLayout.MAIN_SIZE)
+            QuestPage.DAILY -> CustomGui(plugin.commsManager.parseLegacy("&6&lDaily Quests"), QuestMenuLayout.PAGE_SIZE)
+            QuestPage.WEEKLY -> CustomGui(plugin.commsManager.parseLegacy("&b&lWeekly Quests"), QuestMenuLayout.PAGE_SIZE)
+        }
+        render(gui, player, page)
+        val tracked = TrackedGui(gui, page)
+        gui.onClose = { trackedGuis.remove(it.uniqueId, tracked) }
+        trackedGuis[player.uniqueId] = tracked
         plugin.guiManager.open(player, gui)
-        gui.onClose = { trackedGuiPlayers.remove(it.uniqueId) }
-        trackedGuiPlayers.add(player.uniqueId)
-        player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+        if (page == QuestPage.MAIN) player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+        else GuiStyle.clickSound(player)
     }
 
     private fun tickOpenGuis() {
-        if (trackedGuiPlayers.isEmpty()) return
-        for (uuid in trackedGuiPlayers.toList()) {
+        if (trackedGuis.isEmpty()) return
+        for ((uuid, tracked) in trackedGuis.entries.toList()) {
             val player = Bukkit.getPlayer(uuid)
-            if (player == null) {
-                trackedGuiPlayers.remove(uuid)
+            if (player == null || plugin.guiManager.getOpenGui(player) !== tracked.gui) {
+                trackedGuis.remove(uuid, tracked)
                 continue
             }
-            val gui = plugin.guiManager.getOpenGui(player)
-            if (gui == null) {
-                trackedGuiPlayers.remove(uuid)
-                continue
-            }
-            renderInto(gui, player)
+            render(tracked.gui, player, tracked.page)
         }
     }
 
-    private fun renderInto(gui: CustomGui, player: Player) {
-        gui.border(BORDER.clone())
-        gui.fill(FILLER.clone())
+    private fun render(gui: CustomGui, player: Player, page: QuestPage) {
+        when (page) {
+            QuestPage.MAIN -> renderMain(gui, player)
+            QuestPage.DAILY -> renderCycle(gui, player, daily = true)
+            QuestPage.WEEKLY -> renderCycle(gui, player, daily = false)
+        }
+    }
 
+    // ── Main menu ──
+
+    private fun renderMain(gui: CustomGui, player: Player) {
         val uuid = player.uniqueId
-
         val dailyPool = getDailyPool()
-        gui.setItem(10, headerItem("Daily Quests", NamedTextColor.GOLD, dailySecondsLeft()))
-        val dailySlots = listOf(19, 28, 37)
-        for ((i, quest) in dailyPool.withIndex()) {
-            if (i >= dailySlots.size) break
-            val progress = getProgress(uuid, quest)
-            gui.setItem(dailySlots[i], buildQuestItem(quest, progress, effectiveTarget(uuid, quest))) { p, _ -> showQuestDetails(p, quest, getProgress(p.uniqueId, quest)) }
-        }
-        val dailyDone = dailyPool.count { getProgress(uuid, it).completed }
-        gui.setItem(46, bonusItem("Daily Completion", dailyDone, dailyPool.size, 1, if (dailyCompletionRewardEnabled) dailyCompletionCredits else 0.0, isDailyBonusClaimed(uuid, dailyCycleIdState)))
-
         val weeklyPool = getWeeklyPool()
-        gui.setItem(16, headerItem("Weekly Quests", NamedTextColor.AQUA, weeklySecondsLeft()))
-        val weeklySlots = listOf(25, 34, 43)
-        for ((i, quest) in weeklyPool.withIndex()) {
-            if (i >= weeklySlots.size) break
-            val progress = getProgress(uuid, quest)
-            gui.setItem(weeklySlots[i], buildQuestItem(quest, progress, effectiveTarget(uuid, quest))) { p, _ -> showQuestDetails(p, quest, getProgress(p.uniqueId, quest)) }
+
+        gui.setItem(QuestMenuLayout.DAILY_SLOT, cycleCategoryItem(
+            Material.CLOCK, "Daily Quests", NamedTextColor.GOLD, "New quests every day.",
+            dailyPool.count { getProgress(uuid, it).completed }, dailyPool.size, dailySecondsLeft()
+        )) { p, _ -> openDailyGui(p) }
+
+        gui.setItem(QuestMenuLayout.WEEKLY_SLOT, cycleCategoryItem(
+            Material.WRITABLE_BOOK, "Weekly Quests", NamedTextColor.AQUA, "Bigger quests every week.",
+            weeklyPool.count { getProgress(uuid, it).completed }, weeklyPool.size, weeklySecondsLeft()
+        )) { p, _ -> openWeeklyGui(p) }
+
+        gui.setItem(QuestMenuLayout.EVENT_SLOT, eventCategoryItem(player)) { p, _ ->
+            val problem = eventQuestsProblem(p)
+            if (problem != null) {
+                plugin.commsManager.send(p, Component.text(problem, NamedTextColor.RED))
+                GuiStyle.errorSound(p)
+            } else {
+                plugin.eventQuestManager.openGui(p)
+            }
         }
-        val weeklyDone = weeklyPool.count { getProgress(uuid, it).completed }
-        gui.setItem(52, bonusItem("Weekly Completion", weeklyDone, weeklyPool.size, 1, if (weeklyCompletionRewardEnabled) weeklyCompletionCredits else 0.0, isWeeklyBonusClaimed(uuid, weeklyCycleIdState)))
+    }
 
-        val qm = getQuestMasterProgress(uuid, weeklyCycleIdState)
-        gui.setItem(13, questMasterItem(qm))
+    /** Why [player] can't open Event Quests from here (the same gates as /eventquests), or null. */
+    private fun eventQuestsProblem(player: Player): String? = when {
+        !player.hasPermission("joshymc.eventquests") -> "You don't have permission to open Event Quests."
+        !plugin.gamemodeLockManager.isAllowed(GamemodeFeature.EVENT_QUESTS, player) -> "Event Quests aren't available here."
+        else -> null
+    }
 
-        gui.setItem(49, infoItem())
+    private fun cycleCategoryItem(
+        material: Material, name: String, color: NamedTextColor, description: String,
+        done: Int, total: Int, secondsLeft: Long
+    ): ItemStack {
+        val lore = mutableListOf(menuLine(description, NamedTextColor.GRAY), Component.empty())
+        if (total == 0) {
+            lore += menuLine("No quests right now.", NamedTextColor.GRAY)
+        } else {
+            lore += menuLine("Completed: ", NamedTextColor.GRAY)
+                .append(Component.text("$done/$total", if (done >= total) NamedTextColor.GREEN else NamedTextColor.YELLOW))
+        }
+        lore += menuLine("Resets in: ", NamedTextColor.GRAY).append(Component.text(formatTimeLeft(secondsLeft), NamedTextColor.WHITE))
+        lore += Component.empty()
+        lore += menuLine("Click to open", NamedTextColor.YELLOW)
+        return GuiStyle.item(material, Component.text(name, color).decoration(TextDecoration.BOLD, true), lore)
+    }
+
+    private fun eventCategoryItem(player: Player): ItemStack {
+        val problem = eventQuestsProblem(player)
+        val lore = mutableListOf(menuLine("Limited-time Free and Elite quests.", NamedTextColor.GRAY), Component.empty())
+        if (problem != null) {
+            lore += menuLine(problem, NamedTextColor.RED)
+        } else {
+            val summary = plugin.eventQuestManager.menuSummary(player)
+            if (summary.total == 0) {
+                lore += menuLine("No event quests right now.", NamedTextColor.GRAY)
+            } else {
+                lore += menuLine("Available quests: ", NamedTextColor.GRAY).append(Component.text("${summary.available}", NamedTextColor.WHITE))
+                lore += menuLine("Completed: ", NamedTextColor.GRAY).append(Component.text("${summary.completed}/${summary.total}", NamedTextColor.YELLOW))
+            }
+            lore += Component.empty()
+            lore += menuLine("Click to open", NamedTextColor.YELLOW)
+        }
+        val color = if (problem == null) NamedTextColor.LIGHT_PURPLE else NamedTextColor.GRAY
+        return GuiStyle.item(Material.NETHER_STAR, Component.text("Event Quests", color).decoration(TextDecoration.BOLD, true), lore)
+    }
+
+    private fun menuLine(text: String, color: NamedTextColor): Component =
+        Component.text(text, color).decoration(TextDecoration.ITALIC, false)
+
+    // ── Daily / Weekly pages ──
+
+    private fun renderCycle(gui: CustomGui, player: Player, daily: Boolean) {
+        val uuid = player.uniqueId
+        val pool = if (daily) getDailyPool() else getWeeklyPool()
+
+        // A reset can change the pool while the page is open, so the quest row is cleared before redrawing.
+        for (slot in QuestMenuLayout.ROW until 2 * QuestMenuLayout.ROW) {
+            gui.inventory.setItem(slot, null)
+            gui.clickHandlers.remove(slot)
+        }
+
+        gui.setItem(QuestMenuLayout.HEADER_SLOT, if (daily)
+            headerItem("Daily Quests", NamedTextColor.GOLD, dailySecondsLeft())
+        else
+            headerItem("Weekly Quests", NamedTextColor.AQUA, weeklySecondsLeft()))
+
+        val slots = QuestMenuLayout.questSlots(pool.size)
+        for ((i, quest) in pool.withIndex()) {
+            if (i >= slots.size) break
+            val progress = getProgress(uuid, quest)
+            gui.setItem(slots[i], buildQuestItem(quest, progress, effectiveTarget(uuid, quest))) { p, _ -> showQuestDetails(p, quest, getProgress(p.uniqueId, quest)) }
+        }
+
+        val done = pool.count { getProgress(uuid, it).completed }
+        gui.setItem(QuestMenuLayout.BONUS_SLOT, if (daily)
+            bonusItem("Daily Completion", done, pool.size, 1, if (dailyCompletionRewardEnabled) dailyCompletionCredits else 0.0, isDailyBonusClaimed(uuid, dailyCycleIdState))
+        else
+            bonusItem("Weekly Completion", done, pool.size, 1, if (weeklyCompletionRewardEnabled) weeklyCompletionCredits else 0.0, isWeeklyBonusClaimed(uuid, weeklyCycleIdState)))
+
+        gui.setItem(QuestMenuLayout.QUEST_MASTER_SLOT, questMasterItem(getQuestMasterProgress(uuid, weeklyCycleIdState)))
+
+        gui.setItem(QuestMenuLayout.BACK_SLOT, GuiStyle.back("Back to Quests")) { p, _ -> openGui(p) }
+        gui.setItem(QuestMenuLayout.CLOSE_SLOT, GuiStyle.close()) { p, _ -> p.closeInventory() }
+        gui.setItem(QuestMenuLayout.INFO_SLOT, infoItem())
     }
 
     private fun showQuestDetails(player: Player, quest: CycleQuest, progress: CycleProgress) {
