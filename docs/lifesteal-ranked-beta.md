@@ -139,3 +139,74 @@ player and one mixed Java + Bedrock team. Run it on the Lifesteal server after t
     Disconnect while queued: the entry ends and no stale entry remains (`/lifesteal admin ranked queue`).
 13. The Bedrock player opens `/ranked` and every button works (menus are plain chests).
 14. On the Survival server, `/ranked` doesn't exist and Survival teams/PvP are unchanged.
+
+## F. Integration and beta-readiness audit (issue #1377)
+
+Issue #1377 asked for one more pass over Lifesteal and Ranked Team Wars together. As before, this
+comes from reading the code on `main` and running the automated suites. **No live match was played.**
+
+### Systems audited
+
+| Area | Result | Where it is verified |
+|---|---|---|
+| Heart stealing / transfer / withdraw / redeem | OK | `HeartRules`, `HeartStore`, `lifestealHeartCheck` (982 checks) |
+| 1-heart floor (never lose the last heart, a 1-heart kill gives and drops nothing, withdraw refused at 1) | OK | `HeartRules.decide` returns `VictimAtMinimum` before anything else that moves hearts. `HeartRules.withdraw` returns `AtMinimum`. `Limits` refuses a minimum below 1. Nothing drops a Heart item on death. |
+| Teams (create/manage/permissions, max 5, combat rules) | OK | `lifestealTeamCheck`, `lifestealTeamCombatCheck` |
+| Survival isolation | OK | Lifesteal tables, listeners and `/ranked` only exist where Lifesteal is hosted (`lifestealCheck`, `gamemodeScopeCheck`) |
+| Queue entry / cancel / confirmation, 2v2-5v5 | OK, one hardening (below) | `lifestealRankedQueueCheck` |
+| Match lifecycle, arenas (allocation, cleanup, reuse) | OK | `lifestealRankedCheck` |
+| Real Lifesteal gear, snapshot + restore after matches and deaths | OK, one dupe fixed (below) | `lifestealRankedCheck` |
+| Hearts at risk in ranked | OK | Ranked kills go through the normal heart service at MONITOR. Ranked unlocks at +72h, after the 24h grace, so the grace window never blocks a ranked kill. |
+| Player and Team Elo, duplicate rating | OK | `EloRating`, `RatingRules`, `RatingStore.finalize` (`elo:<match>` row), `lifestealRankedEloCheck` |
+| Disconnects, restarts, crashes | OK (code), needs a live test | Startup recovery, pending snapshots restored on join, queues memory-only and cleared on restart |
+| Ranked GUIs, commands, closed by default | OK | `RankedQueueMenu`, `RankedStatsMenu`, `ranked-team-wars.enabled: false` |
+
+### Fixed in #1377
+
+1. **High: arrows and tridents duplicated through the snapshot.** The restore gives a participant
+   back every arrow and trident they owned before the match. The projectile they fired was still a
+   real item in the world, though:
+   - an arrow or trident shot over the arena boundary could be picked up by a friend standing
+     outside. Only players held by the match had pickups blocked, and `PlayerPickupArrowEvent`
+     isn't an `EntityPickupItemEvent` anyway;
+   - a Loyalty trident thrown just before the match ended flew back into the already-restored
+     inventory.
+
+   Either way, that was a second copy. Now every arrow/trident a held participant fires is tagged
+   with its match id (PDC `joshymc:ranked_match_projectile`). The Bukkit-free
+   `RankedMatchRules.projectilePickup` decides who touches it:
+   - players of that match may pick it up;
+   - anyone else is refused while the match runs;
+   - once the match is over, the projectile is removed on contact.
+2. **Medium: a stuck queue after an unexpected error.** If `createQueuedMatch` threw, both entries
+   stayed PREPARING forever. The tick, quits and `/lifesteal admin ranked cancelqueue` all skip
+   PREPARING, so neither team could queue again until a restart. The queue now cancels any
+   half-created match (which restores its players) and releases both entries.
+
+Regression checks: `lifestealRankedCheck` (#1377 projectile rule and wiring) and
+`lifestealRankedQueueCheck` (#1377 start guard).
+
+### Remaining risks, by severity
+
+- **High (process): no live match has been played.** Sections C and E still apply.
+- **Medium (open decision): dodging a loss.** A team can avoid an Elo loss two ways, both by
+  design until the blueprint settles forfeits:
+  - disconnecting during the countdown cancels the match unrated;
+  - hiding until `max-match-minutes` runs out cancels it unrated too.
+- **Medium (unverified): bundles.** Emptying a bundle in a match goes through Paper's drop path.
+  The drop listener refuses it if Paper fires `PlayerDropItemEvent` there. This needs checking on
+  the live server (checklist item 5 with a bundle).
+- **Low:** projectiles shot out of the arena are left in the world until someone touches them or
+  they despawn. They can't be picked up.
+- The high-severity items in section D (a failed RESTORED mark, other plugins inserting items) are
+  unchanged.
+
+### Readiness
+
+The core Lifesteal loop is ready for a closed beta (section E of
+[lifesteal-beta.md](lifesteal-beta.md)). Ranked Team Wars are code-complete with the fixes above.
+They should stay `enabled: false` until checklist E here passes on the Lifesteal server. Add these
+steps to item 5:
+- shoot an arrow and throw a trident out of the arena to a player outside (they can't pick it up);
+- throw a Loyalty trident as the match ends (no second trident);
+- empty a bundle in the arena.

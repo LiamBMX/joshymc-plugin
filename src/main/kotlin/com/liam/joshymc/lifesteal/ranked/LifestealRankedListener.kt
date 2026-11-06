@@ -5,6 +5,8 @@ import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Location
+import org.bukkit.NamespacedKey
+import org.bukkit.entity.AbstractArrow
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
@@ -28,6 +30,7 @@ import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.entity.EntityPlaceEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.entity.PotionSplashEvent
+import org.bukkit.event.entity.ProjectileLaunchEvent
 import org.bukkit.event.hanging.HangingBreakByEntityEvent
 import org.bukkit.event.hanging.HangingPlaceEvent
 import org.bukkit.event.inventory.InventoryOpenEvent
@@ -41,10 +44,12 @@ import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerMoveEvent
+import org.bukkit.event.player.PlayerPickupArrowEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerRespawnEvent
 import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.event.vehicle.VehicleEnterEvent
+import org.bukkit.persistence.PersistentDataType
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -70,6 +75,8 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
 
     private val ranked get() = plugin.lifestealRankedManager
     private val lastHint = ConcurrentHashMap<UUID, Long>()
+    /** Issue #1377: the match an arrow/trident was fired in (see [RankedMatchRules.projectilePickup]). */
+    private val firedInKey = NamespacedKey(plugin, "ranked_match_projectile")
 
     private fun hint(player: Player, text: String) {
         val now = System.currentTimeMillis()
@@ -270,6 +277,35 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
     fun onPickup(event: EntityPickupItemEvent) {
         val player = event.entity as? Player ?: return
         if (restricted(player)) event.isCancelled = true
+    }
+
+    /**
+     * Issue #1377: arrows and tridents a participant fires are tagged with their match. The snapshot
+     * gives the shooter those items back, so the projectile itself can't be kept by anyone outside
+     * the match (an arrow shot over the boundary to a friend) or come back after the match (a Loyalty
+     * trident returning into the restored inventory): both would be a second copy.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onLaunch(event: ProjectileLaunchEvent) {
+        val arrow = event.entity as? AbstractArrow ?: return
+        val shooter = arrow.shooter as? Player ?: return
+        val match = ranked.matchOf(shooter.uniqueId) ?: return
+        arrow.persistentDataContainer.set(firedInKey, PersistentDataType.STRING, match.id)
+    }
+
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onPickupArrow(event: PlayerPickupArrowEvent) {
+        val arrow = event.arrow
+        val firedIn = arrow.persistentDataContainer.get(firedInKey, PersistentDataType.STRING)
+        val decision = RankedMatchRules.projectilePickup(firedIn, ranked.matchOf(event.player.uniqueId)?.id, firedIn != null && ranked.match(firedIn) != null)
+        when (decision) {
+            RankedMatchRules.ProjectilePickup.ALLOW -> Unit
+            RankedMatchRules.ProjectilePickup.DENY -> event.isCancelled = true
+            RankedMatchRules.ProjectilePickup.REMOVE -> {
+                event.isCancelled = true
+                arrow.remove()
+            }
+        }
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
