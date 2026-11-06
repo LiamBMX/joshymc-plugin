@@ -1605,3 +1605,21 @@ hosted-events:
           gear: diamond
           health-multiplier: 6.0
           damage-multiplier: 1.5
+
+# ──────────────────────────────────────────────
+# Kits (/kit) — issue #1379
+# ──────────────────────────────────────────────
+# /kit opens three categories: Starter Kit, Rank Kits and Special Kits (Media, Discord).
+# The kits themselves live in kits.yml. Each kit belongs to one gamemode
+# (`gamemode: survival|lifesteal`, missing = survival) and is only shown and
+# claimable there. Its category is `category: starter|rank|special`, or when
+# missing: the kit named "starter", a name listed below (rank), "media" or
+# "discord" (special); any other kit is listed with the Rank Kits.
+kits:
+  # Rank kits in display order, lowest rank first, per gamemode. Kit names must
+  # match these ids. Rank kits not listed follow in kits.yml order.
+  rank-order:
+    survival: [scout, pathfinder, lumberjack, trailblazer, voyager, ranger, pioneer]
+    # JoshyMC has no Lifesteal rank hierarchy yet: list the Lifesteal rank kit
+    # names here (ending with legacy) once those kits exist.
+    lifesteal: []

@@ -27,7 +27,8 @@ class KitCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         // /kit <name> — claim directly
         if (args.isNotEmpty()) {
             val name = args[0].lowercase()
-            if (plugin.kitManager.getKit(name) == null) {
+            // Only kits of the sender's current gamemode resolve (issue #1379).
+            if (plugin.kitManager.getKitFor(sender, name) == null) {
                 plugin.commsManager.send(sender, Component.text("Kit '$name' not found.", NamedTextColor.RED))
                 return true
             }
@@ -43,7 +44,8 @@ class KitCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (args.size == 1) {
             val prefix = args[0].lowercase()
-            return plugin.kitManager.getKitNames().filter { it.startsWith(prefix) }
+            val player = sender as? Player ?: return emptyList()
+            return plugin.kitManager.getKitNamesFor(player).filter { it.startsWith(prefix) }
         }
         return emptyList()
     }

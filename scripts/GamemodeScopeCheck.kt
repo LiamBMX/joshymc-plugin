@@ -93,7 +93,7 @@ fun main() {
     // Survival gameplay.
     for (name in listOf(
         "claim", "unclaim", "subclaim", "balance", "pay", "eco", "baltop", "ah", "orders", "order", "market", "invest",
-        "shop", "sell", "chestshop", "crate", "crateeditor", "quests", "daily", "eventquests", "loginstreak", "kit",
+        "shop", "sell", "chestshop", "crate", "crateeditor", "quests", "daily", "eventquests", "loginstreak",
         "customenchant", "fly", "voucher", "rankvoucher", "candy", "spawner", "hopper", "leaderboard", "event",
         "home", "warp", "rtp", "pv", "tokens", "credits", "cshop", "resurge", "jvote", "tutorial",
     )) check("/$name is SURVIVAL", scopeOf(name) == SURVIVAL)
@@ -103,6 +103,8 @@ fun main() {
         "joshymc", "ban", "tempban", "unban", "mute", "tempmute", "unmute", "warn", "pkick", "history", "admin",
         "vanish", "modmode", "staffchat", "report", "reports", "msg", "reply", "link", "unlink", "settings",
         "announce", "jrestart", "help", "rules", "discord", "jmc-violation", "purchase", "rank", "unstuck", "tp",
+        // Issue #1379: kits are per gamemode inside KitManager (kits.yml `gamemode`).
+        "kit", "createkit", "editkit", "deletekit",
     )) check("/$name is NETWORK", scopeOf(name) == NETWORK)
 
     // ── Aliases and subcommands ────────────────────────────

@@ -1,6 +1,8 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
@@ -23,7 +25,7 @@ import java.util.UUID
 class KitManager(private val plugin: Joshymc) {
 
     companion object {
-        val KIT_GUI_TITLE: Component = Component.text("KITS", TextColor.color(0x55FFFF))
+        val KIT_GUI_TITLE: Component = Component.text("Kits", TextColor.color(0x55FFFF))
             .decoration(TextDecoration.BOLD, true)
             .decoration(TextDecoration.ITALIC, false)
 
@@ -55,8 +57,14 @@ class KitManager(private val plugin: Joshymc) {
         val icon: Material,
         val cooldownHours: Int,
         val permission: String,
-        val items: Map<Int, ItemStack>
-    )
+        val items: Map<Int, ItemStack>,
+        /** Raw kits.yml `gamemode` (null = missing = Survival), see [KitCatalog]. */
+        val gamemode: String? = null,
+        /** Raw kits.yml `category` (null = inferred from the name), see [KitCatalog]. */
+        val category: String? = null,
+    ) {
+        val entry: KitCatalog.Entry get() = KitCatalog.Entry(name, gamemode, category)
+    }
 
     data class EditSession(
         val kitName: String,
@@ -167,15 +175,34 @@ class KitManager(private val plugin: Joshymc) {
                 }
             }
 
-            kits[name] = KitDef(name, icon, cooldownHours, permission, items)
+            val gamemode = section.getString("gamemode")
+            val category = section.getString("category")
+            if (KitCatalog.invalidGamemode(gamemode)) {
+                plugin.logger.warning("[KitManager] Kit '$name' has unknown gamemode '$gamemode' (survival or lifesteal); it is hidden from /kit.")
+            }
+            if (KitCatalog.invalidCategory(category)) {
+                plugin.logger.warning("[KitManager] Kit '$name' has unknown category '$category' (starter, rank or special); using its name instead.")
+            }
+
+            kits[name] = KitDef(name, icon, cooldownHours, permission, items, gamemode, category)
         }
     }
 
-    fun saveKit(name: String, icon: Material, cooldownHours: Int, permission: String, items: Map<Int, ItemStack>) {
+    fun saveKit(
+        name: String,
+        icon: Material,
+        cooldownHours: Int,
+        permission: String,
+        items: Map<Int, ItemStack>,
+        gamemode: String? = null,
+        category: String? = null,
+    ) {
         val path = "kits.$name"
         kitsConfig.set("$path.icon", icon.name)
         kitsConfig.set("$path.cooldown-hours", cooldownHours)
         kitsConfig.set("$path.permission", permission)
+        kitsConfig.set("$path.gamemode", gamemode)
+        kitsConfig.set("$path.category", category)
 
         // Clear old items
         kitsConfig.set("$path.items", null)
@@ -184,7 +211,7 @@ class KitManager(private val plugin: Joshymc) {
         }
 
         kitsConfig.save(kitsFile)
-        kits[name] = KitDef(name, icon, cooldownHours, permission, items)
+        kits[name] = KitDef(name, icon, cooldownHours, permission, items, gamemode, category)
     }
 
     fun deleteKit(name: String): Boolean {
@@ -199,8 +226,46 @@ class KitManager(private val plugin: Joshymc) {
 
     fun getKit(name: String): KitDef? = kits[name]
 
+    /** The gamemode whose kits [player] sees: the gamemode of the world they're in. */
+    fun gamemodeOf(player: Player): ServerGamemode = plugin.gamemodeLockManager.gamemodeOf(player)
+
+    /** [name] if it is a kit of [player]'s current gamemode, else null (Survival kits never resolve on Lifesteal and back). */
+    fun getKitFor(player: Player, name: String): KitDef? =
+        kits[name]?.takeIf { KitCatalog.visibleIn(it.entry, gamemodeOf(player)) }
+
+    /** Kit names [player] can see in their current gamemode, in kits.yml order. */
+    fun getKitNamesFor(player: Player): List<String> {
+        val current = gamemodeOf(player)
+        return kits.values.filter { KitCatalog.visibleIn(it.entry, current) }.map { it.name }
+    }
+
+    /**
+     * The rank kit order for [gamemode] from `config.yml > kits.rank-order.<gamemode>`. Survival
+     * falls back to the donor tiers when the key is missing; Lifesteal has no rank hierarchy in
+     * JoshyMC, so it is empty until configured (its rank kits then keep kits.yml order).
+     */
+    fun rankOrder(gamemode: ServerGamemode): List<String> {
+        val path = "kits.rank-order.${gamemode.id}"
+        if (plugin.config.isList(path)) return KitCatalog.normalizeOrder(plugin.config.getStringList(path))
+        return when (gamemode) {
+            ServerGamemode.SURVIVAL -> KitCatalog.DEFAULT_SURVIVAL_RANK_ORDER
+            ServerGamemode.LIFESTEAL -> emptyList()
+        }
+    }
+
+    private fun kitsIn(player: Player, category: KitCatalog.Category): List<KitDef> {
+        val current = gamemodeOf(player)
+        return KitCatalog.kitsFor(category, kits.values.map { it.entry }, current, rankOrder(current))
+            .mapNotNull { kits[it] }
+    }
+
     fun claimKit(player: Player, name: String): Boolean {
-        val kit = kits[name] ?: return false
+        // Revalidated on every claim (GUI clicks included): only kits of the player's current gamemode.
+        val kit = getKitFor(player, name)
+        if (kit == null) {
+            plugin.commsManager.send(player, Component.text("Kit '$name' not found.", NamedTextColor.RED))
+            return false
+        }
 
         if (!player.hasPermission(kit.permission)) {
             plugin.commsManager.send(player, Component.text("You don't have permission to use this kit.", NamedTextColor.RED))
@@ -282,6 +347,10 @@ class KitManager(private val plugin: Joshymc) {
                 player.hasPermission("joshymc.kit.cooldown.bypass")
     }
 
+    /**
+     * `/kit` main menu (issue #1379): a 27-slot chest with only the middle row used, Starter Kit
+     * (slot 11), Rank Kits (13) and Special Kits (15). No filler, borders or other buttons.
+     */
     fun openKitGui(player: Player) {
         if (kits.isEmpty()) {
             // Likely saveResource never ran (file existed but empty, e.g. legacy install).
@@ -289,49 +358,162 @@ class KitManager(private val plugin: Joshymc) {
             plugin.logger.warning("[KitManager] openKitGui: no kits in memory; forcing reload.")
             loadKits()
         }
-        plugin.logger.info(
-            "[KitManager] openKitGui for ${player.name}: ${kits.size} kit(s) known, " +
-            "items/kit=${kits.values.joinToString(",") { "${it.name}=${it.items.size}" }}"
+        val gui = CustomGui(KIT_GUI_TITLE, KitCatalog.MAIN_SIZE)
+
+        renderStarter(gui, player)
+        renderCategory(
+            gui, player, KitCatalog.RANK_SLOT, KitCatalog.Category.RANK, Material.NETHERITE_CHESTPLATE,
+            "Rank Kits", "Kits unlocked by your rank."
         )
-        // Plain chest, no filler (issue #1280): kit icons centered in the middle
-        // row (see KitGuiLayout), Close barrier alone at the bottom center.
-        val size = KitGuiLayout.size(kits.size)
-        val gui = CustomGui(KIT_GUI_TITLE, size)
-
-        val close = ItemStack(Material.BARRIER)
-        close.editMeta { it.displayName(Component.text("Close", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false)) }
-        gui.setItem(KitGuiLayout.closeSlot(kits.size), close) { p, _ -> p.closeInventory() }
-
-        val slots = KitGuiLayout.slots(kits.size)
-
-        var rendered = 0
-        for ((idx, kitDef) in kits.values.withIndex()) {
-            if (idx >= slots.size) break
-            val slot = slots[idx]
-
-            try {
-                renderKitIcon(gui, slot, player, kitDef)
-                rendered++
-            } catch (e: Exception) {
-                plugin.logger.warning("[KitManager] Failed to render kit '${kitDef.name}' at slot $slot: ${e.message}")
-                e.printStackTrace()
-            }
-        }
-        if (rendered < kits.size) {
-            plugin.logger.warning("[KitManager] Rendered $rendered/${kits.size} kits in GUI (others failed — see stack traces above).")
-        }
+        renderCategory(
+            gui, player, KitCatalog.SPECIAL_SLOT, KitCatalog.Category.SPECIAL, Material.NETHER_STAR,
+            "Special Kits", "Media and Discord kits."
+        )
 
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
-    private fun renderKitIcon(gui: CustomGui, slot: Int, player: Player, kitDef: KitDef) {
+    private fun renderStarter(gui: CustomGui, player: Player) {
+        val starters = kitsIn(player, KitCatalog.Category.STARTER)
+        when (starters.size) {
+            0 -> gui.setItem(
+                KitCatalog.STARTER_SLOT,
+                categoryItem(Material.CHEST, "Starter Kit", NamedTextColor.GRAY, listOf(
+                    line("There is no starter kit here.", NamedTextColor.GRAY)
+                ))
+            ) { p, _ -> GuiStyle.errorSound(p) }
+            1 -> {
+                // The one starter kit sits on the main menu itself: same claim/preview clicks as any kit.
+                val kit = starters.single()
+                val item = kitIcon(player, kit, Material.CHEST, "Starter Kit")
+                gui.setItem(KitCatalog.STARTER_SLOT, item, kitClick(kit.name) { openKitGui(it) })
+            }
+            else -> renderCategory(
+                gui, player, KitCatalog.STARTER_SLOT, KitCatalog.Category.STARTER, Material.CHEST,
+                "Starter Kits", "Free kits for new players."
+            )
+        }
+    }
+
+    private fun renderCategory(
+        gui: CustomGui,
+        player: Player,
+        slot: Int,
+        category: KitCatalog.Category,
+        icon: Material,
+        title: String,
+        description: String,
+    ) {
+        val inCategory = kitsIn(player, category)
+        val ready = inCategory.count { player.hasPermission(it.permission) && canClaim(player, it.name) }
+        val lore = mutableListOf(line(description, NamedTextColor.GRAY), Component.empty())
+        if (inCategory.isEmpty()) {
+            lore += line("No kits here yet.", NamedTextColor.GRAY)
+        } else {
+            lore += line("Kits: ", NamedTextColor.GRAY).append(Component.text("${inCategory.size}", NamedTextColor.WHITE))
+            lore += line("Ready to claim: ", NamedTextColor.GRAY)
+                .append(Component.text("$ready", if (ready > 0) NamedTextColor.GREEN else NamedTextColor.WHITE))
+            lore += Component.empty()
+            lore += line("Click to open", NamedTextColor.YELLOW)
+        }
+        val color = if (inCategory.isEmpty()) NamedTextColor.GRAY else NamedTextColor.AQUA
+        gui.setItem(slot, categoryItem(icon, title, color, lore)) { p, _ ->
+            GuiStyle.clickSound(p)
+            openCategoryGui(p, category)
+        }
+    }
+
+    /**
+     * One category's kits (issue #1379), in [KitCatalog] order: centered rows under an empty top
+     * row ([KitGuiLayout]), Back (to the main menu) and Close in the bottom row.
+     */
+    fun openCategoryGui(player: Player, category: KitCatalog.Category) {
+        val list = kitsIn(player, category)
+        val label = when (category) {
+            KitCatalog.Category.STARTER -> "Starter Kits"
+            KitCatalog.Category.RANK -> "Rank Kits"
+            KitCatalog.Category.SPECIAL -> "Special Kits"
+        }
+        val title = Component.text(label, TextColor.color(0x55FFFF))
+            .decoration(TextDecoration.BOLD, true)
+            .decoration(TextDecoration.ITALIC, false)
+        val size = KitGuiLayout.size(list.size)
+        val gui = CustomGui(title, size)
+
+        gui.setItem(GuiStyle.backSlot(size), GuiStyle.back("Back to Kits")) { p, _ ->
+            GuiStyle.clickSound(p)
+            openKitGui(p)
+        }
+        gui.setItem(KitGuiLayout.closeSlot(list.size), GuiStyle.close()) { p, _ -> p.closeInventory() }
+
+        if (list.isEmpty()) {
+            gui.setItem(
+                KitGuiLayout.ROW + 4,
+                categoryItem(Material.GRAY_DYE, "No kits", NamedTextColor.GRAY, listOf(
+                    line("There are no ${label.lowercase()} here.", NamedTextColor.GRAY)
+                ))
+            )
+        }
+
+        val current = gamemodeOf(player)
+        val order = rankOrder(current)
+        val slots = KitGuiLayout.slots(list.size)
+        for ((idx, kitDef) in list.withIndex()) {
+            if (idx >= slots.size) {
+                plugin.logger.warning("[KitManager] ${list.size} $label is more than the menu holds; '${kitDef.name}' and later aren't shown.")
+                break
+            }
+            try {
+                val rank = if (category == KitCatalog.Category.RANK) KitCatalog.rankFor(kitDef.name, order) else null
+                val item = kitIcon(player, kitDef, kitDef.icon, displayName(kitDef.name), rank)
+                gui.setItem(slots[idx], item, kitClick(kitDef.name) { openCategoryGui(it, category) })
+            } catch (e: Exception) {
+                plugin.logger.warning("[KitManager] Failed to render kit '${kitDef.name}' at slot ${slots[idx]}: ${e.message}")
+            }
+        }
+
+        plugin.guiManager.open(player, gui)
+    }
+
+    /**
+     * Left-click claims (closing the menu first, as before), right-click previews; the preview's
+     * Back reopens [reopen]. The kit is looked up again on click, so a kit deleted or moved to
+     * another gamemode meanwhile is refused by [claimKit] rather than claimed from a stale icon.
+     */
+    private fun kitClick(kitName: String, reopen: (Player) -> Unit): (Player, org.bukkit.event.inventory.InventoryClickEvent) -> Unit =
+        { p, event ->
+            if (event.click.isRightClick) {
+                val kit = getKitFor(p, kitName)
+                if (kit == null) {
+                    GuiStyle.errorSound(p)
+                    reopen(p)
+                } else {
+                    openKitPreviewGui(p, kit, reopen)
+                }
+            } else {
+                p.closeInventory()
+                claimKit(p, kitName)
+            }
+        }
+
+    private fun line(text: String, color: NamedTextColor): Component =
+        Component.text(text, color).decoration(TextDecoration.ITALIC, false)
+
+    private fun categoryItem(material: Material, name: String, color: NamedTextColor, lore: List<Component>): ItemStack {
+        val item = GuiStyle.item(material, Component.text(name, color).decoration(TextDecoration.BOLD, true), lore)
+        item.editMeta { it.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_ENCHANTS) }
+        return item
+    }
+
+    /** A kit's icon: name colored by state, cooldown, status (Ready / remaining / Locked) and the click hints. */
+    private fun kitIcon(player: Player, kitDef: KitDef, material: Material, name: String, rank: String? = null): ItemStack {
         val onCooldown = !canClaim(player, kitDef.name)
         val hasPermission = player.hasPermission(kitDef.permission)
         val ready = hasPermission && !onCooldown
         val locked = !hasPermission
 
-        val item = ItemStack(kitDef.icon)
+        val item = ItemStack(material)
 
         item.editMeta { meta ->
                 val nameColor = when {
@@ -340,7 +522,7 @@ class KitManager(private val plugin: Joshymc) {
                     else -> NamedTextColor.AQUA
                 }
                 meta.displayName(
-                    Component.text(displayName(kitDef.name), nameColor)
+                    Component.text(name, nameColor)
                         .decoration(TextDecoration.ITALIC, false)
                         .decoration(TextDecoration.BOLD, true)
                 )
@@ -364,6 +546,9 @@ class KitManager(private val plugin: Joshymc) {
                         .decoration(TextDecoration.ITALIC, false)
                         .append(statusValue.decoration(TextDecoration.ITALIC, false))
                 )
+                if (locked && rank != null) {
+                    lore.add(line("Requires the ${DonorTiers.displayName(rank)} rank", NamedTextColor.RED))
+                }
 
                 lore.add(Component.empty())
                 if (ready) {
@@ -372,6 +557,7 @@ class KitManager(private val plugin: Joshymc) {
                 lore.add(Component.text("Right-Click to preview", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
 
                 meta.lore(lore)
+                meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES)
 
                 // Subtle glint on ready kits only — no glint while on cooldown or locked.
                 if (ready) {
@@ -379,22 +565,18 @@ class KitManager(private val plugin: Joshymc) {
                     meta.addItemFlags(ItemFlag.HIDE_ENCHANTS)
                 }
             }
-
-        val kitName = kitDef.name
-        gui.setItem(slot, item) { p, event ->
-            if (event.click.isRightClick) {
-                openKitPreviewGui(p, kitDef)
-            } else {
-                p.closeInventory()
-                claimKit(p, kitName)
-            }
-        }
+        return item
     }
 
-    /** Read-only preview of a kit's contents — items can be hovered for full tooltips (enchants, attributes, etc.) but not taken. */
-    fun openKitPreviewGui(player: Player, kitDef: KitDef) {
+    /**
+     * Read-only preview of a kit's contents — items can be hovered for full tooltips (enchants,
+     * attributes, etc.) but not taken (GuiManager cancels every click on the menu). With [back],
+     * a bottom row holds Back (to [back]) and Close.
+     */
+    fun openKitPreviewGui(player: Player, kitDef: KitDef, back: ((Player) -> Unit)? = null) {
         val sortedItems = kitDef.items.toSortedMap().values.toList()
-        val rows = (((sortedItems.size - 1) / 9) + 1).coerceIn(1, 6)
+        val itemRows = (((sortedItems.size - 1) / 9) + 1).coerceIn(1, if (back != null) 5 else 6)
+        val rows = itemRows + if (back != null) 1 else 0
         val size = rows * 9
 
         val title = Component.text("Preview: ")
@@ -404,8 +586,16 @@ class KitManager(private val plugin: Joshymc) {
         val gui = CustomGui(title, size)
 
         for ((index, kitItem) in sortedItems.withIndex()) {
-            if (index >= size) break
+            if (index >= itemRows * 9) break
             gui.inventory.setItem(index, kitItem.clone())
+        }
+
+        if (back != null) {
+            gui.setItem(GuiStyle.backSlot(size), GuiStyle.back()) { p, _ ->
+                GuiStyle.clickSound(p)
+                back(p)
+            }
+            gui.setItem(GuiStyle.closeSlot(size), GuiStyle.close()) { p, _ -> p.closeInventory() }
         }
 
         plugin.guiManager.open(player, gui)
@@ -445,7 +635,8 @@ class KitManager(private val plugin: Joshymc) {
                     return@Runnable
                 }
 
-                saveKit(capturedKitName, items.values.first().type, 72, "joshymc.kit.$capturedKitName", items)
+                // A new kit belongs to the gamemode it was made in (issue #1379).
+                saveKit(capturedKitName, items.values.first().type, 72, "joshymc.kit.$capturedKitName", items, gamemodeOf(player).id)
                 plugin.commsManager.send(player, Component.text("Kit '$capturedKitName' created with ${items.size} item(s)!", NamedTextColor.GREEN))
                 player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.2f)
             }
@@ -511,7 +702,7 @@ class KitManager(private val plugin: Joshymc) {
         // Slots outside the editable area (shouldn't normally exist) are preserved untouched.
         items.putAll(session.overflowItems)
 
-        saveKit(session.kitName, kit.icon, kit.cooldownHours, kit.permission, items)
+        saveKit(session.kitName, kit.icon, kit.cooldownHours, kit.permission, items, kit.gamemode, kit.category)
 
         editSessions.remove(player.uniqueId)
         editLocks.remove(session.kitName)
