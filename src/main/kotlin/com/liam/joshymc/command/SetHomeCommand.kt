@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.manager.RankLimits
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -16,19 +17,14 @@ class SetHomeCommand(private val plugin: Joshymc) : CommandExecutor {
         private val NAME_REGEX = Regex("^[a-zA-Z0-9_]{1,20}$")
     }
 
-    // Returns -1 for unlimited, otherwise the highest home limit across all of this player's ranks.
-    private fun homeLimit(player: org.bukkit.entity.Player): Int {
-        val rankIds = plugin.rankManager.getPlayerRankIds(player.uniqueId).ifEmpty { setOf("default") }
-        var best = Int.MIN_VALUE
-        for (rankId in rankIds) {
-            val limit = plugin.config.getInt("homes.limits-by-rank.$rankId", Int.MIN_VALUE)
-            if (limit == Int.MIN_VALUE) continue
-            if (limit == -1 || best == -1) return -1
-            best = maxOf(best, limit)
-        }
-        return if (best != Int.MIN_VALUE) best
-               else plugin.config.getInt("homes.max-per-player", 3)
-    }
+    // Returns -1 for unlimited, otherwise the highest home limit across this player's ranks and
+    // their donor tier (issue #1381: tiers live in LuckPerms, so getPlayerRankIds never has them).
+    private fun homeLimit(player: org.bukkit.entity.Player): Int = RankLimits.resolve(
+        plugin.rankManager.getPlayerRankIds(player.uniqueId),
+        plugin.rankManager.currentDonorTier(player.uniqueId),
+        { rankId -> plugin.config.getInt("homes.limits-by-rank.$rankId", Int.MIN_VALUE).takeIf { it != Int.MIN_VALUE } },
+        plugin.config.getInt("homes.max-per-player", 3)
+    )
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {

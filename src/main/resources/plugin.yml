@@ -1195,13 +1195,19 @@ permissions:
     description: Allows flight in the spawn world
     default: op
   joshymc.heal:
-    description: Heal players
+    description: Heal yourself with /heal (3-minute cooldown unless joshymc.heal.bypass)
+    default: op
+  joshymc.heal.others:
+    description: Heal other players with /heal <player> (staff only; never grant to donor ranks)
     default: op
   joshymc.heal.bypass:
     description: Bypass /heal cooldown
     default: op
   joshymc.feed:
-    description: Feed players
+    description: Feed yourself with /feed (3-minute cooldown unless joshymc.feed.bypass)
+    default: op
+  joshymc.feed.others:
+    description: Feed other players with /feed <player> (staff only; never grant to donor ranks)
     default: op
   joshymc.feed.bypass:
     description: Bypass /feed cooldown
