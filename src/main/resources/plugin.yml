@@ -281,7 +281,7 @@ commands:
     description: View the dynamic stock market
     usage: /market [price|trends|info]
   quests:
-    description: Open the Daily / Weekly / Quest Master quest hub
+    description: Open the quest menu (Daily, Weekly and Event Quests)
     usage: /quests
     aliases: [quest, q, questboard, questbook]
   eventquests:
@@ -289,7 +289,7 @@ commands:
     usage: /eventquests [free|elite|admin reload|progress <player> <event>|reset <player> <event>|repeatable <set> <true|false> [days]|cooldown <set> <days>|category <set> <free|elite>]
     aliases: [eq, eventquest]
   daily:
-    description: Open the Daily / Weekly / Quest Master quest hub (alias for /quests)
+    description: Open your Daily Quests (shortcut into /quests)
     usage: /daily
   cosmetics:
     description: Open the cosmetics hub
