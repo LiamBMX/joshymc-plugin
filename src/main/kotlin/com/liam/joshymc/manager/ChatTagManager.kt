@@ -215,6 +215,7 @@ class ChatTagManager(private val plugin: Joshymc) {
         val config = YamlConfiguration.loadConfiguration(file)
         config.set("tags.$VOUCHER_CATEGORY.$id.display", display)
         config.set("tags.$VOUCHER_CATEGORY.$id.permission", permission)
+        ChatTagDefaults.clearVoucherRemoved(config, id)
         try {
             config.save(file)
         } catch (e: Exception) {
@@ -261,6 +262,8 @@ class ChatTagManager(private val plugin: Joshymc) {
         val file = plugin.configFile("tags.yml")
         val config = YamlConfiguration.loadConfiguration(file)
         config.set("tags.$VOUCHER_CATEGORY.$id", null)
+        // A bundled voucher tag (issue #1391) would otherwise be merged back in on the next start.
+        ChatTagDefaults.markVoucherRemoved(config, id)
         try {
             config.save(file)
         } catch (e: Exception) {
@@ -469,27 +472,9 @@ class ChatTagManager(private val plugin: Joshymc) {
             return
         }
 
-        val defaultsSection = defaults.getConfigurationSection("tags") ?: return
-        val userSection = userCfg.getConfigurationSection("tags")
-            ?: userCfg.createSection("tags")
-
-        var categoriesAdded = 0
-        var tagsAdded = 0
-        for (categoryId in defaultsSection.getKeys(false)) {
-            val defaultCat = defaultsSection.getConfigurationSection(categoryId) ?: continue
-            val userCat = userSection.getConfigurationSection(categoryId)
-            if (userCat == null) {
-                userSection.set(categoryId, defaultsSection.get(categoryId))
-                categoriesAdded++
-                continue
-            }
-            for (tagId in defaultCat.getKeys(false)) {
-                if (!userCat.contains(tagId)) {
-                    userCat.set(tagId, defaultCat.get(tagId))
-                    tagsAdded++
-                }
-            }
-        }
+        val merged = ChatTagDefaults.merge(defaults, userCfg)
+        val categoriesAdded = merged.categoriesAdded
+        val tagsAdded = merged.tagsAdded
         if (categoriesAdded > 0 || tagsAdded > 0) {
             try {
                 com.liam.joshymc.util.ConfigUtil.backup(userFile, plugin.logger, "ChatTags")
@@ -502,8 +487,8 @@ class ChatTagManager(private val plugin: Joshymc) {
     }
 
     companion object {
-        private const val VOUCHER_CATEGORY = "voucher"
-        private const val VOUCHER_PERMISSION_PREFIX = "joshymc.tag.voucher."
+        private const val VOUCHER_CATEGORY = ChatTagDefaults.VOUCHER_CATEGORY
+        private const val VOUCHER_PERMISSION_PREFIX = ChatTagDefaults.VOUCHER_PERMISSION_PREFIX
 
         // Normal (non-Special) Chat Tag categories approved for the shop — issue #602.
         private val APPROVED_CATEGORIES = setOf(
