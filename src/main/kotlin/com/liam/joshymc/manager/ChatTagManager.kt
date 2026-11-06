@@ -271,187 +271,302 @@ class ChatTagManager(private val plugin: Joshymc) {
         }
     }
 
-    // ── GUI ──────────────────────────────────────────
+    // ── GUI (issue #1393) ────────────────────────────
+    //
+    // /tags → main menu (27 slots: Bundled Chat Tags 12, Special Chat Tags 14, nothing else)
+    //       → Bundled Chat Tags (54 slots, one icon per bundle) → a bundle's tags (54 slots)
+    //       → Special Chat Tags (54 slots, the voucher category's tags)
+    // Layout and classification live in the Bukkit-free ChatTagMenus. Every click re-reads the
+    // tag by id and re-checks canUse, so a reload, a deleted tag or a revoked permission between
+    // opening a page and clicking it can never equip anything the player doesn't own.
 
-    /** "Vibe" for a normal category, "Special Chat Tags" for the voucher-only category (issue #602). */
-    private fun categoryDisplayName(category: String): String =
-        if (category == VOUCHER_CATEGORY) "Special Chat Tags" else category.replaceFirstChar { it.uppercase() }
+    private fun plain(text: String, color: NamedTextColor): Component =
+        Component.text(text, color).decoration(TextDecoration.ITALIC, false)
 
-    fun openCategoryMenu(player: Player) {
-        // Issue #1273: a centered grid (ChatTagLayout), no filler panes, Remove Tag in the bottom-row center.
-        val shown = categories.take(ChatTagLayout.PAGE_SIZE)
-        val size = ChatTagLayout.size(shown.size)
-        val gui = CustomGui(
-            Component.text("Chat Tags", NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
-            size
-        )
-        val equippedCategory = getPlayerTag(player)?.category
+    private fun title(text: String): Component =
+        Component.text(text, NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
 
-        // Category icons
-        val catMaterials = mapOf(
-            "skill" to Material.DIAMOND_SWORD,
-            "vibe" to Material.NOTE_BLOCK,
-            "nature" to Material.OAK_SAPLING,
-            "cosmic" to Material.END_STONE,
-            "animal" to Material.BONE,
-            "meme" to Material.PAPER,
-            "music" to Material.JUKEBOX,
-            "pirate" to Material.TRIDENT,
-            "military" to Material.IRON_CHESTPLATE,
-            "mythical" to Material.DRAGON_EGG,
-            "cyberpunk" to Material.REDSTONE,
-            VOUCHER_CATEGORY to Material.NAME_TAG
-        )
+    private fun countLine(label: String, value: String): Component =
+        plain(label, NamedTextColor.GRAY).append(Component.text(value, NamedTextColor.WHITE))
 
-        val slots = ChatTagLayout.slots(shown.size)
+    private fun unlockedCount(player: Player, tags: List<ChatTag>): Int = tags.count { canUse(player, it) }
 
-        for ((index, category) in shown.withIndex()) {
-            val slot = slots[index]
-            val tagCount = getTagsByCategory(category).size
-            val mat = catMaterials[category] ?: Material.BOOK
+    /** Same entry point as before (`/tags`, `/cosmetics`): the two-category main menu. */
+    fun openCategoryMenu(player: Player) = openMainMenu(player)
 
-            val item = ItemStack(mat)
-            item.editMeta { meta ->
-                meta.displayName(
-                    Component.text(categoryDisplayName(category), NamedTextColor.GOLD)
-                        .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
-                )
-                val lore = mutableListOf(
-                    Component.empty(),
-                    Component.text("  $tagCount tags", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
-                )
-                if (category == equippedCategory) {
-                    lore.add(Component.text("  Your equipped tag is here", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
-                    meta.setEnchantmentGlintOverride(true)
-                }
-                lore.add(Component.empty())
-                lore.add(Component.text("  Click to browse", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
-                meta.lore(lore)
+    fun openMainMenu(player: Player) {
+        val gui = CustomGui(title("Chat Tags"), ChatTagMenus.MAIN_SIZE)
+        val equippedKind = getPlayerTag(player)?.let { ChatTagMenus.kindOf(it.category) }
+
+        val bundles = ChatTagMenus.bundles(categories)
+        val bundleTags = bundles.flatMap { getTagsByCategory(it) }
+        val bundled = ItemStack(Material.BUNDLE)
+        bundled.editMeta { meta ->
+            meta.displayName(title("Bundled Chat Tags"))
+            val lore = mutableListOf(
+                plain("Browse themed collections of chat tags available", NamedTextColor.GRAY),
+                plain("through the JoshyMC store.", NamedTextColor.GRAY),
+                Component.empty(),
+                countLine("Bundles: ", "${bundles.size}"),
+                countLine("Unlocked: ", "${unlockedCount(player, bundleTags)}/${bundleTags.size}"),
+            )
+            if (equippedKind == ChatTagMenus.Kind.BUNDLED) {
+                lore += plain("Your equipped tag is here", NamedTextColor.GREEN)
+                meta.setEnchantmentGlintOverride(true)
             }
-
-            val capturedCat = category
-            gui.setItem(slot, item) { p, _ -> openTagList(p, capturedCat, 0) }
+            lore += Component.empty()
+            lore += plain("Click to browse", NamedTextColor.YELLOW)
+            meta.lore(lore)
+        }
+        gui.setItem(ChatTagMenus.BUNDLED_SLOT, bundled) { p, _ ->
+            GuiStyle.clickSound(p)
+            openBundleMenu(p, 0)
         }
 
-        addRemoveTagButton(gui, player, GuiStyle.closeSlot(size))
+        val specialTags = getTagsByCategory(VOUCHER_CATEGORY)
+        val special = ItemStack(Material.NAME_TAG)
+        special.editMeta { meta ->
+            meta.displayName(title("Special Chat Tags"))
+            val lore = mutableListOf(
+                plain("Browse individually unlockable and exclusive", NamedTextColor.GRAY),
+                plain("chat tags.", NamedTextColor.GRAY),
+                Component.empty(),
+                countLine("Tags: ", "${specialTags.size}"),
+                countLine("Unlocked: ", "${unlockedCount(player, specialTags)}/${specialTags.size}"),
+            )
+            if (equippedKind == ChatTagMenus.Kind.SPECIAL) {
+                lore += plain("Your equipped tag is here", NamedTextColor.GREEN)
+                meta.setEnchantmentGlintOverride(true)
+            }
+            lore += Component.empty()
+            lore += plain("Click to browse", NamedTextColor.YELLOW)
+            meta.lore(lore)
+        }
+        gui.setItem(ChatTagMenus.SPECIAL_SLOT, special) { p, _ ->
+            GuiStyle.clickSound(p)
+            openTagList(p, VOUCHER_CATEGORY, 0)
+        }
 
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
-    /** The unequip button: a barrier named "Remove Tag" that also shows what's equipped right now. */
-    private fun addRemoveTagButton(gui: CustomGui, player: Player, slot: Int) {
-        val current = getPlayerTag(player)
-        val removeItem = ItemStack(Material.BARRIER)
-        removeItem.editMeta { meta ->
-            meta.displayName(Component.text("Remove Tag", NamedTextColor.RED).decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false))
-            val equippedLine = if (current != null) {
-                Component.text("  Equipped: ", NamedTextColor.GRAY).append(plugin.commsManager.parseLegacy(current.display.trimEnd()))
-            } else {
-                Component.text("  No tag equipped", NamedTextColor.GRAY)
+    /** Bundled Chat Tags: one icon per bundle category, loaded from tags.yml. */
+    fun openBundleMenu(player: Player, page: Int) {
+        val bundles = ChatTagMenus.bundles(categories)
+        val currentPage = ChatTagMenus.clampPage(page, bundles.size)
+        val totalPages = ChatTagMenus.totalPages(bundles.size)
+        val shown = ChatTagMenus.pageOf(bundles, currentPage)
+        val gui = CustomGui(title("Bundled Chat Tags"), ChatTagMenus.BROWSE_SIZE)
+        val equippedCategory = getPlayerTag(player)?.category
+
+        for ((slot, category) in ChatTagMenus.slots(shown.size).zip(shown)) {
+            val bundleTags = getTagsByCategory(category)
+            val name = ChatTagMenus.displayName(category)
+            val item = ItemStack(BUNDLE_ICONS[category] ?: Material.BOOK)
+            item.editMeta { meta ->
+                meta.displayName(title(name))
+                val lore = mutableListOf(
+                    plain("A themed collection of $name chat tags.", NamedTextColor.GRAY),
+                    Component.empty(),
+                    countLine("Tags: ", "${bundleTags.size}"),
+                    countLine("Unlocked: ", "${unlockedCount(player, bundleTags)}/${bundleTags.size}"),
+                )
+                if (category == equippedCategory) {
+                    lore += plain("Your equipped tag is here", NamedTextColor.GREEN)
+                    meta.setEnchantmentGlintOverride(true)
+                }
+                lore += Component.empty()
+                lore += plain("Click to browse", NamedTextColor.YELLOW)
+                meta.lore(lore)
             }
-            meta.lore(listOf(
-                Component.empty(),
-                equippedLine.decoration(TextDecoration.ITALIC, false),
-                Component.empty(),
-                Component.text("  Click to unequip your tag", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false)
-            ))
+            gui.setItem(slot, item) { p, _ ->
+                GuiStyle.clickSound(p)
+                openTagList(p, category, 0)
+            }
         }
-        gui.setItem(slot, removeItem) { p, _ ->
-            setPlayerTag(p.uniqueId, null)
-            plugin.commsManager.send(p, Component.text("Chat tag removed.", NamedTextColor.GREEN))
-            p.playSound(p.location, Sound.ENTITY_ITEM_PICKUP, 0.5f, 1.0f)
-            p.closeInventory()
+
+        addNavigation(gui, player, currentPage, totalPages, "Back to Chat Tags", { openMainMenu(it) }) { p, to ->
+            openBundleMenu(p, to)
+        }
+        plugin.guiManager.open(player, gui)
+    }
+
+    /** One bundle's tags, or Special Chat Tags for the voucher category. */
+    fun openTagList(player: Player, category: String, page: Int) {
+        val categoryTags = getTagsByCategory(category)
+        val currentPage = ChatTagMenus.clampPage(page, categoryTags.size)
+        val totalPages = ChatTagMenus.totalPages(categoryTags.size)
+        val shown = ChatTagMenus.pageOf(categoryTags, currentPage)
+        val kind = ChatTagMenus.kindOf(category)
+        val gui = CustomGui(title(ChatTagMenus.displayName(category)), ChatTagMenus.BROWSE_SIZE)
+        val currentTag = getPlayerTag(player)?.id
+
+        for ((slot, tag) in ChatTagMenus.slots(shown.size).zip(shown)) {
+            val tagId = tag.id
+            gui.setItem(slot, tagIcon(player, tag, kind, tagId == currentTag)) { p, event ->
+                onTagClick(p, tagId, category, currentPage, event.isRightClick)
+            }
+        }
+
+        val backLabel: String
+        val back: (Player) -> Unit
+        if (kind == ChatTagMenus.Kind.SPECIAL) {
+            backLabel = "Back to Chat Tags"
+            back = { openMainMenu(it) }
+        } else {
+            // Back to the bundle page this bundle sits on.
+            val bundlePage = ChatTagMenus.bundles(categories).indexOf(category).coerceAtLeast(0) / ChatTagMenus.PAGE_SIZE
+            backLabel = "Back to Bundled Chat Tags"
+            back = { openBundleMenu(it, bundlePage) }
+        }
+        addNavigation(gui, player, currentPage, totalPages, backLabel, back) { p, to -> openTagList(p, category, to) }
+        plugin.guiManager.open(player, gui)
+    }
+
+    private fun tagIcon(player: Player, tag: ChatTag, kind: ChatTagMenus.Kind, isEquipped: Boolean): ItemStack {
+        val owned = canUse(player, tag)
+        val item = ItemStack(when {
+            isEquipped -> Material.LIME_DYE
+            owned -> Material.GRAY_DYE
+            else -> Material.RED_DYE
+        })
+        item.editMeta { meta ->
+            meta.displayName(plugin.commsManager.parseLegacy(tag.display.trimEnd()).decoration(TextDecoration.ITALIC, false))
+            val lore = mutableListOf<Component>()
+            lore += plain("Preview:", NamedTextColor.GRAY)
+            lore += previewLine(player, tag).decoration(TextDecoration.ITALIC, false)
+            lore += Component.empty()
+            when {
+                isEquipped -> {
+                    lore += plain("Unlocked", NamedTextColor.GREEN)
+                    lore += plain("Equipped", NamedTextColor.GREEN)
+                }
+                owned -> {
+                    lore += plain("Unlocked", NamedTextColor.GREEN)
+                    lore += plain("Click to equip", NamedTextColor.YELLOW)
+                }
+                else -> {
+                    lore += plain("Locked", NamedTextColor.RED)
+                    if (kind == ChatTagMenus.Kind.SPECIAL) {
+                        lore += plain("Redeem this tag's voucher to unlock it.", NamedTextColor.GRAY)
+                    }
+                }
+            }
+            lore += plain("Right-click to preview in chat", NamedTextColor.DARK_GRAY)
+            meta.lore(lore)
+            if (isEquipped) meta.setEnchantmentGlintOverride(true)
+        }
+        return item
+    }
+
+    /** `[Tag] PlayerName: Hello!` with the tag's real configured formatting and the player's name. */
+    private fun previewLine(player: Player, tag: ChatTag): Component =
+        Component.empty().color(NamedTextColor.WHITE)
+            .append(plugin.commsManager.parseLegacy(tag.display.trimEnd()))
+            .append(Component.text(" ${player.name}", NamedTextColor.WHITE))
+            .append(Component.text(": ", NamedTextColor.GRAY))
+            .append(Component.text(ChatTagMenus.PREVIEW_MESSAGE, NamedTextColor.WHITE))
+
+    /** A preview sent only to [player]: never broadcast and never equips. */
+    private fun sendPreview(player: Player, tag: ChatTag) {
+        plugin.commsManager.send(player, Component.text("Preview (only you can see this):", NamedTextColor.GRAY))
+        player.sendMessage(previewLine(player, tag))
+    }
+
+    private fun onTagClick(player: Player, tagId: String, category: String, page: Int, rightClick: Boolean) {
+        // Re-read by id: the page may predate a reload or a deleted tag.
+        val tag = getTag(tagId)
+        if (tag == null || tag.category != category) {
+            GuiStyle.errorSound(player)
+            plugin.commsManager.send(player, Component.text("That tag is no longer available.", NamedTextColor.RED))
+            openTagList(player, category, page)
+            return
+        }
+        if (rightClick) {
+            GuiStyle.clickSound(player)
+            sendPreview(player, tag)
+            return
+        }
+        if (!canUse(player, tag)) {
+            GuiStyle.errorSound(player)
+            plugin.commsManager.send(player, Component.text("You haven't unlocked this tag yet.", NamedTextColor.RED))
+            sendPreview(player, tag)
+            return
+        }
+        if (getPlayerTag(player)?.id == tag.id) {
+            GuiStyle.clickSound(player)
+            return
+        }
+        setPlayerTag(player.uniqueId, tag.id)
+        player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.5f)
+        plugin.commsManager.send(player,
+            Component.text("Tag set to ", NamedTextColor.GREEN).append(plugin.commsManager.parseLegacy(tag.display.trimEnd()))
+        )
+        openTagList(player, category, page)
+    }
+
+    /** Bottom row of every 54-slot page: Previous 45, Back 49, Remove Current Tag 51, Next 53. */
+    private fun addNavigation(
+        gui: CustomGui,
+        player: Player,
+        page: Int,
+        totalPages: Int,
+        backLabel: String,
+        back: (Player) -> Unit,
+        turn: (Player, Int) -> Unit,
+    ) {
+        if (page > 0) {
+            gui.setItem(ChatTagMenus.PREV_SLOT, GuiStyle.previousPage(page, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
+                turn(p, page - 1)
+            }
+        }
+        gui.setItem(ChatTagMenus.BACK_SLOT, GuiStyle.back(backLabel)) { p, _ ->
+            GuiStyle.clickSound(p)
+            back(p)
+        }
+        addRemoveTagButton(gui, player, ChatTagMenus.REMOVE_SLOT) { p -> turn(p, page) }
+        if (page < totalPages - 1) {
+            gui.setItem(ChatTagMenus.NEXT_SLOT, GuiStyle.nextPage(page, totalPages)) { p, _ ->
+                GuiStyle.pageSound(p)
+                turn(p, page + 1)
+            }
         }
     }
 
-    fun openTagList(player: Player, category: String, page: Int) {
-        val categoryTags = getTagsByCategory(category)
-        val pageSize = ChatTagLayout.PAGE_SIZE
-        val totalPages = ChatTagLayout.totalPages(categoryTags.size)
-        val currentPage = page.coerceIn(0, totalPages - 1)
-        val pageTags = categoryTags.drop(currentPage * pageSize).take(pageSize)
-
-        val currentTag = getPlayerTag(player)?.id
-        // Same chest size and grid pattern on every page of this category (issue #1273).
-        val size = ChatTagLayout.pagedSize(categoryTags.size)
-        val gui = CustomGui(
-            Component.text(categoryDisplayName(category), NamedTextColor.GOLD)
-                .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false),
-            size
-        )
-
-        val slots = ChatTagLayout.slots(pageTags.size)
-
-        for ((index, tag) in pageTags.withIndex()) {
-            val slot = slots[index]
-            val canUse = canUse(player, tag)
-            val isEquipped = tag.id == currentTag
-
-            val mat = when {
-                isEquipped -> Material.LIME_DYE
-                canUse -> Material.GRAY_DYE
-                else -> Material.RED_DYE
+    /** Unequips the current tag (its unlock stays) and shows what's equipped right now. */
+    private fun addRemoveTagButton(gui: CustomGui, player: Player, slot: Int, refresh: (Player) -> Unit) {
+        val current = getPlayerTag(player)
+        val removeItem = ItemStack(Material.BARRIER)
+        removeItem.editMeta { meta ->
+            meta.displayName(
+                Component.text("Remove Current Tag", NamedTextColor.RED)
+                    .decoration(TextDecoration.BOLD, true).decoration(TextDecoration.ITALIC, false)
+            )
+            val equippedLine = if (current != null) {
+                Component.text("Equipped: ", NamedTextColor.GRAY).append(plugin.commsManager.parseLegacy(current.display.trimEnd()))
+            } else {
+                Component.text("No tag equipped", NamedTextColor.GRAY)
             }
-
-            val item = ItemStack(mat)
-            item.editMeta { meta ->
-                meta.displayName(plugin.commsManager.parseLegacy(tag.display.trimEnd())
-                    .decoration(TextDecoration.ITALIC, false))
-                val lore = mutableListOf<Component>()
-                lore.add(Component.empty())
-                val isSpecial = category == VOUCHER_CATEGORY
-                when {
-                    isEquipped -> {
-                        if (isSpecial) lore.add(Component.text("  Owned", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
-                        lore.add(Component.text("  Equipped!", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
-                    }
-                    canUse -> {
-                        if (isSpecial) lore.add(Component.text("  Owned", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
-                        lore.add(Component.text("  Click to equip", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
-                    }
-                    else -> {
-                        lore.add(Component.text("  Locked", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false))
-                        if (isSpecial) lore.add(Component.text("  Redeem the corresponding voucher to unlock", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
-                    }
-                }
-                meta.lore(lore)
-                if (isEquipped) meta.setEnchantmentGlintOverride(true)
-            }
-
-            val capturedTag = tag
-            gui.setItem(slot, item) { p, _ ->
-                if (!canUse(p, capturedTag)) {
-                    plugin.commsManager.send(p, Component.text("You don't have permission to use this tag.", NamedTextColor.RED))
-                    return@setItem
-                }
-                setPlayerTag(p.uniqueId, capturedTag.id)
-                p.playSound(p.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.5f)
-                plugin.commsManager.send(p,
-                    Component.text("Tag set to ", NamedTextColor.GREEN)
-                        .append(plugin.commsManager.parseLegacy(capturedTag.display.trimEnd()))
-                )
-                p.closeInventory()
-            }
+            meta.lore(listOf(
+                equippedLine.decoration(TextDecoration.ITALIC, false),
+                plain("Your unlocked tags stay unlocked.", NamedTextColor.GRAY),
+                Component.empty(),
+                plain("Click to unequip your tag", NamedTextColor.YELLOW)
+            ))
         }
-
-        // Bottom row in the shared GuiStyle slots: Back, Previous, Remove Tag (center), Next.
-        gui.setItem(GuiStyle.backSlot(size), GuiStyle.back("Back to Chat Tags")) { p, _ -> openCategoryMenu(p) }
-        if (currentPage > 0) {
-            gui.setItem(GuiStyle.prevSlot(size), GuiStyle.previousPage(currentPage, totalPages)) { p, _ ->
-                GuiStyle.pageSound(p)
-                openTagList(p, category, currentPage - 1)
+        gui.setItem(slot, removeItem) { p, _ ->
+            if (getPlayerTag(p) == null) {
+                GuiStyle.errorSound(p)
+                plugin.commsManager.send(p, Component.text("You don't have a tag equipped.", NamedTextColor.RED))
+                return@setItem
             }
+            setPlayerTag(p.uniqueId, null)
+            plugin.commsManager.send(p, Component.text("Chat tag removed.", NamedTextColor.GREEN))
+            p.playSound(p.location, Sound.ENTITY_ITEM_PICKUP, 0.5f, 1.0f)
+            refresh(p)
         }
-        addRemoveTagButton(gui, player, GuiStyle.closeSlot(size))
-        if (currentPage < totalPages - 1) {
-            gui.setItem(GuiStyle.nextSlot(size), GuiStyle.nextPage(currentPage, totalPages)) { p, _ ->
-                GuiStyle.pageSound(p)
-                openTagList(p, category, currentPage + 1)
-            }
-        }
-
-        plugin.guiManager.open(player, gui)
     }
 
     /**
@@ -489,6 +604,21 @@ class ChatTagManager(private val plugin: Joshymc) {
     companion object {
         private const val VOUCHER_CATEGORY = ChatTagDefaults.VOUCHER_CATEGORY
         private const val VOUCHER_PERMISSION_PREFIX = ChatTagDefaults.VOUCHER_PERMISSION_PREFIX
+
+        // Icons for the bundles in the Bundled Chat Tags menu; unlisted bundles show a book.
+        private val BUNDLE_ICONS = mapOf(
+            "skill" to Material.DIAMOND_SWORD,
+            "vibe" to Material.NOTE_BLOCK,
+            "nature" to Material.OAK_SAPLING,
+            "cosmic" to Material.END_STONE,
+            "animal" to Material.BONE,
+            "meme" to Material.PAPER,
+            "music" to Material.JUKEBOX,
+            "pirate" to Material.TRIDENT,
+            "military" to Material.IRON_CHESTPLATE,
+            "mythical" to Material.DRAGON_EGG,
+            "cyberpunk" to Material.REDSTONE,
+        )
 
         // Normal (non-Special) Chat Tag categories approved for the shop — issue #602.
         private val APPROVED_CATEGORIES = setOf(

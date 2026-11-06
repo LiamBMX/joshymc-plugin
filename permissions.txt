@@ -564,12 +564,13 @@ base permissions above only gate the command itself):
   joshymc.joinmsg.<id>     — one per join message (14 messages)
   joshymc.killeffect.<id>  — one per kill effect (31 effects)
   joshymc.talisman.<id>    — one per talisman definition
-  joshymc.tag.<category>   — chat tag categories defined in tags.yml, e.g.
-                              joshymc.tag.prestige, joshymc.tag.og,
-                              joshymc.tag.rare, joshymc.tag.legendary,
-                              joshymc.tag.royalty, joshymc.tag.holiday
-                              (some tags in tags.yml are free-for-all and
-                              have no permission at all)
+  <tag permission>         — whatever node a tag's `permission:` in tags.yml
+                              names. Checked per tag; there is no category-wide
+                              node in the code. The bundled themed categories
+                              (vibe, nature, ...) ship with `permission: null`
+                              (free). See docs/chat-tags.md.
+  joshymc.tag.voucher.<id> — one per Special (voucher) Chat Tag, default false,
+                              unlocks only that tag (issue #1391)
 
 
 CHAT
