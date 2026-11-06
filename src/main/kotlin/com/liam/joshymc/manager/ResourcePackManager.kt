@@ -21,6 +21,10 @@ class ResourcePackManager(private val plugin: Joshymc) : Listener {
     private var packUrl: String = ""
     private var httpServer: HttpServer? = null
 
+    /** Id of the pack JoshyMC sends (null until started); crate models only show once it loaded (issue #1389). */
+    var packId: UUID? = null
+        private set
+
     fun start() {
         val packFile = extractPack()
         packHash = sha1Hex(packFile)
@@ -44,6 +48,7 @@ class ResourcePackManager(private val plugin: Joshymc) : Listener {
         // Build the URL players will download from
         val resolvedHost = if (host.isNotBlank()) host else "localhost"
         packUrl = "http://$resolvedHost:$port/pack.zip"
+        packId = UUID.nameUUIDFromBytes(packUrl.toByteArray())
 
         plugin.server.pluginManager.registerEvents(this, plugin)
         plugin.logger.info("Resource pack server started on port $port (hash: $packHash)")
@@ -58,7 +63,7 @@ class ResourcePackManager(private val plugin: Joshymc) : Listener {
         val packInfo = ResourcePackInfo.resourcePackInfo()
             .uri(URI.create(packUrl))
             .hash(packHash)
-            .id(UUID.nameUUIDFromBytes(packUrl.toByteArray()))
+            .id(packId ?: UUID.nameUUIDFromBytes(packUrl.toByteArray()))
             .build()
 
         val request = ResourcePackRequest.resourcePackRequest()

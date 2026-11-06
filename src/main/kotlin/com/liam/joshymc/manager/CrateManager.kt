@@ -215,6 +215,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     private val lastActivation = mutableMapOf<UUID, Long>()
     private var particleTask: BukkitTask? = null
     private var pendingRetryTask: BukkitTask? = null
+
+    /** Custom crate chest models drawn over the crate blocks (issue #1389). Purely visual. */
+    val models = com.liam.joshymc.crate.CrateModelDisplays(plugin, this)
     private lateinit var cratesFile: File
     private lateinit var cratesConfig: YamlConfiguration
 
@@ -256,6 +259,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         loadCrates()
         loadLocations()
         startParticleTask()
+        // Never lets a model problem stop the crates themselves from starting.
+        try {
+            models.start()
+        } catch (e: Exception) {
+            plugin.logger.warning("[Crates] Custom crate models failed to start; crates keep their vanilla look: ${e.message}")
+        }
 
         // Retry held rewards for online players (inventory was full, or a reload interrupted them).
         pendingRetryTask?.cancel()
@@ -273,6 +282,11 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     }
 
     fun stop() {
+        try {
+            models.stop()
+        } catch (e: Exception) {
+            plugin.logger.warning("[Crates] Could not remove custom crate models: ${e.message}")
+        }
         particleTask?.cancel()
         particleTask = null
         pendingRetryTask?.cancel()
@@ -475,6 +489,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 "DELETE FROM crate_locations WHERE world = ? AND x = ? AND y = ? AND z = ?",
                 loc.world, loc.x, loc.y, loc.z
             )
+            Bukkit.getWorld(loc.world)?.let { refreshModel(it.getBlockAt(loc.x, loc.y, loc.z)) }
         }
         saveCrates()
         return true
@@ -622,7 +637,17 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             loc.world, loc.x, loc.y, loc.z, loc.crateType
         )
         crateLocations.add(loc)
+        refreshModel(block)
         return true
+    }
+
+    /** Redraws (or clears) the custom model at [block]; a model failure never affects the crate. */
+    private fun refreshModel(block: Block) {
+        try {
+            models.refresh(block.world, block.x, block.y, block.z)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Crates] Could not refresh the custom model at ${block.world.name} ${block.x}, ${block.y}, ${block.z}: ${e.message}")
+        }
     }
 
     fun removeCrateLocation(block: Block): Boolean {
@@ -634,6 +659,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 "DELETE FROM crate_locations WHERE world = ? AND x = ? AND y = ? AND z = ?",
                 block.world.name, block.x, block.y, block.z
             )
+            refreshModel(block)
         }
         return removed
     }

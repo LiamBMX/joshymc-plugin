@@ -34,6 +34,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "diagnose", "inspect" -> handleDiagnose(sender)
             "locations" -> handleLocations(sender)
             "force" -> handleForceOpen(sender, args)
+            "models" -> handleModels(sender, args)
             else -> sendUsage(sender)
         }
         return true
@@ -387,6 +388,25 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         plugin.crateManager.openPreview(player, crateType)
     }
 
+    /**
+     * `/crate models [refresh]` (issue #1389): shows each crate's custom model status, or
+     * removes every crate model display and redraws them from the current crate locations.
+     */
+    private fun handleModels(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.crate.admin")) {
+            Msg.noPermission(sender)
+            return
+        }
+        val models = plugin.crateManager.models
+        if (args.getOrNull(1)?.lowercase() == "refresh") {
+            models.refreshAll()
+            Msg.success(sender, "Crate models redrawn.")
+        }
+        for (line in models.describe()) {
+            sender.sendMessage(Component.text(line, NamedTextColor.GRAY))
+        }
+    }
+
     private fun sendUsage(sender: CommandSender) {
         if (sender is Player) {
             plugin.commsManager.send(sender, Component.text("Crate Commands:", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
@@ -401,7 +421,8 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "/crate preview <type>",
             "/crate diagnose  (look at a block to inspect)",
             "/crate locations  (list all registered crates)",
-            "/crate force <type> [player]  (open a crate without clicking — testing only)"
+            "/crate force <type> [player]  (open a crate without clicking — testing only)",
+            "/crate models [refresh]  (custom crate model status / redraw)"
         )
         for (usage in usages) {
             sender.sendMessage(
@@ -421,13 +442,17 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             1 -> {
                 val subs = mutableListOf("list", "preview")
                 if (sender.hasPermission("joshymc.crate.admin")) {
-                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force"))
+                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force", "models"))
                 }
                 subs.filter { it.startsWith(args[0], ignoreCase = true) }
             }
             2 -> when (args[0].lowercase()) {
                 "setlocation", "givekey", "preview", "force" ->
                     plugin.crateManager.getCrateTypes().filter { it.startsWith(args[1], ignoreCase = true) }
+                "models" ->
+                    if (sender.hasPermission("joshymc.crate.admin")) {
+                        listOf("refresh").filter { it.startsWith(args[1], ignoreCase = true) }
+                    } else emptyList()
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
