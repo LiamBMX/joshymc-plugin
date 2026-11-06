@@ -108,7 +108,7 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
 
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
 
-        plugin.saleManager.recordSales(player, breakdown, SaleManager.Source.SELL_WAND)
+        plugin.saleManager.recordSales(player, breakdown, SaleManager.Source.SELL_WAND, earned = totalEarned)
 
         val formatted = plugin.economyManager.format(totalEarned)
         val multiplierText = if (multiplier != 1.0) " (${multiplier}x)" else ""

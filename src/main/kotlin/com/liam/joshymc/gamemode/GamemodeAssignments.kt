@@ -36,6 +36,8 @@ object GamemodeAssignments {
         "settings", "scoreboard", "serverbar", "jmc-ecview",
         // Information.
         "help", "rules", "media", "discord", "ip",
+        // The guided tutorial (issue #1387): one walkthrough per gamemode, picked from where the player is.
+        "tutorial",
         // Softlock recovery (issue #1241) is server infrastructure, not gameplay.
         "unstuck",
         // Cross-server transfers (issue #1331) move players between gamemodes, so they work on all of them.
@@ -80,8 +82,8 @@ object GamemodeAssignments {
         // Rank perks and flight (Fly Vouchers / flight time are Survival only, issue #1304).
         "fly", "flytime", "nightvision", "condense", "hat", "craft", "anvil", "smithing", "stonecutter", "repair",
         "trash",
-        // Fake base bait builds and the getting-started guide for Survival.
-        "fakebase", "spawnstash", "tutorial",
+        // Fake base bait builds (the tutorial is NETWORK since issue #1387).
+        "fakebase", "spawnstash",
     )
 
     private val LIFESTEAL_COMMANDS = listOf(

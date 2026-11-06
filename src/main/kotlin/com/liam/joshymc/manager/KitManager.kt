@@ -313,8 +313,26 @@ class KitManager(private val plugin: Joshymc) {
 
         plugin.commsManager.send(player, Component.text("Kit '$name' claimed!", NamedTextColor.GREEN))
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.2f)
+        // Issue #1387: the tutorial's Starter Kit objective counts only this confirmed claim.
+        if (isStarterKit(player, kit)) plugin.tutorialSignal(player, com.liam.joshymc.tutorial.TutorialSignal.StarterKitClaimed)
         return true
     }
+
+    /** Whether [kit] is a Starter Kit in [player]'s current gamemode (issue #1387). */
+    fun isStarterKit(player: Player, kit: KitDef): Boolean {
+        val current = gamemodeOf(player)
+        return KitCatalog.visibleIn(kit.entry, current) && KitCatalog.categoryOf(kit.entry, rankOrder(current)) == KitCatalog.Category.STARTER
+    }
+
+    /** The Starter Kits of [player]'s current gamemode (issue #1387). */
+    fun starterKitsFor(player: Player): List<KitDef> = kitsIn(player, KitCatalog.Category.STARTER)
+
+    /** Whether [uuid] has ever claimed kit [name] (a cooldown row exists, expired or not). Read only. */
+    fun hasClaimedBefore(uuid: UUID, name: String): Boolean =
+        plugin.databaseManager.queryFirst(
+            "SELECT 1 FROM kit_cooldowns WHERE uuid = ? AND kit = ?",
+            uuid.toString(), name
+        ) { true } ?: false
 
     fun getCooldownRemaining(player: Player, name: String): Long {
         // Bypass permissions: global or per-kit

@@ -294,7 +294,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
 
         if (totalEarned > 0) {
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
-            plugin.saleManager.recordSales(player, breakdown, SaleManager.Source.SELL_GUI)
+            plugin.saleManager.recordSales(player, breakdown, SaleManager.Source.SELL_GUI, earned = totalEarned)
             player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         }
 
@@ -353,7 +353,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         }
 
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
-        plugin.saleManager.recordSales(player, breakdown, SaleManager.Source.SELL_COMMAND)
+        plugin.saleManager.recordSales(player, breakdown, SaleManager.Source.SELL_COMMAND, earned = totalEarned)
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         sendSellSummary(player, totalEarned, breakdown)
     }
@@ -395,7 +395,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             return
         }
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
-        plugin.saleManager.recordSale(player, material, count, SaleManager.Source.SELL_COMMAND)
+        plugin.saleManager.recordSale(player, material, count, SaleManager.Source.SELL_COMMAND, earned = totalEarned)
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         sendSellSummary(player, totalEarned, mapOf(material to count))
     }
@@ -444,7 +444,7 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         }
 
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
-        plugin.saleManager.recordSale(player, material, totalAmount, SaleManager.Source.SELL_COMMAND)
+        plugin.saleManager.recordSale(player, material, totalAmount, SaleManager.Source.SELL_COMMAND, earned = totalEarned)
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         sendSellSummary(player, totalEarned, mapOf(material to totalAmount))
     }

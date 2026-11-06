@@ -32,6 +32,7 @@ class ServerTransferCommand(
     private val progression = if (destination == TransferDestination.LIFESTEAL) LifestealProgressCommand(plugin) else null
     private val ranked = if (destination == TransferDestination.LIFESTEAL) LifestealRankedCommand(plugin) else null
     private val info = if (destination == TransferDestination.LIFESTEAL) com.liam.joshymc.lifesteal.LifestealInfoCommand(plugin) else null
+    private val pvpInfo = if (destination == TransferDestination.LIFESTEAL) com.liam.joshymc.lifesteal.LifestealPvpInfoCommand(plugin) else null
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (hearts != null && args.firstOrNull()?.equals("hearts", ignoreCase = true) == true) {
@@ -62,6 +63,11 @@ class ServerTransferCommand(
                 info.execute(sender)
                 return true
             }
+            // Issue #1387: the PvP / combat rules (read only), the Lifesteal tutorial's sixth objective.
+            if ((first == "pvp" || first == "rules") && args.size == 1 && pvpInfo != null && plugin.lifestealHeartManager.hosted) {
+                pvpInfo.execute(sender)
+                return true
+            }
         }
         plugin.transferManager.request(sender, destination)
         return true
@@ -74,6 +80,7 @@ class ServerTransferCommand(
             if (combat.visibleTo(sender)) add("combat")
             if (progression.progressVisibleTo(sender)) add("progress")
             if (info?.visibleTo(sender) == true) add("info")
+            if (pvpInfo?.visibleTo(sender) == true) add("pvp")
             if (progression.adminVisibleTo(sender) || ranked.visibleTo(sender)) add("admin")
         }
         if (args.size == 1) return visible.filter { it.startsWith(args[0].lowercase()) }

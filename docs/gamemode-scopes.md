@@ -43,7 +43,7 @@ never restricts its own gamemode, so **nothing changes on the Survival server**,
 | Moderation | `ban`, `tempban`, `unban`, `mute`, `tempmute`, `unmute`, `warn`, `unwarn`, `pkick`, `history`, `punish`, `playerdata`, `alts`, `report`, `reports`, `admin`, `jmc-violation` |
 | Staff utilities | `vanish`, `modmode`, `hidestaff`, `staffchat`, `stafftag`, `sj`, `invsee`, `tp`, `tphere`, `sudo`, `smite`, `heal`, `feed`, `god`, `speed`, `enchant`, `gamemode`, `gmc`, `gms`, `gma`, `gmsp`, `chat` |
 | Communication / accounts | `link`, `unlink`, `msg`, `reply`, `messages`, `ignore`, `announce`, `live`, `promote`, `nick`, `timezone`, `settings`, `scoreboard`, `serverbar`, `jmc-ecview` |
-| Information | `help`, `rules`, `media`, `discord`, `ip` |
+| Information | `help`, `rules`, `media`, `discord`, `ip`, `tutorial` (guided walkthrough of the sender's current gamemode, issue #1387) |
 | Recovery | `unstuck` |
 | Kits, filtered per gamemode (issue #1379) | `kit`, `createkit`, `editkit`, `deletekit`: every kit belongs to one gamemode (kits.yml `gamemode: survival\|lifesteal`, missing = Survival; `/createkit` records the creator's gamemode) and `/kit` only shows and claims kits of the sender's current gamemode |
 | Teams, routed per gamemode (issue #1346) | `team`: `TeamCommandRouter` runs the Lifesteal team system for senders in Lifesteal and the Survival `TeamCommand` everywhere else, applying the SURVIVAL scope (same refusal message) and `joshymc.team` to it itself, so Survival teams behave as before (`docs/lifesteal-teams.md`) |
@@ -64,7 +64,7 @@ never restricts its own gamemode, so **nothing changes on the Survival server**,
 | Hosted events | `event` |
 | Travel | `warp`, `setwarp`, `delwarp`, `editwarp`, `pwarp`, `home`, `sethome`, `delhome`, `phome`, `rtp`, `resource`, `back`, `top` |
 | Rank perks and flight | `fly`, `flytime`, `nightvision`, `condense`, `hat`, `craft`, `anvil`, `smithing`, `stonecutter`, `repair`, `trash` |
-| Other | `fakebase`, `spawnstash`, `tutorial` |
+| Other | `fakebase`, `spawnstash` (`tutorial` is NETWORK since issue #1387: one walkthrough per gamemode, `docs/tutorial.md`) |
 
 ### Deliberately unassigned
 

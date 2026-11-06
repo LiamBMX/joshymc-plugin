@@ -122,6 +122,20 @@ class Joshymc : JavaPlugin() {
         return networkIdentityManager.featureEnabled(feature, configured)
     }
 
+    /**
+     * Success callback for the guided tutorial (issue #1387). Gameplay systems call this right after
+     * they confirm an action (kit claimed, random teleport done, claim created, items sold, ...).
+     * It never throws into the caller and does nothing before the tutorial is up.
+     */
+    fun tutorialSignal(player: org.bukkit.entity.Player, signal: com.liam.joshymc.tutorial.TutorialSignal, origin: org.bukkit.World? = null) {
+        if (!::tutorialManager.isInitialized) return
+        try {
+            tutorialManager.signal(player, signal, origin)
+        } catch (e: Exception) {
+            logger.log(java.util.logging.Level.WARNING, "[Tutorial] Failed to handle $signal for ${player.name}", e)
+        }
+    }
+
     /** False on a dedicated server that isolates Survival (issue #1336): its `pvp`/`dungeon` worlds aren't created. */
     private fun survivalWorldsAllowed(): Boolean {
         val allowed = com.liam.joshymc.gamemode.DedicatedServerFeatures.survivalWorldsAllowed(networkIdentityManager.isolatedGamemodes)
@@ -271,6 +285,8 @@ class Joshymc : JavaPlugin() {
     lateinit var freeRankManager: com.liam.joshymc.freerank.FreeRankManager
         private set
     lateinit var freeTagManager: com.liam.joshymc.freetag.FreeTagManager
+        private set
+    lateinit var tutorialManager: com.liam.joshymc.tutorial.TutorialManager
         private set
     lateinit var chatTagVoucherManager: com.liam.joshymc.manager.ChatTagVoucherManager
         private set
@@ -547,6 +563,8 @@ class Joshymc : JavaPlugin() {
         freeRankManager = com.liam.joshymc.freerank.FreeRankManager(this)
         chatTagVoucherManager = com.liam.joshymc.manager.ChatTagVoucherManager(this)
         freeTagManager = com.liam.joshymc.freetag.FreeTagManager(this)
+        // Issue #1387: the guided seven-step tutorial (Survival and Lifesteal, progress per gamemode).
+        tutorialManager = com.liam.joshymc.tutorial.TutorialManager(this)
         // Issue #1341: Lifesteal hearts. Only does anything on a server that runs Lifesteal.
         lifestealHeartManager = com.liam.joshymc.lifesteal.hearts.LifestealHeartManager(this)
         // Issue #1346: Lifesteal teams (separate from Survival teams). Only does anything where Lifesteal runs.
@@ -649,6 +667,7 @@ class Joshymc : JavaPlugin() {
         freeRankManager.start()
         chatTagVoucherManager.start()
         freeTagManager.start()
+        tutorialManager.start()
         lifestealHeartManager.refresh()
         lifestealTeamManager.refresh()
         lifestealCombatManager.refresh()
@@ -769,6 +788,8 @@ class Joshymc : JavaPlugin() {
         // Cancels running ranked matches and restores everyone online while the database (and the systems it reads) are still running.
         shutdown.step("lifestealRankedManager.stop", { ::lifestealRankedManager.isInitialized }) { lifestealRankedManager.stop() }
         shutdown.step("flightTimeManager.stop", { ::flightTimeManager.isInitialized }) { flightTimeManager.stop() }
+        // Tutorial progress is written when it changes, so this only stops the action bar and listeners.
+        shutdown.step("tutorialManager.stop", { ::tutorialManager.isInitialized }) { tutorialManager.stop() }
         shutdown.step("beaconPotionManager.stop", { ::beaconPotionManager.isInitialized }) { beaconPotionManager.stop() }
         shutdown.step("stuckRecoveryManager.stop", { ::stuckRecoveryManager.isInitialized }) { stuckRecoveryManager.stop() }
         shutdown.step("transferManager.stop", { ::transferManager.isInitialized }) { transferManager.stop() }
@@ -889,6 +910,7 @@ class Joshymc : JavaPlugin() {
         safe("eventShopManager.stop") { eventShopManager.stop() }
         safe("stuckRecoveryManager.stop") { stuckRecoveryManager.stop() }
         safe("transferManager.stop") { transferManager.stop() }
+        safe("tutorialManager.stop") { tutorialManager.stop() }
         safe("hopperPlusManager.stop") { hopperPlusManager.stop() }
         safe("questCycleManager.stop") { questCycleManager.stop() }
         safe("eventQuestManager.stop") { eventQuestManager.stop() }
@@ -931,6 +953,8 @@ class Joshymc : JavaPlugin() {
         safe("flightTimeManager.start") { flightTimeManager.start() }
         // Re-registers its join listener (unregistered above) and settles pending claims.
         safe("freeRankManager.start") { freeRankManager.start() }
+        // Re-registers its listeners and action-bar task, reloads tutorial-walkthrough.yml, resumes online players.
+        safe("tutorialManager.start") { tutorialManager.start() }
         safe("kitManager.start") { kitManager.start() }
         safe("storageManager.start") { storageManager.start() }
         safe("overflowManager.start") { overflowManager.start() }

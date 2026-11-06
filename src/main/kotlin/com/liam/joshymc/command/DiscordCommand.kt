@@ -30,6 +30,8 @@ class DiscordCommand(private val plugin: Joshymc) : CommandExecutor {
                 )
         )
         sender.sendMessage(Component.empty())
+        // Issue #1387: showing the invite completes the tutorial's Discord objective (no joining or linking needed).
+        if (sender is org.bukkit.entity.Player) plugin.tutorialSignal(sender, com.liam.joshymc.tutorial.TutorialSignal.DiscordInfoShown)
         return true
     }
 }

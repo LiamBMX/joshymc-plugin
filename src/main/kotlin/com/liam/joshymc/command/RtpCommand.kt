@@ -317,9 +317,11 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         // since the player is already moving through the trigger region.
         if (skipWarmup) {
             // Admin-built portals are a sanctioned way in/out of the PvP world.
-            PvpTeleportGuard.forced { player.teleport(destination) }
+            val origin = player.world
+            val teleported = PvpTeleportGuard.forced { player.teleport(destination) }
             plugin.commsManager.sendActionBar(player, Component.text("Teleported!", NamedTextColor.GREEN))
             cooldowns[player.uniqueId] = System.currentTimeMillis()
+            if (teleported) plugin.tutorialSignal(player, com.liam.joshymc.tutorial.TutorialSignal.RandomTeleported, origin)
             return
         }
         // The safe-spot search ran over several ticks (and the RTP GUI may have stayed open), so
@@ -358,9 +360,12 @@ class RtpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
                 if (ticks >= 60) {
                     cancel()
+                    val origin = player.world
                     if (PvpTeleportGuard.blocks(plugin, player, destination) || !player.teleport(destination)) return
                     plugin.commsManager.sendActionBar(player, Component.text("Teleported!", NamedTextColor.GREEN))
                     cooldowns[player.uniqueId] = System.currentTimeMillis()
+                    // Issue #1387: only a teleport that actually happened counts for the tutorial.
+                    plugin.tutorialSignal(player, com.liam.joshymc.tutorial.TutorialSignal.RandomTeleported, origin)
                     return
                 }
 

@@ -512,6 +512,8 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
         // Save terrain snapshot before any modifications
         saveTerrainSnapshot(claim)
 
+        // Issue #1387: a new, valid, stored claim of the player's own completes the tutorial objective.
+        if (id > 0) plugin.tutorialSignal(player, com.liam.joshymc.tutorial.TutorialSignal.ClaimCreated, world)
         return ClaimCreateResult.Success(claim)
     }
 
