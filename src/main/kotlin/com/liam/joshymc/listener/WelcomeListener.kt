@@ -1,7 +1,6 @@
 package com.liam.joshymc.listener
 
 import com.liam.joshymc.Joshymc
-import com.liam.joshymc.command.TutorialCommand
 import com.liam.joshymc.command.VanishCommand
 import io.papermc.paper.event.player.AsyncChatEvent
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
@@ -36,7 +35,6 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
     companion object {
         private const val WELCOME_WINDOW_MS = 30_000L
         private const val WELCOME_WINDOW_TICKS = 600L // 30 seconds
-        private const val FIRST_JOIN_TUTORIAL_DELAY_TICKS = 40L // 2 seconds
     }
 
     data class WelcomeEntry(
@@ -188,17 +186,8 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
             plugin.server.scheduler.runTask(plugin, Runnable {
                 if (player.isOnline) player.teleport(spawn)
             })
-
-            // Auto-open the tutorial a couple seconds after join, once the
-            // player's session (and the spawn teleport above) has settled.
-            plugin.server.scheduler.runTaskLater(plugin, Runnable {
-                if (!player.isOnline) return@Runnable
-                val command = plugin.getCommand("tutorial") ?: return@Runnable
-                // Issue #1329: /tutorial is Survival-scoped, so its executor may be wrapped in a gate.
-                if (!plugin.gamemodeLockManager.canUse(player, command)) return@Runnable
-                val tutorialCommand = com.liam.joshymc.gamemode.GamemodeLockManager.GatedCommand.unwrap(command.executor) as? TutorialCommand
-                tutorialCommand?.openForPlayer(player)
-            }, FIRST_JOIN_TUTORIAL_DELAY_TICKS)
+            // Issue #1387: the guided tutorial (TutorialManager) starts by itself a few seconds
+            // after join; the old getting-started GUI no longer opens on first join.
         }
 
         // Send MOTD lines to the player (first join or returning)

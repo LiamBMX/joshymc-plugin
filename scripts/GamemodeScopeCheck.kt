@@ -95,7 +95,7 @@ fun main() {
         "claim", "unclaim", "subclaim", "balance", "pay", "eco", "baltop", "ah", "orders", "order", "market", "invest",
         "shop", "sell", "chestshop", "crate", "crateeditor", "quests", "daily", "eventquests", "loginstreak",
         "customenchant", "fly", "voucher", "rankvoucher", "candy", "spawner", "hopper", "leaderboard", "event",
-        "home", "warp", "rtp", "pv", "tokens", "credits", "cshop", "resurge", "jvote", "tutorial",
+        "home", "warp", "rtp", "pv", "tokens", "credits", "cshop", "resurge", "jvote",
     )) check("/$name is SURVIVAL", scopeOf(name) == SURVIVAL)
 
     // Network-wide infrastructure, staff and moderation.
@@ -105,6 +105,8 @@ fun main() {
         "announce", "jrestart", "help", "rules", "discord", "jmc-violation", "purchase", "rank", "unstuck", "tp",
         // Issue #1379: kits are per gamemode inside KitManager (kits.yml `gamemode`).
         "kit", "createkit", "editkit", "deletekit",
+        // Issue #1387: one guided tutorial per gamemode, picked from where the player is.
+        "tutorial",
     )) check("/$name is NETWORK", scopeOf(name) == NETWORK)
 
     // ── Aliases and subcommands ────────────────────────────
@@ -221,7 +223,9 @@ fun main() {
     )) {
         check("$file checks ${feature.id}", "isAllowed(com.liam.joshymc.gamemode.GamemodeFeature.${feature.name}, player.world)" in source(file))
     }
-    check("tutorial auto-open respects the gate", "gamemodeLockManager.canUse(player, command)" in source("listener/WelcomeListener.kt"))
+    // Issue #1387: the guided tutorial starts per gamemode (TutorialManager); the old GUI no longer auto-opens.
+    check("old tutorial GUI no longer auto-opens", "openForPlayer" !in source("listener/WelcomeListener.kt"))
+    check("tutorial picks the walkthrough of the player's gamemode", "gamemodeLockManager.gamemodeOf(player.world)" in source("tutorial/TutorialManager.kt"))
 
     // ── Default configuration compatibility ────────────────
     val config = resource("config.yml")

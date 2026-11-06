@@ -16,7 +16,7 @@ import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 
-class TutorialCommand(private val plugin: Joshymc) : CommandExecutor {
+class TutorialCommand(private val plugin: Joshymc) : CommandExecutor, org.bukkit.command.TabCompleter {
 
     private data class Step(
         val icon: Material,
@@ -74,27 +74,52 @@ class TutorialCommand(private val plugin: Joshymc) : CommandExecutor {
         plugin.logger.info("[TutorialCommand] Loaded ${steps.size} tutorial step(s) from tutorial.yml.")
     }
 
+    /**
+     * `/tutorial [start|skip|restart|continue|guide|reload]` (issue #1387). Every subcommand acts on
+     * the sender's current gamemode only; the walkthrough itself lives in
+     * [com.liam.joshymc.tutorial.TutorialManager]. `guide` is the old read-only Survival
+     * getting-started page (tutorial.yml), which no longer opens by itself on first join.
+     */
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (sender !is Player) {
-            Msg.playersOnly(sender)
-            return true
-        }
-        if (args.isNotEmpty() && args[0].equals("reload", ignoreCase = true)) {
+        val sub = args.firstOrNull()?.lowercase()
+        if (sub == "reload") {
             if (!sender.hasPermission("joshymc.tutorial.reload")) {
                 Msg.noPermission(sender)
                 return true
             }
             loadSteps()
-            plugin.commsManager.send(sender, Component.text("Tutorial reloaded.", NamedTextColor.GREEN))
+            plugin.tutorialManager.reloadTexts()
+            Msg.success(sender, "Tutorial reloaded.")
             return true
         }
-        openTutorialGui(sender, 0)
+        if (sender !is Player) {
+            Msg.playersOnly(sender)
+            return true
+        }
+        val tutorial = plugin.tutorialManager
+        when (sub) {
+            null, "status" -> tutorial.status(sender)
+            "start", "resume" -> tutorial.startCommand(sender)
+            "skip" -> tutorial.skip(sender)
+            "restart", "replay" -> tutorial.restart(sender)
+            "continue" -> tutorial.continueCommand(sender)
+            "guide" -> {
+                if (plugin.gamemodeLockManager.gamemodeOf(sender) != com.liam.joshymc.gamemode.ServerGamemode.SURVIVAL) {
+                    Msg.error(sender, "The getting-started guide is only available in Survival.")
+                } else {
+                    openTutorialGui(sender, 0)
+                }
+            }
+            else -> Msg.usage(sender, "/tutorial [start|skip|restart|guide]")
+        }
         return true
     }
 
-    /** Opens the tutorial GUI for [player], e.g. for automatic first-join opening. */
-    fun openForPlayer(player: Player) {
-        openTutorialGui(player, 0)
+    override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
+        if (args.size != 1) return emptyList()
+        val options = mutableListOf("start", "skip", "restart", "guide")
+        if (sender.hasPermission("joshymc.tutorial.reload")) options.add("reload")
+        return options.filter { it.startsWith(args[0].lowercase()) }
     }
 
     private fun openTutorialGui(player: Player, page: Int) {

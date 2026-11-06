@@ -604,7 +604,7 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Help & Rules GUI ─────────────────────────
         plugin.getCommand("help")?.setExecutor(HelpCommand(plugin))
         plugin.getCommand("rules")?.setExecutor(RulesCommand(plugin))
-        plugin.getCommand("tutorial")?.setExecutor(TutorialCommand(plugin))
+        plugin.getCommand("tutorial")?.let { val c = TutorialCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
         plugin.getCommand("media")?.setExecutor(MediaCommand(plugin))
         plugin.getCommand("discord")?.setExecutor(DiscordCommand(plugin))
         plugin.getCommand("ip")?.setExecutor(IpCommand(plugin))

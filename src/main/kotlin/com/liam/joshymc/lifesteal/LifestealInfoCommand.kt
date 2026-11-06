@@ -52,7 +52,10 @@ class LifestealInfoCommand(private val plugin: Joshymc) {
         command(sender, "/team", "create, invite, join and manage your team (max ${plugin.lifestealConfigManager.settings?.teams?.maxSize ?: 5})")
         command(sender, "/withdrawheart", "turn 1 heart into a Heart item (right-click it to redeem)")
         command(sender, "/lifesteal progress", "grace period, End unlock and season countdowns")
+        command(sender, "/lifesteal pvp", "PvP, heart stealing, combat tag and combat logging rules")
         if (plugin.lifestealRankedQueueManager.commandVisibleTo(sender)) command(sender, "/ranked", "Ranked Team Wars")
+        // Issue #1387: this is the Hearts information the Lifesteal tutorial's fourth objective opens.
+        player?.let { plugin.tutorialSignal(it, com.liam.joshymc.tutorial.TutorialSignal.HeartsInfoOpened) }
     }
 
     private fun line(sender: CommandSender, label: String, value: String, color: NamedTextColor) {

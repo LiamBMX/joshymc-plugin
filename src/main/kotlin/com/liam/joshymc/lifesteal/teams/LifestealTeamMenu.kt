@@ -86,6 +86,10 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
 
         gui.setItem(GuiStyle.closeSlot(27), GuiStyle.close()) { p, _ -> p.closeInventory() }
         plugin.guiManager.open(player, gui)
+        // Issue #1387: the tutorial's Teams objective (solo players complete it too).
+        if (player.openInventory.topInventory === gui.inventory) {
+            plugin.tutorialSignal(player, com.liam.joshymc.tutorial.TutorialSignal.TeamsMenuOpened)
+        }
     }
 
     private fun teamLore(team: Team, viewer: UUID): List<Component> {

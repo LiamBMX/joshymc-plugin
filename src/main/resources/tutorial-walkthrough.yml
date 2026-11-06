@@ -1,0 +1,170 @@
+# Guided tutorial walkthrough (issue #1387). Docs: docs/tutorial.md
+#
+# Each gamemode has exactly seven objectives in a fixed order; only the texts and the settings
+# below can change. Any key missing from this file falls back to the bundled default.
+# Texts use & colour codes. Placeholders in {braces} are filled in by the plugin.
+#
+# Common placeholders: {step} {total} {player}
+# Step placeholders:   {walk} (walking distance), {earn} (required earnings), {earned} (earned so far),
+#                      {daily} / {weekly} (✔ or ✘), {reward}
+# Lifesteal facts (read from lifesteal.yml / config.yml at the time the message is sent):
+#                      {hearts_start} {hearts_max} {hearts_min} {same_victim_minutes} {tag_seconds}
+#                      {team_max} {invite_seconds} {friendly_fire} {grace_hours}
+#
+# Per objective: `action-bar` (short, shown above the hotbar), `lines` (chat, sent once when the
+# objective begins or resumes), `objective`, and optional `continue`: the prompt next to a
+# [Continue] button, shown only when the objective was already done earlier (Starter Kit claimed
+# before, a claim already owned) or the feature can't be used here. The server re-checks that
+# before continuing, so the button can't be used to skip a real objective.
+
+settings:
+  survival:
+    enabled: true
+    reward: 50000
+  lifesteal:
+    enabled: true
+    reward: 25000
+  # Blocks walked (straight-line, horizontal) for objective 1.
+  walk-distance: 10
+  # Money earned by selling items for Survival objective 5.
+  earn-amount: 100
+  # Seconds between action-bar refreshes (1-10). The action bar fades after about 3 seconds.
+  action-bar-interval-seconds: 2
+  # Seconds after joining (or entering the gamemode's world) before the tutorial starts/resumes.
+  join-delay-seconds: 3
+
+messages:
+  header: "&6&l✦ JOSHYMC TUTORIAL &8| &eSTEP {step}/{total}"
+  action-bar: "&6✦ &eTutorial &7({step}/{total}) &8| &f{text}"
+  objective: "&6Objective: &f{text}"
+  skip-hint: "&7Skip tutorial: &e/tutorial skip"
+  # Bedrock chat can't be clicked, so the command is spelled out too.
+  continue-button: "&a&l[Continue] &8(/tutorial continue)"
+  continue-hover: "&7Click to continue the tutorial"
+  step-complete: "&a✔ Objective complete!"
+  skipped: "&7Tutorial skipped. You can replay it any time with &e/tutorial restart&7."
+  restarted: "&aTutorial restarted from objective 1."
+  not-active: "&7You don't have an active tutorial here. Start it with &e/tutorial start&7."
+  disabled: "&cThe tutorial isn't available here."
+  complete-title: "&6&lTutorial Complete!"
+  complete-subtitle: "&eWelcome to JoshyMC!"
+  complete-sound: "ui.toast.challenge_complete"
+  complete-chat:
+    - ""
+    - "&6&l✦ JOSHYMC TUTORIAL"
+    - ""
+    - "&aCongratulations! You've completed all seven tutorial objectives!"
+    - ""
+  reward-received: "&aReward Received: &6{reward} Money"
+  reward-already: "&7You've already claimed your tutorial reward!"
+  reward-pending: "&eYour {reward} Money reward couldn't be paid right now. It is saved and will be paid automatically when you rejoin."
+  reward-held: "&eYour {reward} Money reward is saved. It isn't paid on this server because its Money isn't {gamemode} Money."
+  reward-late: "&aYour saved tutorial reward was paid: &6{reward} Money"
+
+survival:
+  walk:
+    action-bar: "Walk {walk} blocks from where you are"
+    lines:
+      - "&eWelcome to &6JoshyMC Survival SMP&e, {player}!"
+      - "&7This short tutorial walks you through the basics: kits, exploring, land claims, money, quests and our community."
+      - "&7Let's start simple: walk about &f{walk} blocks &7in any direction."
+    objective: "Walk {walk} blocks."
+  starter-kit:
+    action-bar: "Claim your Starter Kit using /kits"
+    lines:
+      - "&eLet's get your starting equipment!"
+      - "&7Type &f/kits&7, select &fStarter Kit&7, and claim it."
+    objective: "Claim your Starter Kit."
+    continue:"&7Already claimed your Starter Kit (or can't claim one)? Click to continue."
+  rtp:
+    action-bar: "Explore the world with /rtp"
+    lines:
+      - "&eTime to find your own spot!"
+      - "&7Use &f/rtp &7to teleport to a random wilderness location. Stand still for the 3 second warmup."
+    objective: "Use /rtp."
+    continue:"&7Random teleport isn't available to you here. Click to continue."
+  claim:
+    action-bar: "Protect your land with /claim wand"
+    lines:
+      - "&eProtect your builds with a land claim!"
+      - "&7Type &f/claim wand &7to get the claim tool, then &fright-click &7one corner block and &fright-click &7the opposite corner."
+      - "&7Claims use claim blocks (you earn more by playing). See &f/claim blocks &7and &f/claim help&7."
+    objective: "Create your first land claim."
+    continue:"&7You already own a claim. Click to use it for this objective."
+  earn:
+    action-bar: "Earn Money: {earned} / {earn}"
+    lines:
+      - "&eSurvival runs on Money!"
+      - "&7Money buys items, ranks, claim blocks and more. Earn &f{earn} &7by selling items with &f/sell&7, &f/shop &7or &f/market&7."
+      - "&7Only money from selling items counts; your current balance and payments from players don't."
+    objective: "Earn {earn} by selling items."
+  quests:
+    action-bar: "Open Daily {daily} and Weekly {weekly} Quests in /quests"
+    lines:
+      - "&eQuests give rewards for playing!"
+      - "&7Type &f/quests&7, open &fDaily Quests&7, go back to the main menu, then open &fWeekly Quests&7."
+      - "&7You don't need to finish any quest."
+    objective: "Open both Daily and Weekly Quests."
+    continue:"&7Quests aren't available right now. Click to continue."
+  discord:
+    action-bar: "Check out our Discord with /discord"
+    lines:
+      - "&eJoin the community!"
+      - "&7Our Discord has announcements, support and event info. Type &f/discord &7to get the link."
+      - "&7You don't need to join or link your account."
+    objective: "Use /discord."
+
+lifesteal:
+  walk:
+    action-bar: "Walk {walk} blocks from where you are"
+    lines:
+      - "&eWelcome to &cJoshyMC Lifesteal&e, {player}!"
+      - "&7Lifesteal is competitive: permanent hearts, survival, teams and PvP. This tutorial shows you how it works."
+      - "&7First, walk about &f{walk} blocks &7in any direction."
+    objective: "Walk {walk} blocks."
+  starter-kit:
+    action-bar: "Claim your Starter Kit using /kits"
+    lines:
+      - "&eLet's get your starting equipment!"
+      - "&7Type &f/kits&7, select &fStarter Kit&7, and claim it."
+    objective: "Claim your Lifesteal Starter Kit."
+    continue:"&7Already claimed it, or there's no Starter Kit here yet? Click to continue."
+  rtp:
+    action-bar: "Explore the world with /rtp"
+    lines:
+      - "&eTime to explore!"
+      - "&7Use &f/rtp &7to teleport to a random location."
+    objective: "Use /rtp."
+    continue:"&7Random teleport isn't available on Lifesteal yet. Click to continue."
+  hearts:
+    action-bar: "Check your hearts with /lifesteal info"
+    lines:
+      - "&cHearts are everything here."
+      - "&7You start with &f{hearts_start} &7permanent hearts, can have at most &f{hearts_max}&7, and never drop below &f{hearts_min}&7: you can't lose your final heart, and there is no elimination or revival."
+      - "&7Killing a player steals 1 heart (none from a player at {hearts_min}; killing the same player again within {same_victim_minutes} min steals nothing)."
+      - "&7Turn a heart into an item with &f/withdrawheart &7and right-click it to redeem."
+      - "&7Type &f/lifesteal info &7to see your hearts."
+    objective: "Open /lifesteal info."
+  teams:
+    action-bar: "Open the Teams menu with /team"
+    lines:
+      - "&eTeam up!"
+      - "&7Teams have up to &f{team_max} &7players: one leader and members. Create one with &f/team create <name>&7, invite with &f/team invite <player> &7(invites last {invite_seconds}s), join with &f/team accept&7."
+      - "&7Teammate damage: &f{friendly_fire}&7. Playing solo is fine too."
+      - "&7Type &f/team &7to open the Teams menu."
+    objective: "Open the Teams menu."
+    continue:"&7Teams aren't available right now. Click to continue."
+  combat:
+    action-bar: "Read the PvP rules with /lifesteal pvp"
+    lines:
+      - "&cKnow the rules of combat."
+      - "&7Hitting or being hit by a player tags you for &f{tag_seconds}s&7. Don't log out while tagged."
+      - "&7Type &f/lifesteal pvp &7for PvP, heart stealing, combat logging and protection rules."
+    objective: "Open /lifesteal pvp."
+  discord:
+    action-bar: "Check out our Discord with /discord"
+    lines:
+      - "&eJoin the community!"
+      - "&7Our Discord has announcements, support and event info. Type &f/discord &7to get the link."
+      - "&7You don't need to join or link your account."
+    objective: "Use /discord."

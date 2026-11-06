@@ -1459,6 +1459,14 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         plugin.guiManager.open(player, gui)
         if (page == QuestPage.MAIN) player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
         else GuiStyle.clickSound(player)
+        // Issue #1387: the tutorial counts a Daily/Weekly page only once it is really on screen.
+        if (player.openInventory.topInventory === gui.inventory) {
+            when (page) {
+                QuestPage.DAILY -> plugin.tutorialSignal(player, com.liam.joshymc.tutorial.TutorialSignal.DailyQuestsOpened)
+                QuestPage.WEEKLY -> plugin.tutorialSignal(player, com.liam.joshymc.tutorial.TutorialSignal.WeeklyQuestsOpened)
+                QuestPage.MAIN -> {}
+            }
+        }
     }
 
     private fun tickOpenGuis() {

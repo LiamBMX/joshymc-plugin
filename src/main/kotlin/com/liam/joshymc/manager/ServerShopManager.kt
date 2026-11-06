@@ -1078,7 +1078,7 @@ class ServerShopManager(private val plugin: Joshymc) {
             }
 
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
-            plugin.saleManager.recordSale(player, material, totalCount, SaleManager.Source.SERVER_SHOP)
+            plugin.saleManager.recordSale(player, material, totalCount, SaleManager.Source.SERVER_SHOP, earned = totalEarned)
 
             plugin.commsManager.send(player,
                 Component.text("Sold ", NamedTextColor.YELLOW)
@@ -1122,7 +1122,7 @@ class ServerShopManager(private val plugin: Joshymc) {
             }
 
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
-            plugin.saleManager.recordSale(player, material, amount, SaleManager.Source.SERVER_SHOP)
+            plugin.saleManager.recordSale(player, material, amount, SaleManager.Source.SERVER_SHOP, earned = totalEarned)
 
             plugin.commsManager.send(player,
                 Component.text("Sold ", NamedTextColor.YELLOW)
