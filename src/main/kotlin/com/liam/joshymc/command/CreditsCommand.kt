@@ -91,6 +91,7 @@ class CreditsCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         plugin.logger.info("[Credits] ${sender.name} gave $amount Credits to ${target.name} (${target.uniqueId}).")
+        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "CREDITS_GIVE", target.uniqueId, target.name, "currency=CREDITS amount=$amount")
         sender.sendMessage(
             Component.text("Gave ", NamedTextColor.GREEN)
                 .append(Component.text(plugin.creditsManager.format(amount), NamedTextColor.AQUA))

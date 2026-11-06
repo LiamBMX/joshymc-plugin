@@ -162,6 +162,7 @@ class SellWandCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
         }
 
         val wand = createSellWand(plugin, multiplier, uses)
+        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "SELLWAND_GIVE", target.uniqueId, target.name, "multiplier=$multiplier uses=$uses")
         val leftover = target.inventory.addItem(wand)
         for ((_, drop) in leftover) {
             target.world.dropItemNaturally(target.location, drop)

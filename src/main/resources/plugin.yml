@@ -1027,8 +1027,14 @@ permissions:
     description: Remove Credit Shop categories via /cshop category remove
     default: op
   joshymc.vouchers:
-    description: Configure/manage virtual voucher packages and give physical money vouchers via /voucher (redeeming either kind needs no permission)
+    description: Manage Credit Shop voucher packages (names, icons, enable/disable) and give physical vouchers via /voucher. Reward commands can only be set from the server console (issue #1383); redeeming needs no permission
     default: op
+  joshymc.vouchers.pricing:
+    description: Change a Credit Shop package's price or linked donor tier (/voucher setprice|setrank). High risk, Owner approval (issue #1383)
+    default: false
+  joshymc.creative.bypass:
+    description: Create, copy or move JoshyMC items (tokens, keys, vouchers, custom items) in the Creative inventory. Owner only (issue #1383)
+    default: false
   joshymc.creditvoucher.admin:
     description: Give physical Credit Vouchers via /creditvoucher give (redeeming one needs no permission)
     default: op
@@ -1305,7 +1311,7 @@ permissions:
     description: Register for hosted community events with /event join and /event leave, and see your /event stats
     default: true
   joshymc.portal:
-    description: Manage portals
+    description: Manage portals. A portal's command action runs with the walking player's own permissions; console actions can only be set from the console (issue #1383)
     default: op
   joshymc.fakebase.create:
     description: Allows selecting and saving the fake base template
@@ -1371,7 +1377,7 @@ permissions:
     description: Teleport to top
     default: true
   joshymc.sudo:
-    description: Force player commands
+    description: Force player commands. Only players ranked below you, never permission/operator/economy commands, always audited (issue #1383)
     default: op
   joshymc.resource:
     description: Teleport to resource world
@@ -1517,12 +1523,11 @@ permissions:
       joshymc.unban: true
       joshymc.punish.unban: true
   joshymc.staff.trainee:
-    description: Trainee rank - staff chat tools, mute, warn
+    description: Trainee rank - staff chat tools, warn (no mutes; issue #1383)
     default: false
     children:
       joshymc.punish.trainee: true
       joshymc.staff.chat: true
-      joshymc.staff.mute: true
       joshymc.staff.warn: true
   joshymc.staff.helper:
     description: Helper rank - staff chat tools, mute, warn
@@ -1533,14 +1538,13 @@ permissions:
       joshymc.staff.mute: true
       joshymc.staff.warn: true
   joshymc.staff.jrmod:
-    description: Jr Mod rank - staff chat tools, mute, warn, ban
+    description: Jr Mod rank - staff chat tools, mute, warn (no bans; issue #1383)
     default: false
     children:
       joshymc.punish.jrmod: true
       joshymc.staff.chat: true
       joshymc.staff.mute: true
       joshymc.staff.warn: true
-      joshymc.staff.ban: true
   joshymc.staff.mod:
     description: Mod rank - staff chat tools, mute, warn, unban
     default: false

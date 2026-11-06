@@ -989,6 +989,13 @@ signitem:
 credits:
   per-hour: 1.0  # Credits awarded per hour of playtime
 
+# Credit and Rank Vouchers are signed by this server (issue #1383), so a modded or Creative
+# client can't forge one. Vouchers made before that update have no signature; while this is
+# true they still redeem (each one is logged). Turn it off once the old vouchers are used up,
+# see docs/staff-permissions.md. A voucher with a wrong signature is always refused.
+vouchers:
+  accept-unsigned-legacy: true
+
 # Physical Money Vouchers — real inventory items (issue #537), separate from the
 # virtual Credit Shop vouchers above. Right-clicking one deposits normal server
 # money ONLY (never credits/ranks/perms/commands/items) and consumes exactly one.
@@ -1068,6 +1075,30 @@ ranks:
       tag: "&8Player"
       weight: 0
       category: "Player Ranks"
+
+# Staff hierarchy for rank protection (issue #1383, docs/staff-permissions.md).
+# Maps each Minecraft staff rank to the LuckPerms group names (or ranks.list ids) that mean
+# it. A player's staff rank is the highest one whose group they hold (LuckPerms `group.<name>`)
+# or that JoshyMC recorded for them; ops count as Owner. This only decides who may act on whom
+# (nobody may punish, rank-change, sudo or restore staff at or above their own rank). It grants
+# no permission. Edit the lists to match the live LuckPerms group names; unknown names simply
+# never match.
+staff-ranks:
+  # true = staff of the same rank may act on each other. Needs Owner approval.
+  allow-equal-rank-actions: false
+  groups:
+    owner: [owner]
+    head_manager: [head_manager, headmanager]
+    staff_manager: [staff_manager, staffmanager]
+    community_manager: [community_manager, communitymanager]
+    lead_admin: [lead_admin, leadadmin]
+    admin: [admin]
+    jr_admin: [jr_admin, jradmin]
+    lead_mod: [lead_mod, leadmod]
+    mod: [mod]
+    jr_mod: [jr_mod, jrmod]
+    helper: [helper]
+    trainee: [trainee]
 
 # Auto Restart — periodically restart the server to prevent memory-related disconnects
 auto-restart:

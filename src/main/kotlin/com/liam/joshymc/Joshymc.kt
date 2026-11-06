@@ -261,6 +261,9 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var physicalVoucherManager: com.liam.joshymc.manager.PhysicalVoucherManager
         private set
+    /** HMAC signatures for Credit and Rank Vouchers (issue #1383). */
+    lateinit var premiumVoucherSigner: com.liam.joshymc.staff.PremiumVoucherSigner
+        private set
     lateinit var creditVoucherManager: com.liam.joshymc.manager.CreditVoucherManager
         private set
     lateinit var rankVoucherManager: com.liam.joshymc.manager.RankVoucherManager
@@ -306,6 +309,9 @@ class Joshymc : JavaPlugin() {
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
     lateinit var rankManager: RankManager
+        private set
+    /** Staff hierarchy + protection checks (issue #1383). */
+    lateinit var staffRankManager: com.liam.joshymc.staff.StaffRankManager
         private set
     lateinit var claimManager: ClaimManager
         private set
@@ -427,6 +433,8 @@ class Joshymc : JavaPlugin() {
 
         rankManager = RankManager(this)
         rankManager.start()
+        staffRankManager = com.liam.joshymc.staff.StaffRankManager(this)
+        staffRankManager.start()
 
         chatTagManager = ChatTagManager(this)
         chatTagManager.start()
@@ -533,6 +541,7 @@ class Joshymc : JavaPlugin() {
         creditShopManager = com.liam.joshymc.manager.CreditShopManager(this)
         voucherManager = com.liam.joshymc.manager.VoucherManager(this)
         physicalVoucherManager = com.liam.joshymc.manager.PhysicalVoucherManager(this)
+        premiumVoucherSigner = com.liam.joshymc.staff.PremiumVoucherSigner(this)
         creditVoucherManager = com.liam.joshymc.manager.CreditVoucherManager(this)
         rankVoucherManager = com.liam.joshymc.manager.RankVoucherManager(this)
         freeRankManager = com.liam.joshymc.freerank.FreeRankManager(this)
@@ -634,6 +643,7 @@ class Joshymc : JavaPlugin() {
         creditShopManager.start()
         voucherManager.start()
         physicalVoucherManager.start()
+        premiumVoucherSigner.start()
         creditVoucherManager.start()
         rankVoucherManager.start()
         freeRankManager.start()
@@ -975,6 +985,7 @@ class Joshymc : JavaPlugin() {
 
         // 9. Restart lag cleaner, combat manager, chat manager, and AFK manager with new config
         safe("rankManager.start") { rankManager.start() }
+        safe("staffRankManager.reload") { staffRankManager.reload() }
         safe("staffTagManager.start") { staffTagManager.start() }
         safe("commsManager.start") { commsManager.start() }
         safe("lagCleanerManager.start") { lagCleanerManager.start() }

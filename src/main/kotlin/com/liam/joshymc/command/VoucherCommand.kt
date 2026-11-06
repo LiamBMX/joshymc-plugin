@@ -6,6 +6,8 @@ import com.liam.joshymc.flight.SurvivalFlight
 import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.manager.ChatTagManager
 import com.liam.joshymc.manager.DonorTiers
+import com.liam.joshymc.staff.AdminAudit
+import com.liam.joshymc.staff.VoucherAdminRules
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -38,6 +40,21 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         if (args.isEmpty()) {
             sendUsage(sender)
             return true
+        }
+
+        // Reward commands run as the console when a package is bought, so only the console may
+        // set them; pricing/rank links need their own node (issue #1383).
+        when (VoucherAdminRules.gate(args[0], args.getOrNull(2))) {
+            VoucherAdminRules.Gate.CONSOLE_ONLY -> if (sender is Player) {
+                Msg.error(sender, "Credit Shop reward commands run as the server console, so they can only be set from the console.")
+                plugin.logger.warning("[Vouchers] Refused /voucher ${args[0].lowercase()} from ${sender.name} (${sender.uniqueId}): reward commands are console only.")
+                return true
+            }
+            VoucherAdminRules.Gate.PRICING -> if (sender is Player && !sender.hasPermission(VoucherAdminRules.PRICING_PERMISSION)) {
+                Msg.noPermission(sender)
+                return true
+            }
+            VoucherAdminRules.Gate.NONE -> {}
         }
 
         when (args[0].lowercase()) {
@@ -95,6 +112,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             Msg.error(sender, "A voucher with id '$id' already exists.")
             return
         }
+        AdminAudit.log(plugin, sender, "VOUCHER_CREATE", details = "id=$id price=$price category=$category")
 
         sender.sendMessage(
             Component.text("Created voucher ", NamedTextColor.GREEN)
@@ -287,6 +305,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return
         }
         if (plugin.voucherManager.setPrice(id, price)) {
+            AdminAudit.log(plugin, sender, "VOUCHER_SETPRICE", details = "id=$id price=$price")
             Msg.success(sender, "Updated price for $id to ${plugin.creditsManager.format(price)} credits.")
         } else {
             Msg.error(sender, "No voucher found with id $id.")
@@ -313,6 +332,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         plugin.voucherManager.setRank(id, rankId)
+        AdminAudit.log(plugin, sender, "VOUCHER_SETRANK", details = "id=$id rank=${rankId ?: "none"}")
         if (rankId == null) {
             Msg.success(sender, "Unlinked $id from any rank.")
         } else {
@@ -328,6 +348,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         val id = args[1].lowercase()
         val rewardCommand = args.drop(2).joinToString(" ")
         if (plugin.voucherManager.setRewardCommand(id, rewardCommand)) {
+            AdminAudit.log(plugin, sender, "VOUCHER_SETCOMMAND", details = "id=$id")
             Msg.success(sender, "Updated reward command for $id.")
         } else {
             Msg.error(sender, "No voucher found with id $id.")
@@ -464,6 +485,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         plugin.physicalVoucherManager.give(target, voucherId, amount)
+        AdminAudit.log(plugin, sender, "VOUCHER_GIVE", target.uniqueId, target.name, "voucher=$voucherId amount=$amount value_each=${voucher.amount}")
         val voucherName = plugin.commsManager.parseLegacy(voucher.displayName)
         sender.sendMessage(
             Component.text("Gave ", NamedTextColor.GREEN)
@@ -504,6 +526,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         plugin.flyVoucherManager.give(target, seconds, amount)
+        AdminAudit.log(plugin, sender, "VOUCHER_GIVE", target.uniqueId, target.name, "voucher=fly seconds=$seconds amount=$amount")
         val label = "${SurvivalFlight.long(seconds)} Fly Voucher${if (amount == 1) "" else "s"}"
         sender.sendMessage(
             Component.text("Gave ", NamedTextColor.GREEN)
@@ -532,6 +555,7 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         }
 
         plugin.chatTagVoucherManager.give(target, tag.id, amount)
+        AdminAudit.log(plugin, sender, "VOUCHER_GIVE", target.uniqueId, target.name, "voucher=chattag_${tag.id} amount=$amount")
         val tagDisplay = plugin.commsManager.parseLegacy(tag.display.trim())
         sender.sendMessage(
             Component.text("Gave ", NamedTextColor.GREEN)

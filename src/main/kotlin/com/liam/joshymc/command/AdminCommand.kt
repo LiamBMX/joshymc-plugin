@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.manager.AdminManager
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.PunishmentManager
 import com.liam.joshymc.util.Msg
@@ -29,6 +30,20 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
         if (args.isEmpty()) {
             plugin.adminManager.openMainPanel(sender)
+            return true
+        }
+
+        // Every subcommand checks its own tier (issue #1383), so widening the base permission
+        // of /admin later can't hand Helpers unban, rollback or freeze.
+        val tier = when (args[0].lowercase()) {
+            "player", "logs" -> AdminManager.Tier.HELPER
+            "freeze" -> AdminManager.Tier.MODERATE
+            "mutelist" -> AdminManager.Tier.HELPER
+            "snapshot", "rollback", "banlist", "lagclear" -> AdminManager.Tier.ADMIN
+            else -> null
+        }
+        if (tier != null && !plugin.adminManager.hasTier(sender, tier)) {
+            Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return true
         }
 
@@ -111,6 +126,12 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
 
+        if (!plugin.adminManager.isFrozen(target.uniqueId)) {
+            plugin.staffRankManager.protectionProblem(sender, target.uniqueId)?.let {
+                Msg.error(sender, it, CommunicationsManager.Category.ADMIN)
+                return
+            }
+        }
         val frozen = plugin.adminManager.toggleFreeze(target)
         plugin.adminManager.logAction(sender, if (frozen) "FREEZE" else "UNFREEZE", target)
 
