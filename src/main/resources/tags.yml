@@ -4,9 +4,11 @@
 # permission: Permission node required (null = free for all)
 #
 # Approved categories only — see issue #602. The "voucher" category (shown to
-# players as "Special Chat Tags") is created automatically the first time an
-# admin runs `/voucher create <id> <display>` and should not be hand-edited
-# here; edit it through ChatTagManager.createVoucherTag instead.
+# players as "Special Chat Tags") holds the bundled voucher tags at the bottom of
+# this file (issue #1391) plus any an admin adds with `/voucher create <id> <display>`.
+# Every voucher tag needs its own joshymc.tag.voucher.<id> node or a redeemed voucher.
+# A bundled voucher tag removed with `/voucher tag delete` is listed under
+# removed-voucher-defaults and is not merged back in on the next start.
 
 tags:
   vibe:
@@ -660,3 +662,73 @@ tags:
     quasar:
       display: "&5[Quasar] "
       permission: null
+
+  # Bundled Special Chat Tags (issue #1391). Each one needs its own
+  # joshymc.tag.voucher.<id> node (registered default false, so no rank or op
+  # inherits it) or a redeemed voucher (/voucher give <player> chattag_<id>).
+  # Gradients are per-letter &#RRGGBB codes, no bold/obfuscated; the opening
+  # bracket and symbol take the start colour, the closing bracket the end colour,
+  # and &r ends the tag. Symbols are Basic Multilingual Plane only: the requested
+  # emoji were swapped (maple leaf -> ❦, honey pot -> ⬢, fire -> ✹), see
+  # docs/chat-tags.md. Regression checks: scripts/VoucherTagCheck.kt.
+  voucher:
+    mapleborn:
+      # [❦ Mapleborn]  #E8571E -> #F2B33D
+      display: "&#E8571E[❦ &#E8571EM&#E96222a&#EA6E26p&#EC7A2Al&#ED852Ee&#EE9031b&#F09C35o&#F1A839r&#F2B33Dn&#F2B33D]&r "
+      permission: joshymc.tag.voucher.mapleborn
+    hearthbound:
+      # [⌂ Hearthbound]  #FFB627 -> #B8693D
+      display: "&#FFB627[⌂ &#FFB627H&#F8AE29e&#F1A72Ba&#EA9F2Er&#E39730t&#DC9032h&#D48834b&#CD8036o&#C67839u&#BF713Bn&#B8693Dd&#B8693D]&r "
+      permission: joshymc.tag.voucher.hearthbound
+    moonmoss:
+      # [☾ Moonmoss]  #A3B58F -> #4F9A9B
+      display: "&#A3B58F[☾ &#A3B58FM&#97B191o&#8BAD92o&#7FA994n&#73A696m&#67A298o&#5B9E99s&#4F9A9Bs&#4F9A9B]&r "
+      permission: joshymc.tag.voucher.moonmoss
+    lanternlit:
+      # [✦ Lanternlit]  #FFD23F -> #FF9550
+      display: "&#FFD23F[✦ &#FFD23FL&#FFCB41a&#FFC443n&#FFBE45t&#FFB747e&#FFB048r&#FFA94An&#FFA34Cl&#FF9C4Ei&#FF9550t&#FF9550]&r "
+      permission: joshymc.tag.voucher.lanternlit
+    starforged:
+      # [✧ Starforged]  #C9B0FF -> #5B8DEF
+      display: "&#C9B0FF[✧ &#C9B0FFS&#BDACFDt&#B1A8FBa&#A4A4FAr&#98A0F8f&#8C9DF6o&#8099F4r&#7395F3g&#6791F1e&#5B8DEFd&#5B8DEF]&r "
+      permission: joshymc.tag.voucher.starforged
+    honeyglow:
+      # [⬢ Honeyglow]  #E3A018 -> #FFF3A8
+      display: "&#E3A018[⬢ &#E3A018H&#E6AA2Ao&#EAB53Cn&#EEBF4Ee&#F1CA60y&#F4D472g&#F8DE84l&#FCE996o&#FFF3A8w&#FFF3A8]&r "
+      permission: joshymc.tag.voucher.honeyglow
+    wildroot:
+      # [❀ Wildroot]  #2F8F3A -> #9BE08A
+      display: "&#2F8F3A[❀ &#2F8F3AW&#3E9B45i&#4EA651l&#5DB25Cd&#6DBD68r&#7CC973o&#8CD47Fo&#9BE08At&#9BE08A]&r "
+      permission: joshymc.tag.voucher.wildroot
+    nightbloom:
+      # [✿ Nightbloom]  #8A3FD1 -> #D7B8FF
+      display: "&#8A3FD1[✿ &#8A3FD1N&#934CD6i&#9B5ADBg&#A467E0h&#AC75E5t&#B582EBb&#BD90F0l&#C69DF5o&#CEABFAo&#D7B8FFm&#D7B8FF]&r "
+      permission: joshymc.tag.voucher.nightbloom
+    sunwoven:
+      # [☀ Sunwoven]  #FFCBA4 -> #F5A01B
+      display: "&#FFCBA4[☀ &#FFCBA4S&#FEC590u&#FCBF7Dn&#FBB969w&#F9B256o&#F8AC42v&#F6A62Fe&#F5A01Bn&#F5A01B]&r "
+      permission: joshymc.tag.voucher.sunwoven
+    cloudbound:
+      # [☁ Cloudbound]  #6EC1FF -> #F2F8FF
+      display: "&#6EC1FF[☁ &#6EC1FFC&#7DC7FFl&#8BCDFFo&#9AD3FFu&#A9D9FFd&#B7E0FFb&#C6E6FFo&#D5ECFFu&#E3F2FFn&#F2F8FFd&#F2F8FF]&r "
+      permission: joshymc.tag.voucher.cloudbound
+    emberkeeper:
+      # [✹ Emberkeeper]  #E82C1E -> #FF9A3C
+      display: "&#E82C1E[✹ &#E82C1EE&#EA3721m&#ED4224b&#EF4D27e&#F1582Ar&#F4632Dk&#F66E30e&#F87933e&#FA8436p&#FD8F39e&#FF9A3Cr&#FF9A3C]&r "
+      permission: joshymc.tag.voucher.emberkeeper
+    driftwood:
+      # [Driftwood]  #9A7752 -> #E6D3AC
+      display: "&#9A7752[&#9A7752D&#A4825Dr&#AD8E68i&#B69A74f&#C0A57Ft&#CAB08Aw&#D3BC96o&#DCC8A1o&#E6D3ACd&#E6D3AC]&r "
+      permission: joshymc.tag.voucher.driftwood
+    glowkeeper:
+      # [✴ Glowkeeper]  #7DF2B5 -> #1FE3F7
+      display: "&#7DF2B5[✴ &#7DF2B5G&#73F0BCl&#68EFC4o&#5EEDCBw&#53EBD2k&#49EADAe&#3EE8E1e&#34E6E8p&#29E5F0e&#1FE3F7r&#1FE3F7]&r "
+      permission: joshymc.tag.voucher.glowkeeper
+    twilightkin:
+      # [☽ Twilightkin]  #8C63C4 -> #F7A8C8
+      display: "&#8C63C4[☽ &#8C63C4T&#976AC4w&#A171C5i&#AC78C5l&#B77FC6i&#C286C6g&#CC8CC6h&#D793C7t&#E29AC7k&#ECA1C8i&#F7A8C8n&#F7A8C8]&r "
+      permission: joshymc.tag.voucher.twilightkin
+    trailmarked:
+      # [⚒ Trailmarked]  #A3A23C -> #5E9E4C
+      display: "&#A3A23C[⚒ &#A3A23CT&#9CA23Er&#95A13Fa&#8EA141i&#87A042l&#80A044m&#7AA046a&#739F47r&#6C9F49k&#659E4Ae&#5E9E4Cd&#5E9E4C]&r "
+      permission: joshymc.tag.voucher.trailmarked
