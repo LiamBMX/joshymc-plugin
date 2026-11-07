@@ -55,7 +55,10 @@ class LifestealPvpInfoCommand(private val plugin: Joshymc) {
         line(sender, "Combat tag", "Hitting or being hit by a player tags you for ${tagSeconds}s. While tagged you can't teleport, fly or switch servers.", NamedTextColor.GRAY)
         val leaveNpc = settings?.combatLogging?.leaveNpc ?: true
         val logLine = if (leaveNpc) {
-            "Logging out while tagged kills you and leaves an NPC holding your items for 60 seconds. It never moves hearts."
+            // Issue #1402: the Lifesteal Combat NPC stands in for the player instead of killing them.
+            val lifetime = settings?.combatLogging?.npc?.lifetimeSeconds ?: LifestealSettings.CombatNpc().lifetimeSeconds
+            "Logging out while tagged leaves a Combat Logger with your real items, health and effects for ${lifetime}s. " +
+                "If anyone kills it you die normally (drops, hearts by the normal rules); if it survives you keep everything."
         } else {
             "Logging out while tagged is recorded for staff. It never moves hearts."
         }

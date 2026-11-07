@@ -256,14 +256,15 @@ heart-items:
 
 # Combat logging (docs/lifesteal-combat.md). The combat-tag duration is the existing
 # config.yml > combat.tag-duration-seconds (the blueprint defines none). Blueprint v1.1 defines no
-# combat-log penalty, so nobody loses a heart for logging out in combat: incidents are recorded for
-# staff (/lifesteal combat), and counted disconnects keep the combat-log NPC every server already
-# had. Server shutdowns, staff kicks and bans and server-side errors are never counted.
+# combat-log penalty, so logging out itself costs no heart: incidents are recorded for staff
+# (/lifesteal combat), and counted disconnects leave a Combat NPC (docs/lifesteal-combat-npc.md).
+# Server shutdowns, staff kicks and bans and server-side errors are never counted.
 combat-logging:
   # Record incidents and apply these rules (false = the plain server-wide behaviour).
   enabled: true
-  # A counted combat log leaves the existing combat-log NPC (the player dies, the NPC holds the
-  # items for 60 seconds). No heart moves when the NPC or the player dies this way.
+  # A counted combat log leaves a Combat NPC holding the player's real items, health and effects
+  # (see npc below). The player is not killed. If the NPC is killed, the player dies normally
+  # (drops, hearts by the normal rules); if it survives, they keep everything.
   leave-npc: true
   # Connection timeouts count as combat logs. Paper can't tell a pulled cable from a crash or a
   # Bedrock network drop; false records them without counting them.
@@ -280,6 +281,25 @@ combat-logging:
   messages:
     tagged: "&cYou are now in combat! Do not disconnect."
     expired: "&aYou are no longer in combat."
+  # The Combat NPC (issue #1402). It is always passive (never attacks, picks up, trades or uses
+  # anything), always holds the player's real inventory, health and potion effects, and never
+  # shows its health. Anyone nearby can see and attack it, also inside protected spawn areas.
+  npc:
+    # Seconds the NPC stands after the disconnect (5 to 300). Real time: a restart never resets it.
+    lifetime-seconds: 30
+    # The line under the player's name (& colour codes).
+    label: "&c[Combat Logger]"
+    # Show the player's name above the label.
+    show-username: true
+    # Which damage can hurt the NPC.
+    allow-player-damage: true
+    allow-mob-damage: true
+    allow-environmental-damage: true
+    # Player messages (& colour codes). {death} is the death message.
+    messages:
+      restored: "&eYou reconnected before your Combat Logger was killed. Your items, health and effects are back where it stood."
+      survived: "&aYour Combat Logger survived. Your items, health and remaining effects were kept."
+      died: "&cYour Combat Logger was killed while you were offline: {death}"
 
 # Player-funded bounties (docs/lifesteal-bounties.md): /bounty on this server. Completely separate
 # from the Survival /bounty; nothing here changes Survival. Bounties only run on the dedicated

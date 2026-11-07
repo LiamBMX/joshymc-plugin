@@ -178,19 +178,25 @@ class KillStreakManager(private val plugin: Joshymc) : Listener {
 
     @EventHandler
     fun onPlayerDeath(event: PlayerDeathEvent) {
+        val victim = event.entity
+        recordDeath(victim.uniqueId, victim.name, victim.killer)
+    }
+
+    /**
+     * One death of [victimUuid] ([killer] null for non-PvP deaths). Also used for a Lifesteal Combat
+     * NPC's death (issue #1402), whose owner is offline, so it takes the owner's UUID and name.
+     */
+    fun recordDeath(victimUuid: UUID, victimName: String, killer: Player?) {
         if (!enabled) return
 
-        val victim = event.entity
-        val victimUuid = victim.uniqueId
         val preDeathStreak = getCurrentStreak(victimUuid)
-        val killer = victim.killer
 
         var validKill = false
         if (killer != null && killer.uniqueId != victimUuid) {
             validKill = !isOnCooldown(killer.uniqueId, victimUuid)
             if (validKill) {
                 markCooldown(killer.uniqueId, victimUuid)
-                handleValidKill(killer, victim, preDeathStreak)
+                handleValidKill(killer, victimUuid, victimName, preDeathStreak)
             }
         }
 
@@ -199,7 +205,7 @@ class KillStreakManager(private val plugin: Joshymc) : Listener {
             resetStreak(victimUuid)
             if (killer == null && envLossBroadcast && preDeathStreak >= envLossMinStreak) {
                 plugin.commsManager.broadcast(
-                    Component.text(victim.name, NamedTextColor.WHITE)
+                    Component.text(victimName, NamedTextColor.WHITE)
                         .append(Component.text("'s $preDeathStreak Kill Streak has ended!", NamedTextColor.GRAY)),
                     CommunicationsManager.Category.COMBAT
                 )
@@ -207,7 +213,7 @@ class KillStreakManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    private fun handleValidKill(killer: Player, victim: Player, victimPreDeathStreak: Int) {
+    private fun handleValidKill(killer: Player, victimUuid: UUID, victimName: String, victimPreDeathStreak: Int) {
         val newStreak = currentStreak.merge(killer.uniqueId, 1, Int::plus) ?: 1
         if (newStreak > getHighestStreak(killer.uniqueId)) highestStreak[killer.uniqueId] = newStreak
         persist(killer.uniqueId)
@@ -216,7 +222,7 @@ class KillStreakManager(private val plugin: Joshymc) : Listener {
             plugin.commsManager.send(
                 killer,
                 Component.text("You killed ", NamedTextColor.GRAY)
-                    .append(Component.text(victim.name, NamedTextColor.WHITE))
+                    .append(Component.text(victimName, NamedTextColor.WHITE))
                     .append(Component.text("! Kill Streak: ", NamedTextColor.GRAY))
                     .append(Component.text(newStreak, NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true)),
                 CommunicationsManager.Category.COMBAT
@@ -235,7 +241,7 @@ class KillStreakManager(private val plugin: Joshymc) : Listener {
         checkMilestone(killer, newStreak)
 
         if (bountyEnabled && victimPreDeathStreak >= bountyMinStreak) {
-            payBounty(killer, victim, victimPreDeathStreak)
+            payBounty(killer, victimUuid, victimName, victimPreDeathStreak)
         }
     }
 
@@ -263,8 +269,8 @@ class KillStreakManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    private fun payBounty(killer: Player, victim: Player, victimStreak: Int) {
-        val balance = plugin.economyManager.getBalance(victim.uniqueId)
+    private fun payBounty(killer: Player, victimUuid: UUID, victimName: String, victimStreak: Int) {
+        val balance = plugin.economyManager.getBalance(victimUuid)
         if (balance <= 0.0) return
 
         val bountyAmount = balance * (bountyPercentage / 100.0)
@@ -272,7 +278,7 @@ class KillStreakManager(private val plugin: Joshymc) : Listener {
 
         var transferred = false
         plugin.databaseManager.transaction {
-            if (plugin.economyManager.withdraw(victim.uniqueId, bountyAmount)) {
+            if (plugin.economyManager.withdraw(victimUuid, bountyAmount)) {
                 plugin.economyManager.deposit(killer.uniqueId, bountyAmount)
                 transferred = true
             }
@@ -284,7 +290,7 @@ class KillStreakManager(private val plugin: Joshymc) : Listener {
             Component.text("You claimed a ", NamedTextColor.GRAY)
                 .append(Component.text("$${plugin.economyManager.formatShort(bountyAmount)}", NamedTextColor.GREEN))
                 .append(Component.text(" bounty from ", NamedTextColor.GRAY))
-                .append(Component.text(victim.name, NamedTextColor.WHITE))
+                .append(Component.text(victimName, NamedTextColor.WHITE))
                 .append(Component.text("'s $victimStreak Kill Streak!", NamedTextColor.GRAY)),
             CommunicationsManager.Category.COMBAT
         )
@@ -293,7 +299,7 @@ class KillStreakManager(private val plugin: Joshymc) : Listener {
             plugin.commsManager.broadcast(
                 Component.text(killer.name, NamedTextColor.WHITE)
                     .append(Component.text(" ended ", NamedTextColor.GRAY))
-                    .append(Component.text(victim.name, NamedTextColor.WHITE))
+                    .append(Component.text(victimName, NamedTextColor.WHITE))
                     .append(Component.text("'s $victimStreak Kill Streak and claimed a ", NamedTextColor.GRAY))
                     .append(Component.text("$${plugin.economyManager.formatShort(bountyAmount)}", NamedTextColor.GREEN))
                     .append(Component.text(" bounty!", NamedTextColor.GRAY)),

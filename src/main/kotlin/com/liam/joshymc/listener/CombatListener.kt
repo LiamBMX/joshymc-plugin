@@ -199,8 +199,11 @@ class CombatListener(private val plugin: Joshymc) : Listener {
         val cmd = event.message.removePrefix("/").substringBefore(' ').lowercase()
         if (cmd in BLOCKED_COMBAT_COMMANDS || cmd in BLOCKED_COMBAT_PREFIXED) {
             event.isCancelled = true
+            // Issue #1402: say how long the tag still runs.
+            val left = plugin.combatManager.tagExpiresAt(player.uniqueId)
+                ?.let { ((it - System.currentTimeMillis()).coerceAtLeast(0) / 1000) + 1 }
             plugin.commsManager.send(player,
-                Component.text("You can't use /$cmd while in combat!", NamedTextColor.RED),
+                Component.text("You can't use /$cmd while in combat!" + (left?.let { " (${it}s left)" } ?: ""), NamedTextColor.RED),
                 CommunicationsManager.Category.COMBAT
             )
         }
@@ -266,7 +269,11 @@ class CombatListener(private val plugin: Joshymc) : Listener {
         // On Lifesteal the combat-log system records the incident and may skip the NPC for
         // server-caused disconnects (issue #1350); without it (Survival) this is always true.
         if (plugin.combatManager.isTagged(player) && plugin.combatManager.shouldSpawnCombatLogNpc(player, event.reason)) {
-            plugin.combatManager.spawnCombatLogNPC(player)
+            // Issue #1402: in a Lifesteal world the Lifesteal Combat NPC stands in for the player
+            // (they aren't killed); everywhere else (Survival) the old villager NPC is unchanged.
+            if (!plugin.lifestealCombatNpcManager.takeOver(player)) {
+                plugin.combatManager.spawnCombatLogNPC(player)
+            }
         }
         plugin.combatManager.untag(player)
     }

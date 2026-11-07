@@ -113,10 +113,18 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     @EventHandler
     fun onPlayerDeath(event: PlayerDeathEvent) {
         val victim = event.entity
-        deaths.merge(victim.uniqueId, 1, Int::plus)
-        saveStats(victim.uniqueId)
+        recordDeath(victim.uniqueId, victim.killer)
+    }
 
-        val killer = victim.killer
+    /**
+     * One death of [victim] and, when a player killed them, one kill for [killer]. Also used for a
+     * Lifesteal Combat NPC's death (issue #1402), whose owner is offline: the victim is the owner's
+     * UUID, never the NPC entity.
+     */
+    fun recordDeath(victim: UUID, killer: Player?) {
+        deaths.merge(victim, 1, Int::plus)
+        saveStats(victim)
+
         if (killer != null) {
             kills.merge(killer.uniqueId, 1, Int::plus)
             saveStats(killer.uniqueId)

@@ -312,6 +312,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var lifestealCombatManager: com.liam.joshymc.lifesteal.combat.LifestealCombatManager
         private set
+    lateinit var lifestealCombatNpcManager: com.liam.joshymc.lifesteal.combat.npc.LifestealCombatNpcManager
+        private set
     lateinit var lifestealProgressionManager: com.liam.joshymc.lifesteal.progression.LifestealProgressionManager
         private set
     lateinit var lifestealRankedManager: com.liam.joshymc.lifesteal.ranked.LifestealRankedManager
@@ -573,6 +575,8 @@ class Joshymc : JavaPlugin() {
         lifestealTeamManager = com.liam.joshymc.lifesteal.teams.LifestealTeamManager(this)
         // Issue #1350: Lifesteal combat logging (an observer of the existing combat tag). Only does anything where Lifesteal runs.
         lifestealCombatManager = com.liam.joshymc.lifesteal.combat.LifestealCombatManager(this)
+        // Issue #1402: the Lifesteal Combat NPC a tagged quit leaves. Only does anything where Lifesteal runs.
+        lifestealCombatNpcManager = com.liam.joshymc.lifesteal.combat.npc.LifestealCombatNpcManager(this)
         // Issue #1352: Lifesteal launch progression (grace period, Ranked/End unlocks). Only does anything where Lifesteal runs.
         lifestealProgressionManager = com.liam.joshymc.lifesteal.progression.LifestealProgressionManager(this)
         // Issue #1361: Ranked Team Wars arenas and match lifecycle. Only does anything where Lifesteal runs.
@@ -676,6 +680,8 @@ class Joshymc : JavaPlugin() {
         lifestealTeamManager.refresh()
         lifestealCombatManager.refresh()
         lifestealProgressionManager.refresh()
+        // After hearts/teams/combat/progression: startup recovery may respawn NPCs and settle sessions.
+        lifestealCombatNpcManager.refresh()
         lifestealRankedManager.refresh()
         lifestealRankedQueueManager.refresh()
         lifestealRatingManager.refresh()
@@ -804,6 +810,8 @@ class Joshymc : JavaPlugin() {
         // Lets team changes already handed to its worker finish before the database closes.
         shutdown.step("lifestealTeamManager.stop", { ::lifestealTeamManager.isInitialized }) { lifestealTeamManager.stop() }
         // No new combat-log decisions once shutdown begins; queued incident writes finish with the database.
+        // Saves every standing Combat NPC (still ACTIVE) and removes the entities; the next start resumes them.
+        shutdown.step("lifestealCombatNpcManager.stop", { ::lifestealCombatNpcManager.isInitialized }) { lifestealCombatNpcManager.stop() }
         shutdown.step("lifestealCombatManager.stop", { ::lifestealCombatManager.isInitialized }) { lifestealCombatManager.stop() }
         shutdown.step("lifestealProgressionManager.stop", { ::lifestealProgressionManager.isInitialized }) { lifestealProgressionManager.stop() }
         shutdown.step("spawnDecorationManager.stop", { ::spawnDecorationManager.isInitialized }) { spawnDecorationManager.stop() }
@@ -1024,6 +1032,8 @@ class Joshymc : JavaPlugin() {
         safe("combatManager.start") { combatManager.start() }
         // After combatManager.start (reads its tag duration) and lifesteal.yml's reload.
         safe("lifestealCombatManager.refresh") { lifestealCombatManager.refresh() }
+        // Standing NPCs keep standing across a reload; only the settings are re-read.
+        safe("lifestealCombatNpcManager.refresh") { lifestealCombatNpcManager.refresh() }
         safe("autoRestartManager.start") { autoRestartManager.start() }
         safe("rotatingBossBarManager.start") { rotatingBossBarManager.start() }
         safe("afkManager.start") { afkManager.start() }

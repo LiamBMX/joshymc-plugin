@@ -196,12 +196,38 @@ data class LifestealSettings(
         /** One console line per incident. */
         val diagnosticLogging: Boolean = false,
         val messages: CombatMessages = CombatMessages(),
+        /** The Lifesteal Combat NPC (issue #1402) a counted combat log leaves when [leaveNpc] is on. */
+        val npc: CombatNpc = CombatNpc(),
     )
 
     /** `&` colour codes. */
     data class CombatMessages(
         val tagged: String = "&cYou are now in combat! Do not disconnect.",
         val expired: String = "&aYou are no longer in combat.",
+    )
+
+    /**
+     * `combat-logging.npc` (issue #1402). The NPC is always passive, always holds the player's real
+     * inventory, health and effects, and never shows its health: those are rules, not settings.
+     */
+    data class CombatNpc(
+        /** How long the NPC stands after the disconnect (real time, never reset by restarts). */
+        val lifetimeSeconds: Int = 30,
+        /** The line under the player's name (`&` colour codes). */
+        val label: String = "&c[Combat Logger]",
+        /** Show the player's name above the label. */
+        val showUsername: Boolean = true,
+        val allowPlayerDamage: Boolean = true,
+        val allowMobDamage: Boolean = true,
+        val allowEnvironmentalDamage: Boolean = true,
+        val messages: CombatNpcMessages = CombatNpcMessages(),
+    )
+
+    /** `&` colour codes; `{death}` is the death message. */
+    data class CombatNpcMessages(
+        val restored: String = "&eYou reconnected before your Combat Logger was killed. Your items, health and effects are back where it stood.",
+        val survived: String = "&aYour Combat Logger survived. Your items, health and remaining effects were kept.",
+        val died: String = "&cYour Combat Logger was killed while you were offline: {death}",
     )
 
     companion object {
@@ -626,7 +652,58 @@ object LifestealConfigParser {
             tagged = text("combat-logging.messages.tagged", d.messages.tagged),
             expired = text("combat-logging.messages.expired", d.messages.expired),
         )
-        return LifestealSettings.CombatLogging(enabled, npc, timeouts, penalty, notifications, retention, diagnostics, messages)
+        return LifestealSettings.CombatLogging(enabled, npc, timeouts, penalty, notifications, retention, diagnostics, messages, combatNpc(get, problems))
+    }
+
+    const val MIN_NPC_LIFETIME_SECONDS = 5
+    const val MAX_NPC_LIFETIME_SECONDS = 300
+
+    /**
+     * `combat-logging.npc` (issue #1402). A file from before it existed has no section: one warning
+     * and the defaults. A wrong value is severe, like every other section.
+     */
+    private fun combatNpc(get: (String) -> Any?, problems: MutableList<Problem>): LifestealSettings.CombatNpc {
+        val d = LifestealSettings.CombatNpc()
+        if (get("combat-logging.npc") == null) {
+            problems += Problem(false, "combat-logging.npc is not set; using the default Combat NPC settings.")
+            return d
+        }
+        fun bool(key: String, default: Boolean): Boolean {
+            val path = "combat-logging.npc.$key"
+            return when (val raw = get(path)) {
+                null -> { problems += Problem(false, "$path is not set; using the default $default."); default }
+                is Boolean -> raw
+                else -> { problems += Problem(true, "$path '$raw' must be true or false."); default }
+            }
+        }
+        fun text(path: String, default: String): String = when (val raw = get(path)) {
+            null -> { problems += Problem(false, "$path is not set; using the default."); default }
+            is String -> if (raw.isBlank()) { problems += Problem(true, "$path is empty."); default } else raw
+            else -> { problems += Problem(true, "$path must be text."); default }
+        }
+        val lifetime = when (val raw = get("combat-logging.npc.lifetime-seconds")) {
+            null -> { problems += Problem(false, "combat-logging.npc.lifetime-seconds is not set; using the default ${d.lifetimeSeconds}."); d.lifetimeSeconds }
+            else -> {
+                val value = wholeNumber(raw)
+                if (value == null || value < MIN_NPC_LIFETIME_SECONDS || value > MAX_NPC_LIFETIME_SECONDS) {
+                    problems += Problem(true, "combat-logging.npc.lifetime-seconds '$raw' must be a whole number from $MIN_NPC_LIFETIME_SECONDS to $MAX_NPC_LIFETIME_SECONDS.")
+                    d.lifetimeSeconds
+                } else value.toInt()
+            }
+        }
+        return LifestealSettings.CombatNpc(
+            lifetimeSeconds = lifetime,
+            label = text("combat-logging.npc.label", d.label),
+            showUsername = bool("show-username", d.showUsername),
+            allowPlayerDamage = bool("allow-player-damage", d.allowPlayerDamage),
+            allowMobDamage = bool("allow-mob-damage", d.allowMobDamage),
+            allowEnvironmentalDamage = bool("allow-environmental-damage", d.allowEnvironmentalDamage),
+            messages = LifestealSettings.CombatNpcMessages(
+                restored = text("combat-logging.npc.messages.restored", d.messages.restored),
+                survived = text("combat-logging.npc.messages.survived", d.messages.survived),
+                died = text("combat-logging.npc.messages.died", d.messages.died),
+            ),
+        )
     }
 
     const val MIN_INVITE_SECONDS = 10

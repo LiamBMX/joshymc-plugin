@@ -75,9 +75,12 @@ Blueprint v1.1 defines **no** combat-log penalty. So:
   No hearts are created and no killer is rewarded. `CombatLogRules.heartsAfterPenalty` (the 1-heart
   guard) and `Enforcement.heartsToRemove` (always 0) are the single place a later approved penalty
   would go; it would have to run through `HeartStore` like every other heart change.
-- **Counted** disconnects keep the combat-log NPC every server already had (the player dies, a
-  villager holds their items for 60 seconds), unchanged unless `leave-npc: false`. That death has no
-  causing player, so it never moves a heart, and killing the NPC doesn't either.
+- **Counted** disconnects leave a **Lifesteal Combat NPC** (issue #1402, see
+  [lifesteal-combat-npc.md](lifesteal-combat-npc.md)) unless `leave-npc: false`. The player is *not*
+  killed: a player-shaped NPC holds their real items, health and effects for
+  `combat-logging.npc.lifetime-seconds` (30). Logging out itself still costs no heart; if someone
+  kills the NPC, that is the player's normal death (drops, and hearts by the ordinary PvP rules,
+  1-heart minimum included). Survival keeps the old villager NPC.
 - **Not counted** (shutdown, staff kick, server error, timeouts with `count-timeouts: false`): no
   NPC, no death, no item drop on Lifesteal. The incident is still recorded.
 - No elimination, no revival, nothing below 1 heart (fixed `LifestealRules`).
@@ -100,8 +103,8 @@ incident. Ordinary PvP heart stealing (issue #1341) is untouched.
 - No names, addresses, chat or session details are stored; Java and Bedrock (Floodgate) players
   are both plain UUIDs, never names.
 - Retention: rows older than `retention-days` (90) are deleted at startup.
-- Reconnects: the tag is removed on quit, so rejoining (even repeatedly) starts untagged and never
-  creates or clears anything. The NPC inventory rule on rejoin is the existing one.
+- Reconnects: the tag is removed on quit; a reconnect while the player's Combat NPC still stands
+  gives back the original tag expiry (never a fresh one), see lifesteal-combat-npc.md.
 - Restarts: tags and sessions live in memory only, so a restart never resumes or re-applies
   anything; incidents written before stay.
 
@@ -131,7 +134,7 @@ Both were already enforced server-side for every gamemode, and stay so:
 | Key | Default | |
 |---|---|---|
 | `enabled` | true | false = plain server-wide behaviour on Lifesteal (no records, NPC for every tagged quit) |
-| `leave-npc` | true | counted combat logs leave the existing NPC |
+| `leave-npc` | true | counted combat logs leave a Combat NPC (`npc` section, lifesteal-combat-npc.md) |
 | `count-timeouts` | true | timeouts count as combat logs |
 | `heart-penalty` | none | only `none` (blueprint) |
 | `notifications` | true | the two chat lines |

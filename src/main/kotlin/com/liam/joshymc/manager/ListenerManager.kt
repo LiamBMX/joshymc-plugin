@@ -297,6 +297,10 @@ class ListenerManager(private val plugin: Joshymc) {
         if (plugin.lifestealCombatManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.combat.LifestealCombatListener(plugin.lifestealCombatManager), plugin)
         }
+        // Issue #1402: Lifesteal Combat NPCs (join hand-over, NPC death/damage/interaction). Never registered where Lifesteal isn't hosted.
+        if (plugin.lifestealCombatNpcManager.hosted) {
+            pm.registerEvents(com.liam.joshymc.lifesteal.combat.npc.LifestealCombatNpcListener(plugin.lifestealCombatNpcManager), plugin)
+        }
 
         // Admin panel
         pm.registerEvents(plugin.adminManager, plugin)
