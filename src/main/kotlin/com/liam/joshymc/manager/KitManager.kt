@@ -531,7 +531,9 @@ class KitManager(private val plugin: Joshymc) {
         val ready = hasPermission && !onCooldown
         val locked = !hasPermission
 
-        val item = ItemStack(material)
+        // Issue #1412: the Discord and Media kits draw the shared custom icons (same item model as
+        // everywhere else); name and lore below are set exactly as for any other kit.
+        val item = KitCatalog.guiIconFor(kitDef.name)?.let { GuiStyle.icon(it) } ?: ItemStack(material)
 
         item.editMeta { meta ->
                 val nameColor = when {

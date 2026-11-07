@@ -8,8 +8,12 @@ Two custom items exist to be menu buttons on every gamemode (Survival and Lifest
 | YouTube play button (red rounded rectangle, white triangle) | `GuiIcon.YOUTUBE` | `youtube_icon` | `STICK` | `&c&lYouTube` | `joshymc:youtube_icon` |
 
 They're visual assets, not player data: nothing is stored, synced or scoped per gamemode
-(`gamemodeScope = null`). Existing menus are not changed. Later GUI redesigns add the icons
-where they need them.
+(`gamemodeScope = null`). Menus add the icons where they need them.
+
+Used by: the `/kit` Special Kits menu (issue #1412), where the Discord Kit draws `discord_icon`
+and the Media Kit `youtube_icon` in both gamemodes (`KitCatalog.guiIconFor`, matched by kit
+name, also `ls_`/`lifesteal_`/`survival_` prefixed or `_kit` suffixed). The kit keeps its own
+name, lore, permission, cooldown and contents.
 
 ## Using an icon in a menu
 
