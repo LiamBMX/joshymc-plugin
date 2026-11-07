@@ -187,6 +187,18 @@ class CombatManager(private val plugin: Joshymc) {
         }
     }
 
+    /**
+     * Gives back a combat tag that was running when [player] disconnected (issue #1402, Lifesteal
+     * Combat NPC hand-over): the original [expiresAt], never a fresh full-length tag. Does nothing
+     * once that time has passed, and never shortens a later tag.
+     */
+    fun resumeTag(player: Player, expiresAt: Long) {
+        if (expiresAt <= System.currentTimeMillis()) return
+        val current = combatTags[player.uniqueId]
+        tag(player)
+        combatTags[player.uniqueId] = maxOf(expiresAt, current ?: 0L)
+    }
+
     /** UUIDs of players who had allowFlight on at the time we tagged them.
      *  When the tag clears we restore allowFlight, but only if they still
      *  have the joshymc.fly perm. */

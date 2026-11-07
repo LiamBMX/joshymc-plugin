@@ -274,13 +274,81 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                         apply(killer, result.killerAfter)
                     }
                 }
-                notify(result, killer, victim, limits)
+                notify(result, killer, victim.name, victim, limits)
             }
         }
     }
 
-    private fun notify(result: HeartStore.PvpResult.Done, killer: Player, victim: Player, limits: HeartRules.Limits) {
-        val names = mapOf("{victim}" to victim.name, "{killer}" to killer.name, "{maximum}" to limits.maximum.toString())
+    /**
+     * Issue #1402: a Lifesteal Combat NPC was killed, which is its (offline) owner's death. The same
+     * attribution ([HeartRules.attribute], final damage's causing player only) and the same
+     * [HeartStore.transferPvp] as [onDeath], so every rule applies unchanged: the 1-heart minimum,
+     * the maximum, the same-victim cooldown, teammates and the launch progression window. The
+     * dedupe key is the NPC session id, so one NPC death can move a heart at most once whatever
+     * repeats (a second death event, a restart, a retry). The owner's record is read by the store;
+     * a missing one is refused there ("victim has no heart record") and nothing moves.
+     */
+    fun onCombatNpcDeath(sessionId: String, victim: UUID, victimName: String, killer: Player?, victimInLifesteal: Boolean) {
+        if (!active) return
+        val limits = limits ?: return
+        val attribution = HeartRules.attribute(
+            HeartRules.Death(
+                victim = victim,
+                victimInLifesteal = victimInLifesteal,
+                // Offline: there is no session to load, the store reads (and checks) the stored record.
+                victimLoaded = true,
+                causingPlayer = killer?.uniqueId,
+                killerOnline = killer?.isOnline == true,
+                killerInLifesteal = killer != null && isLifesteal(killer),
+                killerLoaded = killer != null && loaded.containsKey(killer.uniqueId),
+                killerIsNpc = killer != null && killer.hasMetadata("NPC"),
+            )
+        )
+        if (attribution == HeartRules.Attribution.NOT_LOADED) {
+            plugin.logger.warning("[Hearts] ${killer?.name} killed $victimName's Combat NPC, but the killer has no loaded heart record; no hearts changed.")
+        }
+        if (attribution != HeartRules.Attribution.PVP_KILL || killer == null) return
+        val now = System.currentTimeMillis()
+        val request = HeartStore.PvpRequest(
+            dedupeKey = "combatnpc:$sessionId",
+            killer = killer.uniqueId,
+            victim = victim,
+            now = now,
+            cooldownMillis = HeartRules.cooldownMillis(cooldownMinutes),
+            limits = limits,
+            team = plugin.lifestealTeamManager.heartCheck(killer.uniqueId, victim),
+            window = plugin.lifestealProgressionManager.heartWindow(now),
+        )
+        val result = try {
+            store.transferPvp(request)
+        } catch (e: Exception) {
+            plugin.logger.severe("[Hearts] Heart transfer ${killer.name} <- $victimName (Combat NPC $sessionId) failed and was rolled back; no hearts changed: ${e.message}")
+            send(killer, HeartMessages.TRANSFER_FAILED)
+            return
+        }
+        when (result) {
+            HeartStore.PvpResult.Duplicate -> return
+            is HeartStore.PvpResult.Unavailable -> {
+                plugin.logger.warning("[Hearts] ${killer.name} killed $victimName's Combat NPC, but no hearts changed: ${result.reason}.")
+                return
+            }
+            is HeartStore.PvpResult.Done -> {
+                if (result.decision.changesHearts) {
+                    // The owner is offline: their next join reads the stored value (sync). If they are
+                    // somehow online, bring them in line now.
+                    Bukkit.getPlayer(victim)?.let { if (it.isOnline) sync(it) }
+                    if (killer.isOnline && loaded.containsKey(killer.uniqueId)) {
+                        loaded[killer.uniqueId] = result.killerAfter
+                        apply(killer, result.killerAfter)
+                    }
+                }
+                notify(result, killer, victimName, Bukkit.getPlayer(victim)?.takeIf { it.isOnline }, limits)
+            }
+        }
+    }
+
+    private fun notify(result: HeartStore.PvpResult.Done, killer: Player, victimName: String, victim: Player?, limits: HeartRules.Limits) {
+        val names = mapOf("{victim}" to victimName, "{killer}" to killer.name, "{maximum}" to limits.maximum.toString())
         when (val decision = result.decision) {
             is HeartRules.Decision.Transfer -> {
                 send(killer, HeartMessages.KILLER_STOLE, names + ("{hearts}" to result.killerAfter.toString()))
@@ -306,7 +374,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 send(victim, HeartMessages.VICTIM_TEAMMATE, names)
             }
             HeartRules.Decision.TeamUnknown -> {
-                plugin.logger.warning("[Hearts] " + killer.name + " killed " + victim.name + ", but Lifesteal team membership couldn't be read; no hearts changed.")
+                plugin.logger.warning("[Hearts] " + killer.name + " killed " + victimName + ", but Lifesteal team membership couldn't be read; no hearts changed.")
                 send(killer, HeartMessages.TEAM_UNKNOWN, names)
                 send(victim, HeartMessages.TEAM_UNKNOWN, names)
             }
@@ -319,7 +387,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 send(victim, HeartMessages.NOT_LAUNCHED, names)
             }
             HeartRules.Decision.ProgressionUnknown -> {
-                plugin.logger.warning("[Hearts] " + killer.name + " killed " + victim.name + ", but the launch progression state is unknown; no hearts changed.")
+                plugin.logger.warning("[Hearts] " + killer.name + " killed " + victimName + ", but the launch progression state is unknown; no hearts changed.")
                 send(killer, HeartMessages.PROGRESSION_UNKNOWN, names)
                 send(victim, HeartMessages.PROGRESSION_UNKNOWN, names)
             }
@@ -572,8 +640,8 @@ class LifestealHeartManager(private val plugin: Joshymc) {
 
     // ── Helpers ─────────────────────────────────────────────
 
-    private fun send(player: Player, template: String, values: Map<String, String> = emptyMap()) {
-        if (!player.isOnline) return
+    private fun send(player: Player?, template: String, values: Map<String, String> = emptyMap()) {
+        if (player == null || !player.isOnline) return
         var component: Component = plugin.commsManager.parseLegacy(template)
         for ((key, value) in values) {
             component = component.replaceText(TextReplacementConfig.builder().matchLiteral(key).replacement(value).build())
