@@ -10,23 +10,16 @@ import org.bukkit.inventory.meta.BlockStateMeta
 import org.bukkit.inventory.meta.BundleMeta
 
 /**
- * Single source of truth for /sell pricing, loaded from sell-prices.yml. Completely
- * separate from shop.yml/ServerShopManager — /shop is a curated buy-only money sink,
- * /sell is the broad outlet for ordinary survival-obtainable vanilla items.
+ * The one authoritative sell-price lookup (issue #1416), loaded from `sell-prices.yml > prices:`.
+ * /sell (GUI, hand, all), /worth, the held-item Sell line, /market price and Sell Wands all read
+ * it. The file's `categories:` block is organizational only (see [SellCatalog]). Completely
+ * separate from shop.yml: /shop keeps its own buy prices.
  */
 class SellPriceManager(private val plugin: Joshymc) {
 
-    private val prices = HashMap<Material, Double>()
-
-    companion object {
-        /**
-         * Materials that must never be sellable regardless of sell-prices.yml — a hard block
-         * so a config mistake (or future merge from defaults) can't reintroduce them. Shulker
-         * boxes are excluded because a filled one would otherwise sell its container price
-         * while silently destroying its contents; see issue #610.
-         */
-        private fun isHardBlocked(material: Material): Boolean = material.name.endsWith("SHULKER_BOX")
-    }
+    @Volatile
+    private var catalog = SellCatalog.Catalog(emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyList())
+    private var prices: Map<Material, Double> = emptyMap()
 
     fun start() {
         val fileName = "sell-prices.yml"
@@ -37,26 +30,38 @@ class SellPriceManager(private val plugin: Joshymc) {
             mergeMissingFromDefaults(fileName, file)
         }
 
-        prices.clear()
         val config = YamlConfiguration.loadConfiguration(file)
         val section = config.getConfigurationSection("prices")
         if (section == null) {
             plugin.logger.warning("[Sell] sell-prices.yml has no 'prices:' section — /sell will have nothing to sell.")
-            return
         }
+        val rawPrices = section?.getKeys(false)?.map { it to section.get(it) } ?: emptyList()
 
-        for (key in section.getKeys(false)) {
-            val material = Material.matchMaterial(key)
-            if (material == null) {
-                plugin.logger.warning("[Sell] Unknown material in sell-prices.yml: $key")
-                continue
+        val categories = mutableListOf<SellCatalog.CategoryEntry>()
+        config.getConfigurationSection("categories")?.let { cats ->
+            for (categoryId in cats.getKeys(false)) {
+                val items = cats.getConfigurationSection("$categoryId.items") ?: continue
+                for (key in items.getKeys(false)) {
+                    val item = items.getConfigurationSection(key)
+                    categories += SellCatalog.CategoryEntry(categoryId, key, item?.getString("material"), item?.get("sell"))
+                }
             }
-            if (isHardBlocked(material)) continue
-            val price = section.getDouble(key)
-            if (price > 0.0) prices[material] = price
         }
 
-        plugin.logger.info("[Sell] Loaded ${prices.size} sell price(s).")
+        val built = SellCatalog.build(rawPrices, categories, ::resolve)
+        catalog = built
+        prices = built.prices.mapKeys { Material.valueOf(it.key) }
+
+        plugin.logger.info("[Sell] Loaded ${prices.size} sell price(s) from sell-prices.yml > prices:.")
+        val lines = SellCatalog.summaryLines(built)
+        for (line in lines) plugin.logger.warning("[Sell] $line")
+        if (lines.isNotEmpty()) plugin.logger.warning("[Sell] Full list in-game: /sell admin problems")
+    }
+
+    private fun resolve(key: String): SellCatalog.Resolution {
+        val material = Material.matchMaterial(key) ?: return SellCatalog.Resolution.Unknown
+        if (material.isLegacy || material.isAir || !material.isItem) return SellCatalog.Resolution.NotAnItem(material.name)
+        return SellCatalog.Resolution.Item(material.name)
     }
 
     private fun mergeMissingFromDefaults(fileName: String, file: java.io.File) {
@@ -72,17 +77,17 @@ class SellPriceManager(private val plugin: Joshymc) {
         val defaultsSection = defaults.getConfigurationSection("prices") ?: return
         val userSection = userCfg.getConfigurationSection("prices") ?: userCfg.createSection("prices")
 
-        var added = 0
-        for (key in defaultsSection.getKeys(false)) {
-            if (userSection.contains(key)) continue
-            userSection.set(key, defaultsSection.get(key))
-            added++
-        }
-        if (added > 0) {
+        // A default is only added when no user key names the same material in any spelling, so a
+        // hand-written `kelp: 2.25` never gets a second, conflicting `KELP:` next to it.
+        val missing = SellCatalog.missingDefaults(
+            defaultsSection.getKeys(false).toList(), userSection.getKeys(false).toList(), ::resolve,
+        )
+        for (key in missing) userSection.set(key, defaultsSection.get(key))
+        if (missing.isNotEmpty()) {
             try {
                 com.liam.joshymc.util.ConfigUtil.backup(file, plugin.logger, "Sell")
                 userCfg.save(file)
-                plugin.logger.info("[Sell] Added $added new sell price(s) from bundled defaults.")
+                plugin.logger.info("[Sell] Added ${missing.size} new sell price(s) from bundled defaults: ${missing.joinToString(", ")}")
             } catch (e: Exception) {
                 plugin.logger.warning("[Sell] Failed to save merged sell-prices.yml: ${e.message}")
             }
@@ -92,36 +97,61 @@ class SellPriceManager(private val plugin: Joshymc) {
     /** Base price per single item, or null if the material isn't configured as sellable. */
     fun getPrice(material: Material): Double? = prices[material]
 
-    /** The full central sell-price catalog — the exact set of items /sell (and /worth) accept. */
-    fun getAllPrices(): Map<Material, Double> = prices.toMap()
+    /** The full sell-price catalog — the exact set of materials /sell and /worth accept. */
+    fun getAllPrices(): Map<Material, Double> = prices
 
-    /**
-     * Whether this exact stack can be sold: the material has a configured price, it isn't a
-     * JoshyMC custom item (rejected regardless of matching base material), and — for
-     * containers/bundles — it isn't hiding nested items that selling would otherwise destroy.
-     */
-    fun isSellable(stack: ItemStack): Boolean {
-        if (stack.type == Material.AIR) return false
-        if (prices[stack.type] == null) return false
-        if (plugin.itemManager.getCustomItemId(stack) != null) return false
-        if (hasNestedItems(stack)) return false
-        return true
+    /** The loaded catalog with its sources, categories and problems (admin diagnostics). */
+    fun catalog(): SellCatalog.Catalog = catalog
+
+    /** Null when this exact stack can be sold, otherwise why not. */
+    fun rejectionReason(stack: ItemStack): String? {
+        if (stack.type.isAir) return "empty"
+        val hasPrice = prices.containsKey(stack.type)
+        if (!stack.hasItemMeta()) {
+            return SellItemRules.rejection(SellItemRules.Stack(stack.type.name, stack.amount, hasPrice))
+        }
+        val meta = stack.itemMeta
+        return SellItemRules.rejection(
+            SellItemRules.Stack(
+                material = stack.type.name,
+                amount = stack.amount,
+                hasPrice = hasPrice,
+                customItemId = plugin.itemManager.getCustomItemId(stack),
+                dataKeys = meta.persistentDataContainer.keys.mapTo(HashSet()) { it.toString() },
+                itemModel = if (meta.hasItemModel()) meta.itemModel?.toString() else null,
+                hasCustomModelData = meta.hasCustomModelData(),
+                hasNestedItems = hasNestedItems(stack),
+            )
+        )
     }
 
-    /** Decimal-safe value of the full stack; 0.0 if unsellable. */
+    /**
+     * Whether this exact stack can be sold: the material has a price and the stack is an ordinary
+     * vanilla stack (no JoshyMC custom item, plugin data, custom model or hidden contents).
+     */
+    fun isSellable(stack: ItemStack): Boolean = rejectionReason(stack) == null
+
+    /** Decimal-safe base value of the full stack (no player bonuses); 0.0 if unsellable. */
     fun getStackValue(stack: ItemStack): Double {
         if (!isSellable(stack)) return 0.0
         val unitPrice = prices[stack.type] ?: return 0.0
-        val raw = unitPrice * stack.amount
-        return Math.round(raw * 100.0) / 100.0
+        return SellCatalog.roundCents(unitPrice * stack.amount)
     }
 
-    /** Decimal-safe value of the full stack after [seller]'s rank sell-multiplier; 0.0 if unsellable. */
-    fun getStackValue(stack: ItemStack, seller: Player): Double {
-        val base = getStackValue(stack)
-        if (base <= 0.0) return 0.0
-        val raw = base * plugin.rankManager.getSellMultiplier(seller)
-        return Math.round(raw * 100.0) / 100.0
+    /**
+     * What [seller] is paid for the full stack — the ONE payout formula every sell path uses:
+     * base price × Flower Armor crop bonus × Catalyst mutation × rank sell multiplier
+     * × [extraMultiplier] (a Sell Wand's own multiplier), rounded to cents. 0.0 if unsellable.
+     */
+    fun getStackValue(stack: ItemStack, seller: Player, extraMultiplier: Double = 1.0): Double {
+        if (!isSellable(stack)) return 0.0
+        val base = prices[stack.type] ?: return 0.0
+        val unit = plugin.serverShopManager.applyCropBonus(base, stack.type, seller.uniqueId) *
+            plugin.mutationsManager.getMutationMultiplier(stack) *
+            plugin.rankManager.getSellMultiplier(seller) *
+            extraMultiplier
+        val value = SellCatalog.roundCents(unit * stack.amount)
+        return if (value.isFinite() && value > 0.0) value else 0.0
     }
 
     /** True if a container/bundle item is carrying other items that a sale would delete. */
@@ -130,7 +160,7 @@ class SellPriceManager(private val plugin: Joshymc) {
         if (meta is BundleMeta) {
             return meta.items.isNotEmpty()
         }
-        if (meta is BlockStateMeta) {
+        if (meta is BlockStateMeta && meta.hasBlockState()) {
             val state = meta.blockState
             if (state is Container) {
                 return state.inventory.contents.any { it != null && it.type != Material.AIR }

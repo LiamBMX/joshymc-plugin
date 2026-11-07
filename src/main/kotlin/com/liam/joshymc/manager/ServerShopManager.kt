@@ -55,12 +55,6 @@ class ServerShopManager(private val plugin: Joshymc) {
     // item carries both a "buy" and a "sell" price.
     private val categories = mutableListOf<ShopCategory>()
 
-    // sell-prices.yml's legacy `categories:` block. It feeds getSellPrice()/getBaseSellPrice()
-    // alongside shop.yml, which other systems (sell wand, market, spawner drops) still rely
-    // on. The /worth GUI itself no longer reads this — it browses SellPriceManager's
-    // `prices:` catalog directly (the same one /sell uses) so nothing needs a category.
-    private val sellCategories = mutableListOf<ShopCategory>()
-
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
         editMeta { it.displayName(Component.empty()) }
     }
@@ -74,17 +68,14 @@ class ServerShopManager(private val plugin: Joshymc) {
 
     fun start() {
         categories.clear()
-        sellCategories.clear()
 
         mergeMissingCategoriesFromDefaults("shop.yml")
         removeObsoleteCategories("shop.yml", "spawners")
         loadCategoriesInto(categories, "shop.yml")
 
-        mergeMissingCategoriesFromDefaults("sell-prices.yml")
-        loadCategoriesInto(sellCategories, "sell-prices.yml")
-
+        // sell-prices.yml is no longer read here (issue #1416): SellPriceManager owns it, and its
+        // `categories:` block is organizational only, so it can't supply a second sell price.
         plugin.logger.info("Loaded ${categories.size} shop categories with ${categories.sumOf { it.items.size }} items")
-        plugin.logger.info("Loaded ${sellCategories.size} sell-price categories with ${sellCategories.sumOf { it.items.size }} items")
     }
 
     /**
@@ -233,17 +224,11 @@ class ServerShopManager(private val plugin: Joshymc) {
         return base * plugin.boosterManager.getSellMultiplier(material)
     }
 
-    fun getBaseSellPrice(material: Material): Double? {
-        for (category in categories) {
-            val item = category.items.find { it.material == material && it.sellPrice > 0 }
-            if (item != null) return item.sellPrice
-        }
-        for (category in sellCategories) {
-            val item = category.items.find { it.material == material && it.sellPrice > 0 }
-            if (item != null) return item.sellPrice
-        }
-        return null
-    }
+    /**
+     * The sell price of [material]: always SellPriceManager's (issue #1416), the same value /sell
+     * pays and /worth shows. shop.yml `sell:` values stay /shop's own and are not consulted here.
+     */
+    fun getBaseSellPrice(material: Material): Double? = plugin.sellPriceManager.getPrice(material)
 
     /**
      * The `/shop` buy price for [material], or null if it has no purchasable shop.yml entry.

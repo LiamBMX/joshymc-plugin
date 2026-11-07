@@ -1103,6 +1103,9 @@ permissions:
   joshymc.sell:
     description: Sell items
     default: true
+  joshymc.sell.admin:
+    description: Read-only sell price diagnostics (/sell admin)
+    default: op
   joshymc.chatcolor:
     description: Use chat colors
     default: op
