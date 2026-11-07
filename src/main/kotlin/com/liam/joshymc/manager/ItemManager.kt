@@ -123,6 +123,8 @@ class ItemManager(private val plugin: Joshymc) {
         register(SnowmanBoots())
         // Bat Wings elytra (Survival only, issue #1317)
         register(BatWings())
+        // Christmas Tree Elytra (Survival only, issue #1397)
+        register(ChristmasTreeElytra())
 
         // Retextured Trial Keys
         register(JanuaryKey())

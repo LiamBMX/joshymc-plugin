@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "joshymc:christmas_tree_elytra"
+      }
+    ],
+    "wings": [
+      {
+        "texture": "joshymc:christmas_tree_elytra"
+      }
+    ]
+  }
+}

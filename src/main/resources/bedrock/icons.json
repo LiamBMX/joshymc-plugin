@@ -67,6 +67,11 @@
       "icon": "joshymc/candy_corn.png",
       "sha1": "1d8e5439fb614cb1a5852e168f7f6842082bcbca"
     },
+    "joshymc:christmas_tree_elytra": {
+      "bedrock_name": "christmas_tree_elytra",
+      "icon": "joshymc/christmas_tree_elytra.png",
+      "sha1": "d3be06ae36f5c37742f2f22392a32a46d5b02b4a"
+    },
     "joshymc:cobweb_egg": {
       "bedrock_name": "cobweb_egg",
       "icon": "joshymc/cobweb_egg.png",
