@@ -520,8 +520,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        // Issue #1401: /bounty routes to the Lifesteal bounty system in Lifesteal and to the unchanged
+        // Survival BountyCommand everywhere else (BountyCommandRouter applies Survival's scope + permission).
         plugin.getCommand("bounty")?.let {
-            val cmd = BountyCommand(plugin)
+            val cmd = com.liam.joshymc.command.BountyCommandRouter(
+                plugin, BountyCommand(plugin), com.liam.joshymc.lifesteal.bounty.LifestealBountyCommand(plugin),
+            )
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
@@ -907,7 +911,8 @@ class CommandManager(private val plugin: Joshymc) {
         "chestshop" to "joshymc.shop",
         // Either team system's basic permission; TeamCommandRouter checks the one that applies.
         "team" to com.liam.joshymc.command.TeamCommandRouter.COMMAND_PERMISSION,
-        "bounty" to "joshymc.bounty",
+        // Either bounty system's basic permission; BountyCommandRouter checks the one that applies.
+        "bounty" to com.liam.joshymc.command.BountyCommandRouter.COMMAND_PERMISSION,
         "killstreak" to "joshymc.killstreak",
         "loginstreak" to "joshymc.loginstreak",
         "sell" to "joshymc.sell",

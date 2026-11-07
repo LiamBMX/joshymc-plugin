@@ -2,6 +2,7 @@ package com.liam.joshymc.lifesteal
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.lifesteal.bounty.BountyConfig
 import com.liam.joshymc.lifesteal.ranked.stats.DivisionConfig
 import org.bukkit.configuration.ConfigurationSection
 import org.bukkit.configuration.file.YamlConfiguration
@@ -36,6 +37,12 @@ class LifestealConfigManager(private val plugin: Joshymc) {
         private set
     @Volatile var leaderboards: DivisionConfig.LeaderboardResult = DivisionConfig.LeaderboardResult(null, emptyList())
         private set
+    /**
+     * Issue #1401: `bounties`, read separately as well: a mistake there only stops new bounty
+     * contributions and claims (existing escrow is still expired, refunded and paid out).
+     */
+    @Volatile var bounties: BountyConfig.Result = BountyConfig.Result(null, emptyList())
+        private set
 
     /** Called at startup and on every reload, after the network identity is loaded. */
     fun load() {
@@ -45,6 +52,7 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             problems = emptyList()
             divisions = DivisionConfig.Result(null, DivisionConfig.Status.DISABLED, emptyList())
             leaderboards = DivisionConfig.LeaderboardResult(null, emptyList())
+            bounties = BountyConfig.Result(null, emptyList())
             return
         }
         try {
@@ -60,10 +68,12 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             settings = result.settings
             status = if (result.settings != null) Status.READY else Status.INVALID
             loadRankedDisplay(yaml, result.settings)
+            loadBounties(yaml)
         } catch (e: Exception) {
             problems = listOf(LifestealConfigParser.Problem(true, "Could not read $CONFIG_FILE: ${e.message}"))
             settings = null
             status = Status.INVALID
+            bounties = BountyConfig.Result(null, listOf(BountyConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
         }
 
         for (problem in problems) {
@@ -106,6 +116,23 @@ class LifestealConfigManager(private val plugin: Joshymc) {
         }
         if (divisions.status == DivisionConfig.Status.INVALID) plugin.logger.severe("[Lifesteal] Ranked divisions are unavailable until ranked-team-wars.divisions is fixed (ratings are untouched).")
         if (leaderboards.settings == null) plugin.logger.severe("[Lifesteal] Ranked leaderboards are unavailable until ranked-team-wars.leaderboards is fixed (ratings are untouched).")
+    }
+
+    /**
+     * Bounty settings (issue #1401). A lifesteal.yml from before them has no `bounties` section: the
+     * bundled file's section is used (logged), like the ranked divisions.
+     */
+    private fun loadBounties(yaml: YamlConfiguration) {
+        val source = if (yaml.get("bounties", null) != null) yaml else {
+            plugin.logger.warning("[Lifesteal] $CONFIG_FILE has no bounties section; using the bundled defaults (copy the section from the plugin's $CONFIG_FILE to change it).")
+            plugin.getResource(CONFIG_FILE)?.reader(Charsets.UTF_8)?.use { YamlConfiguration.loadConfiguration(it) }
+        }
+        bounties = if (source == null) BountyConfig.Result(null, listOf(BountyConfig.Problem(true, "no bounties section found.")))
+        else BountyConfig.parse { path -> source.get("bounties.$path", null) }
+        for (problem in bounties.problems) {
+            if (problem.severe) plugin.logger.severe("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+            else plugin.logger.warning("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+        }
     }
 
     companion object {
