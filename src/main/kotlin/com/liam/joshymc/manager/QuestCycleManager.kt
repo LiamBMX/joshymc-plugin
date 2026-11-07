@@ -1450,7 +1450,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         val gui = when (page) {
             QuestPage.MAIN -> CustomGui(plugin.commsManager.parseLegacy("&6&lQuests"), QuestMenuLayout.MAIN_SIZE)
             QuestPage.DAILY -> CustomGui(plugin.commsManager.parseLegacy("&6&lDaily Quests"), QuestMenuLayout.PAGE_SIZE)
-            QuestPage.WEEKLY -> CustomGui(plugin.commsManager.parseLegacy("&b&lWeekly Quests"), QuestMenuLayout.PAGE_SIZE)
+            QuestPage.WEEKLY -> CustomGui(plugin.commsManager.parseLegacy("&b&lWeekly Quests"), QuestMenuLayout.WEEKLY_PAGE_SIZE)
         }
         render(gui, player, page)
         val tracked = TrackedGui(gui, page)
@@ -1589,16 +1589,22 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         }
 
         val done = pool.count { getProgress(uuid, it).completed }
-        gui.setItem(QuestMenuLayout.BONUS_SLOT, if (daily)
+        // Issue #1409: the Weekly page is 3 rows, with bonus/Quest Master beside the timer.
+        val bonusSlot = if (daily) QuestMenuLayout.BONUS_SLOT else QuestMenuLayout.WEEKLY_BONUS_SLOT
+        val questMasterSlot = if (daily) QuestMenuLayout.QUEST_MASTER_SLOT else QuestMenuLayout.WEEKLY_QUEST_MASTER_SLOT
+        val backSlot = if (daily) QuestMenuLayout.BACK_SLOT else QuestMenuLayout.WEEKLY_BACK_SLOT
+        val closeSlot = if (daily) QuestMenuLayout.CLOSE_SLOT else QuestMenuLayout.WEEKLY_CLOSE_SLOT
+        val infoSlot = if (daily) QuestMenuLayout.INFO_SLOT else QuestMenuLayout.WEEKLY_INFO_SLOT
+        gui.setItem(bonusSlot, if (daily)
             bonusItem("Daily Completion", done, pool.size, 1, if (dailyCompletionRewardEnabled) dailyCompletionCredits else 0.0, isDailyBonusClaimed(uuid, dailyCycleIdState))
         else
             bonusItem("Weekly Completion", done, pool.size, 1, if (weeklyCompletionRewardEnabled) weeklyCompletionCredits else 0.0, isWeeklyBonusClaimed(uuid, weeklyCycleIdState)))
 
-        gui.setItem(QuestMenuLayout.QUEST_MASTER_SLOT, questMasterItem(getQuestMasterProgress(uuid, weeklyCycleIdState)))
+        gui.setItem(questMasterSlot, questMasterItem(getQuestMasterProgress(uuid, weeklyCycleIdState)))
 
-        gui.setItem(QuestMenuLayout.BACK_SLOT, GuiStyle.back("Back to Quests")) { p, _ -> openGui(p) }
-        gui.setItem(QuestMenuLayout.CLOSE_SLOT, GuiStyle.close()) { p, _ -> p.closeInventory() }
-        gui.setItem(QuestMenuLayout.INFO_SLOT, infoItem())
+        gui.setItem(backSlot, GuiStyle.back("Back to Quests")) { p, _ -> openGui(p) }
+        gui.setItem(closeSlot, GuiStyle.close()) { p, _ -> p.closeInventory() }
+        gui.setItem(infoSlot, infoItem())
     }
 
     private fun showQuestDetails(player: Player, quest: CycleQuest, progress: CycleProgress) {
