@@ -373,6 +373,10 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 send(killer, HeartMessages.KILLER_TEAMMATE, names)
                 send(victim, HeartMessages.VICTIM_TEAMMATE, names)
             }
+            HeartRules.Decision.Allies -> {
+                send(killer, HeartMessages.KILLER_ALLY, names)
+                send(victim, HeartMessages.VICTIM_ALLY, names)
+            }
             HeartRules.Decision.TeamUnknown -> {
                 plugin.logger.warning("[Hearts] " + killer.name + " killed " + victimName + ", but Lifesteal team membership couldn't be read; no hearts changed.")
                 send(killer, HeartMessages.TEAM_UNKNOWN, names)

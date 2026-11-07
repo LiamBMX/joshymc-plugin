@@ -52,7 +52,19 @@ import java.util.concurrent.TimeUnit
  */
 class LifestealTeamManager(private val plugin: Joshymc) {
 
-    private val store = LifestealTeamStore(plugin.databaseManager)
+    /** Issue #1405: alliances and rivalries (same database, cleaned up inside the disband transaction). */
+    internal val relationStore = TeamRelationStore(plugin.databaseManager)
+    private val store = LifestealTeamStore(plugin.databaseManager, relationStore)
+
+    /**
+     * Issue #1405: the relationships in force, as last committed. Replaced on the team worker right
+     * after every change commits (before the main thread is told), so damage events and `/ac` read the
+     * authoritative state without a database call.
+     */
+    @Volatile internal var relationSnapshot = TeamRelationStore.Snapshot()
+
+    /** Alliance and rivalry actions, alliance chat and their views (issue #1405). */
+    val relations: LifestealTeamRelations by lazy { LifestealTeamRelations(plugin, this) }
 
     @Volatile var settings: LifestealSettings.Teams? = null
         private set
@@ -110,9 +122,17 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         }
         try {
             store.createTables()
+            relationStore.createTables()
             tablesReady = true
             val now = System.currentTimeMillis()
             store.expireInvites(now)
+            // Issue #1405: relationships of teams that no longer exist are removed (no cooldowns),
+            // requests that ran out while the server was down expire, then the cache is loaded.
+            for (cleanup in relationStore.repairOrphans(now)) {
+                plugin.logger.warning("[Teams] Removed relationships of a team that no longer exists (${cleanup.teamId}).")
+            }
+            relationStore.expireRequests(now)
+            relationSnapshot = relationStore.snapshot()
             for (team in store.loadActiveTeams()) applyTeam(team)
             for (invite in store.invites()) invites[inviteKey(invite)] = invite
             for (uuid in byPlayer.keys) names.computeIfAbsent(uuid) { plugin.playerResolver.lastKnownName(it) ?: "" }
@@ -152,6 +172,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
 
     private fun clearCache() {
         teams.clear(); byPlayer.clear(); byName.clear(); invites.clear(); retired.clear(); combatMemory.clear()
+        relationSnapshot = TeamRelationStore.Snapshot()
         busy.clear(); lastAction.clear()
     }
 
@@ -162,10 +183,12 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         if (pending.isNotEmpty()) {
             send(player, text("You have ${pending.size} pending team invitation(s). ", NamedTextColor.GRAY).append(command("[View]", "/team")))
         }
+        relations.onJoin(player)
     }
 
     fun onQuit(player: Player) {
         lastAction.remove(player.uniqueId)
+        relations.onQuit(player)
     }
 
     // ── Read API (cache only; for commands, GUIs and future systems such as Ranked Team Wars) ──
@@ -195,7 +218,9 @@ class LifestealTeamManager(private val plugin: Joshymc) {
 
     /** `lifesteal.yml > teams.friendly-fire`, or null while lifesteal.yml can't be read here. */
     fun combatPolicy(): TeamCombatRules.Policy? =
-        settings?.takeIf { hosted }?.let { TeamCombatRules.Policy(it.friendlyFire, it.teammateHeartTransfers) }
+        settings?.takeIf { hosted }?.let {
+            TeamCombatRules.Policy(it.friendlyFire, it.teammateHeartTransfers, allyProtection = it.alliances.enabled && !it.alliances.friendlyFire)
+        }
 
     /**
      * Whether membership can be read: the cache is loaded, or teams are turned off in lifesteal.yml
@@ -212,7 +237,11 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         // Issue #1371: inside a Ranked Team Wars match the roster's sides decide, so a team change
         // racing the match start can't turn match teammates into enemies (or the other way round).
         rankedSides(a, b)?.let { sameSide -> return TeamCombatRules.rankedRelation(sameSide) }
-        return TeamCombatRules.relation(a, b, membershipAvailable, { byPlayer[it] }, { combatMemory.recent(it, now) })
+        val relation = TeamCombatRules.relation(a, b, membershipAvailable, { byPlayer[it] }, { combatMemory.recent(it, now) })
+        // Issue #1405: allies by current membership and the current alliance only (no grace window).
+        if (!alliancesInForce) return relation
+        val snapshot = relationSnapshot
+        return TeamCombatRules.withAlliance(relation, byPlayer[a], byPlayer[b]) { x, y -> snapshot.allied(x, y) }
     }
 
     private fun rankedSides(a: UUID, b: UUID): Boolean? =
@@ -235,10 +264,13 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         }
     }
 
+    /** Issue #1405: alliances count (teams loaded and `teams.alliances.enabled`). */
+    internal val alliancesInForce: Boolean get() = active && settings?.alliances?.enabled == true
+
     /** The combat-tag duration: how long a former teammate still counts as one. */
     private fun graceMillis(): Long = plugin.combatManager.tagDurationMillis
 
-    private fun inCombat(uuid: UUID): Boolean = Bukkit.getPlayer(uuid)?.let { it.isOnline && plugin.combatManager.isTagged(it) } == true
+    internal fun inCombat(uuid: UUID): Boolean = Bukkit.getPlayer(uuid)?.let { it.isOnline && plugin.combatManager.isTagged(it) } == true
 
     private fun combatRefusal(change: TeamCombatRules.TeamChange, involved: Iterable<UUID>): String? =
         if (involved.any { inCombat(it) }) TeamCombatRules.combatMessage(change)
@@ -260,13 +292,13 @@ class LifestealTeamManager(private val plugin: Joshymc) {
     }
 
     /** Null when [player] may use ordinary team features here. */
-    private fun playerProblem(player: Player): String? = unavailableReason() ?: when {
+    internal fun playerProblem(player: Player): String? = unavailableReason() ?: when {
         !isLifesteal(player) -> "Lifesteal teams only work in Lifesteal."
         !player.hasPermission(PERMISSION_USE) -> Msg.NO_PERMISSION
         else -> null
     }
 
-    private fun refuse(sender: CommandSender, message: String) = Msg.error(sender, message)
+    internal fun refuse(sender: CommandSender, message: String) = Msg.error(sender, message)
 
     // ── Actions ─────────────────────────────────────────────
 
@@ -582,6 +614,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
                 for (invite in result.invites) {
                     Bukkit.getPlayer(invite.target)?.let { send(it, text("Your invitation to ${team.name} was cancelled: the team was disbanded.", NamedTextColor.GRAY)) }
                 }
+                result.relations?.let { relations.notifyDisbanded(team, it) }
             }
             DisbandResult.NotInTeam -> refuse(sender, "You're not in a team.")
             is DisbandResult.NotLeader -> { applyTeam(result.team); refuse(sender, "Only the team leader can disband the team.") }
@@ -595,6 +628,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
     private fun sweepInvites() {
         val now = System.currentTimeMillis()
         combatMemory.sweep(now)
+        relations.sweep(now)
         val due = invites.values.filter { it.expired(now) }
         if (due.isEmpty()) return
         for (invite in due) invites.remove(inviteKey(invite), invite)
@@ -621,12 +655,40 @@ class LifestealTeamManager(private val plugin: Joshymc) {
 
     // ── Plumbing ────────────────────────────────────────────
 
+    /** Re-reads the relationships on the team worker (after a commit); a read failure keeps the old cache. */
+    internal fun refreshRelationsOnWorker() {
+        if (!tablesReady) return
+        try {
+            relationSnapshot = relationStore.snapshot()
+        } catch (e: Exception) {
+            plugin.logger.warning("[Teams] Couldn't re-read team alliances and rivalries: ${e.message}")
+        }
+    }
+
+    /** Runs [work] on the team worker without an actor (sweeps); [done] gets the result on the main thread. */
+    internal fun <R> background(work: () -> R, done: (R) -> Unit): Boolean {
+        val worker = executor ?: return false
+        return try {
+            worker.execute {
+                val result = try { work() } catch (e: Exception) {
+                    plugin.logger.warning("[Teams] A background team task failed (nothing changed): ${e.message}")
+                    return@execute
+                }
+                refreshRelationsOnWorker()
+                main { done(result) }
+            }
+            true
+        } catch (_: RejectedExecutionException) {
+            false
+        }
+    }
+
     /**
      * Runs [work] (a store transaction) on the team worker and [done] with its result on the main
      * thread. One change per actor at a time, at most one per [ACTION_COOLDOWN_MS]; a failure
      * (database error, stale write) rolled everything back and is reported as "nothing changed".
      */
-    private fun <R> submit(sender: CommandSender, actorKey: UUID, work: () -> R, done: (R) -> Unit) {
+    internal fun <R> submit(sender: CommandSender, actorKey: UUID, work: () -> R, done: (R) -> Unit) {
         val worker = executor ?: return refuse(sender, unavailableReason() ?: "Lifesteal teams are unavailable right now.")
         val now = System.currentTimeMillis()
         val last = lastAction[actorKey]
@@ -636,6 +698,8 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         try {
             worker.execute {
                 val result = runCatching(work)
+                // Issue #1405: relationships can change with any team change (a disband ends them).
+                if (result.isSuccess) refreshRelationsOnWorker()
                 main {
                     busy.remove(actorKey)
                     if (sender is Player && !sender.isOnline) {
@@ -655,7 +719,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         }
     }
 
-    private fun main(block: () -> Unit) {
+    internal fun main(block: () -> Unit) {
         if (!plugin.isEnabled) return
         try {
             Bukkit.getScheduler().runTask(plugin, Runnable(block))
@@ -712,7 +776,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
 
     private fun inviteKey(invite: Invite) = "${invite.teamId}|${invite.target}"
 
-    private fun tellTeam(team: Team, message: Component, except: UUID? = null) {
+    internal fun tellTeam(team: Team, message: Component, except: UUID? = null) {
         for (member in team.members) {
             if (member.uuid == except) continue
             Bukkit.getPlayer(member.uuid)?.let { send(it, message) }

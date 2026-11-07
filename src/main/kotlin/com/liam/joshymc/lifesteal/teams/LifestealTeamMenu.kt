@@ -35,7 +35,9 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
         val leader = team?.leader == player.uniqueId
         val invites = teams.invitesFor(player.uniqueId)
 
-        gui.setItem(11, if (team == null) {
+        // Issue #1405: six entries now (Alliances & Rivalries added), centered like SettingsLayout:
+        // 10, 11, 12 | 14, 15, 16 with the middle slot empty.
+        gui.setItem(10, if (team == null) {
             GuiStyle.item(Material.GRAY_BANNER, text("No Team", NamedTextColor.GRAY), listOf(
                 text("You're not in a Lifesteal team.", NamedTextColor.GRAY),
                 text("Create one or accept an invitation.", NamedTextColor.GRAY),
@@ -50,7 +52,7 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
             if (team == null) promptCreate(p) else p.performCommand("team info")
         }
 
-        gui.setItem(12, GuiStyle.item(Material.PLAYER_HEAD, text("Team Members", NamedTextColor.AQUA), listOf(
+        gui.setItem(11, GuiStyle.item(Material.PLAYER_HEAD, text("Team Members", NamedTextColor.AQUA), listOf(
             if (team == null) text("Join a team to see its members.", NamedTextColor.GRAY)
             else text("${team.size}/${teams.maxSize} members", NamedTextColor.GRAY),
         ))) { p, _ ->
@@ -59,7 +61,7 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
             openMembers(p, current)
         }
 
-        gui.setItem(13, GuiStyle.item(if (invites.isEmpty()) Material.PAPER else Material.WRITABLE_BOOK, text("Team Invitations", NamedTextColor.GREEN), listOf(
+        gui.setItem(12, GuiStyle.item(if (invites.isEmpty()) Material.PAPER else Material.WRITABLE_BOOK, text("Team Invitations", NamedTextColor.GREEN), listOf(
             text(if (invites.isEmpty()) "No pending invitations." else "${invites.size} pending invitation(s).", NamedTextColor.GRAY),
         ))) { p, _ ->
             GuiStyle.clickSound(p)
@@ -77,7 +79,24 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
             openManage(p)
         }
 
-        gui.setItem(15, GuiStyle.item(Material.BOOKSHELF, text("Available Teams", NamedTextColor.LIGHT_PURPLE), listOf(
+        gui.setItem(15, GuiStyle.item(if (team != null && teams.relations.allyOf(team.id) != null) Material.LIME_BANNER else Material.RED_BANNER,
+            text("Alliances & Rivalries", NamedTextColor.GREEN), buildList {
+                if (team == null) add(text("Join a team to have allies and rivals.", NamedTextColor.GRAY))
+                else {
+                    val ally = teams.relations.allyOf(team.id)
+                    val rival = teams.relations.declaredRival(team.id)
+                    add(text("Alliance: ", NamedTextColor.GRAY).append(if (ally != null) text(ally.name, NamedTextColor.GREEN) else text("None", NamedTextColor.WHITE)))
+                    add(text("Declared Rival: ", NamedTextColor.GRAY).append(if (rival != null) text(rival.name, NamedTextColor.RED) else text("None", NamedTextColor.WHITE)))
+                    val incoming = teams.relations.incoming(team.id).size
+                    if (incoming > 0) add(text("$incoming alliance request(s) waiting", NamedTextColor.AQUA))
+                }
+            })) { p, _ ->
+            if (teams.teamOf(p.uniqueId) == null) return@setItem GuiStyle.errorSound(p)
+            GuiStyle.clickSound(p)
+            TeamRelationsMenu(plugin).openRelations(p)
+        }
+
+        gui.setItem(16, GuiStyle.item(Material.BOOKSHELF, text("Available Teams", NamedTextColor.LIGHT_PURPLE), listOf(
             text("${teams.allTeams().size} team(s) on this server.", NamedTextColor.GRAY),
         ))) { p, _ ->
             GuiStyle.pageSound(p)
@@ -99,6 +118,13 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
             text("Members: ", NamedTextColor.GRAY).append(text("${team.size}/${teams.maxSize}", NamedTextColor.WHITE)),
             text("Online: ", NamedTextColor.GRAY).append(text("$online", NamedTextColor.GREEN)),
             text("Friendly fire: ", NamedTextColor.GRAY).append(text(teams.friendlyFireSummary(), NamedTextColor.WHITE)),
+            // Issue #1405: allies in green, rivals in red.
+            teams.relations.allyOf(team.id).let { ally ->
+                text("Alliance: ", NamedTextColor.GRAY).append(if (ally != null) text(ally.name, NamedTextColor.GREEN) else text("None", NamedTextColor.WHITE))
+            },
+            teams.relations.declaredRival(team.id).let { rival ->
+                text("Declared Rival: ", NamedTextColor.GRAY).append(if (rival != null) text(rival.name, NamedTextColor.RED) else text("None", NamedTextColor.WHITE))
+            },
             if (team.leader == viewer) text("You lead this team.", NamedTextColor.GOLD) else null,
         )
     }
@@ -247,7 +273,7 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
 
     // ── Available teams ─────────────────────────────────────
 
-    private fun openTeams(player: Player, requestedPage: Int) {
+    internal fun openTeams(player: Player, requestedPage: Int) {
         val all = teams.allTeams()
         val pages = maxOf(1, (all.size + PER_PAGE - 1) / PER_PAGE)
         val page = requestedPage.coerceIn(0, pages - 1)
@@ -260,9 +286,10 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
         all.drop(page * PER_PAGE).take(PER_PAGE).forEachIndexed { index, team ->
             val slot = 10 + (index / 7) * 9 + index % 7
             gui.setItem(slot, GuiStyle.item(Material.WHITE_BANNER, text(team.name, NamedTextColor.GOLD), teamLore(team, player.uniqueId) +
-                listOf(Component.empty(), text("Click for details", NamedTextColor.YELLOW)))) { p, _ ->
-                p.closeInventory()
-                p.performCommand("team info ${team.name}")
+                listOf(Component.empty(), text("Click to view the team", NamedTextColor.YELLOW)))) { p, _ ->
+                // Issue #1405: the public team profile (members, alliance, rivals; leader actions).
+                GuiStyle.clickSound(p)
+                TeamRelationsMenu(plugin).openProfile(p, team.id)
             }
         }
         if (page > 0) gui.setItem(GuiStyle.prevSlot(54), GuiStyle.previousPage(page + 1, pages)) { p, _ -> GuiStyle.pageSound(p); openTeams(p, page - 1) }
@@ -275,7 +302,7 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
     // ── Helpers ─────────────────────────────────────────────
 
     /** A yes/no screen; [action] runs the real (re-checked) manager action. */
-    private fun confirm(player: Player, question: String, detail: Component, action: (Player) -> Unit) {
+    internal fun confirm(player: Player, question: String, detail: Component, action: (Player) -> Unit) {
         GuiStyle.clickSound(player)
         val gui = CustomGui(title(question), 27)
         gui.setItem(11, GuiStyle.item(Material.LIME_STAINED_GLASS_PANE, text("Confirm", NamedTextColor.GREEN), listOf(detail))) { p, _ ->
@@ -295,7 +322,7 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
     }
 
     /** Chest titles stay short (CLAUDE.md: titles over ~28 characters overflow). */
-    private fun title(raw: String): Component =
+    internal fun title(raw: String): Component =
         text(if (raw.length > 28) raw.take(27) + "…" else raw, NamedTextColor.DARK_GRAY)
 
     companion object {

@@ -138,6 +138,213 @@ Everything is keyed by UUID (Floodgate UUIDs for Bedrock players) and ordinary P
 Java and Bedrock players follow the same rules in any mix. No packets, Geyser or Floodgate settings
 are touched, and max health is still set only by the heart system.
 
+## Alliances and rivalries (issue #1405)
+
+Teams can form **alliances** (both leaders agree) and declare **rivalries** (one-sided labels).
+Lifesteal only: the code is in `lifesteal/teams/` (`TeamRelationStore`, `TeamRelationRules`,
+`LifestealTeamRelations`, `TeamRelationsMenu`, `AllianceChatCommand`), reached through the Lifesteal
+side of `/team` and `/ac`. Survival teams, commands and permissions are untouched.
+
+### Rules
+
+| | Alliance | Rivalry |
+|---|---|---|
+| Per team | **one** active alliance (`lifesteal_team_alliance_slots.team_id` PRIMARY KEY) | **one** declared rival (partial UNIQUE index); any number of teams may declare *you* |
+| Created by | the source leader sends a request, the target's **current** leader accepts | the declaring team's current leader; no approval, the target is told |
+| Ended by | either team's current leader, no approval (`/team ally leave`) | only the declaring team's current leader (`/team rival remove`) |
+| Cooldown | **24 h for both teams** after a leader ends it (`dissolution-cooldown-hours`); never after a disband | none |
+| Gives | friendly-fire protection, no heart stealing between allies, `/ac` chat | nothing (label only: no Coins, hearts, rewards, kill/death statistics, scores or Elo) |
+
+- Alliance and rivalry between the same two teams can't coexist, in either direction: a request is
+  refused (and an accept re-refused) while any rivalry exists between them, and a rivalry against an
+  ally is refused. An alliance is **never** dissolved automatically to make room for a rivalry: end
+  it first (normal rules, both teams get the cooldown), then declare. Alliance cooldowns don't
+  restrict rivalries. Database triggers refuse both combinations and self-relationships too.
+- Requests have a random id, source and target team ids, sender, `created_at` and `expires_at`
+  (UTC millis, default +24 h, `request-expiration-hours`). Expiry is judged from the stored time, so
+  requests keep counting down while the server is offline. A request reserves nothing: accepting
+  re-checks that both teams exist, the acceptor leads the target **now**, the request is still
+  pending and unexpired, neither team has an alliance or cooldown and there's no rivalry. Accepting
+  invalidates every other pending request involving either team. Requests end as ACCEPTED,
+  DECLINED, CANCELLED, EXPIRED or INVALIDATED (alliance, rivalry or disband) and are kept as history.
+- Anti-spam: one pending request per (source, target); a request to a team that already asked you
+  points you to `/team ally accept`; at most **3** pending outgoing requests per team; after a
+  request was declined or cancelled, the same team can't be asked again for **10 minutes**. The
+  existing 300 ms / one-at-a-time action throttle applies too.
+- Accepting is refused while any member of either team is combat-tagged, so an alliance can't be
+  formed mid-fight to end a legitimate fight (and its heart) retroactively. Ending one is always
+  allowed and takes effect immediately.
+- Leadership is read live in every transaction: a former leader can't accept, decline, cancel,
+  dissolve, declare or withdraw anything; the new leader can at once. A transfer keeps the alliance,
+  rivalries, pending requests and the cooldown exactly as they were.
+
+### Friendly fire and hearts
+
+Allies are decided from the **current** membership cache and the **current** alliance only
+(`TeamCombatRules.Relation.ALLIES` via `withAlliance`); there is no grace window, so protection ends
+the instant an alliance (or a membership) ends. With `alliances.friendly-fire: false` (default) the
+existing `LifestealTeamCombatListener` cancels an ally's damage exactly as it does a teammate's
+(melee, projectiles by shooter, fireworks, harming/lingering potions, combustion, TNT and End
+Crystals, judged by `damageSource.causingEntity`), even when team friendly fire is on; fall, lava,
+fire ticks, mobs and other environment damage are never touched, and hits between unrelated teams
+are unchanged. Cancelled hits create no combat tag. The Combat NPC of a logged-out ally is protected
+the same way.
+
+Allies **never** steal hearts from each other: `heartCheck` returns `ALLIES` → `HeartRules.Decision.Allies`
+(no heart moved, no cooldown, deduplicated, audited `PVP_REJECTED` / `ALLIES`), even with alliance
+friendly fire on. Lifesteal bounties treat allies like teammates (no claim). Teammate rules,
+limits and cooldowns are unchanged.
+
+### Ranked Team Wars
+
+Inside a match the roster sides decide first (`rankedSides` runs before any alliance check), so allied
+teams can be matched (nothing in matchmaking reads alliances or rivalries) and fight normally: hits
+land, hearts are at risk under the normal heart rules, inventory snapshots/restores are unchanged.
+The override covers only the two players of the **same** match; a participant and an ally outside
+that match are still protected, and the moment the match ends the ordinary alliance protection is back.
+Rivalries are never read by matchmaking, individual Elo or team Elo.
+
+### Alliance chat
+
+`/ac <message>` (alias `/alliancechat`; JoshyMC had no `/ac` before; it's only registered where
+Lifesteal is hosted, LIFESTEAL scope; if another plugin also claims `/ac`, `/joshymc:ac` always
+works). Sent as `[Alliance] [Team] Name: message` to the online members, in Lifesteal, of the
+sender's team and its current ally, never anyone else and never public chat. Recipients are
+recomputed from the relationship cache right before delivery. It follows the rules a public message
+meets: Lifesteal-scoped mutes (`isMutedIn`), the global chat mute (`joshymc.chat.mute.bypass`), the
+profanity filter (`joshymc.chat.profanity.bypass`), the repeated-message rule of
+`chat.anti-spam` (the message is refused; no automatic mute from `/ac`), and `/ignore`. Messages are
+logged to the console like chat. Lifesteal teams have **no** team chat, so there is nothing to leak.
+
+### Land and permissions
+
+Alliances grant nothing else: no claims, containers, block access, team management, invitations,
+banks, storage or permissions. Nothing outside `lifesteal/teams/` reads alliances (checked), no
+permission group changes and no membership or ownership changes.
+
+### Disbanding
+
+`LifestealTeamStore.disband` calls `TeamRelationStore.cleanupDisbanded` **inside the disband
+transaction**: the alliance ends as `ENDED_DISBANDED` with **no** cooldown for the survivor (it can
+ally again at once), the disbanded team's cooldown row is deleted, its outgoing and every incoming
+rivalry become REMOVED, and pending requests involving it INVALIDATED. Affected teams are told. A
+second disband/cleanup finds nothing. At startup, `repairOrphans` cleans any relationship that still
+references a team that isn't ACTIVE (crash or manual edit), and requests that ran out during
+downtime are expired.
+
+### Notifications
+
+Only the affected teams' online members are told (request received/sent, accepted, declined,
+cancelled, expired, alliance formed/ended + cooldown, rivalry declared/withdrawn, removals after a
+disband); nothing is broadcast. **Offline limitation**: there is no offline notification store for
+teams, so offline members aren't told later, except that a leader joining is reminded of pending
+incoming requests. Everything is visible in `/team info` and the menu.
+
+### Commands
+
+| Command | Who | |
+|---|---|---|
+| `/team ally` | member | Alliances & Rivalries menu |
+| `/team ally <team>` (`/team ally request <team>`) | leader | Send a request |
+| `/team ally accept [team]` / `deny [team]` (`decline`) | target leader | Team may be left out with exactly one request |
+| `/team ally cancel [team]` | source leader | |
+| `/team ally leave [confirm]` (`end`, `dissolve`) | either allied leader | Asks first; starts the cooldown |
+| `/team rival <team>` (`/team rival declare <team>`) | leader | |
+| `/team rival remove` (`withdraw`) | declaring leader | |
+| `/ac <message>` | members of allied teams | |
+
+Team names are matched exactly (case-insensitive), never by prefix. Keywords win over team names: a
+team literally called `accept` is asked with `/team ally request accept`. Tab completion only
+offers teams the keyword can act on. No new permission: everything uses `joshymc.lifesteal.team.use`,
+leadership is the only authority, and there is no admin bypass. `/team admin info <team>` adds the
+pending requests; `/team admin pvp` shows "allies".
+
+### GUI and profiles
+
+The `/team` main menu now has six entries centered in the middle row with the middle slot empty
+(the `SettingsLayout` rule): Your Team 10, Members 11, Invitations 12, Management 14,
+**Alliances & Rivalries 15**, Available Teams 16. The relations screen (27 slots): Alliance 10
+(green; leader: end it / pick a team), Incoming 11, Outgoing 12, Declared Rival 14 (red; leader:
+withdraw / pick a team), Rivals Against You 15, Alliance Cooldown 16; Back/Close as usual. Requests
+(36 slots): incoming row 1 (leader: left-click accept, right-click decline), outgoing row 2 (leader:
+click to cancel); members see them read-only. Clicking a team in **Available Teams** now opens its
+public **profile** (36 slots) instead of printing `/team info`: leader, member heads (leader first,
+gold), Alliance (green), Declared Rival (red, "(mutual)" only when both declared) and Rival of (red,
+declared *against* it); a leader of another team also gets Request/Accept/Cancel/End Alliance (20)
+and Declare/Withdraw Rival (24). `/team info [team]` shows the same lines (plus the team's own
+cooldown for its members). Chat formatting is unchanged.
+
+Every click re-reads the team by id and calls the same `LifestealTeamRelations` action as the
+command (current leader and state re-checked, then again in the store transaction), so a stale menu
+can't accept an expired request or act with outdated leadership; shared GuiManager rules keep items
+from being moved. Open menus aren't refreshed live; they show the new state when reopened.
+
+### Storage (same `data.db`, created where Lifesteal teams run; no migration of existing tables)
+
+| Table | |
+|---|---|
+| `lifesteal_team_alliances` | `id`, `team_a`/`team_b` (sorted team ids), `status` ACTIVE/DISSOLVED/ENDED_DISBANDED, `created_at`, `request_id`, `ended_at`, `ended_by`, `end_reason` |
+| `lifesteal_team_alliance_slots` | `team_id` PRIMARY KEY, `alliance_id`: the one-alliance guard |
+| `lifesteal_team_alliance_requests` | `id`, `source_team`, `target_team`, `sender`, `created_at`, `expires_at`, `status`, `resolved_at`, `resolved_by`; UNIQUE (source, target) while PENDING |
+| `lifesteal_team_alliance_cooldowns` | `team_id` PRIMARY KEY, `until`, `alliance_id`, `started_at` (a longer cooldown is never shortened) |
+| `lifesteal_team_rivalries` | `id`, `declarer_team`, `target_team`, `declared_by`, `declared_at`, `status` ACTIVE/WITHDRAWN/REMOVED, `ended_at`, `ended_by`, `end_reason`; one ACTIVE per declarer |
+
+Every change is one transaction with conditional updates and is audited in the existing
+`lifesteal_team_audit` (`ALLY_*`, `RIVAL_*`, `RELATIONS_REMOVED_DISBANDED`). Changes run on the team
+worker thread, never the main thread; the manager's relationship cache is replaced on that thread
+right after each commit, so damage events and `/ac` never query the database. With
+`alliances.enabled: false` or `rivalries.enabled: false` nothing is deleted.
+
+### Configuration (`lifesteal.yml > teams`)
+
+| Key | Default | Valid |
+|---|---|---|
+| `alliances.enabled` | true | false = no protection, no `/ac`, no alliance changes (data kept) |
+| `alliances.request-expiration-hours` | 24 | 1..168 |
+| `alliances.dissolution-cooldown-hours` | 24 | 0..720 |
+| `alliances.friendly-fire` | false | true = allies can damage each other (still no heart stealing) |
+| `alliances.chat-enabled` | true | `/ac` |
+| `rivalries.enabled` | true | false = no new declarations/withdrawals (labels still shown) |
+
+A file without these keys loads the defaults with one warning; a wrong value makes `lifesteal.yml`
+invalid like every Lifesteal setting.
+
+### Tests
+
+`./gradlew -I scripts/lifesteal-alliance-check.init.gradle.kts lifestealAllianceCheck`
+(`scripts/LifestealAllianceCheck.kt`, real SQLite in temp folders): settings; request sending,
+authorization, duplicates, reverse requests, anti-spam, decline/cancel, 24 h expiry and the sweep;
+acceptance, one alliance per team, invalidation, the slot PRIMARY KEY and triggers; dissolution by
+either leader, double dissolution, the 24 h cooldown both ways and its exact end; rivalries
+(one-sided, one per team, independent slots, only the declarer withdraws, no cooldown, no rewards or
+stats in the code); exclusivity in both directions and the triggers; disband cleanup (no survivor
+cooldown, nothing orphaned, idempotent) and startup repair; leadership transfers; restarts
+(alliances, requests with their deadlines, rivalries, cooldowns, downtime expiry); concurrency
+(simultaneous accepts, dissolutions, accept vs rivalry, accept vs disband, duplicate requests);
+ally damage/potion/heart rules incl. the real heart store and ranked sides; chat recipients;
+profiles; and source checks for the Lifesteal-only wiring, mutes/filter/ignore in `/ac`, GUI
+re-checks, land isolation and Survival isolation.
+
+### Manual tests (need a Paper server; not done yet)
+
+1. Teams A, B, C (leaders LA, LB, LC; member MA). MA `/team ally B`: refused. LA `/team ally B`:
+   both teams told; LB sees [Accept]/[Decline] and the typed commands. LB accepts: both teams
+   "now allied". `/team info A` shows Alliance in green; `/team` → Alliances & Rivalries shows it.
+2. MA hits MB with sword, bow, harming splash, lit TNT: no damage, no tag, action bar hint. A zombie,
+   lava and fall still hurt MB. MA hits MC (team C): normal.
+3. `/ac hi` from MA: A and B members see `[Alliance] [A] MA: hi`; C sees nothing. Mute MA: refused.
+4. LA `/team ally C`: refused (one alliance). LB `/team ally leave confirm`: both told + 24h
+   cooldown; MA now damages MB; `/ac` refused; `/team ally C` refused with the time left. Restart:
+   the cooldown is still there.
+5. LA `/team rival B` (right after ending the alliance): works; B is told; `/team info B` shows
+   "Rival of: A" and B's own Declared Rival stays None. LB `/team rival remove`: "no rival".
+   LA `/team ally B` later: refused (rivalry).
+6. LA transfers leadership to MA: LA can no longer accept/withdraw; MA can. Cooldown unchanged.
+7. A allied with B; LA disbands A: B told, B can `/team ally C` immediately.
+8. Ranked test match A vs B while allied: hits land, a kill moves a heart, inventories restore;
+   after the match MA can't hurt MB again.
+9. Survival server: `/ac` doesn't exist, `/team` Survival unchanged, no alliance tables.
+
 ## Commands
 
 `/team` (aliases `/t`, `/teams`) is one command on both gamemodes. `TeamCommandRouter` sends a

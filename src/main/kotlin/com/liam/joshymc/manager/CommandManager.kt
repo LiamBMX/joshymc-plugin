@@ -186,6 +186,17 @@ class CommandManager(private val plugin: Joshymc) {
         } else {
             unregisterCommand("ranked")
         }
+        // Issue #1405: Lifesteal alliance chat (/ac). Lifesteal only: released on servers that don't
+        // host Lifesteal, so Survival never has it (another plugin may own /ac there).
+        if (plugin.lifestealTeamManager.hosted) {
+            plugin.getCommand("ac")?.let {
+                val cmd = com.liam.joshymc.lifesteal.teams.AllianceChatCommand(plugin)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+        } else {
+            unregisterCommand("ac")
+        }
         // Issue #1331: cross-server transfers through the Velocity proxy.
         for (destination in com.liam.joshymc.network.transfer.TransferDestination.entries) {
             plugin.getCommand(destination.command)?.let {

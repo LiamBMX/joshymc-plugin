@@ -50,6 +50,28 @@ data class LifestealSettings(
          * decision still needing approval), so the conservative default is false.
          */
         val teammateHeartTransfers: Boolean = false,
+        /** `teams.alliances` (issue #1405). */
+        val alliances: Alliances = Alliances(),
+        /** `teams.rivalries.enabled` (issue #1405): rivalries are labels only, never a gameplay change. */
+        val rivalriesEnabled: Boolean = true,
+    )
+
+    /**
+     * Team alliances (issue #1405, `lifesteal/teams/`). The one-alliance-per-team and
+     * one-declared-rival-per-team limits are fixed rules ([LifestealRules]), not settings. Turning
+     * [enabled] off pauses alliance protection, alliance chat and every alliance change; stored
+     * alliances, requests and cooldowns are kept as they are.
+     */
+    data class Alliances(
+        val enabled: Boolean = true,
+        /** Hours before a pending alliance request expires (persisted timestamps, so downtime counts). */
+        val requestExpirationHours: Int = 24,
+        /** Hours both teams wait after a voluntary dissolution before forming a new alliance. */
+        val dissolutionCooldownHours: Int = 24,
+        /** false (default) = allied players can't damage each other outside a ranked match. */
+        val friendlyFire: Boolean = false,
+        /** `/ac` alliance chat. */
+        val chatEnabled: Boolean = true,
     )
 
     /**
@@ -273,6 +295,10 @@ object LifestealRules {
     const val MAX_TEAM_MEMBERS = 5
     /** Teams have exactly one leader and plain members: the blueprint defines no officer rank. */
     const val TEAM_OFFICERS = false
+    /** Issue #1405: a team has at most one active alliance (enforced by a PRIMARY KEY on the alliance slot). */
+    const val MAX_ALLIANCES_PER_TEAM = 1
+    /** Issue #1405: a team declares at most one rival (a partial UNIQUE index); rivalries give no rewards or stats. */
+    const val MAX_DECLARED_RIVALS_PER_TEAM = 1
 }
 
 /** Reads and validates `lifesteal.yml`, Bukkit-free. */
@@ -713,7 +739,13 @@ object LifestealConfigParser {
     private val TEAM_KEYS = listOf(
         "enabled", "invite-expiration-seconds", "allow-creation", "allow-disbanding", "name-min-length", "name-max-length", "reserved-names",
         "friendly-fire.enabled", "friendly-fire.heart-transfers",
+        "alliances.enabled", "alliances.request-expiration-hours", "alliances.dissolution-cooldown-hours",
+        "alliances.friendly-fire", "alliances.chat-enabled", "rivalries.enabled",
     )
+    /** Issue #1405: alliance request lifetime and dissolution cooldown bounds (hours). */
+    const val MIN_ALLIANCE_REQUEST_HOURS = 1
+    const val MAX_ALLIANCE_REQUEST_HOURS = 168
+    const val MAX_ALLIANCE_COOLDOWN_HOURS = 720
 
     /**
      * The team-system keys of `teams` (issue #1346). A file from before them only has `max-size`:
@@ -762,7 +794,25 @@ object LifestealConfigParser {
         if (heartTransfers && !friendlyFire) {
             problems += Problem(false, "teams.friendly-fire.heart-transfers is true but friendly fire is off, so it has no effect (teammates can't hurt each other).")
         }
-        return LifestealSettings.Teams(maxSize, enabled, invite, creation, disbanding, minLength, maxLength, reserved, friendlyFire, heartTransfers)
+        val da = d.alliances
+        val alliances = LifestealSettings.Alliances(
+            enabled = bool("alliances.enabled", da.enabled),
+            requestExpirationHours = number(
+                "alliances.request-expiration-hours", da.requestExpirationHours, MIN_ALLIANCE_REQUEST_HOURS, MAX_ALLIANCE_REQUEST_HOURS,
+                "hours before an alliance request expires",
+            ),
+            dissolutionCooldownHours = number(
+                "alliances.dissolution-cooldown-hours", da.dissolutionCooldownHours, 0, MAX_ALLIANCE_COOLDOWN_HOURS,
+                "hours both teams wait after ending an alliance",
+            ),
+            friendlyFire = bool("alliances.friendly-fire", da.friendlyFire),
+            chatEnabled = bool("alliances.chat-enabled", da.chatEnabled),
+        )
+        val rivalries = bool("rivalries.enabled", d.rivalriesEnabled)
+        return LifestealSettings.Teams(
+            maxSize, enabled, invite, creation, disbanding, minLength, maxLength, reserved, friendlyFire, heartTransfers,
+            alliances, rivalries,
+        )
     }
 
     private fun teamSizes(raw: Any?, maxTeam: Int, default: List<Int>, problems: MutableList<Problem>): List<Int> {

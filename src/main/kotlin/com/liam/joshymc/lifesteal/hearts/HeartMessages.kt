@@ -22,6 +22,9 @@ object HeartMessages {
     const val KILLER_TEAMMATE = "&7{victim} is your teammate, so no heart was stolen."
     const val VICTIM_TEAMMATE = "&7{killer} is your teammate, so you kept your heart."
     const val TEAM_UNKNOWN = "&7Team membership couldn't be checked just now, so no heart was stolen."
+    // Team alliances (issue #1405).
+    const val KILLER_ALLY = "&7{victim} is in an allied team, so no heart was stolen."
+    const val VICTIM_ALLY = "&7{killer} is in an allied team, so you kept your heart."
 
     // Launch progression (issue #1352).
     const val GRACE_PERIOD = "&7It's the grace period, so no heart was stolen."

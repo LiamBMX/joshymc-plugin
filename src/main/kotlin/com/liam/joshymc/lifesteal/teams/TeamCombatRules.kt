@@ -14,8 +14,12 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object TeamCombatRules {
 
-    /** `teams.friendly-fire.enabled` and `teams.friendly-fire.heart-transfers`. */
-    data class Policy(val friendlyFire: Boolean, val teammateHeartTransfers: Boolean)
+    /**
+     * `teams.friendly-fire.enabled` and `teams.friendly-fire.heart-transfers`. [allyProtection]
+     * (issue #1405) = alliances are on and `teams.alliances.friendly-fire` is false: allied players
+     * can't damage each other. Allies never steal hearts from each other either way.
+     */
+    data class Policy(val friendlyFire: Boolean, val teammateHeartTransfers: Boolean, val allyProtection: Boolean = true)
 
     enum class Relation {
         /** Not teammates (different teams, one or both without a team, or the same player). */
@@ -35,6 +39,13 @@ object TeamCombatRules {
          * teammate), but no heart is transferred.
          */
         UNKNOWN,
+        /**
+         * Issue #1405: members of two teams in an ACTIVE alliance right now (current membership and
+         * the current alliance only: no grace window, so protection ends the moment an alliance or
+         * a membership does). Never returned inside a Ranked Team Wars match, where the match sides
+         * decide ([rankedRelation]).
+         */
+        ALLIES,
     }
 
     val Relation.teammates: Boolean get() = this == Relation.TEAMMATES || this == Relation.RECENT_TEAMMATES
@@ -64,6 +75,15 @@ object TeamCombatRules {
         return Relation.NOT_TEAMMATES
     }
 
+    /**
+     * Issue #1405: [teamRelation] (from [relation]) refined by alliances. Only two players who are
+     * [Relation.NOT_TEAMMATES] and whose *current* teams are allied ([allied]) become
+     * [Relation.ALLIES]; teammates, recent teammates and unknown membership stay as they are.
+     */
+    fun withAlliance(teamRelation: Relation, teamA: String?, teamB: String?, allied: (String, String) -> Boolean): Relation =
+        if (teamRelation == Relation.NOT_TEAMMATES && teamA != null && teamB != null && teamA != teamB && allied(teamA, teamB)) Relation.ALLIES
+        else teamRelation
+
     enum class DamageDecision {
         /** Leave the damage alone (other rules still apply). */
         ALLOW,
@@ -80,8 +100,10 @@ object TeamCombatRules {
      */
     fun damage(attacker: UUID?, victim: UUID, relation: Relation, policy: Policy?): DamageDecision = when {
         attacker == null || attacker == victim -> DamageDecision.ALLOW
-        policy == null || policy.friendlyFire -> DamageDecision.ALLOW
-        relation.teammates -> DamageDecision.BLOCK_FRIENDLY_FIRE
+        policy == null -> DamageDecision.ALLOW
+        relation.teammates -> if (policy.friendlyFire) DamageDecision.ALLOW else DamageDecision.BLOCK_FRIENDLY_FIRE
+        // Issue #1405: an ally's attack, with alliance protection on.
+        relation == Relation.ALLIES && policy.allyProtection -> DamageDecision.BLOCK_FRIENDLY_FIRE
         else -> DamageDecision.ALLOW
     }
 
@@ -92,6 +114,8 @@ object TeamCombatRules {
         TEAMMATES,
         /** Membership unknown, or the policy couldn't be read: no transfer, nothing guessed. */
         UNKNOWN,
+        /** Issue #1405: allied teams never steal hearts from each other (outside ranked matches). */
+        ALLIES,
     }
 
     /**
@@ -100,6 +124,7 @@ object TeamCombatRules {
      */
     fun heartCheck(relation: Relation, policy: Policy?): HeartCheck = when {
         relation == Relation.UNKNOWN || policy == null -> HeartCheck.UNKNOWN
+        relation == Relation.ALLIES -> HeartCheck.ALLIES
         !relation.teammates -> HeartCheck.ELIGIBLE
         policy.friendlyFire && policy.teammateHeartTransfers -> HeartCheck.ELIGIBLE
         else -> HeartCheck.TEAMMATES
@@ -111,7 +136,9 @@ object TeamCombatRules {
      * reach teammates (healing a teammate is fine).
      */
     fun blocksPotion(anyHarmful: Boolean, relation: Relation, policy: Policy?): Boolean =
-        anyHarmful && policy != null && !policy.friendlyFire && relation.teammates
+        anyHarmful && policy != null && (
+            (!policy.friendlyFire && relation.teammates) || (policy.allyProtection && relation == Relation.ALLIES)
+        )
 
     // ── Team changes during combat ──────────────────────────
 

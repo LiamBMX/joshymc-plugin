@@ -55,11 +55,11 @@ class LifestealTeamCombatListener(private val plugin: Joshymc) : Listener {
         if (attacker.uniqueId == victim.uniqueId || attacker.hasMetadata("NPC") || victim.hasMetadata("NPC")) return
         if (!inLifesteal(victim)) return
         val policy = teams.combatPolicy() ?: return
-        if (policy.friendlyFire) return
+        if (policy.friendlyFire && !policy.allyProtection) return
         val relation = teams.combatRelation(attacker.uniqueId, victim.uniqueId)
         if (TeamCombatRules.damage(attacker.uniqueId, victim.uniqueId, relation, policy) == DamageDecision.BLOCK_FRIENDLY_FIRE) {
             event.isCancelled = true
-            hint(attacker)
+            hint(attacker, relation == TeamCombatRules.Relation.ALLIES)
         }
     }
 
@@ -126,13 +126,14 @@ class LifestealTeamCombatListener(private val plugin: Joshymc) : Listener {
     private fun anyHarmful(effects: Collection<PotionEffect>): Boolean =
         effects.any { it.type.category == PotionEffectTypeCategory.HARMFUL }
 
-    private fun hint(attacker: Player) {
+    private fun hint(attacker: Player, ally: Boolean) {
         val now = System.currentTimeMillis()
         val last = lastHint[attacker.uniqueId]
         if (last != null && now - last < HINT_INTERVAL_MS) return
         lastHint[attacker.uniqueId] = now
         if (lastHint.size > HINT_SWEEP_SIZE) lastHint.entries.removeIf { now - it.value >= HINT_INTERVAL_MS }
-        plugin.commsManager.sendActionBar(attacker, Component.text("Friendly fire is off: that's your teammate.", NamedTextColor.RED))
+        val text = if (ally) "That player is in an allied team." else "Friendly fire is off: that's your teammate."
+        plugin.commsManager.sendActionBar(attacker, Component.text(text, NamedTextColor.RED))
     }
 
     companion object {
