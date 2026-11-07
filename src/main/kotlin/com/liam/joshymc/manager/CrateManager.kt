@@ -43,9 +43,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     }
 
     /**
-     * Shared shape-based reward layout used by BOTH the Preview and Pick-a-Reward
-     * GUIs, so the same crate always renders as the same compact formation in both
-     * places instead of a plain row-by-row fill.
+     * Shape-based reward layout for the Pick-a-Reward (Select / Select 3) GUIs.
+     * The Preview GUI is sized to its rewards by [CratePreviewLayout] instead (issue #1414).
      */
     private object CrateLayout {
         const val USABLE_ROWS = 3
@@ -1895,27 +1894,22 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
             .decoration(TextDecoration.ITALIC, false)
 
-        val totalPages = CrateLayout.pageCount(crate.rewards.size)
+        // Sized to the rewards, no glass rows (issue #1414): see CratePreviewLayout.
+        val total = crate.rewards.size
+        val totalPages = CratePreviewLayout.pageCount(total)
         val safePage = page.coerceIn(0, totalPages - 1)
-        val pageStart = safePage * CrateLayout.PAGE_CAPACITY
-        val pageRewards = crate.rewards.drop(pageStart).take(CrateLayout.PAGE_CAPACITY)
+        val pageStart = CratePreviewLayout.pageStart(total, safePage)
+        val pageRewards = crate.rewards.drop(pageStart).take(CratePreviewLayout.pageSize(total, safePage))
 
-        val size = 45
+        val size = CratePreviewLayout.size(total)
         val gui = CustomGui(title, size)
 
-        // Fill with black glass
-        val filler = ItemStack(Material.BLACK_STAINED_GLASS_PANE)
-        filler.editMeta { it.displayName(Component.empty()) }
-        for (i in 0 until size) gui.inventory.setItem(i, filler.clone())
-
-        // Place rewards in a compact, centered shape-based formation.
         val totalWeight = crate.rewards.sumOf { it.weight }
-        val positions = CrateLayout.positions(pageRewards.size)
+        val slots = CratePreviewLayout.slots(pageRewards.size)
 
         for ((idx, reward) in pageRewards.withIndex()) {
-            if (idx >= positions.size) break
-            val (row, col) = positions[idx]
-            val slot = (row + 1) * 9 + (col + 1)
+            if (idx >= slots.size) break
+            val slot = slots[idx]
             val percentage = (reward.weight.toDouble() / totalWeight * 100).let { "%.1f".format(it) }
 
             // Use serialized item if present (preserves trims, custom items)
@@ -1966,11 +1960,11 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         if (totalPages > 1) {
             if (safePage > 0) {
-                gui.setItem(39, navButton("« Previous Page")) { p, _ -> openPreview(p, crateType, safePage - 1) }
+                gui.setItem(CratePreviewLayout.PREVIOUS_SLOT, navButton("« Previous Page")) { p, _ -> openPreview(p, crateType, safePage - 1) }
             }
-            gui.setItem(40, pageIndicator(safePage + 1, totalPages))
+            gui.setItem(CratePreviewLayout.INDICATOR_SLOT, pageIndicator(safePage + 1, totalPages))
             if (safePage < totalPages - 1) {
-                gui.setItem(41, navButton("Next Page »")) { p, _ -> openPreview(p, crateType, safePage + 1) }
+                gui.setItem(CratePreviewLayout.NEXT_SLOT, navButton("Next Page »")) { p, _ -> openPreview(p, crateType, safePage + 1) }
             }
         }
 
