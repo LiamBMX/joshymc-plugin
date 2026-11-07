@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.SaleManager
+import com.liam.joshymc.manager.SellCatalog
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -65,6 +66,14 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         }
 
         return when (args.getOrNull(0)?.lowercase()) {
+            "admin" -> {
+                if (!sender.hasPermission(ADMIN_PERMISSION)) {
+                    Msg.noPermission(sender)
+                } else {
+                    handleAdmin(sender, args.drop(1))
+                }
+                true
+            }
             "hand" -> {
                 val sellAllOfType = args.getOrNull(1)?.lowercase() == "all"
                 sellHand(sender, sellAllOfType)
@@ -337,15 +346,13 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
 
         for (i in 0 until player.inventory.size) {
             val item = player.inventory.getItem(i) ?: continue
-            if (!plugin.sellPriceManager.isSellable(item)) continue
-
-            val basePrice = plugin.sellPriceManager.getPrice(item.type) ?: continue
-            val price = plugin.serverShopManager.applyCropBonus(basePrice, item.type, player.uniqueId)
-            val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
-            totalEarned += price * mutMult * item.amount
+            val value = plugin.sellPriceManager.getStackValue(item, player)
+            if (value <= 0.0) continue
+            totalEarned += value
             breakdown[item.type] = (breakdown[item.type] ?: 0) + item.amount
             player.inventory.setItem(i, null)
         }
+        totalEarned = SellCatalog.roundCents(totalEarned)
 
         if (totalEarned <= 0) {
             plugin.commsManager.send(player, Component.text("You have nothing to sell.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
@@ -369,29 +376,26 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             return
         }
 
-        val basePrice = plugin.sellPriceManager.getPrice(material)
-        if (basePrice == null) {
+        if (plugin.sellPriceManager.getPrice(material) == null) {
             plugin.commsManager.send(player, Component.text("That item cannot be sold.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
         }
-
-        val price = plugin.serverShopManager.applyCropBonus(basePrice, material, player.uniqueId) *
-            plugin.rankManager.getSellMultiplier(player)
 
         var count = 0
         var totalEarned = 0.0
         for (i in 0 until player.inventory.size) {
             val item = player.inventory.getItem(i) ?: continue
-            if (item.type == material && plugin.sellPriceManager.isSellable(item)) {
-                val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
-                totalEarned += price * mutMult * item.amount
-                count += item.amount
-                player.inventory.setItem(i, null)
-            }
+            if (item.type != material) continue
+            val value = plugin.sellPriceManager.getStackValue(item, player)
+            if (value <= 0.0) continue
+            totalEarned += value
+            count += item.amount
+            player.inventory.setItem(i, null)
         }
+        totalEarned = SellCatalog.roundCents(totalEarned)
 
         if (count == 0) {
-            plugin.commsManager.send(player, Component.text("You don't have any of that item.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+            plugin.commsManager.send(player, Component.text("You don't have any of that item that can be sold.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             return
         }
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
@@ -417,9 +421,6 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         }
 
         val material = handItem.type
-        val basePrice = plugin.sellPriceManager.getPrice(material) ?: return
-        val price = plugin.serverShopManager.applyCropBonus(basePrice, material, player.uniqueId) *
-            plugin.rankManager.getSellMultiplier(player)
         val totalAmount: Int
         val totalEarned: Double
 
@@ -428,20 +429,26 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
             var earned = 0.0
             for (i in 0 until player.inventory.size) {
                 val item = player.inventory.getItem(i) ?: continue
-                if (item.type == material && plugin.sellPriceManager.isSellable(item)) {
-                    val mutMult = plugin.mutationsManager.getMutationMultiplier(item)
-                    earned += price * mutMult * item.amount
-                    count += item.amount
-                    player.inventory.setItem(i, null)
-                }
+                if (item.type != material) continue
+                val value = plugin.sellPriceManager.getStackValue(item, player)
+                if (value <= 0.0) continue
+                earned += value
+                count += item.amount
+                player.inventory.setItem(i, null)
             }
             totalAmount = count
-            totalEarned = earned
+            totalEarned = SellCatalog.roundCents(earned)
         } else {
+            val value = plugin.sellPriceManager.getStackValue(handItem, player)
+            if (value <= 0.0) {
+                plugin.commsManager.send(player, Component.text("This item cannot be sold.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+                return
+            }
             totalAmount = handItem.amount
-            totalEarned = price * plugin.mutationsManager.getMutationMultiplier(handItem) * totalAmount
+            totalEarned = value
             player.inventory.setItemInMainHand(null)
         }
+        if (totalAmount == 0) return
 
         plugin.economyManager.deposit(player.uniqueId, totalEarned)
         plugin.saleManager.recordSale(player, material, totalAmount, SaleManager.Source.SELL_COMMAND, earned = totalEarned)
@@ -470,17 +477,109 @@ class SellCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter, 
         }
     }
 
+    // ══════════════════════════════════════════════════════════
+    //  ADMIN — read-only price diagnostics (issue #1416)
+    // ══════════════════════════════════════════════════════════
+
+    private fun handleAdmin(player: Player, args: List<String>) {
+        when (args.getOrNull(0)?.lowercase()) {
+            "hand" -> {
+                val stack = player.inventory.itemInMainHand
+                if (stack.type.isAir) {
+                    plugin.commsManager.send(player, Component.text("You are not holding anything.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+                    return
+                }
+                describe(player, stack.type, plugin.sellPriceManager.rejectionReason(stack), "held stack")
+            }
+            "item" -> {
+                val name = args.drop(1).joinToString("_")
+                val material = Material.matchMaterial(name)
+                if (name.isBlank() || material == null) {
+                    Msg.usage(player, "/sell admin item <material>")
+                    return
+                }
+                val reason = if (material.isItem && !material.isAir) {
+                    plugin.sellPriceManager.rejectionReason(ItemStack(material))
+                } else "not an obtainable item"
+                describe(player, material, reason, "plain stack")
+            }
+            "problems" -> {
+                val problems = plugin.sellPriceManager.catalog().problems
+                val perPage = 10
+                val pages = ((problems.size + perPage - 1) / perPage).coerceAtLeast(1)
+                val page = (args.getOrNull(1)?.toIntOrNull() ?: 1).coerceIn(1, pages)
+                plugin.commsManager.send(player,
+                    Component.text("sell-prices.yml problems: ${problems.size} (page $page/$pages)", NamedTextColor.GOLD),
+                    CommunicationsManager.Category.ECONOMY)
+                for (p in problems.drop((page - 1) * perPage).take(perPage)) {
+                    player.sendMessage(
+                        Component.text(" ${p.kind.label}: ", NamedTextColor.YELLOW)
+                            .append(Component.text(p.key, NamedTextColor.WHITE))
+                            .append(Component.text(" — ${p.detail}", NamedTextColor.GRAY))
+                    )
+                }
+                if (page < pages) player.sendMessage(Component.text(" Next: /sell admin problems ${page + 1}", NamedTextColor.DARK_GRAY))
+            }
+            "summary" -> {
+                val catalog = plugin.sellPriceManager.catalog()
+                plugin.commsManager.send(player,
+                    Component.text("Sellable materials: ${catalog.prices.size} (source: sell-prices.yml > prices:)", NamedTextColor.GOLD),
+                    CommunicationsManager.Category.ECONOMY)
+                for (kind in SellCatalog.Kind.entries) {
+                    val n = catalog.count(kind)
+                    if (n > 0) player.sendMessage(Component.text(" ${kind.label}: $n", NamedTextColor.GRAY))
+                }
+            }
+            else -> Msg.usage(player, "/sell admin <hand|item <material>|problems [page]|summary>")
+        }
+    }
+
+    private fun describe(player: Player, material: Material, reason: String?, what: String) {
+        val catalog = plugin.sellPriceManager.catalog()
+        val price = plugin.sellPriceManager.getPrice(material)
+        val sourceKey = catalog.sourceKeys[material.name]
+        val configProblem = catalog.rejected[material.name]
+        plugin.commsManager.send(player,
+            Component.text(material.name, NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true),
+            CommunicationsManager.Category.ECONOMY)
+        player.sendMessage(Component.text(" Effective unit price: ", NamedTextColor.GRAY)
+            .append(Component.text(price?.let { plugin.economyManager.format(it) } ?: "none", NamedTextColor.WHITE)))
+        player.sendMessage(Component.text(" Source: ", NamedTextColor.GRAY)
+            .append(Component.text(
+                when {
+                    sourceKey != null -> "sell-prices.yml > prices.$sourceKey"
+                    configProblem != null -> "prices.${configProblem.key} (${configProblem.kind.label}: ${configProblem.detail})"
+                    else -> "not in prices:"
+                }, NamedTextColor.WHITE)))
+        player.sendMessage(Component.text(" Category (display only): ", NamedTextColor.GRAY)
+            .append(Component.text(catalog.categoryOf[material.name] ?: "none", NamedTextColor.WHITE)))
+        player.sendMessage(Component.text(" Sellable ($what): ", NamedTextColor.GRAY)
+            .append(if (reason == null) Component.text("yes", NamedTextColor.GREEN)
+                    else Component.text("no — $reason", NamedTextColor.RED)))
+    }
+
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (sender !is Player) return emptyList()
+        val admin = sender.hasPermission(ADMIN_PERMISSION)
 
         return when (args.size) {
-            1 -> listOf("all", "hand").filter { it.startsWith(args[0].lowercase()) }
+            1 -> (if (admin) listOf("all", "hand", "admin") else listOf("all", "hand")).filter { it.startsWith(args[0].lowercase()) }
             2 -> when (args[0].lowercase()) {
                 "hand" -> listOf("all").filter { it.startsWith(args[1], ignoreCase = true) }
                 "all" -> sellableMaterials.filter { it.startsWith(args[1].lowercase()) }.take(30)
+                "admin" -> if (admin) listOf("hand", "item", "problems", "summary").filter { it.startsWith(args[1].lowercase()) } else emptyList()
                 else -> emptyList()
             }
+            3 -> if (admin && args[0].equals("admin", true) && args[1].equals("item", true)) {
+                Material.entries.asSequence().filter { it.isItem && !it.isAir && !it.isLegacy }
+                    .map { it.name.lowercase() }.filter { it.startsWith(args[2].lowercase()) }.take(30).toList()
+            } else emptyList()
             else -> emptyList()
         }
+    }
+
+    companion object {
+        /** Read-only sell-price diagnostics (`/sell admin`), op by default. */
+        const val ADMIN_PERMISSION = "joshymc.sell.admin"
     }
 }

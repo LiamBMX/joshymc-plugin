@@ -596,14 +596,21 @@ class MarketManager(private val plugin: Joshymc) {
         }
 
         val inventory = player.inventory
+        // Issue #1416: only ordinary stacks of this material count (custom items, crate keys,
+        // vouchers etc. sharing the material are skipped), and the payout is the shared
+        // SellPriceManager formula, the same one /sell uses.
+        fun sellable(stack: ItemStack) = stack.type == material && plugin.sellPriceManager.isSellable(stack)
 
         if (amount == -1) {
             // Sell all
             var totalCount = 0
+            var totalEarned = 0.0
             for (slot in 0 until inventory.size) {
                 val stack = inventory.getItem(slot) ?: continue
-                if (stack.type == material) {
+                if (sellable(stack)) {
                     totalCount += stack.amount
+                    totalEarned += plugin.sellPriceManager.getStackValue(stack, player)
+                    inventory.setItem(slot, null)
                 }
             }
 
@@ -618,21 +625,7 @@ class MarketManager(private val plugin: Joshymc) {
                 return
             }
 
-            var remaining = totalCount
-            for (slot in 0 until inventory.size) {
-                if (remaining <= 0) break
-                val stack = inventory.getItem(slot) ?: continue
-                if (stack.type == material) {
-                    val take = remaining.coerceAtMost(stack.amount)
-                    stack.amount -= take
-                    remaining -= take
-                    if (stack.amount <= 0) {
-                        inventory.setItem(slot, null)
-                    }
-                }
-            }
-
-            val totalEarned = price * totalCount
+            totalEarned = SellCatalog.roundCents(totalEarned)
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
             plugin.saleManager.recordSale(player, material, totalCount, SaleManager.Source.MARKET, earned = totalEarned)
 
@@ -646,7 +639,8 @@ class MarketManager(private val plugin: Joshymc) {
             )
             player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.0f)
         } else {
-            if (!inventory.contains(material, amount)) {
+            val available = (0 until inventory.size).sumOf { inventory.getItem(it)?.takeIf(::sellable)?.amount ?: 0 }
+            if (available < amount) {
                 plugin.commsManager.send(player,
                     Component.text("You don't have enough ", NamedTextColor.RED)
                         .append(Component.text(formatMaterialName(material), NamedTextColor.WHITE))
@@ -658,11 +652,13 @@ class MarketManager(private val plugin: Joshymc) {
             }
 
             var remaining = amount
+            var totalEarned = 0.0
             for (slot in 0 until inventory.size) {
                 if (remaining <= 0) break
                 val stack = inventory.getItem(slot) ?: continue
-                if (stack.type == material) {
+                if (sellable(stack)) {
                     val take = remaining.coerceAtMost(stack.amount)
+                    totalEarned += plugin.sellPriceManager.getStackValue(stack.clone().apply { this.amount = take }, player)
                     stack.amount -= take
                     remaining -= take
                     if (stack.amount <= 0) {
@@ -671,7 +667,7 @@ class MarketManager(private val plugin: Joshymc) {
                 }
             }
 
-            val totalEarned = price * amount
+            totalEarned = SellCatalog.roundCents(totalEarned)
             plugin.economyManager.deposit(player.uniqueId, totalEarned)
             plugin.saleManager.recordSale(player, material, amount, SaleManager.Source.MARKET, earned = totalEarned)
 

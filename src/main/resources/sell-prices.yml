@@ -5,16 +5,21 @@
 # vanilla items: open /sell, drop items into the deposit GUI, close it to
 # sell everything valid.
 #
-# Only materials listed below can be sold. Armor, tools, weapons, spawners,
-# spawn eggs, and admin/creative/unobtainable blocks are intentionally left
-# out entirely instead of needing a separate blacklist — if it's not listed
-# here, /sell will politely hand it straight back to the player.
+# Only materials listed under prices: can be sold (issue #1416). It is the one
+# authoritative price list: /sell (GUI, hand, all), /worth, the held-item Sell
+# line, /market price and Sell Wands all read it. The categories: block at the
+# bottom only groups items for display and never affects selling.
+# Weapons, armor, the main tools, spawners, spawn eggs, shulker boxes and
+# admin/unobtainable blocks are never sellable, even if listed here.
 #
 # Prices are PER SINGLE ITEM (not per stack) and support decimals, e.g.
-# Dirt at 0.25 means a stack of 64 sells for exactly $16.00.
+# Dirt at 0.25 means a stack of 64 sells for exactly $16.00. Set a price to 0
+# to disable an item. Each material should appear once; the startup log and
+# /sell admin problems report duplicates, unknown names and invalid prices.
 #
-# JoshyMC custom items (anything tagged with a custom item id) are always
-# rejected regardless of what's configured here for their base material.
+# Only ordinary vanilla stacks sell. JoshyMC custom items, crate keys,
+# vouchers and anything else carrying plugin data or a custom model are
+# always rejected regardless of what's configured here for their base material.
 prices:
   # ══════════════════════════════════════════════════════
   # ULTRA-COMMON BLOCKS
@@ -37,6 +42,12 @@ prices:
   CLAY: 3.00
   MUD: 0.75
   PACKED_MUD: 1.50
+  # Issue #1416 additions. A Clay block breaks into 4 Clay Balls and 4 craft back into
+  # one, so CLAY_BALL = CLAY / 4; likewise SNOW_BLOCK = 4 x SNOWBALL.
+  CLAY_BALL: 0.75
+  MOSSY_COBBLESTONE: 1.00
+  SNOWBALL: 0.10
+  SNOW_BLOCK: 0.40
 
   # ══════════════════════════════════════════════════════
   # STONE / BUILDING BLOCKS
@@ -291,6 +302,9 @@ prices:
   CHERRY_SAPLING: 8
   PALE_OAK_SAPLING: 8
   MANGROVE_PROPAGULE: 7
+  # Issue #1416 additions (mangrove tree farms; muddy roots = roots + mud, priced below both).
+  MANGROVE_ROOTS: 2
+  MUDDY_MANGROVE_ROOTS: 2.50
   AZALEA: 8
   FLOWERING_AZALEA: 10
 
@@ -355,6 +369,13 @@ prices:
   PITCHER_POD: 20
   PITCHER_PLANT: 30
   APPLE: 25
+  # Issue #1416 additions. Reversible crafts are priced exactly at their parts, so
+  # crafting back and forth never makes money (HAY_BLOCK = 9 x WHEAT, and so on).
+  HAY_BLOCK: 135
+  KELP: 2.25
+  DRIED_KELP_BLOCK: 54
+  BROWN_MUSHROOM: 5
+  RED_MUSHROOM: 5
 
   # ══════════════════════════════════════════════════════
   # FLOWERS
@@ -439,6 +460,12 @@ prices:
   ROTTEN_FLESH: 25
   BONE: 40
   BONE_MEAL: 15
+  # Issue #1416: 9 Bone Meal <-> 1 Bone Block, so the block is exactly 9 x BONE_MEAL.
+  BONE_BLOCK: 135
+  # Issue #1416: eggs (all three chicken variants).
+  EGG: 3
+  BROWN_EGG: 3
+  BLUE_EGG: 3
   GUNPOWDER: 100
   SLIME_BALL: 125
   MAGMA_CREAM: 175
@@ -1062,25 +1089,17 @@ prices:
   FIREWORK_ROCKET: 20
   FIREWORK_STAR: 25
   EXPERIENCE_BOTTLE: 50
-# JoshyMC Sell Price Catalog
+# ══════════════════════════════════════════════════════
+# CATEGORIES — ORGANIZATIONAL ONLY (issue #1416)
+# ══════════════════════════════════════════════════════
+# Groups materials for display. Categories never make an item sellable, never
+# decide whether /sell or /worth recognize it, and never set its price: only the
+# prices: list above does. An item can be sold without being in any category.
 #
-# This is the single source of truth for "what is this item worth" across the whole
-# plugin. ServerShopManager.getSellPrice()/getBaseSellPrice() read from this file (in
-# addition to shop.yml) — both /sell and /worth use those same methods, so a price
-# changed here updates everywhere automatically. There is no separate config for /worth.
-#
-# Unlike shop.yml (a server-controlled money-sink shop for gear/decor/convenience
-# items), this file exists specifically for the bulk-resource sell economy — ores,
-# crops, building blocks, mob drops, etc. — that shop.yml intentionally excludes.
-#
-# Fields per item (same shape as shop.yml, "buy" is simply omitted/left at 0):
-#   sell      - price paid when sold via /sell (0 or omitted = cannot sell)
-#   enabled   - set to false to hide the item entirely (default true)
-#   material  - only needed when the yaml key isn't itself a valid Material name
-#   name      - display name override (defaults to a title-cased material name)
-#
-# Do NOT add tools/weapons/armor, spawners, spawn eggs, or admin/unobtainable items
-# here — those stay non-sellable by design.
+# Older versions of this file had a "sell:" value on each entry. Those values were
+# never paid by /sell; they only leaked into the held-item Sell line and
+# /market price. They are ignored now, and the startup log (and /sell admin
+# problems) lists any that differ from prices: so they can be deleted.
 
 categories:
   blocks:
@@ -1088,309 +1107,194 @@ categories:
     icon: STONE
     enabled: true
     items:
-      DIRT:
-        sell: 0.25
-      GRASS_BLOCK:
-        sell: 0.5
-      COBBLESTONE:
-        sell: 0.5
-      STONE:
-        sell: 0.5
-      SAND:
-        sell: 0.5
-      GRAVEL:
-        sell: 0.5
-      ANDESITE:
-        sell: 0.5
-      DIORITE:
-        sell: 0.5
-      GRANITE:
-        sell: 0.5
-      SANDSTONE:
-        sell: 1
-      MOSSY_COBBLESTONE:
-        sell: 1
-      CLAY_BALL:
-        sell: 5
+      DIRT: {}
+      GRASS_BLOCK: {}
+      COBBLESTONE: {}
+      STONE: {}
+      SAND: {}
+      GRAVEL: {}
+      ANDESITE: {}
+      DIORITE: {}
+      GRANITE: {}
+      SANDSTONE: {}
+      MOSSY_COBBLESTONE: {}
+      CLAY_BALL: {}
 
   wood:
     name: "Wood"
     icon: OAK_LOG
     enabled: true
     items:
-      OAK_LOG:
-        sell: 15
-      SPRUCE_LOG:
-        sell: 15
-      BIRCH_LOG:
-        sell: 15
-      JUNGLE_LOG:
-        sell: 18
-      ACACIA_LOG:
-        sell: 18
-      DARK_OAK_LOG:
-        sell: 20
-      MANGROVE_LOG:
-        sell: 20
-      CHERRY_LOG:
-        sell: 22
-      CRIMSON_STEM:
-        sell: 25
-      WARPED_STEM:
-        sell: 25
+      OAK_LOG: {}
+      SPRUCE_LOG: {}
+      BIRCH_LOG: {}
+      JUNGLE_LOG: {}
+      ACACIA_LOG: {}
+      DARK_OAK_LOG: {}
+      MANGROVE_LOG: {}
+      CHERRY_LOG: {}
+      CRIMSON_STEM: {}
+      WARPED_STEM: {}
 
   farming:
     name: "Farming"
     icon: WHEAT
     enabled: true
     items:
-      WHEAT:
-        sell: 15
-      CARROT:
-        sell: 10
-      POTATO:
-        sell: 10
-      BEETROOT:
-        sell: 10
-      MELON_SLICE:
-        sell: 5
-      PUMPKIN:
-        sell: 20
-      SUGAR_CANE:
-        sell: 8
-      BAMBOO:
-        sell: 8
-      COCOA_BEANS:
-        sell: 12
-      NETHER_WART:
-        sell: 15
+      WHEAT: {}
+      CARROT: {}
+      POTATO: {}
+      BEETROOT: {}
+      MELON_SLICE: {}
+      PUMPKIN: {}
+      SUGAR_CANE: {}
+      BAMBOO: {}
+      COCOA_BEANS: {}
+      NETHER_WART: {}
 
   mob_drops:
     name: "Mob Drops"
     icon: ROTTEN_FLESH
     enabled: true
     items:
-      ROTTEN_FLESH:
-        sell: 2
-      BONE:
-        sell: 10
-      STRING:
-        sell: 50
-      SPIDER_EYE:
-        sell: 15
-      GUNPOWDER:
-        sell: 25
-      LEATHER:
-        sell: 150
-      FEATHER:
-        sell: 20
-      RABBIT_HIDE:
-        sell: 15
-      RABBIT_FOOT:
-        sell: 100
-      SLIME_BALL:
-        sell: 30
-      MAGMA_CREAM:
-        sell: 40
-      INK_SAC:
-        sell: 10
-      GLOW_INK_SAC:
-        sell: 15
-      PHANTOM_MEMBRANE:
-        sell: 60
+      ROTTEN_FLESH: {}
+      BONE: {}
+      STRING: {}
+      SPIDER_EYE: {}
+      GUNPOWDER: {}
+      LEATHER: {}
+      FEATHER: {}
+      RABBIT_HIDE: {}
+      RABBIT_FOOT: {}
+      SLIME_BALL: {}
+      MAGMA_CREAM: {}
+      INK_SAC: {}
+      GLOW_INK_SAC: {}
+      PHANTOM_MEMBRANE: {}
 
   ores:
     name: "Ores & Minerals"
     icon: DIAMOND
     enabled: true
     items:
-      COAL:
-        sell: 20
-      IRON_INGOT:
-        sell: 175
-      GOLD_INGOT:
-        sell: 250
-      COPPER_INGOT:
-        sell: 40
-      REDSTONE:
-        sell: 15
-      LAPIS_LAZULI:
-        sell: 20
-      DIAMOND:
-        sell: 1000
-      EMERALD:
-        sell: 600
-      NETHERITE_SCRAP:
-        sell: 3000
-      NETHERITE_INGOT:
-        sell: 8000
-      RAW_IRON:
-        sell: 150
-      RAW_GOLD:
-        sell: 220
-      RAW_COPPER:
-        sell: 35
-      AMETHYST_SHARD:
-        sell: 50
+      COAL: {}
+      IRON_INGOT: {}
+      GOLD_INGOT: {}
+      COPPER_INGOT: {}
+      REDSTONE: {}
+      LAPIS_LAZULI: {}
+      DIAMOND: {}
+      EMERALD: {}
+      NETHERITE_SCRAP: {}
+      NETHERITE_INGOT: {}
+      RAW_IRON: {}
+      RAW_GOLD: {}
+      RAW_COPPER: {}
+      AMETHYST_SHARD: {}
 
   nether:
     name: "Nether"
     icon: NETHERRACK
     enabled: true
     items:
-      NETHERRACK:
-        sell: 0.5
-      SOUL_SAND:
-        sell: 5
-      QUARTZ:
-        sell: 30
-      BLAZE_ROD:
-        sell: 400
-      BLAZE_POWDER:
-        sell: 200
-      GHAST_TEAR:
-        sell: 750
+      NETHERRACK: {}
+      SOUL_SAND: {}
+      QUARTZ: {}
+      BLAZE_ROD: {}
+      BLAZE_POWDER: {}
+      GHAST_TEAR: {}
 
   end:
     name: "End"
     icon: END_STONE
     enabled: true
     items:
-      END_STONE:
-        sell: 3
-      CHORUS_FRUIT:
-        sell: 10
-      POPPED_CHORUS_FRUIT:
-        sell: 12
-      SHULKER_SHELL:
-        sell: 5000
-      DRAGON_BREATH:
-        sell: 500
+      END_STONE: {}
+      CHORUS_FRUIT: {}
+      POPPED_CHORUS_FRUIT: {}
+      SHULKER_SHELL: {}
+      DRAGON_BREATH: {}
 
   ocean:
     name: "Ocean"
     icon: PRISMARINE_SHARD
     enabled: true
     items:
-      PRISMARINE_SHARD:
-        sell: 15
-      PRISMARINE_CRYSTALS:
-        sell: 20
-      KELP:
-        sell: 2
-      PUFFERFISH:
-        sell: 10
-      TROPICAL_FISH:
-        sell: 15
-      COD:
-        sell: 8
-      SALMON:
-        sell: 10
-      NAUTILUS_SHELL:
-        sell: 300
-      SPONGE:
-        sell: 100
+      PRISMARINE_SHARD: {}
+      PRISMARINE_CRYSTALS: {}
+      KELP: {}
+      PUFFERFISH: {}
+      TROPICAL_FISH: {}
+      COD: {}
+      SALMON: {}
+      NAUTILUS_SHELL: {}
+      SPONGE: {}
 
   redstone:
     name: "Redstone"
     icon: REPEATER
     enabled: true
     items:
-      REPEATER:
-        sell: 20
-      COMPARATOR:
-        sell: 30
-      PISTON:
-        sell: 25
-      STICKY_PISTON:
-        sell: 35
-      OBSERVER:
-        sell: 40
-      HOPPER:
-        sell: 60
-      DROPPER:
-        sell: 20
-      DISPENSER:
-        sell: 30
-      TNT:
-        sell: 50
+      REPEATER: {}
+      COMPARATOR: {}
+      PISTON: {}
+      STICKY_PISTON: {}
+      OBSERVER: {}
+      HOPPER: {}
+      DROPPER: {}
+      DISPENSER: {}
+      TNT: {}
 
   food:
     name: "Food"
     icon: COOKED_BEEF
     enabled: true
     items:
-      COOKED_BEEF:
-        sell: 15
-      COOKED_PORKCHOP:
-        sell: 15
-      COOKED_CHICKEN:
-        sell: 12
-      BREAD:
-        sell: 8
-      APPLE:
-        sell: 10
-      GOLDEN_CARROT:
-        sell: 40
-      CAKE:
-        sell: 60
-      PUMPKIN_PIE:
-        sell: 25
-      HONEY_BOTTLE:
-        sell: 30
+      COOKED_BEEF: {}
+      COOKED_PORKCHOP: {}
+      COOKED_CHICKEN: {}
+      BREAD: {}
+      APPLE: {}
+      GOLDEN_CARROT: {}
+      CAKE: {}
+      PUMPKIN_PIE: {}
+      HONEY_BOTTLE: {}
 
   decoration:
     name: "Decoration"
     icon: GLOWSTONE_DUST
     enabled: true
     items:
-      GLOWSTONE_DUST:
-        sell: 20
-      BONE_MEAL:
-        sell: 5
-      SEA_LANTERN:
-        sell: 60
+      GLOWSTONE_DUST: {}
+      BONE_MEAL: {}
+      SEA_LANTERN: {}
 
   utility:
     name: "Utility"
     icon: ARROW
     enabled: true
     items:
-      ARROW:
-        sell: 3
-      LEAD:
-        sell: 15
-      NAME_TAG:
-        sell: 50
-      SADDLE:
-        sell: 100
-      BOOK:
-        sell: 10
-      PAPER:
-        sell: 2
-      GLASS_BOTTLE:
-        sell: 3
+      ARROW: {}
+      LEAD: {}
+      NAME_TAG: {}
+      BOOK: {}
+      PAPER: {}
+      GLASS_BOTTLE: {}
 
   rare_items:
     name: "Rare Items"
     icon: TOTEM_OF_UNDYING
     enabled: true
     items:
-      TOTEM_OF_UNDYING:
-        sell: 250
-      ECHO_SHARD:
-        sell: 1000
-      WITHER_SKELETON_SKULL:
-        sell: 2000
+      TOTEM_OF_UNDYING: {}
+      ECHO_SHARD: {}
+      WITHER_SKELETON_SKULL: {}
 
   other:
     name: "Other"
     icon: CHEST
     enabled: true
     items:
-      HONEYCOMB:
-        sell: 15
-      SHROOMLIGHT:
-        sell: 30
-      DRIED_KELP:
-        sell: 3
+      HONEYCOMB: {}
+      SHROOMLIGHT: {}
+      DRIED_KELP: {}

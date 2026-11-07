@@ -18,7 +18,10 @@ class WorthListener(private val plugin: Joshymc) : Listener {
         if (item.type == Material.AIR) return
 
         val material = item.type
-        val sellPrice = plugin.marketManager.getCurrentSellPrice(material) ?: return
+        // Issue #1416: the same authoritative price /sell pays, and only for stacks /sell accepts
+        // (a crate key on a Tripwire Hook shows nothing, not the hook's price).
+        if (!plugin.sellPriceManager.isSellable(item)) return
+        val sellPrice = plugin.sellPriceManager.getPrice(material) ?: return
 
         val name = material.name.lowercase().replace('_', ' ')
         val formatted = plugin.economyManager.format(sellPrice)

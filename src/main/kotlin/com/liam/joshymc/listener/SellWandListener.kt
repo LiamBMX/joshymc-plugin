@@ -74,28 +74,22 @@ class SellWandListener(private val plugin: Joshymc) : Listener {
         val chest = block.state as? Chest ?: return
         val inventory = chest.inventory
 
-        // Rank sell-multiplier stacks multiplicatively with the wand's own multiplier —
-        // resolved once per use so it reflects the player's current rank immediately.
-        val rankMult = plugin.rankManager.getSellMultiplier(player)
-
         var totalEarned = 0.0
         val breakdown = mutableMapOf<Material, Int>()
 
         for (i in 0 until inventory.size) {
             val slot = inventory.getItem(i) ?: continue
-            // sellPriceManager is the single authoritative source for sell pricing — the same
-            // one /sell, /sellall and /worth use — so Sell Wands always reflect the current
-            // sell-prices.yml value instead of the stale legacy ServerShopManager catalog.
-            // isSellable() also rejects custom items (e.g. Void Shard = PRISMARINE_SHARD).
+            // sellPriceManager is the single authoritative source for sell pricing and payout
+            // (issue #1416): the same price and formula /sell uses, times the wand's multiplier.
+            // isSellable() also rejects custom items, crate keys, vouchers and other plugin items.
             if (!plugin.sellPriceManager.isSellable(slot)) continue
-            val basePrice = plugin.sellPriceManager.getPrice(slot.type) ?: continue
-
-            val price = plugin.serverShopManager.applyCropBonus(basePrice, slot.type, player.uniqueId)
-            val mutMult = plugin.mutationsManager.getMutationMultiplier(slot)
-            totalEarned += price * multiplier * mutMult * rankMult * slot.amount
+            val value = plugin.sellPriceManager.getStackValue(slot, player, multiplier)
+            if (value <= 0.0) continue
+            totalEarned += value
             breakdown[slot.type] = (breakdown[slot.type] ?: 0) + slot.amount
             inventory.setItem(i, null)
         }
+        totalEarned = com.liam.joshymc.manager.SellCatalog.roundCents(totalEarned)
 
         if (totalEarned <= 0) {
             plugin.commsManager.send(
