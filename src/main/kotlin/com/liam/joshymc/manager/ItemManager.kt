@@ -125,6 +125,8 @@ class ItemManager(private val plugin: Joshymc) {
         register(BatWings())
         // Christmas Tree Elytra (Survival only, issue #1397)
         register(ChristmasTreeElytra())
+        // Peppermint Pickaxe (Survival only, Christmas 2026, issue #1399)
+        register(PeppermintPickaxe())
 
         // Retextured Trial Keys
         register(JanuaryKey())
