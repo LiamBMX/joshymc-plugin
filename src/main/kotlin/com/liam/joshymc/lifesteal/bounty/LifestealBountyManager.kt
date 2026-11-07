@@ -377,6 +377,8 @@ class LifestealBountyManager(private val plugin: Joshymc) {
             TeamCombatRules.Relation.TEAMMATES -> BountyRules.Team.TEAMMATES
             TeamCombatRules.Relation.RECENT_TEAMMATES -> BountyRules.Team.RECENT_TEAMMATES
             TeamCombatRules.Relation.UNKNOWN -> BountyRules.Team.UNKNOWN
+            // Issue #1405: allies can't farm bounties off each other either (no Coins through relationships).
+            TeamCombatRules.Relation.ALLIES -> BountyRules.Team.TEAMMATES
         }
 
     private fun inEvent(player: Player): Boolean = try {

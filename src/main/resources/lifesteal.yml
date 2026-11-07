@@ -68,6 +68,26 @@ teams:
     # Only used while enabled is true: whether killing a teammate can steal a heart. false keeps
     # teammates from farming hearts off each other (a gameplay decision still to be approved).
     heart-transfers: false
+  # Team alliances (docs/lifesteal-teams.md, "Alliances and rivalries"). A team has at most one
+  # alliance; both leaders must agree. Allies get friendly-fire protection and /ac alliance chat
+  # only: never claims, containers, team management or anything else of the other team.
+  alliances:
+    # false = no alliance protection, no /ac and no alliance changes (stored alliances are kept).
+    enabled: true
+    # Hours before an alliance request expires (1 to 168). Counts while the server is offline.
+    request-expiration-hours: 24
+    # Hours BOTH teams wait after an alliance is ended by a leader before forming a new one
+    # (0 to 720). A team disbanding never starts this cooldown for the surviving team.
+    dissolution-cooldown-hours: 24
+    # false = allied players can't damage each other (and never steal hearts from each other).
+    # Inside a Ranked Team Wars match the match sides decide instead, so allies can fight there.
+    friendly-fire: false
+    # /ac alliance chat.
+    chat-enabled: true
+  # Rivalries: one declared rival per team, no approval needed. Labels only: no rewards, hearts,
+  # Coins, statistics or Elo changes, and normal PvP rules apply.
+  rivalries:
+    enabled: true
 
 ranked-team-wars:
   # Master switch for players (issue #1369). false = /ranked is closed and hidden for players, even

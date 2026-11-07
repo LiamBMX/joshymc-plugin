@@ -222,6 +222,11 @@ commands:
     description: Ranked Team Wars queues, match confirmations, team challenges, leaderboards, divisions and statistics (Lifesteal only)
     usage: /ranked [queue <2v2|3v3|4v4|5v5> [teammates]|leave|status|accept|decline|challenge <team> <size> [teammates]|challenge accept|decline <team>|challenge cancel|challenges|stats [player]|rating|history [player] [page]|top [players|teams] [page]|teamstats [team]|divisions|season]
     permission: joshymc.lifesteal.ranked.use
+  ac:
+    description: Alliance chat with your Lifesteal team and its allied team (Lifesteal only)
+    usage: /ac <message>
+    aliases: [alliancechat]
+    permission: joshymc.lifesteal.team.use
   unstuck:
     description: Get out of a spot where you're frozen midair or the world didn't load
     usage: /unstuck [player]

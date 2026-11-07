@@ -594,7 +594,8 @@ private fun wiring() {
     check("rapid commands are throttled", "now - last < ACTION_COOLDOWN_MS" in manager)
     check("older snapshots never overwrite newer ones", "old.version > team.version" in manager && "retiredAt >= team.version" in manager)
     check("session state dropped on quit", "lastAction.remove(player.uniqueId)" in manager)
-    check("membership doesn't live in the session", "fun onQuit(player: Player) {\n        lastAction.remove(player.uniqueId)\n    }" in manager)
+    // Issue #1405: quitting also drops the player's /ac repeat history; membership stays untouched.
+    check("membership doesn't live in the session", "fun onQuit(player: Player) {\n        lastAction.remove(player.uniqueId)\n        relations.onQuit(player)\n    }" in manager)
 
     // Identity: UUIDs only, names are never identifiers, no blocking name lookups.
     check("no Bukkit.getOfflinePlayer(String)", Regex("""getOfflinePlayer\((name|targetName|\w*Name)\)""").find(manager + command + menu) == null)

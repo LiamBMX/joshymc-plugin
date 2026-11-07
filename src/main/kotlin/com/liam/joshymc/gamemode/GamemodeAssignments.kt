@@ -97,6 +97,8 @@ object GamemodeAssignments {
         // Ranked Team Wars queues and team challenges (issue #1363). Also only registered where
         // Lifesteal is hosted (released elsewhere), and refused outside Lifesteal worlds.
         "ranked",
+        // Lifesteal alliance chat (issue #1405). Also only registered where Lifesteal is hosted.
+        "ac",
     )
 
     val COMMANDS: Map<String, GamemodeScope> =

@@ -635,6 +635,7 @@ class HeartStore(private val db: SqliteDatabase) {
         is HeartRules.Decision.Cooldown -> "COOLDOWN"
         HeartRules.Decision.Teammates -> "TEAMMATES"
         HeartRules.Decision.TeamUnknown -> "TEAM_UNKNOWN"
+        HeartRules.Decision.Allies -> "ALLIES"
         HeartRules.Decision.NotLaunched -> "NOT_LAUNCHED"
         HeartRules.Decision.GracePeriod -> "GRACE_PERIOD"
         HeartRules.Decision.ProgressionUnknown -> "PROGRESSION_UNKNOWN"

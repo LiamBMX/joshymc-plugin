@@ -28,7 +28,14 @@ import java.util.UUID
  * Concurrent requests (two players taking the last slot, two disbands, two transfers) therefore
  * run one after the other against fresh data, and the second one sees the first one's result.
  */
-class LifestealTeamStore(private val db: SqliteDatabase) {
+class LifestealTeamStore(
+    private val db: SqliteDatabase,
+    /**
+     * Issue #1405: alliances and rivalries. When set, [disband] removes the team's relationships
+     * inside its own transaction (its tables must exist). Null in checks that only test teams.
+     */
+    private val relations: TeamRelationStore? = null,
+) {
 
     data class Member(val uuid: UUID, val joinedAt: Long)
 
@@ -429,8 +436,11 @@ class LifestealTeamStore(private val db: SqliteDatabase) {
     // ── Disband ─────────────────────────────────────────────
 
     sealed interface DisbandResult {
-        /** [team] is the roster right before disbanding; [invites] the invitations that were cancelled. */
-        data class Disbanded(val team: Team, val invites: List<Invite>) : DisbandResult
+        /**
+         * [team] is the roster right before disbanding; [invites] the invitations that were cancelled;
+         * [relations] the alliance/rivalries/requests removed with it (issue #1405, no cooldown).
+         */
+        data class Disbanded(val team: Team, val invites: List<Invite>, val relations: TeamRelationStore.Cleanup? = null) : DisbandResult
         data object NotInTeam : DisbandResult
         data class NotLeader(val team: Team) : DisbandResult
         /** Already disbanded (a second, concurrent disband) or never existed. */
@@ -469,7 +479,9 @@ class LifestealTeamStore(private val db: SqliteDatabase) {
         db.execute("DELETE FROM lifesteal_team_members WHERE team_id = ?", id)
         db.execute("DELETE FROM lifesteal_team_invites WHERE team_id = ?", id)
         audit(id, if (actor.admin) "ADMIN_DISBAND" else "DISBAND", actor, null, "members=${team.members.joinToString(",") { it.uuid.toString() }}", now)
-        DisbandResult.Disbanded(team, invites)
+        // Issue #1405: same transaction, so the team and its relationships end together or not at all.
+        val cleanup = relations?.cleanupDisbanded(id, actor.id, now)
+        DisbandResult.Disbanded(team, invites, cleanup)
     }
 
     // ── Helpers ─────────────────────────────────────────────

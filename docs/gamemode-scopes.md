@@ -8,7 +8,7 @@ identity from issue #1323 (`docs/network.md`); there is no second framework.
 |---|---|
 | `NETWORK` | Works on every server, never affected by a lock. |
 | `SURVIVAL` | Survival SMP gameplay. Stops outside Survival **only while Survival is locked**. |
-| `LIFESTEAL` | Lifesteal gameplay. So far `/withdrawheart` (issue #1344) and `/ranked` (issue #1363); their executors also refuse anywhere Lifesteal doesn't run, since the scope alone only blocks while Lifesteal is locked (`/ranked` isn't even registered on a server that doesn't host Lifesteal). |
+| `LIFESTEAL` | Lifesteal gameplay. So far `/withdrawheart` (issue #1344), `/ranked` (issue #1363) and `/ac` alliance chat (issue #1405); their executors also refuse anywhere Lifesteal doesn't run, since the scope alone only blocks while Lifesteal is locked (`/ranked` and `/ac` aren't even registered on a server that doesn't host Lifesteal). |
 | unassigned | Never affected (same as before this change). |
 
 ## How enforcement works

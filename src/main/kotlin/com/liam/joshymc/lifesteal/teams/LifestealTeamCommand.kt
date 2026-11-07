@@ -58,9 +58,39 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
             "transfer", "promote" -> args.getOrNull(1)?.let { teams.transfer(sender, it, confirmed(args, 2)) }
                 ?: Msg.usage(sender, "/team $sub <player>")
             "disband" -> teams.disband(sender, confirmed(args, 1))
+            "ally", "alliance" -> ally(sender, args.drop(1))
+            "rival", "rivalry" -> rival(sender, args.drop(1))
             else -> help(sender)
         }
         return true
+    }
+
+    /**
+     * Issue #1405: `/team ally ...`. Keywords win over team names, so a team literally called
+     * "accept" is reached with `/team ally request accept`.
+     */
+    private fun ally(player: Player, args: List<String>) {
+        val relations = teams.relations
+        when (args.firstOrNull()?.lowercase()) {
+            null, "list", "requests" -> teams.unavailableReason()?.let { Msg.error(player, it) } ?: TeamRelationsMenu(plugin).openRelations(player)
+            "accept" -> relations.acceptAlliance(player, args.getOrNull(1))
+            "deny", "decline" -> relations.declineAlliance(player, args.getOrNull(1))
+            "cancel" -> relations.cancelAlliance(player, args.getOrNull(1))
+            "leave", "end", "dissolve" -> relations.dissolveAlliance(player, args.getOrNull(1).equals("confirm", ignoreCase = true))
+            "request", "send" -> relations.requestAlliance(player, args.getOrNull(1))
+            else -> relations.requestAlliance(player, args[0])
+        }
+    }
+
+    /** Issue #1405: `/team rival <team>` / `/team rival remove`. `/team rival declare <team>` for a team named like a keyword. */
+    private fun rival(player: Player, args: List<String>) {
+        val relations = teams.relations
+        when (args.firstOrNull()?.lowercase()) {
+            null -> teams.unavailableReason()?.let { Msg.error(player, it) } ?: TeamRelationsMenu(plugin).openRelations(player)
+            "remove", "withdraw" -> relations.withdrawRival(player)
+            "declare" -> relations.declareRival(player, args.getOrNull(1))
+            else -> relations.declareRival(player, args[0])
+        }
     }
 
     private fun confirmed(args: Array<out String>, index: Int): Boolean = args.getOrNull(index).equals("confirm", ignoreCase = true)
@@ -76,6 +106,14 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
             "/team kick <player>" to "Remove a member (leader)",
             "/team transfer <player>" to "Make a member the leader (leader; /team promote does the same)",
             "/team disband" to "Disband your team (leader)",
+            "/team ally <team>" to "Ask a team for an alliance (leader)",
+            "/team ally accept|deny [team]" to "Answer an alliance request (leader)",
+            "/team ally cancel [team]" to "Cancel your alliance request (leader)",
+            "/team ally leave" to "End your alliance (leader; both teams wait before a new one)",
+            "/team ally" to "Alliances and rivalries menu",
+            "/team rival <team>" to "Declare a rival team (leader; a label only)",
+            "/team rival remove" to "Withdraw your rivalry (leader)",
+            "/ac <message>" to "Chat with your team and its allies",
             "/team info [team]" to "Show a team",
             "/team list [page]" to "List all teams",
         )
@@ -129,12 +167,43 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
         sender.sendMessage(text("  ", NamedTextColor.GRAY).append(roster))
         line(sender, "Created", formatDate(team.createdAt, sender))
         line(sender, "Friendly fire", teams.friendlyFireSummary())
+        relationLines(sender, team, admin)
         if (admin) {
             line(sender, "Team id", team.id)
             line(sender, "Version", team.version.toString())
             line(sender, "Created by", teams.nameOf(team.createdBy))
             val pending = teams.invitesFrom(team.id)
             line(sender, "Pending invitations", if (pending.isEmpty()) "none" else pending.joinToString { teams.nameOf(it.target) })
+        }
+    }
+
+    /**
+     * Issue #1405: the team profile's relationships, public: ally in green, rivals in red, with a
+     * rivalry declared BY the team kept apart from rivalries declared AGAINST it. The alliance cooldown
+     * is only shown to the team's own members (and staff).
+     */
+    private fun relationLines(sender: CommandSender, team: Team, admin: Boolean) {
+        val relations = teams.relations
+        val ally = relations.allyOf(team.id)
+        sender.sendMessage(text("  Alliance: ", NamedTextColor.GRAY).append(
+            if (ally != null) text(ally.name, NamedTextColor.GREEN) else text("None", NamedTextColor.WHITE)
+        ))
+        val profile = TeamRelationRules.profile(relations.snapshot, team.id)
+        val declared = relations.declaredRival(team.id)
+        sender.sendMessage(text("  Declared Rival: ", NamedTextColor.GRAY).append(
+            if (declared != null) text(declared.name + if (profile.mutual()) " (mutual)" else "", NamedTextColor.RED) else text("None", NamedTextColor.WHITE)
+        ))
+        val against = relations.rivalsAgainst(team.id)
+        sender.sendMessage(text("  Rival of: ", NamedTextColor.GRAY).append(
+            if (against.isEmpty()) text("None", NamedTextColor.WHITE) else text(against.joinToString { it.name }, NamedTextColor.RED)
+        ))
+        val own = (sender as? Player)?.let { teams.teamOf(it.uniqueId)?.id == team.id } == true
+        if (own || admin) {
+            relations.cooldownRemaining(team.id)?.let { line(sender, "Alliance cooldown", relations.formatRemaining(it)) }
+        }
+        if (admin) {
+            line(sender, "Alliance requests in", relations.incoming(team.id).joinToString { teams.team(it.source)?.name ?: it.source }.ifEmpty { "none" })
+            line(sender, "Alliance requests out", relations.outgoing(team.id).joinToString { teams.team(it.target)?.name ?: it.target }.ifEmpty { "none" })
         }
     }
 
@@ -218,13 +287,17 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
             TeamCombatRules.Relation.RECENT_TEAMMATES -> "recent teammates (left within the combat-tag time)"
             TeamCombatRules.Relation.NOT_TEAMMATES -> if (a == b) "same player" else "not teammates"
             TeamCombatRules.Relation.UNKNOWN -> "unknown (team data unavailable)"
+            TeamCombatRules.Relation.ALLIES -> "allies (their teams are allied)"
         })
         val damage = TeamCombatRules.damage(a, b, relation, policy)
-        line(sender, "Damage between them", if (damage == TeamCombatRules.DamageDecision.BLOCK_FRIENDLY_FIRE) "blocked (friendly fire)" else "normal PvP rules")
+        line(sender, "Damage between them", if (damage == TeamCombatRules.DamageDecision.BLOCK_FRIENDLY_FIRE) {
+            if (relation == TeamCombatRules.Relation.ALLIES) "blocked (alliance)" else "blocked (friendly fire)"
+        } else "normal PvP rules")
         line(sender, "Heart transfer (team check)", when (TeamCombatRules.heartCheck(relation, policy)) {
             TeamCombatRules.HeartCheck.ELIGIBLE -> "allowed"
             TeamCombatRules.HeartCheck.TEAMMATES -> "refused (teammates)"
             TeamCombatRules.HeartCheck.UNKNOWN -> "refused (team data or settings unavailable)"
+            TeamCombatRules.HeartCheck.ALLIES -> "refused (allied teams)"
         })
         if (a == b) return
         val hearts = plugin.lifestealHeartManager
@@ -243,7 +316,7 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
 
     override fun onTabComplete(sender: CommandSender, command: Command, label: String, args: Array<out String>): List<String> {
         val player = sender as? Player
-        val subs = mutableListOf("create", "invite", "accept", "deny", "leave", "kick", "transfer", "promote", "disband", "info", "list", "help")
+        val subs = mutableListOf("create", "invite", "accept", "deny", "leave", "kick", "transfer", "promote", "disband", "ally", "rival", "info", "list", "help")
         if (teams.canAdmin(sender)) subs += "admin"
         val own = player?.let { teams.teamOf(it.uniqueId) }
         val options: List<String> = when (args.size) {
@@ -254,6 +327,8 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
                 "accept", "join", "deny", "decline" -> player?.let { p -> teams.invitesFor(p.uniqueId).mapNotNull { teams.team(it.teamId)?.name } }.orEmpty()
                 "info" -> teams.allTeams().map { it.name }
                 "admin" -> if (teams.canAdmin(sender)) listOf("info", "disband", "transfer", "pvp") else emptyList()
+                "ally", "alliance" -> listOf("accept", "deny", "cancel", "leave") + otherTeams(own)
+                "rival", "rivalry" -> listOf("remove") + otherTeams(own)
                 else -> emptyList()
             }
             3 -> when {
@@ -261,6 +336,8 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
                     org.bukkit.Bukkit.getOnlinePlayers().map { it.name }
                 args[0].equals("admin", true) && teams.canAdmin(sender) -> teams.allTeams().map { it.name }
                 args[0].lowercase() in setOf("transfer", "promote") -> listOf("confirm")
+                args[0].lowercase() in setOf("ally", "alliance") -> allySecond(args[1].lowercase(), own)
+                args[0].lowercase() in setOf("rival", "rivalry") && args[1].equals("declare", true) -> otherTeams(own)
                 else -> emptyList()
             }
             4 -> when {
@@ -273,6 +350,20 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
         }
         val prefix = args.lastOrNull()?.lowercase().orEmpty()
         return options.filter { it.lowercase().startsWith(prefix) }
+    }
+
+    private fun otherTeams(own: Team?): List<String> = teams.allTeams().filter { it.id != own?.id }.map { it.name }
+
+    /** Tab completion after `/team ally <keyword>`: only the teams that keyword can act on. */
+    private fun allySecond(keyword: String, own: Team?): List<String> {
+        val relations = teams.relations
+        return when (keyword) {
+            "accept", "deny", "decline" -> own?.let { t -> relations.incoming(t.id).mapNotNull { teams.team(it.source)?.name } }.orEmpty()
+            "cancel" -> own?.let { t -> relations.outgoing(t.id).mapNotNull { teams.team(it.target)?.name } }.orEmpty()
+            "leave", "end", "dissolve" -> listOf("confirm")
+            "request", "send" -> otherTeams(own)
+            else -> emptyList()
+        }
     }
 
     companion object {

@@ -119,6 +119,8 @@ object HeartRules {
         data object Teammates : Decision
         /** Team membership couldn't be read, so nothing is transferred (issue #1348). */
         data object TeamUnknown : Decision
+        /** The two are in allied teams (issue #1405): allies never move hearts outside a ranked match. */
+        data object Allies : Decision
         /** The season hasn't launched yet (issue #1352): no heart moves. */
         data object NotLaunched : Decision
         /** Inside the launch grace period (issue #1352): no heart moves. */
@@ -154,6 +156,7 @@ object HeartRules {
         when (team) {
             TeamCombatRules.HeartCheck.TEAMMATES -> return Decision.Teammates
             TeamCombatRules.HeartCheck.UNKNOWN -> return Decision.TeamUnknown
+            TeamCombatRules.HeartCheck.ALLIES -> return Decision.Allies
             TeamCombatRules.HeartCheck.ELIGIBLE -> {}
         }
         val victim = limits.clamp(victimHearts)
