@@ -757,6 +757,11 @@
       "icon": "joshymc/peanut_butter_cup.png",
       "sha1": "0da98dced22994eba9b840e9e7f71ad0e4c3dee3"
     },
+    "joshymc:peppermint_pickaxe": {
+      "bedrock_name": "peppermint_pickaxe",
+      "icon": "joshymc/peppermint_pickaxe.png",
+      "sha1": "4ab3bf0562121c15dd3127f4bd7573a3f628f434"
+    },
     "joshymc:phantoms_grasp": {
       "bedrock_name": "phantoms_grasp",
       "icon": "joshymc/phantoms_grasp.png",
