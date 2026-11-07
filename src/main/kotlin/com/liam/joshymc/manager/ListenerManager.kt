@@ -289,6 +289,10 @@ class ListenerManager(private val plugin: Joshymc) {
         if (plugin.lifestealRankedManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.ranked.LifestealRankedListener(plugin), plugin)
         }
+        // Issue #1401: Lifesteal bounty claims (read-only at MONITOR), notices and menu prompts. Never registered where Lifesteal isn't hosted.
+        if (plugin.lifestealBountyManager.hosted) {
+            pm.registerEvents(com.liam.joshymc.lifesteal.bounty.LifestealBountyListener(plugin), plugin)
+        }
         // Issue #1350: Lifesteal combat-log kick causes and quit cleanup. Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealCombatManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.combat.LifestealCombatListener(plugin.lifestealCombatManager), plugin)

@@ -639,8 +639,8 @@ commands:
     usage: /team <subcommand>
     aliases: [t, teams]
   bounty:
-    description: Place and manage bounties
-    usage: /bounty <set|list|cancel>
+    description: Place and manage bounties (Survival) or player-funded Lifesteal bounties
+    usage: /bounty [add|stats|top] (Lifesteal) or /bounty <set|list|cancel> (Survival)
   killstreak:
     description: View PvP kill streak stats and bounty status
     usage: /killstreak [player|set|reset|sethighest]
@@ -990,6 +990,12 @@ permissions:
   joshymc.lifesteal.ranked.stats.others:
     description: See other players' ranked statistics and match history with /ranked stats|history <player> and from the leaderboards on the Lifesteal server
     default: true
+  joshymc.lifesteal.bounty.use:
+    description: Use /bounty on the Lifesteal server (browse, contribute, stats, leaderboards)
+    default: true
+  joshymc.lifesteal.bounty.admin:
+    description: Investigate Lifesteal bounties (contributors, payouts, refunds, failures, suspicious kills) and run the safe retry sweep with /bounty admin
+    default: op
   joshymc.transfer.bypass-cooldown:
     description: Skip the cross-server transfer cooldown
     default: op
