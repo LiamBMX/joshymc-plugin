@@ -9,6 +9,7 @@
 import com.liam.joshymc.gamemode.GamemodeAssignments
 import com.liam.joshymc.gamemode.GamemodeScope
 import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.gui.GuiIcon
 import com.liam.joshymc.manager.KitCatalog
 import com.liam.joshymc.manager.KitCatalog.Category
 import com.liam.joshymc.manager.KitCatalog.Entry
@@ -109,6 +110,18 @@ fun main() {
     val submenu = manager.substringAfter("fun openCategoryGui(").substringBefore("private fun kitClick(")
     check("submenu has a Back to the main menu", "GuiStyle.back(" in submenu && "openKitGui(p)" in submenu)
     check("submenu has Close", "GuiStyle.close()" in submenu)
+
+    // ── Discord / Media icons (issue #1412) ─────────────
+    check("discord kit uses discord_icon", KitCatalog.guiIconFor("discord") == GuiIcon.DISCORD && GuiIcon.DISCORD.itemId == "discord_icon")
+    check("media kit uses youtube_icon", KitCatalog.guiIconFor("Media") == GuiIcon.YOUTUBE && GuiIcon.YOUTUBE.itemId == "youtube_icon")
+    check("lifesteal-prefixed kits get the icons",
+        KitCatalog.guiIconFor("ls_media") == GuiIcon.YOUTUBE && KitCatalog.guiIconFor("lifesteal_discord") == GuiIcon.DISCORD &&
+            KitCatalog.guiIconFor("discord_kit") == GuiIcon.DISCORD)
+    check("other kits keep their own icon",
+        listOf("starter", "scout", "knight", "pioneer", "legacy", "ls_starter", "mediakit", "discordx").all { KitCatalog.guiIconFor(it) == null })
+    val kitIcon = manager.substringAfter("private fun kitIcon(").substringBefore("fun openKitPreviewGui(")
+    check("kit icon uses the shared GuiStyle.icon", "KitCatalog.guiIconFor(kitDef.name)" in kitIcon && "GuiStyle.icon(" in kitIcon)
+    check("kit icon still sets its own name and lore", "meta.displayName(" in kitIcon && "meta.lore(lore)" in kitIcon)
 
     // ── Claims stay revalidated ─────────────────────────
     val claim = manager.substringAfter("fun claimKit(").substringBefore("fun getCooldownRemaining(")

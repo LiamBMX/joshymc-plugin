@@ -1,6 +1,7 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.gui.GuiIcon
 
 /**
  * Which kits the `/kit` menus show and in which category (issue #1379). Bukkit-free.
@@ -86,6 +87,26 @@ object KitCatalog {
     /** The donor/rank name a rank kit stands for, or null when the kit isn't one of the ordered ranks. */
     fun rankFor(kitName: String, rankOrder: List<String>): String? =
         kitName.lowercase().takeIf { it in normalizeOrder(rankOrder) }
+
+    /**
+     * The shared custom GUI icon a kit's menu button draws (issue #1412), or null for the kit's
+     * own kits.yml `icon` material. Only the Discord Kit (`discord_icon`) and the Media Kit
+     * (`youtube_icon`) have one. Matched by name, case-insensitive, also with a gamemode prefix
+     * (`ls_`, `lifesteal_`, `survival_`) or a `_kit` suffix, so each gamemode's own Discord/Media
+     * kit gets it without touching that kit's contents, permission or cooldown.
+     */
+    fun guiIconFor(kitName: String): GuiIcon? {
+        var name = kitName.trim().lowercase().replace('-', '_')
+        GAMEMODE_PREFIXES.firstOrNull { name.startsWith(it) }?.let { name = name.removePrefix(it) }
+        name = name.removeSuffix("_kit")
+        return when (name) {
+            "discord" -> GuiIcon.DISCORD
+            "media" -> GuiIcon.YOUTUBE
+            else -> null
+        }
+    }
+
+    private val GAMEMODE_PREFIXES = listOf("lifesteal_", "survival_", "ls_")
 
     /** Main menu (27 slots, middle row only). */
     const val MAIN_SIZE = 27
