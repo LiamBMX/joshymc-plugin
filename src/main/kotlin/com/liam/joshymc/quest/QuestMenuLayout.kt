@@ -8,12 +8,12 @@ import com.liam.joshymc.manager.SettingsLayout
  * Main menu: a 27-slot chest laid out like the `/kit` menu, only the middle row used: Daily (11),
  * Weekly (13) and Event Quests (15). No filler, no Back or Close.
  *
- * Daily page: a 36-slot chest. Reset timer at the top center, the cycle's quests centered
- * in row 1, the completion bonus and Quest Master in row 2, and the GuiStyle bottom row
- * (Back = size-9, Close = size-5) with the "How This Works" book in the last slot.
+ * Daily page (issue #1417, was 36 slots): a 27-slot chest. Reset timer at the top center with the
+ * completion bonus (2) and Quest Master (6) beside it, the cycle's quests centered in row 1, and the
+ * GuiStyle bottom row in the third row (Back = size-9, Close = size-5) with the "How This Works"
+ * book in the last slot.
  *
- * Weekly page (issue #1409): a 27-slot chest. Same timer and quest row, the completion bonus and
- * Quest Master move up beside the timer (slots 2 and 6), and the bottom row is the third row.
+ * Weekly page (issue #1409): the same 3-row layout, with its own `WEEKLY_*` constants.
  */
 object QuestMenuLayout {
     const val ROW = 9
@@ -24,12 +24,13 @@ object QuestMenuLayout {
     const val EVENT_SLOT = 15
     val MAIN_SLOTS: List<Int> = listOf(DAILY_SLOT, WEEKLY_SLOT, EVENT_SLOT)
 
-    const val PAGE_SIZE = 36
+    /** Daily Quests page (issue #1417): 3 rows, the same layout as the Weekly page. */
+    const val PAGE_SIZE = 27
     const val HEADER_SLOT = 4
     /** Quests fit in one row, columns 1..7. */
     const val MAX_QUESTS = 7
-    const val BONUS_SLOT = 21
-    const val QUEST_MASTER_SLOT = 23
+    const val BONUS_SLOT = 2
+    const val QUEST_MASTER_SLOT = 6
     const val BACK_SLOT = PAGE_SIZE - 9
     const val CLOSE_SLOT = PAGE_SIZE - 5
     const val INFO_SLOT = PAGE_SIZE - 1
