@@ -24,7 +24,6 @@ class LuckPermsFlight private constructor(private val api: Any, apiClass: Class<
     private val getKey = nodeClass.getMethod("getKey")
     private val getValue = nodeClass.getMethod("getValue")
     private val getExpiry = nodeClass.getMethod("getExpiry")
-    private val hasExpired = nodeClass.getMethod("hasExpired")
 
     /**
      * The expiry of every path from [uuid] to a granted fly node, through its own nodes and
@@ -41,7 +40,10 @@ class LuckPermsFlight private constructor(private val api: Any, apiClass: Class<
     private fun walk(holder: Any, expiry: Instant?, path: MutableList<String>, out: MutableList<Instant?>) {
         if (path.size > MAX_DEPTH) return
         for (node in getNodes.invoke(holder) as Collection<*>) {
-            if (node == null || hasExpired.invoke(node) as Boolean || !(getValue.invoke(node) as Boolean)) continue
+            // Expired nodes are kept, with their past expiry (issue #1408): LuckPerms removes
+            // them a few seconds late and may still grant the permission until then, so
+            // skipping them would make that leftover grant look permanent.
+            if (node == null || !(getValue.invoke(node) as Boolean)) continue
             val key = (getKey.invoke(node) as String).lowercase()
             val until = FlightTime.earlier(expiry, getExpiry.invoke(node) as Instant?)
             if (key in FlightTime.FLY_NODES) {

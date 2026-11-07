@@ -18,6 +18,9 @@ class FlightTimeListener(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onJoin(event: PlayerJoinEvent) {
+        // Issue #1408: settle Fly Voucher redemptions a crash left PENDING first, from what
+        // LuckPerms holds, then mirror LuckPerms' flight expiry.
+        plugin.flyVoucherManager.recoverPending(event.player)
         plugin.flightTimeManager.onJoin(event.player)
     }
 
