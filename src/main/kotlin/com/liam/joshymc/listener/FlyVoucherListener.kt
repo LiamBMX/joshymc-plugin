@@ -30,13 +30,7 @@ class FlyVoucherListener(private val plugin: Joshymc) : Listener {
 
         event.isCancelled = true
 
-        plugin.flyVoucherManager.redeem(player, item) {
-            val hand = player.inventory.itemInMainHand
-            if (hand.amount > 1) {
-                hand.amount -= 1
-            } else {
-                player.inventory.setItemInMainHand(null)
-            }
-        }
+        // Takes the voucher itself (by its uuid) only after LuckPerms confirmed the grant (issue #1408).
+        plugin.flyVoucherManager.redeem(player, item)
     }
 }

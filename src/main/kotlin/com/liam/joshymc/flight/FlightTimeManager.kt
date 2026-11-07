@@ -18,9 +18,20 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Survival temporary flight time (issue #1304): the one flight balance that Fly Vouchers add
- * to, `/fly` honours, `/flytime` shows and the 30-second landing grace runs from. Rules live
- * in the Bukkit-free [SurvivalFlight].
+ * Survival temporary flight (issues #1304 and #1408): the 30-second landing grace and the
+ * end of temporary flight. Rules live in the Bukkit-free [SurvivalFlight].
+ *
+ * Since issue #1408 LuckPerms is the authority for temporary flight: Fly Vouchers grant a
+ * timed `joshymc.fly` node ([LuckPermsFlyGrant]) and LuckPerms expires it. This manager only
+ * keeps a mirror of that expiry (`lp_synced = 1` rows, re-synced from LuckPerms every second
+ * while the player is online in Survival, so staff extending or removing the node is followed)
+ * because LuckPerms removing the node doesn't touch `allowFlight`: the mirror is what starts
+ * the landing grace and then takes flight away. Any timed `joshymc.fly` grant gets that
+ * treatment, not just vouchers.
+ *
+ * Rows from before issue #1408 (`lp_synced = 0`) are JoshyMC-only balances. They keep working
+ * until they're moved into LuckPerms (on join and while online, idempotent, never shortening
+ * what LuckPerms already has).
  *
  * Stored per player in `survival_flight_time` (gamemode is always `survival`; nothing here
  * applies outside Survival). `ended` is set once the end has been enforced, so a finished
@@ -28,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class FlightTimeManager(private val plugin: Joshymc) {
 
-    data class Balance(val endsAt: Long, val ended: Boolean)
+    data class Balance(val endsAt: Long, val ended: Boolean, val lpSynced: Boolean = true)
 
     private val balances = ConcurrentHashMap<UUID, Balance>()
 
@@ -36,6 +47,20 @@ class FlightTimeManager(private val plugin: Joshymc) {
     private val lastReminder = ConcurrentHashMap<UUID, Long>()
 
     private var task: BukkitTask? = null
+    private var ticks = 0L
+
+    /**
+     * One LuckPerms flight change per player at a time (voucher redemption or moving an old
+     * balance in), across the asynchronous LuckPerms save. Closes rapid clicks and concurrent
+     * redemptions.
+     */
+    private val busy = ConcurrentHashMap.newKeySet<UUID>()
+
+    /** Old balances that couldn't be moved into LuckPerms this session: not retried every second. */
+    private val migrationSkipped = ConcurrentHashMap.newKeySet<UUID>()
+
+    fun tryLock(uuid: UUID): Boolean = busy.add(uuid)
+    fun unlock(uuid: UUID) { busy.remove(uuid) }
 
     fun start() {
         plugin.databaseManager.createTable("""
@@ -45,9 +70,16 @@ class FlightTimeManager(private val plugin: Joshymc) {
                 ends_at INTEGER NOT NULL,
                 ended INTEGER NOT NULL DEFAULT 0,
                 updated_at INTEGER NOT NULL,
+                lp_synced INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (uuid, gamemode)
             )
         """.trimIndent())
+        // Issue #1408: 1 = this row mirrors a LuckPerms timed node; 0 = an older JoshyMC-only balance.
+        try {
+            plugin.databaseManager.execute("ALTER TABLE survival_flight_time ADD COLUMN lp_synced INTEGER NOT NULL DEFAULT 0")
+        } catch (_: Exception) {
+            // Column already exists.
+        }
 
         Bukkit.getOnlinePlayers().forEach { load(it.uniqueId) }
         task?.cancel()
@@ -63,15 +95,16 @@ class FlightTimeManager(private val plugin: Joshymc) {
 
     fun load(uuid: UUID) {
         val row = plugin.databaseManager.queryFirst(
-            "SELECT ends_at, ended FROM survival_flight_time WHERE uuid = ? AND gamemode = ?",
+            "SELECT ends_at, ended, lp_synced FROM survival_flight_time WHERE uuid = ? AND gamemode = ?",
             uuid.toString(), GAMEMODE
-        ) { Balance(it.getLong("ends_at"), it.getInt("ended") != 0) }
+        ) { Balance(it.getLong("ends_at"), it.getInt("ended") != 0, it.getInt("lp_synced") != 0) }
         if (row == null) balances.remove(uuid) else balances[uuid] = row
     }
 
     fun unload(uuid: UUID) {
         balances.remove(uuid)
         lastReminder.remove(uuid)
+        migrationSkipped.remove(uuid)
     }
 
     fun balance(uuid: UUID): Balance? = balances[uuid]
@@ -84,7 +117,8 @@ class FlightTimeManager(private val plugin: Joshymc) {
     /**
      * True while [player] may fly on Survival flight time: in Survival, with time left or
      * inside the landing grace. `/fly` and the combat/arena flight restores check this
-     * alongside `joshymc.fly`.
+     * alongside `joshymc.fly`. Time left on a mirrored row is the LuckPerms node (the player
+     * has `joshymc.fly` anyway); on an old row it's the balance not yet moved into LuckPerms.
      */
     fun hasTemporaryFlight(player: Player): Boolean {
         if (!inSurvival(player.world)) return false
@@ -95,14 +129,15 @@ class FlightTimeManager(private val plugin: Joshymc) {
     }
 
     /**
-     * Writes a new end time. Must run inside the caller's [com.liam.joshymc.manager.DatabaseManager.transaction]
-     * when it goes with other writes (a voucher redemption); call [applyWritten] after commit.
+     * Writes a new end time mirroring LuckPerms. Must run inside the caller's
+     * [com.liam.joshymc.manager.DatabaseManager.transaction] when it goes with other writes (a
+     * voucher redemption); call [applyWritten] after commit.
      */
     fun writeEnd(uuid: UUID, endsAt: Long) {
         plugin.databaseManager.execute(
             """
-            INSERT INTO survival_flight_time (uuid, gamemode, ends_at, ended, updated_at) VALUES (?, ?, ?, 0, ?)
-            ON CONFLICT(uuid, gamemode) DO UPDATE SET ends_at = excluded.ends_at, ended = 0, updated_at = excluded.updated_at
+            INSERT INTO survival_flight_time (uuid, gamemode, ends_at, ended, updated_at, lp_synced) VALUES (?, ?, ?, 0, ?, 1)
+            ON CONFLICT(uuid, gamemode) DO UPDATE SET ends_at = excluded.ends_at, ended = 0, updated_at = excluded.updated_at, lp_synced = 1
             """.trimIndent(),
             uuid.toString(), GAMEMODE, endsAt, System.currentTimeMillis()
         )
@@ -110,34 +145,131 @@ class FlightTimeManager(private val plugin: Joshymc) {
 
     /** Mirrors a committed [writeEnd] in memory and drops any grace reminders in progress. */
     fun applyWritten(uuid: UUID, endsAt: Long) {
-        balances[uuid] = Balance(endsAt, ended = false)
+        balances[uuid] = Balance(endsAt, ended = false, lpSynced = true)
         lastReminder.remove(uuid)
     }
 
-    /** The end of the player's LuckPerms timed fly access, if that's the only fly access they have. */
-    fun luckPermsAccess(player: Player): FlightTime.Access {
-        val grants = try {
-            LuckPermsFlight.current()?.flyGrants(player.uniqueId)
+    private fun persist(uuid: UUID, endsAt: Long) {
+        try {
+            writeEnd(uuid, endsAt)
+            applyWritten(uuid, endsAt)
         } catch (e: Exception) {
-            plugin.logger.warning("[FlyTime] Couldn't read LuckPerms flight nodes: ${e.message}")
-            null
+            plugin.logger.warning("[FlyTime] Couldn't store the flight end for $uuid: ${e.message}")
         }
-        return FlightTime.resolve(player.hasPermission("joshymc.fly"), grants, Instant.now())
     }
 
-    fun luckPermsTemporaryEnd(player: Player, now: Long): Long? =
-        (luckPermsAccess(player) as? FlightTime.Access.Temporary)?.let { now + it.remaining.toMillis() }
+    /** Every LuckPerms path to the player's fly node with its expiry, or null when LuckPerms can't be read. */
+    private fun luckPermsGrants(player: Player): List<Instant?>? = try {
+        LuckPermsFlight.current()?.flyGrants(player.uniqueId)
+    } catch (e: Exception) {
+        plugin.logger.warning("[FlyTime] Couldn't read LuckPerms flight nodes: ${e.message}")
+        null
+    }
+
+    /** The player's `/fly` access as LuckPerms explains it: permanent, timed, or none. */
+    fun luckPermsAccess(player: Player): FlightTime.Access =
+        FlightTime.resolve(player.hasPermission("joshymc.fly"), luckPermsGrants(player), Instant.now())
+
+    // ── LuckPerms sync (issue #1408) ─────────────────────────────────────
+
+    /**
+     * Brings the mirror in line with LuckPerms for an online Survival player: a timed fly grant
+     * sets the end time (so the landing grace follows its expiry), a grant LuckPerms took away
+     * early ends it now (the grace starts), and an old JoshyMC balance is moved into LuckPerms.
+     */
+    fun sync(player: Player, now: Long = System.currentTimeMillis()) {
+        if (!inSurvival(player.world)) return
+        val uuid = player.uniqueId
+        val b = balances[uuid]
+        if (b != null && !b.ended && !b.lpSynced && b.endsAt > now) {
+            migrateLegacy(player, b)
+            return
+        }
+        val grants = luckPermsGrants(player)
+        when (val access = FlightTime.resolve(player.hasPermission("joshymc.fly"), grants, Instant.now())) {
+            is FlightTime.Access.Temporary -> {
+                val target = now + access.remaining.toMillis()
+                if (b == null || b.ended || !b.lpSynced || kotlin.math.abs(b.endsAt - target) > SYNC_TOLERANCE_MILLIS) persist(uuid, target)
+            }
+            FlightTime.Access.None -> {
+                // LuckPerms is readable and no longer grants flight, but the mirror still says
+                // there's time left: staff removed the node early. The grace starts now.
+                if (grants != null && b != null && !b.ended && b.lpSynced && b.endsAt > now) persist(uuid, now)
+            }
+            FlightTime.Access.Permanent -> {}
+        }
+    }
+
+    /**
+     * Moves an older JoshyMC-only balance (issue #1304) into LuckPerms as a timed `joshymc.fly`
+     * node lasting until the balance's end (never shortening a longer node), then marks the
+     * row as a mirror. Idempotent, so a crash halfway just repeats it on the next try.
+     */
+    private fun migrateLegacy(player: Player, b: Balance) {
+        val uuid = player.uniqueId
+        if (uuid in migrationSkipped || !tryLock(uuid)) return
+        val writer = try {
+            LuckPermsFlyGrant.current()
+        } catch (e: Exception) {
+            plugin.logger.warning("[FlyTime] LuckPerms API unavailable, can't move ${player.name}'s flight time: ${e.message}")
+            null
+        }
+        if (writer == null) {
+            // Keeps working as before (hasTemporaryFlight) until LuckPerms is back.
+            migrationSkipped += uuid
+            unlock(uuid)
+            return
+        }
+        val untilSec = Math.floorDiv(b.endsAt + 999, 1000L)
+        val future = try {
+            writer.ensureUntil(uuid, untilSec, FlyVoucherGrants.nowSeconds(System.currentTimeMillis()))
+        } catch (e: Exception) {
+            plugin.logger.warning("[FlyTime] Couldn't move ${player.name}'s flight time into LuckPerms: ${e.message}")
+            migrationSkipped += uuid
+            unlock(uuid)
+            return
+        }
+        future.whenComplete { outcome, error ->
+            val settle = Runnable {
+                try {
+                    val plan = outcome?.plan
+                    if (error != null || plan == null || plan is FlyVoucherGrants.Plan.Denied || plan is FlyVoucherGrants.Plan.TooLong) {
+                        plugin.logger.warning("[FlyTime] Couldn't move ${player.name}'s flight time into LuckPerms: ${error?.message ?: plan}")
+                        migrationSkipped += uuid
+                        return@Runnable
+                    }
+                    plugin.databaseManager.executeUpdate(
+                        "UPDATE survival_flight_time SET lp_synced = 1, updated_at = ? WHERE uuid = ? AND gamemode = ? AND ends_at = ? AND lp_synced = 0",
+                        System.currentTimeMillis(), uuid.toString(), GAMEMODE, b.endsAt
+                    )
+                    load(uuid)
+                    plugin.logger.info("[FlyTime] Moved ${player.name}'s Fly Voucher time into LuckPerms (${FlyVoucherGrants.NODE} until epoch second $untilSec, $plan).")
+                } catch (e: Exception) {
+                    plugin.logger.warning("[FlyTime] Moved ${player.name}'s flight time into LuckPerms but couldn't mark it: ${e.message}")
+                    migrationSkipped += uuid
+                } finally {
+                    unlock(uuid)
+                }
+            }
+            try {
+                Bukkit.getScheduler().runTask(plugin, settle)
+            } catch (_: Exception) {
+                unlock(uuid) // Plugin disabling: the row stays an old balance and is moved next time (idempotent).
+            }
+        }
+    }
 
     // ── Enforcement ──────────────────────────────────────────────────────
 
     /**
-     * Flight that doesn't come from Survival flight time and must never be taken away when it
-     * runs out: Creative/Spectator, `/fly` permission (rank, staff or a LuckPerms timed node),
-     * ModMode, and spawn-world flight.
+     * Flight that doesn't come from temporary flight and must never be taken away when it
+     * runs out: Creative/Spectator, permanent `/fly` permission (rank, staff, op), ModMode, and
+     * spawn-world flight. A timed `joshymc.fly` node is temporary flight (issue #1408): it's
+     * what the grace ends, and LuckPerms may still report it for a few seconds after expiry.
      */
     fun hasIndependentFlight(player: Player): Boolean {
         if (player.gameMode == GameMode.CREATIVE || player.gameMode == GameMode.SPECTATOR) return true
-        if (player.hasPermission("joshymc.fly")) return true
+        if (luckPermsAccess(player) == FlightTime.Access.Permanent) return true
         if (plugin.modModeManager.isModMode(player)) return true
         if (player.world.name == "spawn" && player.hasPermission(SpawnWorldManager.FLY_PERMISSION)) return true
         return false
@@ -147,6 +279,10 @@ class FlightTimeManager(private val plugin: Joshymc) {
 
     private fun tick() {
         val now = System.currentTimeMillis()
+        // Once a second: follow LuckPerms (issue #1408).
+        if (ticks++ % SYNC_EVERY_TICKS == 0L) {
+            for (player in Bukkit.getOnlinePlayers()) sync(player, now)
+        }
         for (player in Bukkit.getOnlinePlayers()) {
             val b = balances[player.uniqueId] ?: continue
             if (b.ended) continue
@@ -159,6 +295,12 @@ class FlightTimeManager(private val plugin: Joshymc) {
     }
 
     private fun tickGrace(player: Player, b: Balance, graceLeftMillis: Long) {
+        // A new timed grant in LuckPerms (another voucher, staff): back to time left, no grace.
+        val access = luckPermsAccess(player)
+        if (access is FlightTime.Access.Temporary && inSurvival(player.world)) {
+            persist(player.uniqueId, System.currentTimeMillis() + access.remaining.toMillis())
+            return
+        }
         // Permanent flight, a /fly grant or staff flight took over: the grace has nothing to
         // take away, so it ends quietly.
         if (hasIndependentFlight(player)) {
@@ -222,6 +364,8 @@ class FlightTimeManager(private val plugin: Joshymc) {
         if (!markEnded(player.uniqueId, b)) return
         lastReminder.remove(player.uniqueId)
         if (hasIndependentFlight(player) || !inSurvival(player.world)) return
+        // Still on a timed grant LuckPerms hasn't expired: the next sync mirrors it again.
+        if (luckPermsAccess(player) is FlightTime.Access.Temporary) return
         // No teleport, Slow Falling or fall-damage immunity: the player simply loses flight.
         if (player.allowFlight || player.isFlying) {
             player.isFlying = false
@@ -257,6 +401,10 @@ class FlightTimeManager(private val plugin: Joshymc) {
     fun onJoin(player: Player) {
         load(player.uniqueId)
         lastReminder.remove(player.uniqueId)
+        migrationSkipped.remove(player.uniqueId)
+        // Follow LuckPerms first: a node that expired while they were away has no time left,
+        // and a node still running keeps its real remaining time (a restart never resets it).
+        sync(player)
         val b = balances[player.uniqueId] ?: return
         when (phase(player.uniqueId)) {
             SurvivalFlight.Phase.Expired -> finish(player, b)
@@ -288,5 +436,9 @@ class FlightTimeManager(private val plugin: Joshymc) {
 
     companion object {
         const val GAMEMODE = "survival"
+        /** The 5-tick task syncs with LuckPerms every 4th run (once a second). */
+        private const val SYNC_EVERY_TICKS = 4L
+        /** Mirror drift (rounding, LuckPerms' whole seconds) that isn't worth a write. */
+        private const val SYNC_TOLERANCE_MILLIS = 2_000L
     }
 }

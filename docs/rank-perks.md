@@ -56,7 +56,7 @@ Lifesteal ranks (including Legacy) exist, they exist only in LuckPerms and can't
 | Homes | `homes.limits-by-rank.<rank>` (now also `<tier>`, see E), else `homes.max-per-player` 3; `joshymc.sethome.unlimited` (op) | no tier entries bundled |
 | Player warps | `warps.limits-by-rank.<rank>` (now also `<tier>`), else `warps.player-max-per-player` 3 | no tier entries bundled |
 | Player vaults | `/pv` needs `joshymc.pv` (op by default); count = highest `joshymc.pv.<n>` up to `vaults.max` (10), else 1 | set in LuckPerms only |
-| Flight | `joshymc.fly` (op) = permanent `/fly`; temporary flight = LuckPerms timed node or Fly Voucher time (`/flytime` shows it); `joshymc.fly.pvp` / `.others` op | set in LuckPerms only |
+| Flight | `joshymc.fly` (op) = permanent `/fly`; temporary flight = LuckPerms timed `joshymc.fly` node, which is also what Fly Vouchers grant (issue #1408; `/flytime` shows it); `joshymc.fly.pvp` / `.others` op | set in LuckPerms only |
 | Monthly Credits | `/mcr` needs `joshymc.mcr` (default false), 500 Credits / 30 days | meant for Ranger (+ Pioneer by inheritance) |
 | Sign item | `/signitem` needs `joshymc.sign.item` (default false), once a week | set in LuckPerms only |
 | Nicknames | `/nick` needs `joshymc.nick` (op); colors/filter/others are separate op nodes | set in LuckPerms only |
