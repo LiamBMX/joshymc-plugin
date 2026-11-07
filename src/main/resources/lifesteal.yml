@@ -280,3 +280,58 @@ combat-logging:
   messages:
     tagged: "&cYou are now in combat! Do not disconnect."
     expired: "&aYou are no longer in combat."
+
+# Player-funded bounties (docs/lifesteal-bounties.md): /bounty on this server. Completely separate
+# from the Survival /bounty; nothing here changes Survival. Bounties only run on the dedicated
+# Lifesteal server (a server that also hosts Survival keeps them off, because its coin balances
+# are Survival's). This section is read on its own: a mistake here only stops new contributions
+# and claims, and never pauses hearts, teams or anything else.
+bounties:
+  # false = no new contributions and no new claims. Nothing is deleted: active bounties still
+  # expire on time and refund every contributor, and payouts already won are still paid.
+  enabled: true
+  # The smallest contribution, in coins. There is no maximum bounty (the only limit is
+  # $10,000,000,000,000 per contribution and per bounty, the most that can be moved safely).
+  minimum-contribution: 10000
+  # Hours from a bounty's creation until it expires and every contributor is refunded in full
+  # (1 to 8760). Later contributions never move it. A change only affects bounties created after it.
+  expiration-hours: 168
+  # Hours before the same hunter can claim another bounty on the same target (0 to 8760).
+  claim-cooldown-hours: 24
+  # Seconds between runs of the expiration / refund / payout / retry task (10 to 3600).
+  sweep-interval-seconds: 60
+  # Seconds before a failed payout or refund is tried again (30 to 86400).
+  retry-delay-seconds: 300
+  # Bounty farming signals. These are only logged for staff (/bounty admin suspicious); they never
+  # block a claim, change PvP or punish anyone.
+  anti-abuse:
+    # This many kills of the same target by the same hunter within the window are logged (2 to 1000).
+    repeat-kill-threshold: 3
+    repeat-kill-window-hours: 24
+    # Log claims where hunter and target have connected from the same address (the /alts data).
+    # A shared address is not proof of an alt account (families, schools, VPNs).
+    log-shared-connections: true
+    # Also write a console line for every suspicious claim.
+    console-logging: true
+  gui:
+    list-title: "&8Lifesteal Bounties"
+    contribute-title: "&8Contribute to Bounty"
+    confirm-title: "&8Confirm Contribution"
+    leaderboard-title: "&8Bounty Hunters"
+    # The amount buttons of the contribution screen, in coins (1 to 7; amounts below the minimum
+    # are hidden). Any other amount can be typed with "Custom Amount".
+    contribution-presets: [10000, 25000, 50000, 100000, 250000, 1000000]
+  # Messages (& colour codes). Contributors are never named in any of them.
+  messages:
+    # Lifesteal-wide, once, when a bounty is created. {amount} {target}
+    created: "&c&l[BOUNTY] &7A &6{amount} &7bounty has been placed on &c{target}&7!"
+    # Lifesteal-wide, once, after a claim is paid. {hunter} {target} {amount}
+    claimed: "&c&l[BOUNTY] &e{hunter} &7eliminated &c{target} &7and claimed &6{amount}&7!"
+    # Private to the target (saved and shown on their next join if offline). {amount} {expires}
+    target-notified: "&cA bounty of &6{amount} &chas been placed on you! &7It expires in &f{expires}&7. Check &e/bounty&7."
+    # Private to the hunter, once the reward is in their balance. {target} {amount}
+    hunter-paid: "&aYou claimed the bounty on &c{target} &aand received &6{amount}&a!"
+    # Private to each contributor of an expired bounty. {target} {amount}
+    refunded: "&7The bounty on &c{target} &7expired. Your contribution of &6{amount} &7was refunded."
+    # Private to the contributor. {amount} {target} {total}
+    contributed: "&aYou contributed &6{amount} &ato the bounty on &c{target}&a. Total: &6{total}&a."

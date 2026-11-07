@@ -46,6 +46,10 @@ object GamemodeAssignments {
         // Lifesteal team system and everyone else to the Survival TeamCommand, applying the SURVIVAL
         // scope (and joshymc.team) itself, so Survival teams behave exactly as before.
         "team",
+        // Issue #1401: /bounty likewise. BountyCommandRouter sends Lifesteal senders to the Lifesteal bounty
+        // system and everyone else to the Survival BountyCommand, applying the SURVIVAL scope (and
+        // joshymc.bounty) itself, so Survival bounties behave exactly as before.
+        "bounty",
         // Issue #1379: kits exist in both gamemodes. Every kit belongs to one gamemode in kits.yml
         // (missing = Survival) and KitManager only shows/claims kits of the sender's current
         // gamemode, so Survival kits never appear on Lifesteal and back.
@@ -72,8 +76,8 @@ object GamemodeAssignments {
         "cosmetics", "killeffect", "tag", "chatcolor", "signitem", "skull",
         // Custom enchants (admin-applied, Survival gear).
         "customenchant",
-        // Survival PvP: toggles, arenas, bounties, kill stats, leaderboards.
-        "pvp", "arena", "bounty", "killstreak", "killtop", "deathstop", "leaderboard", "mutations",
+        // Survival PvP: toggles, arenas, kill stats, leaderboards (/bounty is routed per gamemode, see NETWORK_COMMANDS).
+        "pvp", "arena", "killstreak", "killtop", "deathstop", "leaderboard", "mutations",
         // Hosted community events (event world, rewards paid in Survival currencies).
         "event",
         // Travel: warps, homes, random teleport, resource world, /back, /top.
