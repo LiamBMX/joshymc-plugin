@@ -48,16 +48,18 @@ fun main() {
     check("event icon keeps the /eventquests permission", "\"joshymc.eventquests\"" in quests)
 
     // ── Daily / Weekly pages ────────────────────────────
-    check("pages are 36 slots", QuestMenuLayout.PAGE_SIZE == 36)
-    check("Back bottom-left, Close bottom-center",
-        QuestMenuLayout.BACK_SLOT == 27 && QuestMenuLayout.CLOSE_SLOT == 31)
+    // Daily page (issue #1417): 3 rows like Weekly, bonus 2, Quest Master 6, bottom row 18..26.
+    check("daily page is 27 slots", QuestMenuLayout.PAGE_SIZE == 27)
+    check("daily bonus 2, Quest Master 6", QuestMenuLayout.BONUS_SLOT == 2 && QuestMenuLayout.QUEST_MASTER_SLOT == 6)
+    check("daily Back bottom-left, Close bottom-center, info bottom-right",
+        QuestMenuLayout.BACK_SLOT == 18 && QuestMenuLayout.CLOSE_SLOT == 22 && QuestMenuLayout.INFO_SLOT == 26)
     check("three quests sit centered in row 1", QuestMenuLayout.questSlots(3) == listOf(12, 13, 14))
     check("seven quests fill row 1", QuestMenuLayout.questSlots(7) == (10..16).toList())
     check("more than seven are capped", QuestMenuLayout.questSlots(12).size == QuestMenuLayout.MAX_QUESTS)
     check("no quests, no slots", QuestMenuLayout.questSlots(0).isEmpty())
     val fixed = listOf(QuestMenuLayout.HEADER_SLOT, QuestMenuLayout.BONUS_SLOT, QuestMenuLayout.QUEST_MASTER_SLOT,
         QuestMenuLayout.BACK_SLOT, QuestMenuLayout.CLOSE_SLOT, QuestMenuLayout.INFO_SLOT)
-    check("fixed page slots are distinct and inside the chest", fixed.toSet().size == fixed.size && fixed.all { it in 0 until 36 })
+    check("fixed page slots are distinct and inside the chest", fixed.toSet().size == fixed.size && fixed.all { it in 0 until QuestMenuLayout.PAGE_SIZE })
     check("quest row never hits a fixed slot",
         (1..QuestMenuLayout.MAX_QUESTS).all { n -> QuestMenuLayout.questSlots(n).none { it in fixed } })
     // Weekly page (issue #1409): 3 rows, bonus 2, Quest Master 6, bottom row moved up to 18..26.
@@ -73,7 +75,7 @@ fun main() {
     check("weekly quest row never hits a fixed slot",
         (1..QuestMenuLayout.MAX_QUESTS).all { n -> QuestMenuLayout.questSlots(n).none { it in weeklyFixed } })
     check("weekly page opens with the 27-slot size", "\"&b&lWeekly Quests\"), QuestMenuLayout.WEEKLY_PAGE_SIZE)" in quests)
-    check("daily page keeps the 36-slot size", "\"&6&lDaily Quests\"), QuestMenuLayout.PAGE_SIZE)" in quests)
+    check("daily page opens with the 27-slot size", "\"&6&lDaily Quests\"), QuestMenuLayout.PAGE_SIZE)" in quests)
     val page = quests.substringAfter("private fun renderCycle(").substringBefore("private fun showQuestDetails(")
     check("page Back returns to the main menu", "GuiStyle.back(\"Back to Quests\")) { p, _ -> openGui(p) }" in page)
     check("page Close closes", "GuiStyle.close()) { p, _ -> p.closeInventory() }" in page)

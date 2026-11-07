@@ -1589,7 +1589,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
         }
 
         val done = pool.count { getProgress(uuid, it).completed }
-        // Issue #1409: the Weekly page is 3 rows, with bonus/Quest Master beside the timer.
+        // Issues #1409/#1417: both pages are 3 rows, with bonus/Quest Master beside the timer.
         val bonusSlot = if (daily) QuestMenuLayout.BONUS_SLOT else QuestMenuLayout.WEEKLY_BONUS_SLOT
         val questMasterSlot = if (daily) QuestMenuLayout.QUEST_MASTER_SLOT else QuestMenuLayout.WEEKLY_QUEST_MASTER_SLOT
         val backSlot = if (daily) QuestMenuLayout.BACK_SLOT else QuestMenuLayout.WEEKLY_BACK_SLOT
