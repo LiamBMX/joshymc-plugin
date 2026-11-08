@@ -1,7 +1,9 @@
 # Special (voucher) Chat Tags
 
 The "voucher" category in `tags.yml` (shown to players as **Special Chat Tags**) holds tags that
-nobody owns by default. Issue #1391 bundles 15 of them; admins can still add more with
+nobody owns by default. Issue #1391 bundles 15 of them, and the Christmas Advent Calendar
+(issue #1424, `docs/advent-calendar.md`) adds 5 more it hands out as vouchers: `snowflake` (❄),
+`holly` (☘), `frostbite` (❅), `blizzard` (❆) and `christmas` (★). Admins can still add more with
 `/voucher create <id> <display>`.
 
 ## The bundled tags (issue #1391)
@@ -137,7 +139,7 @@ back on the next start. Creating the id again with `/voucher create` takes it of
 The menu check covers the slot layout, paging, the classification, that every Special tag has its
 own node and the bundled ones are unchanged, the re-checked clicks and the private previews.
 
-This checks that all 15 tags load into the voucher category with their own node. It also checks:
+This checks that all 20 bundled tags (15 + the 5 Advent tags) load into the voucher category with their own node. It also checks:
 
 - ids and names are unique across every category
 - each palette is distinct

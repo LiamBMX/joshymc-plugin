@@ -1,4 +1,4 @@
-// Checks the bundled voucher Chat Tags (issue #1391): all 15 load from src/main/resources/tags.yml
+// Checks the bundled voucher Chat Tags (issue #1391, plus the 5 Advent Calendar tags of issue #1424): all load from src/main/resources/tags.yml
 // into the existing "voucher" category with their own joshymc.tag.voucher.<id> node, ids and names
 // don't clash with any other tag, each display parses through the same legacy (&#RRGGBB) serializer
 // CommunicationsManager uses into the exact "[symbol Name] " text with its own gradient, nothing
@@ -52,6 +52,12 @@ private val EXPECTED = listOf(
     Expected("glowkeeper", "✴", "Glowkeeper", "7DF2B5", "1FE3F7"),
     Expected("twilightkin", "☽", "Twilightkin", "8C63C4", "F7A8C8"),
     Expected("trailmarked", "⚒", "Trailmarked", "A3A23C", "5E9E4C"),
+    // Christmas Advent Calendar rewards (issue #1424), same rules as the 15 above.
+    Expected("snowflake", "❄", "Snowflake", "9ED8FF", "F4FBFF"),
+    Expected("holly", "☘", "Holly", "1F9D4A", "D92B3A"),
+    Expected("frostbite", "❅", "Frostbite", "7FE0FF", "2A5BD6"),
+    Expected("blizzard", "❆", "Blizzard", "F0F6FF", "8AA6CF"),
+    Expected("christmas", "★", "Christmas", "FFD54A", "E8302F"),
 )
 
 /** One rendered code point with the color and decorations it ends up with. */
@@ -107,8 +113,8 @@ fun main() {
     val voucher = tags.getConfigurationSection(ChatTagDefaults.VOUCHER_CATEGORY)
     check("bundled voucher category exists", voucher != null)
     voucher!!
-    check("the voucher category has exactly the 15 issue #1391 tags", voucher.getKeys(false) == EXPECTED.map { it.id }.toSet())
-    check("15 distinct ids", EXPECTED.map { it.id }.toSet().size == 15)
+    check("the voucher category has exactly the 15 issue #1391 tags plus the 5 issue #1424 Advent tags", voucher.getKeys(false) == EXPECTED.map { it.id }.toSet())
+    check("20 distinct ids", EXPECTED.map { it.id }.toSet().size == 20)
 
     for (e in EXPECTED) {
         val others = namesById.filterKeys { it != e.id }
@@ -116,9 +122,9 @@ fun main() {
     }
 
     // ── Palettes ───────────────────────────────────────────
-    check("every tag has its own start color", EXPECTED.map { it.start }.toSet().size == 15)
-    check("every tag has its own end color", EXPECTED.map { it.end }.toSet().size == 15)
-    check("every tag has its own palette", EXPECTED.map { it.start to it.end }.toSet().size == 15)
+    check("every tag has its own start color", EXPECTED.map { it.start }.toSet().size == EXPECTED.size)
+    check("every tag has its own end color", EXPECTED.map { it.end }.toSet().size == EXPECTED.size)
+    check("every tag has its own palette", EXPECTED.map { it.start to it.end }.toSet().size == EXPECTED.size)
 
     // ── Each tag ───────────────────────────────────────────
     for (e in EXPECTED) {
@@ -184,12 +190,12 @@ fun main() {
     // ── Bundled-defaults merge ─────────────────────────────
     val defaults = YamlConfiguration.loadConfiguration(file)
 
-    // A server whose tags.yml has no voucher category yet gets all 15.
+    // A server whose tags.yml has no voucher category yet gets all of them.
     val fresh = YamlConfiguration()
     fresh.set("tags.vibe.chill.display", "&d[Chill] ")
     val r1 = ChatTagDefaults.merge(defaults, fresh)
     check("merge adds the voucher category", r1.categoriesAdded >= 1 && fresh.getConfigurationSection("tags.voucher") != null)
-    check("merge adds all 15 voucher tags", EXPECTED.all { fresh.getString("tags.voucher.${it.id}.permission") == "joshymc.tag.voucher.${it.id}" })
+    check("merge adds every bundled voucher tag", EXPECTED.all { fresh.getString("tags.voucher.${it.id}.permission") == "joshymc.tag.voucher.${it.id}" })
     check("merge keeps an existing tag's display", fresh.getString("tags.vibe.chill.display") == "&d[Chill] ")
     check("merge reports a change", r1.changed)
     check("second merge is a no-op", !ChatTagDefaults.merge(defaults, fresh).changed)
@@ -203,10 +209,10 @@ fun main() {
     val r2 = ChatTagDefaults.merge(defaults, existing)
     val normalCategories = defaults.getConfigurationSection("tags")!!.getKeys(false).size - 1
     check("existing voucher category isn't re-added", r2.categoriesAdded == normalCategories)
-    check("voucher category now holds the admin's tag plus the 15", existing.getConfigurationSection("tags.voucher")!!.getKeys(false).size == 16)
+    check("voucher category now holds the admin's tag plus the bundled ones", existing.getConfigurationSection("tags.voucher")!!.getKeys(false).size == EXPECTED.size + 1)
     check("admin-created voucher tag kept", existing.getString("tags.voucher.joshymc.display") == "&6[JoshyMC] ")
     check("admin edit of a bundled voucher tag kept", existing.getString("tags.voucher.mapleborn.display") == "&c[Custom Maple] ")
-    check("the other 14 are added", EXPECTED.filter { it.id != "mapleborn" }.all { existing.contains("tags.voucher.${it.id}") })
+    check("the other bundled ones are added", EXPECTED.filter { it.id != "mapleborn" }.all { existing.contains("tags.voucher.${it.id}") })
     check("existing category order: voucher tags appended after admin's", existing.getConfigurationSection("tags.voucher")!!.getKeys(false).first() == "joshymc")
 
     // A bundled voucher tag deleted with /voucher tag delete stays deleted.

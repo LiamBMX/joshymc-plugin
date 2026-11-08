@@ -163,6 +163,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
+        // Issue #1424: the Christmas Advent Calendar (also opened by NPCs through /advent).
+        plugin.getCommand("advent")?.let {
+            val cmd = com.liam.joshymc.advent.AdventCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
         // Issue #1339: free [JoshyMC] Chat Tag Voucher, once per player (Survival only).
         plugin.getCommand("freetag")?.let {
             val cmd = com.liam.joshymc.command.FreeTagCommand(plugin)

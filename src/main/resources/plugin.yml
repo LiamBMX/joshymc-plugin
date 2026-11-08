@@ -202,6 +202,11 @@ commands:
     description: Claim the free starter rank of the gamemode you're playing
     usage: /freerank
     permission: joshymc.freerank
+  advent:
+    description: Christmas Advent Calendar
+    usage: /advent
+    aliases: [adventcalendar, christmas]
+    permission: joshymc.advent.use
   freetag:
     description: Claim your free [JoshyMC] chat tag voucher (once per player, Survival only)
     usage: /freetag
@@ -993,6 +998,15 @@ permissions:
   joshymc.freerank:
     description: Use /freerank to claim the current gamemode's free starter rank (once per gamemode)
     default: true
+  joshymc.advent.use:
+    description: Open the Advent Calendar
+    default: true
+  joshymc.advent.admin:
+    description: /advent admin status, history, failed, reload, setnpc
+    default: op
+  joshymc.advent.admin.recover:
+    description: /advent admin reissue, grantfree, revokefree
+    default: op
   joshymc.freetag.use:
     description: Use /freetag to claim the free [JoshyMC] chat tag voucher (once per player, Survival only)
     default: true
