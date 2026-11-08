@@ -989,24 +989,19 @@ class MsgCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             Msg.playerNotFound(sender)
             return true
         }
-        if (IgnoreCommand.isIgnoring(target.uniqueId, sender.uniqueId)) {
-            plugin.commsManager.send(sender, Component.text("That player is not accepting messages from you.", NamedTextColor.RED))
-            return true
-        }
-        if (!plugin.commsManager.canReceivePersonalMessages(target)) {
-            plugin.commsManager.send(sender, Component.text("That player has personal messages disabled.", NamedTextColor.RED))
-            return true
-        }
-        val message = args.drop(1).joinToString(" ")
-        sender.sendMessage(Component.text("[me → ${target.name}] ", NamedTextColor.GRAY).append(Component.text(message, NamedTextColor.WHITE)))
-        target.sendMessage(Component.text("[${sender.name} → me] ", NamedTextColor.GRAY).append(Component.text(message, NamedTextColor.WHITE)))
-        lastMessaged[sender.uniqueId] = target.uniqueId
-        lastMessaged[target.uniqueId] = sender.uniqueId
+        // Mutes, Lifesteal privacy/vanish/filters, ignores and the personal-messages toggle (issue #1430).
+        PrivateMessages.send(plugin, sender, target, args.drop(1).joinToString(" "))
         return true
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (args.size == 1) return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
+        if (args.size == 1) {
+            // Lifesteal never suggests players hidden from the sender (vanished staff, issue #1430).
+            val hideHidden = sender is Player && plugin.lifestealSocialManager.active && plugin.lifestealSocialManager.isLifesteal(sender)
+            return Bukkit.getOnlinePlayers()
+                .filter { !hideHidden || (sender as Player).canSee(it) }
+                .map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
+        }
         return emptyList()
     }
 }
@@ -1027,15 +1022,7 @@ class ReplyCommand(private val plugin: Joshymc) : CommandExecutor {
             plugin.commsManager.send(sender, Component.text("That player is offline.", NamedTextColor.RED))
             return true
         }
-        if (!plugin.commsManager.canReceivePersonalMessages(target)) {
-            plugin.commsManager.send(sender, Component.text("That player has personal messages disabled.", NamedTextColor.RED))
-            return true
-        }
-        val message = args.joinToString(" ")
-        sender.sendMessage(Component.text("[me → ${target.name}] ", NamedTextColor.GRAY).append(Component.text(message, NamedTextColor.WHITE)))
-        target.sendMessage(Component.text("[${sender.name} → me] ", NamedTextColor.GRAY).append(Component.text(message, NamedTextColor.WHITE)))
-        MsgCommand.lastMessaged[sender.uniqueId] = target.uniqueId
-        MsgCommand.lastMessaged[target.uniqueId] = sender.uniqueId
+        PrivateMessages.send(plugin, sender, target, args.joinToString(" "), viaReply = true)
         return true
     }
 }

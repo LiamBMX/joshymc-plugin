@@ -293,10 +293,20 @@ class ListenerManager(private val plugin: Joshymc) {
         if (plugin.lifestealRankedManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.ranked.LifestealRankedListener(plugin), plugin)
         }
+        // Issue #1426: Team XP from mining (read-only at MONITOR). Never registered where Lifesteal isn't hosted.
+        if (plugin.lifestealTeamProgressionManager.hosted) {
+            pm.registerEvents(com.liam.joshymc.lifesteal.teams.progression.TeamProgressionListener(plugin.lifestealTeamProgressionManager), plugin)
+        }
         // Issue #1401: Lifesteal bounty claims (read-only at MONITOR), notices and menu prompts. Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealBountyManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.bounty.LifestealBountyListener(plugin), plugin)
         }
+        // Issue #1430: Lifesteal friend notices and chat-channel routing. Never registered where Lifesteal isn't hosted.
+        if (plugin.lifestealSocialManager.hosted) {
+            pm.registerEvents(com.liam.joshymc.lifesteal.social.LifestealSocialListener(plugin), plugin)
+        }
+        // Issue #1430: muted players can't use the vanilla /minecraft:msg, /me or /teammsg (every gamemode).
+        pm.registerEvents(com.liam.joshymc.listener.MutedCommandListener(plugin), plugin)
         // Issue #1429: Lifesteal profile activity (ores, crops, fish, mobs, dimensions). Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealProfileManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.profile.LifestealProfileListener(plugin), plugin)

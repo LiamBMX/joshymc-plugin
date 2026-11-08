@@ -1125,6 +1125,8 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
     /** Issue #1439: the Free page's lower filler, visible against the dark slot background. */
     private val FREE_FILLER = ItemStack(Material.LIME_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
+    /** Issue #1440: decorative border of the Elite category page (no click handler, so clicks are just cancelled). */
+    private val ELITE_BORDER = ItemStack(Material.PURPLE_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
 
     private fun plain(text: String, color: NamedTextColor, bold: Boolean = false): Component =
         Component.text(text, color).decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, bold)
@@ -1198,7 +1200,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         val lore = mutableListOf<Component>()
         lore += when (category) {
             EventQuestCategory.FREE -> plain("Free for every player", NamedTextColor.GREEN)
-            EventQuestCategory.ELITE -> plain("Exclusive Elite quest sets", NamedTextColor.LIGHT_PURPLE)
+            EventQuestCategory.ELITE -> plain("Exclusive Monthly quest sets", NamedTextColor.LIGHT_PURPLE)
         }
         lore += Component.empty()
         if (denial != null) {
@@ -1236,13 +1238,16 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         if (list.isEmpty()) {
             val empty = if (category == EventQuestCategory.ELITE)
                 GuiStyle.item(Material.CLOCK, plain("Coming Soon", NamedTextColor.GOLD, true),
-                    listOf(plain("No Elite quests are available yet.", NamedTextColor.GRAY), plain("Check back soon!", NamedTextColor.GRAY)))
+                    listOf(plain("No Monthly quests are available yet.", NamedTextColor.GRAY), plain("Check back soon!", NamedTextColor.GRAY)))
             else
                 GuiStyle.item(Material.BARRIER, plain("No Quests Available", NamedTextColor.RED, true),
                     listOf(plain("Check back soon!", NamedTextColor.GRAY)))
             gui.setItem(EventQuestLayout.EMPTY_SLOT, empty)
         }
-        val slots = EventQuestLayout.SET_SLOTS
+        // Issue #1440: Elite sets are centered between a purple pane border (top row and the row above
+        // navigation); the Free page keeps its original layout.
+        val elite = category == EventQuestCategory.ELITE
+        val slots = if (elite) EventQuestLayout.eliteSetSlots(list.size) else EventQuestLayout.SET_SLOTS
         list.take(slots.size).forEachIndexed { i, event -> gui.setItem(slots[i], eventIcon(player, event)) { p, _ -> openEventGui(p, event) } }
         gui.setItem(EventQuestLayout.PAGE_BACK_SLOT, GuiStyle.back("Back to Event Quests")) { p, _ -> GuiStyle.clickSound(p); openGui(p) }
         gui.setItem(EventQuestLayout.PAGE_CLOSE_SLOT, GuiStyle.close()) { p, _ -> p.closeInventory() }
@@ -1251,6 +1256,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
                 gui.setItem(slot, FREE_FILLER)
             }
         }
+        if (elite) EventQuestLayout.ELITE_BORDER_SLOTS.forEach { gui.setItem(it, ELITE_BORDER) }
         gui.fill(FILLER)
         plugin.guiManager.open(player, gui)
         GuiStyle.clickSound(player)
@@ -1341,17 +1347,15 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
             }
             m.lore(lore)
         }
-        gui.setItem(4, rewardIcon) { p, _ ->
+        // Issue #1438: the reward sits in the central display area, right above the quests.
+        gui.setItem(EventQuestLayout.SET_REWARD_SLOT, rewardIcon) { p, _ ->
             p.closeInventory()
             claim(p, event)
         }
 
-        val slots = if (event.quests.size <= 5) listOf(20, 21, 22, 23, 24).let { all ->
-            val offset = (5 - event.quests.size) / 2
-            all.subList(offset, offset + event.quests.size)
-        } else (19..23).toList() + (28..32).toList()
+        val slots = EventQuestLayout.questSlots(event.quests.size.coerceAtMost(EventQuestLayout.SET_MAX_QUESTS))
 
-        event.quests.forEachIndexed { i, q ->
+        event.quests.take(slots.size).forEachIndexed { i, q ->
             val item = when {
                 s.completed || q.index < s.index -> questItem(Material.LIME_STAINED_GLASS_PANE, q,
                     listOf(plain("✔ Completed", NamedTextColor.GREEN, true)), NamedTextColor.GREEN)
@@ -1387,7 +1391,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
                 ))
             }
         }
-        gui.setItem(40, info)
+        gui.setItem(EventQuestLayout.SET_INFO_SLOT, info)
         // Issue #1335: Back returns to the set's category page; Close sits in the GuiStyle close slot.
         gui.setItem(EventQuestLayout.PAGE_BACK_SLOT, GuiStyle.back()) { p, _ -> GuiStyle.clickSound(p); openCategoryGui(p, event.category) }
         gui.setItem(EventQuestLayout.PAGE_CLOSE_SLOT, GuiStyle.close()) { p, _ -> p.closeInventory() }

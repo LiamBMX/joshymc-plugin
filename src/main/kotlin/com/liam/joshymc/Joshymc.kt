@@ -374,6 +374,16 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var lifestealBountyManager: com.liam.joshymc.lifesteal.bounty.LifestealBountyManager
         private set
+    /** Issue #1430: Lifesteal friends, social privacy, private-message privacy and chat channels. */
+    lateinit var lifestealSocialManager: com.liam.joshymc.lifesteal.social.LifestealSocialManager
+        private set
+    /** Issue #1426: Lifesteal Team Levels, upgrades, team bank, shared objectives and milestones. */
+    lateinit var lifestealTeamProgressionManager: com.liam.joshymc.lifesteal.teams.progression.LifestealTeamProgressionManager
+        private set
+
+    /** The team progression manager once it exists (event hooks may fire before onEnable finishes wiring). */
+    fun teamProgression(): com.liam.joshymc.lifesteal.teams.progression.LifestealTeamProgressionManager? =
+        if (::lifestealTeamProgressionManager.isInitialized) lifestealTeamProgressionManager else null
     lateinit var lifestealProfileManager: com.liam.joshymc.lifesteal.profile.LifestealProfileManager
         private set
     lateinit var lifestealRankManager: com.liam.joshymc.lifesteal.ranks.LifestealRankManager
@@ -649,6 +659,10 @@ class Joshymc : JavaPlugin() {
         lifestealRankedStatsManager = com.liam.joshymc.lifesteal.ranked.stats.LifestealRankedStatsManager(this)
         // Issue #1401: player-funded Lifesteal bounties (escrow in data.db). Only does anything on the dedicated Lifesteal server.
         lifestealBountyManager = com.liam.joshymc.lifesteal.bounty.LifestealBountyManager(this)
+        // Issue #1430: Lifesteal friends, privacy and chat channels. Only does anything where Lifesteal runs.
+        lifestealSocialManager = com.liam.joshymc.lifesteal.social.LifestealSocialManager(this)
+        // Issue #1426: Lifesteal Team Upgrades and shared progression. Only does anything where Lifesteal runs.
+        lifestealTeamProgressionManager = com.liam.joshymc.lifesteal.teams.progression.LifestealTeamProgressionManager(this)
         // Issue #1429: Lifesteal profiles, statistics, achievements and leaderboards. Only does anything where Lifesteal runs.
         lifestealProfileManager = com.liam.joshymc.lifesteal.profile.LifestealProfileManager(this)
         // Issue #1428: Lifesteal ranks, rank perks, rank kits and progression. Only does anything where Lifesteal runs.
@@ -757,6 +771,9 @@ class Joshymc : JavaPlugin() {
         lifestealRatingManager.refresh()
         lifestealRankedStatsManager.refresh()
         lifestealBountyManager.refresh()
+        lifestealSocialManager.refresh()
+        // After teams and progression (seasons): Team XP, upgrades and the team bank.
+        lifestealTeamProgressionManager.refresh()
         lifestealProfileManager.refresh()
         lifestealRankManager.refresh()
         // After crates and chat tags (reward validation); its payout sweep waits for the purchase queue to start.
@@ -874,6 +891,10 @@ class Joshymc : JavaPlugin() {
         // Ends every ranked queue entry, found match and challenge (none is resumed after a restart) before the matches stop.
         // Stops the bounty sweep; bounty writes already queued finish with the database (every one is a complete transaction).
         shutdown.step("lifestealBountyManager.stop", { ::lifestealBountyManager.isInitialized }) { lifestealBountyManager.stop() }
+        // Stops the request-expiry sweep; every friend change is already committed when it happens.
+        shutdown.step("lifestealSocialManager.stop", { ::lifestealSocialManager.isInitialized }) { lifestealSocialManager.stop() }
+        // Queues the last mining/exploration Team XP batch (the database drains it before closing).
+        shutdown.step("lifestealTeamProgressionManager.stop", { ::lifestealTeamProgressionManager.isInitialized }) { lifestealTeamProgressionManager.stop() }
         // Writes buffered profile activity counters synchronously while the database is still open.
         shutdown.step("lifestealProfileManager.stop", { ::lifestealProfileManager.isInitialized }) { lifestealProfileManager.stop() }
         // Stops the rank-change sweep and removes the rank permission attachments; pending changes stay PENDING and resume at the next start.
@@ -1108,6 +1129,8 @@ class Joshymc : JavaPlugin() {
         safe("lifestealRatingManager.refresh") { lifestealRatingManager.refresh() }
         safe("lifestealRankedStatsManager.refresh") { lifestealRankedStatsManager.refresh() }
         safe("lifestealBountyManager.refresh") { lifestealBountyManager.refresh() }
+        safe("lifestealSocialManager.refresh") { lifestealSocialManager.refresh() }
+        safe("lifestealTeamProgressionManager.refresh") { lifestealTeamProgressionManager.refresh() }
         safe("lifestealProfileManager.refresh") { lifestealProfileManager.refresh() }
         safe("lifestealRankManager.refresh") { lifestealRankManager.refresh() }
         // Saves progress, rereads lifesteal-quests.yml and reloads the online players' boards.
