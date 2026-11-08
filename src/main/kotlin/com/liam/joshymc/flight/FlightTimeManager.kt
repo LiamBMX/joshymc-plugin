@@ -1,7 +1,9 @@
 package com.liam.joshymc.flight
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gamemode.GamemodeScope
 import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.listener.PvpWorldFlightListener
 import com.liam.joshymc.manager.SpawnWorldManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -81,7 +83,16 @@ class FlightTimeManager(private val plugin: Joshymc) {
             // Column already exists.
         }
 
-        Bukkit.getOnlinePlayers().forEach { load(it.uniqueId) }
+        // Issue #1470: the player's own /fly choice, so it survives reconnects and restarts.
+        plugin.databaseManager.createTable("""
+            CREATE TABLE IF NOT EXISTS player_flight_preferences (
+                uuid TEXT PRIMARY KEY,
+                enabled INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+        """.trimIndent())
+
+        Bukkit.getOnlinePlayers().forEach { load(it.uniqueId); loadPreference(it.uniqueId) }
         task?.cancel()
         task = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tick() }, 20L, 5L)
     }
@@ -103,6 +114,8 @@ class FlightTimeManager(private val plugin: Joshymc) {
 
     fun unload(uuid: UUID) {
         balances.remove(uuid)
+        preferences.remove(uuid)
+        fallProtection.remove(uuid)
         lastReminder.remove(uuid)
         migrationSkipped.remove(uuid)
     }
@@ -257,6 +270,143 @@ class FlightTimeManager(private val plugin: Joshymc) {
                 unlock(uuid) // Plugin disabling: the row stays an old balance and is moved next time (idempotent).
             }
         }
+    }
+
+    // ── /fly preference (issue #1470) ────────────────────────────────────
+
+    /**
+     * The player's last `/fly` toggle (true = on), cached while online. Absent = never toggled.
+     * This is a choice, not access: [restoreFlight] only acts on it when [restoreBlock] is null.
+     */
+    private val preferences = ConcurrentHashMap<UUID, Boolean>()
+
+    /** Reconnect fall protection: epoch millis it ends at. Used up by the first fall. */
+    private val fallProtection = ConcurrentHashMap<UUID, Long>()
+
+    fun loadPreference(uuid: UUID) {
+        val row = try {
+            plugin.databaseManager.queryFirst(
+                "SELECT enabled FROM player_flight_preferences WHERE uuid = ?", uuid.toString()
+            ) { it.getInt("enabled") != 0 }
+        } catch (e: Exception) {
+            plugin.logger.warning("[Fly] Couldn't load the /fly preference for $uuid: ${e.message}")
+            null
+        }
+        if (row == null) preferences.remove(uuid) else preferences[uuid] = row
+    }
+
+    fun flightPreference(uuid: UUID): Boolean? = preferences[uuid]
+
+    /**
+     * Records a `/fly` toggle. Written straight away (one small row by UUID) so a crash right
+     * after still remembers it, and only when the choice actually changed.
+     */
+    fun setFlightPreference(uuid: UUID, enabled: Boolean) {
+        if (!FlightRestore.needsWrite(preferences[uuid], enabled)) return
+        try {
+            plugin.databaseManager.execute(
+                "INSERT INTO player_flight_preferences (uuid, enabled, updated_at) VALUES (?, ?, ?) " +
+                    "ON CONFLICT(uuid) DO UPDATE SET enabled = excluded.enabled, updated_at = excluded.updated_at",
+                uuid.toString(), if (enabled) 1 else 0, System.currentTimeMillis()
+            )
+            preferences[uuid] = enabled
+        } catch (e: Exception) {
+            plugin.logger.warning("[Fly] Couldn't store the /fly preference for $uuid: ${e.message}")
+        }
+    }
+
+    /**
+     * Why [player] can't have `/fly` back right now, or null when they may. The same rules `/fly`
+     * applies, plus the places where flight is taken away (event world, ranked matches).
+     */
+    fun restoreBlock(player: Player): FlightRestore.Block? {
+        if (!player.hasPermission("joshymc.fly") && !hasTemporaryFlight(player)) return FlightRestore.Block.NO_PERMISSION
+        if (!plugin.gamemodeLockManager.isAllowed(GamemodeScope.SURVIVAL, player.world)) return FlightRestore.Block.GAMEMODE_LOCKED
+        if (plugin.combatManager.isTagged(player)) return FlightRestore.Block.COMBAT_TAGGED
+        if (plugin.arenaManager.playersInArena.containsKey(player.uniqueId)) return FlightRestore.Block.PVP_ARENA
+        val world = player.world.name
+        if (world == PvpWorldFlightListener.WORLD_NAME && !player.hasPermission(PvpWorldFlightListener.PERMISSION)) return FlightRestore.Block.WORLD_RESTRICTED
+        if (world == "spawn" && !player.hasPermission(SpawnWorldManager.FLY_PERMISSION)) return FlightRestore.Block.WORLD_RESTRICTED
+        if (runCatching { plugin.eventManager.isInEventWorld(player) }.getOrDefault(true)) return FlightRestore.Block.EVENT_WORLD
+        if (runCatching { plugin.lifestealRankedManager.holds(player) }.getOrDefault(true)) return FlightRestore.Block.RANKED_MATCH
+        return null
+    }
+
+    /** Open (non-solid, non-liquid) blocks straight below [player]'s feet, up to [FlightRestore.MAX_GAP]. */
+    private fun gapBelow(player: Player): Int {
+        val loc = player.location
+        val world = loc.world ?: return 0
+        // Just under the feet, so a player standing on a block (or a slab) counts as grounded.
+        var y = Math.floor(loc.y - 0.05).toInt()
+        var gap = 0
+        while (gap < FlightRestore.MAX_GAP) {
+            if (y < world.minHeight) return FlightRestore.MAX_GAP // Over the void.
+            val block = world.getBlockAt(loc.blockX, y, loc.blockZ)
+            if (block.type.isSolid || block.isLiquid) break
+            gap++
+            y--
+        }
+        return gap
+    }
+
+    /**
+     * Puts [player]'s own `/fly` back when they chose it and may use it here. Never turns flight
+     * off and never touches Creative/Spectator, so it can't flicker or override another source.
+     * When flight was on but can't come back and the player is high up, they only get a short,
+     * one-time fall-damage protection (no flight, no teleport).
+     */
+    fun restoreFlight(player: Player, protectFall: Boolean) {
+        if (!player.isOnline) return
+        val creative = player.gameMode == GameMode.CREATIVE || player.gameMode == GameMode.SPECTATOR
+        val pref = preferences[player.uniqueId]
+        // Cheap exits before reading permissions or blocks.
+        if (creative || pref != true || player.allowFlight) {
+            if (player.allowFlight) fallProtection.remove(player.uniqueId)
+            return
+        }
+        val decision = FlightRestore.decide(FlightRestore.Input(
+            preference = pref,
+            creativeOrSpectator = false,
+            alreadyAllowed = false,
+            block = restoreBlock(player),
+            gapBelow = gapBelow(player),
+        ))
+        when (decision) {
+            is FlightRestore.Decision.Restore -> {
+                player.allowFlight = true
+                if (decision.flying) player.isFlying = true
+                fallProtection.remove(player.uniqueId)
+            }
+            is FlightRestore.Decision.ProtectFall -> if (protectFall) {
+                fallProtection.putIfAbsent(player.uniqueId, System.currentTimeMillis() + FlightRestore.FALL_PROTECTION_MILLIS)
+            }
+            else -> {}
+        }
+    }
+
+    /**
+     * After join: restore now, then check again a moment later in case another plugin or
+     * listener reset flight during login. Rechecks only turn flight on if it's still off.
+     */
+    fun restoreFlightOnJoin(player: Player) {
+        restoreFlight(player, protectFall = true)
+        for (delay in FlightRestore.RECHECK_TICKS) {
+            Bukkit.getScheduler().runTaskLater(plugin, Runnable { restoreFlight(player, protectFall = false) }, delay)
+        }
+    }
+
+    /** A gamemode switch or world change: put `/fly` back (vanilla clears it on a Survival switch). */
+    fun restoreFlightLater(player: Player) {
+        Bukkit.getScheduler().runTask(plugin, Runnable { restoreFlight(player, protectFall = false) })
+    }
+
+    /**
+     * True (and used up) when this fall damage is the reconnect fall [restoreFlight] protected
+     * against: within [FlightRestore.FALL_PROTECTION_MILLIS] of joining and not in combat.
+     */
+    fun consumeFallProtection(player: Player): Boolean {
+        val until = fallProtection.remove(player.uniqueId) ?: return false
+        return FlightRestore.cancelsFall(until, System.currentTimeMillis(), plugin.combatManager.isTagged(player))
     }
 
     // ── Enforcement ──────────────────────────────────────────────────────
