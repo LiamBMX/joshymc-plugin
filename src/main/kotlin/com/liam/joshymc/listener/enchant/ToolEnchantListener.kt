@@ -340,6 +340,7 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
                                         // No BlockBreakEvent fires here: count it for Daily/Weekly Quests first.
                                         plugin.questCycleManager.recordBlockBreak(player, target)
                                         plugin.milestoneBlockBreak(player, target)
+                                        plugin.lifestealQuestBlockBreak(player, target)
                                         target.breakNaturally(tool)
                                     }
                                 }
