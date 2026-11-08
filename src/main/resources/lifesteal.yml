@@ -375,3 +375,73 @@ bounties:
     refunded: "&7The bounty on &c{target} &7expired. Your contribution of &6{amount} &7was refunded."
     # Private to the contributor. {amount} {target} {total}
     contributed: "&aYou contributed &6{amount} &ato the bounty on &c{target}&a. Total: &6{total}&a."
+
+# The Protected Bank (issue #1427, docs/lifesteal-bank.md): /bank on this server. Players have a
+# wallet (their normal coin balance: /balance, /pay, shops, bounties) and a protected bank. Coins
+# in the bank can never be stolen in PvP. Only runs on the dedicated Lifesteal server (a server
+# that also hosts Survival keeps it off, because its coin balances are Survival's). This section
+# is read on its own: a mistake here only stops deposits, never hearts, coin stealing or teams.
+bank:
+  # false = no deposits. Nothing is deleted: bank balances are kept and can still be withdrawn,
+  # so nobody's coins are ever locked away.
+  enabled: true
+  # The most coins one bank can hold. -1 = unlimited. Lowering it never removes coins; a bank
+  # above the new limit just takes no deposits until it is below it again.
+  max-capacity: -1
+  # Fees as percentages (0 to 50, at most two decimals, e.g. 2.5). A fee is rounded up to the next
+  # cent and is removed from the economy (a coin sink). It is shown before every confirmation.
+  deposit-fee-percent: 0
+  withdrawal-fee-percent: 0
+  # Refuse deposits and withdrawals while combat-tagged / while in a Ranked Team Wars match.
+  # Events, freezes and death always block banking.
+  block-during-combat: true
+  block-during-ranked: true
+  # What a new season does to personal banks. Only "none" exists: no reset policy for personal
+  # banks has been approved, so banks are never wiped. Every bank record stores its season.
+  season-reset: none
+  # The most one /bank admin add|remove may move, in coins.
+  admin-max-adjustment: 1000000
+  gui:
+    title: "&8Protected Bank"
+    confirm-title: "&8Confirm Bank Transfer"
+  # Messages (& colour codes). {amount} left the source, {net} arrived, {fee} is the fee-suffix
+  # line (empty without a fee), {wallet} and {bank} are the balances afterwards.
+  messages:
+    deposited: "&aYou deposited &6{amount} &ainto your bank.{fee} &7Wallet: &6{wallet} &8| &7Bank: &6{bank}"
+    withdrew: "&aYou withdrew &6{amount} &afrom your bank.{fee} &7Wallet: &6{wallet} &8| &7Bank: &6{bank}"
+    fee-suffix: " &7(fee &c{fee}&7)"
+
+# PvP coin stealing (issue #1427, docs/lifesteal-bank.md). A legitimate Lifesteal PvP kill moves a
+# share of the victim's wallet to the killer (never their bank). The same rules as heart stealing
+# decide what counts (the final hit's player, no self kills, NPCs, events, the launch grace period,
+# teammates, allies), but coins are decided on their own: killing a player on their last heart
+# still moves coins, and a failed coin transfer never touches hearts. Read on its own: a mistake
+# here only stops coin stealing.
+pvp-coins:
+  # false = no coins move on any death. Heart stealing is unaffected.
+  enabled: true
+  # Share of the victim's wallet the killer receives (0 to 100, at most two decimals). Rounded down.
+  wallet-loss-percent: 10
+  # The most one kill can move, in coins. -1 = no limit.
+  max-per-kill: -1
+  # Deaths inside a Ranked Team Wars match. Off until the policy is approved.
+  ranked-enabled: false
+  # Teammates, recent teammates and allies never steal coins from each other, even if the team
+  # settings let them move hearts.
+  block-team-farming: true
+  # The same-victim cooldown below and the suspicious-kill log (/bank admin suspicious).
+  anti-farming-enabled: true
+  # Killing the same victim again within this many minutes moves no coins (0 = no cooldown).
+  same-victim-cooldown-minutes: 30
+  # This many coin steals from the same victim by the same killer within the window are logged.
+  repeat-kill-threshold: 3
+  repeat-kill-window-hours: 24
+  # Killer and victim have connected from the same address (the /alts data): false = only logged,
+  # true = no coins move. A shared address is not proof of an alt (families, schools, VPNs).
+  block-shared-connections: false
+  # Messages (& colour codes). The victim's bank is never shown to the killer.
+  messages:
+    # {amount} {killer} {wallet} (the victim's wallet afterwards). Saved for the next join if offline.
+    victim: "&cYou lost &6{amount} &cin combat to &f{killer}&c! &7Wallet: &6{wallet}"
+    # {amount} {victim} {wallet} (the killer's wallet afterwards).
+    killer: "&aYou stole &6{amount} &afrom &f{victim}&a! &7Wallet: &6{wallet}"

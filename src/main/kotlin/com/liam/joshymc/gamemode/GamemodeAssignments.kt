@@ -101,6 +101,9 @@ object GamemodeAssignments {
         "ac",
         // Lifesteal friends and chat channels (issue #1430). Also only registered where Lifesteal is hosted.
         "friend", "channel",
+        // The Lifesteal Protected Bank (issue #1427). Also only registered where Lifesteal is hosted,
+        // and the manager refuses outside Lifesteal worlds and on servers whose economy isn't Lifesteal's.
+        "bank",
     )
 
     val COMMANDS: Map<String, GamemodeScope> =
