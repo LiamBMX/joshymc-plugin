@@ -1,262 +1,268 @@
 package com.liam.joshymc.listener
 
+import com.destroystokyo.paper.event.entity.EntityAddToWorldEvent
+import com.destroystokyo.paper.event.entity.EntityRemoveFromWorldEvent
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.mobvisibility.MobVisibilityRules
 import org.bukkit.Bukkit
 import org.bukkit.entity.ArmorStand
+import org.bukkit.entity.Bee
+import org.bukkit.entity.Enderman
 import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Mob
+import org.bukkit.entity.PigZombie
 import org.bukkit.entity.Player
-import org.bukkit.entity.Projectile
 import org.bukkit.entity.Tameable
 import org.bukkit.entity.Villager
+import org.bukkit.entity.Wolf
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.CreatureSpawnEvent
-import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityTameEvent
 import org.bukkit.event.entity.EntityTargetEvent
 import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerTeleportEvent
+import java.util.UUID
 
 /**
- * Per-player mob visibility toggle. The mob is still ONE server-side entity
- * — players sharing the world all see the same mob if their setting is on.
- * Players with the setting off use Paper's [Player.hideEntity] so the mob
- * is never sent to their client, and we cancel mob targeting + mob-dealt
- * damage against them so a mob they can't see can never harm them.
+ * Per-player Mobs OFF setting (`mob_visibility`). **Visibility only** (issue #1421): a
+ * player with Mobs OFF gets Paper's [Player.hideEntity] for hostile mobs and for neutral
+ * mobs while they're aggressive; nothing else changes. Mobs still spawn, target, attack,
+ * drop and despawn exactly as for everyone else, and other players are unaffected.
  *
- * The setting is visual-only in the other direction: a player with mobs
- * hidden can still damage any mob normally (melee, projectiles, passive
- * mobs included) — see issue #815.
+ * Which entities hide is the Bukkit-free [MobVisibilityRules]:
+ *  - hostile: always hidden;
+ *  - neutral (Enderman, Piglin, Zombified Piglin, Wolf, Bee, Iron Golem, ...): hidden only
+ *    while aggressive (targeting a player, or its own anger state);
+ *  - passive, tamed, villagers, armor stands, xray helpers: always visible.
  *
- * Two players with the setting ON both see the same mob and can both hit
- * it / be targeted by it as normal.
+ * Aggression changes are caught by events (target changes, damage to the mob) that put the
+ * mob on a small watch list checked every [MobVisibilityRules.WATCH_INTERVAL_TICKS]; anger
+ * that ends without an event (it expires) is seen there. A sweep every
+ * [MobVisibilityRules.SWEEP_INTERVAL_TICKS] looks only near players with Mobs OFF.
+ *
+ * Paper keeps a player's hidden entities by UUID, so a hidden mob stays hidden when it
+ * leaves and re-enters tracking range; join, world change and teleports re-apply.
  */
 class MobVisibilityListener(private val plugin: Joshymc) : Listener {
 
     companion object {
         private const val SETTING_KEY = "mob_visibility"
 
-        /**
-         * Entity types that stay visible when mob visibility is off (issue
-         * #1018). Matched by enum name so a type missing from the running API
-         * is ignored instead of breaking compilation. Neutral mobs (wolves,
-         * bees, polar bears, llamas, pandas, goats, foxes, dolphins, ...) are
-         * deliberately absent and stay hidden. IRON_GOLEM and SULFUR_CUBE are
-         * explicit exceptions to the passive-only rule.
-         */
-        private val ALWAYS_VISIBLE_TYPES = setOf(
-            "IRON_GOLEM", "SULFUR_CUBE",
-            "VILLAGER", "WANDERING_TRADER", "ALLAY", "ARMADILLO", "AXOLOTL", "BAT",
-            "CAMEL", "CAT", "CHICKEN", "COD", "COW", "DONKEY", "FROG", "GLOW_SQUID",
-            "HAPPY_GHAST", "HORSE", "MOOSHROOM", "MULE", "OCELOT", "PARROT", "PIG",
-            "RABBIT", "SALMON", "SHEEP", "SNIFFER", "SNOW_GOLEM", "SQUID", "STRIDER",
-            "TADPOLE", "TROPICAL_FISH", "TURTLE", "COPPER_GOLEM"
-        )
+        /** Watched neutral mob → consecutive calm checks. Main thread only. */
+        private val watched = HashMap<UUID, Int>()
 
-        /**
-         * Returns true for entities that the mob-hide setting should manage.
-         * ArmorStands are LivingEntities but not mobs — always keep them visible.
-         * Xray shulkers (tagged "joshymc_xray") are helper entities for the
-         * xray enchant and must remain visible to the enchant owner. Axolotls
-         * and Iron Golems are exempt from hiding at the user's request — see
-         * issue #917. Tamed animals (anyone's pets) stay visible too, but
-         * only once actually tamed: a wild wolf is still hidden (issue #1267).
-         */
-        private fun shouldHide(entity: LivingEntity): Boolean {
-            if (entity is ArmorStand) return false
-            if (isTamed(entity)) return false
-            if (entity is Villager) return false
-            if (entity.type.name in ALWAYS_VISIBLE_TYPES) return false
-            if (entity.scoreboardTags.contains("joshymc_xray")) return false
-            return true
+        private fun exempt(entity: LivingEntity): Boolean =
+            entity is ArmorStand ||
+                entity is Villager ||
+                (entity is Tameable && entity.isTamed) ||
+                entity.scoreboardTags.contains("joshymc_xray")
+
+        private fun kind(entity: LivingEntity): MobVisibilityRules.Kind =
+            MobVisibilityRules.kindOf(entity.type.name)
+
+        /** The mob's current aggression: a live player target, or its own anger state. */
+        private fun isAggressive(entity: LivingEntity): Boolean {
+            val target = (entity as? Mob)?.target
+            val targetIsPlayer = target is Player && target.isValid && !target.isDead
+            val angry = when (entity) {
+                is Wolf -> entity.isAngry
+                is PigZombie -> entity.isAngry
+                is Bee -> entity.anger > 0
+                is Enderman -> entity.isScreaming
+                else -> false
+            }
+            return MobVisibilityRules.isAggressive(targetIsPlayer, angry)
         }
 
-        private fun isTamed(entity: LivingEntity): Boolean =
-            entity is Tameable && entity.isTamed
+        private fun shouldHide(entity: LivingEntity): Boolean {
+            if (entity is Player) return false
+            val kind = kind(entity)
+            if (kind == MobVisibilityRules.Kind.PASSIVE) return false
+            val exempt = exempt(entity)
+            val aggressive = kind == MobVisibilityRules.Kind.NEUTRAL && !exempt && isAggressive(entity)
+            return MobVisibilityRules.shouldHide(kind, exempt, aggressive)
+        }
+
+        private fun isNeutral(entity: LivingEntity): Boolean =
+            kind(entity) == MobVisibilityRules.Kind.NEUTRAL && !exempt(entity)
+
+        private fun mobsVisible(plugin: Joshymc, player: Player): Boolean =
+            plugin.settingsManager.getSetting(player, SETTING_KEY)
 
         /**
-         * Apply the current setting state to [player]. Iterates every loaded
-         * living entity in their world; hides or reveals based on [enabled].
-         * Called by:
-         *   - the SettingDef.onToggle when the player flips the setting
-         *   - the join handler when they connect
+         * Hide or show [entity] for [player] according to the rules. `showEntity(plugin, …)`
+         * only lifts JoshyMC's own hide, so vanish or other plugins' hides stay in place.
+         */
+        private fun sync(plugin: Joshymc, player: Player, entity: LivingEntity, hide: Boolean) {
+            if (hide) {
+                if (player.canSee(entity)) player.hideEntity(plugin, entity)
+            } else if (!player.canSee(entity)) {
+                player.showEntity(plugin, entity)
+            }
+        }
+
+        /** Re-evaluate [entity] for every Mobs OFF player in its world. */
+        private fun syncForWorld(plugin: Joshymc, entity: LivingEntity) {
+            if (!entity.isValid) return
+            val hide = shouldHide(entity)
+            for (online in entity.world.players) {
+                if (!mobsVisible(plugin, online)) sync(plugin, online, entity, hide)
+            }
+        }
+
+        private fun watch(entity: LivingEntity) {
+            if (watched.size >= MobVisibilityRules.MAX_WATCHED && entity.uniqueId !in watched) return
+            watched[entity.uniqueId] = 0
+        }
+
+        /**
+         * Apply [player]'s setting to every loaded living entity in their world. Called by
+         * the setting's onToggle and after join / world change / teleport. With Mobs ON
+         * ([enabled]) every JoshyMC hide is lifted.
          */
         fun applyTo(plugin: Joshymc, player: Player, enabled: Boolean) {
-            val world = player.world
-            for (entity in world.livingEntities) {
+            for (entity in player.world.livingEntities) {
                 if (entity is Player) continue
-                if (isTamed(entity)) {
-                    // A pet hidden before it was tamed (or by an older build)
-                    // comes back. showEntity(plugin, …) only lifts JoshyMC's
-                    // own hide, so vanish/other-plugin hides stay in place.
+                if (enabled) {
                     if (!player.canSee(entity)) player.showEntity(plugin, entity)
                     continue
                 }
-                if (!shouldHide(entity)) continue
-                if (enabled) {
-                    // Toggling on: re-show every mob the player had hidden.
-                    if (!player.canSee(entity)) player.showEntity(plugin, entity)
-                } else {
-                    if (player.canSee(entity)) player.hideEntity(plugin, entity)
-                    // ALSO drop any existing target this mob had on the
-                    // player. Without this, a mob already locked onto the
-                    // player at the moment they toggle off will keep
-                    // chasing — EntityTargetEvent only fires on new
-                    // acquisitions, not on mid-track refreshes.
-                    if (entity is Mob && entity.target == player) {
-                        entity.target = null
-                    }
-                }
+                if (isNeutral(entity) && isAggressive(entity)) watch(entity)
+                sync(plugin, player, entity, shouldHide(entity))
             }
         }
     }
 
-    /** Convenience accessor — true when the player wants mobs visible. */
-    private fun visible(player: Player): Boolean =
-        plugin.settingsManager.getSetting(player, SETTING_KEY)
+    fun start() {
+        Bukkit.getScheduler().runTaskTimer(plugin, Runnable { checkWatched() },
+            MobVisibilityRules.WATCH_INTERVAL_TICKS, MobVisibilityRules.WATCH_INTERVAL_TICKS)
+        Bukkit.getScheduler().runTaskTimer(plugin, Runnable { sweep() },
+            MobVisibilityRules.SWEEP_INTERVAL_TICKS, MobVisibilityRules.SWEEP_INTERVAL_TICKS)
+    }
+
+    /** Re-check watched neutral mobs; drops gone ones and ones calm for long enough. */
+    private fun checkWatched() {
+        if (watched.isEmpty()) return
+        val iterator = watched.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            val entity = Bukkit.getEntity(entry.key) as? LivingEntity
+            if (entity == null || !entity.isValid) {
+                iterator.remove()
+                continue
+            }
+            val aggressive = isNeutral(entity) && isAggressive(entity)
+            syncForWorld(plugin, entity)
+            val next = MobVisibilityRules.nextCalmCount(aggressive, entry.value)
+            if (next == null) iterator.remove() else entry.setValue(next)
+        }
+    }
+
+    /**
+     * Backstop near Mobs OFF players only: re-hides hostiles that slipped through and
+     * catches neutral aggression that no event reported (e.g. brain-driven targeting).
+     */
+    private fun sweep() {
+        val r = MobVisibilityRules.SWEEP_RADIUS
+        for (player in Bukkit.getOnlinePlayers()) {
+            if (mobsVisible(plugin, player)) continue
+            for (entity in player.getNearbyEntities(r, r, r)) {
+                if (entity !is LivingEntity || entity is Player) continue
+                val hide = shouldHide(entity)
+                if (hide && isNeutral(entity)) watch(entity)
+                sync(plugin, player, entity, hide)
+            }
+        }
+    }
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onJoin(event: PlayerJoinEvent) {
         val player = event.player
-        // Defer one tick — settings cache is loaded lazily on first read,
-        // and the player's scoreboard / chunk visibility setup needs to
-        // settle before we start sending entity-hide packets.
+        // Defer — the settings cache and the player's tracking setup need to settle first.
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            if (player.isOnline) applyTo(plugin, player, visible(player))
+            if (player.isOnline) applyTo(plugin, player, mobsVisible(plugin, player))
         }, 5L)
     }
 
     /**
-     * Re-apply hide state when crossing worlds. Cross-world teleports reset
-     * Paper's per-player entity tracking, so every mob in the new world
-     * becomes visible again until we re-hide them. We fire at tick 1 to
-     * intercept entity spawn packets before the entity tracker sends them,
-     * then again at tick 40 to catch mobs in chunks that loaded after the
-     * initial pass.
+     * Re-apply when crossing worlds: tick 1 for what's already loaded, tick 40 for mobs in
+     * chunks that loaded after the first pass.
      */
     @EventHandler(priority = EventPriority.MONITOR)
-    fun onWorldChange(event: PlayerChangedWorldEvent) {
-        val player = event.player
-        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            if (player.isOnline) applyTo(plugin, player, visible(player))
-        }, 1L)
-        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            if (player.isOnline) applyTo(plugin, player, visible(player))
-        }, 40L)
-    }
+    fun onWorldChange(event: PlayerChangedWorldEvent) = reapplySoon(event.player)
 
-    /**
-     * Same-world long-distance teleports (e.g. /tpa, /warp inside the
-     * overworld) can move the player into chunks that weren't tracked yet.
-     * Re-apply on every teleport — applyTo is idempotent.
-     */
+    /** Long same-world teleports move the player into chunks that weren't tracked yet. */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    fun onTeleport(event: PlayerTeleportEvent) {
-        val player = event.player
-        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            if (player.isOnline) applyTo(plugin, player, visible(player))
-        }, 1L)
-        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            if (player.isOnline) applyTo(plugin, player, visible(player))
-        }, 40L)
-    }
+    fun onTeleport(event: PlayerTeleportEvent) = reapplySoon(event.player)
 
-    @EventHandler(priority = EventPriority.MONITOR)
-    fun onSpawn(event: CreatureSpawnEvent) {
-        val entity = event.entity
-        if (!shouldHide(entity)) return
-        // Hide newly-spawned mobs from anyone who has the setting off.
-        for (online in entity.world.players) {
-            if (!visible(online) && online.canSee(entity)) {
-                online.hideEntity(plugin, entity)
-            }
+    private fun reapplySoon(player: Player) {
+        for (delay in longArrayOf(1L, 40L)) {
+            Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                if (player.isOnline) applyTo(plugin, player, mobsVisible(plugin, player))
+            }, delay)
         }
     }
 
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onSpawn(event: CreatureSpawnEvent) = hideNewEntity(event.entity)
+
+    /** Every entity entering the world, including mobs loaded with a chunk. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onAddToWorld(event: EntityAddToWorldEvent) {
+        val entity = event.entity as? LivingEntity ?: return
+        hideNewEntity(entity)
+    }
+
+    private fun hideNewEntity(entity: LivingEntity) {
+        if (entity is Player) return
+        val kind = kind(entity)
+        if (kind == MobVisibilityRules.Kind.PASSIVE) return
+        val players = entity.world.players
+        if (players.none { !mobsVisible(plugin, it) }) return
+        if (!shouldHide(entity)) return
+        if (kind == MobVisibilityRules.Kind.NEUTRAL) watch(entity)
+        for (online in players) {
+            if (!mobsVisible(plugin, online) && online.canSee(entity)) online.hideEntity(plugin, entity)
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onRemoveFromWorld(event: EntityRemoveFromWorldEvent) {
+        watched.remove(event.entity.uniqueId)
+    }
+
     /**
-     * A wild animal tamed while someone has mobs hidden shows up for them
-     * right away instead of waiting for their next join/teleport re-apply.
-     * Only lifts JoshyMC's own hide (see [applyTo]).
+     * Target acquired or dropped. The new target is only set after the event, so the mob
+     * is checked one tick later (and stays watched, so dropping it later shows it again).
      */
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onTarget(event: EntityTargetEvent) {
+        val entity = event.entity as? LivingEntity ?: return
+        if (!isNeutral(entity)) return
+        watch(entity)
+        Bukkit.getScheduler().runTask(plugin, Runnable { syncForWorld(plugin, entity) })
+    }
+
+    /** A hit can anger a neutral mob (and its group, which then fire their own target events). */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onDamaged(event: EntityDamageEvent) {
+        val entity = event.entity as? LivingEntity ?: return
+        if (!isNeutral(entity)) return
+        watch(entity)
+        Bukkit.getScheduler().runTask(plugin, Runnable { syncForWorld(plugin, entity) })
+    }
+
+    /** A wild animal tamed while someone has Mobs OFF shows up for them right away. */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onTame(event: EntityTameEvent) {
         val entity = event.entity
+        watched.remove(entity.uniqueId)
         for (online in entity.world.players) {
             if (!online.canSee(entity)) online.showEntity(plugin, entity)
-        }
-    }
-
-    /**
-     * Cancel mob targeting onto a player who's hiding mobs. Without this,
-     * the mob would still chase / attack-anim them server-side even though
-     * the player can't see it — and the next damage tick would land.
-     */
-    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
-    fun onTarget(event: EntityTargetEvent) {
-        val target = event.target as? Player ?: return
-        if (!visible(target)) {
-            event.target = null
-            event.isCancelled = true
-        }
-    }
-
-    /**
-     * Hidden mobs can't hurt a player who can't see them. Covers:
-     *   - direct mob hit (creeper explosion, zombie melee, …) → player
-     *   - projectile fired by mob (skeleton arrow, ghast fireball, …) → player
-     *
-     * Deliberately one-directional: the setting is visual-only, so a player
-     * with mobs hidden must still be able to damage mobs normally (melee,
-     * projectiles, passive mobs included) — see issue #815.
-     */
-    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
-    fun onDamage(event: EntityDamageByEntityEvent) {
-        val damager = event.damager
-        val victim = event.entity
-        if (victim !is Player || visible(victim)) return
-
-        // Resolve the actual mob source — direct mob, or the mob shooter
-        // behind a projectile / TNT. If there's a non-player living
-        // source, this is a mob hit and we cancel.
-        val mobSource: LivingEntity? = when {
-            damager is Player -> null
-            damager is LivingEntity -> damager
-            damager is Projectile -> {
-                val shooter = damager.shooter
-                if (shooter is LivingEntity && shooter !is Player) shooter else null
-            }
-            else -> null
-        }
-        if (mobSource != null) {
-            event.isCancelled = true
-        }
-    }
-
-    /**
-     * Catch explosion / non-attributed damage paths to a mob-hidden player.
-     * Creeper blasts and TNT chains land via EntityDamageEvent with cause
-     * ENTITY_EXPLOSION / BLOCK_EXPLOSION; not all of those fire through
-     * EntityDamageByEntityEvent. If the player has mobs off, suppress the
-     * explosion damage entirely — so a creeper that somehow primed near
-     * them can never hit them.
-     */
-    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
-    fun onExplosionDamage(event: EntityDamageEvent) {
-        if (event is EntityDamageByEntityEvent) return // handled by onDamage
-        val player = event.entity as? Player ?: return
-        if (visible(player)) return
-        when (event.cause) {
-            EntityDamageEvent.DamageCause.ENTITY_EXPLOSION,
-            EntityDamageEvent.DamageCause.BLOCK_EXPLOSION,
-            EntityDamageEvent.DamageCause.MAGIC,
-            EntityDamageEvent.DamageCause.WITHER -> {
-                event.isCancelled = true
-            }
-            else -> Unit
         }
     }
 }

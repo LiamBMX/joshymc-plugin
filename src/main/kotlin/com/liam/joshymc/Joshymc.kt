@@ -1517,7 +1517,7 @@ class Joshymc : JavaPlugin() {
         settingsManager.register(SettingsManager.SettingDef(
             key = "mob_visibility",
             displayName = "Mob Visibility",
-            description = "Hide ordinary mobs while keeping tamed animals visible",
+            description = "Hide hostile mobs, and neutral mobs while aggressive",
             material = org.bukkit.Material.ZOMBIE_HEAD,
             disabledMaterial = org.bukkit.Material.SKELETON_SKULL,
             default = true,
