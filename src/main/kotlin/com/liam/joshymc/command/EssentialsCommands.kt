@@ -236,6 +236,9 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         target.allowFlight = !target.allowFlight
         target.isFlying = target.allowFlight
+        // Issue #1470: remember the choice so it comes back after a reconnect or restart
+        // (only ever restored while the target may still use /fly).
+        plugin.flightTimeManager.setFlightPreference(target.uniqueId, target.allowFlight)
 
         val state = if (target.allowFlight) "enabled" else "disabled"
         val color = if (target.allowFlight) NamedTextColor.GREEN else NamedTextColor.RED
