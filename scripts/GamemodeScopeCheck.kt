@@ -74,12 +74,9 @@ fun main() {
     check("unassigned commands all say why", GamemodeAssignments.UNASSIGNED.values.all { it.isNotBlank() })
     check("keys are lower-case plugin.yml names", table.keys.all { it == it.lowercase() && !it.startsWith("/") })
     // Issue #1344: /withdrawheart is the first Lifesteal command; issue #1363 adds /ranked, issue #1405 /ac,
-    // issue #1429 /profile, /stats, /achievements and /lstop.
+    // issue #1427 /bank, issue #1429 /profile, /stats, /achievements and /lstop.
     check("only the Lifesteal commands are assigned to Lifesteal", table.filterValues { it == GamemodeScope.LIFESTEAL }.keys ==
-        setOf("withdrawheart", "ranked", "ac", "profile", "stats", "achievements", "lstop"))
-    // Issue #1344: /withdrawheart is the first Lifesteal command; issue #1363 adds /ranked, issue #1405 /ac, issue #1427 /bank.
-    check("only /withdrawheart, /ranked, /ac and /bank are assigned to Lifesteal",
-        table.filterValues { it == GamemodeScope.LIFESTEAL }.keys == setOf("withdrawheart", "ranked", "ac", "bank"))
+        setOf("withdrawheart", "ranked", "ac", "bank", "profile", "stats", "achievements", "lstop"))
 
     // Scopes set by earlier issues are unchanged.
     check("jgamemode NETWORK", scopeOf("jgamemode") == NETWORK)
@@ -94,11 +91,16 @@ fun main() {
     val teamRouter = source("command/TeamCommandRouter.kt")
     check("team router applies the Survival scope to Survival teams", "isAllowed(GamemodeScope.SURVIVAL, sender)" in teamRouter)
     check("team router refuses with the gate's message", "That command is only available on \${ServerGamemode.SURVIVAL.displayName}." in teamRouter)
+    // Issue #1425: /quests likewise (Lifesteal quests in Lifesteal, the Survival quests everywhere else).
+    check("quests NETWORK (routed per gamemode)", scopeOf("quests") == NETWORK)
+    val questRouter = source("command/QuestCommandRouter.kt")
+    check("quest router applies the Survival scope to Survival quests", "isAllowed(GamemodeScope.SURVIVAL, sender)" in questRouter)
+    check("quest router refuses with the gate's message", "That command is only available on \${ServerGamemode.SURVIVAL.displayName}." in questRouter)
 
     // Survival gameplay.
     for (name in listOf(
         "claim", "unclaim", "subclaim", "balance", "pay", "eco", "baltop", "ah", "orders", "order", "market", "invest",
-        "shop", "sell", "chestshop", "crate", "crateeditor", "quests", "daily", "eventquests", "loginstreak",
+        "shop", "sell", "chestshop", "crate", "crateeditor", "daily", "eventquests", "loginstreak",
         "customenchant", "fly", "voucher", "rankvoucher", "candy", "spawner", "hopper", "leaderboard", "event",
         "home", "warp", "rtp", "pv", "tokens", "credits", "cshop", "resurge", "jvote",
     )) check("/$name is SURVIVAL", scopeOf(name) == SURVIVAL)
@@ -130,7 +132,7 @@ fun main() {
     for ((alias, owner) in aliasOwner) {
         check("alias /$alias is not a separate table key", alias !in GamemodeAssignments.KNOWN || alias == owner)
     }
-    check("/q resolves to /quests", aliasOwner["q"] == "quests" && scopeOf("quests") == SURVIVAL)
+    check("/q resolves to /quests", aliasOwner["q"] == "quests" && scopeOf("quests") == NETWORK)
     check("/bal resolves to /balance", aliasOwner["bal"] == "balance")
     check("/eshop resolves to /eventshop", aliasOwner["eshop"] == "eventshop")
     check("/sc resolves to /staffchat (network)", aliasOwner["sc"] == "staffchat" && scopeOf("staffchat") == NETWORK)

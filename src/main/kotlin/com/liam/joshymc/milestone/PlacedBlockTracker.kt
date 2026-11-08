@@ -19,7 +19,7 @@ import java.util.UUID
  */
 class PlacedBlockTracker(plugin: Plugin, keyName: String = "milestone_placed") {
 
-    /** [keyName]: each user keeps its own markers (Lifesteal profiles use `lifesteal_profile_placed`, issue #1429). */
+    /** [keyName]: each user keeps its own markers, so they never share a cache (Lifesteal quests use `lifesteal_quest_placed`, issue #1425; Lifesteal profiles `lifesteal_profile_placed`, issue #1429). */
     private val key = NamespacedKey(plugin, keyName)
 
     private data class ChunkId(val world: UUID, val x: Int, val z: Int)
