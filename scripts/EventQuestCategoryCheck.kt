@@ -88,6 +88,29 @@ fun main() {
     check("set slots never overlap navigation", EventQuestLayout.SET_SLOTS.none { it in nav })
     check("room for every existing set (6+)", EventQuestLayout.SET_SLOTS.size >= 6)
 
+    // ── Issue #1438: set page layout ──
+    check("reward in the central area (row 1 center)", EventQuestLayout.SET_REWARD_SLOT == 13)
+    check("info slot kept", EventQuestLayout.SET_INFO_SLOT == 40)
+    val reserved = nav + setOf(EventQuestLayout.SET_REWARD_SLOT, EventQuestLayout.SET_INFO_SLOT)
+    for (n in 1..EventQuestLayout.SET_MAX_QUESTS) {
+        val slots = EventQuestLayout.questSlots(n)
+        check("$n quests: one slot each", slots.size == n && slots.toSet().size == n)
+        check("$n quests: rows 2-3 only", slots.all { it / 9 in 2..3 })
+        check("$n quests: never on reward/info/navigation", slots.none { it in reserved })
+        check("$n quests: in reading order", slots == slots.sorted())
+        for (row in 2..3) {
+            val cols = slots.filter { it / 9 == row }.map { it % 9 }
+            check("$n quests: row $row symmetric around center", cols.map { 8 - it }.sorted() == cols.sorted())
+        }
+    }
+    check("1 quest under the reward", EventQuestLayout.questSlots(1) == listOf(22))
+    check("5 quests fill 20-24", EventQuestLayout.questSlots(5) == (20..24).toList())
+    check("10 quests: 20-24 + 29-33", EventQuestLayout.questSlots(10) == (20..24).toList() + (29..33).toList())
+    check("even row leaves center empty", EventQuestLayout.questSlots(4) == listOf(20, 21, 23, 24))
+    check("manager uses the layout", run {
+        val src = File("src/main/kotlin/com/liam/joshymc/manager/EventQuestManager.kt").readText()
+        "EventQuestLayout.SET_REWARD_SLOT" in src && "EventQuestLayout.questSlots(" in src && "gui.setItem(4, rewardIcon)" !in src
+    })
     // ── Elite page layout (issue #1440) ──
     val border = EventQuestLayout.ELITE_BORDER_SLOTS.toSet()
     check("elite border = top row + row above navigation", border == ((0..8) + (36..44)).toSet())
