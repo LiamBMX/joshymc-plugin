@@ -374,6 +374,8 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var lifestealBountyManager: com.liam.joshymc.lifesteal.bounty.LifestealBountyManager
         private set
+    lateinit var lifestealProfileManager: com.liam.joshymc.lifesteal.profile.LifestealProfileManager
+        private set
     lateinit var lifestealRankManager: com.liam.joshymc.lifesteal.ranks.LifestealRankManager
         private set
 
@@ -647,6 +649,8 @@ class Joshymc : JavaPlugin() {
         lifestealRankedStatsManager = com.liam.joshymc.lifesteal.ranked.stats.LifestealRankedStatsManager(this)
         // Issue #1401: player-funded Lifesteal bounties (escrow in data.db). Only does anything on the dedicated Lifesteal server.
         lifestealBountyManager = com.liam.joshymc.lifesteal.bounty.LifestealBountyManager(this)
+        // Issue #1429: Lifesteal profiles, statistics, achievements and leaderboards. Only does anything where Lifesteal runs.
+        lifestealProfileManager = com.liam.joshymc.lifesteal.profile.LifestealProfileManager(this)
         // Issue #1428: Lifesteal ranks, rank perks, rank kits and progression. Only does anything where Lifesteal runs.
         lifestealRankManager = com.liam.joshymc.lifesteal.ranks.LifestealRankManager(this)
         // Issue #1425: Lifesteal Daily & Weekly Quests. Only does anything on the dedicated Lifesteal server.
@@ -753,6 +757,7 @@ class Joshymc : JavaPlugin() {
         lifestealRatingManager.refresh()
         lifestealRankedStatsManager.refresh()
         lifestealBountyManager.refresh()
+        lifestealProfileManager.refresh()
         lifestealRankManager.refresh()
         // After crates and chat tags (reward validation); its payout sweep waits for the purchase queue to start.
         lifestealQuestManager.refresh()
@@ -869,6 +874,8 @@ class Joshymc : JavaPlugin() {
         // Ends every ranked queue entry, found match and challenge (none is resumed after a restart) before the matches stop.
         // Stops the bounty sweep; bounty writes already queued finish with the database (every one is a complete transaction).
         shutdown.step("lifestealBountyManager.stop", { ::lifestealBountyManager.isInitialized }) { lifestealBountyManager.stop() }
+        // Writes buffered profile activity counters synchronously while the database is still open.
+        shutdown.step("lifestealProfileManager.stop", { ::lifestealProfileManager.isInitialized }) { lifestealProfileManager.stop() }
         // Stops the rank-change sweep and removes the rank permission attachments; pending changes stay PENDING and resume at the next start.
         shutdown.step("lifestealRankManager.stop", { ::lifestealRankManager.isInitialized }) { lifestealRankManager.stop() }
         // Saves every online player's Lifesteal quest progress while the database is still open.
@@ -1101,6 +1108,7 @@ class Joshymc : JavaPlugin() {
         safe("lifestealRatingManager.refresh") { lifestealRatingManager.refresh() }
         safe("lifestealRankedStatsManager.refresh") { lifestealRankedStatsManager.refresh() }
         safe("lifestealBountyManager.refresh") { lifestealBountyManager.refresh() }
+        safe("lifestealProfileManager.refresh") { lifestealProfileManager.refresh() }
         safe("lifestealRankManager.refresh") { lifestealRankManager.refresh() }
         // Saves progress, rereads lifesteal-quests.yml and reloads the online players' boards.
         safe("lifestealQuestManager.refresh") { lifestealQuestManager.refresh() }

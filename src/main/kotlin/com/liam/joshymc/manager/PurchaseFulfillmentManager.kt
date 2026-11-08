@@ -63,6 +63,9 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         }
     }
 
+    /** What this server can deliver, for systems that validate their own reward lists up front (Lifesteal achievements, issue #1429). */
+    val rewardCatalog: PurchaseRewards.Catalog get() = catalog
+
     fun start() {
         store.createSchema()
 
@@ -508,6 +511,7 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
     /** How the player hears about [row]: event rewards (issue #1199) aren't store purchases. */
     private fun what(row: Delivery): String = when {
         row.source.startsWith(EVENT_SOURCE_PREFIX) -> "event reward"
+        row.source.startsWith(ACHIEVEMENT_SOURCE_PREFIX) -> "achievement reward"
         row.source.startsWith(QUEST_SOURCE_PREFIX) -> "quest reward"
         else -> "store purchase"
     }
@@ -606,6 +610,8 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
     companion object {
         /** `source` of rows queued by hosted-event rewards (issue #1199). */
         const val EVENT_SOURCE_PREFIX = "event:"
+        /** `source` of rows queued by Lifesteal achievement claims (issue #1429). */
+        const val ACHIEVEMENT_SOURCE_PREFIX = "achievement:"
         /** `source` of rows queued by Lifesteal quest claims (issue #1425). */
         const val QUEST_SOURCE_PREFIX = "lsquest:"
         private const val JOIN_DELAY_TICKS = 100L
