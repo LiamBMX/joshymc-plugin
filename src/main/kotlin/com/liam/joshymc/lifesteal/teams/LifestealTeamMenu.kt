@@ -68,6 +68,19 @@ class LifestealTeamMenu(private val plugin: Joshymc) {
             openInvites(p)
         }
 
+        // Issue #1426: Team Upgrades in the middle slot (7 entries now fill 10..16).
+        gui.setItem(13, GuiStyle.item(Material.EXPERIENCE_BOTTLE, text("Team Upgrades", NamedTextColor.GOLD), buildList {
+            if (team == null) add(text("Join a team to level it up.", NamedTextColor.GRAY))
+            else {
+                add(text("Team Level " + plugin.lifestealTeamProgressionManager.level(team.id), NamedTextColor.WHITE))
+                add(text("Upgrades, objectives, milestones and the team bank.", NamedTextColor.GRAY))
+            }
+        })) { p, _ ->
+            if (teams.teamOf(p.uniqueId) == null) return@setItem GuiStyle.errorSound(p)
+            GuiStyle.clickSound(p)
+            com.liam.joshymc.lifesteal.teams.progression.TeamUpgradesMenu(plugin).open(p)
+        }
+
         gui.setItem(14, GuiStyle.item(Material.COMPARATOR, text("Team Management", NamedTextColor.YELLOW), listOf(
             text(when {
                 team == null -> "Create a team."

@@ -7,6 +7,7 @@ import com.liam.joshymc.lifesteal.bank.BankSettings
 import com.liam.joshymc.lifesteal.bank.CoinStealSettings
 import com.liam.joshymc.lifesteal.bounty.BountyConfig
 import com.liam.joshymc.lifesteal.ranked.stats.DivisionConfig
+import com.liam.joshymc.lifesteal.teams.progression.TeamProgressionConfig
 import org.bukkit.configuration.ConfigurationSection
 import org.bukkit.configuration.file.YamlConfiguration
 
@@ -47,6 +48,12 @@ class LifestealConfigManager(private val plugin: Joshymc) {
     @Volatile var bounties: BountyConfig.Result = BountyConfig.Result(null, emptyList())
         private set
     /**
+     * Issue #1426: `team-progression` (Team Levels, upgrades, team bank, objectives, milestones), read
+     * separately too: a mistake there only pauses Team Upgrades, never hearts or teams.
+     */
+    @Volatile var teamProgression: TeamProgressionConfig.Result = TeamProgressionConfig.Result(null, emptyList())
+        private set
+    /**
      * Issue #1427: `bank` and `pvp-coins`, each read on its own: a mistake in one only pauses
      * deposits (bank) or coin stealing (pvp-coins), never hearts or the other section.
      */
@@ -64,6 +71,7 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             divisions = DivisionConfig.Result(null, DivisionConfig.Status.DISABLED, emptyList())
             leaderboards = DivisionConfig.LeaderboardResult(null, emptyList())
             bounties = BountyConfig.Result(null, emptyList())
+            teamProgression = TeamProgressionConfig.Result(null, emptyList())
             bank = BankConfig.Result(null, emptyList())
             pvpCoins = BankConfig.Result(null, emptyList())
             return
@@ -82,12 +90,14 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             status = if (result.settings != null) Status.READY else Status.INVALID
             loadRankedDisplay(yaml, result.settings)
             loadBounties(yaml)
+            loadTeamProgression(yaml)
             loadBank(yaml)
         } catch (e: Exception) {
             problems = listOf(LifestealConfigParser.Problem(true, "Could not read $CONFIG_FILE: ${e.message}"))
             settings = null
             status = Status.INVALID
             bounties = BountyConfig.Result(null, listOf(BountyConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
+            teamProgression = TeamProgressionConfig.Result(null, listOf(TeamProgressionConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
             bank = BankConfig.Result(null, listOf(BankConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
             pvpCoins = BankConfig.Result(null, listOf(BankConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
         }
@@ -152,6 +162,29 @@ class LifestealConfigManager(private val plugin: Joshymc) {
     }
 
     /**
+     * Team progression settings (issue #1426). A lifesteal.yml from before them has no
+     * `team-progression` section: the bundled file's section is used (logged), like bounties.
+     * Sections inside it are handed to the Bukkit-free parser as plain maps.
+     */
+    private fun loadTeamProgression(yaml: YamlConfiguration) {
+        val source = if (yaml.get(TEAM_PROGRESSION, null) != null) yaml else {
+            plugin.logger.warning("[Lifesteal] $CONFIG_FILE has no $TEAM_PROGRESSION section; using the bundled defaults (copy the section from the plugin's $CONFIG_FILE to change it).")
+            plugin.getResource(CONFIG_FILE)?.reader(Charsets.UTF_8)?.use { YamlConfiguration.loadConfiguration(it) }
+        }
+        teamProgression = if (source == null) TeamProgressionConfig.Result(null, listOf(TeamProgressionConfig.Problem(true, "no $TEAM_PROGRESSION section found.")))
+        else TeamProgressionConfig.parse { path ->
+            when (val value = source.get("$TEAM_PROGRESSION.$path", null)) {
+                is ConfigurationSection -> value.getValues(false)
+                else -> value
+            }
+        }
+        for (problem in teamProgression.problems) {
+            if (problem.severe) plugin.logger.severe("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+            else plugin.logger.warning("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+        }
+    }
+
+    /**
      * Bank and PvP coin settings (issue #1427). A lifesteal.yml from before them has no section:
      * the bundled file's section is used (logged), like the bounties.
      */
@@ -175,5 +208,6 @@ class LifestealConfigManager(private val plugin: Joshymc) {
 
     companion object {
         const val CONFIG_FILE = "lifesteal.yml"
+        private const val TEAM_PROGRESSION = "team-progression"
     }
 }

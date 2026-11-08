@@ -112,6 +112,34 @@ object EventQuestLayout {
     const val EMPTY_SLOT = 22
     val SET_SLOTS: List<Int> = (10..16) + (19..25) + (28..34) + (37..43)
 
+    /**
+     * Issue #1440: the Elite category page has a purple pane border across the top row (0..8)
+     * and the row right above the navigation (36..44). Sets sit in the three rows between them
+     * (rows 1..3, columns 1..7), centered both ways, so one set lands in the middle at slot 22.
+     */
+    val ELITE_BORDER_SLOTS: List<Int> = (0..8) + (36..44)
+    const val ELITE_FIRST_ROW = 1
+    const val ELITE_ROWS = 3
+    const val ELITE_COLUMNS = 7
+    const val ELITE_CAPACITY = ELITE_ROWS * ELITE_COLUMNS
+
+    /** Slots for [count] Elite sets (capped at [ELITE_CAPACITY]) in reading order, centered in rows 1..3. */
+    fun eliteSetSlots(count: Int): List<Int> {
+        val n = count.coerceIn(0, ELITE_CAPACITY)
+        if (n == 0) return emptyList()
+        val rows = (n + ELITE_COLUMNS - 1) / ELITE_COLUMNS
+        val firstRow = ELITE_FIRST_ROW + (ELITE_ROWS - rows) / 2
+        val result = mutableListOf<Int>()
+        var remaining = n
+        for (r in 0 until rows) {
+            // Spread evenly across rows; each row is centered and mirror-symmetric (SettingsLayout rules).
+            val inRow = (remaining + (rows - r) - 1) / (rows - r)
+            result += com.liam.joshymc.manager.SettingsLayout.rowSlots(inRow).map { (firstRow + r) * 9 + it }
+            remaining -= inRow
+        }
+        return result
+    }
+
     fun categorySlot(category: EventQuestCategory): Int = when (category) {
         EventQuestCategory.FREE -> FREE_SLOT
         EventQuestCategory.ELITE -> ELITE_SLOT

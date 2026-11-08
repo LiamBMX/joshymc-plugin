@@ -275,6 +275,8 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                     }
                 }
                 notify(result, killer, victim.name, victim, limits)
+                // Issue #1426: Team XP only for kills the heart service accepted as legitimate.
+                plugin.teamProgression()?.onPvpKill(killer.uniqueId, victim.uniqueId, result.decision, request.dedupeKey)
             }
         }
     }
@@ -343,6 +345,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                     }
                 }
                 notify(result, killer, victimName, Bukkit.getPlayer(victim)?.takeIf { it.isOnline }, limits)
+                plugin.teamProgression()?.onPvpKill(killer.uniqueId, victim, result.decision, request.dedupeKey)
             }
         }
     }

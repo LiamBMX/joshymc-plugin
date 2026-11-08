@@ -111,6 +111,30 @@ fun main() {
         val src = File("src/main/kotlin/com/liam/joshymc/manager/EventQuestManager.kt").readText()
         "EventQuestLayout.SET_REWARD_SLOT" in src && "EventQuestLayout.questSlots(" in src && "gui.setItem(4, rewardIcon)" !in src
     })
+    // ── Elite page layout (issue #1440) ──
+    val border = EventQuestLayout.ELITE_BORDER_SLOTS.toSet()
+    check("elite border = top row + row above navigation", border == ((0..8) + (36..44)).toSet())
+    check("elite border never covers navigation", border.none { it in nav })
+    check("one elite set is centered at slot 22", EventQuestLayout.eliteSetSlots(1) == listOf(22))
+    check("empty page item also centered", EventQuestLayout.EMPTY_SLOT == 22 && EventQuestLayout.EMPTY_SLOT !in border)
+    check("two elite sets mirror around the center", EventQuestLayout.eliteSetSlots(2) == listOf(21, 23))
+    check("three elite sets centered", EventQuestLayout.eliteSetSlots(3) == listOf(21, 22, 23))
+    check("eight elite sets use rows 1-2, balanced", EventQuestLayout.eliteSetSlots(8) == listOf(11, 12, 14, 15, 20, 21, 23, 24))
+    check("elite capacity 21", EventQuestLayout.ELITE_CAPACITY == 21 && EventQuestLayout.eliteSetSlots(30).size == 21)
+    check("no elite sets = no slots", EventQuestLayout.eliteSetSlots(0).isEmpty())
+    for (n in 1..EventQuestLayout.ELITE_CAPACITY) {
+        val s = EventQuestLayout.eliteSetSlots(n)
+        check("elite $n: count", s.size == n)
+        check("elite $n: distinct", s.toSet().size == n)
+        check("elite $n: inside rows 1-3, columns 1-7", s.all { it / 9 in 1..3 && it % 9 in 1..7 })
+        check("elite $n: never on border or navigation", s.none { it in border || it in nav })
+    }
+    val events = File("src/main/kotlin/com/liam/joshymc/manager/EventQuestManager.kt").readText()
+    val categoryPage = events.substringAfter("fun openCategoryGui(").substringBefore("private fun eventIcon(")
+    check("elite page uses the centered slots", categoryPage.contains("EventQuestLayout.eliteSetSlots(list.size)"))
+    check("border placed before filler", categoryPage.indexOf("ELITE_BORDER_SLOTS") in 0 until categoryPage.indexOf("gui.fill(FILLER)"))
+    check("border panes have no click handler", Regex("""ELITE_BORDER_SLOTS\.forEach \{ gui\.setItem\(it, ELITE_BORDER\) }""").containsMatchIn(categoryPage))
+    check("free page keeps the original slots", categoryPage.contains("else EventQuestLayout.SET_SLOTS"))
 
     // ── Wiring ──
     val yml = File("src/main/resources/event-quests.yml").readText()
