@@ -398,12 +398,76 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
         val models = plugin.crateManager.models
-        if (args.getOrNull(1)?.lowercase() == "refresh") {
-            models.refreshAll()
-            Msg.success(sender, "Crate models redrawn.")
+        when (args.getOrNull(1)?.lowercase()) {
+            "refresh" -> {
+                models.refreshAll()
+                Msg.success(sender, "Crate models redrawn.")
+            }
+            // Issue #1460: monthly rotation status (current month, timezone, every month's model, fallbacks).
+            "monthly" -> {
+                for (line in models.monthlyLines()) sender.sendMessage(Component.text(line.trimStart(), NamedTextColor.GRAY))
+                return
+            }
+            "set" -> {
+                handleModelSet(sender, args)
+                return
+            }
         }
         for (line in models.describe()) {
             sender.sendMessage(Component.text(line, NamedTextColor.GRAY))
+        }
+    }
+
+    /**
+     * `/crate models set <crate> <model>` (issue #1460): points one existing crate's static model
+     * (`crates.custom-models.models.<crate>.model`) at an item model that is in the bundled pack,
+     * saves config.yml and redraws the models. Only that entry's `model` changes: the crate id,
+     * keys, rewards, locations and every other entry are untouched. For a rotating crate this is
+     * the model used in months whose monthly model is missing.
+     */
+    private fun handleModelSet(sender: CommandSender, args: Array<out String>) {
+        if (args.size < 4) {
+            Msg.usage(sender, "/crate models set <crate> <model>")
+            return
+        }
+        val crateManager = plugin.crateManager
+        val input = args[2].lowercase()
+        val crateId = crateManager.resolveCrateId(input)
+        if (crateManager.getCrate(crateId) == null) {
+            Msg.error(sender, "Unknown crate: $input. Crates: ${crateManager.getCrateTypes().sorted().joinToString()}")
+            return
+        }
+        val raw = args[3].trim().lowercase()
+        val model = if (':' in raw) raw else "joshymc:$raw"
+        plugin.crateManager.models.modelProblem(model)?.let {
+            Msg.error(sender, "Model not changed: $it.")
+            return
+        }
+        val entryId = crateId.lowercase()
+        val path = "crates.custom-models.models.$entryId.model"
+        val old = plugin.config.getString(path)
+        if (old?.trim()?.lowercase() == model) {
+            Msg.reply(sender, Component.text("Crate $entryId already uses $model.", NamedTextColor.GRAY))
+            return
+        }
+        val configFile = java.io.File(plugin.dataFolder, "config.yml")
+        try {
+            com.liam.joshymc.util.ConfigUtil.backup(configFile, plugin.logger, "Crates")
+            plugin.config.set(path, model)
+            plugin.saveConfig()
+        } catch (e: Exception) {
+            plugin.config.set(path, old)
+            Msg.error(sender, "Could not save config.yml (${e.message}); nothing changed.")
+            return
+        }
+        plugin.logger.info("[Crates] ${sender.name} set the custom model of crate '$entryId' to $model (was ${old ?: "the default"}).")
+        crateManager.restartModels()
+        Msg.success(sender, "Crate $entryId now uses $model (was ${old ?: "the default"}). Models redrawn.")
+        val resolved = crateManager.models.resolve(entryId)
+        if (resolved.source == com.liam.joshymc.crate.CrateModels.ModelSource.MONTHLY) {
+            Msg.reply(sender, Component.text("This crate rotates monthly: $model is shown only in months whose monthly model is missing.", NamedTextColor.GRAY))
+        } else if (resolved.model == null) {
+            Msg.reply(sender, Component.text("Not drawn yet: ${resolved.note}.", NamedTextColor.YELLOW))
         }
     }
 
@@ -422,7 +486,9 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "/crate diagnose  (look at a block to inspect)",
             "/crate locations  (list all registered crates)",
             "/crate force <type> [player]  (open a crate without clicking — testing only)",
-            "/crate models [refresh]  (custom crate model status / redraw)"
+            "/crate models [refresh]  (custom crate model status / redraw)",
+            "/crate models monthly  (monthly model rotation status)",
+            "/crate models set <crate> <model>  (change a crate's custom model)"
         )
         for (usage in usages) {
             sender.sendMessage(
@@ -451,11 +517,15 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                     plugin.crateManager.getCrateTypes().filter { it.startsWith(args[1], ignoreCase = true) }
                 "models" ->
                     if (sender.hasPermission("joshymc.crate.admin")) {
-                        listOf("refresh").filter { it.startsWith(args[1], ignoreCase = true) }
+                        listOf("refresh", "monthly", "set").filter { it.startsWith(args[1], ignoreCase = true) }
                     } else emptyList()
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
+                "models" ->
+                    if (sender.hasPermission("joshymc.crate.admin") && args[1].equals("set", ignoreCase = true)) {
+                        plugin.crateManager.getCrateTypes().filter { it.startsWith(args[2], ignoreCase = true) }
+                    } else emptyList()
                 "givekey" -> {
                     val names = plugin.server.onlinePlayers.map { it.name } + listOf("@a", "@r")
                     names.filter { it.startsWith(args[2], ignoreCase = true) }
@@ -464,6 +534,10 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             }
             4 -> when (args[0].lowercase()) {
                 "givekey" -> listOf("1", "5", "10", "32", "64").filter { it.startsWith(args[3], ignoreCase = true) }
+                "models" ->
+                    if (sender.hasPermission("joshymc.crate.admin") && args[1].equals("set", ignoreCase = true)) {
+                        plugin.crateManager.models.chestModelKeys().filter { it.startsWith(args[3], ignoreCase = true) }
+                    } else emptyList()
                 else -> emptyList()
             }
             else -> emptyList()

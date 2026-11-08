@@ -231,6 +231,113 @@ crates:
   - crates with locations but no model entry, locations refused for their placement, and
     config problems.
 
+## E2. Monthly model rotation (issue #1460)
+
+Part of the crates redesign (issue #1407, audit #1446). Rotation lets chosen crates show a
+different model each calendar month. The 12 monthly models themselves (`january_chest` …
+`december_chest`) are made in later phases; until they are in the pack every month falls back
+(see below), so nothing changes in game yet.
+
+### Configuration
+
+```yaml
+crates:
+  custom-models:
+    enabled: true
+    models:
+      harvest:
+        model: "joshymc:harvest_chest"   # the static model, also the monthly fallback
+        scale: 1.0                       # offset / rotation / scale / hitbox apply to every month
+    monthly:
+      enabled: true                # rotation switch (the custom-models master switch still wins)
+      timezone: America/New_York   # any IANA zone id: UTC, Europe/London, America/Los_Angeles ...
+      crates: [harvest]            # crate ids (aliases work) that rotate; empty = nothing rotates
+      models:                      # january .. december, each an item model key
+        january: "joshymc:january_chest"
+        february: "joshymc:february_chest"
+        # ... one line per month, up to december
+```
+
+- Month ids are the 12 English month names, lower case: `january`, `february`, `march`,
+  `april`, `may`, `june`, `july`, `august`, `september`, `october`, `november`, `december`.
+  Abbreviations are not accepted.
+- The bundled config maps all 12 months to `joshymc:<month>_chest` and lists **no crates**:
+  the plugin doesn't know which live crates should rotate, so the Owner chooses. Crates not in
+  `monthly.crates` behave exactly as before (their static `models.<id>` entry).
+- A rotating crate keeps its own `models.<id>` placement (offset, rotation, scale, hitbox) for
+  every month; without an entry it uses the defaults (no offset, auto rotation, scale 1, auto
+  hitbox). `models.<id>.enabled: false` turns the crate's model off in every month.
+- Turning rotation off: `monthly.enabled: false` (or an empty `crates` list), then
+  `/joshymc reload`. Rotating crates go back to their static model.
+- Invalid values are logged and never guessed: an unknown month key is ignored, a bad model
+  key leaves that month unset (it falls back), a bad timezone or a non-boolean `enabled` turns
+  rotation off (static models keep working), and a non-list `crates` rotates nothing.
+
+### How rotation works
+
+- The month is read from the wall clock in `monthly.timezone` (default America/New_York),
+  never stored, so a restart or `/joshymc reload` always starts with the right month, also
+  when the month changed while the server was down.
+- While rotation is active there is **one** delayed check (never one per crate, no repeating
+  task): it fires just after the next month start (computed in the timezone, so DST and the
+  December → January year change are handled) and at most an hour after the previous check,
+  so tick lag or a changed system clock can't make it late by more than that.
+- When the month hasn't changed the check does nothing. When it has, only rotating crates
+  whose drawn model differs from the new one are redrawn, through the same `refresh` that
+  `/crate setlocation` uses (old display and hitbox removed first, so no duplicates). Crates
+  in unloaded chunks are drawn with the new month's model when their chunks load; chunks are
+  never loaded for this.
+- Hitbox bounds are measured for the monthly models too, so a taller monthly model gets its
+  hitbox like a static one.
+- Only the display's item model changes. Crate ids, keys, rewards, probabilities, animations,
+  GUIs, locations (`crate_locations`) and player data are never touched.
+
+### Missing models and fallbacks
+
+For a rotating crate, in order:
+1. this month's model, if it is set and in the bundled resource pack;
+2. otherwise the crate's static `models.<id>.model`, if it is in the pack;
+3. otherwise the vanilla crate block.
+
+A key that isn't in the bundled pack is never spawned. At startup one warning lists every
+month whose model is missing (not one per month or crate), plus any listed crate id that
+doesn't exist; a month change logs one line. Visibility rules are unchanged: Bedrock players
+and players without the JoshyMC pack always see the vanilla block.
+
+### Commands (`joshymc.crate.admin`, op)
+
+- `/crate models`: the existing status, now with the monthly summary when rotation is set up.
+- `/crate models monthly`: on/off, timezone, current month and its model, when the next month
+  starts, all 12 months with "ok" / "not in the pack" / "not set" (`>` marks the current one),
+  and per rotating crate what it shows now (this month's model, static fallback and why, or
+  the vanilla block and why).
+- `/crate models refresh`: redraw everything (unchanged).
+- `/crate models set <crate> <model>`: sets that crate's static
+  `crates.custom-models.models.<crate>.model`. The crate must exist (aliases resolve to their
+  crate) and the model must be in the bundled pack (`cabin_chest` is read as
+  `joshymc:cabin_chest`; tab completion lists the bundled `*_chest` / `*_crate` models).
+  config.yml is backed up to `backups/` and saved, then the models are redrawn. Nothing else
+  changes. For a rotating crate this is the fallback model. Note: saving writes the loaded
+  config, so reload first if config.yml was edited by hand since the last reload. Monthly
+  mappings and the crate list are edited in config.yml (then `/joshymc reload`).
+
+### Verifying
+
+- `/crate models monthly` shows the active month, its model and each crate's source.
+- Manual (test server): list a crate under `monthly.crates`, map the current month to a model
+  that is in the pack (e.g. `joshymc:stockpile_chest`) and reload: that crate shows it. Map it
+  to a missing key and reload: the static model shows, and the startup log warns once.
+  Change the server clock (or `timezone`) across a month start: within the hour the crate is
+  redrawn once, and `/execute if entity @e[type=item_display,tag=joshymc_crate_model]` still
+  matches `/crate models`.
+
+### Limitations
+
+- The 12 monthly models don't exist yet (later phases); until then every month falls back.
+- One month → model map is shared by every rotating crate (no per-crate monthly models).
+- Rotation is per crate id, so every location of a listed crate rotates together.
+- `/crate models set` only edits static models; monthly mappings are edited in config.yml.
+
 ## F. Java and Bedrock
 
 - **Java (Paper 26.2):** Java players see the models once the required JoshyMC pack has

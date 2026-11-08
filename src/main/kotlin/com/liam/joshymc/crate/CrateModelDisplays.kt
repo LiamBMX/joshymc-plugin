@@ -37,7 +37,10 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.util.Transformation
 import org.joml.Quaternionf
+import org.bukkit.scheduler.BukkitTask
 import org.joml.Vector3f
+import java.time.Clock
+import java.time.Month
 import java.util.UUID
 import java.util.zip.ZipInputStream
 
@@ -64,20 +67,27 @@ import java.util.zip.ZipInputStream
  *   exists, the block isn't air, the model sits on its block and the world's gamemode is listed
  *   (Survival only by default). Anything else falls back to the vanilla crate block.
  *
- * No repeating task: everything is driven by chunk, pack-status and crate-location events.
+ * - Monthly rotation (issue #1460): crates listed in `monthly.crates` show the current calendar
+ *   month's model (read in `monthly.timezone`), else their static model, else the vanilla block
+ *   ([CrateModels.resolve]). Only the display's item model changes, never the crate.
+ *
+ * No repeating task: everything is driven by chunk, pack-status and crate-location events, plus
+ * (only while rotation is active) one delayed month check that reschedules itself at most an
+ * hour ahead and redraws just the rotating crates whose model actually changed.
  */
 class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateManager) : Listener {
 
     companion object {
         const val TAG = "joshymc_crate_model"
         private const val CONFIG_PATH = "crates.custom-models"
+        private val ITEM_DEFINITION = Regex("^assets/([a-z0-9_.-]+)/items/([a-z0-9_./-]+)\\.json$")
     }
 
     /** The location key ("world:x:y:z") on every JoshyMC crate display and hitbox. */
     private val locationKeyTag = NamespacedKey(plugin, "crate_model")
 
     /** What one crate location has spawned. Only ids and chunk keys: no entity or world references. */
-    private data class Spawned(val display: UUID, val hitbox: UUID?, val chunks: Set<Long>)
+    private data class Spawned(val display: UUID, val hitbox: UUID?, val chunks: Set<Long>, val model: String)
 
     /** location key -> the entities drawn there. */
     private val spawned = mutableMapOf<String, Spawned>()
@@ -100,9 +110,20 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
     /** Model key -> the space its elements fill (null = unreadable, treated as a full block). */
     private var modelBounds: Map<String, CrateModels.ModelBounds?> = emptyMap()
 
+    /** Wall clock the calendar month is read from (replaceable so month changes can be tested). */
+    var clock: Clock = Clock.systemUTC()
+
+    /** The month every drawn rotating crate currently uses. */
+    var activeMonth: Month = Month.JANUARY
+        private set
+
+    /** The one pending month check while rotation is active (never one per crate). */
+    private var rotationTask: BukkitTask? = null
+
     fun start() {
         settings = CrateModels.parse(sectionSource(plugin.config.getConfigurationSection(CONFIG_PATH)))
         for (problem in settings.problems) plugin.logger.warning("[Crates] $CONFIG_PATH.$problem")
+        activeMonth = CrateModels.monthAt(clock.instant(), settings.monthly.zone)
         readBundledPack()
         for (model in settings.models.values) {
             if (!modelAvailable(model)) {
@@ -111,14 +132,19 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
                 plugin.logger.warning("[Crates] Could not read the elements of '${model.model}'; its hitbox assumes it fills one block.")
             }
         }
+        warnMissingMonthlyModels()
         refreshAll()
         if (settings.enabled) {
             plugin.logger.info("[Crates] Custom crate models: ${spawned.size} shown (${spawned.values.count { it.hitbox != null }} with a hitbox), ${settings.models.size} configured (gamemodes: ${settings.gamemodes.joinToString()}).")
+            if (settings.monthly.active) plugin.logger.info("[Crates] ${monthlySummary()}")
         }
+        scheduleRotation()
         for ((key, problem) in placementProblems) plugin.logger.warning("[Crates] Crate model at $key not drawn: $problem")
     }
 
     fun stop() {
+        rotationTask?.cancel()
+        rotationTask = null
         removeAll()
         // Also sweep loaded chunks for any entity this instance didn't spawn (e.g. a previous
         // plugin instance after a hard reload), so they can never pile up.
@@ -173,6 +199,7 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
         val strays = (taggedDisplays - liveDisplays).coerceAtLeast(0) + (taggedHitboxes - liveHitboxes).coerceAtLeast(0)
         out += "  Crate model entities in loaded chunks: $taggedDisplays display(s), $taggedHitboxes hitbox(es)" +
             if (strays > 0) " — $strays untracked, run /crate models refresh" else ""
+        if (settings.monthly.enabled || settings.monthly.crates.isNotEmpty()) out += monthlyLines()
         for (model in settings.models.values.sortedBy { it.crateId }) {
             val state = when {
                 !model.enabled -> "disabled"
@@ -193,23 +220,166 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
                 "hitbox ${model.hitbox.name.lowercase()} ($withHitbox placed), scale ${fmt(model.scale)}, rotation ${rotationText(model.rotation)}$bounds"
         }
         val unmapped = locations.map { crates.resolveCrateId(it.crateType) }
-            .filter { settings.models[it.lowercase()] == null }.distinct().sorted()
+            .filter { settings.models[it.lowercase()] == null && !rotates(it) }.distinct().sorted()
         if (settings.enabled && unmapped.isNotEmpty()) out += "  No model configured (vanilla look): ${unmapped.joinToString()}"
         for ((key, problem) in placementProblems.toSortedMap()) out += "  problem at $key: $problem"
         for (problem in settings.problems) out += "  problem: $problem"
         return out
     }
 
+    // ── Monthly rotation (issue #1460) ─────────────────────────────────
+
+    /** One line: this month, its model and the rotating crates (startup log and `/crate models monthly`). */
+    fun monthlySummary(): String {
+        val m = settings.monthly
+        val key = m.modelFor(activeMonth)
+        val state = when {
+            key == null -> "no model set, using fallbacks"
+            !available(key) -> "$key (not in the pack, using fallbacks)"
+            else -> key
+        }
+        return "Monthly crate models: ${if (m.active) "on" else if (m.enabled) "on, but no crate listed" else "off"}; " +
+            "${CrateModels.monthId(activeMonth)} in ${m.zone.id} -> $state; " +
+            "rotating crates: ${m.crates.sorted().joinToString().ifEmpty { "none" }}"
+    }
+
+    /** `/crate models monthly`: the summary, every month's model and availability, and each rotating crate's fallback. */
+    fun monthlyLines(): List<String> {
+        val m = settings.monthly
+        val out = mutableListOf("  " + monthlySummary())
+        val next = CrateModels.nextMonthStart(clock.instant(), m.zone)
+        out += "    Next month starts ${next.atZone(m.zone)} (checked at most every hour)"
+        for (month in Month.entries) {
+            val key = m.modelFor(month)
+            val state = when {
+                key == null -> "not set"
+                !available(key) -> "$key — not in the pack"
+                else -> "$key — ok"
+            }
+            out += "    ${if (month == activeMonth) ">" else " "} ${CrateModels.monthId(month)}: $state"
+        }
+        for (id in m.crates.sorted()) {
+            val real = crates.resolveCrateId(id)
+            if (crates.getCrate(real) == null) {
+                out += "    crate $id: no crate with this id"
+                continue
+            }
+            val r = resolve(real)
+            val what = when (r.source) {
+                CrateModels.ModelSource.MONTHLY -> "${r.model!!.model} (this month's model)"
+                CrateModels.ModelSource.STATIC_FALLBACK -> "${r.model!!.model} (static fallback: ${r.note})"
+                CrateModels.ModelSource.STATIC -> "${r.model!!.model} (static)"
+                CrateModels.ModelSource.NONE -> "vanilla block (${r.note})"
+            }
+            out += "    crate ${if (real != id) "$id -> $real" else id}: $what"
+        }
+        return out
+    }
+
+    /** One warning (not one per month or crate) listing the months whose model can't be drawn. */
+    private fun warnMissingMonthlyModels() {
+        val m = settings.monthly
+        if (!settings.enabled || !m.active) return
+        val missing = Month.entries.filter { month -> m.modelFor(month)?.let(::available) != true }
+        if (missing.isEmpty()) return
+        plugin.logger.warning("[Crates] Monthly crate models missing or not in the bundled pack for: " +
+            missing.joinToString { month -> CrateModels.monthId(month) + (m.modelFor(month)?.let { " ($it)" } ?: "") } +
+            ". In those months rotating crates use their static model, or the vanilla block.")
+        for (id in m.crates) {
+            if (crates.getCrate(crates.resolveCrateId(id)) == null) {
+                plugin.logger.warning("[Crates] crates.custom-models.monthly.crates lists '$id', which is not a crate id; it is ignored.")
+            }
+        }
+    }
+
+    /** Schedules the next month check: one delayed task, only while rotation is active. */
+    private fun scheduleRotation() {
+        rotationTask?.cancel()
+        rotationTask = null
+        if (!settings.enabled || !settings.monthly.active) return
+        val delay = CrateModels.ticksFor(CrateModels.checkDelayMillis(clock.instant(), settings.monthly.zone))
+        rotationTask = Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            rotationTask = null
+            try {
+                checkMonth()
+            } catch (e: Exception) {
+                plugin.logger.warning("[Crates] Monthly crate model check failed: ${e.message}")
+            }
+            scheduleRotation()
+        }, delay)
+    }
+
+    /**
+     * Applies the current calendar month. Does nothing while the month hasn't changed; otherwise
+     * redraws only the rotating crates whose drawn model differs from the new one.
+     */
+    fun checkMonth(): Int {
+        val now = CrateModels.monthAt(clock.instant(), settings.monthly.zone)
+        if (now == activeMonth) return 0
+        val previous = activeMonth
+        activeMonth = now
+        val redrawn = refreshRotating()
+        val key = settings.monthly.modelFor(now)
+        plugin.logger.info("[Crates] Month changed (${CrateModels.monthId(previous)} -> ${CrateModels.monthId(now)}): " +
+            "${key ?: "no monthly model set"}${if (key != null && !available(key)) " is not in the pack, rotating crates use their fallback" else ""}; " +
+            "$redrawn crate model(s) redrawn.")
+        return redrawn
+    }
+
+    /** Redraws the rotating crates whose model no longer matches; returns how many were redrawn. */
+    private fun refreshRotating(): Int {
+        var redrawn = 0
+        for (loc in crates.getAllLocations()) {
+            if (!rotates(crates.resolveCrateId(loc.crateType))) continue
+            val key = CrateModels.locationKey(loc.world, loc.x, loc.y, loc.z)
+            val want = expectedModel(loc)?.model
+            val have = spawned[key]?.model
+            if (want == have) continue
+            val world = Bukkit.getWorld(loc.world)
+            if (world == null) {
+                remove(key)
+                continue
+            }
+            // refresh() only spawns when the chunks are loaded; otherwise the next chunk load does.
+            refresh(world, loc.x, loc.y, loc.z)
+            redrawn++
+        }
+        return redrawn
+    }
+
     // ── Spawning ───────────────────────────────────────────────────────
 
-    private fun modelAvailable(model: CrateModels.Model): Boolean {
-        val path = CrateModels.itemDefinitionPath(model.model) ?: return false
+    private fun modelAvailable(model: CrateModels.Model): Boolean = available(model.model)
+
+    /** True when the bundled resource pack has an item definition for model key [key]. */
+    fun available(key: String): Boolean {
+        val path = CrateModels.itemDefinitionPath(key) ?: return false
         return path in bundledItemDefinitions
     }
 
+    /** Bundled item model keys that look like crate chest models (`*_chest`, `*_crate`), for tab completion. */
+    fun chestModelKeys(): List<String> = bundledItemDefinitions.mapNotNull { path ->
+        val m = ITEM_DEFINITION.find(path) ?: return@mapNotNull null
+        val key = m.groupValues[1] + ":" + m.groupValues[2]
+        key.takeIf { it.endsWith("_chest") || it.endsWith("_crate") }
+    }.sorted()
+
+    /** Why [key] can't be used as a crate model (bad key or not in the bundled pack), or null when it can. */
+    fun modelProblem(key: String): String? = when {
+        !CrateModels.isModelKey(key) -> "'$key' is not a namespaced item model key like joshymc:cabin_chest"
+        !available(key) -> "'$key' is not in the bundled resource pack (${CrateModels.itemDefinitionPath(key)})"
+        else -> null
+    }
+
+    /** The model (static or this month's) [crateId] shows in [month], with where it came from. */
+    fun resolve(crateId: String, month: Month = activeMonth): CrateModels.Resolved =
+        CrateModels.resolve(settings, crates.resolveCrateId(crateId), month, ::available, crates::resolveCrateId)
+
+    private fun rotates(crateId: String): Boolean = CrateModels.rotates(settings, crateId, crates::resolveCrateId)
+
     /** The model this location should show, ignoring whether its chunks are loaded. */
     private fun expectedModel(loc: CrateManager.CrateLocation): CrateModels.Model? {
-        val model = settings.modelFor(crates.resolveCrateId(loc.crateType)) ?: return null
+        val model = resolve(loc.crateType).model ?: return null
         if (crates.getCrate(model.crateId) == null || !modelAvailable(model)) return null
         val world = Bukkit.getWorld(loc.world)
         if (world != null && !settings.showsIn(plugin.gamemodeLockManager.gamemodeOf(world).id)) return null
@@ -281,7 +451,7 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
                 i.persistentDataContainer.set(locationKeyTag, PersistentDataType.STRING, key)
             }
         }
-        spawned[key] = Spawned(display.uniqueId, hitbox?.uniqueId, chunks)
+        spawned[key] = Spawned(display.uniqueId, hitbox?.uniqueId, chunks, model.model)
         for (player in world.players) {
             if (!eligible(player)) continue
             player.showEntity(plugin, display)
@@ -496,7 +666,7 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
             plugin.logger.warning("[Crates] resourcepack.zip is missing from the plugin JAR; custom crate models are off.")
             return
         }
-        val wanted = settings.models.values.mapNotNull { CrateModels.itemDefinitionPath(it.model) }.toSet()
+        val wanted = allModelKeys().mapNotNull(CrateModels::itemDefinitionPath).toSet()
         val definitions = mutableSetOf<String>()
         val definitionJson = mutableMapOf<String, String>()
         val modelJson = mutableMapOf<String, String>()
@@ -528,10 +698,10 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
         }
         bundledItemDefinitions = definitions
         val bounds = mutableMapOf<String, CrateModels.ModelBounds?>()
-        for (model in settings.models.values) {
-            val path = CrateModels.itemDefinitionPath(model.model) ?: continue
+        for (modelKey in allModelKeys()) {
+            val path = CrateModels.itemDefinitionPath(modelKey) ?: continue
             val json = definitionJson[path] ?: continue
-            bounds[model.model] = CrateModelBounds.union(
+            bounds[modelKey] = CrateModelBounds.union(
                 CrateModelBounds.modelRefs(json).map { ref ->
                     CrateModelBounds.modelPath(ref)?.let(modelJson::get)?.let(CrateModelBounds::elementBounds)
                 }
@@ -539,6 +709,9 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
         }
         modelBounds = bounds
     }
+
+    /** Every model key the config can draw: static entries plus the monthly ones. */
+    private fun allModelKeys(): Set<String> = settings.models.values.map { it.model }.toSet() + settings.monthly.models.values
 
     private fun sectionSource(section: ConfigurationSection?): CrateModels.Source = object : CrateModels.Source {
         override fun keys(path: String): Set<String> {
