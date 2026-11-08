@@ -513,6 +513,7 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         row.source.startsWith(EVENT_SOURCE_PREFIX) -> "event reward"
         row.source.startsWith(ACHIEVEMENT_SOURCE_PREFIX) -> "achievement reward"
         row.source.startsWith(QUEST_SOURCE_PREFIX) -> "quest reward"
+        row.source.startsWith(ADVENT_SOURCE_PREFIX) -> "Advent Calendar reward"
         else -> "store purchase"
     }
 
@@ -614,6 +615,8 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         const val ACHIEVEMENT_SOURCE_PREFIX = "achievement:"
         /** `source` of rows queued by Lifesteal quest claims (issue #1425). */
         const val QUEST_SOURCE_PREFIX = "lsquest:"
+        /** `source` of rows queued by Advent Calendar claims (issue #1424). */
+        const val ADVENT_SOURCE_PREFIX = "advent:"
         private const val JOIN_DELAY_TICKS = 100L
         private const val STARTUP_SWEEP_DELAY_TICKS = 200L
         private const val SWEEP_INTERVAL_TICKS = 20L * 60

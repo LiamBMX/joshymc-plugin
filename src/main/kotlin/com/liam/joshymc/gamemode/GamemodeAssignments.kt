@@ -38,6 +38,9 @@ object GamemodeAssignments {
         "help", "rules", "media", "discord", "ip",
         // The guided tutorial (issue #1387): one walkthrough per gamemode, picked from where the player is.
         "tutorial",
+        // The Christmas Advent Calendar (issue #1424): separate calendars and claims per gamemode,
+        // picked from where the player is; each only runs where that gamemode's economy lives.
+        "advent",
         // Softlock recovery (issue #1241) is server infrastructure, not gameplay.
         "unstuck",
         // Cross-server transfers (issue #1331) move players between gamemodes, so they work on all of them.

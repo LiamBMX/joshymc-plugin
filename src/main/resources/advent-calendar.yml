@@ -1,0 +1,163 @@
+# Christmas Advent Calendar (issue #1424). Full guide: docs/advent-calendar.md
+#
+# /advent (aliases /adventcalendar, /christmas) or an NPC set up with
+# /advent admin setnpc <npc id>. Changes take effect after /advent admin reload
+# or /joshymc reload (no rebuild, no restart). This file is never overwritten.
+#
+# HOW THE SWITCHES COMBINE (top wins):
+#   1. enabled: false                -> the calendar is OFF, whatever else is set.
+#                                       Nobody can open or claim; saved claims and
+#                                       rewards already claimed (still being
+#                                       delivered) are kept and still delivered.
+#   2. manual-override.enabled: true -> OPEN outside the dates. It only skips the
+#                                       date check: one claim per day, prices and
+#                                       future-day locks still apply.
+#   3. schedule.automatic: true      -> OPEN from start to end (Dec 1 - Dec 25) in
+#                                       schedule.timezone, closed otherwise. Returns
+#                                       every year on its own.
+#      schedule.automatic: false     -> closed unless manual-override is on.
+
+enabled: true
+
+schedule:
+  automatic: true
+  # Each present unlocks at midnight in this timezone (real IANA id, DST-aware).
+  timezone: "America/New_York"
+  # Must span exactly 25 days (day 1 = start, day 25 = end).
+  start-month: 12
+  start-day: 1
+  end-month: 12
+  end-day: 25
+
+manual-override:
+  enabled: false
+  # Calendar year to run while overriding (0 = the current year).
+  year: 0
+  # Which day counts as "today" while overriding (1-25). 0 = by date: before the
+  # start nothing is unlocked, after the end every day is a missed day.
+  current-day: 0
+
+missed-days:
+  # Past presents can be recovered for Credits while the calendar is open.
+  # Recovery closes with the calendar (after December 25) unless manual-override
+  # is on. Staff can make a day free after an outage: /advent admin grantfree.
+  enabled: true
+  cost-credits: 25
+
+gui:
+  title: "&4&l✦ &2&lAdvent Calendar &4&l✦"
+  christmas-day-name: "&6&lChristmas Grand Bundle"
+
+messages:
+  disabled: "&cThe Advent Calendar is currently disabled. Check back soon!"
+  not-started: "&eThe Advent Calendar opens on {date}. See you then!"
+  ended: "&eThe Advent Calendar has ended for this year. It returns on {date}!"
+  closed: "&eThe Advent Calendar isn't open right now."
+  claimed: "&aYou opened your &fDecember {day} &apresent: &f{rewards}&a!"
+  christmas: "&6&l✦ Merry Christmas! &eYou opened the &6Christmas Grand Bundle&e: &f{rewards}&e!"
+
+# Reward lines (one list per day, every day 1-25 required):
+#   coins <amount>                      credits <amount>
+#   cratekey <crate id> <quantity>      chattagvoucher <tag id> <quantity>
+#   tokens <quantity>
+#   pending <placeholder> <quantity> <label>
+#       A reward that doesn't exist on this server yet. Claiming records it and it
+#       is delivered automatically once placeholders.<placeholder> below maps it to
+#       a real reward. {year} is replaced by the calendar year.
+# A crate or chat tag that doesn't exist on this server is also kept waiting,
+# never swapped for something else.
+#
+# "default" is used every year. To change one December only, copy the 25 days
+# under years.<year> (e.g. years: 2027: ...). Claims store what they gave, so
+# editing rewards never changes a present someone already opened.
+# Each gamemode's calendar only runs on the server that hosts its economy.
+rewards:
+  survival:
+    enabled: true
+    default:
+      1: ["coins 50000"]
+      2: ["credits 100"]
+      3: ["cratekey cabin 1"]
+      4: ["coins 75000"]
+      5: ["chattagvoucher snowflake 1"]
+      6: ["credits 100"]
+      7: ["cratekey campfire 1"]
+      8: ["coins 100000"]
+      9: ["pending snow_globe 1 Snow Globe Collectible"]
+      10: ["credits 150"]
+      11: ["cratekey homestead 1"]
+      12: ["coins 125000"]
+      13: ["pending winter_scarf 1 Winter Scarf Cosmetic"]
+      14: ["credits 150"]
+      15: ["cratekey stockpile 1"]
+      16: ["coins 150000"]
+      17: ["pending christmas_bell 1 Christmas Bell Collectible"]
+      18: ["credits 200"]
+      19: ["cratekey harvest 1"]
+      20: ["coins 200000"]
+      21: ["chattagvoucher holly 1"]
+      22: ["credits 200"]
+      23: ["cratekey campfire 2"]
+      24: ["coins 250000"]
+      25:
+        - "coins 500000"
+        - "credits 500"
+        - "pending survival_premium_crate_key 3 Premium Crate Key"
+        - "chattagvoucher christmas 1"
+        - "pending survival_festive_cosmetic 1 Exclusive Festive Cosmetic"
+        - "pending christmas_{year}_collectible 1 Christmas {year} Collectible"
+    years: {}
+  lifesteal:
+    enabled: true
+    default:
+      1: ["coins 10000"]
+      2: ["credits 50"]
+      3: ["pending lifesteal_standard_crate_key 1 Standard Lifesteal Crate Key"]
+      4: ["coins 15000"]
+      5: ["chattagvoucher frostbite 1"]
+      6: ["credits 50"]
+      7: ["pending lifesteal_standard_crate_key 1 Standard Lifesteal Crate Key"]
+      8: ["coins 20000"]
+      9: ["pending snow_globe 1 Snow Globe Collectible"]
+      10: ["credits 75"]
+      11: ["pending lifesteal_upgraded_crate_key 1 Upgraded Lifesteal Crate Key"]
+      12: ["coins 25000"]
+      13: ["pending winter_trail 1 Winter Trail Cosmetic"]
+      14: ["credits 75"]
+      15: ["pending lifesteal_upgraded_crate_key 1 Upgraded Lifesteal Crate Key"]
+      16: ["coins 30000"]
+      17: ["pending christmas_bell 1 Christmas Bell Collectible"]
+      18: ["credits 100"]
+      19: ["pending lifesteal_premium_crate_key 1 Premium Lifesteal Crate Key"]
+      20: ["coins 40000"]
+      21: ["chattagvoucher blizzard 1"]
+      22: ["credits 100"]
+      23: ["pending lifesteal_standard_crate_key 2 Standard Lifesteal Crate Key"]
+      24: ["coins 50000"]
+      25:
+        - "coins 100000"
+        - "credits 250"
+        - "pending lifesteal_premium_crate_key 3 Premium Lifesteal Crate Key"
+        - "chattagvoucher christmas 1"
+        - "pending lifesteal_festive_cosmetic 1 Exclusive Festive Cosmetic"
+        - "pending christmas_{year}_collectible 1 Christmas {year} Collectible"
+    years: {}
+
+# What each placeholder becomes once it exists here: "cratekey <crate id>",
+# "chattagvoucher <tag id>" or "tokens" (the quantity comes from the day's line).
+# "" = not set up yet: claimed copies wait (never lost) and are delivered after
+# you map it and run /advent admin reload. None of these exist in JoshyMC yet:
+# Lifesteal has no crates, Survival has no crate marked premium, and the
+# collectibles/cosmetics need items (with art) first. See docs/advent-calendar.md.
+placeholders:
+  survival_premium_crate_key: ""
+  lifesteal_standard_crate_key: ""
+  lifesteal_upgraded_crate_key: ""
+  lifesteal_premium_crate_key: ""
+  snow_globe: ""
+  christmas_bell: ""
+  christmas_2026_collectible: ""
+  winter_scarf: ""
+  winter_trail: ""
+  survival_festive_cosmetic: ""
+  lifesteal_festive_cosmetic: ""

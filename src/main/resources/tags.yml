@@ -732,3 +732,25 @@ tags:
       # [⚒ Trailmarked]  #A3A23C -> #5E9E4C
       display: "&#A3A23C[⚒ &#A3A23CT&#9CA23Er&#95A13Fa&#8EA141i&#87A042l&#80A044m&#7AA046a&#739F47r&#6C9F49k&#659E4Ae&#5E9E4Cd&#5E9E4C]&r "
       permission: joshymc.tag.voucher.trailmarked
+    # Christmas Advent Calendar rewards (issue #1424, docs/advent-calendar.md): handed out as
+    # Chat Tag Vouchers by /advent, same rules as the tags above.
+    snowflake:
+      # [❄ Snowflake]  #9ED8FF -> #F4FBFF (Advent Calendar, issue #1424)
+      display: "&#9ED8FF[❄ &#9ED8FFS&#A9DCFFn&#B4E1FFo&#BEE5FFw&#C9EAFFf&#D4EEFFl&#DEF2FFa&#E9F7FFk&#F4FBFFe&#F4FBFF]&r "
+      permission: joshymc.tag.voucher.snowflake
+    holly:
+      # [☘ Holly]  #1F9D4A -> #D92B3A (Advent Calendar, issue #1424)
+      display: "&#1F9D4A[☘ &#1F9D4AH&#4E8046o&#7C6442l&#AA483El&#D92B3Ay&#D92B3A]&r "
+      permission: joshymc.tag.voucher.holly
+    frostbite:
+      # [❅ Frostbite]  #7FE0FF -> #2A5BD6 (Advent Calendar, issue #1424)
+      display: "&#7FE0FF[❅ &#7FE0FFF&#74CFFAr&#6ABFF5o&#5FAEF0s&#549EEAt&#4A8DE5b&#3F7CE0i&#356CDBt&#2A5BD6e&#2A5BD6]&r "
+      permission: joshymc.tag.voucher.frostbite
+    blizzard:
+      # [❆ Blizzard]  #F0F6FF -> #8AA6CF (Advent Calendar, issue #1424)
+      display: "&#F0F6FF[❆ &#F0F6FFB&#E1EBF8l&#D3DFF1i&#C4D4EAz&#B6C8E4z&#A7BDDDa&#99B1D6r&#8AA6CFd&#8AA6CF]&r "
+      permission: joshymc.tag.voucher.blizzard
+    christmas:
+      # [★ Christmas]  #FFD54A -> #E8302F (Advent Calendar, issue #1424)
+      display: "&#FFD54A[★ &#FFD54AC&#FCC047h&#F9AC43r&#F69740i&#F4823Cs&#F16E39t&#EE5936m&#EB4532a&#E8302Fs&#E8302F]&r "
+      permission: joshymc.tag.voucher.christmas
