@@ -228,8 +228,8 @@ commands:
     usage: /ranked [queue <2v2|3v3|4v4|5v5> [teammates]|leave|status|accept|decline|challenge <team> <size> [teammates]|challenge accept|decline <team>|challenge cancel|challenges|stats [player]|rating|history [player] [page]|top [players|teams] [page]|teamstats [team]|divisions|season]
     permission: joshymc.lifesteal.ranked.use
   lsranks:
-    description: Lifesteal ranks, their benefits, kits and your progress (Lifesteal only)
-    usage: /lsranks [info [player]|claim <rank>|admin <grant|revoke|history|pending|failed|retry|cancel|reload|problems>]
+    description: Lifesteal ranks (Lifesteal only)
+    usage: /lsranks [info [player]|claim <rank>|admin]
     aliases: [lifestealranks, lranks]
     permission: joshymc.lifesteal.ranks.use
   bank:
@@ -300,7 +300,7 @@ commands:
     description: View the dynamic stock market
     usage: /market [price|trends|info]
   quests:
-    description: Open the quest menu (Daily, Weekly and Event Quests)
+    description: Open the quest menu (Survival Daily, Weekly and Event Quests; Lifesteal Daily and Weekly Quests in Lifesteal)
     usage: /quests
     aliases: [quest, q, questboard, questbook]
   eventquests:
@@ -1007,13 +1007,13 @@ permissions:
     description: Watch a running Ranked Team Wars match from its spectator point (/lifesteal admin ranked spectate|unspectate; no damage, no item pickup)
     default: op
   joshymc.lifesteal.ranks.use:
-    description: Use /lsranks on the Lifesteal server (view Lifesteal ranks, benefits and progress, claim earned ranks)
+    description: Use /lsranks
     default: true
   joshymc.lifesteal.ranks.view.others:
-    description: See another player's Lifesteal rank with /lsranks info <player>
+    description: /lsranks info <player>
     default: op
   joshymc.lifesteal.ranks.admin:
-    description: Grant, revoke, retry and review Lifesteal ranks and reload lifesteal-ranks.yml (audited, staff-rank protection applies)
+    description: Lifesteal rank administration (/lsranks admin)
     default: op
   joshymc.lifesteal.ranked.use:
     description: Use /ranked on the Lifesteal server (queue with your team, accept matches, team challenges)
@@ -1035,6 +1035,12 @@ permissions:
     default: op
   joshymc.lifesteal.bounty.admin:
     description: Investigate Lifesteal bounties (contributors, payouts, refunds, failures, suspicious kills) and run the safe retry sweep with /bounty admin
+    default: op
+  joshymc.lifesteal.quests.use:
+    description: Use /quests on the Lifesteal server (Daily and Weekly quests, claims and rerolls)
+    default: true
+  joshymc.lifesteal.quests.admin:
+    description: Read-only Lifesteal quest diagnostics with /quests admin status|view
     default: op
   joshymc.transfer.bypass-cooldown:
     description: Skip the cross-server transfer cooldown

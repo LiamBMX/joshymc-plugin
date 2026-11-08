@@ -1,0 +1,635 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Lifesteal Daily & Weekly Quests (issue #1425). Lifesteal only: this file is only created and read
+# on a server that runs Lifesteal, and the quests only run on the dedicated Lifesteal server (where
+# the coin balances are Lifesteal Coins). The Survival quests (quest-cycle.yml) are separate and
+# unchanged; no progress is ever shared between the two. Full guide: docs/lifesteal-quests.md.
+#
+# After editing, run /joshymc reload. A wrong setting pauses the quests (nothing stored is lost);
+# a broken quest only skips that quest. Both are logged in the console with the reason.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# false = no new progress, claims or rerolls and /quests says the quests are off. Nothing is
+# deleted: everyone's quests and progress stay stored, and rewards already claimed are still delivered.
+enabled: true
+
+# Every reset uses this IANA timezone (daylight saving time included).
+timezone: America/New_York
+
+daily:
+  # Daily quests reset every day at this local time ("HH:mm").
+  reset-time: "00:00"
+  # Quests each player gets per day (1 to 3).
+  quests-per-cycle: 3
+
+weekly:
+  # Weekly quests reset on this day at this local time.
+  reset-day: MONDAY
+  reset-time: "00:00"
+  quests-per-cycle: 3
+
+rerolls:
+  # Rerolling replaces one quest that isn't complete with a different one. A quest can't be rolled
+  # back in the same cycle, claimed or completed quests can't be rerolled, and a reroll never
+  # changes the rewards of any other quest.
+  daily:
+    # Free rerolls per player per day.
+    free-per-cycle: 1
+    # Credits per reroll after the free ones (0 = free).
+    credit-cost: 25
+    # Paid rerolls allowed per day (0 = none).
+    max-paid-per-cycle: 3
+  weekly:
+    free-per-cycle: 0
+    credit-cost: 75
+    max-paid-per-cycle: 2
+  # A team-only quest held by someone who has since left their team can be rerolled for free
+  # (it doesn't use up a free or paid reroll).
+  free-when-ineligible: true
+
+# Only legitimate gameplay in Lifesteal worlds counts. PvP quests use the same rules as bounty
+# claims: no events, PvP arenas, Ranked Team Wars matches or arenas, no teammates or allies, and
+# nothing while team data is unavailable. Creative/Spectator, Mod Mode and the event world never count.
+anti-abuse:
+  # Minutes before killing the same player counts again for the same killer (0 to 10080).
+  pvp-same-victim-cooldown-minutes: 30
+  # Most kills per player per hour that count (0 = no limit).
+  pvp-max-kills-per-hour: 10
+  # Kills, damage and bounty claims between players who have shared a connection (the /alts data)
+  # never count. A failed lookup never counts either.
+  pvp-block-shared-connections: true
+  # Hearts of PvP damage one attacker can count against one victim per hour (0 = no limit).
+  pvp-damage-cap-hearts-per-victim-per-hour: 40
+  # A kill is a won fight (pvp_victory) when the victim had hit the killer within this many seconds.
+  victory-window-seconds: 30
+  # Teammates who hit the victim within this many seconds before a kill get a team assist.
+  assist-window-seconds: 15
+  # Teamwork quests count while an active teammate is within this many blocks.
+  team-radius: 48
+  # Players with no input for this many seconds (or /afk) are idle: their kills, catches, mobs and
+  # walking don't count, and killing an idle player doesn't count either.
+  idle-seconds: 120
+  # Mob spawn reasons that count for mob quests. Spawners, spawn eggs and plugin spawns are left out.
+  mob-spawn-reasons: [NATURAL, DEFAULT, REINFORCEMENTS, JOCKEY, PATROL, RAID, VILLAGE_INVASION]
+  # Most mob kills per player per minute that count (0 = no limit).
+  max-mob-kills-per-minute: 40
+  # Minimum seconds between two counted catches.
+  fishing-min-interval-seconds: 3
+  # Ores only count when mined with a tool that drops them. Player-placed and generator blocks
+  # never count for ores, crops or gathering.
+  require-correct-tool: true
+  # Exploration: faster horizontal movement than this (blocks per second) never counts. Vehicles,
+  # elytra, flying, riptide, teleports and small loops never count either.
+  explore-max-blocks-per-second: 12
+
+gui:
+  title: "&8Lifesteal Quests"
+  reroll-title: "&8Confirm Reroll"
+
+messages:
+  # Shown when a quest is completed. {quest} {period}
+  completion-enabled: true
+  completed: "&a&lQUEST COMPLETE! &7{period} quest &f{quest}&7 is done. Claim it in &e/quests&7."
+  # {quest} {rewards}
+  claimed: "&aYou claimed &f{quest}&a: &6{rewards}&a."
+  # {old} {new} {cost}
+  rerolled: "&aRerolled &f{old}&a into &f{new}&a{cost}."
+  disabled: "&cLifesteal quests are turned off right now."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Quest pools. Each quest:
+#   name, description ({target} = the target), category (combat | survival | teamwork; must match
+#   the objective), objective, target, rewards, and optionally
+#   match: [..]     only these materials / entity types count (where the objective supports it)
+#   team: any | required | none    (none = only players without a team: the solo alternatives;
+#                                   every teamwork objective is team: required)
+#   weight: 1..10000 (default 10)  how likely it is to be picked
+#   group: <name>   quests sharing a group never appear together in one cycle
+#   enabled: true | false
+# A player never gets two quests with the same objective (or group) in one cycle.
+#
+# Objectives:
+#   combat:   player_kill, unique_player_kill, pvp_damage (target in hearts), bounty_claim, pvp_victory
+#   survival: mine_ore, harvest_crop, catch_fish, kill_mob (hostile mobs), explore (target in blocks),
+#             gather_block (needs match)
+#   teamwork: team_assist, team_pvp_kill, team_mob_kill, team_mine_ore, team_explore
+#
+# Rewards (each a line): "coins <amount>", "credits <amount>", "cratekey <crate id> <quantity>",
+#   "chattagvoucher <voucher tag id> <quantity>". Crates and chat tags must exist on this server
+#   (/crate list, /voucher tag list), otherwise that quest is skipped. Rewards are delivered through
+#   the store-delivery queue (works offline, never dropped). Hearts, ranks and commands can't be
+#   quest rewards. Example: rewards: ["coins 15000", "cratekey vote 1"]
+#
+# Deleting a quest here removes it for good (pools are never merged back from the plugin's copy).
+# Quests a player already has keep the name, target and rewards they were given.
+# ─────────────────────────────────────────────────────────────────────────────
+pools:
+  daily:
+    # ── Combat ──
+    first_blood:
+      name: "&cFirst Blood"
+      description: "Eliminate {target} player in Lifesteal PvP."
+      category: combat
+      objective: player_kill
+      target: 1
+      weight: 12
+      rewards: ["coins 10000"]
+    hunter:
+      name: "&cHunter"
+      description: "Eliminate {target} players in Lifesteal PvP."
+      category: combat
+      objective: player_kill
+      target: 3
+      weight: 8
+      rewards: ["coins 18000"]
+    headhunter:
+      name: "&4Headhunter"
+      description: "Eliminate {target} players in Lifesteal PvP."
+      category: combat
+      objective: player_kill
+      target: 5
+      weight: 4
+      rewards: ["coins 25000"]
+    new_faces:
+      name: "&cNew Faces"
+      description: "Eliminate {target} different players."
+      category: combat
+      objective: unique_player_kill
+      target: 2
+      weight: 8
+      rewards: ["coins 15000"]
+    brawler:
+      name: "&cBrawler"
+      description: "Deal {target} hearts of damage to other players."
+      category: combat
+      objective: pvp_damage
+      target: 20
+      weight: 10
+      rewards: ["coins 12000"]
+    bruiser:
+      name: "&4Bruiser"
+      description: "Deal {target} hearts of damage to other players."
+      category: combat
+      objective: pvp_damage
+      target: 40
+      weight: 6
+      rewards: ["coins 20000"]
+    duelist:
+      name: "&cDuelist"
+      description: "Win {target} fight (kill a player who hit you back)."
+      category: combat
+      objective: pvp_victory
+      target: 1
+      weight: 8
+      rewards: ["coins 12000"]
+    bounty_hunter:
+      name: "&6Bounty Hunter"
+      description: "Claim {target} bounty."
+      category: combat
+      objective: bounty_claim
+      target: 1
+      weight: 3
+      rewards: ["coins 25000"]
+    lone_wolf:
+      name: "&7Lone Wolf"
+      description: "Eliminate {target} players without a team."
+      category: combat
+      objective: player_kill
+      target: 2
+      team: none
+      weight: 8
+      rewards: ["coins 18000"]
+    # ── Survival ──
+    ore_prospector:
+      name: "&bOre Prospector"
+      description: "Mine {target} naturally generated ores."
+      category: survival
+      objective: mine_ore
+      target: 32
+      weight: 12
+      rewards: ["coins 10000"]
+    deep_miner:
+      name: "&bDeep Miner"
+      description: "Mine {target} naturally generated ores."
+      category: survival
+      objective: mine_ore
+      target: 64
+      weight: 8
+      rewards: ["coins 15000"]
+    iron_age:
+      name: "&fIron Age"
+      description: "Mine {target} iron ores."
+      category: survival
+      objective: mine_ore
+      target: 24
+      match: [IRON_ORE, DEEPSLATE_IRON_ORE]
+      weight: 8
+      rewards: ["coins 12000"]
+    diamond_digger:
+      name: "&bDiamond Digger"
+      description: "Mine {target} diamond ores."
+      category: survival
+      objective: mine_ore
+      target: 5
+      match: [DIAMOND_ORE, DEEPSLATE_DIAMOND_ORE]
+      weight: 5
+      rewards: ["coins 20000"]
+    netherite_scout:
+      name: "&8Netherite Scout"
+      description: "Mine {target} Ancient Debris."
+      category: survival
+      objective: mine_ore
+      target: 2
+      match: [ANCIENT_DEBRIS]
+      weight: 3
+      rewards: ["coins 25000"]
+    self_reliant:
+      name: "&7Self-Reliant"
+      description: "Mine {target} ores on your own (no team)."
+      category: survival
+      objective: mine_ore
+      target: 80
+      team: none
+      weight: 6
+      rewards: ["coins 18000"]
+    harvest_time:
+      name: "&aHarvest Time"
+      description: "Harvest {target} fully grown crops."
+      category: survival
+      objective: harvest_crop
+      target: 64
+      weight: 12
+      rewards: ["coins 10000"]
+    wheat_farmer:
+      name: "&eWheat Farmer"
+      description: "Harvest {target} fully grown wheat."
+      category: survival
+      objective: harvest_crop
+      target: 48
+      match: [WHEAT]
+      weight: 6
+      rewards: ["coins 10000"]
+    root_cellar:
+      name: "&6Root Cellar"
+      description: "Harvest {target} fully grown potatoes or carrots."
+      category: survival
+      objective: harvest_crop
+      target: 64
+      match: [POTATOES, CARROTS]
+      weight: 6
+      rewards: ["coins 10000"]
+    sugar_rush:
+      name: "&aSugar Rush"
+      description: "Harvest {target} naturally grown sugar cane."
+      category: survival
+      objective: harvest_crop
+      target: 32
+      match: [SUGAR_CANE]
+      weight: 5
+      rewards: ["coins 12000"]
+    angler:
+      name: "&3Angler"
+      description: "Catch {target} things while fishing."
+      category: survival
+      objective: catch_fish
+      target: 10
+      weight: 10
+      rewards: ["coins 12000"]
+    fishmonger:
+      name: "&3Fishmonger"
+      description: "Catch {target} cod or salmon."
+      category: survival
+      objective: catch_fish
+      target: 8
+      match: [COD, SALMON]
+      weight: 6
+      rewards: ["coins 12000"]
+    monster_slayer:
+      name: "&2Monster Slayer"
+      description: "Kill {target} hostile mobs."
+      category: survival
+      objective: kill_mob
+      target: 25
+      weight: 12
+      rewards: ["coins 12000"]
+    undead_patrol:
+      name: "&2Undead Patrol"
+      description: "Kill {target} undead mobs."
+      category: survival
+      objective: kill_mob
+      target: 20
+      match: [ZOMBIE, HUSK, DROWNED, ZOMBIE_VILLAGER, SKELETON, STRAY, BOGGED]
+      weight: 7
+      rewards: ["coins 12000"]
+    creeper_control:
+      name: "&aCreeper Control"
+      description: "Kill {target} creepers."
+      category: survival
+      objective: kill_mob
+      target: 8
+      match: [CREEPER]
+      weight: 6
+      rewards: ["coins 15000"]
+    spider_squasher:
+      name: "&8Spider Squasher"
+      description: "Kill {target} spiders."
+      category: survival
+      objective: kill_mob
+      target: 12
+      match: [SPIDER, CAVE_SPIDER]
+      weight: 6
+      rewards: ["coins 12000"]
+    solo_survivor:
+      name: "&7Solo Survivor"
+      description: "Kill {target} hostile mobs without a team."
+      category: survival
+      objective: kill_mob
+      target: 40
+      team: none
+      weight: 6
+      rewards: ["coins 15000"]
+    wanderer:
+      name: "&eWanderer"
+      description: "Travel {target} blocks on foot."
+      category: survival
+      objective: explore
+      target: 1500
+      weight: 10
+      rewards: ["coins 10000"]
+    trailblazer:
+      name: "&6Trailblazer"
+      description: "Travel {target} blocks on foot."
+      category: survival
+      objective: explore
+      target: 3000
+      weight: 6
+      rewards: ["coins 18000"]
+    lumberjack:
+      name: "&6Lumberjack"
+      description: "Chop {target} logs from natural trees."
+      category: survival
+      objective: gather_block
+      target: 64
+      match: [OAK_LOG, SPRUCE_LOG, BIRCH_LOG, JUNGLE_LOG, ACACIA_LOG, DARK_OAK_LOG, MANGROVE_LOG, CHERRY_LOG, PALE_OAK_LOG]
+      group: gathering
+      weight: 8
+      rewards: ["coins 10000"]
+    sand_shoveler:
+      name: "&eSand Shoveler"
+      description: "Dig {target} natural sand."
+      category: survival
+      objective: gather_block
+      target: 128
+      match: [SAND, RED_SAND]
+      group: gathering
+      weight: 5
+      rewards: ["coins 10000"]
+    stonecutter:
+      name: "&7Stonecutter"
+      description: "Mine {target} natural stone or deepslate."
+      category: survival
+      objective: gather_block
+      target: 256
+      match: [STONE, DEEPSLATE]
+      group: gathering
+      weight: 5
+      rewards: ["coins 10000"]
+    # ── Teamwork (players in a Lifesteal team) ──
+    squad_assist:
+      name: "&bSquad Assist"
+      description: "Hit {target} players right before a teammate eliminates them."
+      category: teamwork
+      objective: team_assist
+      target: 2
+      weight: 8
+      rewards: ["coins 18000"]
+    pack_hunt:
+      name: "&bPack Hunt"
+      description: "Eliminate {target} players with a teammate nearby."
+      category: teamwork
+      objective: team_pvp_kill
+      target: 2
+      weight: 8
+      rewards: ["coins 20000"]
+    monster_squad:
+      name: "&bMonster Squad"
+      description: "Kill {target} hostile mobs with a teammate nearby."
+      category: teamwork
+      objective: team_mob_kill
+      target: 25
+      weight: 10
+      rewards: ["coins 15000"]
+    mining_crew:
+      name: "&bMining Crew"
+      description: "Mine {target} ores with a teammate nearby."
+      category: teamwork
+      objective: team_mine_ore
+      target: 48
+      weight: 10
+      rewards: ["coins 15000"]
+    expedition:
+      name: "&bExpedition"
+      description: "Travel {target} blocks with a teammate nearby."
+      category: teamwork
+      objective: team_explore
+      target: 1500
+      weight: 8
+      rewards: ["coins 15000"]
+
+  weekly:
+    # ── Combat ──
+    warlord:
+      name: "&4Warlord"
+      description: "Eliminate {target} players in Lifesteal PvP."
+      category: combat
+      objective: player_kill
+      target: 15
+      weight: 8
+      rewards: ["coins 100000"]
+    most_wanted:
+      name: "&4Most Wanted"
+      description: "Eliminate {target} different players."
+      category: combat
+      objective: unique_player_kill
+      target: 8
+      weight: 8
+      rewards: ["coins 120000"]
+    war_machine:
+      name: "&4War Machine"
+      description: "Deal {target} hearts of damage to other players."
+      category: combat
+      objective: pvp_damage
+      target: 250
+      weight: 8
+      rewards: ["coins 90000"]
+    champion:
+      name: "&6Champion"
+      description: "Win {target} fights (kill players who hit you back)."
+      category: combat
+      objective: pvp_victory
+      target: 8
+      weight: 8
+      rewards: ["coins 110000"]
+    bounty_collector:
+      name: "&6Bounty Collector"
+      description: "Claim {target} bounties."
+      category: combat
+      objective: bounty_claim
+      target: 3
+      weight: 3
+      rewards: ["coins 150000", "credits 25"]
+    lone_legend:
+      name: "&7Lone Legend"
+      description: "Eliminate {target} players without a team."
+      category: combat
+      objective: player_kill
+      target: 12
+      team: none
+      weight: 8
+      rewards: ["coins 110000"]
+    # ── Survival ──
+    master_miner:
+      name: "&bMaster Miner"
+      description: "Mine {target} naturally generated ores."
+      category: survival
+      objective: mine_ore
+      target: 500
+      weight: 10
+      rewards: ["coins 80000"]
+    diamond_hoard:
+      name: "&bDiamond Hoard"
+      description: "Mine {target} diamond ores."
+      category: survival
+      objective: mine_ore
+      target: 40
+      match: [DIAMOND_ORE, DEEPSLATE_DIAMOND_ORE]
+      weight: 6
+      rewards: ["coins 120000"]
+    debris_delver:
+      name: "&8Debris Delver"
+      description: "Mine {target} Ancient Debris."
+      category: survival
+      objective: mine_ore
+      target: 12
+      match: [ANCIENT_DEBRIS]
+      weight: 4
+      rewards: ["coins 150000"]
+    master_farmer:
+      name: "&aMaster Farmer"
+      description: "Harvest {target} fully grown crops."
+      category: survival
+      objective: harvest_crop
+      target: 800
+      weight: 10
+      rewards: ["coins 70000"]
+    gourd_season:
+      name: "&6Gourd Season"
+      description: "Harvest {target} naturally grown melons or pumpkins."
+      category: survival
+      objective: harvest_crop
+      target: 128
+      match: [MELON, PUMPKIN]
+      weight: 6
+      rewards: ["coins 60000"]
+    deep_sea:
+      name: "&3Deep Sea"
+      description: "Catch {target} things while fishing."
+      category: survival
+      objective: catch_fish
+      target: 80
+      weight: 10
+      rewards: ["coins 75000"]
+    exterminator:
+      name: "&2Exterminator"
+      description: "Kill {target} hostile mobs."
+      category: survival
+      objective: kill_mob
+      target: 300
+      weight: 10
+      rewards: ["coins 80000"]
+    void_stalker:
+      name: "&5Void Stalker"
+      description: "Kill {target} endermen."
+      category: survival
+      objective: kill_mob
+      target: 50
+      match: [ENDERMAN]
+      weight: 5
+      rewards: ["coins 90000"]
+    one_man_army:
+      name: "&7One-Man Army"
+      description: "Kill {target} hostile mobs without a team."
+      category: survival
+      objective: kill_mob
+      target: 400
+      team: none
+      weight: 6
+      rewards: ["coins 95000"]
+    globetrotter:
+      name: "&eGlobetrotter"
+      description: "Travel {target} blocks on foot."
+      category: survival
+      objective: explore
+      target: 20000
+      weight: 10
+      rewards: ["coins 80000"]
+    timber:
+      name: "&6Timber!"
+      description: "Chop {target} logs from natural trees."
+      category: survival
+      objective: gather_block
+      target: 640
+      match: [OAK_LOG, SPRUCE_LOG, BIRCH_LOG, JUNGLE_LOG, ACACIA_LOG, DARK_OAK_LOG, MANGROVE_LOG, CHERRY_LOG, PALE_OAK_LOG]
+      group: gathering
+      weight: 8
+      rewards: ["coins 60000"]
+    quarry:
+      name: "&7Quarry"
+      description: "Mine {target} natural stone or deepslate."
+      category: survival
+      objective: gather_block
+      target: 1500
+      match: [STONE, DEEPSLATE]
+      group: gathering
+      weight: 6
+      rewards: ["coins 50000"]
+    # ── Teamwork (players in a Lifesteal team) ──
+    war_party:
+      name: "&bWar Party"
+      description: "Eliminate {target} players with a teammate nearby."
+      category: teamwork
+      objective: team_pvp_kill
+      target: 10
+      weight: 8
+      rewards: ["coins 130000"]
+    support_role:
+      name: "&bSupport Role"
+      description: "Hit {target} players right before a teammate eliminates them."
+      category: teamwork
+      objective: team_assist
+      target: 12
+      weight: 8
+      rewards: ["coins 110000"]
+    horde_breakers:
+      name: "&bHorde Breakers"
+      description: "Kill {target} hostile mobs with a teammate nearby."
+      category: teamwork
+      objective: team_mob_kill
+      target: 250
+      weight: 10
+      rewards: ["coins 90000"]
+    guild_mining:
+      name: "&bGuild Mining"
+      description: "Mine {target} ores with a teammate nearby."
+      category: teamwork
+      objective: team_mine_ore
+      target: 400
+      weight: 10
+      rewards: ["coins 90000"]
+    caravan:
+      name: "&bCaravan"
+      description: "Travel {target} blocks with a teammate nearby."
+      category: teamwork
+      objective: team_explore
+      target: 15000
+      weight: 8
+      rewards: ["coins 85000"]

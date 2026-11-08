@@ -610,7 +610,15 @@ class CommandManager(private val plugin: Joshymc) {
         // ── Quests ──────────────────────────────────
         // /quests: unified Daily/Weekly/Quest Master GUI. /quest, /questboard, /questbook are
         // plain plugin.yml aliases (see aliases: list) that route into this same executor.
-        plugin.getCommand("quests")?.let { val c = QuestCycleCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
+        // Issue #1425: in Lifesteal /quests opens the Lifesteal quests; everywhere else the unchanged
+        // Survival QuestCycleCommand (QuestCommandRouter applies Survival's scope + permission).
+        plugin.getCommand("quests")?.let {
+            val c = com.liam.joshymc.command.QuestCommandRouter(
+                plugin, QuestCycleCommand(plugin), com.liam.joshymc.lifesteal.quests.LifestealQuestCommand(plugin),
+            )
+            it.setExecutor(c)
+            it.tabCompleter = c
+        }
         plugin.getCommand("daily")?.setExecutor(DailyCommand(plugin))
         plugin.getCommand("eventquests")?.let { val c = EventQuestCommand(plugin); it.setExecutor(c); it.tabCompleter = c }
 
@@ -958,7 +966,8 @@ class CommandManager(private val plugin: Joshymc) {
         "loginstreak" to "joshymc.loginstreak",
         "sell" to "joshymc.sell",
         "chatcolor" to "joshymc.chatcolor",
-        "quests" to "joshymc.quests",
+        // Either quest system's basic permission; QuestCommandRouter checks the one that applies.
+        "quests" to com.liam.joshymc.command.QuestCommandRouter.COMMAND_PERMISSION,
         "daily" to "joshymc.quests",
         "killeffect" to "joshymc.killeffect",
         "cosmetics" to "joshymc.cosmetics",

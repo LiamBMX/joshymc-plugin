@@ -103,9 +103,15 @@ fun main() {
     check("event Back needs the /quests permission", "\"joshymc.quests\"" in events && "GamemodeFeature.QUESTS" in events)
 
     // ── Commands and gamemode scope ─────────────────────
-    for (name in listOf("quests", "daily", "eventquests")) {
+    for (name in listOf("daily", "eventquests")) {
         check("/$name stays Survival-only", GamemodeAssignments.COMMANDS[name] == GamemodeScope.SURVIVAL)
     }
+    // Issue #1425: /quests is routed per gamemode; outside Lifesteal it is the Survival command behind the SURVIVAL scope.
+    check("/quests is routed (NETWORK)", GamemodeAssignments.COMMANDS["quests"] == GamemodeScope.NETWORK)
+    val router = source("command/QuestCommandRouter.kt")
+    check("/quests router keeps the Survival scope and permission",
+        "isAllowed(GamemodeScope.SURVIVAL, sender)" in router && "SURVIVAL_PERMISSION = \"joshymc.quests\"" in router)
+    check("/quests router uses QuestCycleCommand", "QuestCycleCommand(plugin)" in source("manager/CommandManager.kt"))
     check("quest features stay Survival-only",
         GamemodeFeature.QUESTS.scope == GamemodeScope.SURVIVAL && GamemodeFeature.EVENT_QUESTS.scope == GamemodeScope.SURVIVAL)
     check("/daily opens the daily page", "openDailyGui(sender)" in source("command/DailyCommand.kt"))
