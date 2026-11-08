@@ -7,18 +7,31 @@ package com.liam.joshymc.eventquest
  *
  * Bukkit-free so the rules can be checked by `scripts/EventQuestCategoryCheck.kt`.
  */
-enum class EventQuestCategory(val id: String, val defaultName: String, val defaultIcon: String) {
+enum class EventQuestCategory(
+    val id: String,
+    val defaultName: String,
+    val defaultIcon: String,
+    /** Player-facing name typed in commands (issue #1443: Elite is shown as Monthly; [id] stays `elite`). */
+    val commandName: String = id,
+    /** Earlier default display names, read as "not customized" so old config files show [defaultName]. */
+    val legacyDefaultNames: Set<String> = emptySet()
+) {
     FREE("free", "Free Event Quests", "EMERALD"),
-    ELITE("elite", "Elite Event Quests", "ENCHANTED_GOLDEN_APPLE");
+    // Issue #1443: renamed to Monthly Event Quests for players. The id, config key (`categories.elite`),
+    // `category: elite` values and progress rows are unchanged; `monthly` is accepted as an alias.
+    ELITE("elite", "Monthly Event Quests", "ENCHANTED_GOLDEN_APPLE",
+        commandName = "monthly", legacyDefaultNames = setOf("Elite Event Quests"));
 
     companion object {
         fun fromId(raw: String?): EventQuestCategory? =
-            raw?.trim()?.let { r -> entries.firstOrNull { it.id.equals(r, ignoreCase = true) } }
+            raw?.trim()?.let { r ->
+                entries.firstOrNull { it.id.equals(r, ignoreCase = true) || it.commandName.equals(r, ignoreCase = true) }
+            }
 
         /**
          * A set's `category` value: missing or blank = [FREE] (every legacy set), a known id = that
          * category, anything else = null so the set is skipped with a warning instead of a typo
-         * like `elitee` quietly landing in Free.
+         * like `monthlyy` quietly landing in Free.
          */
         fun parse(raw: String?): EventQuestCategory? = if (raw.isNullOrBlank()) FREE else fromId(raw)
     }
@@ -40,7 +53,8 @@ data class EventQuestCategorySettings(
             EventQuestCategorySettings(
                 category = category,
                 enabled = enabled as? Boolean ?: true,
-                displayName = (displayName as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: category.defaultName,
+                displayName = (displayName as? String)?.trim()
+                    ?.takeIf { it.isNotEmpty() && it !in category.legacyDefaultNames } ?: category.defaultName,
                 permission = (permission as? String)?.trim()?.takeIf { it.isNotEmpty() },
                 icon = (icon as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: category.defaultIcon
             )

@@ -1543,7 +1543,7 @@ class QuestCycleManager(private val plugin: Joshymc) : Listener {
 
     private fun eventCategoryItem(player: Player): ItemStack {
         val problem = eventQuestsProblem(player)
-        val lore = mutableListOf(menuLine("Limited-time Free and Elite quests.", NamedTextColor.GRAY), Component.empty())
+        val lore = mutableListOf(menuLine("Limited-time Free and Monthly quests.", NamedTextColor.GRAY), Component.empty())
         if (problem != null) {
             lore += menuLine(problem, NamedTextColor.RED)
         } else {
