@@ -358,6 +358,8 @@ class Joshymc : JavaPlugin() {
     /** The team progression manager once it exists (event hooks may fire before onEnable finishes wiring). */
     fun teamProgression(): com.liam.joshymc.lifesteal.teams.progression.LifestealTeamProgressionManager? =
         if (::lifestealTeamProgressionManager.isInitialized) lifestealTeamProgressionManager else null
+    lateinit var lifestealBankManager: com.liam.joshymc.lifesteal.bank.LifestealBankManager
+        private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
     lateinit var rankManager: RankManager
@@ -623,6 +625,8 @@ class Joshymc : JavaPlugin() {
         lifestealBountyManager = com.liam.joshymc.lifesteal.bounty.LifestealBountyManager(this)
         // Issue #1426: Lifesteal Team Upgrades and shared progression. Only does anything where Lifesteal runs.
         lifestealTeamProgressionManager = com.liam.joshymc.lifesteal.teams.progression.LifestealTeamProgressionManager(this)
+        // Issue #1427: Lifesteal Protected Bank + PvP coin stealing. Only does anything on the dedicated Lifesteal server.
+        lifestealBankManager = com.liam.joshymc.lifesteal.bank.LifestealBankManager(this)
         flightTimeManager = com.liam.joshymc.flight.FlightTimeManager(this)
         flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
@@ -725,6 +729,7 @@ class Joshymc : JavaPlugin() {
         lifestealBountyManager.refresh()
         // After teams and progression (seasons): Team XP, upgrades and the team bank.
         lifestealTeamProgressionManager.refresh()
+        lifestealBankManager.refresh()
         flightTimeManager.start()
         flyVoucherManager.start()
 
@@ -839,6 +844,8 @@ class Joshymc : JavaPlugin() {
         shutdown.step("lifestealBountyManager.stop", { ::lifestealBountyManager.isInitialized }) { lifestealBountyManager.stop() }
         // Queues the last mining/exploration Team XP batch (the database drains it before closing).
         shutdown.step("lifestealTeamProgressionManager.stop", { ::lifestealTeamProgressionManager.isInitialized }) { lifestealTeamProgressionManager.stop() }
+        // Drops bank chat prompts; every bank transfer is one synchronous transaction, so nothing is pending.
+        shutdown.step("lifestealBankManager.stop", { ::lifestealBankManager.isInitialized }) { lifestealBankManager.stop() }
         shutdown.step("lifestealRankedStatsManager.stop", { ::lifestealRankedStatsManager.isInitialized }) { lifestealRankedStatsManager.stop() }
         shutdown.step("lifestealRatingManager.stop", { ::lifestealRatingManager.isInitialized }) { lifestealRatingManager.stop() }
         shutdown.step("lifestealRankedQueueManager.stop", { ::lifestealRankedQueueManager.isInitialized }) { lifestealRankedQueueManager.stop() }
@@ -1066,6 +1073,7 @@ class Joshymc : JavaPlugin() {
         safe("lifestealRankedStatsManager.refresh") { lifestealRankedStatsManager.refresh() }
         safe("lifestealBountyManager.refresh") { lifestealBountyManager.refresh() }
         safe("lifestealTeamProgressionManager.refresh") { lifestealTeamProgressionManager.refresh() }
+        safe("lifestealBankManager.refresh") { lifestealBankManager.refresh() }
         safe("beaconPotionManager.start") { beaconPotionManager.start() }
 
         // 8. Restart Discord

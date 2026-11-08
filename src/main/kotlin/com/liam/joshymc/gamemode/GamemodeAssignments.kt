@@ -99,6 +99,9 @@ object GamemodeAssignments {
         "ranked",
         // Lifesteal alliance chat (issue #1405). Also only registered where Lifesteal is hosted.
         "ac",
+        // The Lifesteal Protected Bank (issue #1427). Also only registered where Lifesteal is hosted,
+        // and the manager refuses outside Lifesteal worlds and on servers whose economy isn't Lifesteal's.
+        "bank",
     )
 
     val COMMANDS: Map<String, GamemodeScope> =
