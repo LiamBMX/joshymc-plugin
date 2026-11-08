@@ -254,6 +254,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         lastWithdrawAt.remove(player.uniqueId)
         lastRedeemAt.remove(player.uniqueId)
         lastRedeemTick.remove(player.uniqueId)
+        deathTags.remove(player.uniqueId)
     }
 
     /** Sets the max health base value to [hearts] × 2; modifiers (potions, items) stay on top. */
@@ -287,24 +288,73 @@ class LifestealHeartManager(private val plugin: Joshymc) {
 
     // ── PvP ─────────────────────────────────────────────────
 
+    /**
+     * Issue #1461: the victim's combat tag as it stood when they died. [CombatListener] removes the
+     * tag at NORMAL priority, before [onDeath] runs at MONITOR, so [captureCombatTag] copies it at
+     * LOWEST of the same death. Main thread only; one entry per online player at most, used only in
+     * the tick it was taken, removed when used and on quit.
+     */
+    private data class DeathTag(val tick: Int, val at: Long, val expiresAt: Long, val hits: List<HeartRules.RecentHit>)
+    private val deathTags = HashMap<UUID, DeathTag>()
+
+    /** PlayerDeathEvent at LOWEST (issue #1461): remember the victim's still-running combat tag. */
+    fun captureCombatTag(event: PlayerDeathEvent) {
+        val uuid = event.player.uniqueId
+        deathTags.remove(uuid)
+        if (!active || !isLifesteal(event.player)) return
+        val combat = plugin.combatManager
+        val expiresAt = combat.tagExpiresAt(uuid) ?: return
+        val hits = combat.recentPvpAttackers(uuid).map { HeartRules.RecentHit(it.attacker, it.at) }
+        if (hits.isEmpty()) return
+        deathTags[uuid] = DeathTag(Bukkit.getCurrentTick(), System.currentTimeMillis(), expiresAt, hits)
+    }
+
+    private fun deathFor(victim: Player, killer: Player?, causing: UUID?) = HeartRules.Death(
+        victim = victim.uniqueId,
+        victimInLifesteal = isLifesteal(victim),
+        victimLoaded = loaded.containsKey(victim.uniqueId),
+        causingPlayer = causing,
+        killerOnline = killer?.isOnline == true,
+        killerInLifesteal = killer != null && isLifesteal(killer),
+        killerLoaded = killer != null && loaded.containsKey(killer.uniqueId),
+        killerIsNpc = killer != null && killer.hasMetadata("NPC"),
+    )
+
     fun onDeath(event: PlayerDeathEvent) {
+        val tag = deathTags.remove(event.player.uniqueId)?.takeIf { it.tick == Bukkit.getCurrentTick() }
         if (!active) return
         val victim = event.player
         val limits = limits ?: return
         val causing = event.damageSource.causingEntity as? Player
-        val killer = causing?.takeIf { it.uniqueId != victim.uniqueId }
-        val attribution = HeartRules.attribute(
-            HeartRules.Death(
-                victim = victim.uniqueId,
-                victimInLifesteal = isLifesteal(victim),
-                victimLoaded = loaded.containsKey(victim.uniqueId),
-                causingPlayer = causing?.uniqueId,
-                killerOnline = killer?.isOnline == true,
-                killerInLifesteal = killer != null && isLifesteal(killer),
-                killerLoaded = killer != null && loaded.containsKey(killer.uniqueId),
-                killerIsNpc = killer != null && killer.hasMetadata("NPC"),
-            )
-        )
+        var killer = causing?.takeIf { it.uniqueId != victim.uniqueId }
+        var attribution = HeartRules.attribute(deathFor(victim, killer, causing?.uniqueId))
+
+        // Issue #1461: an environmental (or self-inflicted) death while still combat-tagged by
+        // another player is credited to the most recent valid attacker of that tag. Not for a
+        // combat-log kill (no combat-log heart penalty exists), a ranked match (ranked hits never
+        // tag; the match has its own rules) or /kill.
+        var note: String? = null
+        val damageType = runCatching { event.damageSource.damageType.key.toString() }.getOrNull()
+        val credited = HeartRules.combatTagKiller(
+            direct = attribution,
+            victim = victim.uniqueId,
+            tagExpiresAt = tag?.expiresAt,
+            hits = tag?.hits.orEmpty(),
+            now = tag?.at ?: System.currentTimeMillis(),
+            tagMillis = plugin.combatManager.tagDurationMillis,
+            excluded = plugin.combatManager.isCombatLogged(victim) ||
+                plugin.lifestealRankedManager.matchOf(victim.uniqueId) != null ||
+                damageType == GENERIC_KILL,
+        ) { attacker ->
+            val candidate = Bukkit.getPlayer(attacker)
+            candidate != null && HeartRules.attribute(deathFor(victim, candidate, attacker)) == HeartRules.Attribution.PVP_KILL
+        }
+        if (credited != null) {
+            killer = Bukkit.getPlayer(credited)
+            attribution = HeartRules.attribute(deathFor(victim, killer, credited))
+            note = HeartRules.combatTagNote(damageType?.removePrefix("minecraft:") ?: "the environment")
+        }
+
         if (attribution == HeartRules.Attribution.NOT_LOADED) {
             plugin.logger.warning("[Hearts] ${killer?.name} killed ${victim.name}, but one of them has no loaded heart record; no hearts changed.")
         }
@@ -324,6 +374,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
             // window, so a team change after the fatal hit (or in the same tick) can't unlock a transfer.
             team = plugin.lifestealTeamManager.heartCheck(killer.uniqueId, victim.uniqueId),
             window = plugin.lifestealProgressionManager.heartWindow(now),
+            note = note,
         )
         val result = try {
             store.transferPvp(request)
@@ -777,6 +828,9 @@ class LifestealHeartManager(private val plugin: Joshymc) {
 
         /** A vanilla player's max health base value (10 hearts). */
         const val VANILLA_MAX_HEALTH = 20.0
+
+        /** `/kill` (and plugin kills using it): never credited through the combat tag (issue #1461). */
+        const val GENERIC_KILL = "minecraft:generic_kill"
 
         /** Lifesteal playtime is sampled once a minute (issue #1457). */
         const val PLAYTIME_SAMPLE_TICKS = 1200L

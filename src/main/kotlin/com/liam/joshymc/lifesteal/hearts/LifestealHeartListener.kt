@@ -38,6 +38,14 @@ class LifestealHeartListener(private val hearts: LifestealHeartManager) : Listen
     @EventHandler(priority = EventPriority.MONITOR)
     fun onPostRespawn(event: PlayerPostRespawnEvent) = hearts.onPostRespawn(event.player)
 
+    /**
+     * Issue #1461: copies the victim's combat tag before CombatListener's death handler (NORMAL)
+     * removes it, so [onDeath] can credit an environmental death to the tag's last attacker.
+     * Changes nothing; a cancelled death's copy is never used (it only counts in its own tick).
+     */
+    @EventHandler(priority = EventPriority.LOWEST)
+    fun onDeathCaptureTag(event: PlayerDeathEvent) = hearts.captureCombatTag(event)
+
     /** MONITOR + ignoreCancelled: only deaths that really happen (another plugin may cancel it). */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onDeath(event: PlayerDeathEvent) = hearts.onDeath(event)

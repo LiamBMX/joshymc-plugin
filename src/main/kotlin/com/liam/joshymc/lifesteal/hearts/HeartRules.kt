@@ -79,9 +79,10 @@ object HeartRules {
     }
 
     /**
-     * Only the final damage counts: a death whose last damage had no causing player is
-     * [Attribution.ENVIRONMENT], even right after a fight. The blueprint doesn't define kill credit
-     * for environmental deaths after PvP (knocked into lava or the void), so none is invented.
+     * The final damage's causing player only: a death whose last damage had no causing player is
+     * [Attribution.ENVIRONMENT]. Since issue #1461 such a death (and a [Attribution.SELF] one)
+     * during an active combat tag is then credited to the most recent valid attacker by
+     * [combatTagKiller], which re-runs this check with that attacker.
      */
     fun attribute(death: Death): Attribution = when {
         !death.victimInLifesteal -> Attribution.NOT_LIFESTEAL
@@ -91,6 +92,50 @@ object HeartRules {
         !death.victimLoaded || !death.killerLoaded -> Attribution.NOT_LOADED
         else -> Attribution.PVP_KILL
     }
+
+    // ── Combat-tag credit for environmental deaths (issue #1461) ──
+
+    /** One eligible PvP hit on the victim, as the combat tag recorded it (`CombatManager.PvpHit`). */
+    data class RecentHit(val attacker: UUID, val at: Long)
+
+    /**
+     * Who gets the kill when the final damage had no other player behind it ([Attribution.ENVIRONMENT]:
+     * lava, fire, fall, void, drowning, suffocation, mobs, ... or [Attribution.SELF]: own arrow, own
+     * TNT) while the victim was still combat-tagged by another player. Any other [direct] attribution
+     * returns null: real PvP kills keep their killer, and invalid killers or unloaded records are
+     * never replaced by somebody else.
+     *
+     * Only the existing combat tag counts: [tagExpiresAt] is the victim's tag expiry taken just
+     * before the death cleared it (null = not tagged, or the tag had run out), and a hit counts only
+     * while it is itself younger than one tag duration ([tagMillis]), so refreshing the tag by
+     * hitting a third player never keeps an older attacker's credit alive. A hit "in the future"
+     * (the clock went back, or broken data) doesn't count. The victim is never their own killer.
+     * Of the hits left, the most recent one whose attacker passes [eligible] (online, in
+     * Lifesteal, not an NPC, loaded: the same checks as [attribute]) wins. [excluded] (combat-log
+     * kill, ranked match, `/kill`) turns it off entirely. Null = keep the existing
+     * environmental-death behaviour: nobody's hearts change.
+     */
+    fun combatTagKiller(
+        direct: Attribution,
+        victim: UUID,
+        tagExpiresAt: Long?,
+        hits: List<RecentHit>,
+        now: Long,
+        tagMillis: Long,
+        excluded: Boolean,
+        eligible: (UUID) -> Boolean,
+    ): UUID? {
+        if (direct != Attribution.ENVIRONMENT && direct != Attribution.SELF) return null
+        if (excluded || tagMillis <= 0 || tagExpiresAt == null || now >= tagExpiresAt) return null
+        return hits
+            .filter { it.attacker != victim && it.at <= now && now - it.at < tagMillis }
+            .sortedByDescending { it.at }
+            .firstOrNull { eligible(it.attacker) }
+            ?.attacker
+    }
+
+    /** Audit note on a transfer credited through the combat tag (issue #1461); [cause] is the damage type. */
+    fun combatTagNote(cause: String): String = "combat tag credit, died to $cause"
 
     // ── Transfers ───────────────────────────────────────────
 
