@@ -203,6 +203,52 @@ chat:
     mute-duration-seconds: 3600
     mute-reason: "Spam"
 
+# Lifesteal friends, social privacy, private-message privacy and chat channels (issue #1430).
+# Only read on a server that hosts Lifesteal; Survival ignores it. Turning anything off here
+# never deletes stored friendships, requests or settings. See docs/lifesteal-social.md.
+lifesteal-social:
+  enabled: true
+  friends:
+    enabled: true
+    # Friends per player (1..500), checked when a request is sent and again when it's accepted.
+    max-friends: 50
+    # How long a friend request stays open (30s..7d).
+    request-expiration-seconds: 300
+    # Minimum time between two friend requests from the same player.
+    request-cooldown-seconds: 10
+    # After a denial the same player can't ask again for this long (they aren't told why).
+    deny-cooldown-seconds: 300
+  notifications:
+    # One join/leave/request notice per friend per this many seconds (stops relog spam).
+    cooldown-seconds: 60
+  # What a player starts with until they change it in /friend settings.
+  #   friend-requests:  everyone | nobody
+  #   online-status:    friends | nobody      (who sees them online; never non-friends)
+  #   private-messages: everyone | friends | nobody
+  privacy-defaults:
+    friend-requests: everyone
+    online-status: friends
+    private-messages: everyone
+    login-notifications: true
+    request-notifications: true
+  messaging:
+    # Lifesteal privacy, vanish protection and chat filters for /msg and /r. Mutes always apply.
+    enabled: true
+  # /channel: Global is ordinary public chat; the others never reach public chat or Discord.
+  # Formats use & colors and {team}, {player}, {message} (the message is inserted as plain text).
+  channels:
+    enabled: true
+    team:
+      enabled: true
+      format: "&b&l[Team] &r&3{team} &f{player}&7: &f{message}"
+    alliance:
+      # Alliance chat is the existing /ac (lifesteal.yml > teams.alliances).
+      enabled: true
+    local:
+      enabled: true
+      radius: 100
+      format: "&e&l[Local] &r&f{player}&7: &f{message}"
+
 # Server connection info shown by /ip and the rotating ServerBar ({ip}, {java_port}, {bedrock_port}).
 # Display only: this never changes a listening port.
 #   port:         Java Edition port

@@ -232,6 +232,16 @@ commands:
     usage: /ac <message>
     aliases: [alliancechat]
     permission: joshymc.lifesteal.team.use
+  friend:
+    description: Friends, friend requests and social privacy settings (Lifesteal only)
+    usage: /friend [add|remove|accept|deny|cancel <player>|requests|list|settings [option value]]
+    aliases: [friends]
+    permission: joshymc.lifesteal.friends.use
+  channel:
+    description: Choose where your chat goes - Global, Team, Alliance or Local (Lifesteal only)
+    usage: /channel [global|team|alliance|local] [message]
+    aliases: [ch, chatchannel]
+    permission: joshymc.lifesteal.channel.use
   unstuck:
     description: Get out of a spot where you're frozen midair or the world didn't load
     usage: /unstuck [player]
@@ -1652,6 +1662,15 @@ permissions:
   joshymc.lifesteal.team.use:
     description: Use Lifesteal teams on the Lifesteal server (/team, invitations, leave, info, list); leader actions also need team leadership
     default: true
+  joshymc.lifesteal.friends.use:
+    description: Use Lifesteal friends (/friend, /friends, the Friends menu and social settings)
+    default: true
+  joshymc.lifesteal.channel.use:
+    description: Switch Lifesteal chat channels with /channel (Team/Alliance still need membership)
+    default: true
+  joshymc.lifesteal.social.bypass-privacy:
+    description: Private-message Lifesteal players whose privacy setting would refuse it (ignores and mutes still apply)
+    default: op
   joshymc.lifesteal.team.create:
     description: Create a Lifesteal team with /team create (on Lifesteal)
     default: true

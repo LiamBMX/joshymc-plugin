@@ -351,6 +351,9 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var lifestealBountyManager: com.liam.joshymc.lifesteal.bounty.LifestealBountyManager
         private set
+    /** Issue #1430: Lifesteal friends, social privacy, private-message privacy and chat channels. */
+    lateinit var lifestealSocialManager: com.liam.joshymc.lifesteal.social.LifestealSocialManager
+        private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
     lateinit var rankManager: RankManager
@@ -614,6 +617,8 @@ class Joshymc : JavaPlugin() {
         lifestealRankedStatsManager = com.liam.joshymc.lifesteal.ranked.stats.LifestealRankedStatsManager(this)
         // Issue #1401: player-funded Lifesteal bounties (escrow in data.db). Only does anything on the dedicated Lifesteal server.
         lifestealBountyManager = com.liam.joshymc.lifesteal.bounty.LifestealBountyManager(this)
+        // Issue #1430: Lifesteal friends, privacy and chat channels. Only does anything where Lifesteal runs.
+        lifestealSocialManager = com.liam.joshymc.lifesteal.social.LifestealSocialManager(this)
         flightTimeManager = com.liam.joshymc.flight.FlightTimeManager(this)
         flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
@@ -714,6 +719,7 @@ class Joshymc : JavaPlugin() {
         lifestealRatingManager.refresh()
         lifestealRankedStatsManager.refresh()
         lifestealBountyManager.refresh()
+        lifestealSocialManager.refresh()
         flightTimeManager.start()
         flyVoucherManager.start()
 
@@ -826,6 +832,8 @@ class Joshymc : JavaPlugin() {
         // Ends every ranked queue entry, found match and challenge (none is resumed after a restart) before the matches stop.
         // Stops the bounty sweep; bounty writes already queued finish with the database (every one is a complete transaction).
         shutdown.step("lifestealBountyManager.stop", { ::lifestealBountyManager.isInitialized }) { lifestealBountyManager.stop() }
+        // Stops the request-expiry sweep; every friend change is already committed when it happens.
+        shutdown.step("lifestealSocialManager.stop", { ::lifestealSocialManager.isInitialized }) { lifestealSocialManager.stop() }
         shutdown.step("lifestealRankedStatsManager.stop", { ::lifestealRankedStatsManager.isInitialized }) { lifestealRankedStatsManager.stop() }
         shutdown.step("lifestealRatingManager.stop", { ::lifestealRatingManager.isInitialized }) { lifestealRatingManager.stop() }
         shutdown.step("lifestealRankedQueueManager.stop", { ::lifestealRankedQueueManager.isInitialized }) { lifestealRankedQueueManager.stop() }
@@ -1052,6 +1060,7 @@ class Joshymc : JavaPlugin() {
         safe("lifestealRatingManager.refresh") { lifestealRatingManager.refresh() }
         safe("lifestealRankedStatsManager.refresh") { lifestealRankedStatsManager.refresh() }
         safe("lifestealBountyManager.refresh") { lifestealBountyManager.refresh() }
+        safe("lifestealSocialManager.refresh") { lifestealSocialManager.refresh() }
         safe("beaconPotionManager.start") { beaconPotionManager.start() }
 
         // 8. Restart Discord

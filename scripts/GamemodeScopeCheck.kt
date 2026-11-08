@@ -73,8 +73,10 @@ fun main() {
     check("no command is both assigned and unassigned", table.keys.intersect(GamemodeAssignments.UNASSIGNED.keys).isEmpty())
     check("unassigned commands all say why", GamemodeAssignments.UNASSIGNED.values.all { it.isNotBlank() })
     check("keys are lower-case plugin.yml names", table.keys.all { it == it.lowercase() && !it.startsWith("/") })
-    // Issue #1344: /withdrawheart is the first Lifesteal command; issue #1363 adds /ranked, issue #1405 /ac.
-    check("only /withdrawheart, /ranked and /ac are assigned to Lifesteal", table.filterValues { it == GamemodeScope.LIFESTEAL }.keys == setOf("withdrawheart", "ranked", "ac"))
+    // Issue #1344: /withdrawheart is the first Lifesteal command; issue #1363 adds /ranked, issue #1405 /ac,
+    // issue #1430 /friend and /channel.
+    check("only /withdrawheart, /ranked, /ac, /friend and /channel are assigned to Lifesteal",
+        table.filterValues { it == GamemodeScope.LIFESTEAL }.keys == setOf("withdrawheart", "ranked", "ac", "friend", "channel"))
 
     // Scopes set by earlier issues are unchanged.
     check("jgamemode NETWORK", scopeOf("jgamemode") == NETWORK)

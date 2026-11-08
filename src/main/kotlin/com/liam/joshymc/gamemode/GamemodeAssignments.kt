@@ -99,6 +99,8 @@ object GamemodeAssignments {
         "ranked",
         // Lifesteal alliance chat (issue #1405). Also only registered where Lifesteal is hosted.
         "ac",
+        // Lifesteal friends and chat channels (issue #1430). Also only registered where Lifesteal is hosted.
+        "friend", "channel",
     )
 
     val COMMANDS: Map<String, GamemodeScope> =
