@@ -207,6 +207,13 @@ class CommandManager(private val plugin: Joshymc) {
             }
             plugin.getCommand("channel")?.let {
                 val cmd = com.liam.joshymc.lifesteal.social.ChannelCommand(plugin)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+        } else {
+            unregisterCommand("friend")
+            unregisterCommand("channel")
+        }
         // Issue #1427: the Lifesteal Protected Bank (/bank). Lifesteal only: released on servers that
         // don't host Lifesteal, so Survival never has it (another plugin may own /bank there).
         if (plugin.lifestealBankManager.hosted) {
@@ -216,8 +223,6 @@ class CommandManager(private val plugin: Joshymc) {
                 it.tabCompleter = cmd
             }
         } else {
-            unregisterCommand("friend")
-            unregisterCommand("channel")
             unregisterCommand("bank")
         }
         // Issue #1331: cross-server transfers through the Velocity proxy.
