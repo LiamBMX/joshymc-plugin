@@ -663,6 +663,8 @@ crates:
       #   rotation  auto = follow the crate block's facing, or degrees the front faces
       #             (0 south, 90 west, 180 north, 270 east)
       #   scale     0.5..2.0 (1.0 hides a chest exactly; the floor stays on the floor)
+      #   hitbox    auto (default) = add a click hitbox only when the model reaches more
+      #             than 1/4 block past its block, on = always, off = never
       cabin:
         enabled: true
         model: "joshymc:cabin_crate"

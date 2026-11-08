@@ -7,9 +7,12 @@
 //
 // Exits non-zero on the first failed check.
 
+import com.liam.joshymc.crate.CrateClickGate
+import com.liam.joshymc.crate.CrateModelBounds
 import com.liam.joshymc.crate.CrateModels
 import com.liam.joshymc.crate.CrateModels.Rotation
 import java.io.File
+import java.util.UUID
 import java.util.zip.ZipFile
 import kotlin.system.exitProcess
 
@@ -164,10 +167,157 @@ fun main() {
     check("displays are never saved", "isPersistent = false" in displays)
     check("displays hidden by default", "isVisibleByDefault = false" in displays)
     check("no repeating task", "runTaskTimer" !in displays && "scheduleSyncRepeatingTask" !in displays)
-    check("no Interaction hitbox (clicks reach the real block)", "Interaction" !in displays)
     check("never changes blocks", ".setType(" !in displays && ".type = " !in displays && "setBlockData" !in displays)
     val listeners = File("src/main/kotlin/com/liam/joshymc/manager/ListenerManager.kt").readText()
     check("listener registered", "plugin.crateManager.models" in listeners)
 
+    // ── Hitboxes (issue #1451) ──────────────────────────
+    hitboxChecks(manager, displays)
+
     println("All $checks crate model checks passed.")
+}
+
+private fun near(a: Double, b: Double, eps: Double = 1e-6) = kotlin.math.abs(a - b) < eps
+
+private fun model(
+    scale: Double = 1.0, ox: Double = 0.0, oy: Double = 0.0, oz: Double = 0.0,
+    rotation: Rotation = Rotation.Auto, hitbox: CrateModels.HitboxMode = CrateModels.HitboxMode.AUTO,
+) = CrateModels.Model("test", true, "joshymc:test", ox, oy, oz, rotation, scale, hitbox)
+
+private fun hitboxChecks(manager: String, displays: String) {
+    // ── Config ──
+    check("hitbox defaults to auto", parse("enabled" to true, "models.a.scale" to 1.0).modelFor("a")?.hitbox == CrateModels.HitboxMode.AUTO)
+    check("hitbox on/off/true/false", parse("enabled" to true, "models.a.hitbox" to "on").modelFor("a")?.hitbox == CrateModels.HitboxMode.ON &&
+        parse("enabled" to true, "models.a.hitbox" to "OFF").modelFor("a")?.hitbox == CrateModels.HitboxMode.OFF &&
+        parse("enabled" to true, "models.a.hitbox" to true).modelFor("a")?.hitbox == CrateModels.HitboxMode.ON &&
+        parse("enabled" to true, "models.a.hitbox" to false).modelFor("a")?.hitbox == CrateModels.HitboxMode.OFF)
+    val badHitbox = parse("enabled" to true, "models.a.hitbox" to "huge")
+    check("bad hitbox value refused, not guessed", badHitbox.modelFor("a") == null && badHitbox.problems.size == 1)
+
+    // ── Placement: the model sits on its block ──
+    val block = CrateModels.ModelBounds.FULL_BLOCK
+    val flat = CrateModels.placement(model(), block, "SOUTH")
+    check("display at the block centre", near(flat.displayX, 0.5) && near(flat.displayY, 0.5) && near(flat.displayZ, 0.5))
+    check("full-block model fills exactly its block", flat.visual == CrateModels.Box(0.0, 0.0, 0.0, 1.0, 1.0, 1.0))
+    check("a model that fits needs no hitbox", flat.hitbox == null && flat.problem == null)
+    check("hitbox: on adds one even when it fits", CrateModels.placement(model(hitbox = CrateModels.HitboxMode.ON), block, "SOUTH").hitbox != null)
+    for (facing in listOf("NORTH", "SOUTH", "EAST", "WEST", null)) {
+        val p = CrateModels.placement(model(), block, facing)
+        check("full block stays aligned facing $facing", near(p.visual.minX, 0.0) && near(p.visual.maxX, 1.0) &&
+            near(p.visual.minZ, 0.0) && near(p.visual.maxZ, 1.0) && near(p.visual.minY, 0.0))
+    }
+    val big = CrateModels.placement(model(scale = 2.0), block, "NORTH")
+    check("scaled model keeps its floor on the block floor", near(big.visual.minY, 0.0) && near(big.visual.maxY, 2.0))
+    check("scaled model is centred on its block", near(big.visual.minX, -0.5) && near(big.visual.maxX, 1.5))
+    val bigBox = big.hitbox
+    check("oversized model gets a hitbox", bigBox != null)
+    check("hitbox follows the scale", bigBox != null && near(bigBox.width, 2.0) && near(bigBox.height, 2.0) &&
+        near(bigBox.x, 0.5) && near(bigBox.z, 0.5) && near(bigBox.y, 0.0))
+    check("hitbox: off never adds one", CrateModels.placement(model(scale = 2.0, hitbox = CrateModels.HitboxMode.OFF), block, "NORTH").hitbox == null)
+    val shifted = CrateModels.placement(model(ox = 0.5, oy = 0.25), block, "SOUTH")
+    check("offset moves the model in world axes", near(shifted.visual.minX, 0.5) && near(shifted.visual.maxX, 1.5) && near(shifted.visual.minY, 0.25))
+    check("offset hitbox follows the model", shifted.hitbox != null && near(shifted.hitbox!!.x, 1.0) && near(shifted.hitbox!!.y, 0.25))
+    check("small overhang (lips, latches) doesn't count",
+        CrateModels.placement(model(), CrateModels.ModelBounds(0.0, 0.0, -0.2, 16.0, 19.5, 16.25), "SOUTH").hitbox == null)
+    val beside = CrateModels.placement(model(scale = 0.5, ox = 1.0), block, "SOUTH")
+    check("a model drawn beside its block is refused", beside.problem != null && beside.hitbox == null)
+
+    // ── Rotation turns the footprint the way Paper draws it ──
+    // A model that sticks out of its front (+z in model space) by 0.5 blocks.
+    val front = CrateModels.ModelBounds(0.0, 0.0, 0.0, 16.0, 16.0, 24.0)
+    val south = CrateModels.placement(model(), front, "SOUTH").visual
+    val north = CrateModels.placement(model(), front, "NORTH").visual
+    val east = CrateModels.placement(model(), front, "EAST").visual
+    val west = CrateModels.placement(model(), front, "WEST").visual
+    check("front faces south", near(south.maxZ, 1.5) && near(south.minZ, 0.0))
+    check("front faces north", near(north.minZ, -0.5) && near(north.maxZ, 1.0))
+    check("front faces east", near(east.maxX, 1.5) && near(east.minX, 0.0))
+    check("front faces west", near(west.minX, -0.5) && near(west.maxX, 1.0))
+    val fixed = CrateModels.placement(model(rotation = Rotation.Fixed(270f)), front, "SOUTH").visual
+    check("fixed rotation turns the footprint too", near(fixed.maxX, 1.5))
+    val diagonal = CrateModels.placement(model(rotation = Rotation.Fixed(45f)), block, null).visual
+    check("a 45 degree turn widens the footprint", diagonal.maxX - diagonal.minX > 1.4)
+    val wideHit = CrateModels.placement(model(), front, "EAST").hitbox!!
+    check("hitbox is square around the footprint", near(wideHit.width, 1.5) && near(wideHit.x, 0.75) && near(wideHit.z, 0.5))
+
+    // ── Chunks: never draws into an unloaded neighbour ──
+    check("chunk of a point", CrateModels.chunkOf(15, 0.5) == 0 && CrateModels.chunkOf(15, 1.5) == 1 && CrateModels.chunkOf(0, -0.5) == -1)
+    check("a centred crate needs only its own chunk", CrateModels.requiredChunks(5, 5, flat).size == 1)
+    val edge = CrateModels.placement(model(ox = 1.0), block, "SOUTH")
+    check("an offset across a chunk border needs both chunks", CrateModels.requiredChunks(15, 5, edge) ==
+        setOf(CrateModels.chunkKey(0, 0), CrateModels.chunkKey(1, 0)))
+    check("neighbour chunks may hold a crate's entities", CrateModels.mayHoldEntities(15, 5, 1, 0) && CrateModels.mayHoldEntities(0, 0, -1, -1))
+    check("far chunks never do", !CrateModels.mayHoldEntities(8, 8, 1, 0) && !CrateModels.mayHoldEntities(15, 5, 2, 0))
+    check("chunk keys keep negatives apart", CrateModels.chunkKey(-1, 0) != CrateModels.chunkKey(0, -1))
+
+    // ── Reach ──
+    val unit = CrateModels.Box(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+    check("inside the box = no distance", CrateModels.distanceSqToBox(0.5, 0.5, 0.5, unit) == 0.0)
+    check("distance to the nearest face", near(CrateModels.distanceSqToBox(4.0, 0.5, 0.5, unit), 9.0))
+
+    // ── Model bounds from the real pack JSON ──
+    val def = """{"model":{"type":"minecraft:select","cases":[{"model":{"type":"minecraft:model","model":"joshymc:item/a"}}],
+        "fallback":{"type":"model","model":"joshymc:item/b"}}}"""
+    check("item definition model refs", CrateModelBounds.modelRefs(def) == listOf("joshymc:item/a", "joshymc:item/b"))
+    check("model path", CrateModelBounds.modelPath("joshymc:item/x/main") == "assets/joshymc/models/item/x/main.json" &&
+        CrateModelBounds.modelPath("item/chest") == "assets/minecraft/models/item/chest.json" &&
+        CrateModelBounds.modelPath("joshymc:../x") == null)
+    val rotated = CrateModelBounds.elementBounds("""{"elements":[{"from":[0,0,0],"to":[16,2,16]},
+        {"from":[6,0,6],"to":[10,20,10],"rotation":{"origin":[8,0,8],"axis":"z","angle":90}}]}""")!!
+    check("rotated elements are measured after their rotation", near(rotated.minY, -2.0) && near(rotated.maxY, 2.0) && near(rotated.minX, -12.0) && near(rotated.maxX, 16.0))
+    val euler = CrateModelBounds.elementBounds("""{"elements":[{"from":[0,0,0],"to":[16,16,16],"rotation":{"origin":[8,8,8],"x":0,"y":45,"z":0}}]}""")!!
+    check("Euler rotations are measured", euler.maxX > 18.0 && near(euler.maxY, 16.0))
+    check("no elements = unknown bounds", CrateModelBounds.elementBounds("""{"parent":"item/generated"}""") == null &&
+        CrateModelBounds.elementBounds("not json") == null)
+
+    // The bundled crate models: Harvest fits its block, the taller ones get a hitbox at scale 1.
+    val expectHitbox = mapOf("cabin_crate" to true, "homestead_crate" to true, "campfire_crate" to true,
+        "harvest_chest" to false, "stockpile_chest" to true)
+    for ((path, wanted) in expectHitbox) {
+        val itemJson = File("resourcepack/assets/joshymc/items/$path.json").readText()
+        val bounds = CrateModelBounds.union(CrateModelBounds.modelRefs(itemJson).map { ref ->
+            CrateModelBounds.modelPath(ref)?.let { File("resourcepack/$it") }?.takeIf { it.exists() }?.readText()?.let(CrateModelBounds::elementBounds)
+        })
+        check("$path bounds are readable", bounds != null)
+        bounds!!
+        check("$path stands on the floor", bounds.minY > -0.05)
+        check("$path stays inside its block's sides", bounds.minX > -0.3 && bounds.maxX < 16.3 && bounds.minZ > -0.3 && bounds.maxZ < 16.3)
+        for (facing in listOf("NORTH", "SOUTH", "EAST", "WEST")) {
+            val p = CrateModels.placement(model(), bounds, facing)
+            check("$path facing $facing sits on its block", p.problem == null && near(p.visual.minY, bounds.minY / 16.0))
+            check("$path facing $facing hitbox = $wanted", (p.hitbox != null) == wanted)
+            p.hitbox?.let { h ->
+                check("$path hitbox covers the block", h.box.minX <= 0.0 + 0.02 && h.box.maxX >= 1.0 - 0.02 &&
+                    h.box.minZ <= 0.02 && h.box.maxZ >= 0.98 && h.box.minY <= 0.0 && h.box.maxY >= bounds.maxY / 16.0 - 1e-9)
+                check("$path hitbox stays close to the model", h.width < 1.1)
+            }
+        }
+    }
+
+    // ── One action per click ──
+    val gate = CrateClickGate()
+    val a = UUID.randomUUID()
+    check("first click runs", gate.tryEnter(a, 100, leftClick = false))
+    check("same click again in the same tick is dropped", !gate.tryEnter(a, 100, leftClick = false))
+    check("the other click kind still runs", gate.tryEnter(a, 100, leftClick = true))
+    check("next tick runs again", gate.tryEnter(a, 101, leftClick = false))
+    check("ranIn reports it", gate.ranIn(a, 101, leftClick = false) && !gate.ranIn(a, 102, leftClick = false))
+    check("other players are independent", gate.tryEnter(UUID.randomUUID(), 101, leftClick = false))
+    gate.forget(a)
+    check("forget drops the player", gate.size == 1)
+
+    // ── Wiring ──
+    check("hitboxes are never saved", displays.substringAfter("Interaction::class.java) { i ->").substringBefore("}").contains("isPersistent = false"))
+    check("hitboxes hidden by default", displays.substringAfter("Interaction::class.java) { i ->").substringBefore("}").contains("isVisibleByDefault = false"))
+    check("hitbox clicks go through the crate manager", "crates.handleModelClick(" in displays)
+    check("hitbox right-clicks are hand-filtered", "event.hand != EquipmentSlot.HAND" in displays)
+    check("left-clicks use Paper's attack event", "PrePlayerAttackEntityEvent" in displays)
+    check("managed entities can't be damaged", "EntityDamageEvent" in displays)
+    check("cleanup only matches tagged JoshyMC entities", "TAG in entity.scoreboardTags" in displays && "locationKeyTag" in displays)
+    check("never loads chunks", "getChunkAtAsync" !in displays && "loadChunk" !in displays && ".load(" !in displays)
+    val modelClick = manager.substringAfter("fun handleModelClick(").substringBefore("\n    }\n")
+    check("model clicks reuse the crate click flow", "handleCrateClick(" in modelClick && "getCrateTypeAt(block)" in modelClick)
+    check("model clicks spend no key themselves", "consumeOneKey" !in modelClick && "beginOpening" !in modelClick)
+    check("block clicks share the click gate", manager.substringAfter("fun onInteract(event: PlayerInteractEvent)").substringBefore("fun handleModelClick(").contains("clickGate.tryEnter("))
+    check("click gate cleared on quit", "clickGate.forget(" in manager)
 }

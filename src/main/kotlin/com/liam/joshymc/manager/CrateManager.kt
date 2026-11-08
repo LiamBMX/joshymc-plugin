@@ -217,6 +217,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     /** Custom crate chest models drawn over the crate blocks (issue #1389). Purely visual. */
     val models = com.liam.joshymc.crate.CrateModelDisplays(plugin, this)
+
+    /**
+     * One crate action per player, click kind and tick, shared by the block and the model hitbox
+     * (issue #1451), so one click can never run the crate flow twice.
+     */
+    private val clickGate = com.liam.joshymc.crate.CrateClickGate()
     private lateinit var cratesFile: File
     private lateinit var cratesConfig: YamlConfiguration
 
@@ -2337,6 +2343,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             event.isCancelled = true
             event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY)
             event.setUseItemInHand(org.bukkit.event.Event.Result.DENY)
+            if (!clickGate.tryEnter(player.uniqueId, Bukkit.getCurrentTick(), leftClick = true)) return
             openPreview(player, crateType)
             return
         }
@@ -2352,8 +2359,30 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // tries to place the held item instead of opening the crate.
         event.setUseItemInHand(org.bukkit.event.Event.Result.DENY)
 
+        // The same click already reached the crate through its model hitbox (issue #1451).
+        if (!clickGate.tryEnter(player.uniqueId, Bukkit.getCurrentTick(), leftClick = false)) return
         handleCrateClick(player, crateType, block, leftClick = false)
     }
+
+    /**
+     * A click on a crate model's hitbox (issue #1451), routed into exactly the same flow as a
+     * click on the crate [block] itself: the crate is resolved from the block (the registered
+     * location stays the authority), then [handleCrateClick] runs its usual animation lock, key,
+     * free-slot, validity and debounce checks. Returns false when [block] is no crate.
+     */
+    fun handleModelClick(player: Player, block: Block, leftClick: Boolean): Boolean {
+        val crateType = getCrateTypeAt(block) ?: return false
+        if (plugin.config.getBoolean("crates.debug-interactions", false)) {
+            plugin.logger.info("[Crates DEBUG] ${player.name} ${if (leftClick) "left" else "right"}-clicked the model hitbox @ ${block.world.name} ${block.x},${block.y},${block.z} crateType=$crateType")
+        }
+        if (!clickGate.tryEnter(player.uniqueId, Bukkit.getCurrentTick(), leftClick)) return true
+        handleCrateClick(player, crateType, block, leftClick)
+        return true
+    }
+
+    /** True when [player] already ran a right-click crate action this tick (block or hitbox). */
+    fun rightClickedCrateThisTick(player: Player): Boolean =
+        clickGate.ranIn(player.uniqueId, Bukkit.getCurrentTick(), leftClick = false)
 
     @EventHandler
     fun onBlockBreak(event: BlockBreakEvent) {
@@ -2372,6 +2401,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         inFlightRewards.remove(event.player.uniqueId)
         activeAnimations.remove(event.player.uniqueId)
         lastActivation.remove(event.player.uniqueId)
+        clickGate.forget(event.player.uniqueId)
     }
 
     @EventHandler
