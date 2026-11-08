@@ -99,6 +99,8 @@ object GamemodeAssignments {
         "ranked",
         // Lifesteal alliance chat (issue #1405). Also only registered where Lifesteal is hosted.
         "ac",
+        // Lifesteal ranks, benefits and progression (issue #1428). Also only registered where Lifesteal is hosted.
+        "lsranks",
     )
 
     val COMMANDS: Map<String, GamemodeScope> =

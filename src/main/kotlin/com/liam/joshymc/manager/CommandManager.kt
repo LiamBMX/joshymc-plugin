@@ -197,6 +197,17 @@ class CommandManager(private val plugin: Joshymc) {
         } else {
             unregisterCommand("ac")
         }
+        // Issue #1428: Lifesteal ranks (/lsranks). Lifesteal only: released on servers that don't host
+        // Lifesteal, so Survival never has it (another plugin may own /lsranks there).
+        if (plugin.lifestealRankManager.hosted) {
+            plugin.getCommand("lsranks")?.let {
+                val cmd = com.liam.joshymc.lifesteal.ranks.LifestealRanksCommand(plugin)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+        } else {
+            unregisterCommand("lsranks")
+        }
         // Issue #1331: cross-server transfers through the Velocity proxy.
         for (destination in com.liam.joshymc.network.transfer.TransferDestination.entries) {
             plugin.getCommand(destination.command)?.let {

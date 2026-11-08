@@ -90,11 +90,15 @@ class StorageManager(private val plugin: Joshymc) : Listener {
     // ---- Permission-based vault count ----
 
     fun getMaxVaults(player: Player): Int {
+        var byPermission = 1
         for (n in maxVaults downTo 1) {
-            if (player.hasPermission("joshymc.pv.$n")) return n
+            if (player.hasPermission("joshymc.pv.$n")) { byPermission = n; break }
         }
+        // Issue #1428: in a Lifesteal world the Lifesteal rank `vaults` perk can raise it (never past vaults.max).
+        val lifesteal = plugin.lifestealRanksOrNull()?.takeIf { it.appliesTo(player) }
+            ?.perk(player, com.liam.joshymc.lifesteal.ranks.LifestealRankConfig.Perk.VAULTS) ?: 0
         // Default: 1 vault if they have base permission
-        return 1
+        return maxOf(byPermission, lifesteal.coerceAtMost(maxVaults))
     }
 
     // ---- Open vault ----

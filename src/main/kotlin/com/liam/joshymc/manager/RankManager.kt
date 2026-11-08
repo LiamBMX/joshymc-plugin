@@ -360,6 +360,9 @@ class RankManager(private val plugin: Joshymc) : Listener {
      * player has no rank-perk permission.
      */
     fun getRankPerkBonus(player: Player): RankPerk? {
+        // Issue #1428: in a Lifesteal world only the Lifesteal rank perks count (a Survival donor
+        // group never gives a Lifesteal bonus). Survival worlds are unchanged.
+        plugin.lifestealRanksOrNull()?.takeIf { it.appliesTo(player) }?.let { return it.economyPerk(player) }
         return rankPerks
             .filter { player.hasPermission("joshymc.rankperk.${it.key}") }
             .maxWithOrNull(compareBy({ it.auctionExtraListings }, { it.ordersExtraOrders }))

@@ -126,7 +126,9 @@ fun main() {
     // ── Claims stay revalidated ─────────────────────────
     val claim = manager.substringAfter("fun claimKit(").substringBefore("fun getCooldownRemaining(")
     check("claim re-resolves the kit in the current gamemode", "getKitFor(player, name)" in claim)
-    check("claim still checks the permission", "player.hasPermission(kit.permission)" in claim)
+    // Issue #1428: through canUse, which keeps the kit permission for every Survival kit.
+    check("claim still checks the permission", "canUse(player, kit)" in claim &&
+        "if (!kit.isLifesteal) return player.hasPermission(kit.permission)" in manager)
     check("claim still checks the cooldown", "canClaim(player, name)" in claim)
 
     // ── Scope ───────────────────────────────────────────
