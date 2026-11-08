@@ -300,6 +300,7 @@ class ListenerManager(private val plugin: Joshymc) {
         // Issue #1429: Lifesteal profile activity (ores, crops, fish, mobs, dimensions). Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealProfileManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.profile.LifestealProfileListener(plugin), plugin)
+        }
         // Issue #1427: PvP coin stealing (read-only at MONITOR), offline notices and bank menu prompts. Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealBankManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.bank.LifestealBankListener(plugin), plugin)

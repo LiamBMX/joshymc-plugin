@@ -725,6 +725,8 @@ commands:
     usage: /spawnstash
     permission: joshymc.spawnstash
 
+# JoshyMC ${version}: Gradle's expand() can't handle more than 65535 plain characters in a row,
+# so this comment (and the one in the permissions) splits the file. Keep them.
 permissions:
   joshymc.give:
     description: Allows giving custom items
@@ -1257,6 +1259,7 @@ permissions:
   joshymc.fly:
     description: Toggle flight (players with Survival flight time from Fly Vouchers can toggle their own flight without it)
     default: op
+  # JoshyMC ${version}: splits the file for Gradle's expand() (see the comment above permissions).
   joshymc.flytime.use:
     description: Use /flytime to check your remaining or permanent flight time
     default: true
