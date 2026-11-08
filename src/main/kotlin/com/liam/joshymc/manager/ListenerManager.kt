@@ -297,6 +297,10 @@ class ListenerManager(private val plugin: Joshymc) {
         if (plugin.lifestealBountyManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.bounty.LifestealBountyListener(plugin), plugin)
         }
+        // Issue #1429: Lifesteal profile activity (ores, crops, fish, mobs, dimensions). Never registered where Lifesteal isn't hosted.
+        if (plugin.lifestealProfileManager.hosted) {
+            pm.registerEvents(com.liam.joshymc.lifesteal.profile.LifestealProfileListener(plugin), plugin)
+        }
         // Issue #1350: Lifesteal combat-log kick causes and quit cleanup. Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealCombatManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.combat.LifestealCombatListener(plugin.lifestealCombatManager), plugin)

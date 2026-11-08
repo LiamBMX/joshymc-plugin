@@ -99,6 +99,9 @@ object GamemodeAssignments {
         "ranked",
         // Lifesteal alliance chat (issue #1405). Also only registered where Lifesteal is hosted.
         "ac",
+        // Lifesteal profiles, statistics, achievements and leaderboards (issue #1429). Also only
+        // registered where Lifesteal is hosted (released elsewhere), and refused outside Lifesteal worlds.
+        "profile", "stats", "achievements", "lstop",
     )
 
     val COMMANDS: Map<String, GamemodeScope> =

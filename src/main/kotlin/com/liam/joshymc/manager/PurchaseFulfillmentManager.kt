@@ -58,6 +58,9 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         override fun chatTagVoucherExists(id: String) = plugin.chatTagManager.getVoucherTag(id) != null
     }
 
+    /** What this server can deliver, for systems that validate their own reward lists up front (Lifesteal achievements, issue #1429). */
+    val rewardCatalog: PurchaseRewards.Catalog get() = catalog
+
     fun start() {
         store.createSchema()
 
@@ -457,7 +460,11 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
     }
 
     /** How the player hears about [row]: event rewards (issue #1199) aren't store purchases. */
-    private fun what(row: Delivery): String = if (row.source.startsWith(EVENT_SOURCE_PREFIX)) "event reward" else "store purchase"
+    private fun what(row: Delivery): String = when {
+        row.source.startsWith(EVENT_SOURCE_PREFIX) -> "event reward"
+        row.source.startsWith(ACHIEVEMENT_SOURCE_PREFIX) -> "achievement reward"
+        else -> "store purchase"
+    }
 
     private fun notify(player: Player, message: Component) {
         plugin.commsManager.send(player, message, CommunicationsManager.Category.ECONOMY)
@@ -553,6 +560,8 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
     companion object {
         /** `source` of rows queued by hosted-event rewards (issue #1199). */
         const val EVENT_SOURCE_PREFIX = "event:"
+        /** `source` of rows queued by Lifesteal achievement claims (issue #1429). */
+        const val ACHIEVEMENT_SOURCE_PREFIX = "achievement:"
         private const val JOIN_DELAY_TICKS = 100L
         private const val STARTUP_SWEEP_DELAY_TICKS = 200L
         private const val SWEEP_INTERVAL_TICKS = 20L * 60
