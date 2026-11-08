@@ -116,4 +116,35 @@ object EventQuestLayout {
         EventQuestCategory.FREE -> FREE_SLOT
         EventQuestCategory.ELITE -> ELITE_SLOT
     }
+
+    // ── Issue #1438: one set's page (54 slots) ──
+    /** The set's reward (claim button), centered above the quests instead of the top row. */
+    const val SET_REWARD_SLOT = 13
+    /** "N% complete" info, unchanged. */
+    const val SET_INFO_SLOT = 40
+    /** Most quests a set can have (EventQuestManager.MAX_QUESTS). */
+    const val SET_MAX_QUESTS = 10
+    private const val QUEST_ROW_A = 2
+    private const val QUEST_ROW_B = 3
+    private const val ROW_WIDTH = 5
+
+    /**
+     * Slots for a set's [count] quests, in quest order, centered under the reward: up to 5 in one
+     * row (slot 22 is the center column), more split over two rows (top row gets the extra one).
+     * Even counts in a row leave the center column empty so the row stays symmetric.
+     */
+    fun questSlots(count: Int): List<Int> {
+        require(count in 0..SET_MAX_QUESTS) { "count $count outside 0..$SET_MAX_QUESTS" }
+        if (count <= ROW_WIDTH) return centeredRow(QUEST_ROW_A, count)
+        val top = (count + 1) / 2
+        return centeredRow(QUEST_ROW_A, top) + centeredRow(QUEST_ROW_B, count - top)
+    }
+
+    private fun centeredRow(row: Int, n: Int): List<Int> {
+        val center = row * 9 + 4
+        val half = n / 2
+        val offsets = if (n % 2 == 1) (-half..half).toList()
+            else (-half..-1).toList() + (1..half).toList()
+        return offsets.map { center + it }
+    }
 }
