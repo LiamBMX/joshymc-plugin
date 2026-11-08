@@ -1,4 +1,4 @@
-# Lifesteal hearts (issues #1341, #1344, #1457)
+# Lifesteal hearts (issues #1341, #1344, #1457, #1461)
 
 The core Lifesteal heart system: permanent hearts per player, shown as their maximum health, and
 PvP heart stealing (issue #1341), plus physical Heart items: `/withdrawheart` and right-click
@@ -40,15 +40,65 @@ From `lifesteal.yml` (defaults = blueprint v1.1): `hearts.starting` 10, `hearts.
   5. Otherwise victim −1, killer +1.
 - Nobody is ever eliminated, banned or revived. Hearts never go below 1 or above the maximum.
 - Deaths with no causing player (fall, lava, drowning, suffocation, void, mobs, fire) are vanilla
-  deaths: no heart changes.
+  deaths: no heart changes, **unless** the victim was still combat-tagged by another player
+  (issue #1461, see "Environmental deaths during PvP" below).
 
 ### Kill attribution
 
 The killer is `PlayerDeathEvent.damageSource.causingEntity` when that is a player: the attacker
 for melee, the shooter for arrows/tridents/other projectiles, the igniter for player-lit TNT.
 Not counted: self-kills, NPC players (`NPC` metadata), a killer who is offline or outside
-Lifesteal, and deaths whose final damage had no causing player. The death handler runs at
-MONITOR with `ignoreCancelled`, so deaths another plugin cancels never count.
+Lifesteal, and deaths whose final damage had no causing player (except during an active combat
+tag, below). The death handler runs at MONITOR with `ignoreCancelled`, so deaths another plugin
+cancels never count.
+
+### Environmental deaths during PvP (issue #1461)
+
+Audit #1453 (P2-2(b)): a player who was losing a fight could jump into lava or the void, take
+fall damage, drown or shoot themselves, and keep their heart, because only the final damage
+counted. Now:
+
+- **What counts as active PvP**: the existing combat tag (`CombatManager`, `config.yml >
+  combat.tag-duration-seconds`, 15s by default). It is set only by an eligible PvP hit that
+  actually landed (`CombatListener.onDamageTag` → `tagPvp`), so cancelled hits (PvP off,
+  teammates with friendly fire off, the launch grace period, Mod Mode) never create one, and
+  ranked and hosted Crystal PvP fights never tag. No new timer and nothing persistent: since this
+  issue `tagPvp` also remembers, per tagged player, who hit them and when (newest first, at most
+  8, memory only), and that list is dropped whenever the tag is removed (expiry, death, quit,
+  offline sweep, plugin stop), so it can't outlive the tag or survive a restart.
+- **Which deaths**: the direct attribution is `ENVIRONMENT` (no causing player: lava, fire, fall,
+  void, drowning, suffocation, mobs, cactus, ...) or `SELF` (own arrow, own TNT, ...). A real PvP
+  kill keeps its killer, and an invalid direct killer (NPC, offline, another gamemode) or an
+  unloaded record is never replaced by someone else.
+- **Who is credited**: the victim's tag must still be running at the moment of death, and an
+  attacker's hit counts only while it is itself younger than one tag duration (refreshing your
+  own tag by hitting a third player doesn't keep an older attacker's credit alive). Of those, the
+  **most recent** attacker who passes the normal attribution checks (online, in a Lifesteal world,
+  not an NPC, heart record loaded) is credited; if the newest attacker fails them, the next newest
+  is used. The victim is never their own killer. Rules: the Bukkit-free
+  `HeartRules.combatTagKiller`.
+- **Never credited**: a death while not tagged (unrelated environmental deaths keep the old
+  behaviour), a kill by the old combat-log villager path (`isCombatLogged`; there is still no
+  combat-log heart penalty), a death while in a ranked match (`matchOf`; ranked hits never tag,
+  so the ranked system provides no verified attacker for an environmental death), and `/kill`
+  (`minecraft:generic_kill`).
+- **Same transfer**: the credited death goes through the unchanged `HeartStore.transferPvp` with
+  the same dedupe key as any other death (`pvp:<boot>:<victim>:<tick>`), so the launch window,
+  teammates/allies (`heartCheck(killer, victim)`), the 1-heart minimum, the 20-heart maximum
+  (`NO_TRANSFER`) and the 30-minute same-victim cooldown all apply exactly as for a sword kill, and
+  a repeated death event moves at most one heart. Players see the normal heart messages naming the
+  credited attacker; nothing about the combat tracking is shown.
+- **Audit**: the transaction stays type `PVP` (so profile and rank statistics count it as a kill),
+  and its audit reasons get ` (combat tag credit, died to <damage type>)` appended, e.g.
+  `killed by <uuid> (combat tag credit, died to lava)` or `COOLDOWN (combat tag credit, died to
+  fall)`, so staff can tell it from a direct kill. Direct kills' audit text is unchanged.
+- **Timing**: `CombatListener` removes the tag at NORMAL priority of the death event, so
+  `LifestealHeartListener.onDeathCaptureTag` copies it at LOWEST (Lifesteal victims only) and the
+  MONITOR handler uses that copy only in the same tick; it's dropped on use and on quit.
+- **Limitations**: a disconnect ends the tag, so a player who quits is handled by the combat-log
+  / Combat NPC rules, not this; Combat NPC deaths keep their direct attribution; pet kills are
+  still not credited to the owner; PvP coin stealing (`docs/lifesteal-bank.md`) and bounties keep
+  their own final-damage attribution.
 
 ### Anti-farming
 
@@ -316,7 +366,8 @@ These are left for a later decision rather than invented:
    alternative "victim still loses, killer stays at max" is implemented but unused
    (`VICTIM_LOSES_ONLY`). No Heart item drops and there's no other overflow reward.
 2. **Environmental deaths after PvP** (knocked into lava or the void, fall damage from a hit).
-   Only the final damage counts: these cost no heart.
+   Decided in issue #1461: credited to the most recent valid attacker while the victim's combat
+   tag runs (see "Environmental deaths during PvP").
 3. **Combat logging** (issue #1350, `docs/lifesteal-combat.md`). No heart penalty for logging out
    itself (the blueprint defines none). A counted combat log in a Lifesteal world leaves a Combat
    NPC (issue #1402, `docs/lifesteal-combat-npc.md`); server shutdowns, staff kicks and server
@@ -340,6 +391,13 @@ runs `scripts/LifestealHeartCheck.kt` against real SQLite. It covers:
 
 - the defaults and config validation, heart-to-health conversion and limits;
 - attribution (environment, self, NPC, offline, other gamemode, not loaded, Java/Bedrock UUIDs);
+- environmental deaths during PvP (issue #1461): direct kills untouched, lava/fall/void and
+  self-inflicted deaths credited while tagged, no tag / no hits / expired tag / stale hit / hit
+  in the future refused, the victim never credited, most recent of several attackers (and the
+  fallback past an ineligible one), exclusions; then in front of a real store: one transfer,
+  duplicate death events, the audit note, the cooldown, 1 heart, 20 hearts, teammates, allies,
+  an attacker without a record; and the wiring (tag capture at LOWEST before the NORMAL untag,
+  same-tick use, cleanup, ranked/Crystal PvP still untagged, Combat NPC deaths unchanged);
 - every transfer outcome, cooldown arithmetic (clock going back, corrupt values), and admin set/add/remove and input parsing;
 - new players getting 10 hearts once and keeping saved hearts;
 - restart persistence of hearts, cooldowns and dedupe keys, and repeated death events;
@@ -402,3 +460,15 @@ Combat withdrawal (issue #1455), also not yet run on a live server:
     the same time. After the tag expires, `/withdrawheart` works.
 16. While tagged, right-click a Heart item: it still redeems. Kill a Combat NPC: hearts still move
     as before. In a ranked match, `/withdrawheart` still gives the ranked-match message.
+
+Environmental deaths during PvP (issue #1461), also not yet run on a live server:
+
+17. A hits B, B jumps into lava (then: the void, a long fall, drowning, own arrow): A 11, B 9, the
+    normal messages; `/lifesteal hearts` audit shows `(combat tag credit, died to ...)`.
+18. A hits B, wait for "You are no longer in combat.", B dies to lava: no change. B dies to lava
+    without being hit at all: no change.
+19. A hits B, then C hits B, B jumps into the void: C is credited. Same with C logged out first:
+    A is credited.
+20. Repeat 17 within 30 minutes: cooldown message. With B at 1 heart, or A at 20: no change.
+21. In a ranked match, die to lava: no heart moves outside the ranked rules. `/kill` while
+    tagged: no change. On Survival, die to lava while tagged: nothing Lifesteal happens.

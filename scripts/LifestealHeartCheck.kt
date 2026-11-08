@@ -91,6 +91,9 @@ fun main() {
     altFarmingStore()
     altFarmingConcurrency()
     altFarmingWiring()
+    environmentalRules()
+    environmentalStore()
+    environmentalWiring()
     println("OK: $checks Lifesteal heart checks passed.")
 }
 
@@ -1291,4 +1294,143 @@ private fun altFarmingWiring() {
     // 16. Survival: the listener (and so playtime counting) exists only where Lifesteal is hosted.
     check("Survival untouched: listener only on Lifesteal servers", Regex("""if \(plugin\.lifestealHeartManager\.hosted\) \{\s+pm\.registerEvents\(com\.liam\.joshymc\.lifesteal\.hearts\.LifestealHeartListener""").containsMatchIn(source("manager/ListenerManager.kt")))
     check("no new Survival code paths", "lifestealHeartManager" !in source("manager/PlaytimeManager.kt") && "lifestealHeartManager" !in source("manager/AltManager.kt"))
+}
+
+// ── Environmental deaths during PvP (issue #1461) ────────────
+
+private const val TAG = 15_000L
+private val A = UUID.randomUUID()
+private val B = UUID.randomUUID()
+
+/** [HeartRules.combatTagKiller] for victim [BEDROCK], tagged until `T0 + TAG` unless [tagExpiresAt] says otherwise. */
+private fun credit(
+    direct: Attribution = Attribution.ENVIRONMENT,
+    hits: List<HeartRules.RecentHit> = listOf(HeartRules.RecentHit(A, T0)),
+    now: Long = T0 + 1_000,
+    tagExpiresAt: Long? = T0 + TAG,
+    excluded: Boolean = false,
+    eligible: (UUID) -> Boolean = { true },
+) = HeartRules.combatTagKiller(direct, BEDROCK, tagExpiresAt, hits, now, TAG, excluded, eligible)
+
+private fun environmentalRules() {
+    // The direct attribution decides first: real kills keep their killer.
+    check("env: normal PvP kill is never re-credited", credit(direct = Attribution.PVP_KILL) == null)
+    check("env: invalid direct killer is never replaced", credit(direct = Attribution.INVALID_KILLER) == null)
+    check("env: unloaded records are never replaced", credit(direct = Attribution.NOT_LOADED) == null)
+    check("env: Survival / other gamemode victims untouched", credit(direct = Attribution.NOT_LIFESTEAL) == null)
+
+    // Lava, fall, void, drowning, ...: all ENVIRONMENT (no causing player), credited while tagged.
+    check("env: lava/fall/void death while tagged credits the attacker", credit() == A)
+    check("env: self-inflicted death while tagged credits the other attacker, never the victim", credit(direct = Attribution.SELF) == A)
+    check("env: the victim's own hit never makes them the killer",
+        credit(hits = listOf(HeartRules.RecentHit(BEDROCK, T0 + 500))) == null)
+    check("env: own hit skipped, older real attacker still credited",
+        credit(hits = listOf(HeartRules.RecentHit(BEDROCK, T0 + 500), HeartRules.RecentHit(A, T0))) == A)
+
+    // Outside combat / expired.
+    check("env: no tag = no credit (unrelated death)", credit(tagExpiresAt = null) == null)
+    check("env: no recorded hits = no credit", credit(hits = emptyList()) == null)
+    check("env: tag already expired = no credit", credit(now = T0 + TAG) == null && credit(now = T0 + TAG + 1) == null)
+    check("env: last instant of the tag still credits", credit(now = T0 + TAG - 1) == A)
+    check("env: a hit older than one tag duration doesn't count, even if the tag was refreshed",
+        credit(now = T0 + TAG, tagExpiresAt = T0 + TAG * 2) == null)
+    check("env: tag duration 0 never credits",
+        HeartRules.combatTagKiller(Attribution.ENVIRONMENT, BEDROCK, T0 + TAG, listOf(HeartRules.RecentHit(A, T0)), T0 + 1, 0, false) { true } == null)
+    check("env: a hit in the future (clock went back / bad data) doesn't count",
+        credit(hits = listOf(HeartRules.RecentHit(A, T0 + 5_000)), now = T0 + 1_000) == null)
+
+    // Multiple attackers: the most recent eligible one, whatever the list order.
+    val two = listOf(HeartRules.RecentHit(A, T0), HeartRules.RecentHit(B, T0 + 2_000))
+    check("env: most recent attacker wins", credit(hits = two, now = T0 + 3_000) == B)
+    check("env: most recent attacker wins (newest first input)", credit(hits = two.reversed(), now = T0 + 3_000) == B)
+    check("env: most recent ineligible (offline, NPC, other gamemode, unloaded) falls back to the previous one",
+        credit(hits = two, now = T0 + 3_000, eligible = { it != B }) == A)
+    check("env: no eligible attacker = existing environmental behaviour", credit(hits = two, now = T0 + 3_000, eligible = { false }) == null)
+    check("env: the previous attacker's hit must still be fresh", credit(hits = two, now = T0 + TAG + 500, eligible = { it != B }) == null)
+
+    // Exclusions: combat-log kill, ranked match, /kill.
+    check("env: excluded deaths never credit", credit(excluded = true) == null)
+    check("env: audit note names the cause", HeartRules.combatTagNote("lava") == "combat tag credit, died to lava")
+}
+
+private fun environmentalStore() {
+    val dir = Files.createTempDirectory("joshymc-hearts-env-check").toFile()
+    try {
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            val note = HeartRules.combatTagNote("lava")
+            fun credited(killer: UUID, victim: UUID, now: Long, key: String = "pvp:boot:$victim:${UUID.randomUUID()}", team: com.liam.joshymc.lifesteal.teams.TeamCombatRules.HeartCheck = com.liam.joshymc.lifesteal.teams.TeamCombatRules.HeartCheck.ELIGIBLE) =
+                HeartStore.PvpRequest(key, killer, victim, now, COOLDOWN, LIMITS, team = team, note = note)
+
+            val killer = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+            val victim = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+            val lava = store.transferPvp(credited(killer, victim, T0, key = "env-1"))
+            check("env store: credited death transfers through transferPvp", lava is PvpResult.Done && lava.decision == Decision.Transfer(9, 11))
+            check("env store: hearts moved once", store.load(victim)!!.hearts == 9 && store.load(killer)!!.hearts == 11)
+            check("env store: duplicate death event moves nothing", store.transferPvp(credited(killer, victim, T0, key = "env-1")) == PvpResult.Duplicate &&
+                store.load(victim)!!.hearts == 9 && store.load(killer)!!.hearts == 11)
+            val audit = store.audit(victim) + store.audit(killer)
+            check("env store: loss audited with the combat-tag note", audit.any { it.operation == "PVP_LOSS" && it.reason == "killed by $killer ($note)" })
+            check("env store: gain audited with the combat-tag note", audit.any { it.operation == "PVP_GAIN" && it.reason == "killed $victim ($note)" })
+            check("env store: same 30-minute cooldown", store.transferPvp(credited(killer, victim, T0 + 60_000)).let { it is PvpResult.Done && it.decision is Decision.Cooldown } &&
+                store.load(victim)!!.hearts == 9)
+            check("env store: a cooldown refusal is audited with the note", store.audit(victim).any { it.operation == "PVP_REJECTED" && it.reason == "COOLDOWN ($note)" })
+            check("env store: a direct kill's audit is unchanged", store.transferPvp(pvp(killer, UUID.randomUUID().also { store.ensure(it, 10, T0) }, T0)).let { it is PvpResult.Done } &&
+                store.audit(killer).count { it.operation == "PVP_GAIN" && it.reason?.contains("combat tag") == false } == 1)
+
+            val last = UUID.randomUUID().also { store.ensure(it, 1, T0) }
+            val atOne = store.transferPvp(credited(killer, last, T0))
+            check("env store: victim at 1 heart stays protected", atOne is PvpResult.Done && atOne.decision == Decision.VictimAtMinimum && store.load(last)!!.hearts == 1)
+
+            val maxed = UUID.randomUUID().also { store.ensure(it, 20, T0) }
+            val target = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+            val atMax = store.transferPvp(credited(maxed, target, T0))
+            check("env store: killer at 20 gets nothing (NO_TRANSFER)", atMax is PvpResult.Done && atMax.decision == Decision.KillerAtMaximum &&
+                store.load(maxed)!!.hearts == 20 && store.load(target)!!.hearts == 10)
+
+            val mate = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+            val team = store.transferPvp(credited(mate, target, T0, team = com.liam.joshymc.lifesteal.teams.TeamCombatRules.HeartCheck.TEAMMATES))
+            check("env store: teammates still never move hearts", team is PvpResult.Done && team.decision == Decision.Teammates && store.load(target)!!.hearts == 10)
+            val ally = store.transferPvp(credited(mate, target, T0 + 1, team = com.liam.joshymc.lifesteal.teams.TeamCombatRules.HeartCheck.ALLIES))
+            check("env store: allies still never move hearts", ally is PvpResult.Done && ally.decision == Decision.Allies && store.load(target)!!.hearts == 10)
+
+            val ghost = UUID.randomUUID()
+            check("env store: an attacker without a heart record moves nothing",
+                store.transferPvp(credited(ghost, target, T0 + 2)) is PvpResult.Unavailable && store.load(target)!!.hearts == 10 && store.load(ghost) == null)
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+}
+
+private fun environmentalWiring() {
+    val combat = source("manager/CombatManager.kt")
+    check("env wiring: attackers recorded only by tagPvp (the eligible-hit tag)",
+        Regex("""fun tagPvp\(attacker: Player, victim: Player\) \{[\s\S]*?recentAttackers\.compute\(victim\.uniqueId\)""").containsMatchIn(combat))
+    check("env wiring: attackers only while tagged", "if (tagExpiresAt(uuid) == null) emptyList() else recentAttackers[uuid].orEmpty()" in combat)
+    check("env wiring: attackers dropped with every tag removal", Regex("recentAttackers\\.remove\\(").findAll(combat).count() == 3 && "recentAttackers.clear()" in combat)
+    check("env wiring: bounded per player", "take(MAX_RECENT_ATTACKERS)" in combat)
+
+    val listener = source("listener/CombatListener.kt")
+    check("env wiring: ranked fights still never tag", listener.indexOf("lifestealRankedManager.isMatchFight(attacker, victim)) return") in 0 until listener.indexOf("plugin.combatManager.tagPvp(attacker, victim)"))
+    check("env wiring: hosted Crystal PvP still never tags", listener.indexOf("games.isMatchFight(attacker, victim)) return") in 0 until listener.indexOf("plugin.combatManager.tagPvp(attacker, victim)"))
+    check("env wiring: CombatListener still untags at death (NORMAL)", "@EventHandler\n    fun onDeath(event: PlayerDeathEvent) {\n        val player = event.player\n        plugin.combatManager.untag(player)" in listener)
+
+    val hearts = source("lifesteal/hearts/LifestealHeartListener.kt")
+    check("env wiring: tag captured at LOWEST, before the untag", "@EventHandler(priority = EventPriority.LOWEST)\n    fun onDeathCaptureTag(event: PlayerDeathEvent) = hearts.captureCombatTag(event)" in hearts)
+
+    val manager = source("lifesteal/hearts/LifestealHeartManager.kt")
+    check("env wiring: capture only for Lifesteal victims", "if (!active || !isLifesteal(event.player)) return" in manager)
+    check("env wiring: capture used only in its own tick", "?.takeIf { it.tick == Bukkit.getCurrentTick() }" in manager)
+    check("env wiring: capture dropped on quit", "deathTags.remove(player.uniqueId)" in manager)
+    check("env wiring: combat-log kills, ranked matches and /kill excluded",
+        "plugin.combatManager.isCombatLogged(victim)" in manager && "plugin.lifestealRankedManager.matchOf(victim.uniqueId) != null" in manager &&
+            "damageType == GENERIC_KILL" in manager && "\"minecraft:generic_kill\"" in manager)
+    check("env wiring: credited attacker re-checked by attribute()", "HeartRules.attribute(deathFor(victim, candidate, attacker)) == HeartRules.Attribution.PVP_KILL" in manager)
+    check("env wiring: uses the configured combat-tag duration", "tagMillis = plugin.combatManager.tagDurationMillis" in manager)
+    check("env wiring: same transferPvp request with the note", "note = note,\n        )\n        val result = try {\n            store.transferPvp(request)" in manager)
+    check("env wiring: one transferPvp call per death path (onDeath + Combat NPC)", Regex("store\\.transferPvp\\(").findAll(manager).count() == 2)
+    val npcDeath = manager.substringAfter("fun onCombatNpcDeath(").substringBefore("private fun notify(")
+    check("env wiring: Combat NPC deaths unchanged (direct attribution only)", "combatTagKiller" !in npcDeath && "\"combatnpc:\$sessionId\"" in npcDeath)
 }

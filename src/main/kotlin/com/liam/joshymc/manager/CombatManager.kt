@@ -19,6 +19,8 @@ class CombatManager(private val plugin: Joshymc) {
         const val PVP_WORLD_NAME = "pvp"
         const val NPC_TAG = "joshymc_combat_npc"
         const val NPC_DURATION_TICKS = 60 * 20L // 60 seconds
+        /** Recent attackers kept per tagged player (issue #1461). */
+        const val MAX_RECENT_ATTACKERS = 8
     }
 
     private val combatTags = ConcurrentHashMap<UUID, Long>()
@@ -60,10 +62,31 @@ class CombatManager(private val plugin: Joshymc) {
         }
     }
 
+    /** One eligible PvP hit landed on a player: who hit them and when (epoch millis). */
+    data class PvpHit(val attacker: UUID, val at: Long)
+
+    /**
+     * Issue #1461: the players who landed eligible PvP hits on each tagged player (the same hits
+     * [tagPvp] tags for), newest first, at most [MAX_RECENT_ATTACKERS]. Memory only, keyed by UUID,
+     * removed whenever that player's tag is removed (expiry, untag, quit, offline sweep, stop), so it
+     * never outlives the combat tag and nothing survives a restart.
+     */
+    private val recentAttackers = ConcurrentHashMap<UUID, List<PvpHit>>()
+
+    /** [uuid]'s recent PvP attackers, newest first, while [uuid] is tagged; empty otherwise. */
+    fun recentPvpAttackers(uuid: UUID): List<PvpHit> =
+        if (tagExpiresAt(uuid) == null) emptyList() else recentAttackers[uuid].orEmpty()
+
     /** Tags both players of an eligible PvP hit and tells the observer (issue #1350). */
     fun tagPvp(attacker: Player, victim: Player) {
         tag(attacker)
         tag(victim)
+        if (attacker.uniqueId != victim.uniqueId) {
+            val hit = PvpHit(attacker.uniqueId, System.currentTimeMillis())
+            recentAttackers.compute(victim.uniqueId) { _, old ->
+                (listOf(hit) + old.orEmpty().filter { it.attacker != hit.attacker }).take(MAX_RECENT_ATTACKERS)
+            }
+        }
         val expiresAt = combatTags[victim.uniqueId] ?: return
         observe("pvp tag") { it.onPvpTag(attacker, victim, expiresAt) }
     }
@@ -113,6 +136,7 @@ class CombatManager(private val plugin: Joshymc) {
                 val player = plugin.server.getPlayer(uuid)
                 if (player == null) {
                     combatTags.remove(uuid)
+                    recentAttackers.remove(uuid)
                     observe("offline sweep") { it.onTagCleared(uuid) }
                     continue
                 }
@@ -120,6 +144,7 @@ class CombatManager(private val plugin: Joshymc) {
                 if (now >= expiry) {
                     // Expired
                     combatTags.remove(uuid)
+                    recentAttackers.remove(uuid)
                     plugin.rankManager.refreshCollisionIfChanged(player)
                     restoreFlightIfEligible(player)
                     plugin.commsManager.sendActionBar(player,
@@ -147,6 +172,7 @@ class CombatManager(private val plugin: Joshymc) {
             tickTaskId = -1
         }
         combatTags.clear()
+        recentAttackers.clear()
         hadFlightOnTag.clear()
         // Remove all combat NPCs
         for ((_, npc) in activeNPCs) {
@@ -212,6 +238,7 @@ class CombatManager(private val plugin: Joshymc) {
     fun untag(player: Player) {
         combatTags.remove(player.uniqueId)
         observe("untag") { it.onTagCleared(player.uniqueId) }
+        recentAttackers.remove(player.uniqueId)
         plugin.rankManager.refreshCollisionIfChanged(player)
         restoreFlightIfEligible(player)
     }

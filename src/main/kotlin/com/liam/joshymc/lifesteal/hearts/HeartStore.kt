@@ -344,6 +344,12 @@ class HeartStore(private val db: SqliteDatabase) {
          * moment later can't land after the grace period ended.
          */
         val window: ProgressionRules.HeartWindow = ProgressionRules.HeartWindow.OPEN,
+        /**
+         * Issue #1461: set when [killer] was credited through the combat tag (the victim died to the
+         * environment or themselves while tagged), e.g. [HeartRules.combatTagNote]. Only added to
+         * this death's audit reasons so staff can tell it from a direct kill; nothing else changes.
+         */
+        val note: String? = null,
     )
 
     sealed interface PvpResult {
@@ -389,7 +395,7 @@ class HeartStore(private val db: SqliteDatabase) {
                     else -> "killer's heart record is unreadable"
                 }
                 insertTransaction(transactionId, request.dedupeKey, "PVP", "UNAVAILABLE", request.killer, request.victim, null, request.now)
-                insertAudit(transactionId, request.victim, "PVP_REJECTED", victimHearts, victimHearts, request.killer.toString(), reason, request.now)
+                insertAudit(transactionId, request.victim, "PVP_REJECTED", victimHearts, victimHearts, request.killer.toString(), noted(reason, request.note), request.now)
                 result = PvpResult.Unavailable(reason)
                 return@transaction
             }
@@ -418,12 +424,12 @@ class HeartStore(private val db: SqliteDatabase) {
                         "ON CONFLICT (killer, victim) DO UPDATE SET last_transfer_at = excluded.last_transfer_at",
                     request.killer.toString(), request.victim.toString(), request.now
                 )
-                insertAudit(transactionId, request.victim, "PVP_LOSS", victimHearts, victimAfter, request.killer.toString(), "killed by ${request.killer}", request.now)
+                insertAudit(transactionId, request.victim, "PVP_LOSS", victimHearts, victimAfter, request.killer.toString(), noted("killed by ${request.killer}", request.note), request.now)
                 if (decision is HeartRules.Decision.Transfer) {
-                    insertAudit(transactionId, request.killer, "PVP_GAIN", killerHearts, killerAfter, request.victim.toString(), "killed ${request.victim}", request.now)
+                    insertAudit(transactionId, request.killer, "PVP_GAIN", killerHearts, killerAfter, request.victim.toString(), noted("killed ${request.victim}", request.note), request.now)
                 }
             } else {
-                insertAudit(transactionId, request.victim, "PVP_REJECTED", victimHearts, victimHearts, request.killer.toString(), outcome(decision), request.now)
+                insertAudit(transactionId, request.victim, "PVP_REJECTED", victimHearts, victimHearts, request.killer.toString(), noted(outcome(decision), request.note), request.now)
             }
             result = PvpResult.Done(transactionId, decision, victimBefore, victimAfter, killerBefore, killerAfter)
         }
@@ -772,6 +778,9 @@ class HeartStore(private val db: SqliteDatabase) {
 
     private fun dedupeExists(key: String): Boolean =
         db.queryFirst("SELECT 1 AS hit FROM lifesteal_heart_transactions WHERE dedupe_key = ?", key) { true } == true
+
+    /** [reason] with the combat-tag credit [note] appended (issue #1461); unchanged without one. */
+    private fun noted(reason: String, note: String?): String = if (note == null) reason else "$reason ($note)"
 
     private fun insertTransaction(id: String, dedupeKey: String, type: String, outcome: String, killer: UUID?, victim: UUID?, actor: String?, now: Long) {
         db.execute(
