@@ -269,7 +269,8 @@ class ScoreboardManager(private val plugin: Joshymc) : Listener {
     // ── Tab List ────────────────────────────────────────────────────
 
     private fun updateTabHeaderFooter(player: Player) {
-        val online = Bukkit.getOnlinePlayers().size
+        // Only players this viewer can see, so the count never gives away vanished staff (issue #1467).
+        val online = Bukkit.getOnlinePlayers().count { player.canSee(it) }
         val ping = player.ping
 
         // The logo hangs 36 px down from its line, so four blank lines keep the stats clear of it.

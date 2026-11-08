@@ -3,9 +3,9 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.util.Msg
+import com.liam.joshymc.vanish.VanishRules
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -15,7 +15,9 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.metadata.FixedMetadataValue
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -45,13 +47,83 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
         isVanished(player) || (player.hasPermission(SILENT_JOIN_PERMISSION) &&
             plugin.settingsManager.getSetting(player, SILENT_JOIN_PRIVATE_SETTING_KEY))
 
+    /** Staff with `joshymc.vanish` see vanished players (unchanged rule). */
+    fun canSeeVanished(viewer: Player): Boolean = viewer.hasPermission(VanishRules.PERMISSION)
+
+    /**
+     * Whether [viewer] must not see [target], combining vanish with the viewer's
+     * `/hidestaff` toggle so neither reason clobbers the other (issue #1467).
+     */
+    fun shouldHide(viewer: Player, target: Player): Boolean = VanishRules.hides(
+        viewerIsTarget = viewer.uniqueId == target.uniqueId,
+        targetVanished = isVanished(target),
+        viewerSeesVanished = canSeeVanished(viewer),
+        hiddenByHideStaff = plugin.hideStaffManager.hidesModModeStaff(viewer, target),
+    )
+
+    /**
+     * Applies [shouldHide] for one pair. Paper's hidePlayer also removes the target's TAB
+     * entry for that viewer, and the server's own player-list updates (joins, display names,
+     * game modes) skip viewers that can't see the player, so they never bring it back.
+     */
+    fun applyVisibility(viewer: Player, target: Player) {
+        if (viewer.uniqueId == target.uniqueId) return
+        if (shouldHide(viewer, target)) viewer.hidePlayer(plugin, target) else viewer.showPlayer(plugin, target)
+    }
+
+    /** Re-syncs every online viewer's view of [target], and its "vanished" metadata. */
+    fun resync(target: Player) {
+        for (viewer in Bukkit.getOnlinePlayers()) applyVisibility(viewer, target)
+        markMetadata(target)
+    }
+
+    /** Re-syncs what [viewer] sees of every vanished online player. */
+    private fun resyncViewer(viewer: Player) {
+        for (uuid in vanished) {
+            val target = Bukkit.getPlayer(uuid) ?: continue
+            applyVisibility(viewer, target)
+        }
+    }
+
+    /**
+     * The de-facto "vanished" metadata flag that TAB / TAB-Bridge and other plugins read, so a
+     * separate TAB plugin (or a proxy-wide player list) also leaves vanished staff out.
+     */
+    private fun markMetadata(player: Player) {
+        if (isVanished(player)) {
+            player.setMetadata(VanishRules.METADATA_KEY, FixedMetadataValue(plugin, true))
+        } else {
+            player.removeMetadata(VanishRules.METADATA_KEY, plugin)
+        }
+    }
+
     fun start() {
-        // Action bar reminder every 2 seconds (40 ticks)
+        plugin.databaseManager.createTable(
+            """
+            CREATE TABLE IF NOT EXISTS vanished_players (
+                uuid TEXT PRIMARY KEY,
+                since INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        // Vanish survives /joshymc reload (which builds a new VanishCommand) and restarts.
+        vanished.clear()
+        plugin.databaseManager.query("SELECT uuid FROM vanished_players") { rs -> rs.getString("uuid") }
+            .mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+            .forEach { vanished.add(it) }
+        for (online in Bukkit.getOnlinePlayers()) {
+            markMetadata(online)
+            resyncViewer(online)
+        }
+
+        // Every 2 seconds: the action bar reminder, plus a visibility re-sync so a viewer's
+        // permission change (LuckPerms) can never leave a vanished player shown.
         actionBarTaskId = plugin.server.scheduler.scheduleSyncRepeatingTask(plugin, Runnable {
             val message = plugin.commsManager.parseLegacy("&c&lVANISHED")
             for (uuid in vanished) {
                 val player = Bukkit.getPlayer(uuid) ?: continue
                 player.sendActionBar(message)
+                resync(player)
             }
         }, 40L, 40L)
     }
@@ -69,7 +141,7 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
             return true
         }
 
-        if (!sender.hasPermission("joshymc.vanish")) {
+        if (!sender.hasPermission(VanishRules.PERMISSION)) {
             Msg.noPermission(sender, CommunicationsManager.Category.ADMIN)
             return true
         }
@@ -101,12 +173,9 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
     /** Public so other systems (e.g. Moderator Mode) can vanish/unvanish a player programmatically. */
     fun vanish(player: Player) {
         vanished.add(player.uniqueId)
+        persist(player.uniqueId, true)
         refreshModModeTool(player)
-        for (online in Bukkit.getOnlinePlayers()) {
-            if (online == player) continue
-            if (online.hasPermission("joshymc.vanish")) continue
-            online.hidePlayer(plugin, player)
-        }
+        resync(player)
     }
 
     /** Keeps the Moderator Mode vanish dye in sync however vanish was toggled (tool, /vanish, ...). */
@@ -116,38 +185,59 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
 
     fun unvanish(player: Player) {
         vanished.remove(player.uniqueId)
+        persist(player.uniqueId, false)
         refreshModModeTool(player)
-        for (online in Bukkit.getOnlinePlayers()) {
-            if (online == player) continue
-            online.showPlayer(plugin, player)
+        // Same combined rule as vanish, so a viewer's /hidestaff still hides Mod Mode staff.
+        resync(player)
+    }
+
+    private fun persist(uuid: UUID, isVanished: Boolean) {
+        try {
+            if (isVanished) {
+                plugin.databaseManager.execute(
+                    "INSERT OR IGNORE INTO vanished_players (uuid, since) VALUES (?, ?)",
+                    uuid.toString(), System.currentTimeMillis()
+                )
+            } else {
+                plugin.databaseManager.execute("DELETE FROM vanished_players WHERE uuid = ?", uuid.toString())
+            }
+        } catch (e: Exception) {
+            plugin.logger.warning("[Vanish] Could not save vanish state for $uuid: ${e.message}")
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
+    /**
+     * LOWEST so the joiner is hidden (and its "vanished" metadata set) before the server sends
+     * its TAB entry to the other players and before other plugins' join handlers run. The
+     * join message itself is handled by WelcomeListener via hidesJoinLeave().
+     */
+    @EventHandler(priority = EventPriority.LOWEST)
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val joiner = event.player
 
-        // If the joiner is vanished, hide from non-staff. The join message
-        // itself is handled by WelcomeListener via hidesJoinLeave().
-        if (vanished.contains(joiner.uniqueId)) {
-            for (online in Bukkit.getOnlinePlayers()) {
-                if (online == joiner) continue
-                if (online.hasPermission("joshymc.vanish")) continue
-                online.hidePlayer(plugin, joiner)
-            }
+        // A stored vanish is dropped for players who can no longer vanish (e.g. demoted staff).
+        if (vanished.contains(joiner.uniqueId) &&
+            !VanishRules.keepOnJoin(stored = true, hasPermission = joiner.hasPermission(VanishRules.PERMISSION))) {
+            vanished.remove(joiner.uniqueId)
+            persist(joiner.uniqueId, false)
         }
 
-        // Hide all currently vanished players from the joiner (unless they have vanish perm)
-        if (!joiner.hasPermission("joshymc.vanish")) {
-            for (uuid in vanished) {
-                val vanishedPlayer = Bukkit.getPlayer(uuid) ?: continue
-                joiner.hidePlayer(plugin, vanishedPlayer)
-            }
-        }
+        // Vanished joiner: hidden from everyone who can't see vanished players.
+        resync(joiner)
+        // Already-vanished players: hidden from the joiner unless they may see them.
+        resyncViewer(joiner)
+    }
+
+    /** A world change must never reveal anyone: re-check both directions. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onWorldChange(event: PlayerChangedWorldEvent) {
+        val player = event.player
+        if (isVanished(player)) resync(player)
+        resyncViewer(player)
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (args.size == 1 && sender.hasPermission("joshymc.vanish")) {
+        if (args.size == 1 && sender.hasPermission(VanishRules.PERMISSION)) {
             return Bukkit.getOnlinePlayers()
                 .map { it.name }
                 .filter { it.startsWith(args[0], ignoreCase = true) }

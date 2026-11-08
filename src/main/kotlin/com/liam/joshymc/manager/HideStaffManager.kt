@@ -70,17 +70,16 @@ class HideStaffManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    /** Recomputes whether [viewer] should see [target], honoring both /hidestaff and /vanish together. */
-    private fun refreshVisibility(viewer: Player, target: Player) {
-        if (viewer == target) return
-        val hiddenByModMode = hiding.contains(viewer.uniqueId) && plugin.modModeManager.isModMode(target)
-        val hiddenByVanish = plugin.vanishCommand.isVanished(target) && !viewer.hasPermission("joshymc.vanish")
+    /** Whether [viewer]'s /hidestaff toggle hides [target] (a staff member in Moderator Mode). */
+    fun hidesModModeStaff(viewer: Player, target: Player): Boolean =
+        viewer.uniqueId != target.uniqueId && hiding.contains(viewer.uniqueId) && plugin.modModeManager.isModMode(target)
 
-        if (hiddenByModMode || hiddenByVanish) {
-            viewer.hidePlayer(plugin, target)
-        } else {
-            viewer.showPlayer(plugin, target)
-        }
+    /**
+     * Recomputes whether [viewer] should see [target], honoring both /hidestaff and /vanish
+     * together through the one combined rule in VanishCommand (issue #1467).
+     */
+    private fun refreshVisibility(viewer: Player, target: Player) {
+        plugin.vanishCommand.applyVisibility(viewer, target)
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

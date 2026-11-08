@@ -1130,6 +1130,8 @@ class Joshymc : JavaPlugin() {
 
         // 7. Commands just get new instances (executors are swapped, not re-registered)
         safe("commandManager.registerAll") { commandManager.registerAll() }
+        // Its join listener was unregistered above; /hidestaff must keep working after a reload.
+        safe("hideStaffManager.start") { hideStaffManager.start() }
         safe("gamemodeLockManager.start") { gamemodeLockManager.start() }
         // After the locks (world -> gamemode map) and lifesteal.yml are reloaded.
         safe("lifestealHeartManager.refresh") { lifestealHeartManager.refresh() }
