@@ -197,6 +197,23 @@ class CommandManager(private val plugin: Joshymc) {
         } else {
             unregisterCommand("ac")
         }
+        // Issue #1430: Lifesteal friends (/friend, /friends) and chat channels (/channel). Lifesteal only:
+        // released on servers that don't host Lifesteal, so Survival never has them.
+        if (plugin.lifestealSocialManager.hosted) {
+            plugin.getCommand("friend")?.let {
+                val cmd = com.liam.joshymc.lifesteal.social.FriendCommand(plugin)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+            plugin.getCommand("channel")?.let {
+                val cmd = com.liam.joshymc.lifesteal.social.ChannelCommand(plugin)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+        } else {
+            unregisterCommand("friend")
+            unregisterCommand("channel")
+        }
         // Issue #1429: Lifesteal profiles (/profile, /stats), achievements and leaderboards (/lstop).
         // Lifesteal only: released on servers that don't host Lifesteal, so Survival never has them.
         if (plugin.lifestealProfileManager.hosted) {

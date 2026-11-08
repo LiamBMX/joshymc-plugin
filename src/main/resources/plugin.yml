@@ -241,6 +241,16 @@ commands:
     usage: /ac <message>
     aliases: [alliancechat]
     permission: joshymc.lifesteal.team.use
+  friend:
+    description: Friends, friend requests and social privacy settings (Lifesteal only)
+    usage: /friend [add|remove|accept|deny|cancel <player>|requests|list|settings [option value]]
+    aliases: [friends]
+    permission: joshymc.lifesteal.friends.use
+  channel:
+    description: Choose where your chat goes - Global, Team, Alliance or Local (Lifesteal only)
+    usage: /channel [global|team|alliance|local] [message]
+    aliases: [ch, chatchannel]
+    permission: joshymc.lifesteal.channel.use
   profile:
     description: Lifesteal profile
     usage: /profile [player|private <on|off>]
@@ -730,6 +740,10 @@ commands:
     usage: /spawnstash
     permission: joshymc.spawnstash
 
+# processResources expands this file as a Groovy template, which can't hold more than 65535 characters of
+# plain text in one piece. The empty scriptlet on the next line splits the text in two and disappears from
+# the built plugin.yml (only the leading "#" stays). Keep it, and add another one if a piece outgrows the limit again.
+#<% /* template split */ %>
 # JoshyMC ${version}: Gradle's expand() can't handle more than 65535 plain characters in a row,
 # so this comment (and the one in the permissions) splits the file. Keep them.
 permissions:
@@ -1725,6 +1739,15 @@ permissions:
   joshymc.lifesteal.team.use:
     description: Use Lifesteal teams on the Lifesteal server (/team, invitations, leave, info, list); leader actions also need team leadership
     default: true
+  joshymc.lifesteal.friends.use:
+    description: Use Lifesteal friends (/friend, /friends, the Friends menu and social settings)
+    default: true
+  joshymc.lifesteal.channel.use:
+    description: Switch Lifesteal chat channels with /channel (Team/Alliance still need membership)
+    default: true
+  joshymc.lifesteal.social.bypass-privacy:
+    description: Private-message Lifesteal players whose privacy setting would refuse it (ignores and mutes still apply)
+    default: op
   joshymc.lifesteal.team.create:
     description: Create a Lifesteal team with /team create (on Lifesteal)
     default: true

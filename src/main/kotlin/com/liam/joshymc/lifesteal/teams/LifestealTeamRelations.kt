@@ -409,6 +409,12 @@ class LifestealTeamRelations(private val plugin: Joshymc, private val teams: Lif
         plugin.logger.info("[AllianceChat] ${team.name}/${nameOfTeam(current.allyOf(team.id) ?: "")} ${player.name}: $clean")
     }
 
+    /**
+     * Issue #1430: whether [teamId] is in an alliance right now (the committed snapshot). Only for
+     * showing which chat channels a player can pick; it grants nothing (`/ac` re-checks everything).
+     */
+    fun hasAlliance(teamId: String): Boolean = snapshot.allyOf(teamId) != null
+
     fun onQuit(player: Player) {
         spam.forget(player.uniqueId)
     }
