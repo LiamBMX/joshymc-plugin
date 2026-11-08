@@ -301,6 +301,10 @@ class ListenerManager(private val plugin: Joshymc) {
         if (plugin.lifestealBountyManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.bounty.LifestealBountyListener(plugin), plugin)
         }
+        // Issue #1429: Lifesteal profile activity (ores, crops, fish, mobs, dimensions). Never registered where Lifesteal isn't hosted.
+        if (plugin.lifestealProfileManager.hosted) {
+            pm.registerEvents(com.liam.joshymc.lifesteal.profile.LifestealProfileListener(plugin), plugin)
+        }
         // Issue #1425: Lifesteal quest progress (read-only at MONITOR) and placed-block markers. Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealQuestManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.quests.LifestealQuestListener(plugin), plugin)

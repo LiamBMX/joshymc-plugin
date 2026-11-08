@@ -1,0 +1,376 @@
+# Lifesteal player profiles, statistics, achievements and leaderboards (issue #1429).
+# Only read on a server that hosts Lifesteal. Full guide: docs/lifesteal-profiles.md.
+#
+# Turning anything off here never deletes player data: statistics are re-derived from the existing
+# Lifesteal history (hearts, ranked, bounties) and the profile tables are kept as they are.
+
+# false = /profile, /stats, /achievements and /lstop refuse and nothing is tracked (data is kept).
+enabled: true
+
+pvp:
+  # A kill of the same player counts at most once per this many minutes for profiles, achievements
+  # and leaderboards (0 to 10080). Only legitimate Lifesteal kills count at all (see the docs):
+  # teammates, allies, the grace period, alt accounts that shared a connection and kills the heart
+  # system refused never count.
+  same-victim-cooldown-minutes: 60
+
+achievements-settings:
+  # false = no achievement progress or claims (already earned rows are kept and shown on profiles).
+  enabled: true
+  # How often online Lifesteal players' achievements are checked (30 to 3600 seconds). Opening
+  # /achievements and joining also check.
+  evaluate-interval-seconds: 120
+
+activity:
+  # Buffered activity (ores, crops, fish, mobs) is written this often (5 to 600 seconds), on quit
+  # and at shutdown.
+  flush-interval-seconds: 30
+  # Naturally generated ores that count. Placed blocks never count.
+  ores:
+    - COAL_ORE
+    - DEEPSLATE_COAL_ORE
+    - COPPER_ORE
+    - DEEPSLATE_COPPER_ORE
+    - IRON_ORE
+    - DEEPSLATE_IRON_ORE
+    - GOLD_ORE
+    - DEEPSLATE_GOLD_ORE
+    - REDSTONE_ORE
+    - DEEPSLATE_REDSTONE_ORE
+    - LAPIS_ORE
+    - DEEPSLATE_LAPIS_ORE
+    - DIAMOND_ORE
+    - DEEPSLATE_DIAMOND_ORE
+    - EMERALD_ORE
+    - DEEPSLATE_EMERALD_ORE
+    - NETHER_GOLD_ORE
+    - NETHER_QUARTZ_ORE
+    - ANCIENT_DEBRIS
+  # Hostile mobs only count when they spawned for one of these reasons (no spawners, spawn eggs,
+  # portals or plugin-made mobs).
+  mob-spawn-reasons: [NATURAL, CHUNK_GEN, PATROL, RAID, REINFORCEMENTS, JOCKEY, MOUNT, VILLAGE_INVASION, LIGHTNING, TRAP]
+  # At most this many mob kills count per player per minute (1 to 1000).
+  mobs-per-minute: 40
+  # At least this many seconds between two counted fish of one player (0 to 600).
+  fish-min-interval-seconds: 3
+
+profiles:
+  # Players may hide their profile from other players (/profile private on). Staff with
+  # joshymc.lifesteal.profile.private.bypass still see it; leaderboards still list everyone.
+  allow-private: true
+  # Show playtime on profiles (only ever on a Lifesteal-only server, whose playtime is Lifesteal's).
+  show-playtime: true
+  # The border every profile has: a stained glass colour (gray, white, red, lime, ...).
+  default-border: gray
+
+leaderboards:
+  enabled: true
+  # Shown in this order. kills, kill-streak, kd, bounties, achievements, playtime, player-elo, team-elo.
+  # Quests completed isn't offered: Daily/Weekly quests are a Survival-only system.
+  categories: [kills, kill-streak, kd, bounties, achievements, playtime, player-elo, team-elo]
+  # K/D board: players need at least this many kills + deaths in the period (1 to 100000).
+  kd-minimum-fights: 20
+  # The boards are rebuilt from history this often (30 to 86400 seconds). Elo boards are the live
+  # Ranked Team Wars leaderboards (/ranked top).
+  refresh-seconds: 300
+
+announcements:
+  # Tell the player when they complete an achievement tier.
+  player: true
+  # Broadcast to Lifesteal players for achievements with `broadcast: true` (never hidden ones).
+  broadcast: true
+  broadcast-message: "&6{player} &eearned the achievement &6{achievement}&e!"
+
+gui:
+  # Chest titles (& colours, at most 28 characters).
+  profile-title: "Lifesteal Profile"
+  achievements-title: "Achievements"
+  leaderboards-title: "Lifesteal Leaderboards"
+
+# Achievements. The key is the achievement's stable id (lower case, digits and '-'): never rename it
+# once players earned it. Tiers are numbered by their position, so only add new tiers at the end.
+#
+#   name / description   what players see
+#   category             combat | survival | social | progression | competitive
+#   stat                 pvp-kills, unique-victims, best-kill-streak, bounty-claims, ranked-matches,
+#                        ranked-wins, player-division, team-division, team-joined, ores-mined,
+#                        crops-harvested, fish-caught, mobs-killed, dimensions-explored, playtime-hours
+#   type                 permanent (once ever) | seasonal (once per season, from that season's numbers;
+#                        not for team-joined or playtime-hours)
+#   visibility           visible | hidden (shown as ??? until its first tier is completed)
+#   icon                 any item name
+#   broadcast            true = announce completions to Lifesteal players
+#   tiers                list of { name (optional, e.g. Bronze), target (or division: <id> for the
+#                        division stats), rewards }
+#
+# Rewards (each claimed once, delivered by the store delivery queue: coins/credits work offline,
+# items wait for inventory room and are never dropped):
+#   coins <amount>                 Lifesteal coins (only on a Lifesteal-only server)
+#   credits <amount>
+#   tokens <quantity>
+#   cratekey <crate> <quantity>    an existing crate
+#   chattagvoucher <tag> <quantity> an existing chat tag voucher
+#   title <text>                   a profile title (& colours)
+#   border <colour>                a profile border (stained glass colour)
+# Hearts, ranks, rank vouchers and ranked advantages can't be rewards.
+achievements:
+  # ── Combat ─────────────────────────────────────────────
+  first-blood:
+    name: "First Blood"
+    description: "Win your first legitimate PvP fight."
+    category: combat
+    stat: pvp-kills
+    icon: WOODEN_SWORD
+    tiers:
+      - target: 1
+        rewards: ["coins 1000"]
+  slayer:
+    name: "Slayer"
+    description: "Win legitimate PvP fights."
+    category: combat
+    stat: pvp-kills
+    icon: IRON_SWORD
+    tiers:
+      - name: Bronze
+        target: 10
+        rewards: ["coins 5000"]
+      - name: Silver
+        target: 50
+        rewards: ["coins 20000", "border red"]
+      - name: Gold
+        target: 100
+        rewards: ["coins 50000", "title &cSlayer"]
+      - name: Diamond
+        target: 250
+        rewards: ["coins 100000", "title &b&lWarlord"]
+    broadcast: true
+  executioner:
+    name: "Executioner"
+    description: "Eliminate different players."
+    category: combat
+    stat: unique-victims
+    icon: SKELETON_SKULL
+    tiers:
+      - target: 10
+        rewards: ["coins 10000", "title &4Executioner"]
+  unstoppable:
+    name: "Unstoppable"
+    description: "Win legitimate fights in a row without a PvP death."
+    category: combat
+    stat: best-kill-streak
+    icon: BLAZE_POWDER
+    tiers:
+      - name: Bronze
+        target: 5
+        rewards: ["coins 5000"]
+      - name: Gold
+        target: 10
+        rewards: ["coins 20000", "border orange"]
+  bounty-hunter:
+    name: "Bounty Hunter"
+    description: "Claim player bounties."
+    category: combat
+    stat: bounty-claims
+    icon: GOLD_INGOT
+    tiers:
+      - name: Bronze
+        target: 1
+        rewards: ["coins 2500"]
+      - name: Gold
+        target: 10
+        rewards: ["coins 25000", "title &6Bounty Hunter"]
+  season-contender:
+    name: "Season Contender"
+    description: "Win legitimate PvP fights this season."
+    category: combat
+    stat: pvp-kills
+    type: seasonal
+    icon: GOLDEN_SWORD
+    tiers:
+      - name: Bronze
+        target: 25
+        rewards: ["coins 10000"]
+      - name: Gold
+        target: 75
+        rewards: ["coins 30000"]
+
+  # ── Survival ───────────────────────────────────────────
+  miner:
+    name: "Miner"
+    description: "Mine naturally generated ores."
+    category: survival
+    stat: ores-mined
+    icon: IRON_PICKAXE
+    tiers:
+      - name: Bronze
+        target: 100
+        rewards: ["coins 1000"]
+      - name: Silver
+        target: 500
+        rewards: ["coins 5000"]
+      - name: Gold
+        target: 2500
+        rewards: ["coins 15000", "border yellow"]
+      - name: Diamond
+        target: 10000
+        rewards: ["coins 50000", "title &bDeep Delver"]
+  farmer:
+    name: "Farmer"
+    description: "Harvest fully grown crops."
+    category: survival
+    stat: crops-harvested
+    icon: WHEAT
+    tiers:
+      - name: Bronze
+        target: 250
+        rewards: ["coins 1000"]
+      - name: Silver
+        target: 1000
+        rewards: ["coins 5000"]
+      - name: Gold
+        target: 5000
+        rewards: ["coins 15000", "border lime"]
+  angler:
+    name: "Angler"
+    description: "Catch fish."
+    category: survival
+    stat: fish-caught
+    icon: FISHING_ROD
+    tiers:
+      - name: Bronze
+        target: 25
+        rewards: ["coins 1000"]
+      - name: Silver
+        target: 100
+        rewards: ["coins 5000", "border light_blue"]
+      - name: Gold
+        target: 500
+        rewards: ["coins 15000", "title &3Angler"]
+  monster-hunter:
+    name: "Monster Hunter"
+    description: "Defeat hostile mobs."
+    category: survival
+    stat: mobs-killed
+    icon: ROTTEN_FLESH
+    tiers:
+      - name: Bronze
+        target: 100
+        rewards: ["coins 1000"]
+      - name: Silver
+        target: 500
+        rewards: ["coins 5000"]
+      - name: Gold
+        target: 2500
+        rewards: ["coins 15000", "border green"]
+  explorer:
+    name: "Explorer"
+    description: "Enter the Overworld, the Nether and the End."
+    category: survival
+    stat: dimensions-explored
+    icon: COMPASS
+    tiers:
+      - name: Nether
+        target: 2
+        rewards: ["coins 2500"]
+      - name: End
+        target: 3
+        rewards: ["coins 10000", "border purple"]
+
+  # ── Social ─────────────────────────────────────────────
+  team-player:
+    name: "Team Player"
+    description: "Join a Lifesteal team."
+    category: social
+    stat: team-joined
+    icon: WHITE_BANNER
+    tiers:
+      - target: 1
+        rewards: ["coins 1000"]
+  squad-up:
+    name: "Squad Up"
+    description: "Fight for your team in rated Ranked Team Wars."
+    category: social
+    stat: ranked-matches
+    icon: SHIELD
+    tiers:
+      - target: 5
+        rewards: ["coins 5000", "border blue"]
+
+  # ── Progression ────────────────────────────────────────
+  veteran:
+    name: "Veteran"
+    description: "Play on the Lifesteal server."
+    category: progression
+    stat: playtime-hours
+    icon: CLOCK
+    tiers:
+      - name: Bronze
+        target: 10
+        rewards: ["coins 2500"]
+      - name: Silver
+        target: 50
+        rewards: ["coins 10000"]
+      - name: Gold
+        target: 200
+        rewards: ["coins 30000", "title &eVeteran"]
+      - name: Diamond
+        target: 500
+        rewards: ["coins 75000", "border white"]
+
+  # ── Competitive ────────────────────────────────────────
+  ranked-debut:
+    name: "Ranked Debut"
+    description: "Play a rated Ranked Team War."
+    category: competitive
+    stat: ranked-matches
+    icon: IRON_HELMET
+    tiers:
+      - target: 1
+        rewards: ["coins 2500"]
+  ranked-victor:
+    name: "Ranked Victor"
+    description: "Win rated Ranked Team Wars."
+    category: competitive
+    stat: ranked-wins
+    icon: GOLDEN_HELMET
+    tiers:
+      - name: Bronze
+        target: 1
+        rewards: ["coins 5000"]
+      - name: Silver
+        target: 10
+        rewards: ["coins 20000"]
+      - name: Gold
+        target: 50
+        rewards: ["coins 50000", "title &6Champion"]
+    broadcast: true
+  climber:
+    name: "Climber"
+    description: "Reach a Player Elo division."
+    category: competitive
+    stat: player-division
+    icon: DIAMOND
+    tiers:
+      - name: Platinum
+        division: platinum
+        rewards: ["coins 10000"]
+      - name: Diamond
+        division: diamond
+        rewards: ["coins 25000", "border cyan"]
+      - name: Master
+        division: master
+        rewards: ["coins 50000", "title &dMaster"]
+    broadcast: true
+  team-climber:
+    name: "Team Climber"
+    description: "Reach a Team Elo division with your team."
+    category: competitive
+    stat: team-division
+    icon: AMETHYST_SHARD
+    tiers:
+      - name: Platinum
+        division: platinum
+        rewards: ["coins 10000"]
+      - name: Diamond
+        division: diamond
+        rewards: ["coins 25000", "border magenta"]

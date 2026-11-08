@@ -227,6 +227,11 @@ commands:
     description: Ranked Team Wars queues, match confirmations, team challenges, leaderboards, divisions and statistics (Lifesteal only)
     usage: /ranked [queue <2v2|3v3|4v4|5v5> [teammates]|leave|status|accept|decline|challenge <team> <size> [teammates]|challenge accept|decline <team>|challenge cancel|challenges|stats [player]|rating|history [player] [page]|top [players|teams] [page]|teamstats [team]|divisions|season]
     permission: joshymc.lifesteal.ranked.use
+  lsranks:
+    description: Lifesteal ranks (Lifesteal only)
+    usage: /lsranks [info [player]|claim <rank>|admin]
+    aliases: [lifestealranks, lranks]
+    permission: joshymc.lifesteal.ranks.use
   bank:
     description: Your Lifesteal Protected Bank (coins in the bank can't be stolen in PvP)
     usage: /bank [balance|deposit <amount|all>|withdraw <amount|all>|admin]
@@ -236,6 +241,25 @@ commands:
     usage: /ac <message>
     aliases: [alliancechat]
     permission: joshymc.lifesteal.team.use
+  profile:
+    description: Lifesteal profile
+    usage: /profile [player|private <on|off>]
+    aliases: [lsprofile]
+    permission: joshymc.lifesteal.profile.use
+  stats:
+    description: Lifesteal stats
+    usage: /stats [player]
+    permission: joshymc.lifesteal.profile.use
+  achievements:
+    description: Lifesteal achievements
+    usage: /achievements [category]
+    aliases: [ach, achievement]
+    permission: joshymc.lifesteal.achievements.use
+  lstop:
+    description: Lifesteal leaderboards
+    usage: /lstop [category] [season|alltime] [page]
+    aliases: [lifestealtop]
+    permission: joshymc.lifesteal.leaderboards.use
   unstuck:
     description: Get out of a spot where you're frozen midair or the world didn't load
     usage: /unstuck [player]
@@ -706,6 +730,8 @@ commands:
     usage: /spawnstash
     permission: joshymc.spawnstash
 
+# JoshyMC ${version}: Gradle's expand() can't handle more than 65535 plain characters in a row,
+# so this comment (and the one in the permissions) splits the file. Keep them.
 permissions:
   joshymc.give:
     description: Allows giving custom items
@@ -1001,12 +1027,39 @@ permissions:
   joshymc.lifesteal.ranked.spectate:
     description: Watch a running Ranked Team Wars match from its spectator point (/lifesteal admin ranked spectate|unspectate; no damage, no item pickup)
     default: op
+  joshymc.lifesteal.ranks.use:
+    description: Use /lsranks
+    default: true
+  joshymc.lifesteal.ranks.view.others:
+    description: /lsranks info <player>
+    default: op
+  joshymc.lifesteal.ranks.admin:
+    description: Lifesteal rank administration (/lsranks admin)
+    default: op
   joshymc.lifesteal.ranked.use:
     description: Use /ranked on the Lifesteal server (queue with your team, accept matches, team challenges)
     default: true
   joshymc.lifesteal.ranked.stats.others:
     description: See other players' ranked statistics and match history with /ranked stats|history <player> and from the leaderboards on the Lifesteal server
     default: true
+  joshymc.lifesteal.profile.use:
+    description: Use /profile and /stats
+    default: true
+  joshymc.lifesteal.profile.others:
+    description: View others' profiles
+    default: true
+  joshymc.lifesteal.profile.private.bypass:
+    description: View private profiles
+    default: op
+  joshymc.lifesteal.achievements.use:
+    description: Use /achievements
+    default: true
+  joshymc.lifesteal.leaderboards.use:
+    description: Use /lstop
+    default: true
+  joshymc.lifesteal.profile.admin:
+    description: /achievements admin
+    default: op
   joshymc.lifesteal.bounty.use:
     description: Use /bounty on the Lifesteal server (browse, contribute, stats, leaderboards)
     default: true
@@ -1226,6 +1279,7 @@ permissions:
   joshymc.fly:
     description: Toggle flight (players with Survival flight time from Fly Vouchers can toggle their own flight without it)
     default: op
+  # JoshyMC ${version}: splits the file for Gradle's expand() (see the comment above permissions).
   joshymc.flytime.use:
     description: Use /flytime to check your remaining or permanent flight time
     default: true

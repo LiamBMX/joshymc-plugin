@@ -197,6 +197,38 @@ class CommandManager(private val plugin: Joshymc) {
         } else {
             unregisterCommand("ac")
         }
+        // Issue #1429: Lifesteal profiles (/profile, /stats), achievements and leaderboards (/lstop).
+        // Lifesteal only: released on servers that don't host Lifesteal, so Survival never has them.
+        if (plugin.lifestealProfileManager.hosted) {
+            val profile = com.liam.joshymc.lifesteal.profile.ProfileCommand(plugin)
+            for (name in listOf("profile", "stats")) plugin.getCommand(name)?.let {
+                it.setExecutor(profile)
+                it.tabCompleter = profile
+            }
+            plugin.getCommand("achievements")?.let {
+                val cmd = com.liam.joshymc.lifesteal.profile.AchievementsCommand(plugin)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+            plugin.getCommand("lstop")?.let {
+                val cmd = com.liam.joshymc.lifesteal.profile.LifestealLeaderboardCommand(plugin)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+        } else {
+            for (name in listOf("profile", "stats", "achievements", "lstop")) unregisterCommand(name)
+        }
+        // Issue #1428: Lifesteal ranks (/lsranks). Lifesteal only: released on servers that don't host
+        // Lifesteal, so Survival never has it (another plugin may own /lsranks there).
+        if (plugin.lifestealRankManager.hosted) {
+            plugin.getCommand("lsranks")?.let {
+                val cmd = com.liam.joshymc.lifesteal.ranks.LifestealRanksCommand(plugin)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+        } else {
+            unregisterCommand("lsranks")
+        }
         // Issue #1427: the Lifesteal Protected Bank (/bank). Lifesteal only: released on servers that
         // don't host Lifesteal, so Survival never has it (another plugin may own /bank there).
         if (plugin.lifestealBankManager.hosted) {

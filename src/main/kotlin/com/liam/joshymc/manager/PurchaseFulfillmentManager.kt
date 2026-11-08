@@ -56,7 +56,15 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         override fun crateExists(id: String) = plugin.crateManager.getCrate(plugin.crateManager.resolveCrateId(id)) != null
         override fun moneyVoucherExists(id: String) = plugin.physicalVoucherManager.getVoucher(id)?.enabled == true
         override fun chatTagVoucherExists(id: String) = plugin.chatTagManager.getVoucherTag(id) != null
+        override fun lifestealRankPurchasable(id: String): Boolean {
+            val ranks = plugin.lifestealRanksOrNull()?.takeIf { it.ready } ?: return false
+            val rank = ranks.settings?.rank(id) ?: return false
+            return ranks.settings?.enabled == true && rank.enabled && rank.acquisition.store
+        }
     }
+
+    /** What this server can deliver, for systems that validate their own reward lists up front (Lifesteal achievements, issue #1429). */
+    val rewardCatalog: PurchaseRewards.Catalog get() = catalog
 
     fun start() {
         store.createSchema()
@@ -216,6 +224,49 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
             PurchaseRewards.Delivery.CURRENCY -> if (isKnownPlayer(uuid)) processCurrency(row, kind)
             PurchaseRewards.Delivery.ITEM -> Bukkit.getPlayer(uuid)?.let { processItems(it, row, kind) }
             PurchaseRewards.Delivery.RANK -> if (includeRanks) Bukkit.getPlayer(uuid)?.let { processRank(it, row) }
+            // Offline-capable and idempotent (the rank change is keyed by this row), so the sweep runs it too.
+            PurchaseRewards.Delivery.LIFESTEAL_RANK -> if (isKnownPlayer(uuid)) processLifestealRank(row)
+        }
+    }
+
+    /**
+     * Issue #1428: a Lifesteal rank purchase. The rank change is recorded in the Lifesteal rank store
+     * with the reference `purchase:<row id>` (UNIQUE), so a retry, a requeue after a crash or a
+     * repeated sweep finds that same change instead of granting again. The row is COMPLETED only
+     * once LuckPerms has saved the group; while the change is still pending the row goes back to
+     * PENDING and the next sweep checks again. Already owning the rank (or a higher one) fails the
+     * row with a note, exactly like a Survival donor tier, and grants nothing.
+     */
+    private fun processLifestealRank(snapshot: Delivery) {
+        val uuid = snapshot.recipientUuid ?: return
+        // Not ready (e.g. lifesteal-ranks.yml invalid until it's fixed): stays PENDING, the sweep tries again.
+        // A server that doesn't host Lifesteal never gets here: the line is rejected when it's parsed.
+        val ranks = plugin.lifestealRanksOrNull()?.takeIf { it.ready } ?: return
+        val row = store.claim(snapshot.id) ?: return
+        ranks.requestGrant(uuid, row.recipientName, row.param, com.liam.joshymc.lifesteal.ranks.LifestealRankRules.Source.STORE,
+            "purchase:${row.id}", "store:#${row.id}") { outcome ->
+            val label = ranks.settings?.rank(row.param)?.displayName ?: row.param
+            when (outcome) {
+                is com.liam.joshymc.lifesteal.ranks.LifestealRankManager.Outcome.Completed -> {
+                    finishRank(row, State.COMPLETED, "lifesteal rank change ${outcome.op.id}")
+                    Bukkit.getPlayer(uuid)?.let { notify(it, Component.text("Store purchase delivered: ", NamedTextColor.GREEN)
+                        .append(Component.text("$label rank (Lifesteal)", NamedTextColor.GOLD))
+                        .append(Component.text(".", NamedTextColor.GREEN))) }
+                }
+                is com.liam.joshymc.lifesteal.ranks.LifestealRankManager.Outcome.Duplicate -> when (outcome.existing.status) {
+                    com.liam.joshymc.lifesteal.ranks.LifestealRankStore.Status.COMPLETED -> finishRank(row, State.COMPLETED, "lifesteal rank change ${outcome.existing.id} already completed")
+                    com.liam.joshymc.lifesteal.ranks.LifestealRankStore.Status.PENDING -> finishRank(row, State.PENDING, "waiting for LuckPerms (lifesteal rank change ${outcome.existing.id})")
+                    else -> finishRank(row, State.FAILED, "lifesteal rank change ${outcome.existing.id} is ${outcome.existing.status}; see /lsranks admin failed")
+                }
+                is com.liam.joshymc.lifesteal.ranks.LifestealRankManager.Outcome.Pending -> finishRank(row, State.PENDING, "waiting for LuckPerms (lifesteal rank change ${outcome.op.id}): ${outcome.reason}")
+                is com.liam.joshymc.lifesteal.ranks.LifestealRankManager.Outcome.Refused -> when (outcome.decision) {
+                    // Another rank change for this player is running: look again at the next sweep.
+                    com.liam.joshymc.lifesteal.ranks.LifestealRankRules.Decision.PENDING -> finishRank(row, State.PENDING, "another Lifesteal rank change is pending for this player")
+                    else -> finishRank(row, State.FAILED, "${outcome.decision.message} Nothing was granted.")
+                }
+                is com.liam.joshymc.lifesteal.ranks.LifestealRankManager.Outcome.Failed -> finishRank(row, State.FAILED,
+                    "lifesteal rank change failed: ${outcome.reason}" + (outcome.op?.let { " (${it.id}, /lsranks admin retry)" } ?: ""))
+            }
         }
     }
 
@@ -443,6 +494,7 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         Kind.MONEY_VOUCHER -> "$param voucher"
         Kind.CHAT_TAG_VOUCHER -> "$param Chat Tag Voucher"
         Kind.RANK -> "${DonorTiers.displayName(param)} rank"
+        Kind.LIFESTEAL_RANK -> "${plugin.lifestealRanksOrNull()?.settings?.rank(param)?.displayName ?: param} rank (Lifesteal)"
     }
 
     private fun noticeFull(player: Player, row: Delivery, force: Boolean = false) {
@@ -459,6 +511,7 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
     /** How the player hears about [row]: event rewards (issue #1199) aren't store purchases. */
     private fun what(row: Delivery): String = when {
         row.source.startsWith(EVENT_SOURCE_PREFIX) -> "event reward"
+        row.source.startsWith(ACHIEVEMENT_SOURCE_PREFIX) -> "achievement reward"
         row.source.startsWith(QUEST_SOURCE_PREFIX) -> "quest reward"
         else -> "store purchase"
     }
@@ -557,6 +610,8 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
     companion object {
         /** `source` of rows queued by hosted-event rewards (issue #1199). */
         const val EVENT_SOURCE_PREFIX = "event:"
+        /** `source` of rows queued by Lifesteal achievement claims (issue #1429). */
+        const val ACHIEVEMENT_SOURCE_PREFIX = "achievement:"
         /** `source` of rows queued by Lifesteal quest claims (issue #1425). */
         const val QUEST_SOURCE_PREFIX = "lsquest:"
         private const val JOIN_DELAY_TICKS = 100L
