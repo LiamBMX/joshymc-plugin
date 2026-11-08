@@ -227,6 +227,11 @@ commands:
     description: Ranked Team Wars queues, match confirmations, team challenges, leaderboards, divisions and statistics (Lifesteal only)
     usage: /ranked [queue <2v2|3v3|4v4|5v5> [teammates]|leave|status|accept|decline|challenge <team> <size> [teammates]|challenge accept|decline <team>|challenge cancel|challenges|stats [player]|rating|history [player] [page]|top [players|teams] [page]|teamstats [team]|divisions|season]
     permission: joshymc.lifesteal.ranked.use
+  lsranks:
+    description: Lifesteal ranks (Lifesteal only)
+    usage: /lsranks [info [player]|claim <rank>|admin]
+    aliases: [lifestealranks, lranks]
+    permission: joshymc.lifesteal.ranks.use
   bank:
     description: Your Lifesteal Protected Bank (coins in the bank can't be stolen in PvP)
     usage: /bank [balance|deposit <amount|all>|withdraw <amount|all>|admin]
@@ -1000,6 +1005,15 @@ permissions:
       joshymc.lifesteal.ranked.spectate: true
   joshymc.lifesteal.ranked.spectate:
     description: Watch a running Ranked Team Wars match from its spectator point (/lifesteal admin ranked spectate|unspectate; no damage, no item pickup)
+    default: op
+  joshymc.lifesteal.ranks.use:
+    description: Use /lsranks
+    default: true
+  joshymc.lifesteal.ranks.view.others:
+    description: /lsranks info <player>
+    default: op
+  joshymc.lifesteal.ranks.admin:
+    description: Lifesteal rank administration (/lsranks admin)
     default: op
   joshymc.lifesteal.ranked.use:
     description: Use /ranked on the Lifesteal server (queue with your team, accept matches, team challenges)
