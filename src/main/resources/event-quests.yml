@@ -7,8 +7,9 @@
 #
 # Event fields:
 #   name / description / enabled
-#   category        - free (default; every set without this key is Free) or elite. Also settable
-#                     in-game: /eq admin category <set> <free|elite>. Progress is kept per set, so
+#   category        - free (default; every set without this key is Free) or elite (shown to players
+#                     as Monthly; `monthly` also works). Also settable
+#                     in-game: /eq admin category <set> <free|monthly>. Progress is kept per set, so
 #                     moving a set never resets it.
 #   permission      - optional permission needed to see, progress and claim this set
 #   display-item    - icon in the category page (defaults to the reward item itself, custom model included)
@@ -39,7 +40,7 @@ event-quests:
   # /eq opens a menu with these two categories. A missing section uses these defaults.
   #   enabled      - false hides the category's sets: no progress, no claims (progress is kept)
   #   display-name - icon name and page title
-  #   permission   - optional; "" = everyone. Elite has no access rule by default.
+  #   permission   - optional; "" = everyone. Monthly (elite) has no access rule by default.
   #   icon         - material for the category icon
   categories:
     free:
@@ -47,9 +48,9 @@ event-quests:
       display-name: "Free Event Quests"
       permission: ""
       icon: EMERALD
-    elite:
+    elite:   # Monthly Event Quests (the key stays "elite" so existing sets and progress are kept)
       enabled: true
-      display-name: "Elite Event Quests"
+      display-name: "Monthly Event Quests"
       permission: ""
       icon: ENCHANTED_GOLDEN_APPLE
 

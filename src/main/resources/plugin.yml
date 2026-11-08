@@ -323,8 +323,8 @@ commands:
     usage: /quests
     aliases: [quest, q, questboard, questbook]
   eventquests:
-    description: Open the Event Quests hub (Free and Elite categories)
-    usage: /eventquests [free|elite|admin reload|progress <player> <event>|reset <player> <event>|repeatable <set> <true|false> [days]|cooldown <set> <days>|category <set> <free|elite>]
+    description: Open the Event Quests hub (Free and Monthly categories)
+    usage: /eventquests [free|monthly|admin reload|progress <player> <event>|reset <player> <event>|repeatable <set> <true|false> [days]|cooldown <set> <days>|category <set> <free|monthly>]
     aliases: [eq, eventquest]
   daily:
     description: Open your Daily Quests (shortcut into /quests)

@@ -1198,7 +1198,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         val lore = mutableListOf<Component>()
         lore += when (category) {
             EventQuestCategory.FREE -> plain("Free for every player", NamedTextColor.GREEN)
-            EventQuestCategory.ELITE -> plain("Exclusive Elite quest sets", NamedTextColor.LIGHT_PURPLE)
+            EventQuestCategory.ELITE -> plain("Exclusive Monthly quest sets", NamedTextColor.LIGHT_PURPLE)
         }
         lore += Component.empty()
         if (denial != null) {
@@ -1236,7 +1236,7 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         if (list.isEmpty()) {
             val empty = if (category == EventQuestCategory.ELITE)
                 GuiStyle.item(Material.CLOCK, plain("Coming Soon", NamedTextColor.GOLD, true),
-                    listOf(plain("No Elite quests are available yet.", NamedTextColor.GRAY), plain("Check back soon!", NamedTextColor.GRAY)))
+                    listOf(plain("No Monthly quests are available yet.", NamedTextColor.GRAY), plain("Check back soon!", NamedTextColor.GRAY)))
             else
                 GuiStyle.item(Material.BARRIER, plain("No Quests Available", NamedTextColor.RED, true),
                     listOf(plain("Check back soon!", NamedTextColor.GRAY)))

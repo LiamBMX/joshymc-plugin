@@ -15,7 +15,7 @@ import org.bukkit.entity.Player
 
 /**
  * /eventquests (/eq, /eventquest) — opens the Event Quests category menu for everyone (issue #1335);
- * /eq free and /eq elite open a category page directly.
+ * /eq free and /eq monthly (legacy alias: elite) open a category page directly.
  *
  * Admin (joshymc.eventquests.admin, also usable from console):
  *   /eq admin reload | progress <player> <event> | reset <player> <event>
@@ -54,7 +54,7 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
         }
         val category = args.getOrNull(0)?.let { EventQuestCategory.fromId(it) }
         if (args.isNotEmpty() && category == null) {
-            Msg.usage(sender, "/eventquests [free|elite]")
+            Msg.usage(sender, "/eventquests [free|monthly]")
             return true
         }
         if (category != null) plugin.eventQuestManager.openCategoryGui(sender, category)
@@ -145,7 +145,7 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
             }
             "category" -> {
                 val category = EventQuestCategory.fromId(args.getOrNull(3))
-                if (args.size != 4 || category == null) { Msg.usage(sender, "/eq admin category <quest-set-name> <free|elite>"); return }
+                if (args.size != 4 || category == null) { Msg.usage(sender, "/eq admin category <quest-set-name> <free|monthly>"); return }
                 val err = mgr.setCategory(args[2], category)
                 if (err != null) msg(sender, err, NamedTextColor.RED)
                 else msg(sender, "'${args[2].lowercase()}' is now in ${mgr.categorySettings(category).displayName}. Player progress was not changed.", NamedTextColor.GREEN)
@@ -155,7 +155,7 @@ class EventQuestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        val categories = EventQuestCategory.entries.map { it.id }
+        val categories = EventQuestCategory.entries.map { it.commandName }
         if (!sender.hasPermission("joshymc.eventquests.admin")) {
             return if (args.size == 1 && sender.hasPermission("joshymc.eventquests")) categories.filter { it.startsWith(args[0], true) } else emptyList()
         }

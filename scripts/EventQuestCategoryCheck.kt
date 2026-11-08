@@ -30,6 +30,8 @@ fun main() {
     check("blank category = Free", EventQuestCategory.parse("  ") == EventQuestCategory.FREE)
     check("free parses", EventQuestCategory.parse("free") == EventQuestCategory.FREE)
     check("elite parses case-insensitively", EventQuestCategory.parse(" ELITE ") == EventQuestCategory.ELITE)
+    check("monthly alias parses to the elite category (issue #1443)", EventQuestCategory.parse(" Monthly ") == EventQuestCategory.ELITE)
+    check("elite id unchanged (config key, progress)", EventQuestCategory.ELITE.id == "elite")
     check("typo is rejected, never Free", EventQuestCategory.parse("elitee") == null)
     check("fromId(null) is null", EventQuestCategory.fromId(null) == null)
 
@@ -39,7 +41,9 @@ fun main() {
     check("missing section: default name", defFree.displayName == "Free Event Quests")
     check("missing section: no permission", defFree.permission == null)
     val defElite = EventQuestCategorySettings.parse(EventQuestCategory.ELITE, null, null, "", null)
-    check("elite default name", defElite.displayName == "Elite Event Quests")
+    check("elite default name is Monthly (issue #1443)", defElite.displayName == "Monthly Event Quests")
+    check("old default name in an existing config shows the new name",
+        EventQuestCategorySettings.parse(EventQuestCategory.ELITE, null, " Elite Event Quests ", null, null).displayName == "Monthly Event Quests")
     check("elite: blank permission = everyone (no paid-rank assumption)", defElite.permission == null)
     check("elite default icon", defElite.icon == "ENCHANTED_GOLDEN_APPLE")
     val custom = EventQuestCategorySettings.parse(EventQuestCategory.ELITE, false, " Elite ", " joshymc.eq.elite ", "NETHER_STAR")
