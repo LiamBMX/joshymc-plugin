@@ -1731,6 +1731,9 @@ permissions:
   joshymc.lifesteal.team.admin:
     description: Lifesteal team staff actions (/team admin info|disband|transfer); never makes anyone a team leader
     default: op
+  joshymc.lifesteal.team.upgrades:
+    description: Use Lifesteal Team Upgrades (/team upgrades, bank deposits, milestones); buying upgrades also needs team leadership
+    default: true
   joshymc.rank:
     description: Use rank commands
     default: op
