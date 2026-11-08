@@ -1422,10 +1422,10 @@ private fun environmentalWiring() {
 
     val manager = source("lifesteal/hearts/LifestealHeartManager.kt")
     check("env wiring: capture only for Lifesteal victims", "if (!active || !isLifesteal(event.player)) return" in manager)
-    check("env wiring: capture used only in its own tick", "?.takeIf { it.tick == Bukkit.getCurrentTick() }" in manager)
+    check("env wiring: capture used only in its own tick", "val tick = Bukkit.getCurrentTick()" in manager && "?.takeIf { it.tick == tick }" in manager)
     check("env wiring: capture dropped on quit", "deathTags.remove(player.uniqueId)" in manager)
     check("env wiring: combat-log kills, ranked matches and /kill excluded",
-        "plugin.combatManager.isCombatLogged(victim)" in manager && "plugin.lifestealRankedManager.matchOf(victim.uniqueId) != null" in manager &&
+        "plugin.combatManager.isCombatLogged(victim)" in manager && "rankedMatch != null ||" in manager &&
             "damageType == GENERIC_KILL" in manager && "\"minecraft:generic_kill\"" in manager)
     check("env wiring: credited attacker re-checked by attribute()", "HeartRules.attribute(deathFor(victim, candidate, attacker)) == HeartRules.Attribution.PVP_KILL" in manager)
     check("env wiring: uses the configured combat-tag duration", "tagMillis = plugin.combatManager.tagDurationMillis" in manager)

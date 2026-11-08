@@ -255,7 +255,23 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
                 if (rows.isEmpty()) sender.sendMessage(Component.text("Nothing logged yet.", NamedTextColor.GRAY))
                 for (r in rows) sender.sendMessage(Component.text("${time(r.at)} ${r.kind} ${r.ref ?: ""} ${r.uuid?.let { plugin.lifestealTeamManager.nameOf(it) } ?: ""} ${r.detail ?: ""}".replace(Regex(" +"), " ").trim(), NamedTextColor.GRAY))
             }
+            // Issue #1474: the logging-only anti-farming review log (staff only; nothing is shown to players).
+            "reviews" -> reviews(sender, a.getOrNull(0))
             else -> Msg.usage(sender, RANKED_USAGE)
+        }
+    }
+
+    private fun reviews(sender: CommandSender, playerName: String?) {
+        val player = playerName?.let { plugin.playerResolver.resolve(it) ?: return Msg.playerNotFound(sender, it) }
+        val rows = try { ranked.monitor.reviews(player?.uniqueId, 15) } catch (e: Exception) { return Msg.error(sender, "Couldn't read the ranked review log: ${e.message}") }
+        sender.sendMessage(Component.text("Ranked reviews${player?.let { " for ${it.name ?: playerName}" } ?: ""} (newest first)", NamedTextColor.GOLD, TextDecoration.BOLD))
+        sender.sendMessage(Component.text("Logging only: nothing was blocked. A shared connection is not proof of one owner.", NamedTextColor.GRAY))
+        if (!ranked.monitor.active) sender.sendMessage(Component.text("Monitoring is off (ranked-team-wars.monitoring).", NamedTextColor.RED))
+        if (rows.isEmpty()) sender.sendMessage(Component.text("Nothing logged.", NamedTextColor.GRAY))
+        for (r in rows) {
+            val who = r.players.joinToString(", ") { plugin.lifestealTeamManager.nameOf(it) }
+            sender.sendMessage(Component.text("${time(r.at)} ${r.kind} match ${r.matchId}: $who", NamedTextColor.YELLOW))
+            sender.sendMessage(Component.text("  ${r.reason}", NamedTextColor.GRAY))
         }
     }
 
@@ -414,9 +430,9 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
 
     companion object {
         const val ARENA_USAGE = "/lifesteal admin arena <create|delete|list|info|setname|setcorner|setspawn|setspectator|clearspawns|sizes|enable|disable> ..."
-        const val RANKED_USAGE = "/lifesteal admin ranked <testmatch <teamA> <teamB> <size> [arena]|list|info|cancel|remove|restore|spectate|unspectate|queue|cancelqueue|cancelproposal|queuelog|rating|stats> ..."
+        const val RANKED_USAGE = "/lifesteal admin ranked <testmatch <teamA> <teamB> <size> [arena]|list|info|cancel|remove|restore|spectate|unspectate|queue|cancelqueue|cancelproposal|queuelog|rating|stats|reviews> ..."
         private val ARENA_SUBS = listOf("create", "delete", "list", "info", "setname", "setcorner", "setspawn", "setspectator", "clearspawns", "sizes", "enable", "disable")
-        private val RANKED_SUBS = listOf("testmatch", "list", "info", "cancel", "remove", "restore", "spectate", "unspectate", "queue", "cancelqueue", "cancelproposal", "queuelog", "rating", "stats")
+        private val RANKED_SUBS = listOf("testmatch", "list", "info", "cancel", "remove", "restore", "spectate", "unspectate", "queue", "cancelqueue", "cancelproposal", "queuelog", "rating", "stats", "reviews")
         /** A queue entry this long in a state other than WAITING is shown as possibly stuck. */
         private const val STUCK_SECONDS = 180L
         private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss'Z'").withZone(ZoneOffset.UTC)

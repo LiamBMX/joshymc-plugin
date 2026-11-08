@@ -124,6 +124,8 @@ class HeartStore(private val db: SqliteDatabase) {
             )
             """.trimIndent()
         )
+        // Issue #1474: the ranked anti-farming monitor counts a killer -> victim pair's transfers (index only).
+        db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_heart_transactions_pair ON lifesteal_heart_transactions (killer, victim, created_at)")
         db.createTable(
             """
             CREATE TABLE IF NOT EXISTS lifesteal_heart_audit (
