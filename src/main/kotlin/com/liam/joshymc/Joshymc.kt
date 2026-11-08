@@ -357,6 +357,8 @@ class Joshymc : JavaPlugin() {
     /** Issue #1428: the Lifesteal rank manager once constructed (shared managers may ask before onEnable reaches it). */
     fun lifestealRanksOrNull(): com.liam.joshymc.lifesteal.ranks.LifestealRankManager? =
         if (::lifestealRankManager.isInitialized) lifestealRankManager else null
+    lateinit var lifestealBankManager: com.liam.joshymc.lifesteal.bank.LifestealBankManager
+        private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
     lateinit var rankManager: RankManager
@@ -622,6 +624,8 @@ class Joshymc : JavaPlugin() {
         lifestealBountyManager = com.liam.joshymc.lifesteal.bounty.LifestealBountyManager(this)
         // Issue #1428: Lifesteal ranks, rank perks, rank kits and progression. Only does anything where Lifesteal runs.
         lifestealRankManager = com.liam.joshymc.lifesteal.ranks.LifestealRankManager(this)
+        // Issue #1427: Lifesteal Protected Bank + PvP coin stealing. Only does anything on the dedicated Lifesteal server.
+        lifestealBankManager = com.liam.joshymc.lifesteal.bank.LifestealBankManager(this)
         flightTimeManager = com.liam.joshymc.flight.FlightTimeManager(this)
         flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
@@ -723,6 +727,7 @@ class Joshymc : JavaPlugin() {
         lifestealRankedStatsManager.refresh()
         lifestealBountyManager.refresh()
         lifestealRankManager.refresh()
+        lifestealBankManager.refresh()
         flightTimeManager.start()
         flyVoucherManager.start()
 
@@ -837,6 +842,8 @@ class Joshymc : JavaPlugin() {
         shutdown.step("lifestealBountyManager.stop", { ::lifestealBountyManager.isInitialized }) { lifestealBountyManager.stop() }
         // Stops the rank-change sweep and removes the rank permission attachments; pending changes stay PENDING and resume at the next start.
         shutdown.step("lifestealRankManager.stop", { ::lifestealRankManager.isInitialized }) { lifestealRankManager.stop() }
+        // Drops bank chat prompts; every bank transfer is one synchronous transaction, so nothing is pending.
+        shutdown.step("lifestealBankManager.stop", { ::lifestealBankManager.isInitialized }) { lifestealBankManager.stop() }
         shutdown.step("lifestealRankedStatsManager.stop", { ::lifestealRankedStatsManager.isInitialized }) { lifestealRankedStatsManager.stop() }
         shutdown.step("lifestealRatingManager.stop", { ::lifestealRatingManager.isInitialized }) { lifestealRatingManager.stop() }
         shutdown.step("lifestealRankedQueueManager.stop", { ::lifestealRankedQueueManager.isInitialized }) { lifestealRankedQueueManager.stop() }
@@ -1064,6 +1071,7 @@ class Joshymc : JavaPlugin() {
         safe("lifestealRankedStatsManager.refresh") { lifestealRankedStatsManager.refresh() }
         safe("lifestealBountyManager.refresh") { lifestealBountyManager.refresh() }
         safe("lifestealRankManager.refresh") { lifestealRankManager.refresh() }
+        safe("lifestealBankManager.refresh") { lifestealBankManager.refresh() }
         safe("beaconPotionManager.start") { beaconPotionManager.start() }
 
         // 8. Restart Discord

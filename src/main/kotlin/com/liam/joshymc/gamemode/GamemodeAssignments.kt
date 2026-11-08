@@ -101,6 +101,9 @@ object GamemodeAssignments {
         "ac",
         // Lifesteal ranks, benefits and progression (issue #1428). Also only registered where Lifesteal is hosted.
         "lsranks",
+        // The Lifesteal Protected Bank (issue #1427). Also only registered where Lifesteal is hosted,
+        // and the manager refuses outside Lifesteal worlds and on servers whose economy isn't Lifesteal's.
+        "bank",
     )
 
     val COMMANDS: Map<String, GamemodeScope> =
