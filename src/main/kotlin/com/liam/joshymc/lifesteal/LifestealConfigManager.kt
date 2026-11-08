@@ -52,6 +52,8 @@ class LifestealConfigManager(private val plugin: Joshymc) {
      * separately too: a mistake there only pauses Team Upgrades, never hearts or teams.
      */
     @Volatile var teamProgression: TeamProgressionConfig.Result = TeamProgressionConfig.Result(null, emptyList())
+        private set
+    /**
      * Issue #1427: `bank` and `pvp-coins`, each read on its own: a mistake in one only pauses
      * deposits (bank) or coin stealing (pvp-coins), never hearts or the other section.
      */
@@ -177,6 +179,12 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             }
         }
         for (problem in teamProgression.problems) {
+            if (problem.severe) plugin.logger.severe("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+            else plugin.logger.warning("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+        }
+    }
+
+    /**
      * Bank and PvP coin settings (issue #1427). A lifesteal.yml from before them has no section:
      * the bundled file's section is used (logged), like the bounties.
      */
