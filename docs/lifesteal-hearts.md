@@ -133,13 +133,23 @@ who withdrew it), and moving an item never changes anyone's hearts.
 
 Player-only, `joshymc.lifesteal.withdraw` (default true), scope LIFESTEAL. Checks, in order:
 this server runs Lifesteal, hearts aren't paused, the player is in a Lifesteal world, alive and
-online, their heart session is loaded, `heart-items.withdraw-enabled`, the anti-spam gap
+online, their heart session is loaded, `heart-items.withdraw-enabled`, they aren't
+combat-tagged (issue #1455, see below), the anti-spam gap
 (`action-cooldown-millis`), they have more than the minimum (1) hearts, and they have an empty
 inventory slot (Heart items don't stack, so a free slot is needed; the withdrawal is refused
 otherwise: there's no other safe delivery for it). Then one transaction takes one heart (fresh
 read, conditional update, never below the minimum, so the store refuses the final heart even if
 the cached value were wrong) and issues the serial. Only after the commit is the item put into
 the free slot, max health updated (10 → 9 hearts = 18 health) and the player data saved.
+
+**No withdrawing in combat** (issue #1455). A combat-tagged player could otherwise turn their
+hearts into items mid-fight, hand them to someone, and die at the minimum so the killer gets no
+heart. The check reads the existing combat tag (`CombatManager.tagExpiresAt`, the same tag as
+`combat.tag-duration-seconds`; no second tracker) through `HeartRules.combatBlocksWithdraw`, before
+the anti-spam gap, the inventory check and the transaction. A refused withdrawal says "You cannot
+withdraw hearts while in combat." and changes nothing: no heart taken, no serial issued, no
+transaction or audit row, inventory and combat tag untouched. Once the tag expires, withdrawing
+works normally again. Redeeming Heart items isn't restricted in combat.
 
 ### Redemption
 
@@ -247,17 +257,23 @@ These are left for a later decision rather than invented:
    starts. This is fixed in code (`HeartRules.KILLER_AT_MAXIMUM`), not configurable. The
    alternative "victim still loses, killer stays at max" is implemented but unused
    (`VICTIM_LOSES_ONLY`). No Heart item drops and there's no other overflow reward.
-5. **Heart item look, stacking and recipes** (issue #1344). The blueprint defines none of them:
-   the look is configurable, items never stack because each has its own serial, and there is no
-   recipe.
 2. **Environmental deaths after PvP** (knocked into lava or the void, fall damage from a hit).
    Only the final damage counts: these cost no heart.
-3. **Combat logging** (issue #1350, `docs/lifesteal-combat.md`). No heart penalty (the blueprint
-   defines none). A counted combat log leaves the existing combat-log NPC; server shutdowns, staff
-   kicks and server errors don't. Neither the NPC's nor the player's death moves a heart.
+3. **Combat logging** (issue #1350, `docs/lifesteal-combat.md`). No heart penalty for logging out
+   itself (the blueprint defines none). A counted combat log in a Lifesteal world leaves a Combat
+   NPC (issue #1402, `docs/lifesteal-combat-npc.md`); server shutdowns, staff kicks and server
+   errors don't. **Killing that Combat NPC is a PvP kill of its owner**:
+   `LifestealHeartManager.onCombatNpcDeath` sends it through the same `HeartStore.transferPvp` as
+   a normal kill (dedupe key `combatnpc:<session>`), so the killer can gain a heart and the owner
+   lose one, with every normal rule: kill attribution, the 1-heart minimum, the 20-heart maximum,
+   the same-victim cooldown, teammates/allies, and the grace period/launch checks. An NPC that
+   survives its lifetime moves no heart.
 4. **Pets and indirect kills.** A tamed wolf's kill isn't credited to its owner (the wolf is the
    causing entity). Kills by crystals, beds or anchors count only when Paper reports a causing
    player.
+5. **Heart item look, stacking and recipes** (issue #1344). The blueprint defines none of them:
+   the look is configurable, items never stack because each has its own serial, and there is no
+   recipe.
 
 ## Testing
 
@@ -283,7 +299,13 @@ runs `scripts/LifestealHeartCheck.kt` against real SQLite. It covers:
   (stops at 20), withdrawals racing PvP (final heart kept); rollback of a failed withdrawal and
   redemption and of a stale write (item stays valid); a closed database; and the source wiring
   (session/inventory checks before the transaction, item handed over/taken only after the
-  commit, one hand per click, no ItemManager registration, permissions, LIFESTEAL scope).
+  commit, one hand per click, no ItemManager registration, permissions, LIFESTEAL scope);
+- combat-tagged withdrawal (issue #1455): the tag rule (untagged allowed, tagged refused up to
+  the expiry, allowed from the expiry on, rapid repeats refused), refused attempts in front of a
+  real store (hearts, version, serials, transactions and audit unchanged), withdrawal after expiry,
+  the final heart still kept, and the wiring (existing combat tag read before the cooldown,
+  inventory, re-entry guard and transaction; `/withdrawheart` is the only entry point; redemption
+  and Combat NPC heart transfers unchanged).
 
 Manual, on a real Paper 26.2 Lifesteal server (not done yet, so gameplay is unverified):
 
@@ -313,3 +335,12 @@ Heart items (issue #1344), also not yet run on a live server:
 13. `/lifesteal hearts give <player> 3`, `items <player>`, `void <serial> refund`, and the same
     commands without permission.
 14. On the Survival server, `/withdrawheart` says hearts only exist on Lifesteal.
+
+Combat withdrawal (issue #1455), also not yet run on a live server:
+
+15. Hit another player (both tagged), then `/withdrawheart` (also spammed, and as
+    `/joshymc:withdrawheart`): "You cannot withdraw hearts while in combat.", hearts and inventory
+    unchanged, `/lifesteal hearts items <player>` shows no new item, and the tag still runs out at
+    the same time. After the tag expires, `/withdrawheart` works.
+16. While tagged, right-click a Heart item: it still redeems. Kill a Combat NPC: hearts still move
+    as before. In a ranked match, `/withdrawheart` still gives the ranked-match message.

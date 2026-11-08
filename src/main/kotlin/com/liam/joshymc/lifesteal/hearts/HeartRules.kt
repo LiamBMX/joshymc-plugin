@@ -251,6 +251,13 @@ object HeartRules {
         else WithdrawDecision.Withdraw(hearts - HEARTS_PER_ITEM)
     }
 
+    /**
+     * Issue #1455: a combat-tagged player can't withdraw (they could hand the Heart items to someone
+     * and die at the minimum, so their killer gets nothing). [tagExpiresAt] is the existing combat
+     * tag's expiry (`CombatManager.tagExpiresAt`), null when untagged. Redemption isn't restricted.
+     */
+    fun combatBlocksWithdraw(tagExpiresAt: Long?, now: Long): Boolean = tagExpiresAt != null && now < tagExpiresAt
+
     sealed interface RedeemDecision {
         data class Redeem(val after: Int) : RedeemDecision
         /** Redeeming would take the player above the maximum: the item is kept. */
