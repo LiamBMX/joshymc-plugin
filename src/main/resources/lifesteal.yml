@@ -154,6 +154,26 @@ ranked-team-wars:
     # are recorded as unrated.
     same-opponent-limit: 3
     same-opponent-window-hours: 24
+  # Anti-farming monitoring (docs/lifesteal-ranked-beta.md, issue #1474). LOGGING ONLY: it never
+  # blocks a match, changes a heart transfer or a rating, or punishes anyone. After every finished
+  # ranked match (staff test matches are skipped) it looks back window-hours (1-720) and writes a
+  # staff review entry (/lifesteal admin ranked reviews, also in /admin logs) when a count reaches
+  # its threshold (0-1000, 0 = that check off). One entry per subject per window. A mistake here
+  # only turns monitoring off; hearts and ranked matches are unaffected.
+  monitoring:
+    enabled: true
+    window-hours: 24
+    # Matches between the same two teams (either order), this one included.
+    repeated-team-matches: 4
+    # Matches in which the same two players were opponents, whatever teams they played for.
+    repeated-player-matches: 6
+    # Hearts one killer took from one victim (ranked and open-world PvP together).
+    repeated-heart-transfers: 3
+    # Ranked matches one player forfeited by disconnecting.
+    repeated-forfeits: 3
+    # Opponents AltManager has seen on one connection (no address is ever logged). A shared
+    # connection is not proof of one owner (households share one).
+    shared-connections: true
   # Ranked leaderboards (/ranked top players|teams, docs/lifesteal-ranked-stats.md). Only players /
   # teams with at least this many rated matches this season are listed, so a fresh initial rating
   # can't top the board. Ratings below the minimum are kept and shown in /ranked stats, just not

@@ -6,6 +6,7 @@ import com.liam.joshymc.lifesteal.bank.BankConfig
 import com.liam.joshymc.lifesteal.bank.BankSettings
 import com.liam.joshymc.lifesteal.bank.CoinStealSettings
 import com.liam.joshymc.lifesteal.bounty.BountyConfig
+import com.liam.joshymc.lifesteal.ranked.monitor.RankedMonitorConfig
 import com.liam.joshymc.lifesteal.ranked.stats.DivisionConfig
 import com.liam.joshymc.lifesteal.teams.progression.TeamProgressionConfig
 import org.bukkit.configuration.ConfigurationSection
@@ -61,6 +62,9 @@ class LifestealConfigManager(private val plugin: Joshymc) {
         private set
     @Volatile var pvpCoins: BankConfig.Result<CoinStealSettings> = BankConfig.Result(null, emptyList())
         private set
+    /** Issue #1474: `ranked-team-wars.monitoring`, read on its own; null settings = monitoring off, nothing else affected. */
+    @Volatile var rankedMonitoring: RankedMonitorConfig.Result = RankedMonitorConfig.Result(null, emptyList())
+        private set
 
     /** Called at startup and on every reload, after the network identity is loaded. */
     fun load() {
@@ -74,6 +78,7 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             teamProgression = TeamProgressionConfig.Result(null, emptyList())
             bank = BankConfig.Result(null, emptyList())
             pvpCoins = BankConfig.Result(null, emptyList())
+            rankedMonitoring = RankedMonitorConfig.Result(null, emptyList())
             return
         }
         try {
@@ -92,6 +97,7 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             loadBounties(yaml)
             loadTeamProgression(yaml)
             loadBank(yaml)
+            loadRankedMonitoring(yaml)
         } catch (e: Exception) {
             problems = listOf(LifestealConfigParser.Problem(true, "Could not read $CONFIG_FILE: ${e.message}"))
             settings = null
@@ -100,6 +106,7 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             teamProgression = TeamProgressionConfig.Result(null, listOf(TeamProgressionConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
             bank = BankConfig.Result(null, listOf(BankConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
             pvpCoins = BankConfig.Result(null, listOf(BankConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
+            rankedMonitoring = RankedMonitorConfig.Result(null, listOf(RankedMonitorConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
         }
 
         for (problem in problems) {
@@ -201,6 +208,24 @@ class LifestealConfigManager(private val plugin: Joshymc) {
         pvpCoins = if (c == null) BankConfig.Result(null, listOf(BankConfig.Problem(true, "no pvp-coins section found.")))
         else BankConfig.parseCoinSteal { path -> c.get("pvp-coins.$path", null) }
         for (problem in bank.problems + pvpCoins.problems) {
+            if (problem.severe) plugin.logger.severe("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+            else plugin.logger.warning("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+        }
+    }
+
+    /**
+     * Ranked anti-farming monitoring (issue #1474). A lifesteal.yml from before it has no section:
+     * the bundled file's section is used (logged), like the bounties. Invalid = monitoring off only.
+     */
+    private fun loadRankedMonitoring(yaml: YamlConfiguration) {
+        val base = RankedMonitorConfig.BASE
+        val source = if (yaml.get(base, null) != null) yaml else {
+            plugin.logger.warning("[Lifesteal] $CONFIG_FILE has no $base section; using the bundled defaults (copy the section from the plugin's $CONFIG_FILE to change it).")
+            plugin.getResource(CONFIG_FILE)?.reader(Charsets.UTF_8)?.use { YamlConfiguration.loadConfiguration(it) }
+        }
+        rankedMonitoring = if (source == null) RankedMonitorConfig.Result(null, listOf(RankedMonitorConfig.Problem(true, "no $base section found.")))
+        else RankedMonitorConfig.parse { path -> source.get(if (path.isEmpty()) base else "$base.$path", null) }
+        for (problem in rankedMonitoring.problems) {
             if (problem.severe) plugin.logger.severe("[Lifesteal] $CONFIG_FILE: ${problem.message}")
             else plugin.logger.warning("[Lifesteal] $CONFIG_FILE: ${problem.message}")
         }

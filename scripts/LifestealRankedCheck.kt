@@ -36,6 +36,11 @@ import com.liam.joshymc.lifesteal.ranked.RankedArenaRules
 import com.liam.joshymc.lifesteal.ranked.RankedMatchRules
 import com.liam.joshymc.lifesteal.ranked.RankedMatchRules.Decision
 import com.liam.joshymc.lifesteal.ranked.RankedStore
+import com.liam.joshymc.lifesteal.ranked.RankedHeartSummary
+import com.liam.joshymc.lifesteal.ranked.monitor.RankedMonitorConfig
+import com.liam.joshymc.lifesteal.ranked.monitor.RankedMonitorRules
+import com.liam.joshymc.lifesteal.ranked.monitor.RankedMonitorSettings
+import com.liam.joshymc.lifesteal.ranked.monitor.RankedMonitorStore
 import com.liam.joshymc.lifesteal.ranked.Side
 import com.liam.joshymc.lifesteal.teams.TeamCombatRules
 import com.liam.joshymc.manager.DatabaseManager
@@ -81,6 +86,10 @@ fun main() {
     store()
     hearts()
     forfeits()
+    deathDetection()
+    heartFeedback()
+    cooldownRegression()
+    monitoring()
     wiring()
     println("OK: $checks Ranked Team Wars checks passed.")
 }
@@ -703,6 +712,360 @@ private fun forfeits() {
     check("#1465 shutdown disconnects decide nothing (stop() cancels and restores)", manager.contains("RankedMatchRules.DisconnectAction.SHUTDOWN -> Unit"))
     check("#1465 the decision gets this tick's outs", manager.contains("RankedMatchRules.decide(match.roster, outs)"))
     check("#1465 Elo only from a completed match (never from the forfeit itself)", manager.split("lifestealRatingManager.onMatchCompleted(").size == 2)
+}
+
+// ── Issue #1474: ranked death detection, heart outcomes, cooldown regression ──
+
+private fun deathDetection() {
+    val m = "rtw-0000000014a1"
+    // 1. Still identifiable after the ranked death handler (HIGHEST) took the victim out of `held`.
+    check("#1474 a ranked death stays ranked after the defeat (LOWEST copy)", RankedMatchRules.deathMatch(RankedMatchRules.DeathCapture(m, 50), 50, stillHeld = null) == m)
+    // 2. Every processing stage gives the same answer.
+    check("#1474 LOWEST (still held, nothing copied yet) = ranked", RankedMatchRules.deathMatch(null, 50, stillHeld = m) == m)
+    check("#1474 MONITOR (copied, defeated) = ranked", RankedMatchRules.deathMatch(RankedMatchRules.DeathCapture(m, 50), 50, null) == m)
+    check("#1474 copy and live lookup agree", RankedMatchRules.deathMatch(RankedMatchRules.DeathCapture(m, 50), 50, m) == m)
+    // 3. Ordinary deaths stay ordinary.
+    check("#1474 an ordinary death isn't ranked", RankedMatchRules.deathMatch(null, 50, null) == null)
+    check("#1474 a stale copy from another tick never makes a later death ranked", RankedMatchRules.deathMatch(RankedMatchRules.DeathCapture(m, 49), 50, null) == null)
+    // 4. A ranked environmental death never uses the open-world combat-tag credit (#1461).
+    val victim = UUID(140L, 1)
+    val foe = UUID(140L, 2)
+    fun credit(ranked: String?) = HeartRules.combatTagKiller(
+        HeartRules.Attribution.ENVIRONMENT, victim, tagExpiresAt = 10_000, hits = listOf(HeartRules.RecentHit(foe, 1_000)), now = 2_000,
+        tagMillis = 15_000, excluded = ranked != null,
+    ) { true }
+    check("#1474 ordinary environmental death while tagged is still credited (unchanged #1461 rule)", credit(RankedMatchRules.deathMatch(null, 50, null)) == foe)
+    check("#1474 ranked environmental death is never credited through the tag, even after the defeat", credit(RankedMatchRules.deathMatch(RankedMatchRules.DeathCapture(m, 50), 50, null)) == null)
+    // 5. Simultaneous deaths: each victim keeps their own copy; the next-tick decision is unchanged.
+    val a = UUID(141L, 1)
+    val b = UUID(141L, 2)
+    val captures = mapOf(a to RankedMatchRules.DeathCapture(m, 70), b to RankedMatchRules.DeathCapture(m, 70))
+    check("#1474 simultaneous deaths are both ranked", captures.values.all { RankedMatchRules.deathMatch(it, 70, null) == m })
+    val roster = MatchRoster(listOf(MatchParticipant(a, Side.A, "team-a"), MatchParticipant(b, Side.B, "team-b")))
+    val after = roster.defeat(a, DefeatReason.DEATH)!!.defeat(b, DefeatReason.DEATH)!!
+    check("#1474 simultaneous last deaths are still a no-winner cancel", RankedMatchRules.decide(after, after.participants) == Decision.NoWinner)
+
+    // Wiring.
+    val heart = source("lifesteal/hearts/LifestealHeartManager.kt")
+    val heartListener = source("lifesteal/hearts/LifestealHeartListener.kt")
+    val rankedListener = source("lifesteal/ranked/LifestealRankedListener.kt")
+    check("#1474 the ranked match is copied at LOWEST, before the HIGHEST defeat", heartListener.contains("@EventHandler(priority = EventPriority.LOWEST)\n    fun onDeathCaptureTag(event: PlayerDeathEvent) = hearts.captureCombatTag(event)") &&
+        heart.contains("plugin.lifestealRankedManager.matchOf(uuid)?.let { rankedDeaths[uuid] = RankedMatchRules.DeathCapture(it.id, Bukkit.getCurrentTick()) }") &&
+        rankedListener.contains("@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)\n    fun onDeath(event: PlayerDeathEvent)"))
+    check("#1474 the heart death handler decides it once through deathMatch", heart.contains("val rankedMatch = RankedMatchRules.deathMatch(rankedDeaths.remove(event.player.uniqueId), tick,"))
+    check("#1474 the combat-tag exclusion no longer depends on `held`", heart.contains("rankedMatch != null ||") && !heart.contains("lifestealRankedManager.matchOf(victim.uniqueId) != null"))
+    check("#1474 the copy is dropped on quit", heart.contains("rankedDeaths.remove(player.uniqueId)"))
+    check("#1474 still one transferPvp per heart path (no second transfer for the summary)", Regex("store\\.transferPvp\\(").findAll(heart).count() == 3)
+}
+
+private fun heartFeedback() {
+    val summary = source("lifesteal/ranked/RankedHeartSummary.kt")
+    check("#1474 the summary never touches the heart service", !summary.contains("import com.liam.joshymc.lifesteal.hearts.HeartStore") && !summary.contains("transferPvp(") && !summary.contains("adminChange("))
+    // Every decision maps, and only the two that change hearts count as moved.
+    val all = listOf(
+        HeartRules.Decision.Transfer(9, 11), HeartRules.Decision.VictimLosesOnly(9), HeartRules.Decision.VictimAtMinimum, HeartRules.Decision.KillerAtMaximum,
+        HeartRules.Decision.Cooldown(60_000), HeartRules.Decision.Teammates, HeartRules.Decision.Allies, HeartRules.Decision.TeamUnknown,
+        HeartRules.Decision.GracePeriod, HeartRules.Decision.NotLaunched, HeartRules.Decision.ProgressionUnknown,
+    )
+    check("#1474 moved == the heart service's changesHearts, for every decision", all.all { RankedHeartSummary.Outcome.of(it).moved == it.changesHearts })
+    check("#1474 a refused transfer is never worded as a steal", RankedHeartSummary.Outcome.entries.filter { !it.moved }.all { it.label.startsWith("no heart") && !it.label.contains("stolen") })
+
+    val dir = Files.createTempDirectory("ranked-feedback").toFile()
+    try {
+        val db = DatabaseManager(dir, quietLogger())
+        db.start()
+        try {
+            val hs = HeartStore(db)
+            hs.createTables()
+            fun player(n: Long, hearts: Int): UUID {
+                val u = UUID(142L, n)
+                hs.ensure(u, 10, 1)
+                if (hearts != 10) hs.adminChange(u, HeartRules.AdminOp.SET, hearts, LIMITS, "test", "test", 1)
+                return u
+            }
+            val cooldown = 30 * 60_000L
+            fun kill(k: UUID, v: UUID, at: Long, tick: Int) = hs.transferPvp(HeartStore.PvpRequest("pvp:boot:$v:$tick", k, v, at, cooldown, LIMITS)) as HeartStore.PvpResult.Done
+            fun entry(k: UUID, v: UUID, d: HeartStore.PvpResult.Done) =
+                RankedHeartSummary.Entry(k, "K${k.leastSignificantBits}", v, "V${v.leastSignificantBits}", RankedHeartSummary.Outcome.of(d.decision))
+            val k1 = player(1, 10)
+            val v1 = player(2, 10)
+            val low = player(3, 1)
+            val full = player(4, 20)
+            val v4 = player(5, 10)
+            val first = kill(k1, v1, 1_000_000, 1)
+            val again = kill(k1, v1, 1_060_000, 2)
+            val lastHeart = kill(k1, low, 1_000_000, 3)
+            val atMax = kill(full, v4, 1_000_000, 4)
+            // 6-9.
+            check("#1474 a successful transfer shows as stolen", RankedHeartSummary.line(entry(k1, v1, first)).let { it.moved && it.text == "K1 killed V2: heart stolen" })
+            check("#1474 a cooldown refusal shows as the cooldown", RankedHeartSummary.Outcome.of(again.decision) == RankedHeartSummary.Outcome.COOLDOWN && !RankedHeartSummary.line(entry(k1, v1, again)).moved)
+            check("#1474 a 1-heart victim shows as last heart", RankedHeartSummary.Outcome.of(lastHeart.decision) == RankedHeartSummary.Outcome.LAST_HEART && hs.load(low)?.hearts == 1)
+            check("#1474 a killer at 20 shows as at the maximum", RankedHeartSummary.Outcome.of(atMax.decision) == RankedHeartSummary.Outcome.KILLER_AT_MAXIMUM && hs.load(full)?.hearts == 20)
+            // 10-12.
+            var entries = emptyList<RankedHeartSummary.Entry>()
+            for ((k, v, d) in listOf(Triple(k1, v1, first), Triple(k1, low, lastHeart), Triple(full, v4, atMax))) entries = RankedHeartSummary.add(entries, entry(k, v, d))
+            val transactionsBefore = hs.transactionCount()
+            val heartsBefore = db.queryFirst("SELECT SUM(hearts) AS s FROM lifesteal_hearts") { it.getInt("s") }
+            val lines = RankedHeartSummary.lines(entries)
+            check("#1474 refused transfers never appear as successful", lines.drop(1).count { it.moved } == 1 && lines.drop(1).filter { it.text.contains("heart stolen") }.size == 1)
+            check(
+                "#1474 several kills are summarized in order with a correct total",
+                lines.size == 4 && lines[0].text == "Hearts this match: 1 of 3 moved a heart." &&
+                    lines[1].text.startsWith("K1 killed V2") && lines[2].text.startsWith("K1 killed V3") && lines[3].text.startsWith("K4 killed V5")
+            )
+            check(
+                "#1474 building the summary makes no heart transaction and moves no heart",
+                hs.transactionCount() == transactionsBefore && db.queryFirst("SELECT SUM(hearts) AS s FROM lifesteal_hearts") { it.getInt("s") } == heartsBefore
+            )
+            check("#1474 the same kill reported twice is listed once", RankedHeartSummary.add(entries, entries[0]) === entries)
+            val forfeit = RankedHeartSummary.Entry(k1, "Ann", v1, "Bob", RankedHeartSummary.Outcome.COOLDOWN, RankedHeartSummary.Source.FORFEIT)
+            check(
+                "#1474 a forfeit has its own wording and doesn't collide with a kill",
+                RankedHeartSummary.add(entries, forfeit).size == 4 && RankedHeartSummary.line(forfeit).text == "Bob forfeited to Ann: no heart, same-victim cooldown"
+            )
+            check("#1474 no heart decision = no summary section", RankedHeartSummary.lines(emptyList()).isEmpty())
+        } finally {
+            db.shutdown()
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+
+    // 2v2 .. 5v5: at most 2 x size - 1 deaths, every one listed, no fold.
+    for (size in 2..5) {
+        val n = 2 * size - 1
+        val e = (1..n).fold(emptyList<RankedHeartSummary.Entry>()) { acc, i ->
+            RankedHeartSummary.add(acc, RankedHeartSummary.Entry(UUID(143L, i.toLong()), "Killer$i", UUID(144L, i.toLong()), "Victim$i", RankedHeartSummary.Outcome.STOLEN))
+        }
+        check("#1474 ${size}v$size summary lists all $n kills plus one header", RankedHeartSummary.lines(e).size == n + 1 && RankedHeartSummary.lines(e).none { it.text.startsWith("...") })
+    }
+    val many = (1..30).fold(emptyList<RankedHeartSummary.Entry>()) { acc, i ->
+        RankedHeartSummary.add(acc, RankedHeartSummary.Entry(UUID(145L, i.toLong()), "K", UUID(146L, i.toLong()), "V", RankedHeartSummary.Outcome.COOLDOWN))
+    }
+    check("#1474 the per-match list is bounded", many.size == RankedHeartSummary.MAX_ENTRIES)
+    check(
+        "#1474 the chat section is bounded (no spam)",
+        RankedHeartSummary.lines(many).size == RankedHeartSummary.MAX_LINES + 2 &&
+            RankedHeartSummary.lines(many).last().text == "... and ${RankedHeartSummary.MAX_ENTRIES - RankedHeartSummary.MAX_LINES} more."
+    )
+
+    val manager = source("lifesteal/ranked/LifestealRankedManager.kt")
+    check(
+        "#1474 the summary follows the win and the cancel broadcasts",
+        Regex("""won the ranked match!", NamedTextColor\.GOLD\)\)\s*\n\s*heartSummary\(match\)""").containsMatchIn(manager) &&
+            Regex("""No winner\.", NamedTextColor\.RED\)\)[\s\S]{0,200}heartSummary\(match\)""").containsMatchIn(manager)
+    )
+    check("#1474 the summary goes only to the match (roster + spectators)", manager.contains("private fun heartSummary(match: Match)") && manager.contains("for (uuid in match.roster.uuids + match.spectators)"))
+    check("#1474 forfeits are summarized from their stored decision", manager.contains("RankedHeartSummary.Outcome.of(it.decision)") && manager.contains("RankedHeartSummary.Source.FORFEIT"))
+    check("#1474 outcomes live on the match (released with it)", manager.contains("var heartOutcomes: List<RankedHeartSummary.Entry> = emptyList()"))
+    check("#1474 the summary carries no connection or review information", RankedHeartSummary.Outcome.entries.none { o -> listOf("connection", "alt", "review", "suspicious").any { o.label.contains(it, ignoreCase = true) } })
+}
+
+private fun cooldownRegression() {
+    val dir = Files.createTempDirectory("ranked-cooldown").toFile()
+    val cooldown = 30 * 60_000L
+    val killer = UUID(150L, 1)
+    val victim = UUID(150L, 2)
+    val other = UUID(150L, 3)
+    try {
+        fun <T> heartsDb(block: (HeartStore) -> T): T {
+            val db = DatabaseManager(dir, quietLogger())
+            db.start()
+            try {
+                val hs = HeartStore(db)
+                hs.createTables()
+                return block(hs)
+            } finally {
+                db.shutdown()
+            }
+        }
+        fun kill(hs: HeartStore, k: UUID, v: UUID, at: Long, key: String) = hs.transferPvp(HeartStore.PvpRequest(key, k, v, at, cooldown, LIMITS)) as HeartStore.PvpResult.Done
+        val t0 = 10_000_000L
+        heartsDb { hs ->
+            for (u in listOf(killer, victim, other)) hs.ensure(u, 10, 1)
+            // 13. Ranked kill with the real 30-minute cooldown.
+            check("#1474 a ranked kill moves a heart", kill(hs, killer, victim, t0, "pvp:boot:$victim:100").decision is HeartRules.Decision.Transfer)
+            // 14. Back-to-back match, same pair, two minutes later: refused, nothing restarted.
+            val rematch = kill(hs, killer, victim, t0 + 120_000, "pvp:boot:$victim:2500")
+            check("#1474 a back-to-back match can't bypass the cooldown", rematch.decision is HeartRules.Decision.Cooldown && hs.lastTransferAt(killer, victim) == t0)
+            check("#1474 a new pairing in the rematch still moves a heart", kill(hs, other, victim, t0 + 120_000, "pvp:boot:$victim:2501").decision is HeartRules.Decision.Transfer)
+            // 15. Ranked -> open world (same table).
+            check("#1474 ranked and open-world PvP share the cooldown", kill(hs, killer, victim, t0 + 300_000, "pvp:boot:$victim:6000").decision is HeartRules.Decision.Cooldown)
+            // 16. A forfeit inside the cooldown moves nothing either.
+            check("#1474 ranked forfeits respect the same cooldown", kill(hs, killer, victim, t0 + 400_000, RankedMatchRules.forfeitDedupeKey("rtw-0000000014c1", victim)).decision is HeartRules.Decision.Cooldown)
+            check("#1474 the cooldown is directional (revenge allowed)", kill(hs, victim, killer, t0 + 400_000, "pvp:boot:$killer:8000").decision is HeartRules.Decision.Transfer)
+        }
+        // 17. After a restart: still running, then over after 30 minutes.
+        heartsDb { hs ->
+            check("#1474 the cooldown survives a restart", kill(hs, killer, victim, t0 + 600_000, "pvp:boot2:$victim:10").decision is HeartRules.Decision.Cooldown)
+            check("#1474 the cooldown ends after 30 minutes (never longer)", kill(hs, killer, victim, t0 + cooldown + 1, "pvp:boot2:$victim:40000").decision is HeartRules.Decision.Transfer)
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+    // 18. Elo never reads hearts or heart outcomes.
+    val ratingDir = File("src/main/kotlin/com/liam/joshymc/lifesteal/ranked/rating")
+    val rating = ratingDir.listFiles()!!.filter { it.name.endsWith(".kt") }.map { it.readText() }
+    check(
+        "#1474 Elo is independent of heart transfers",
+        rating.isNotEmpty() && rating.none { it.contains("lifesteal_heart") || it.contains("HeartStore") || it.contains("heartOutcomes") || it.contains("RankedHeartSummary") }
+    )
+    check("#1474 the shared cooldown default stays 30 minutes", resourceText("lifesteal.yml").contains("same-victim-cooldown-minutes: 30"))
+}
+
+// ── Issue #1474: anti-farming monitoring (logging only) ──────
+
+private fun monitoring() {
+    val defaults = RankedMonitorSettings.DEFAULTS
+    // Settings from the bundled lifesteal.yml.
+    val text = InputStreamReader(Thread.currentThread().contextClassLoader.getResourceAsStream("lifesteal.yml")!!, Charsets.UTF_8).readText()
+    @Suppress("UNCHECKED_CAST")
+    val map: Map<String, Any?> = Yaml().load(text)
+    fun at(m: Map<String, Any?>, path: String): Any? = path.split('.').fold<String, Any?>(m) { node, key -> (node as? Map<*, *>)?.get(key) }
+    fun parse(m: Map<String, Any?>) = RankedMonitorConfig.parse { p -> at(m, if (p.isEmpty()) RankedMonitorConfig.BASE else "${RankedMonitorConfig.BASE}.$p") }
+    val bundled = parse(map)
+    check("#1474 the bundled monitoring settings are the documented defaults", bundled.settings == defaults && bundled.problems.isEmpty())
+    check("#1474 a lifesteal.yml without the section uses the defaults (warning only)", parse(emptyMap()).let { it.settings == defaults && it.problems.none { p -> p.severe } })
+    @Suppress("UNCHECKED_CAST")
+    fun withMonitoring(key: String, value: Any?): Map<String, Any?> {
+        val m = map.toMutableMap()
+        val ranked = (m["ranked-team-wars"] as Map<String, Any?>).toMutableMap()
+        val mon = (ranked["monitoring"] as Map<String, Any?>).toMutableMap()
+        mon[key] = value
+        ranked["monitoring"] = mon
+        m["ranked-team-wars"] = ranked
+        return m
+    }
+    check("#1474 a bad monitoring value only turns monitoring off", parse(withMonitoring("window-hours", "soon")).settings == null)
+    check("#1474 a bad monitoring value never invalidates lifesteal.yml", LifestealConfigParser.parse { p -> at(withMonitoring("window-hours", "soon"), p) }.settings != null)
+    check("#1474 thresholds are bounded", parse(withMonitoring("repeated-team-matches", -1)).settings == null && parse(withMonitoring("repeated-team-matches", 0)).settings?.repeatedTeamMatches == 0)
+
+    val dir = Files.createTempDirectory("ranked-monitor").toFile()
+    try {
+        withDb(dir) { s, db ->
+            val hs = HeartStore(db)
+            hs.createTables()
+            val ms = RankedMonitorStore(db)
+            ms.createTables()
+            s.createArena(readyArena(), 1)
+            val a1 = UUID(160L, 1)
+            val a2 = UUID(160L, 2)
+            val b1 = UUID(161L, 1)
+            val b2 = UUID(161L, 2)
+            for (u in listOf(a1, a2, b1, b2)) hs.ensure(u, 10, 1)
+            val base = 50_000_000L
+            var n = 0
+            fun playMatch(at: Long, test: Boolean = false, teamB: String = "team-b", forfeit: UUID? = null): String {
+                val id = "rtw-%012d".format(++n)
+                s.insertMatch(
+                    RankedStore.NewMatch(id, "season-1", "duel", "team-a", "Alpha", teamB, "Bravo", 2, test, "queue:x", at),
+                    listOf(MatchParticipant(a1, Side.A, "team-a"), MatchParticipant(a2, Side.A, "team-a"), MatchParticipant(b1, Side.B, teamB), MatchParticipant(b2, Side.B, teamB)),
+                    listOf(snap(a1), snap(a2), snap(b1), snap(b2)),
+                )
+                s.moveState(id, MatchState.PREPARING, MatchState.COUNTDOWN, at + 1)
+                s.moveState(id, MatchState.COUNTDOWN, MatchState.ACTIVE, at + 2)
+                if (forfeit != null) s.defeat(id, forfeit, DefeatReason.DISCONNECT, at + 3)
+                for (u in listOf(b1, b2)) if (u != forfeit) s.defeat(id, u, DefeatReason.DEATH, at + 4)
+                s.finish(id, Side.A, "team-a", at + 6)
+                s.complete(id, at + 7)
+                for (u in listOf(a1, a2, b1, b2)) s.markRestored(s.snapshotId(id, u), "test", at + 8)
+                return id
+            }
+            fun facts(id: String, teamB: String = "team-b", forfeited: List<UUID> = emptyList(), transfers: List<Pair<UUID, UUID>> = emptyList()) =
+                RankedMonitorRules.MatchFacts(id, "team-a", "Alpha", teamB, "Bravo", listOf(a1, a2), listOf(b1, b2), forfeited, transfers)
+            fun findings(f: RankedMonitorRules.MatchFacts, now: Long, settings: RankedMonitorSettings = defaults) =
+                RankedMonitorRules.evaluate(f, ms.counts(f, settings, now), settings)
+            val heartsBefore = db.queryFirst("SELECT SUM(hearts) AS s FROM lifesteal_hearts") { it.getInt("s") }
+
+            // 21. A normal match: nothing.
+            val m1 = playMatch(base)
+            check("#1474 a normal match logs nothing", findings(facts(m1), base + 10).isEmpty())
+            // 19. Repeated team matchups (4 in 24h by default).
+            playMatch(base + 60_000)
+            val m3 = playMatch(base + 120_000)
+            check("#1474 three matchups stay below the threshold", findings(facts(m3), base + 130_000).none { it.kind == RankedMonitorRules.Kind.REPEATED_TEAM_MATCHUP })
+            val m4 = playMatch(base + 180_000)
+            val f4 = findings(facts(m4), base + 190_000)
+            check(
+                "#1474 the fourth matchup in the window is flagged",
+                f4.any { it.kind == RankedMonitorRules.Kind.REPEATED_TEAM_MATCHUP && it.subject == RankedMonitorRules.pairKey("team-a", "team-b") && it.reason.contains("played 4 ranked matches") }
+            )
+            check("#1474 staff test matches don't count as matchups", run { playMatch(base + 200_000, test = true); ms.teamMatchCount("team-a", "team-b", base) == 4 })
+            check("#1474 matches outside the window don't count", ms.teamMatchCount("team-a", "team-b", base + 100_000) == 2)
+            val teamFinding = f4.first { it.kind == RankedMonitorRules.Kind.REPEATED_TEAM_MATCHUP }
+            // 24. No duplicates.
+            check("#1474 a finding is recorded once", ms.record(teamFinding, m4, base + 190_000, defaults.windowMillis))
+            check("#1474 processing the same match again adds nothing", !ms.record(teamFinding, m4, base + 191_000, defaults.windowMillis) && ms.reviewCount() == 1)
+            val m5 = playMatch(base + 240_000)
+            val f5 = findings(facts(m5), base + 250_000).first { it.kind == RankedMonitorRules.Kind.REPEATED_TEAM_MATCHUP }
+            check("#1474 the same pair in the same window is one entry, not one per match", !ms.record(f5, m5, base + 250_000, defaults.windowMillis) && ms.reviewCount() == 1)
+            check("#1474 after the window it can be logged again", ms.record(f5, m5, base + 250_000 + defaults.windowMillis, defaults.windowMillis) && ms.reviewCount() == 2)
+            // Player pairs across teams (coordinated rosters under a new team id). 5 non-test matches so far + this one = 6.
+            val mx = playMatch(base + 300_000, teamB = "team-c")
+            val fx = findings(facts(mx, teamB = "team-c"), base + 310_000)
+            check(
+                "#1474 the same opponents under a different team are tracked per player",
+                fx.any { it.kind == RankedMonitorRules.Kind.REPEATED_PLAYER_MATCHUP && it.players.toSet() == setOf(a1, b1) && it.reason.contains("in 6 ranked matches") }
+            )
+            check("#1474 a new team pair isn't a team matchup finding yet", fx.none { it.kind == RankedMonitorRules.Kind.REPEATED_TEAM_MATCHUP })
+            // 20. Shared connection: a review entry, nothing else.
+            db.createTable("CREATE TABLE IF NOT EXISTS player_connections (uuid TEXT NOT NULL, connection_hash TEXT NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY (uuid, connection_hash))")
+            db.execute("INSERT INTO player_connections (uuid, connection_hash, last_seen) VALUES (?, 'hash-xyz', 1), (?, 'hash-xyz', 1)", a2.toString(), b2.toString())
+            val ms6 = playMatch(base + 400_000)
+            val shared = findings(facts(ms6, transfers = listOf(a2 to b2)), base + 410_000).filter { it.kind == RankedMonitorRules.Kind.SHARED_CONNECTION }
+            check("#1474 shared-connection opponents get one review entry", shared.size == 1 && shared[0].players.toSet() == setOf(a2, b2) && shared[0].reason.contains("not proof") && shared[0].reason.contains("a heart moved"))
+            check(
+                "#1474 the shared-connection entry is stored without any connection data",
+                ms.record(shared[0], ms6, base + 410_000, defaults.windowMillis) &&
+                    ms.reviews(a2).single { it.kind == "SHARED_CONNECTION" }.let { r -> r.kind == "SHARED_CONNECTION" && !r.reason.contains("hash") && !r.subject.contains("hash") && r.matchId == ms6 }
+            )
+            check("#1474 shared-connection checking can be turned off", findings(facts(ms6), base + 410_000, defaults.copy(sharedConnections = false)).none { it.kind == RankedMonitorRules.Kind.SHARED_CONNECTION })
+            // Repeated heart transfers (ranked + open world) and repeated forfeits.
+            for (i in 0 until 3) hs.transferPvp(HeartStore.PvpRequest("pvp:boot:$b1:${9000 + i}", a1, b1, base + 500_000 + i * 31 * 60_000L, 30 * 60_000L, LIMITS))
+            val transfersAt = base + 500_000 + 3 * 31 * 60_000L
+            val mt = playMatch(transfersAt)
+            check(
+                "#1474 repeated transfers between one pair are flagged",
+                findings(facts(mt, transfers = listOf(a1 to b1)), transfersAt + 10).any { it.kind == RankedMonitorRules.Kind.REPEATED_HEART_TRANSFERS && it.subject == RankedMonitorRules.directedKey(a1, b1) }
+            )
+            check("#1474 transfers in the other direction are counted separately", ms.transferCount(b1, a1, base) == 0 && ms.transferCount(a1, b1, base) == 3)
+            var lastForfeit = ""
+            for (i in 0 until 3) lastForfeit = playMatch(transfersAt + 60_000L * (i + 1), forfeit = b2)
+            check(
+                "#1474 repeated forfeits are flagged",
+                findings(facts(lastForfeit, forfeited = listOf(b2)), transfersAt + 300_000).any { it.kind == RankedMonitorRules.Kind.REPEATED_FORFEITS && it.players == listOf(b2) }
+            )
+            check("#1474 monitoring off = no findings", findings(facts(lastForfeit, forfeited = listOf(b2)), transfersAt + 300_000, defaults.copy(enabled = false)).isEmpty())
+            // 22. Hearts untouched by counting and recording (the 3 transfers above were made by the heart store itself).
+            val heartsAfter = db.queryFirst("SELECT SUM(hearts) AS s FROM lifesteal_hearts") { it.getInt("s") }
+            check("#1474 monitoring never creates or destroys hearts", heartsAfter == heartsBefore && hs.load(a1)?.hearts == 13 && hs.load(b1)?.hearts == 7)
+            check("#1474 no punishment rows are written", db.queryFirst("SELECT 1 AS hit FROM sqlite_master WHERE type = 'table' AND name = 'punishments'") { true } == null)
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+
+    // 23 + wiring: logging only.
+    val monitorDir = File("src/main/kotlin/com/liam/joshymc/lifesteal/ranked/monitor")
+    val monitorSources = monitorDir.listFiles()!!.filter { it.name.endsWith(".kt") }.map { it.readText() }
+    check(
+        "#1474 monitoring never changes Elo, hearts, matches or punishments",
+        monitorSources.isNotEmpty() && monitorSources.none {
+            it.contains("lifesteal_ranked_ratings") || it.contains("transferPvp") || it.contains("adminChange") || it.contains("punishmentManager") ||
+                Regex("""UPDATE lifesteal_|DELETE FROM lifesteal_|INSERT INTO lifesteal_(?!ranked_reviews)""").containsMatchIn(it)
+        }
+    )
+    check("#1474 monitoring never reads an address", monitorSources.none { it.contains("getAddress") || it.contains("connection_hash") || it.contains(".address") })
+    val manager = source("lifesteal/ranked/LifestealRankedManager.kt")
+    val farming = source("lifesteal/ranked/monitor/RankedFarmingMonitor.kt")
+    check(
+        "#1474 the check runs after the result is recorded, never at shutdown",
+        Regex("""complete\(match, shutdown = false\)\s*\n\s*monitorEnded\(match\)""").containsMatchIn(manager) && manager.contains("if (fought && !shutdown) monitorEnded(match)")
+    )
+    check("#1474 the check runs off the main thread and failures stay logged", farming.contains("plugin.databaseManager.async(\"ranked monitoring") && farming.contains("catch (e: Exception)"))
+    check("#1474 a review entry also reaches the /admin logs", farming.contains("plugin.adminManager.logAction(") && farming.contains("RANKED_REVIEW_"))
+    check("#1474 staff can read the reviews", source("lifesteal/ranked/LifestealRankedCommand.kt").contains("\"reviews\" -> reviews(sender, a.getOrNull(0))"))
+    check("#1474 players are never told about reviews", !farming.contains("commsManager"))
 }
 
 // ── Wiring (source) ──────────────────────────────────────────

@@ -350,3 +350,151 @@ in memory, so a restart in between loses it. The heart change itself is stored.
 17. Quit at 1 heart: no heart moves. Quit when the hitter has 20: no heart moves.
 18. `/kick` a participant mid-fight: out, no heart. `/stop` mid-fight: nobody forfeits, and
     everyone is restored.
+
+## H. Heart feedback, ranked death detection and anti-farming monitoring (issue #1474)
+
+Follow-up to the read-only cooldown audit (#1469) and the heart system audit (#1453). **No rule
+changed**: heart limits (10 start, 1-20), the 30-minute same-victim cooldown, the order of the
+heart checks, Elo, matchmaking, forfeits, inventory snapshots and restart recovery are exactly as
+before.
+
+### The shared 30-minute cooldown
+
+Ranked has no cooldown of its own. Every heart-moving PvP path (open-world kill, Combat NPC kill,
+ranked kill, ranked disconnect forfeit) goes through the same `HeartStore.transferPvp` and the
+same `lifesteal_heart_cooldowns` row per directed pair (killer → victim), set by
+`lifesteal.yml > pvp.same-victim-cooldown-minutes` (30). It starts only when a heart moves. It is
+stored on disk with wall-clock time, so it keeps running through restarts, and a refused kill
+never restarts it. A revenge kill (victim → killer) is a different pair. What players notice:
+
+- a rematch within 30 minutes: the same killer → victim pair moves no heart; new pairings do;
+- a ranked steal blocks the same pair in the open world for the rest of the 30 minutes, and the
+  other way round;
+- the match result and Elo never depend on hearts: a kill refused by the cooldown still counts
+  toward winning.
+
+### Ranked death detection
+
+The #1461 combat-tag credit excluded ranked deaths with `matchOf(victim) != null`. But the ranked
+death handler (HIGHEST) removes the victim from the held set before the heart handler (MONITOR)
+runs, so that check was always false. It was harmless only because ranked hits never
+combat-tag.
+
+Now the heart listener's existing LOWEST handler copies the victim's match id with the server
+tick (`RankedMatchRules.DeathCapture`: memory only, removed when used and on quit). `onDeath`
+decides once with `RankedMatchRules.deathMatch(copy, tick, matchOf(victim))`, and a copy from
+another tick is never used. That one answer drives both the combat-tag exclusion and the match
+summary. There is no second match tracking, no stored state and no priority change.
+
+### Heart outcomes in the match summary
+
+For each ranked kill, the heart service passes its **stored** result (the `HeartRules.Decision`
+that `transferPvp` returned; it is never called a second time) to
+`lifestealRankedManager.recordHeartOutcome`. Forfeits add theirs from `forfeitHeart`. Each
+outcome is kept on the in-memory match (at most 24, dropped with the match). It is also queued to
+the match's event log (`lifesteal_ranked_events`, kind `HEART`, visible in
+`/lifesteal admin ranked info <match>`). The per-kill chat lines players already got (stole a
+heart, cooldown, last heart, maximum, teammates, ...) are unchanged.
+
+After "X won the ranked match!", and after a cancellation (hearts that already moved stay moved),
+everyone in the match and its spectators get one section through `commsManager`:
+
+```
+[Ranked] Hearts this match: 2 of 3 moved a heart.
+[Ranked] Ann killed Bob: heart stolen
+[Ranked] Ann killed Cid: no heart, same-victim cooldown
+[Ranked] Dee forfeited to Ann: heart stolen
+```
+
+- Green lines moved a heart; gray lines didn't. A refusal is never worded as a steal.
+- Reasons are the public ones only: same-victim cooldown, victim on their last heart, killer at
+  the maximum, teammates, allies, grace period, season not launched, season state unknown, team
+  data unavailable, heart data unavailable.
+- A 5v5 has at most 9 deaths, so every kill fits. Past 12 lines the rest folds into
+  "... and N more".
+- A match with no heart decision shows no section.
+- Nothing about connections, alts or reviews is ever shown to players.
+
+### Anti-farming monitoring (logging only)
+
+`lifestealRankedManager.monitor` (`lifesteal/ranked/monitor/`) checks each finished ranked match
+that reached the fight, once, after its result is recorded, on the database thread
+(`databaseManager.async`). Staff test matches and shutdowns are skipped, and any failure is only
+logged. It **never** blocks a match, changes a heart decision or a rating, or punishes anyone.
+
+| Finding | Counted from | Default (within `window-hours`, this match included) |
+|---|---|---|
+| `REPEATED_TEAM_MATCHUP` | non-test matches between the same two team ids (either order) | 4 in 24h |
+| `REPEATED_PLAYER_MATCHUP` | non-test matches where the same two players were opponents, whatever their teams (catches rotating teams) | 6 in 24h |
+| `REPEATED_HEART_TRANSFERS` | hearts one killer took from one victim, any PvP path (`lifesteal_heart_transactions`) | 3 in 24h |
+| `SHARED_CONNECTION` | opponents AltManager saw on one connection (`player_connections` hashes compared in SQL, never read out) | on |
+| `REPEATED_FORFEITS` | ranked matches a player forfeited by a counted disconnect | 3 in 24h |
+
+Each finding produces:
+
+- one row in `lifesteal_ranked_reviews`, the only new table (UUIDs, team ids, match id, kind,
+  reason, timestamp; never an address or a hash);
+- one `admin_logs` row (`RANKED_REVIEW_<KIND>` by "Lifesteal Ranked", visible in /admin);
+- a console warning.
+
+Duplicates: the dedupe key (kind + subject + match) is UNIQUE, so processing a match again adds
+nothing, and the same kind + subject is logged at most once per window. Staff read the entries
+with `/lifesteal admin ranked reviews [player]` (`joshymc.lifesteal.ranked.admin`). A shared
+connection is not proof of one owner (households share one), and the entry says so.
+
+Settings live in `lifesteal.yml > ranked-team-wars.monitoring`. They are read on their own: a
+mistake only turns monitoring off, never the rest of Lifesteal, and a missing section uses the
+bundled defaults.
+
+```yaml
+monitoring:
+  enabled: true
+  window-hours: 24             # 1-720
+  repeated-team-matches: 4     # 0-1000, 0 = off
+  repeated-player-matches: 6
+  repeated-heart-transfers: 3
+  repeated-forfeits: 3
+  shared-connections: true
+```
+
+New indexes (no rows changed): `lifesteal_ranked_participants (uuid, match_id)` and
+`lifesteal_heart_transactions (killer, victim, created_at)`.
+
+### Tests
+
+`./gradlew -I scripts/lifesteal-ranked-check.init.gradle.kts lifestealRankedCheck` now also covers
+the `#1474` checks:
+
+- death detection at every stage, stale copies, ordinary vs ranked environmental deaths,
+  simultaneous deaths;
+- summary lines for transfer, cooldown, last heart and maximum; refusals never shown as steals;
+  several kills; 2v2-5v5 sizes; bounds; no heart transaction while building it;
+- the cooldown through the real `HeartStore` for back-to-back matches, ranked ↔ open world,
+  forfeits, restarts and direction, and Elo sources never reading hearts;
+- every monitoring finding against a real SQLite database: thresholds, windows, test matches,
+  dedupe and suppression, no heart or punishment change, no connection data stored, and the
+  settings parser.
+
+`lifestealHeartCheck` keeps the #1461 wiring checks, updated for the new exclusion.
+
+**Needs a live Paper server:**
+
+1. A 2v2 where both kills move a heart: the summary says 2 of 2, in green.
+2. Rematch the same pairs within 30 minutes: those kills say "no heart, same-victim cooldown",
+   and Elo still changes (`/ranked stats`).
+3. Kill a 1-heart opponent, and kill while at 20 hearts: "last heart" and "at the maximum".
+4. Play the same two teams four times within a day: `/lifesteal admin ranked reviews` lists one
+   `REPEATED_TEAM_MATCHUP`, /admin logs show it, and nothing was blocked. A fifth match adds no
+   second entry.
+5. Two opponents on one home connection: one `SHARED_CONNECTION` review; the players see nothing.
+
+### Remaining limitations
+
+- The summary is chat only and in memory: a restart mid-match loses it (hearts, the event log and
+  the cooldown are kept).
+- Review entries are information for staff. There is no resolve/dismiss workflow and no
+  automatic action (by design).
+- Matchups are counted by team id and by player pair. A ring that rotates both teams and players
+  across many accounts only shows up through the heart-transfer and shared-connection findings.
+- `SHARED_CONNECTION` only knows what AltManager recorded (`player_connections`). Accounts never
+  seen on one connection are never flagged.

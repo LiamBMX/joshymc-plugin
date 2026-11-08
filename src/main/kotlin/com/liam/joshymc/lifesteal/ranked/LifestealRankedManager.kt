@@ -8,6 +8,8 @@ import com.liam.joshymc.lifesteal.combat.CombatLogRules
 import com.liam.joshymc.lifesteal.hearts.HeartRules
 import com.liam.joshymc.lifesteal.hearts.HeartStore
 import com.liam.joshymc.lifesteal.progression.ProgressionRules
+import com.liam.joshymc.lifesteal.ranked.monitor.RankedFarmingMonitor
+import com.liam.joshymc.lifesteal.ranked.monitor.RankedMonitorRules
 import com.liam.joshymc.lifesteal.teams.LifestealTeamStore
 import com.liam.joshymc.recovery.SafeSpots
 import net.kyori.adventure.text.Component
@@ -95,6 +97,12 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         internal val recentHits = HashMap<UUID, List<HeartRules.RecentHit>>()
         /** Issue #1465: participants who went out since the last decision (same-tick tie-break). */
         internal val outsSinceDecision = mutableListOf<MatchParticipant>()
+        /**
+         * Issue #1474: what the heart service decided for each kill/forfeit of this match, in order,
+         * for the end-of-match summary (bounded by [RankedHeartSummary.MAX_ENTRIES]; gone with the match).
+         */
+        var heartOutcomes: List<RankedHeartSummary.Entry> = emptyList()
+            internal set
 
         fun team(side: Side): LifestealTeamStore.Team = if (side == Side.A) teamA else teamB
         val label: String get() = "${teamA.name} vs ${teamB.name} (${size}v$size${when (kind) { MatchKind.TEST -> ", TEST"; MatchKind.CHALLENGE -> ", challenge"; MatchKind.PUBLIC -> "" }})"
@@ -111,6 +119,9 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     }
 
     private val store = RankedStore(plugin.databaseManager)
+
+    /** Issue #1474: logging-only anti-farming monitoring of finished matches. */
+    val monitor = RankedFarmingMonitor(plugin)
 
     @Volatile private var tablesReady = false
     @Volatile var settings: LifestealSettings.RankedTeamWars? = null
@@ -340,6 +351,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             recoveredThisBoot = true
             recover()
         }
+        monitor.refresh()
         try {
             val loaded = store.arenas()
             arenas.clear()
@@ -866,8 +878,10 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         if (!ok) return cancel(match, "the result couldn't be recorded")
         match.state = MatchState.FINISHING
         broadcast(match, Component.text("${team.name} won the ranked match!", NamedTextColor.GOLD))
+        heartSummary(match)
         plugin.logger.info("[Ranked] Match ${match.id} (${match.label}) won by ${team.name}.")
         complete(match, shutdown = false)
+        monitorEnded(match)
     }
 
     /** FINISHING → COMPLETED: cleanup, restore, record. */
@@ -895,10 +909,60 @@ class LifestealRankedManager(private val plugin: Joshymc) {
                 plugin.logger.severe("[Ranked] Couldn't record match ${match.id} as cancelled: ${e.message} (it is cancelled at the next start).")
             }
         }
+        val fought = match.startedAt != null
         match.state = MatchState.CANCELLED
         broadcast(match, Component.text("The ranked match was cancelled: $reason. No winner.", NamedTextColor.RED))
+        // Issue #1474: hearts already stolen stay stolen, so a cancelled match still says which kills moved one.
+        heartSummary(match)
         plugin.logger.warning("[Ranked] Match ${match.id} (${match.label}) cancelled: $reason.")
         release(match)
+        if (fought && !shutdown) monitorEnded(match)
+    }
+
+    // ── Heart outcomes and monitoring (issue #1474) ─────────
+
+    /**
+     * Adds one heart decision to [matchId]'s summary. Called by the heart service with the result
+     * `HeartStore.transferPvp` already returned (kills), and by [forfeitHeart] (forfeits); never
+     * evaluates or changes anything itself. A match that is already over (or unknown) ignores it.
+     * The decision is also queued to the match's event log for staff.
+     */
+    fun recordHeartOutcome(matchId: String, entry: RankedHeartSummary.Entry) {
+        val match = matches[matchId] ?: return
+        if (match.state.terminal) return
+        val before = match.heartOutcomes
+        match.heartOutcomes = RankedHeartSummary.add(before, entry)
+        if (match.heartOutcomes === before) return
+        val now = System.currentTimeMillis()
+        val detail = "${entry.source.name} killer=${entry.killer} outcome=${entry.outcome.name}"
+        plugin.databaseManager.async("ranked heart outcome ${match.id}") { store.logEvent(match.id, "HEART", entry.victim, detail, now) }
+    }
+
+    /** The heart section of the end-of-match message (to the match's players and spectators only). */
+    private fun heartSummary(match: Match) {
+        for (line in RankedHeartSummary.lines(match.heartOutcomes)) {
+            broadcast(match, Component.text(line.text, if (line.moved) NamedTextColor.GREEN else NamedTextColor.GRAY))
+        }
+    }
+
+    /** Hands a match that reached the fight to the logging-only monitor (after its result is recorded). */
+    private fun monitorEnded(match: Match) {
+        try {
+            val roster = match.roster.participants
+            val facts = RankedMonitorRules.MatchFacts(
+                matchId = match.id,
+                teamAId = match.teamA.id, teamAName = match.teamA.name,
+                teamBId = match.teamB.id, teamBName = match.teamB.name,
+                sideA = roster.filter { it.side == Side.A }.map { it.uuid },
+                sideB = roster.filter { it.side == Side.B }.map { it.uuid },
+                forfeited = roster.filter { it.defeatReason == DefeatReason.DISCONNECT }.map { it.uuid },
+                transfers = match.heartOutcomes.filter { it.outcome.moved }.map { it.killer to it.victim },
+            )
+            val names = roster.associate { it.uuid to (Bukkit.getPlayer(it.uuid)?.name ?: plugin.lifestealTeamManager.nameOf(it.uuid)) }
+            monitor.onMatchEnded(facts, match.test, names)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Ranked] Couldn't queue the monitoring check of match ${match.id}: ${e.message}")
+        }
     }
 
     /** Ends tasks and protections, restores every online participant and clears the arena's loose entities. */
@@ -1066,6 +1130,11 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         )
         val done = result as? HeartStore.PvpResult.Done
         plugin.logger.info("[Ranked] ${victim.name} forfeited match ${match.id} (${kind.label}); heart forfeit to ${recipient.name}: ${done?.decision ?: result ?: "not evaluated"}.")
+        // Issue #1474: the stored decision, for the end-of-match summary (a Duplicate was already reported).
+        if (result != HeartStore.PvpResult.Duplicate) {
+            val outcome = done?.let { RankedHeartSummary.Outcome.of(it.decision) } ?: RankedHeartSummary.Outcome.UNAVAILABLE
+            recordHeartOutcome(match.id, RankedHeartSummary.Entry(recipient.uniqueId, recipient.name, victim.uniqueId, victim.name, outcome, RankedHeartSummary.Source.FORFEIT))
+        }
         broadcast(match, Component.text("${victim.name} disconnected and forfeited (last hit by ${recipient.name}).", NamedTextColor.GRAY))
         if (done == null) return "No heart was taken."
         return when (done.decision) {

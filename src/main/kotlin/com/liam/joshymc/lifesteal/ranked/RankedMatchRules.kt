@@ -249,6 +249,25 @@ object RankedMatchRules {
     /** Audit note on a forfeit transfer (`HeartStore.PvpRequest.note`). */
     fun forfeitNote(matchId: String, kind: DisconnectKind): String = "ranked disconnect forfeit, match $matchId (${kind.label})"
 
+    // ── Ranked deaths (issue #1474) ─────────────────────────
+
+    /**
+     * The match a dying player was held by, copied at LOWEST of their PlayerDeathEvent, before the
+     * ranked death handler (HIGHEST) takes them out of the match. [tick] is the server tick of
+     * that death, so a copy is only ever used by the death it was taken for.
+     */
+    data class DeathCapture(val matchId: String, val tick: Int)
+
+    /**
+     * The ranked match a death belongs to, or null for an ordinary death. [captured] is the copy
+     * taken at LOWEST (valid only in its own [currentTick]); [stillHeld] is the match that holds
+     * the victim right now (null once the ranked death handler has defeated them). Either one is
+     * enough: the copy keeps the answer after the defeat, the live lookup covers a death whose
+     * LOWEST copy was missed. A stale copy (an earlier tick) never makes a later death ranked.
+     */
+    fun deathMatch(captured: DeathCapture?, currentTick: Int, stillHeld: String?): String? =
+        captured?.takeIf { it.tick == currentTick }?.matchId ?: stillHeld
+
     // ── Validation ──────────────────────────────────────────
 
     /** The facts about one chosen participant, gathered on the main thread before validating. */
