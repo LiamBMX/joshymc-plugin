@@ -25,8 +25,9 @@ in the pack for rollback. Lifesteal is prepared for but not enabled.
 
 ## B. How the models are shown
 
-The crate block is never replaced, moved or edited, and it stays the crate's identity (the
-`crate_locations` row). `crate/CrateModelDisplays` draws an `ItemDisplay` over it. The
+The crate block is never replaced or moved, and it stays the crate's identity (the
+`crate_locations` row). The only edit ever made to it is turning its facing on
+`/crate rotate` (see E3). `crate/CrateModelDisplays` draws an `ItemDisplay` over it. The
 display itself has no hitbox. Models that reach past their block also get an `Interaction`
 hitbox (see below). Every click, on the block or on a hitbox, goes through the same
 `CrateManager` code. Keys, previews, animations, rewards, permissions and the anti-dupe guards
@@ -35,7 +36,7 @@ are untouched.
 | Concern | How it's handled |
 |---|---|
 | Hiding the chest | Each model encloses a vanilla chest (x/z 1..15, y 0..14, latch to z 16) and stays inside its block (x/z 0..16), so neighbouring crates never overlap. |
-| Facing | `rotation: auto` turns the model's front (its lock) to the chest's `facing`. Blocks without a facing face south. |
+| Facing | A location's own facing (`/crate rotate`, issue #1472) wins. Otherwise `rotation: auto` turns the model's front (its lock) to the chest's `facing`, and blocks without a facing face south. |
 | Restarts and reloads | Displays and hitboxes are **non-persistent**, so they are never saved with the chunk. They are spawned once every chunk they stand in is loaded (and at startup), and removed when any of those chunks unloads, on `/joshymc reload` and at shutdown. Before every spawn, any entity tagged with that location is removed. Any tagged entity that loads from disk anyway is removed in `EntitiesLoadEvent`. The result is one display (and at most one hitbox) per crate, never duplicates. |
 | Chunk borders | A model offset across a chunk border is drawn only while both chunks are loaded and removed when either unloads (`CrateModels.requiredChunks`). Chunks are never loaded for a model. |
 | Moving or removing crates | `/crate setlocation` and `/crate removelocation`, and deleting a crate in the editor, redraw or remove that location's display and hitbox right away. `/crate models refresh` redraws everything. |
@@ -338,6 +339,105 @@ and players without the JoshyMC pack always see the vanilla block.
 - Rotation is per crate id, so every location of a listed crate rotates together.
 - `/crate models set` only edits static models; monthly mappings are edited in config.yml.
 
+## E3. Per-crate facing (issue #1472)
+
+Part of the crates redesign (audit #1446).
+
+**Why admins couldn't turn single crates before:** the existing rotation rules worked, but
+they only existed per crate *type*. `crates.custom-models.models.<id>.rotation` is one value
+for every crate of that id, and `auto` follows the crate block's own `facing`, which is set
+when the chest is placed. So turning one crate meant breaking and re-placing its block (and
+re-registering it), and a fixed `rotation` turned every crate of the type at once.
+
+### Commands (`joshymc.crate.admin`, op)
+
+Look at the crate block (within 5 blocks, like `/crate setlocation`):
+
+- `/crate rotate north|south|east|west` (also `n`/`s`/`e`/`w`): this crate's front (its lock)
+  faces that way.
+- `/crate rotate next`: one step on from the direction it shows now.
+- `/crate rotate auto`: clears this crate's facing. It follows the crate type's `rotation`
+  again (with `auto`, the block's facing).
+- `/crate rotate mode [on|off]`: quick rotation (below). No argument toggles it.
+
+The target must be a registered crate location exactly. A neighbour that only reaches the
+crate through the double-chest fallback is refused with a hint, and any other block gets
+"isn't a registered crate". Tab completion lists the directions, `auto`, `next` and `mode`
+(admins only). `/crate locations` and `/crate diagnose` show each crate's facing, and
+`/crate models` counts locations with their own facing.
+
+### Quick rotation
+
+After `/crate rotate mode on`, **sneak + right-click a crate with an empty hand** turns it
+NORTH → EAST → SOUTH → WEST → NORTH, with an action-bar line and a click sound.
+
+- Only crate admins who turned the mode on. Losing `joshymc.crate.admin` ends it, and it is
+  cleared on quit (memory only).
+- With a key (or any item) in hand, or without sneaking, the click is the normal crate
+  flow: open, mass-open, preview and the key checks are unchanged. No key is used, no
+  reward is picked and no preview opens for a rotation. Ordinary sneak + right-click (for
+  everyone else, and for admins outside rotate mode) still previews.
+- Works on the block and on a model's hitbox (both go through `handleCrateClick`, behind
+  the same one-action-per-tick click gate).
+- `crates.rotation.quick-rotate: false` turns it off server-wide (`/crate rotate` still works).
+
+### How it is stored
+
+- Column `facing` on the existing `crate_locations` table (no second table). It is added once
+  at startup when missing (`PRAGMA table_info` check), so older databases keep every row,
+  crate type and id. `NULL` = automatic, which is what every crate registered before this
+  change has, so they look exactly as before.
+- Each row has its own value, so turning one crate never turns the others of its type.
+- `/crate setlocation` on a block that is already a crate keeps its facing.
+- A value this build can't read (not NORTH/SOUTH/EAST/WEST) is logged at startup, treated as
+  automatic and left in the row untouched.
+- The facing is read from the location every time a model is drawn (startup, `/joshymc reload`,
+  chunk load, `/crate models refresh`, `/crate models set`, pack status, monthly rotation),
+  so it survives all of them. Changing the model or the month never resets it.
+
+### Model alignment
+
+Every bundled crate model is built on `art/items/_crate_chest.py`, whose front (lock) is +Z
+(south) in model space; `CrateRotationCheck` verifies every `*_chest`/`*_crate` module is.
+A facing is a fixed yaw in the same convention as `rotation:` degrees (south 0, west 90,
+north 180, east 270), passed through the unchanged `CrateModels.placement`: the display stays
+on the block centre plus `offset`, `scale` and the floor lift are kept, the model only turns
+about the vertical axis (never mirrored or upside down), and the hitbox is recomputed from the
+turned model. A change redraws only that location (`refresh`, which removes the old display
+and hitbox first), so there are never duplicates.
+
+### The vanilla block (`crates.rotation.rotate-block`, default true)
+
+When a direction is set, the crate block itself is turned to match where that is safe, so
+Bedrock and pack-less players (who see the real block) see the same front:
+
+- only blocks that support that facing (chests, trapped/ender chests, barrels, shulker
+  boxes, ...);
+- **never half of a double chest**: turning one half would split the pair, so there only the
+  model turns (the message says so);
+- the same block with a new facing (`setBlockData(..., false)`): the block type and its block
+  entity (inventory) stay, and no physics or neighbour updates run, so adjacent chests aren't
+  joined or changed;
+- `auto` leaves the block as it is; with `rotation: auto` the model then follows it.
+
+`rotate-block: false` turns only the model. The crate registration, keys and rewards are
+never touched either way.
+
+### Verifying (needs a test server)
+
+1. Place two crates of one type. `/crate rotate east` on one: only it turns (model and
+   chest); the other stays.
+2. `/crate rotate north|south|west`: the lock faces that way; F3+B on Homestead / Campfire /
+   Stockpile shows the hitbox still around the model.
+3. `/joshymc reload`, restart, fly away until the chunk unloads and come back: same facing,
+   and `/execute if entity @e[type=item_display,tag=joshymc_crate_model]` matches
+   `/crate models`.
+4. `/crate rotate mode on`, sneak + right-click with an empty hand: it cycles. With a key:
+   mass-open as usual. Not sneaking: normal open / key message. A non-admin sneak +
+   right-click: preview.
+5. A double chest crate: the model turns, the chest stays paired.
+6. `/crate rotate auto`: back to the automatic facing.
+
 ## F. Java and Bedrock
 
 - **Java (Paper 26.2):** Java players see the models once the required JoshyMC pack has
@@ -364,6 +464,12 @@ Automated:
   rules; reach; reading model JSON (rotated and Euler elements); the click gate; and that
   hitbox clicks only call `handleModelClick`, which reuses `handleCrateClick` and spends no
   key itself.
+- `./gradlew -I scripts/crate-rotation-check.init.gradle.kts crateRotationCheck` (issue
+  #1472) covers every direction, auto, next/quick-rotate order, stored values and migration,
+  model and hitbox alignment per direction (scale/offset kept, never mirrored), the
+  vanilla-block rules, quick-rotate gating, the models' +Z front, and the wiring (exact
+  location, admin permission, one row updated, one location redrawn, key/reward paths
+  untouched).
 - `python3 -m unittest discover -s art/tests -t .` (from `resourcepack/`) covers chest
   cover, inside-the-block, floor, glow-on-accents, built files, and that the config points
   at built models.
@@ -400,6 +506,9 @@ Manual (needs a test server with the pack and real crates):
   chunk, pack-status and hitbox click events.
 - `src/main/kotlin/com/liam/joshymc/crate/CrateModelBounds.kt`: Bukkit-free model JSON bounds.
 - `src/main/kotlin/com/liam/joshymc/crate/CrateClickGate.kt`: Bukkit-free one action per tick.
+- `src/main/kotlin/com/liam/joshymc/crate/CrateFacing.kt`: Bukkit-free per-location facing
+  rules (issue #1472); `CrateManager.setCrateFacing` stores and applies them, `/crate rotate`
+  is in `CrateCommand`.
 - `CrateManager` owns `models`, starts and stops it, redraws on location changes, and routes
   hitbox clicks through `handleModelClick`.
   `ListenerManager` registers it. `ResourcePackManager.packId` exposes the pack id.

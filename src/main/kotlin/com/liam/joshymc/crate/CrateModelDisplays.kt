@@ -196,6 +196,8 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
         out += "  Crate locations: ${locations.size}; expected models: ${expected.size}; " +
             "not drawn yet (chunk/world not loaded, or no block): $waiting"
         out += "  Spawned displays: $liveDisplays; interaction hitboxes: $liveHitboxes"
+        val faced = locations.count { it.facing != null }
+        out += "  Locations with their own facing (/crate rotate): $faced; automatic: ${locations.size - faced}"
         val strays = (taggedDisplays - liveDisplays).coerceAtLeast(0) + (taggedHitboxes - liveHitboxes).coerceAtLeast(0)
         out += "  Crate model entities in loaded chunks: $taggedDisplays display(s), $taggedHitboxes hitbox(es)" +
             if (strays > 0) " — $strays untracked, run /crate models refresh" else ""
@@ -398,7 +400,9 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
 
         val facing = (block.blockData as? Directional)?.facing?.takeIf { it in BlockFace.entries.take(4) }?.name
         val bounds = modelBounds[model.model] ?: CrateModels.ModelBounds.FULL_BLOCK
-        val placement = CrateModels.placement(model, bounds, facing)
+        // Issue #1472: a location's own facing wins over the crate type's rotation (and the
+        // block's facing); scale, offset and hitbox rules are the model's, unchanged.
+        val placement = CrateModels.placement(model.copy(rotation = CrateFacing.effectiveRotation(model.rotation, loc.facing)), bounds, facing)
         if (placement.problem != null) {
             remove(key)
             placementProblems[key] = placement.problem
