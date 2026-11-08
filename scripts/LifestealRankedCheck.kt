@@ -14,7 +14,12 @@
 // covered here (see docs/lifesteal-ranked.md, "Manual tests").
 
 import com.liam.joshymc.lifesteal.LifestealConfigParser
+import com.liam.joshymc.lifesteal.RankedForfeitHeartLoss
+import com.liam.joshymc.lifesteal.combat.CombatLogRules
+import com.liam.joshymc.lifesteal.combat.CombatLogRules.DisconnectKind
+import com.liam.joshymc.lifesteal.ranked.RankedMatchRules.DisconnectAction
 import com.liam.joshymc.lifesteal.hearts.HeartRules
+import com.liam.joshymc.lifesteal.hearts.HeartRules.changesHearts
 import com.liam.joshymc.lifesteal.hearts.HeartStore
 import com.liam.joshymc.lifesteal.progression.ProgressionRules
 import com.liam.joshymc.lifesteal.ranked.ArenaAvailability
@@ -75,6 +80,7 @@ fun main() {
     settings()
     store()
     hearts()
+    forfeits()
     wiring()
     println("OK: $checks Ranked Team Wars checks passed.")
 }
@@ -489,6 +495,216 @@ private fun hearts() {
     }
 }
 
+// ── Disconnect forfeits (issue #1465) ────────────────────────
+
+private fun forfeits() {
+    val last = RankedForfeitHeartLoss.LAST_OPPONENT
+    fun policy(state: MatchState?, fighting: Boolean = true, kind: DisconnectKind = DisconnectKind.QUIT, timeouts: Boolean = true, loss: RankedForfeitHeartLoss = last) =
+        RankedMatchRules.disconnect(state, fighting, kind, timeouts, loss)
+
+    // 1. Before the start: cancelled, unrated, no heart.
+    for (state in listOf(MatchState.CREATED, MatchState.VALIDATING, MatchState.PREPARING, MatchState.COUNTDOWN)) {
+        val p = policy(state)
+        check("#1465 disconnect in $state cancels the match without a heart", p.action == DisconnectAction.CANCEL_MATCH && !p.heartForfeit)
+    }
+    // 2. In the fight: a forfeit with a heart decision, whatever the kind of counted disconnect.
+    for (kind in listOf(DisconnectKind.QUIT, DisconnectKind.TIMED_OUT, DisconnectKind.PLAYER_KICK, DisconnectKind.TRANSFER)) {
+        val p = policy(MatchState.ACTIVE, kind = kind)
+        check("#1465 ${kind.name} during the fight is a forfeit with a heart decision", p.action == DisconnectAction.FORFEIT && p.heartForfeit)
+    }
+    check("#1465 timeouts not counted when combat-logging.count-timeouts is false", policy(MatchState.ACTIVE, kind = DisconnectKind.TIMED_OUT, timeouts = false).let { it.action == DisconnectAction.LEAVE_EXEMPT && !it.heartForfeit })
+    check("#1465 heart-loss none = match forfeit only", policy(MatchState.ACTIVE, loss = RankedForfeitHeartLoss.NONE).let { it.action == DisconnectAction.FORFEIT && !it.heartForfeit })
+    for (kind in listOf(DisconnectKind.STAFF_KICK, DisconnectKind.SERVER_ERROR)) {
+        val p = policy(MatchState.ACTIVE, kind = kind)
+        check("#1465 ${kind.name} takes them out but never costs a heart", p.action == DisconnectAction.LEAVE_EXEMPT && !p.heartForfeit)
+    }
+    // 3. Already out, or the match is over: nothing.
+    check("#1465 disconnect after being knocked out does nothing", policy(MatchState.ACTIVE, fighting = false).action == DisconnectAction.NONE)
+    for (state in listOf(MatchState.FINISHING, MatchState.COMPLETED, MatchState.CANCELLED, null)) {
+        check("#1465 disconnect after the match ($state) does nothing", policy(state).let { it.action == DisconnectAction.NONE && !it.heartForfeit })
+    }
+    // 4. Shutdown: left to shutdown (cancel + restore), never a forfeit or heart, in any state.
+    for (state in MatchState.OPEN) {
+        val p = policy(state, kind = DisconnectKind.SERVER_SHUTDOWN)
+        check("#1465 shutdown in $state is never a forfeit", p.action == DisconnectAction.SHUTDOWN && !p.heartForfeit)
+    }
+    check("#1465 classification: stopping server wins over everything", CombatLogRules.classify("DISCONNECTED", "KICK_COMMAND", true, true) == DisconnectKind.SERVER_SHUTDOWN)
+    check("#1465 classification: restart kick is a shutdown", CombatLogRules.classify("KICKED", "RESTART_COMMAND", false, false) == DisconnectKind.SERVER_SHUTDOWN)
+    check("#1465 classification: /kick is staff", CombatLogRules.classify("KICKED", "KICK_COMMAND", false, false) == DisconnectKind.STAFF_KICK)
+    check("#1465 classification: a plain quit counts", CombatLogRules.classify("DISCONNECTED", null, false, false) == DisconnectKind.QUIT)
+
+    // 5. Match results for 2v2..5v5: the forfeit is an ordinary "out", so Elo comes from the normal win.
+    for (size in 2..5) {
+        var r = roster(size, size)
+        r = r.defeat(UUID(2L, 0), DefeatReason.DISCONNECT)!!
+        check("#1465 ${size}v$size: one forfeit leaves the match running", RankedMatchRules.decide(r, listOf(r.of(UUID(2L, 0))!!)) == Decision.Continue)
+        check("#1465 ${size}v$size: the leaver can't fight again", !r.isActive(UUID(2L, 0)) && r.defeat(UUID(2L, 0), DefeatReason.DISCONNECT) == null)
+        // Multiple teammates disconnecting (all of side B, some in the same tick).
+        val outs = mutableListOf<MatchParticipant>()
+        for (i in 1 until size) {
+            r = r.defeat(UUID(2L, i.toLong()), DefeatReason.DISCONNECT)!!
+            outs += r.of(UUID(2L, i.toLong()))!!
+        }
+        check("#1465 ${size}v$size: a whole side disconnecting = the other side wins", RankedMatchRules.decide(r, outs) == Decision.Winner(Side.A))
+    }
+    // 6. Same tick: disconnect + death.
+    fun lastTick(aReason: DefeatReason, bReason: DefeatReason): Decision {
+        var r = roster(2, 2).defeat(UUID(1L, 0), DefeatReason.DEATH)!!.defeat(UUID(2L, 0), DefeatReason.DEATH)!!
+        r = r.defeat(UUID(1L, 1), aReason)!!.defeat(UUID(2L, 1), bReason)!!
+        return RankedMatchRules.decide(r, listOf(r.of(UUID(1L, 1))!!, r.of(UUID(2L, 1))!!))
+    }
+    check("#1465 quitting in the tick the opponent's last player dies loses (no free cancel)", lastTick(DefeatReason.DEATH, DefeatReason.DISCONNECT) == Decision.Winner(Side.A))
+    check("#1465 ... from either side", lastTick(DefeatReason.DISCONNECT, DefeatReason.DEATH) == Decision.Winner(Side.B))
+    check("#1465 both sides dying in one tick is still no winner", lastTick(DefeatReason.DEATH, DefeatReason.DEATH) == Decision.NoWinner)
+    check("#1465 both sides forfeiting in one tick is no winner", lastTick(DefeatReason.DISCONNECT, DefeatReason.DISCONNECT) == Decision.NoWinner)
+    check("#1465 a staff kick in that tick isn't a forfeit", lastTick(DefeatReason.DEATH, DefeatReason.DISCONNECT_EXEMPT) == Decision.NoWinner)
+    check("#1465 decide without tick info keeps the old behaviour", RankedMatchRules.decide(roster(1, 1).defeat(UUID(1L, 0), DefeatReason.DEATH)!!.defeat(UUID(2L, 0), DefeatReason.DISCONNECT)!!) == Decision.NoWinner)
+
+    // 7. Recipient: the most recent opposing hit inside the window, never a teammate or a guess.
+    val victim = UUID(70L, 1)
+    val foeA = UUID(71L, 1)
+    val foeB = UUID(71L, 2)
+    val mate = UUID(70L, 2)
+    val window = 15_000L
+    val now = 100_000L
+    val hits = listOf(HeartRules.RecentHit(foeA, now - 9_000), HeartRules.RecentHit(foeB, now - 2_000))
+    val opponents = setOf(foeA, foeB)
+    check("#1465 recipient = most recent opposing hitter", RankedMatchRules.forfeitRecipient(victim, hits, now, window) { it in opponents } == foeB)
+    check("#1465 an ineligible latest hitter falls back to the previous one", RankedMatchRules.forfeitRecipient(victim, hits, now, window) { it == foeA } == foeA)
+    check("#1465 no hits = no heart", RankedMatchRules.forfeitRecipient(victim, emptyList(), now, window) { true } == null)
+    check("#1465 hits older than the window don't count", RankedMatchRules.forfeitRecipient(victim, listOf(HeartRules.RecentHit(foeA, now - window)), now, window) { true } == null)
+    check("#1465 hits in the future don't count", RankedMatchRules.forfeitRecipient(victim, listOf(HeartRules.RecentHit(foeA, now + 1)), now, window) { true } == null)
+    check("#1465 never the leaver themselves", RankedMatchRules.forfeitRecipient(victim, listOf(HeartRules.RecentHit(victim, now - 1)), now, window) { true } == null)
+    check("#1465 teammates never receive it (eligibility refuses them)", RankedMatchRules.forfeitRecipient(victim, listOf(HeartRules.RecentHit(mate, now - 1)), now, window) { it in opponents } == null)
+    check("#1465 window 0 = nobody", RankedMatchRules.forfeitRecipient(victim, hits, now, 0) { true } == null)
+    var bounded = emptyList<HeartRules.RecentHit>()
+    for (i in 0 until 50) bounded = RankedMatchRules.recordHit(bounded, HeartRules.RecentHit(foeA, i.toLong()))
+    check("#1465 recorded hits are bounded, newest kept", bounded.size == RankedMatchRules.MAX_RECENT_HITS && bounded.last().at == 49L)
+    check("#1465 one dedupe key per player per match", RankedMatchRules.forfeitDedupeKey("rtw-000000000001", victim) == RankedMatchRules.forfeitDedupeKey("rtw-000000000001", victim) &&
+        RankedMatchRules.forfeitDedupeKey("rtw-000000000001", victim) != RankedMatchRules.forfeitDedupeKey("rtw-000000000002", victim) &&
+        !RankedMatchRules.forfeitDedupeKey("rtw-000000000001", victim).startsWith("pvp:"))
+
+    // 8. Hearts through the real HeartStore (minimum, maximum, cooldown, dedupe, teammates).
+    val dir = Files.createTempDirectory("ranked-forfeit").toFile()
+    try {
+        val db = DatabaseManager(dir, quietLogger())
+        db.start()
+        try {
+            val hs = HeartStore(db)
+            hs.createTables()
+            fun player(n: Long, hearts: Int): UUID {
+                val u = UUID(80L, n)
+                hs.ensure(u, 10, 1)
+                if (hearts != 10) hs.adminChange(u, HeartRules.AdminOp.SET, hearts, LIMITS, "test", "test", 1)
+                return u
+            }
+            fun forfeit(match: String, v: UUID, k: UUID, at: Long, team: TeamCombatRules.HeartCheck = TeamCombatRules.HeartCheck.ELIGIBLE) =
+                hs.transferPvp(HeartStore.PvpRequest(RankedMatchRules.forfeitDedupeKey(match, v), k, v, at, 30 * 60_000L, LIMITS, team = team,
+                    note = RankedMatchRules.forfeitNote(match, DisconnectKind.QUIT)))
+            val v1 = player(1, 10)
+            val k1 = player(2, 10)
+            val first = forfeit("rtw-00000000000a", v1, k1, 1_000)
+            check("#1465 a forfeit moves exactly one heart", first is HeartStore.PvpResult.Done && first.decision is HeartRules.Decision.Transfer && hs.load(v1)?.hearts == 9 && hs.load(k1)?.hearts == 11)
+            check("#1465 the same forfeit never moves a second heart", forfeit("rtw-00000000000a", v1, k1, 1_001) == HeartStore.PvpResult.Duplicate && hs.load(v1)?.hearts == 9)
+            val again = forfeit("rtw-00000000000b", v1, k1, 2_000)
+            check("#1465 same-victim cooldown applies to forfeits", again is HeartStore.PvpResult.Done && again.decision is HeartRules.Decision.Cooldown && hs.load(v1)?.hearts == 9)
+            val kill = hs.transferPvp(HeartStore.PvpRequest("pvp:boot:$v1:500", k1, v1, 3_000, 30 * 60_000L, LIMITS))
+            check("#1465 a death after a forfeit in the cooldown moves nothing more", kill is HeartStore.PvpResult.Done && !kill.decision.changesHearts && hs.load(v1)?.hearts == 9)
+            val low = player(3, 1)
+            val lowKiller = player(4, 10)
+            val atMin = forfeit("rtw-00000000000c", low, lowKiller, 1_000)
+            check("#1465 a leaver at 1 heart keeps it and the opponent gains nothing", atMin is HeartStore.PvpResult.Done && atMin.decision == HeartRules.Decision.VictimAtMinimum && hs.load(low)?.hearts == 1 && hs.load(lowKiller)?.hearts == 10)
+            val v5 = player(5, 10)
+            val full = player(6, 20)
+            val atMax = forfeit("rtw-00000000000d", v5, full, 1_000)
+            check("#1465 an opponent at 20 hearts gains nothing (approved maximum rule)", atMax is HeartStore.PvpResult.Done && atMax.decision == HeartRules.Decision.KillerAtMaximum && hs.load(full)?.hearts == 20 && hs.load(v5)?.hearts == 10)
+            val v7 = player(7, 10)
+            val k8 = player(8, 10)
+            val mates = forfeit("rtw-00000000000e", v7, k8, 1_000, TeamCombatRules.HeartCheck.TEAMMATES)
+            check("#1465 teammates never receive a forfeit heart", mates is HeartStore.PvpResult.Done && mates.decision == HeartRules.Decision.Teammates && hs.load(v7)?.hearts == 10 && hs.load(k8)?.hearts == 10)
+            val audit = db.query("SELECT reason FROM lifesteal_heart_audit WHERE uuid = ? AND operation = 'PVP_LOSS'", v1.toString()) { it.getString("reason") }
+            check("#1465 the forfeit is audited as one, with its match", audit.size == 1 && audit[0].contains("ranked disconnect forfeit, match rtw-00000000000a"))
+            val total = db.queryFirst("SELECT SUM(hearts) AS s FROM lifesteal_hearts") { it.getInt("s") }
+            check("#1465 forfeits never create or destroy hearts", total == 9 + 11 + 1 + 10 + 10 + 20 + 10 + 10)
+        } finally {
+            db.shutdown()
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+
+    // 9. Snapshot restoration for a forfeit: survives reconnects and restarts, applied once.
+    val sdir = Files.createTempDirectory("ranked-forfeit-snap").toFile()
+    try {
+        val leaver = UUID(90L, 1)
+        val others = listOf(UUID(90L, 2), UUID(91L, 1), UUID(91L, 2))
+        withDb(sdir) { s, _ ->
+            s.createArena(readyArena(), 1)
+            s.insertMatch(newMatch("rtw-0000000000f1"), participants(leaver to Side.A, others[0] to Side.A, others[1] to Side.B, others[2] to Side.B),
+                listOf(snap(leaver, item("netherite_sword")), snap(others[0]), snap(others[1]), snap(others[2])))
+            s.moveState("rtw-0000000000f1", MatchState.PREPARING, MatchState.COUNTDOWN, 2)
+            s.moveState("rtw-0000000000f1", MatchState.COUNTDOWN, MatchState.ACTIVE, 3)
+            check("#1465 the forfeit is recorded once", s.defeat("rtw-0000000000f1", leaver, DefeatReason.DISCONNECT, 4) && !s.defeat("rtw-0000000000f1", leaver, DefeatReason.DISCONNECT, 5))
+            check("#1465 the leaver's snapshot waits while they're offline", s.pendingSnapshot(leaver)?.slots?.get(0) == item("netherite_sword"))
+            s.defeat("rtw-0000000000f1", others[0], DefeatReason.DEATH, 6)
+            check("#1465 a forfeit-decided match records an ordinary WIN (rated like any other)", s.finish("rtw-0000000000f1", Side.B, "team-b", 7) && s.complete("rtw-0000000000f1", 8) &&
+                s.match("rtw-0000000000f1")?.let { it.outcome == "WIN" && it.winner == Side.B } == true)
+            check("#1465 no second result for the same match", !s.finish("rtw-0000000000f1", Side.A, "team-a", 9) && !s.cancel("rtw-0000000000f1", "late", 9))
+            check("#1465 the forfeit reason is kept", s.participants("rtw-0000000000f1").first { it.uuid == leaver }.defeatReason == DefeatReason.DISCONNECT)
+            check("#1465 a new reason value reads back (staff kick)", run {
+                s.createArena(readyArena(id = "other"), 10)
+                val q = listOf(UUID(92L, 1), UUID(92L, 2))
+                s.insertMatch(newMatch("rtw-0000000000f2", arena = "other", now = 11), participants(q[0] to Side.A, q[1] to Side.B), q.map { snap(it) })
+                s.moveState("rtw-0000000000f2", MatchState.PREPARING, MatchState.COUNTDOWN, 12)
+                s.moveState("rtw-0000000000f2", MatchState.COUNTDOWN, MatchState.ACTIVE, 13)
+                s.defeat("rtw-0000000000f2", q[0], DefeatReason.DISCONNECT_EXEMPT, 14)
+                s.participants("rtw-0000000000f2").first { it.uuid == q[0] }.defeatReason == DefeatReason.DISCONNECT_EXEMPT
+            })
+        }
+        withDb(sdir) { s, _ ->
+            val pending = s.pendingSnapshot(leaver)
+            check("#1465 the leaver's snapshot survives a restart", pending != null && pending.slots[0] == item("netherite_sword"))
+            check("#1465 rejoining restores exactly once (rapid reconnects can't apply it twice)", s.markRestored(pending!!.id, "rejoined", 20) && !s.markRestored(pending.id, "rejoined", 21) && s.pendingSnapshot(leaver) == null)
+        }
+    } finally {
+        sdir.deleteRecursively()
+    }
+
+    // 10. Settings.
+    val text = InputStreamReader(Thread.currentThread().contextClassLoader.getResourceAsStream("lifesteal.yml")!!, Charsets.UTF_8).readText()
+    @Suppress("UNCHECKED_CAST")
+    val map: Map<String, Any?> = Yaml().load(text)
+    fun parse(m: Map<String, Any?>) = LifestealConfigParser.parse { p -> p.split('.').fold<String, Any?>(m) { node, key -> (node as? Map<*, *>)?.get(key) } }
+    @Suppress("UNCHECKED_CAST")
+    fun withForfeit(value: Any?): Map<String, Any?> {
+        val m = map.toMutableMap()
+        val section = (m["ranked-team-wars"] as Map<String, Any?>).toMutableMap()
+        if (value == null) section.remove("disconnect-forfeit") else section["disconnect-forfeit"] = mapOf("heart-loss" to value)
+        m["ranked-team-wars"] = section
+        return m
+    }
+    check("#1465 bundled heart-loss is last-opponent", parse(map).settings?.rankedTeamWars?.disconnectHeartLoss == RankedForfeitHeartLoss.LAST_OPPONENT)
+    check("#1465 heart-loss none accepted", parse(withForfeit("none")).settings?.rankedTeamWars?.disconnectHeartLoss == RankedForfeitHeartLoss.NONE)
+    check("#1465 an unknown heart-loss value is refused (never guessed)", parse(withForfeit("everyone")).settings == null)
+    val missing = parse(withForfeit(null))
+    check("#1465 an older lifesteal.yml without the section still loads (warning only)", missing.settings?.rankedTeamWars?.disconnectHeartLoss == RankedForfeitHeartLoss.LAST_OPPONENT && missing.problems.none { it.severe })
+
+    // 11. Wiring.
+    val manager = source("lifesteal/ranked/LifestealRankedManager.kt")
+    val listener = source("lifesteal/ranked/LifestealRankedListener.kt")
+    val heartManager = source("lifesteal/hearts/LifestealHeartManager.kt")
+    check("#1465 quits go through the one policy", manager.contains("RankedMatchRules.disconnect(") && manager.contains("CombatLogRules.classify(quitReason, kickCause, Bukkit.isStopping(), transferPending)"))
+    check("#1465 the quit passes Paper's quit reason and kick cause", listener.contains("ranked.onQuit(event.player, event.reason.name, kickCause)") && listener.contains("fun onKick(event: PlayerKickEvent)"))
+    check("#1465 the recipient is chosen before the defeat clears the hits", manager.indexOf("val recipient = if (policy.heartForfeit) forfeitRecipient(") in 0 until manager.indexOf("defeat(match, uuid, DefeatReason.DISCONNECT)"))
+    check("#1465 only landed hits between opponents are recorded", Regex("""MONITOR, ignoreCancelled = true\)\s*\n\s*fun onLandedHit""").containsMatchIn(listener) && manager.contains("match.roster.sameSide(attacker.uniqueId, victim.uniqueId) != false"))
+    check("#1465 recipient must still be fighting on the other side", manager.contains("match.roster.isActive(attacker) && match.roster.sameSide(attacker, victim) == false"))
+    check("#1465 the forfeit heart uses the normal transferPvp with the team and progression checks", Regex("""fun onRankedForfeit[\s\S]*?heartCheck\(killer\.uniqueId, victim\.uniqueId\)[\s\S]*?heartWindow\(now\)[\s\S]*?store\.transferPvp\(request\)""").containsMatchIn(heartManager))
+    check("#1465 a forfeit never makes a Heart item or Team XP", Regex("""fun onRankedForfeit[\s\S]*?\n    }\n""").find(heartManager)?.value?.let { !it.contains("issue(") && !it.contains("onPvpKill") && !it.contains("HeartItem") } == true)
+    check("#1465 shutdown disconnects decide nothing (stop() cancels and restores)", manager.contains("RankedMatchRules.DisconnectAction.SHUTDOWN -> Unit"))
+    check("#1465 the decision gets this tick's outs", manager.contains("RankedMatchRules.decide(match.roster, outs)"))
+    check("#1465 Elo only from a completed match (never from the forfeit itself)", manager.split("lifestealRatingManager.onMatchCompleted(").size == 2)
+}
+
 // ── Wiring (source) ──────────────────────────────────────────
 
 private fun wiring() {
@@ -574,7 +790,8 @@ private fun wiring() {
     check("boundary: walking out pushed back, walking in refused", listener.contains("if (inside(match.arena, from) && !inside(match.arena, to))") && listener.contains("!inside(it.arena, from) && inside(it.arena, to)"))
     check("no block changes in arenas (place, break, buckets, explosions)", listener.contains("fun onPlace(event: BlockPlaceEvent)") && listener.contains("fun onBreak(event: BlockBreakEvent)") && listener.contains("fun onEntityExplode"))
     check("cleanup removes only loose leftovers, never blocks", manager.contains("e is Item || e is AbstractArrow || e is EnderCrystal || e is ExperienceOrb") && !manager.contains("setType(") && !manager.contains(".type = "))
-    check("no permanent heart penalty for disconnects/boundaries", !manager.contains("HeartRules.AdminOp") && manager.contains("no heart penalty"))
+    // Issue #1465: the only heart consequence of a disconnect is the normal transferPvp; never an admin change.
+    check("no admin heart changes for disconnects/boundaries", !manager.contains("HeartRules.AdminOp") && !manager.contains("adminChange("))
     check("spectators can't affect combat", listener.contains("if (ranked.isSpectator(victim.uniqueId)) return true") && listener.contains("ranked.isSpectator(attacker.uniqueId)"))
 
     // Scope limits of this issue.

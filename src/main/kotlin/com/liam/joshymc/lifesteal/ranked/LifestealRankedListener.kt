@@ -43,6 +43,7 @@ import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerKickEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerPickupArrowEvent
 import org.bukkit.event.player.PlayerQuitEvent
@@ -137,6 +138,19 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
         if (harmBlocked(attackerOf(event), victim)) event.isCancelled = true
     }
 
+    /**
+     * Issue #1465: hits that landed (MONITOR, not cancelled) between opponents of an ACTIVE match,
+     * remembered by the match as the only candidates for a disconnect forfeit's heart.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onLandedHit(event: EntityDamageEvent) {
+        val victim = event.entity as? Player ?: return
+        if (!ranked.anyMatch || event.finalDamage <= 0.0) return
+        val attacker = attackerOf(event) ?: return
+        if (attacker.uniqueId == victim.uniqueId) return
+        ranked.recordHit(attacker, victim)
+    }
+
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onSplash(event: PotionSplashEvent) {
         if (!ranked.anyMatch) return
@@ -197,10 +211,19 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
         plugin.lifestealRatingManager.onJoin(event.player)
     }
 
+    /** Issue #1465: the kick cause of a kick that is going through, read by the quit that follows. */
+    private val pendingKicks = HashMap<UUID, String>()
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onKick(event: PlayerKickEvent) {
+        if (ranked.holds(event.player)) pendingKicks[event.player.uniqueId] = event.cause.name
+    }
+
     @EventHandler(priority = EventPriority.LOW)
     fun onQuit(event: PlayerQuitEvent) {
         lastHint.remove(event.player.uniqueId)
-        ranked.onQuit(event.player)
+        val kickCause = pendingKicks.remove(event.player.uniqueId)
+        ranked.onQuit(event.player, event.reason.name, kickCause)
         // Issue #1363: a queued/confirming player's team entry ends (a created match stays the match manager's).
         plugin.lifestealRankedQueueManager.onQuit(event.player)
         plugin.lifestealRatingManager.onQuit(event.player)

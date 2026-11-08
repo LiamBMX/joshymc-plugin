@@ -1,5 +1,8 @@
 package com.liam.joshymc.lifesteal.ranked
 
+import com.liam.joshymc.lifesteal.RankedForfeitHeartLoss
+import com.liam.joshymc.lifesteal.combat.CombatLogRules.DisconnectKind
+import com.liam.joshymc.lifesteal.hearts.HeartRules
 import java.util.UUID
 
 /**
@@ -46,10 +49,16 @@ enum class MatchState(val terminal: Boolean = false) {
 /** Where a participant stands inside the match. Only [ACTIVE] participants are still fighting. */
 enum class ParticipantStatus { ACTIVE, DEFEATED }
 
-/** Why a participant stopped fighting. None of these touch hearts (no ranked heart penalty exists). */
+/**
+ * Why a participant stopped fighting. Only [DEATH] (the normal heart service) and [DISCONNECT] (the
+ * issue #1465 disconnect forfeit, [RankedMatchRules.forfeitRecipient]) can ever move a heart.
+ */
 enum class DefeatReason(val label: String) {
     DEATH("died"),
-    DISCONNECT("disconnected"),
+    /** Issue #1465: a counted disconnect from an ACTIVE match (quit, timeout, player-caused kick): a forfeit. */
+    DISCONNECT("disconnected (forfeit)"),
+    /** Issue #1465: kicked by staff/the server or a server error mid-fight: out of the match, never a heart. */
+    DISCONNECT_EXEMPT("disconnected (staff kick or server error)"),
     /** Staff took them out of the match (`/lifesteal admin ranked remove`). */
     REMOVED("removed by staff"),
 }
@@ -130,16 +139,115 @@ object RankedMatchRules {
      * this runs (the manager decides on the next tick), so the last players of both sides dying
      * together is [Decision.NoWinner], never whichever event happened to fire first.
      */
-    fun decide(roster: MatchRoster): Decision {
+    fun decide(roster: MatchRoster, outThisTick: List<MatchParticipant> = emptyList()): Decision {
         val a = roster.active(Side.A).size
         val b = roster.active(Side.B).size
         return when {
-            a == 0 && b == 0 -> Decision.NoWinner
+            a == 0 && b == 0 -> simultaneous(outThisTick)
             a == 0 -> Decision.Winner(Side.B)
             b == 0 -> Decision.Winner(Side.A)
             else -> Decision.Continue
         }
     }
+
+    /**
+     * Issue #1465: both sides ran out in the same tick. If every player one side lost in that tick
+     * left by a counted disconnect ([DefeatReason.DISCONNECT]) and the other side lost at least one
+     * player some other way, the disconnecting side forfeits and the other side wins, so quitting in
+     * the tick your opponent's last player falls can't turn a loss into a cancelled match. Anything
+     * else (deaths on both sides, forfeits on both sides) stays [Decision.NoWinner].
+     */
+    private fun simultaneous(outThisTick: List<MatchParticipant>): Decision {
+        fun forfeited(side: Side): Boolean {
+            val outs = outThisTick.filter { it.side == side }
+            return outs.isNotEmpty() && outs.all { it.defeatReason == DefeatReason.DISCONNECT }
+        }
+        val a = forfeited(Side.A)
+        val b = forfeited(Side.B)
+        return when {
+            a && !b -> Decision.Winner(Side.B)
+            b && !a -> Decision.Winner(Side.A)
+            else -> Decision.NoWinner
+        }
+    }
+
+    // ── Disconnects (issue #1465) ───────────────────────────
+
+    /** What a participant's disconnect does to their match. */
+    enum class DisconnectAction {
+        /** Not in a match any more (out already, or the match is over): nothing happens. */
+        NONE,
+        /** The fight hasn't started: the match is cancelled unrated, nobody's hearts change. */
+        CANCEL_MATCH,
+        /** In the fight: out of the match as a forfeit ([DefeatReason.DISCONNECT]), maybe a heart. */
+        FORFEIT,
+        /** In the fight, but the server or staff caused it: out of the match, never a heart. */
+        LEAVE_EXEMPT,
+        /** The server is stopping: left to shutdown, which cancels the match and restores everyone. */
+        SHUTDOWN,
+    }
+
+    data class DisconnectPolicy(val action: DisconnectAction, val heartForfeit: Boolean)
+
+    /**
+     * The one disconnect policy. It never guesses intent: Paper can't tell alt-F4 from a crash or a
+     * pulled cable, so every disconnect of the same kind is treated the same way. [state] is the
+     * match's state (null = not in a match), [stillFighting] whether the player is an ACTIVE
+     * participant, [kind] from `CombatLogRules.classify`. Timeouts count when [countTimeouts]
+     * (`combat-logging.count-timeouts`, the same switch as ordinary combat logs).
+     */
+    fun disconnect(state: MatchState?, stillFighting: Boolean, kind: DisconnectKind, countTimeouts: Boolean, heartLoss: RankedForfeitHeartLoss): DisconnectPolicy {
+        val none = DisconnectPolicy(DisconnectAction.NONE, false)
+        if (state == null || state.terminal) return none
+        if (kind == DisconnectKind.SERVER_SHUTDOWN) return DisconnectPolicy(DisconnectAction.SHUTDOWN, false)
+        return when (state) {
+            MatchState.CREATED, MatchState.VALIDATING, MatchState.PREPARING, MatchState.COUNTDOWN -> DisconnectPolicy(DisconnectAction.CANCEL_MATCH, false)
+            MatchState.ACTIVE -> when {
+                !stillFighting -> none
+                !counts(kind, countTimeouts) -> DisconnectPolicy(DisconnectAction.LEAVE_EXEMPT, false)
+                else -> DisconnectPolicy(DisconnectAction.FORFEIT, heartLoss == RankedForfeitHeartLoss.LAST_OPPONENT)
+            }
+            else -> none
+        }
+    }
+
+    /** Same counting as ordinary Lifesteal combat logs (`CombatLogRules.enforcement`). */
+    fun counts(kind: DisconnectKind, countTimeouts: Boolean): Boolean = when (kind) {
+        DisconnectKind.QUIT, DisconnectKind.PLAYER_KICK, DisconnectKind.TRANSFER -> true
+        DisconnectKind.TIMED_OUT -> countTimeouts
+        DisconnectKind.STAFF_KICK, DisconnectKind.SERVER_SHUTDOWN, DisconnectKind.SERVER_ERROR -> false
+    }
+
+    /** Opponent hits kept per participant (only the most recent ones can matter). */
+    const val MAX_RECENT_HITS = 8
+
+    /**
+     * Who may receive the heart of a disconnect forfeit (null = nobody, no heart moves). Only hits
+     * the match itself recorded count: an opponent's damage on [victim] during the ACTIVE fight, no
+     * older than one combat-tag duration ([windowMillis], the same window as the #1461 combat-tag
+     * credit) and not "in the future". Of those, the most recent hit whose attacker passes
+     * [eligible] wins: the manager requires them to be on the other roster side, still fighting in
+     * this match and online, and the heart service then applies its own checks (loaded, Lifesteal,
+     * not an NPC). Never a teammate, never a random opponent, never one who didn't hit the leaver.
+     */
+    fun forfeitRecipient(victim: UUID, hits: List<HeartRules.RecentHit>, now: Long, windowMillis: Long, eligible: (UUID) -> Boolean): UUID? {
+        if (windowMillis <= 0) return null
+        return hits
+            .filter { it.attacker != victim && it.at <= now && now - it.at < windowMillis }
+            .sortedByDescending { it.at }
+            .firstOrNull { eligible(it.attacker) }
+            ?.attacker
+    }
+
+    /** Appends a hit, keeping at most [MAX_RECENT_HITS] (oldest dropped). */
+    fun recordHit(hits: List<HeartRules.RecentHit>, hit: HeartRules.RecentHit): List<HeartRules.RecentHit> =
+        (hits + hit).takeLast(MAX_RECENT_HITS)
+
+    /** The dedupe key of [victim]'s disconnect forfeit in [matchId]: one heart decision per player per match. */
+    fun forfeitDedupeKey(matchId: String, victim: UUID): String = "rankedforfeit:$matchId:$victim"
+
+    /** Audit note on a forfeit transfer (`HeartStore.PvpRequest.note`). */
+    fun forfeitNote(matchId: String, kind: DisconnectKind): String = "ranked disconnect forfeit, match $matchId (${kind.label})"
 
     // ── Validation ──────────────────────────────────────────
 

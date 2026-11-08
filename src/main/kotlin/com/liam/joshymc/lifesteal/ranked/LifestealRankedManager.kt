@@ -3,6 +3,10 @@ package com.liam.joshymc.lifesteal.ranked
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.lifesteal.LifestealSettings
+import com.liam.joshymc.lifesteal.RankedForfeitHeartLoss
+import com.liam.joshymc.lifesteal.combat.CombatLogRules
+import com.liam.joshymc.lifesteal.hearts.HeartRules
+import com.liam.joshymc.lifesteal.hearts.HeartStore
 import com.liam.joshymc.lifesteal.progression.ProgressionRules
 import com.liam.joshymc.lifesteal.teams.LifestealTeamStore
 import com.liam.joshymc.recovery.SafeSpots
@@ -51,7 +55,10 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * **Hearts** are untouched by this system: kills go through the normal heart service
  * ([com.liam.joshymc.lifesteal.hearts.LifestealHeartManager.onDeath]) with its limits, cooldown
- * and team checks. Restoring an inventory never restores hearts.
+ * and team checks. Restoring an inventory never restores hearts. The one exception (issue #1465)
+ * is a counted disconnect from an ACTIVE fight ([onQuit], [RankedMatchRules.disconnect]): the
+ * leaver forfeits the match, and the same heart service may move one heart to the opponent who hit
+ * them most recently ([RankedMatchRules.forfeitRecipient]), under every normal heart rule.
  *
  * **Database work**: only at lifecycle edges (match creation, state changes, restorations), each one
  * short transaction on the local SQLite file, like the heart system. Deaths and disconnects during
@@ -84,6 +91,10 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         internal var decisionPending = false
         /** Participants whose `allowFlight` this match turned off (given back afterwards). */
         internal val flightTaken = HashSet<UUID>()
+        /** Issue #1465: opponent hits on each participant during the fight (bounded), for disconnect forfeits. */
+        internal val recentHits = HashMap<UUID, List<HeartRules.RecentHit>>()
+        /** Issue #1465: participants who went out since the last decision (same-tick tie-break). */
+        internal val outsSinceDecision = mutableListOf<MatchParticipant>()
 
         fun team(side: Side): LifestealTeamStore.Team = if (side == Side.A) teamA else teamB
         val label: String get() = "${teamA.name} vs ${teamB.name} (${size}v$size${when (kind) { MatchKind.TEST -> ", TEST"; MatchKind.CHALLENGE -> ", challenge"; MatchKind.PUBLIC -> "" }})"
@@ -818,6 +829,8 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     fun defeat(match: Match, uuid: UUID, reason: DefeatReason) {
         val next = match.roster.defeat(uuid, reason) ?: return
         match.roster = next
+        next.of(uuid)?.let { match.outsSinceDecision += it }
+        match.recentHits.remove(uuid)
         held.remove(uuid)
         val now = System.currentTimeMillis()
         plugin.databaseManager.async("ranked defeat ${match.id}") { store.defeat(match.id, uuid, reason, now) }
@@ -831,8 +844,10 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         match.decisionPending = true
         match.track(plugin.server.scheduler.runTask(plugin, Runnable {
             match.decisionPending = false
+            val outs = match.outsSinceDecision.toList()
+            match.outsSinceDecision.clear()
             if (match.state != MatchState.ACTIVE) return@Runnable
-            when (val d = RankedMatchRules.decide(match.roster)) {
+            when (val d = RankedMatchRules.decide(match.roster, outs)) {
                 RankedMatchRules.Decision.Continue -> Unit
                 RankedMatchRules.Decision.NoWinner -> cancel(match, "both teams were out at the same time (no reliable winner)")
                 is RankedMatchRules.Decision.Winner -> win(match, d.side)
@@ -958,26 +973,108 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     // ── Player events (from the listener) ───────────────────
 
     fun onJoin(player: Player) {
-        if (!hosted || !pendingRestore.contains(player.uniqueId)) return
+        if (!hosted) return
         // They logged in where they left (usually inside an arena). Dead players are restored at respawn.
-        restoreIfPending(player, "rejoined")
+        if (pendingRestore.contains(player.uniqueId)) restoreIfPending(player, "rejoined")
+        forfeitNotices.remove(player.uniqueId)?.let { lines -> for (line in lines) tell(player, line, NamedTextColor.YELLOW) }
     }
 
-    fun onQuit(player: Player) {
+    // ── Disconnects (issue #1465) ───────────────────────────
+
+    /** What a forfeit did, told to the leaver when they're back (memory only; a restart drops it). */
+    private val forfeitNotices = ConcurrentHashMap<UUID, List<String>>()
+
+    /**
+     * An opponent's damage on [victim] during the fight (MONITOR, not cancelled, so only hits that
+     * landed). Only real match fights between opposite roster sides are recorded: these are the
+     * only candidates for a disconnect forfeit's heart.
+     */
+    fun recordHit(attacker: Player, victim: Player) {
+        val match = matchOf(victim.uniqueId) ?: return
+        if (match.state != MatchState.ACTIVE || !isMatchFight(attacker, victim)) return
+        if (match.roster.sameSide(attacker.uniqueId, victim.uniqueId) != false) return
+        val hit = HeartRules.RecentHit(attacker.uniqueId, System.currentTimeMillis())
+        match.recentHits[victim.uniqueId] = RankedMatchRules.recordHit(match.recentHits[victim.uniqueId].orEmpty(), hit)
+    }
+
+    /**
+     * A participant or spectator is disconnecting. [quitReason] / [kickCause] are Paper enum names
+     * (the kick cause from the PlayerKickEvent just before, if any). What happens is decided only by
+     * [RankedMatchRules.disconnect]: before the fight the match is cancelled; in the fight a counted
+     * disconnect is a forfeit (out of the match, their side loses if nobody is left, Elo by the
+     * normal rating of the finished match) and may cost one heart; staff kicks and server errors
+     * only take them out; a shutdown is left to [stop]. Their inventory comes back on rejoin.
+     */
+    fun onQuit(player: Player, quitReason: String? = null, kickCause: String? = null) {
         val uuid = player.uniqueId
         spectating.remove(uuid)?.let { matches[it]?.spectators?.remove(uuid) }
         val match = matchOf(uuid) ?: return
         val now = System.currentTimeMillis()
-        plugin.databaseManager.async("ranked disconnect ${match.id}") { store.logEvent(match.id, "DISCONNECT", uuid, match.state.name, now) }
-        when (match.state) {
+        val transferPending = runCatching { plugin.transferManager.isTransferPending(uuid) }.getOrDefault(false)
+        val kind = CombatLogRules.classify(quitReason, kickCause, Bukkit.isStopping(), transferPending)
+        val lifesteal = plugin.lifestealConfigManager.settings
+        val policy = RankedMatchRules.disconnect(
+            match.state, match.roster.isActive(uuid), kind,
+            countTimeouts = lifesteal?.combatLogging?.countTimeouts ?: true,
+            heartLoss = (settings ?: lifesteal?.rankedTeamWars)?.disconnectHeartLoss ?: RankedForfeitHeartLoss.NONE,
+        )
+        val detail = match.state.name + " " + kind.name + " " + policy.action.name
+        plugin.databaseManager.async("ranked disconnect ${match.id}") { store.logEvent(match.id, "DISCONNECT", uuid, detail, now) }
+        when (policy.action) {
             // Before the fight: the match can't start fair, cancel it. Their snapshot waits for their return.
-            MatchState.PREPARING, MatchState.COUNTDOWN -> {
+            RankedMatchRules.DisconnectAction.CANCEL_MATCH -> {
                 held.remove(uuid)
                 cancel(match, "${player.name} disconnected before the start", leaving = uuid)
             }
-            // In the fight: out of this match only (no heart penalty: none is approved). Restored on rejoin.
-            MatchState.ACTIVE -> defeat(match, uuid, DefeatReason.DISCONNECT)
-            else -> held.remove(uuid)
+            RankedMatchRules.DisconnectAction.FORFEIT -> {
+                // Pick the recipient before the defeat drops this player's recorded hits.
+                val recipient = if (policy.heartForfeit) forfeitRecipient(match, uuid, now) else null
+                defeat(match, uuid, DefeatReason.DISCONNECT)
+                val lines = mutableListOf("You disconnected during a ranked match (${match.label}), so you forfeited it.")
+                if (policy.heartForfeit) lines += forfeitHeart(match, player, recipient, kind)
+                forfeitNotices[uuid] = lines
+            }
+            RankedMatchRules.DisconnectAction.LEAVE_EXEMPT -> {
+                defeat(match, uuid, DefeatReason.DISCONNECT_EXEMPT)
+                forfeitNotices[uuid] = listOf("You left a ranked match (${kind.label}); no heart was taken.")
+            }
+            // Shutdown cancels every match and restores everyone (stop()); nothing is decided here.
+            RankedMatchRules.DisconnectAction.SHUTDOWN -> Unit
+            RankedMatchRules.DisconnectAction.NONE -> held.remove(uuid)
+        }
+    }
+
+    /** Most recent opposing hitter who is still fighting in this match and online, or null. */
+    private fun forfeitRecipient(match: Match, victim: UUID, now: Long): Player? {
+        val hits = match.recentHits[victim].orEmpty()
+        val chosen = RankedMatchRules.forfeitRecipient(victim, hits, now, plugin.combatManager.tagDurationMillis) { attacker ->
+            val p = Bukkit.getPlayer(attacker)
+            p != null && p.isOnline && !p.isDead && held[attacker] == match.id &&
+                match.roster.isActive(attacker) && match.roster.sameSide(attacker, victim) == false
+        }
+        return chosen?.let { Bukkit.getPlayer(it) }
+    }
+
+    /** The heart part of a forfeit, through the normal heart service. Returns the line for the leaver. */
+    private fun forfeitHeart(match: Match, victim: Player, recipient: Player?, kind: CombatLogRules.DisconnectKind): String {
+        if (recipient == null) {
+            plugin.logger.info("[Ranked] ${victim.name} forfeited match ${match.id} (${kind.label}); no opponent had hit them recently, so no heart moved.")
+            return "No opponent had hit you recently, so no heart was taken."
+        }
+        val result = plugin.lifestealHeartManager.onRankedForfeit(
+            RankedMatchRules.forfeitDedupeKey(match.id, victim.uniqueId), victim, recipient, RankedMatchRules.forfeitNote(match.id, kind),
+        )
+        val done = result as? HeartStore.PvpResult.Done
+        plugin.logger.info("[Ranked] ${victim.name} forfeited match ${match.id} (${kind.label}); heart forfeit to ${recipient.name}: ${done?.decision ?: result ?: "not evaluated"}.")
+        broadcast(match, Component.text("${victim.name} disconnected and forfeited (last hit by ${recipient.name}).", NamedTextColor.GRAY))
+        if (done == null) return "No heart was taken."
+        return when (done.decision) {
+            is HeartRules.Decision.Transfer, is HeartRules.Decision.VictimLosesOnly ->
+                "You lost a heart to ${recipient.name}, who hit you last (you have ${done.victimAfter} now)."
+            HeartRules.Decision.VictimAtMinimum -> "You were at your last heart, so you kept it."
+            is HeartRules.Decision.Cooldown -> "No heart was taken: ${recipient.name} took one from you recently."
+            HeartRules.Decision.KillerAtMaximum -> "No heart was taken: ${recipient.name} is at the maximum."
+            else -> "No heart was taken."
         }
     }
 
