@@ -10,6 +10,7 @@
 
 import com.liam.joshymc.lifesteal.LifestealConfigParser
 import com.liam.joshymc.lifesteal.LifestealSettings
+import com.liam.joshymc.lifesteal.hearts.HeartMessages
 import com.liam.joshymc.lifesteal.hearts.HeartRules
 import com.liam.joshymc.lifesteal.hearts.HeartRules.AdminDecision
 import com.liam.joshymc.lifesteal.hearts.HeartRules.AdminOp
@@ -83,6 +84,7 @@ fun main() {
     heartItemConcurrency()
     heartItemRollback()
     heartItemWiring()
+    heartItemCombat()
     heartItemConsumers()
     println("OK: $checks Lifesteal heart checks passed.")
 }
@@ -928,4 +930,67 @@ private fun heartItemConsumers() {
     check("/lifesteal info changes nothing", listOf("adminChange", "withdraw(", "redeem(", "grantItems").none { it in info })
     val transfer = source("command/ServerTransferCommand.kt")
     check("/lifesteal info|help is only taken where Lifesteal is hosted", "(first == \"info\" || first == \"help\") && args.size == 1 && info != null && plugin.lifestealHeartManager.hosted" in transfer)
+}
+
+// ── Combat-tagged withdrawal (issue #1455) ───────────────────
+
+private fun heartItemCombat() {
+    val tag = T0 + 15_000 // a 15s combat tag set at T0
+    check("combat: untagged player may withdraw", !HeartRules.combatBlocksWithdraw(null, T0))
+    check("combat: tagged player refused", HeartRules.combatBlocksWithdraw(tag, T0))
+    check("combat: refused right up to the expiry", HeartRules.combatBlocksWithdraw(tag, tag - 1))
+    check("combat: allowed once the tag expires", !HeartRules.combatBlocksWithdraw(tag, tag) && !HeartRules.combatBlocksWithdraw(tag, tag + 1))
+    check("combat: rapid repeats while tagged all refused", (0 until 100).all { HeartRules.combatBlocksWithdraw(tag, T0 + it * 10L) })
+    check("combat message", HeartMessages.WITHDRAW_IN_COMBAT == "&cYou cannot withdraw hearts while in combat.")
+
+    // The manager's gate in front of the store: a refused attempt never reaches the transaction.
+    val dir = Files.createTempDirectory("joshymc-heart-combat").toFile()
+    try {
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            val p = UUID.randomUUID()
+            val low = UUID.randomUUID()
+            store.ensure(p, 10, T0)
+            store.ensure(low, 1, T0)
+            fun attempt(uuid: UUID, expiry: Long?, now: Long): HeartStore.WithdrawResult? =
+                if (HeartRules.combatBlocksWithdraw(expiry, now)) null else store.withdraw(uuid, serial(), LIMITS, now)
+            val issuedBefore = store.itemCount(HeartStore.ItemStatus.ISSUED)
+            val txBefore = store.transactionCount()
+            val versionBefore = store.load(p)!!.version
+            val denied = (0 until 20).map { attempt(p, tag, T0 + it * 50L) }
+            check("combat: every tagged attempt refused", denied.all { it == null })
+            check("combat: hearts unchanged after refusals", store.load(p)!!.hearts == 10 && store.load(p)!!.version == versionBefore)
+            check("combat: no serial issued for refusals", store.itemCount(HeartStore.ItemStatus.ISSUED) == issuedBefore && store.outstandingItems(p).isEmpty())
+            check("combat: refusals write no transaction or audit", store.transactionCount() == txBefore && store.audit(p).none { it.operation.startsWith("WITHDRAW") })
+            val after = attempt(p, tag, tag)
+            check("combat: withdrawal works after the tag expires", after is HeartStore.WithdrawResult.Withdrawn && after.after == 9 && store.load(p)!!.hearts == 9)
+            check("combat: untagged withdrawal works", attempt(p, null, tag + 1) is HeartStore.WithdrawResult.Withdrawn && store.load(p)!!.hearts == 8)
+            check("combat: final heart still kept outside combat", attempt(low, null, T0) == HeartStore.WithdrawResult.AtMinimum(1) && store.load(low)!!.hearts == 1)
+            check("combat: final heart kept in combat too", attempt(low, tag, T0) == null && store.load(low)!!.hearts == 1)
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+
+    // Wiring: the one withdrawal path checks the existing combat tag before the cooldown, the
+    // inventory, the re-entry guard and the transaction; redemption is untouched.
+    val manager = source("lifesteal/hearts/LifestealHeartManager.kt")
+    val withdraw = manager.substringAfter("fun withdraw(player: Player)").substringBefore("private fun deliver(")
+    val gate = withdraw.indexOf("HeartRules.combatBlocksWithdraw(plugin.combatManager.tagExpiresAt(uuid), now)")
+    check("combat: withdraw reads the existing combat tag", gate >= 0)
+    check("combat: refused with the combat message", "return send(player, HeartMessages.WITHDRAW_IN_COMBAT)" in withdraw)
+    check("combat: checked before the cooldown, inventory, re-entry guard and transaction",
+        gate >= 0 && listOf("HeartRules.cooldownPassed(", "player.inventory.firstEmpty()", "busy.add(uuid)", "lastWithdrawAt[uuid] = now", "store.withdraw(").all { gate < withdraw.indexOf(it) })
+    check("combat: action cooldown still enforced", "HeartRules.cooldownPassed(lastWithdrawAt[uuid], now, settings.actionCooldownMillis.toLong())" in withdraw)
+    check("combat: no second combat tracker", "combatTags" !in manager && "isTagged" !in manager)
+    val redeem = manager.substringAfter("fun redeem(player: Player, hand: EquipmentSlot)").substringBefore("private fun removeRedeemed(")
+    check("combat: redemption not restricted by combat", "combatManager" !in redeem && "WITHDRAW_IN_COMBAT" !in redeem)
+    val npcDeath = manager.substringAfter("fun onCombatNpcDeath(").substringBefore("fun withdraw(player: Player)")
+    check("combat: Combat NPC deaths still transfer hearts", "dedupeKey = \"combatnpc:" in npcDeath && "store.transferPvp(request)" in npcDeath)
+    val callers = File("src/main/kotlin").walkTopDown()
+        .filter { it.isFile && it.extension == "kt" && "lifestealHeartManager.withdraw(" in it.readText() }
+        .map { it.name }.toList()
+    check("combat: /withdrawheart is the only withdrawal entry point", callers == listOf("WithdrawHeartCommand.kt"))
+    check("combat: tagExpiresAt is the live combat tag", "fun tagExpiresAt(uuid: UUID): Long? = combatTags[uuid]?.takeIf { System.currentTimeMillis() < it }" in source("manager/CombatManager.kt"))
 }

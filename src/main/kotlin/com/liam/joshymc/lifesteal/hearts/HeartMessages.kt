@@ -43,6 +43,7 @@ object HeartMessages {
     const val NOT_LOADED = "&cYour hearts haven't loaded yet. Please rejoin and try again."
     const val RANKED_MATCH = "&cHeart items can't be used or made during a ranked match."
     const val WITHDRAW_DISABLED = "&cHeart withdrawal is disabled right now."
+    const val WITHDRAW_IN_COMBAT = "&cYou cannot withdraw hearts while in combat."
     const val REDEEM_DISABLED = "&cRedeeming Heart items is disabled right now."
     const val WITHDRAW_FAILED = "&cYour heart couldn't be withdrawn just now, so nothing changed. Please try again."
     const val INVALID_ITEM = "&cThis Heart item isn't valid and can't be redeemed."

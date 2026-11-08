@@ -431,6 +431,8 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         val settings = itemSettings
         if (!settings.withdrawEnabled) return send(player, HeartMessages.WITHDRAW_DISABLED)
         val now = System.currentTimeMillis()
+        // Issue #1455: the existing combat tag is the authority; checked before anything is taken or issued.
+        if (HeartRules.combatBlocksWithdraw(plugin.combatManager.tagExpiresAt(uuid), now)) return send(player, HeartMessages.WITHDRAW_IN_COMBAT)
         if (!HeartRules.cooldownPassed(lastWithdrawAt[uuid], now, settings.actionCooldownMillis.toLong())) return
         val cached = loaded[uuid] ?: return send(player, HeartMessages.NOT_LOADED)
         if (HeartRules.withdraw(cached, limits) == HeartRules.WithdrawDecision.AtMinimum) return send(player, settings.messages.finalHeart)
