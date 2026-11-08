@@ -375,6 +375,7 @@ class Joshymc : JavaPlugin() {
     lateinit var lifestealBountyManager: com.liam.joshymc.lifesteal.bounty.LifestealBountyManager
         private set
     lateinit var lifestealQuestManager: com.liam.joshymc.lifesteal.quests.LifestealQuestManager
+        private set
     lateinit var lifestealBankManager: com.liam.joshymc.lifesteal.bank.LifestealBankManager
         private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager

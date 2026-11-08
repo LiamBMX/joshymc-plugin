@@ -300,6 +300,7 @@ class ListenerManager(private val plugin: Joshymc) {
         // Issue #1425: Lifesteal quest progress (read-only at MONITOR) and placed-block markers. Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealQuestManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.quests.LifestealQuestListener(plugin), plugin)
+        }
         // Issue #1427: PvP coin stealing (read-only at MONITOR), offline notices and bank menu prompts. Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealBankManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.bank.LifestealBankListener(plugin), plugin)
