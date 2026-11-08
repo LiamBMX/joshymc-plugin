@@ -293,6 +293,10 @@ class ListenerManager(private val plugin: Joshymc) {
         if (plugin.lifestealRankedManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.ranked.LifestealRankedListener(plugin), plugin)
         }
+        // Issue #1426: Team XP from mining (read-only at MONITOR). Never registered where Lifesteal isn't hosted.
+        if (plugin.lifestealTeamProgressionManager.hosted) {
+            pm.registerEvents(com.liam.joshymc.lifesteal.teams.progression.TeamProgressionListener(plugin.lifestealTeamProgressionManager), plugin)
+        }
         // Issue #1401: Lifesteal bounty claims (read-only at MONITOR), notices and menu prompts. Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealBountyManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.bounty.LifestealBountyListener(plugin), plugin)

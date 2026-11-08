@@ -332,6 +332,8 @@ class LifestealBountyManager(private val plugin: Joshymc) {
                     is BountyStore.PayResult.Paid -> {
                         invalidateBoards()
                         if (announced) announceClaim(p.payout, s)
+                        // Issue #1426: Team XP for the hunter's team, once per payout.
+                        plugin.teamProgression()?.onBountyClaimed(request.killer, request.victim, claim.payoutId)
                         killer?.let { deliverNotifications(it) }
                     }
                     is BountyStore.PayResult.Failed -> {

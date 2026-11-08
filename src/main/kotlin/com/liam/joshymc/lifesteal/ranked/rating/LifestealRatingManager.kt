@@ -159,6 +159,8 @@ class LifestealRatingManager(private val plugin: Joshymc) {
                     result.teams.entries.joinToString { (id, c) -> "${if (id == result.teamAId) result.teamAName else result.teamBName} ${c.before}->${c.after}" } + ".")
                 // Issue #1367: leaderboards never show a page read before this commit.
                 plugin.lifestealRankedStatsManager.onRatingsCommitted()
+                // Issue #1426: Team XP for both teams of a rated match (and the winner), once per match and team.
+                plugin.teamProgression()?.onRankedRated(result)
                 // Team Elo also changed for teammates who didn't play: drop their cached view too.
                 for (teamId in result.teams.keys) plugin.lifestealTeamManager.team(teamId)?.members?.forEach { profiles.remove(it.uuid) }
                 for (uuid in result.sides.keys) {

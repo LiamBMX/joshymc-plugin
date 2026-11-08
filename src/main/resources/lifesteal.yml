@@ -375,3 +375,152 @@ bounties:
     refunded: "&7The bounty on &c{target} &7expired. Your contribution of &6{amount} &7was refunded."
     # Private to the contributor. {amount} {target} {total}
     contributed: "&aYou contributed &6{amount} &ato the bounty on &c{target}&a. Total: &6{total}&a."
+
+# Team Levels, Team XP, Team Upgrades, the team bank, shared objectives and milestones
+# (docs/lifesteal-team-progression.md). Lifesteal only; Survival teams are never touched. Read on its
+# own: a mistake here only pauses Team Upgrades (no XP, purchases, deposits or claims) and never
+# pauses hearts or teams. Turning it off (or breaking it) never deletes or changes stored progress.
+team-progression:
+  enabled: true
+  # XP for the next level = base x currentLevel ^ exponent (1,000 x level^1.5 by default). Teams
+  # start at Level 1 and there is no maximum. The level is always worked out from the total Team XP,
+  # so changing the formula re-levels every team (claimed milestones and bought tiers are kept).
+  levels:
+    base: 1000
+    exponent: 1.5
+  xp:
+    # Base Team XP per verified event and the most one team can earn from it per day. Only events
+    # the server already verified count (see the docs); nothing can be farmed by command.
+    sources:
+      # A kill the heart system accepted (never teammates, allies, the same-victim cooldown or grace).
+      pvp-kill: { amount: 40, daily-cap: 400 }
+      # A Lifesteal bounty claimed and paid.
+      bounty-claim: { amount: 75, daily-cap: 450 }
+      # Each team in a rated Ranked Team Wars match (tests and unrated matches never count).
+      ranked-match: { amount: 60, daily-cap: 480 }
+      # The winning team of a rated match, on top of ranked-match.
+      ranked-win: { amount: 120, daily-cap: 720 }
+      # Per naturally generated ore (player-placed ores never count).
+      ore-mined: { amount: 1, daily-cap: 300 }
+      # Per 100 blocks of real movement (no teleports, no AFK, no circling in place).
+      exploration: { amount: 2, daily-cap: 200 }
+    # Base Team XP one team can earn per day from all sources above together.
+    team-daily-cap: 2500
+    # Base Team XP one member can earn for their team per day.
+    member-daily-cap: 800
+    # Days and weeks (caps, weekly objectives) roll over in this time zone.
+    timezone: America/New_York
+    anti-farm:
+      # A member earns Team XP only after being in the team this long (stops team hopping).
+      minimum-membership-minutes: 60
+      # The same team earns PvP Team XP for the same victim at most once in this many hours.
+      pvp-same-victim-hours: 24
+      # Kills and bounties between players who have connected from the same address (the /alts
+      # data) earn no Team XP. A shared address isn't proof of an alt; this only withholds XP.
+      block-shared-connections: true
+    # Ores that count as mining.
+    ores: [COAL_ORE, DEEPSLATE_COAL_ORE, IRON_ORE, DEEPSLATE_IRON_ORE, COPPER_ORE, DEEPSLATE_COPPER_ORE,
+      GOLD_ORE, DEEPSLATE_GOLD_ORE, REDSTONE_ORE, DEEPSLATE_REDSTONE_ORE, LAPIS_ORE, DEEPSLATE_LAPIS_ORE,
+      DIAMOND_ORE, DEEPSLATE_DIAMOND_ORE, EMERALD_ORE, DEEPSLATE_EMERALD_ORE, NETHER_GOLD_ORE,
+      NETHER_QUARTZ_ORE, ANCIENT_DEBRIS]
+  # The team bank pays for upgrades. Any member deposits their own coins; there is no withdrawal,
+  # so bank coins never return to circulation (they stay with the team, also after a disband).
+  bank:
+    deposits-enabled: true
+    minimum-deposit: 1000
+    # The most coins the bank holds before Team Economy upgrades. Milestone rewards may go above it.
+    base-capacity: 2000000
+  # Upgrade tiers: cost (coins from the team bank), level (Team Level needed) and value:
+  #   storage: extra team storage slots | home: extra team homes | economy: extra bank limit (coins)
+  #   progression: total Team XP bonus in % (at most 10) | cosmetics: team colours unlocked (total)
+  #   utility: features unlocked (total): 1 member contributions, 2 activity log, 3 XP by source
+  # Only the team leader buys (Lifesteal teams have no officers). Costs and levels must not fall
+  # from one tier to the next. Storage and homes stay "not available yet" until Lifesteal has team
+  # storage and team homes; their tiers are kept here so they are ready then.
+  upgrades:
+    storage:
+      enabled: false
+      tiers:
+        - { cost: 50000, level: 2, value: 9 }
+        - { cost: 150000, level: 4, value: 9 }
+        - { cost: 350000, level: 6, value: 9 }
+        - { cost: 750000, level: 8, value: 9 }
+        - { cost: 1500000, level: 10, value: 9 }
+    home:
+      enabled: false
+      tiers:
+        - { cost: 50000, level: 2, value: 1 }
+        - { cost: 150000, level: 4, value: 1 }
+        - { cost: 350000, level: 6, value: 1 }
+        - { cost: 750000, level: 8, value: 1 }
+        - { cost: 1500000, level: 10, value: 1 }
+    economy:
+      enabled: true
+      tiers:
+        - { cost: 50000, level: 2, value: 1000000 }
+        - { cost: 150000, level: 4, value: 1000000 }
+        - { cost: 350000, level: 6, value: 2000000 }
+        - { cost: 750000, level: 8, value: 2000000 }
+        - { cost: 1500000, level: 10, value: 3000000 }
+    progression:
+      enabled: true
+      tiers:
+        - { cost: 50000, level: 2, value: 2 }
+        - { cost: 150000, level: 4, value: 4 }
+        - { cost: 350000, level: 6, value: 6 }
+        - { cost: 750000, level: 8, value: 8 }
+        - { cost: 1500000, level: 10, value: 10 }
+    cosmetics:
+      enabled: true
+      tiers:
+        - { cost: 50000, level: 2, value: 2 }
+        - { cost: 150000, level: 5, value: 5 }
+        - { cost: 350000, level: 10, value: 8 }
+    utility:
+      enabled: true
+      tiers:
+        - { cost: 50000, level: 2, value: 1 }
+        - { cost: 150000, level: 4, value: 2 }
+        - { cost: 350000, level: 6, value: 3 }
+  objectives:
+    # weekly (Monday 00:00 in xp.timezone), season (once per Lifesteal season) or never (once per team).
+    cycle: weekly
+    # types: pvp-kills, unique-victims, bounties, ranked-matches, ranked-wins, ores, blocks-travelled,
+    # unique-contributors. pools: combat, mining, exploration, teamwork (keep more than combat, so
+    # teams that don't PvP can progress too). xp is paid once per cycle and is never capped.
+    list:
+      - { id: enemy-hunters, pool: combat, type: unique-victims, target: 25, xp: 600, name: "Eliminate 25 unique enemies" }
+      - { id: bounty-hunters, pool: combat, type: bounties, target: 10, xp: 500, name: "Claim 10 bounties" }
+      - { id: war-champions, pool: combat, type: ranked-wins, target: 5, xp: 750, name: "Win 5 Team Wars" }
+      - { id: deep-miners, pool: mining, type: ores, target: 2500, xp: 600, name: "Mine 2,500 ores" }
+      - { id: trailblazers, pool: exploration, type: blocks-travelled, target: 50000, xp: 600, name: "Travel 50,000 blocks" }
+      - { id: all-hands, pool: teamwork, type: unique-contributors, target: 3, xp: 400, name: "3 members earn Team XP" }
+  milestones:
+    levels: [5, 10, 25, 50, 75, 100]
+    # After the last level above, a milestone every this many levels (0 = none).
+    every-after: 25
+    # Claimed once per team, ever. Coins go to the team bank (so they can only buy upgrades).
+    # title: a team title (letters, digits, spaces; up to 20) the leader can show on the team.
+    rewards:
+      - { level: 5, coins: 25000, title: "Rising" }
+      - { level: 10, coins: 50000, title: "Established" }
+      - { level: 25, coins: 100000, title: "Veteran" }
+      - { level: 50, coins: 150000, title: "Elite" }
+      - { level: 75, coins: 200000, title: "Legendary" }
+      - { level: 100, coins: 250000, title: "Mythic" }
+    # The reward of every later milestone (125, 150, ...).
+    default-reward: { coins: 250000 }
+  cosmetics:
+    # Team name colours in unlock order (Team Cosmetics unlocks the first N).
+    colors: [gold, aqua, green, light_purple, red, yellow, blue, white]
+  seasons:
+    # keep: Team Levels, upgrades, bank, titles and milestone claims are permanent; Team XP per season
+    # is recorded as history. No other policy is approved yet (see docs/lifesteal-team-progression.md).
+    reset-policy: keep
+  gui:
+    main-title: "Team Upgrades"
+  # & colour codes. {team} {level} {objective} {xp}
+  messages:
+    level-up: "&6&lTEAM LEVEL UP! &e{team} &7reached &6Level {level}&7!"
+    objective-completed: "&a&lOBJECTIVE &7Your team completed &f{objective} &7(+{xp} Team XP)."
+    milestone-ready: "&d&lMILESTONE &7Level {level} reward is ready. &e/team milestones"
