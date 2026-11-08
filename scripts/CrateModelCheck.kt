@@ -127,19 +127,31 @@ fun main() {
     val config = File("src/main/resources/config.yml").readText()
     val section = config.substringAfter("  custom-models:\n").substringBefore("\n\n")
     check("bundled config has the section", "enabled: true" in section && "gamemodes: [survival]" in section)
-    for (id in listOf("cabin", "homestead", "campfire")) {
-        check("bundled config has $id", "      $id:\n" in section && "model: \"joshymc:${id}_crate\"" in section)
-        check("resource pack source has $id", File("resourcepack/assets/joshymc/items/${id}_crate.json").exists())
-        check("art module for $id", File("resourcepack/art/items/${id}_crate.py").exists())
+    // crate id -> item model path (the #1447 redesign models are named <id>_chest)
+    val bundled = linkedMapOf(
+        "cabin" to "cabin_crate", "homestead" to "homestead_crate", "campfire" to "campfire_crate",
+        "harvest" to "harvest_chest", "stockpile" to "stockpile_chest",
+    )
+    for ((id, path) in bundled) {
+        check("bundled config has $id", "      $id:\n" in section && "model: \"joshymc:$path\"" in section)
+        check("resource pack source has $id", File("resourcepack/assets/joshymc/items/$path.json").exists())
+        check("art module for $id", File("resourcepack/art/items/$path.py").exists())
     }
+    val parsedBundled = CrateModels.parse(MapSource(mapOf(
+        "enabled" to true,
+        "models.harvest.model" to "joshymc:harvest_chest",
+        "models.stockpile.model" to "joshymc:stockpile_chest",
+    )))
+    check("harvest model key kept", parsedBundled.modelFor("harvest")?.model == "joshymc:harvest_chest")
+    check("stockpile model key kept", parsedBundled.modelFor("stockpile")?.model == "joshymc:stockpile_chest")
     // The crate ids are the ones the rest of the plugin hands out keys for.
     val quests = File("src/main/kotlin/com/liam/joshymc/manager/QuestCycleManager.kt").readText()
-    check("cabin/homestead/campfire are real crate ids", listOf("\"cabin\"", "\"homestead\"", "\"campfire\"").all { it in quests })
+    check("bundled model crate ids are real crate ids", bundled.keys.all { "\"$it\"" in quests })
     val built = File("build/resources/main/resourcepack.zip")
     if (built.exists()) {
         ZipFile(built).use { zip ->
-            for (id in listOf("cabin", "homestead", "campfire")) {
-                check("built pack has $id", zip.getEntry("assets/joshymc/items/${id}_crate.json") != null)
+            for ((id, path) in bundled) {
+                check("built pack has $id", zip.getEntry("assets/joshymc/items/$path.json") != null)
             }
         }
     }

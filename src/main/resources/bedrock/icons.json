@@ -552,6 +552,11 @@
       "icon": "joshymc/gun.png",
       "sha1": "be909da1b9f73b73b81bea6ac41cd38dd0abc4a5"
     },
+    "joshymc:harvest_chest": {
+      "bedrock_name": "harvest_chest",
+      "icon": "joshymc/harvest_chest.png",
+      "sha1": "d20ce83da8e972058e548e172d8aca26ffe0cd44"
+    },
     "joshymc:harvest_key": {
       "bedrock_name": "harvest_key",
       "icon": "joshymc/harvest_key.png",
@@ -846,6 +851,11 @@
       "bedrock_name": "snowveil_leggings",
       "icon": "joshymc/snowveil_leggings.png",
       "sha1": "a7ee4fcead0a1188be19ea9c69c72a8cc11fe454"
+    },
+    "joshymc:stockpile_chest": {
+      "bedrock_name": "stockpile_chest",
+      "icon": "joshymc/stockpile_chest.png",
+      "sha1": "175a5a00e2288bc28fb96dcf712cf7a9b3b2fc82"
     },
     "joshymc:stockpile_key": {
       "bedrock_name": "stockpile_key",

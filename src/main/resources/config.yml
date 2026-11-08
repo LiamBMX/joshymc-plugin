@@ -681,6 +681,19 @@ crates:
         offset: {x: 0.0, y: 0.0, z: 0.0}
         rotation: auto
         scale: 1.0
+      # Crates redesign (issue #1447): the first two of the new "_chest" models.
+      harvest:
+        enabled: true
+        model: "joshymc:harvest_chest"
+        offset: {x: 0.0, y: 0.0, z: 0.0}
+        rotation: auto
+        scale: 1.0
+      stockpile:
+        enabled: true
+        model: "joshymc:stockpile_chest"
+        offset: {x: 0.0, y: 0.0, z: 0.0}
+        rotation: auto
+        scale: 1.0
 
 # Lag Cleaner — entity-threshold-based, only clears when needed
 # Checks entity counts every check-interval-seconds

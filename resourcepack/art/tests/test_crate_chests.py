@@ -24,7 +24,9 @@ REPO = PACK.parent
 ITEMS = PACK / "assets" / kit.NAMESPACE / "items"
 CONFIG = REPO / "src" / "main" / "resources" / "config.yml"
 
-CRATES = ("cabin_crate", "homestead_crate", "campfire_crate")
+CRATES = ("cabin_crate", "homestead_crate", "campfire_crate", "harvest_chest", "stockpile_chest")
+# the crates redesign (issue #1447): models that must look different from one another
+REDESIGN = ("harvest_chest", "stockpile_chest")
 
 
 class CrateChestModelsTest(unittest.TestCase):
@@ -77,6 +79,23 @@ class CrateChestModelsTest(unittest.TestCase):
             path = ITEMS / f"{item_id}.json"
             self.assertTrue(path.exists(), f"{path} missing: run python3 -m art.build {item_id}")
             json.loads(path.read_text())
+
+    def test_redesign_models_are_distinct(self):
+        """Harvest and Stockpile share the skeleton but not their textures or their shape."""
+        a, b = (importlib.import_module(f"art.items.{i}").models()["main"]["elements"] for i in REDESIGN)
+        textures = PACK / "assets" / kit.NAMESPACE / "textures" / "item"
+        painted = [{p.read_bytes() for p in (textures / i).glob("*.png")} for i in REDESIGN]
+        self.assertTrue(all(painted), "run python3 -m art.build harvest_chest stockpile_chest")
+        self.assertFalse(painted[0] & painted[1], "Harvest and Stockpile share a texture")
+        (_, ha), (_, hb) = kit.bounds(a), kit.bounds(b)
+        self.assertNotAlmostEqual(ha[1], hb[1], places=0)          # vaulted vs stepped/crowned lid
+
+    def test_bundled_config_maps_redesign_crates(self):
+        text = CONFIG.read_text()
+        section = text[text.index("  custom-models:"):].split("\n\n")[0]
+        for crate, model in (("harvest", "harvest_chest"), ("stockpile", "stockpile_chest")):
+            self.assertIn(f"      {crate}:\n", section)
+            self.assertIn(f'model: "joshymc:{model}"', section)
 
     def test_bundled_config_points_at_built_models(self):
         text = CONFIG.read_text()

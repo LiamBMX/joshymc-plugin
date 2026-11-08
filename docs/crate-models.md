@@ -1,7 +1,8 @@
 # Custom crate chest models (issue #1389)
 
 Survival crates can show their own chest model instead of a plain vanilla chest. Cabin,
-Homestead and Campfire ship with finished models. Lifesteal is prepared for but not
+Homestead and Campfire ship with finished models. The crates redesign (issue #1407, audit
+#1446) adds Harvest and Stockpile (issue #1447) as its first two `_chest` models. Lifesteal is prepared for but not
 enabled.
 
 ## A. Existing crate system (unchanged)
@@ -60,16 +61,39 @@ permissions and the anti-dupe guards are untouched.
 | Cabin | `resourcepack/art/items/cabin_crate.py` | `assets/joshymc/items/cabin_crate.json`, `models/item/cabin_crate/`, `textures/item/cabin_crate/` |
 | Homestead | `resourcepack/art/items/homestead_crate.py` | same layout, `homestead_crate` |
 | Campfire | `resourcepack/art/items/campfire_crate.py` | same layout, `campfire_crate` |
+| Harvest (#1447) | `resourcepack/art/items/harvest_chest.py` | same layout, `harvest_chest` |
+| Stockpile (#1447) | `resourcepack/art/items/stockpile_chest.py` | same layout, `stockpile_chest` |
+
+**Harvest Chest** (`joshymc:harvest_chest`, crate id `harvest`): a rustic treasure chest
+with a warm brown plank body under a barrel-vaulted lid of curved boards. It has pewter-silver
+straps over the vault, arch rims on both ends, heavy corner caps, L brackets, and barrel hinges
+at the back. A silver lock with a lamp-lit keyhole sits on the front. The emblem is a silver
+medallion with a tied wheat sheaf on a green field, ringed by a wheat-and-leaf wreath. Crossed
+wheat sprigs with a red bow are on both side walls. Animated: rim glint, wheat ripple, keyhole.
+
+**Stockpile Chest** (`joshymc:stockpile_chest`, crate id `stockpile`): a refined gem
+strongbox. The deep blue enamel body has diamond-lattice panels inside raised silver frames,
+each set with a small sapphire. Heavy silver pillars stand on the body corners, and posts
+with stepped caps on the lid corners. The stepped, chamfered strongbox lid is crowned by a
+large cut sapphire in a clawed bezel. The emblem and lock are one piece: a silver diamond
+plate with a faceted sapphire and an icy keyhole. Barrel hinges hold the lid, and pale blue
+crystal clusters grow from the back corners. Animated: sapphire twinkle, crystal pulse,
+keyhole. It shares no textures with Harvest, and its silhouette differs (flat stepped lid and
+pillars vs. vault and straps).
 
 All three are built on the shared skeleton `art/items/_crate_chest.py` (same footprint, lid
 seam, lock and hinges) and have animated textures: window and lantern flicker, ember
 cracks, flames, coals and the keyhole glow.
 
 **Adding a model for another crate:**
-1. Copy one of the modules to `art/items/<id>_crate.py` and keep the shared skeleton.
+1. Copy one of the modules to `art/items/<name>.py` and keep the shared skeleton
+   (the redesign names them `<crate id>_chest`; Harvest and Stockpile are the quality
+   reference for the remaining models). Add the id to `CRATES` in
+   `art/tests/test_crate_chests.py`.
 2. Run `python3 -m art.check <id>_crate`, `python3 -m art.render <id>_crate` and
    `python3 -m art.build <id>_crate`.
-3. Add a `crates.custom-models.models.<crate id>` entry.
+3. Add a `crates.custom-models.models.<crate id>` entry. A `_chest` model needs an
+   explicit `model:` (the default is `joshymc:<crate id>_crate`).
 
 `art/tests/test_crate_chests.py` checks the chest-cover and inside-the-block rules.
 
@@ -81,7 +105,11 @@ crates:
     enabled: true            # master switch
     gamemodes: [survival]    # add lifesteal here once Lifesteal has crates
     models:
-      cabin:                 # crate id from crates.yml
+      harvest:               # crate id from crates.yml
+        model: "joshymc:harvest_chest"
+      stockpile:
+        model: "joshymc:stockpile_chest"
+      cabin:
         enabled: true
         model: "joshymc:cabin_crate"
         offset: {x: 0.0, y: 0.0, z: 0.0}   # blocks, -1..1, world axes
