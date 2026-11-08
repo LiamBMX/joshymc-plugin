@@ -471,6 +471,13 @@ class CommandManager(private val plugin: Joshymc) {
             it.tabCompleter = cmd
         }
 
+        // Issue #1420: Milestones (Survival only).
+        plugin.getCommand("milestones")?.let {
+            val cmd = com.liam.joshymc.command.MilestonesCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
+
         plugin.getCommand("overflow")?.let {
             it.setExecutor(com.liam.joshymc.command.OverflowCommand(plugin))
         }
@@ -911,6 +918,7 @@ class CommandManager(private val plugin: Joshymc) {
         "order" to "joshymc.orders",
         "candy" to "joshymc.candy",
         "eventshop" to "joshymc.eventshop.use",
+        "milestones" to "joshymc.milestones.use",
         "overflow" to "joshymc.overflow",
         "unstuck" to "joshymc.unstuck",
         "eco" to "joshymc.eco",

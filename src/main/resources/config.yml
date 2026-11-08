@@ -39,6 +39,8 @@ features:
   casino: true
   candy-shop: true
   event-shop: true
+  # Issue #1420: /milestones (Survival only). Settings live in milestones.yml.
+  milestones: true
   stuck-recovery: true
   bedrock-pack: true
 

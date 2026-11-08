@@ -248,6 +248,7 @@ class FishingManager(private val plugin: Joshymc) : Listener {
             // Quests here (once per hook; the custom fish's base item decides Cod/Salmon).
             val fish = giveCustomFish(event.player) ?: return
             plugin.questCycleManager.recordFishCatch(event.player, event.hook.uniqueId, fish.material)
+            plugin.milestoneFishCatch(event.player, event.hook, fish.material)
             return
         }
     }

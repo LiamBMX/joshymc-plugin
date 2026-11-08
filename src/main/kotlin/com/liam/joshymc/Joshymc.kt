@@ -136,6 +136,29 @@ class Joshymc : JavaPlugin() {
         }
     }
 
+    /**
+     * Milestones hook (issue #1420) for blocks broken without a BlockBreakEvent (Veinminer, Void Drill,
+     * Tree Feller, Explosive). Call right before the block breaks, once per block. Never throws.
+     */
+    fun milestoneBlockBreak(player: org.bukkit.entity.Player, block: org.bukkit.block.Block) {
+        if (!::milestoneManager.isInitialized || !milestoneManager.running) return
+        try {
+            milestoneManager.processBreak(player, block)
+        } catch (e: Exception) {
+            logger.log(java.util.logging.Level.WARNING, "[Milestones] Failed to record a block break for ${player.name}", e)
+        }
+    }
+
+    /** Milestones hook (issue #1420) for catches without a CAUGHT_FISH event (FishingManager's high-Luck fallback). */
+    fun milestoneFishCatch(player: org.bukkit.entity.Player, hook: org.bukkit.entity.FishHook, material: org.bukkit.Material?) {
+        if (!::milestoneManager.isInitialized || !milestoneManager.running) return
+        try {
+            milestoneManager.processCatch(player, hook.uniqueId, hook.location, material?.name, false)
+        } catch (e: Exception) {
+            logger.log(java.util.logging.Level.WARNING, "[Milestones] Failed to record a catch for ${player.name}", e)
+        }
+    }
+
     /** False on a dedicated server that isolates Survival (issue #1336): its `pvp`/`dungeon` worlds aren't created. */
     private fun survivalWorldsAllowed(): Boolean {
         val allowed = com.liam.joshymc.gamemode.DedicatedServerFeatures.survivalWorldsAllowed(networkIdentityManager.isolatedGamemodes)
@@ -285,6 +308,8 @@ class Joshymc : JavaPlugin() {
     lateinit var freeRankManager: com.liam.joshymc.freerank.FreeRankManager
         private set
     lateinit var freeTagManager: com.liam.joshymc.freetag.FreeTagManager
+        private set
+    lateinit var milestoneManager: com.liam.joshymc.milestone.MilestoneManager
         private set
     lateinit var tutorialManager: com.liam.joshymc.tutorial.TutorialManager
         private set
@@ -604,6 +629,8 @@ class Joshymc : JavaPlugin() {
         saleManager = com.liam.joshymc.manager.SaleManager(this)
         candyShopManager = com.liam.joshymc.candyshop.CandyShopManager(this)
         eventShopManager = com.liam.joshymc.eventshop.EventShopManager(this)
+        // Issue #1420: infinite Milestone Quests (Survival only).
+        milestoneManager = com.liam.joshymc.milestone.MilestoneManager(this)
         stuckRecoveryManager = com.liam.joshymc.recovery.StuckRecoveryManager(this)
         gamemodeLockManager = com.liam.joshymc.gamemode.GamemodeLockManager(this)
         beaconPotionManager = com.liam.joshymc.potion.BeaconPotionManager(this)
@@ -728,6 +755,8 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("candy-shop")) candyShopManager.start()
         // Same dependencies as the Candy Shop, plus the gamemode locks (Survival only).
         if (isFeatureEnabled("event-shop")) eventShopManager.start()
+        // After economy, credits, crates, chat tags, items, Mod Mode, the event world and the gamemode locks.
+        if (isFeatureEnabled("milestones")) milestoneManager.start()
         // Reads the feature flag itself: its listener is always registered.
         stuckRecoveryManager.start()
         // Issue #1331: off (and silent) unless network.enabled; never blocks startup.
@@ -792,6 +821,8 @@ class Joshymc : JavaPlugin() {
         shutdown.step("purchaseFulfillmentManager.stop", { ::purchaseFulfillmentManager.isInitialized }) { purchaseFulfillmentManager.stop() }
         shutdown.step("candyShopManager.stop", { ::candyShopManager.isInitialized }) { candyShopManager.stop() }
         shutdown.step("eventShopManager.stop", { ::eventShopManager.isInitialized }) { eventShopManager.stop() }
+        // Saves every online player's milestone progress while the database is still open.
+        shutdown.step("milestoneManager.stop", { ::milestoneManager.isInitialized }) { milestoneManager.stop() }
         // Ends every ranked queue entry, found match and challenge (none is resumed after a restart) before the matches stop.
         // Stops the bounty sweep; bounty writes already queued finish with the database (every one is a complete transaction).
         shutdown.step("lifestealBountyManager.stop", { ::lifestealBountyManager.isInitialized }) { lifestealBountyManager.stop() }
@@ -923,6 +954,7 @@ class Joshymc : JavaPlugin() {
         safe("orderManager.stop") { orderManager.stop() }
         safe("candyShopManager.stop") { candyShopManager.stop() }
         safe("eventShopManager.stop") { eventShopManager.stop() }
+        safe("milestoneManager.stop") { milestoneManager.stop() }
         safe("stuckRecoveryManager.stop") { stuckRecoveryManager.stop() }
         safe("transferManager.stop") { transferManager.stop() }
         safe("tutorialManager.stop") { tutorialManager.stop() }
@@ -1001,6 +1033,8 @@ class Joshymc : JavaPlugin() {
         safe("resourcePackManager.start") { resourcePackManager.start() }
         if (isFeatureEnabled("candy-shop")) safe("candyShopManager.start") { candyShopManager.start() }
         if (isFeatureEnabled("event-shop")) safe("eventShopManager.start") { eventShopManager.start() }
+        // Reloads milestones.yml and every online player's progress.
+        if (isFeatureEnabled("milestones")) safe("milestoneManager.start") { milestoneManager.start() }
         safe("stuckRecoveryManager.start") { stuckRecoveryManager.start() }
         safe("transferManager.start") { transferManager.start() }
         // Refreshes the exported files (crate keys may have changed); Geyser reads them on its next start.

@@ -1,0 +1,270 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Milestones (issue #1420, Survival only): /milestones
+#
+# Five categories (Farming, Mining, Fishing, Combat, Exploration). Each has an overall
+# Level and individual objectives. Everything starts at Tier 1 with zero progress, tiers
+# never end, and each completed tier must be claimed by hand before the next one starts.
+# An activity counts for every objective of its category that lists one of its tokens
+# under `matches`, and once for that category's Level. Objectives and the Level fill on
+# their own: a completed objective waiting for a claim doesn't stop the Level, and the
+# other way round.
+#
+# Requirement of tier t:  base x (1 + growth x (t - 1)^exponent), rounded up.
+#   exponent must be above 0 and at most 1; below 1 every tier needs more than the
+#   last, but each step adds less than the one before (diminishing growth).
+# Coins of tier t:  the same curve on `base`, never above `cap`.
+#
+# This file is only created when missing; your edits are never overwritten. Keys you
+# leave out fall back to the bundled defaults. Applies on /joshymc reload.
+# Full reference: docs/milestones.md
+# ─────────────────────────────────────────────────────────────────────────────
+
+enabled: true
+
+worlds:
+  # Activity only counts in worlds the gamemode lock maps to Survival (overworld, nether,
+  # end, resource world, ...). Lifesteal worlds and the event world never count.
+  # allowed: empty = every Survival world not in `excluded`. Names are case-insensitive.
+  allowed: []
+  excluded:
+    - spawn
+    - afk
+
+anti-afk:
+  # Fishing, combat and exploration stop counting for a player who hasn't moved their view
+  # or pressed a movement key for this many seconds (AFK fish farms, macros).
+  idle-seconds: 180
+
+mining:
+  # Only blocks broken with a tool that actually harvests them count (e.g. a pickaxe on ores).
+  require-correct-tool: true
+
+fishing:
+  # Shortest time between two counted catches of one player.
+  min-seconds-between-catches: 2.5
+
+combat:
+  # Spawner mobs count as 1 / this many kills (1-16; the stored fraction is exact).
+  spawner-kills-per-progress: 5
+  # Spawn reasons (Paper CreatureSpawnEvent.SpawnReason) that count as natural (full progress).
+  full-spawn-reasons:
+    - NATURAL
+    - CHUNK_GEN
+    - JOCKEY
+    - MOUNT
+    - PATROL
+    - RAID
+    - REINFORCEMENTS
+    - VILLAGE_INVASION
+    - SLIME_SPLIT
+    - SILVERFISH_BLOCK
+  # Spawn reasons that count reduced (above). Any other reason (spawn eggs, commands,
+  # plugins, portals, conversions, breeding, ...) never counts.
+  reduced-spawn-reasons:
+    - SPAWNER
+    - TRIAL_SPAWNER
+  # Most counted mob kills per player per minute (0 = no limit).
+  max-mob-kills-per-minute: 90
+  pvp:
+    enabled: true
+    # A kill of the same victim by the same killer counts again only after this long.
+    same-victim-cooldown-minutes: 30
+    # Most counted player kills per killer per hour (0 = no limit).
+    max-kills-per-hour: 10
+    # Never count a kill between accounts that ever shared a connection (AltManager's hashes).
+    block-shared-connections: true
+
+exploration:
+  # Horizontal distance is sampled once every this many seconds (1-5).
+  sample-seconds: 1
+  # Faster than this between two samples = teleport/knockback/abnormal movement: not counted.
+  max-blocks-per-second: 10.0
+  loop-detection:
+    # Over the last `window-seconds` counted samples, more than `min-distance` blocks inside a box
+    # no wider than `max-span` blocks is treated as an automated loop and not counted.
+    window-seconds: 60
+    min-distance: 150
+    max-span: 12
+
+announcements:
+  enabled: true
+  # Server-wide, once per claimed tier 25, 50, 100, 200, 300, ... (every multiple of 100).
+  broadcast: "&6&l★ MILESTONE &e{player} &7reached &6{milestone} &7Tier &6{tier}&7!"
+  # Private, when a tier is completed (ready to claim).
+  completed: "&aMilestone complete: &f{milestone} &aTier {tier}! &7Claim it in &e/milestones&7."
+  # Private, after a claim.
+  claimed: "&aClaimed &f{milestone} &aTier {tier}: &6{rewards}"
+
+gui:
+  main-title: "Milestones"
+  category-title: "{category} Milestones"
+  pending-title: "Pending Rewards"
+  info:
+    - "&7Do what you already do: farm, mine, fish,"
+    - "&7fight and explore. Every tier you complete"
+    - "&7pays Coins, and special tiers (5, 10, 25, 50,"
+    - "&775, 100, then every 25) add extra rewards."
+    - ""
+    - "&7Progress pauses when a tier is complete,"
+    - "&7so claim it to start the next one."
+    - "&7Items that don't fit wait in &ePending Rewards&7."
+
+rewards:
+  objective-coins:
+    base: 10000
+    growth: 0.25
+    exponent: 0.6
+    cap: 75000
+  level-coins:
+    base: 25000
+    growth: 0.25
+    exponent: 0.6
+    cap: 200000
+  # Reward lines: "coins <amount>", "credits <amount>", "cratekey <crate> [qty]",
+  #   "chattag <tag-id>" (an existing Chat Tag voucher tag), "item <custom-item-id> [qty]".
+  # Tier keys: any tier number; `every-25` = special tiers above 100 that aren't a multiple
+  # of 100 (125, 150, 175, ...); `every-100` = major tiers (100, 200, ...).
+  # A line naming a crate, tag or item that doesn't exist is logged and skipped.
+  objective-special:
+    "5": ["coins 5000"]
+    "10": ["cratekey common 1"]
+    "25": ["cratekey common 2"]
+    "50": ["cratekey rare 1"]
+    "75": ["cratekey rare 1", "coins 25000"]
+    every-25: ["cratekey rare 1"]
+    every-100: ["cratekey joshy 1", "credits 5"]
+  level-special:
+    "5": ["cratekey common 1"]
+    "10": ["cratekey common 2"]
+    "25": ["cratekey rare 1", "credits 2"]
+    "50": ["cratekey rare 2", "credits 3"]
+    "75": ["cratekey rare 2", "credits 3"]
+    every-25: ["cratekey rare 2", "credits 3"]
+    every-100: ["cratekey joshy 1", "credits 10"]
+
+# Per category: enabled, name, icon, unit (shown after numbers), level (the overall Level's
+# base/growth/exponent), scaling (default growth/exponent of its objectives) and objectives.
+# Each objective: name, icon, base (tier 1 requirement), matches (tokens), and optionally its
+# own growth/exponent, coins-base, or enabled: false.
+categories:
+  farming:
+    enabled: true
+    name: "Farming"
+    icon: WHEAT
+    unit: "harvested"
+    level: { base: 3000, growth: 0.3, exponent: 0.6 }
+    scaling: { growth: 0.25, exponent: 0.6 }
+    # Tokens: WHEAT, CARROTS, POTATOES, BEETROOTS, NETHER_WART, COCOA (fully grown only),
+    # SUGAR_CANE, CACTUS, BAMBOO, KELP (every grown segment, never placed ones), MELON, PUMPKIN,
+    # CHORUS (never placed ones), SWEET_BERRIES, GLOW_BERRIES (picking or breaking with berries).
+    objectives:
+      wheat: { name: "Wheat", icon: WHEAT, base: 400, matches: [WHEAT] }
+      carrots: { name: "Carrots", icon: CARROT, base: 400, matches: [CARROTS] }
+      potatoes: { name: "Potatoes", icon: POTATO, base: 400, matches: [POTATOES] }
+      beetroot: { name: "Beetroot", icon: BEETROOT, base: 400, matches: [BEETROOTS] }
+      sugar_cane: { name: "Sugar Cane", icon: SUGAR_CANE, base: 600, matches: [SUGAR_CANE] }
+      melons: { name: "Melons", icon: MELON, base: 300, matches: [MELON] }
+      pumpkins: { name: "Pumpkins", icon: PUMPKIN, base: 300, matches: [PUMPKIN] }
+      cocoa: { name: "Cocoa Beans", icon: COCOA_BEANS, base: 250, matches: [COCOA] }
+      nether_wart: { name: "Nether Wart", icon: NETHER_WART, base: 400, matches: [NETHER_WART] }
+      cactus: { name: "Cactus", icon: CACTUS, base: 400, matches: [CACTUS] }
+      bamboo: { name: "Bamboo", icon: BAMBOO, base: 800, matches: [BAMBOO] }
+      sweet_berries: { name: "Sweet Berries", icon: SWEET_BERRIES, base: 150, matches: [SWEET_BERRIES] }
+      glow_berries: { name: "Glow Berries", icon: GLOW_BERRIES, base: 150, matches: [GLOW_BERRIES] }
+      kelp: { name: "Kelp", icon: KELP, base: 600, matches: [KELP] }
+      chorus: { name: "Chorus", icon: CHORUS_FRUIT, base: 300, matches: [CHORUS] }
+  mining:
+    enabled: true
+    name: "Mining"
+    icon: IRON_PICKAXE
+    unit: "mined"
+    level: { base: 5000, growth: 0.3, exponent: 0.6 }
+    scaling: { growth: 0.25, exponent: 0.6 }
+    # Tokens are block names. Only naturally generated blocks count: placed blocks and blocks
+    # made by cobblestone/stone/basalt generators never do. One block = 1, whatever drops
+    # (Silk Touch and Fortune change nothing).
+    objectives:
+      stone: { name: "Stone", icon: STONE, base: 1200, matches: [STONE, GRANITE, DIORITE, ANDESITE, TUFF, CALCITE] }
+      deepslate: { name: "Deepslate", icon: DEEPSLATE, base: 800, matches: [DEEPSLATE] }
+      netherrack: { name: "Netherrack", icon: NETHERRACK, base: 2000, matches: [NETHERRACK] }
+      end_stone: { name: "End Stone", icon: END_STONE, base: 800, matches: [END_STONE] }
+      basalt: { name: "Basalt & Blackstone", icon: BASALT, base: 600, matches: [BASALT, SMOOTH_BASALT, BLACKSTONE] }
+      coal_ore: { name: "Coal Ore", icon: COAL_ORE, base: 150, matches: [COAL_ORE, DEEPSLATE_COAL_ORE] }
+      iron_ore: { name: "Iron Ore", icon: IRON_ORE, base: 120, matches: [IRON_ORE, DEEPSLATE_IRON_ORE] }
+      copper_ore: { name: "Copper Ore", icon: COPPER_ORE, base: 150, matches: [COPPER_ORE, DEEPSLATE_COPPER_ORE] }
+      gold_ore: { name: "Gold Ore", icon: GOLD_ORE, base: 60, matches: [GOLD_ORE, DEEPSLATE_GOLD_ORE] }
+      redstone_ore: { name: "Redstone Ore", icon: REDSTONE_ORE, base: 80, matches: [REDSTONE_ORE, DEEPSLATE_REDSTONE_ORE] }
+      lapis_ore: { name: "Lapis Ore", icon: LAPIS_ORE, base: 50, matches: [LAPIS_ORE, DEEPSLATE_LAPIS_ORE] }
+      diamond_ore: { name: "Diamond Ore", icon: DIAMOND_ORE, base: 25, matches: [DIAMOND_ORE, DEEPSLATE_DIAMOND_ORE] }
+      emerald_ore: { name: "Emerald Ore", icon: EMERALD_ORE, base: 10, matches: [EMERALD_ORE, DEEPSLATE_EMERALD_ORE] }
+      nether_quartz_ore: { name: "Nether Quartz Ore", icon: NETHER_QUARTZ_ORE, base: 200, matches: [NETHER_QUARTZ_ORE] }
+      nether_gold_ore: { name: "Nether Gold Ore", icon: NETHER_GOLD_ORE, base: 150, matches: [NETHER_GOLD_ORE] }
+      ancient_debris: { name: "Ancient Debris", icon: ANCIENT_DEBRIS, base: 8, matches: [ANCIENT_DEBRIS] }
+  fishing:
+    enabled: true
+    name: "Fishing"
+    icon: FISHING_ROD
+    unit: "caught"
+    level: { base: 150, growth: 0.3, exponent: 0.6 }
+    scaling: { growth: 0.25, exponent: 0.6 }
+    # Tokens: the vanilla catch (COD, SALMON, TROPICAL_FISH, PUFFERFISH, ...), its class
+    # (FISH, TREASURE, JUNK), where it was caught (OCEAN, RIVER, SWAMP), RAIN and NIGHT.
+    # Only real fishing catches count; every one counts toward the Fishing Level.
+    objectives:
+      cod: { name: "Cod", icon: COD, base: 50, matches: [COD] }
+      salmon: { name: "Salmon", icon: SALMON, base: 25, matches: [SALMON] }
+      tropical_fish: { name: "Tropical Fish", icon: TROPICAL_FISH, base: 8, matches: [TROPICAL_FISH] }
+      pufferfish: { name: "Pufferfish", icon: PUFFERFISH, base: 10, matches: [PUFFERFISH] }
+      treasure: { name: "Treasure", icon: NAME_TAG, base: 5, matches: [TREASURE] }
+      junk: { name: "Junk", icon: BOWL, base: 10, matches: [JUNK] }
+      ocean: { name: "Ocean Catches", icon: PRISMARINE_SHARD, base: 60, matches: [OCEAN] }
+      river: { name: "River Catches", icon: WATER_BUCKET, base: 60, matches: [RIVER] }
+      rain: { name: "Rainy Catches", icon: LIGHTNING_ROD, base: 40, matches: [RAIN] }
+      night: { name: "Night Catches", icon: CLOCK, base: 40, matches: [NIGHT] }
+  combat:
+    enabled: true
+    name: "Combat"
+    icon: IRON_SWORD
+    unit: "killed"
+    level: { base: 800, growth: 0.3, exponent: 0.6 }
+    scaling: { growth: 0.25, exponent: 0.6 }
+    # Tokens are entity types (PLAYER for player kills). Only kills dealt by the player
+    # (melee or their own projectile) count; spawner mobs count reduced (combat section).
+    objectives:
+      zombies: { name: "Zombies", icon: ROTTEN_FLESH, base: 120, matches: [ZOMBIE, HUSK, DROWNED, ZOMBIE_VILLAGER] }
+      skeletons: { name: "Skeletons", icon: BONE, base: 100, matches: [SKELETON, STRAY, BOGGED] }
+      creepers: { name: "Creepers", icon: GUNPOWDER, base: 60, matches: [CREEPER] }
+      spiders: { name: "Spiders", icon: STRING, base: 80, matches: [SPIDER, CAVE_SPIDER] }
+      endermen: { name: "Endermen", icon: ENDER_PEARL, base: 40, matches: [ENDERMAN] }
+      witches: { name: "Witches", icon: GLASS_BOTTLE, base: 20, matches: [WITCH] }
+      slimes: { name: "Slimes & Magma Cubes", icon: SLIME_BALL, base: 80, matches: [SLIME, MAGMA_CUBE] }
+      blazes: { name: "Blazes", icon: BLAZE_ROD, base: 60, matches: [BLAZE] }
+      wither_skeletons: { name: "Wither Skeletons", icon: WITHER_SKELETON_SKULL, base: 40, matches: [WITHER_SKELETON] }
+      nether_mobs: { name: "Piglins & Hoglins", icon: GOLD_NUGGET, base: 60, matches: [ZOMBIFIED_PIGLIN, PIGLIN, PIGLIN_BRUTE, HOGLIN, ZOGLIN] }
+      ghasts: { name: "Ghasts", icon: GHAST_TEAR, base: 15, matches: [GHAST] }
+      phantoms: { name: "Phantoms", icon: PHANTOM_MEMBRANE, base: 25, matches: [PHANTOM] }
+      guardians: { name: "Guardians", icon: PRISMARINE_CRYSTALS, base: 60, matches: [GUARDIAN, ELDER_GUARDIAN] }
+      illagers: { name: "Illagers", icon: CROSSBOW, base: 40, matches: [PILLAGER, VINDICATOR, EVOKER, RAVAGER] }
+      shulkers: { name: "Shulkers", icon: SHULKER_SHELL, base: 30, matches: [SHULKER] }
+      breezes: { name: "Breezes", icon: BREEZE_ROD, base: 20, matches: [BREEZE] }
+      players: { name: "Player Kills", icon: PLAYER_HEAD, base: 10, matches: [PLAYER] }
+  exploration:
+    enabled: true
+    name: "Exploration"
+    icon: COMPASS
+    unit: "blocks"
+    level: { base: 20000, growth: 0.3, exponent: 0.6 }
+    scaling: { growth: 0.25, exponent: 0.6 }
+    # Distance travelled on foot, sprinting or swimming (blocks, horizontal). Boats, minecarts,
+    # horses, elytra, flight, riptide, teleports and portals never count.
+    # Tokens: WALK, SPRINT, SWIM, OVERWORLD, NETHER, THE_END, UNDERGROUND (no sky light),
+    # HIGHLANDS (overworld, Y 120 and up).
+    objectives:
+      walking: { name: "Walking", icon: LEATHER_BOOTS, base: 3000, matches: [WALK] }
+      sprinting: { name: "Sprinting", icon: GOLDEN_BOOTS, base: 5000, matches: [SPRINT] }
+      swimming: { name: "Swimming", icon: HEART_OF_THE_SEA, base: 2000, matches: [SWIM] }
+      overworld: { name: "Overworld Travel", icon: GRASS_BLOCK, base: 6000, matches: [OVERWORLD] }
+      nether: { name: "Nether Travel", icon: NETHERRACK, base: 3000, matches: [NETHER] }
+      the_end: { name: "End Travel", icon: END_STONE, base: 3000, matches: [THE_END] }
+      underground: { name: "Underground Travel", icon: LANTERN, base: 3000, matches: [UNDERGROUND] }
+      highlands: { name: "Highland Travel", icon: SNOW_BLOCK, base: 3000, matches: [HIGHLANDS] }
