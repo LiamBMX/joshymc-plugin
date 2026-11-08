@@ -207,6 +207,13 @@ class CommandManager(private val plugin: Joshymc) {
             }
             plugin.getCommand("channel")?.let {
                 val cmd = com.liam.joshymc.lifesteal.social.ChannelCommand(plugin)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+        } else {
+            unregisterCommand("friend")
+            unregisterCommand("channel")
+        }
         // Issue #1429: Lifesteal profiles (/profile, /stats), achievements and leaderboards (/lstop).
         // Lifesteal only: released on servers that don't host Lifesteal, so Survival never has them.
         if (plugin.lifestealProfileManager.hosted) {
@@ -237,8 +244,6 @@ class CommandManager(private val plugin: Joshymc) {
                 it.tabCompleter = cmd
             }
         } else {
-            unregisterCommand("friend")
-            unregisterCommand("channel")
             unregisterCommand("lsranks")
         }
         // Issue #1427: the Lifesteal Protected Bank (/bank). Lifesteal only: released on servers that
