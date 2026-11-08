@@ -130,11 +130,23 @@ fun main() {
     val config = File("src/main/resources/config.yml").readText()
     val section = config.substringAfter("  custom-models:\n").substringBefore("\n\n")
     check("bundled config has the section", "enabled: true" in section && "gamemodes: [survival]" in section)
-    // crate id -> item model path (the #1447 redesign models are named <id>_chest)
+    // crate id -> item model path (the redesign models, #1447 and #1454, are named <id>_chest)
     val bundled = linkedMapOf(
-        "cabin" to "cabin_crate", "homestead" to "homestead_crate", "campfire" to "campfire_crate",
+        "cabin" to "cabin_chest", "homestead" to "homestead_chest", "campfire" to "campfire_chest",
         "harvest" to "harvest_chest", "stockpile" to "stockpile_chest",
     )
+    // Issue #1454: the older "_crate" models stay in the pack for rollback.
+    for (legacy in listOf("cabin_crate", "homestead_crate", "campfire_crate")) {
+        check("legacy model $legacy kept for rollback", File("resourcepack/assets/joshymc/items/$legacy.json").exists() &&
+            File("resourcepack/art/items/$legacy.py").exists())
+    }
+    check("bundled config no longer points at the legacy models", "_crate\"" !in section.lines()
+        .filter { it.trim().startsWith("model:") }.joinToString("\n"))
+    // Issue #1454: existing configs move from the untouched old keys once, behind a marker
+    val main = File("src/main/kotlin/com/liam/joshymc/Joshymc.kt").readText()
+    check("config migration swaps only the untouched old model keys, once",
+        "REDESIGNED_CRATE_MODELS" in main && "CHEST_MODELS_MIGRATED_KEY" in main &&
+            "== \"joshymc:\${crate}_crate\"" in main && "chest-models-migrated" !in config)
     for ((id, path) in bundled) {
         check("bundled config has $id", "      $id:\n" in section && "model: \"joshymc:$path\"" in section)
         check("resource pack source has $id", File("resourcepack/assets/joshymc/items/$path.json").exists())
@@ -272,7 +284,8 @@ private fun hitboxChecks(manager: String, displays: String) {
 
     // The bundled crate models: Harvest fits its block, the taller ones get a hitbox at scale 1.
     val expectHitbox = mapOf("cabin_crate" to true, "homestead_crate" to true, "campfire_crate" to true,
-        "harvest_chest" to false, "stockpile_chest" to true)
+        "harvest_chest" to false, "stockpile_chest" to true,
+        "cabin_chest" to false, "homestead_chest" to true, "campfire_chest" to true)
     for ((path, wanted) in expectHitbox) {
         val itemJson = File("resourcepack/assets/joshymc/items/$path.json").readText()
         val bounds = CrateModelBounds.union(CrateModelBounds.modelRefs(itemJson).map { ref ->

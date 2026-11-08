@@ -93,6 +93,9 @@ class Joshymc : JavaPlugin() {
         // Issue #1359: the old hardcoded invite ServerBar line and its server-info replacement.
         private const val OLD_INVITE_BOSSBAR_LINE =
             "&a&lINVITE YOUR FRIENDS &8» &fIP: &eplay.joshymc.net &7| &fPort: &e25565"
+        // Issue #1454: crates whose bundled model moved from "<id>_crate" to "<id>_chest".
+        private val REDESIGNED_CRATE_MODELS = listOf("cabin", "homestead", "campfire")
+        private const val CHEST_MODELS_MIGRATED_KEY = "crates.custom-models.chest-models-migrated"
         private const val NEW_INVITE_BOSSBAR_LINE =
             "&a&lINVITE YOUR FRIENDS &8» &fIP: &e{ip} &7| &fBedrock Port: &e{bedrock_port}"
 
@@ -1780,6 +1783,21 @@ class Joshymc : JavaPlugin() {
         val bossBarMessages = config.getStringList(bossBarKey)
         if (OLD_INVITE_BOSSBAR_LINE in bossBarMessages) {
             config.set(bossBarKey, bossBarMessages.map { if (it == OLD_INVITE_BOSSBAR_LINE) NEW_INVITE_BOSSBAR_LINE else it })
+            changed++
+        }
+
+        // Issue #1454: Cabin, Homestead and Campfire moved to the redesigned "_chest" models.
+        // Swap only the untouched old default key, once (the marker is not in the bundled
+        // config, so the backfill above never sets it). The "_crate" models stay in the pack,
+        // so an admin can roll back by setting the old key again and it is left alone.
+        if (!config.getBoolean(CHEST_MODELS_MIGRATED_KEY, false)) {
+            for (crate in REDESIGNED_CRATE_MODELS) {
+                val key = "crates.custom-models.models.$crate.model"
+                if (config.getString(key) == "joshymc:${crate}_crate") {
+                    config.set(key, "joshymc:${crate}_chest")
+                }
+            }
+            config.set(CHEST_MODELS_MIGRATED_KEY, true)
             changed++
         }
 

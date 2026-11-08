@@ -24,9 +24,13 @@ REPO = PACK.parent
 ITEMS = PACK / "assets" / kit.NAMESPACE / "items"
 CONFIG = REPO / "src" / "main" / "resources" / "config.yml"
 
-CRATES = ("cabin_crate", "homestead_crate", "campfire_crate", "harvest_chest", "stockpile_chest")
-# the crates redesign (issue #1447): models that must look different from one another
-REDESIGN = ("harvest_chest", "stockpile_chest")
+CRATES = ("cabin_crate", "homestead_crate", "campfire_crate", "harvest_chest", "stockpile_chest",
+          "homestead_chest", "campfire_chest", "cabin_chest")
+# the crates redesign (issues #1447, #1454): models that must look different from one another
+REDESIGN = ("harvest_chest", "stockpile_chest", "homestead_chest", "campfire_chest", "cabin_chest")
+# issue #1454: crate id -> model the bundled config uses, and the legacy model kept for rollback
+REDESIGNED_1454 = {"homestead": ("homestead_chest", "homestead_crate"), "campfire": ("campfire_chest", "campfire_crate"),
+                   "cabin": ("cabin_chest", "cabin_crate")}
 
 
 class CrateChestModelsTest(unittest.TestCase):
@@ -81,14 +85,35 @@ class CrateChestModelsTest(unittest.TestCase):
             json.loads(path.read_text())
 
     def test_redesign_models_are_distinct(self):
-        """Harvest and Stockpile share the skeleton but not their textures or their shape."""
-        a, b = (importlib.import_module(f"art.items.{i}").models()["main"]["elements"] for i in REDESIGN)
+        """The redesign chests share the skeleton but no texture, and no two have the same
+        silhouette height (vault, stepped lid, crown, horns, cottage lid)."""
         textures = PACK / "assets" / kit.NAMESPACE / "textures" / "item"
-        painted = [{p.read_bytes() for p in (textures / i).glob("*.png")} for i in REDESIGN]
-        self.assertTrue(all(painted), "run python3 -m art.build harvest_chest stockpile_chest")
-        self.assertFalse(painted[0] & painted[1], "Harvest and Stockpile share a texture")
-        (_, ha), (_, hb) = kit.bounds(a), kit.bounds(b)
-        self.assertNotAlmostEqual(ha[1], hb[1], places=0)          # vaulted vs stepped/crowned lid
+        painted = {i: {p.read_bytes() for p in (textures / i).glob("*.png")} for i in REDESIGN}
+        tops = {i: kit.bounds(self._main(i))[1][1] for i in REDESIGN}
+        for n, a in enumerate(REDESIGN):
+            self.assertTrue(painted[a], f"run python3 -m art.build {a}")
+            for b in REDESIGN[n + 1:]:
+                self.assertFalse(painted[a] & painted[b], f"{a} and {b} share a texture")
+                self.assertGreater(abs(tops[a] - tops[b]), 0.5, f"{a} and {b} are the same height")
+
+    def test_1454_models_replace_the_legacy_ones_without_removing_them(self):
+        """Homestead, Campfire and Cabin got new models; the old ones stay built for rollback,
+        and the new ones share no texture with the old ones (not recolours)."""
+        textures = PACK / "assets" / kit.NAMESPACE / "textures" / "item"
+        for crate, (new, old) in REDESIGNED_1454.items():
+            self.assertTrue((ITEMS / f"{old}.json").exists(), old)
+            self.assertTrue((ITEMS / f"{new}.json").exists(), new)
+            a = {p.read_bytes() for p in (textures / new).glob("*.png")}
+            b = {p.read_bytes() for p in (textures / old).glob("*.png")}
+            self.assertFalse(a & b, f"{new} reuses a texture of {old}")
+
+    def test_bundled_config_maps_1454_crates(self):
+        text = CONFIG.read_text()
+        section = text[text.index("  custom-models:"):].split("\n\n")[0]
+        for crate, (new, old) in REDESIGNED_1454.items():
+            entry = section[section.index(f"      {crate}:\n"):]
+            model_line = next(line for line in entry.splitlines() if line.strip().startswith("model:"))
+            self.assertIn(f'"joshymc:{new}"', model_line, crate)
 
     def test_bundled_config_maps_redesign_crates(self):
         text = CONFIG.read_text()

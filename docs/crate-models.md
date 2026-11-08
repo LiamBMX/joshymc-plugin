@@ -1,9 +1,10 @@
 # Custom crate chest models (issue #1389)
 
-Survival crates can show their own chest model instead of a plain vanilla chest. Cabin,
-Homestead and Campfire ship with finished models. The crates redesign (issue #1407, audit
-#1446) adds Harvest and Stockpile (issue #1447) as its first two `_chest` models. Lifesteal is prepared for but not
-enabled.
+Survival crates can show their own chest model instead of a plain vanilla chest. The crates
+redesign (issue #1407, audit #1446) names its models `<crate id>_chest`: Harvest and
+Stockpile (issue #1447), then Homestead, Campfire and Cabin (issue #1454), which replace
+the older `homestead_crate`, `campfire_crate` and `cabin_crate` models. The older models stay
+in the pack for rollback. Lifesteal is prepared for but not enabled.
 
 ## A. Existing crate system (unchanged)
 
@@ -54,9 +55,9 @@ are untouched.
   adds one, and `hitbox: off` never does.
 - The hitbox is the smallest square-footed box around the model (Interaction boxes are
   square), standing on the model's floor and as tall as the model.
-- With the bundled models at scale 1, Harvest fits its block (no hitbox). Cabin, Homestead,
-  Campfire and Stockpile have roofs, flames or crowns 1/4 to 1/2 block above it, so they get
-  one. Clicking those tops now reaches the crate instead of missing it.
+- With the bundled models at scale 1, Harvest and the Cabin Chest fit their block (no
+  hitbox). Homestead (crown), Campfire (horns) and Stockpile (crowned gem) reach 1/4 to 1/2
+  block above it, so they get one. The legacy `_crate` models also get one. Clicking those tops now reaches the crate instead of missing it.
 - Right-click (`PlayerInteractEntityEvent`, main hand only) and left-click (Paper's
   `PrePlayerAttackEntityEvent`; attacking an Interaction entity fires no damage event) are
   cancelled and passed to `CrateManager.handleModelClick`. That method resolves the crate
@@ -110,6 +111,12 @@ are untouched.
 | Campfire | `resourcepack/art/items/campfire_crate.py` | same layout, `campfire_crate` |
 | Harvest (#1447) | `resourcepack/art/items/harvest_chest.py` | same layout, `harvest_chest` |
 | Stockpile (#1447) | `resourcepack/art/items/stockpile_chest.py` | same layout, `stockpile_chest` |
+| Homestead (#1454) | `resourcepack/art/items/homestead_chest.py` | same layout, `homestead_chest` |
+| Campfire (#1454) | `resourcepack/art/items/campfire_chest.py` | same layout, `campfire_chest` |
+| Cabin (#1454) | `resourcepack/art/items/cabin_chest.py` | same layout, `cabin_chest` |
+
+The first three rows (`*_crate`) are the original models. Since issue #1454 the bundled
+config no longer uses them, but they are still built so a server can roll back.
 
 **Harvest Chest** (`joshymc:harvest_chest`, crate id `harvest`): a rustic treasure chest
 with a warm brown plank body under a barrel-vaulted lid of curved boards. It has pewter-silver
@@ -128,7 +135,43 @@ crystal clusters grow from the back corners. Animated: sapphire twinkle, crystal
 keyhole. It shares no textures with Harvest, and its silhouette differs (flat stepped lid and
 pillars vs. vault and straps).
 
-All three are built on the shared skeleton `art/items/_crate_chest.py` (same footprint, lid
+**Homestead Chest** (`joshymc:homestead_chest`, crate id `homestead`, #1454): a royal
+purple and gold chest.
+- Body: purple lacquer with a damask of fleurs, raised gold panel frames (gold fleurs-de-lis
+  on the front, jewelled rosettes on the sides), heavy gold corner brackets, and a layered
+  gold plinth with corner blocks.
+- Lid: a reliquary lid with four quilted velvet slopes, gold hip ribs and finials, and a gold
+  crown (pearl and amethyst points, an orb and cross) on a tasselled cushion.
+- Front: the royal crest (a purple shield with a raised gold fleur-de-lis) hangs from the lid
+  as the hasp of a large gold lock with scroll flanges, a pendant and a glowing keyhole.
+- Animated: crown and crest glint, amethyst twinkle, keyhole.
+
+**Campfire Chest** (`joshymc:campfire_chest`, crate id `campfire`, #1454): a black and
+crimson fire-forged war chest.
+- Body: charred planks split by glowing ember cracks, riveted iron armour with teeth on every
+  corner, a crimson band, and an iron plinth.
+- Side walls: forge doors, each a crimson-bordered iron plate with a glowing vent grate.
+- Back: full-length strap hinges and a burnt flame brand.
+- Lid: two stepped iron layers under a forge seal with an ember heart. Two great crescent
+  horns rise from the back corners, with spikes on the front corners and side edges.
+- Front: a forged three-tongued flame with living fire inside drops the hasp into a black
+  iron lock with fangs, side spikes, a pull ring and an ember keyhole.
+- Animated: fire, cracks, horn tips, seal, keyhole.
+
+**Cabin Chest** (`joshymc:cabin_chest`, crate id `cabin`, #1454): a pink and mint cottage
+chest.
+- Body: soft pink clapboard with mint corner boards, a mint plinth and mint-framed panels
+  (rose enamel hearts on the front, flower boxes on the sides).
+- Lid: a low cottage-roof lid of mint fish-scale shingles in overlapping courses, with a
+  cream ridge cap and mint heart finials, cream bargeboards, a heart vent on each gable end,
+  and a scalloped mint valance.
+- Front: the emblem is a flower wreath round a pink enamel heart. A mint hasp drops from it
+  onto a mint lock with a large enamel heart and a warm keyhole.
+- Animated: flowers nod, enamel glint, keyhole.
+
+None of the three keeps its old theme: no barn, log campfire or snowy log cabin.
+
+All models are built on the shared skeleton `art/items/_crate_chest.py` (same footprint, lid
 seam, lock and hinges) and have animated textures: window and lantern flicker, ember
 cracks, flames, coals and the keyhole glow.
 
@@ -158,7 +201,7 @@ crates:
         model: "joshymc:stockpile_chest"
       cabin:
         enabled: true
-        model: "joshymc:cabin_crate"
+        model: "joshymc:cabin_chest"   # "joshymc:cabin_crate" = the original model (rollback)
         offset: {x: 0.0, y: 0.0, z: 0.0}   # blocks, -1..1, world axes
         rotation: auto       # or degrees the front faces: 0 south, 90 west, 180 north, 270 east
         scale: 1.0           # 0.5..2.0; the floor stays on the floor
@@ -166,6 +209,11 @@ crates:
 ```
 
 - A missing `model` defaults to `joshymc:<crate id>_crate`.
+- Issue #1454: on the first start with this version, an existing config whose Cabin,
+  Homestead or Campfire `model` is still the untouched old default (`joshymc:<id>_crate`)
+  is switched to `joshymc:<id>_chest`. Any other value is left alone. This happens once:
+  the marker `crates.custom-models.chest-models-migrated: true` is then written, so setting
+  the old key again rolls back for good.
 - An invalid value is logged and only that crate falls back to the vanilla block.
   Nothing is guessed.
 - The default entries are backfilled into existing configs. To turn one off, set
@@ -214,8 +262,8 @@ Automated:
   at built models.
 
 Manual (needs a test server with the pack and real crates):
-1. Cabin, Homestead and Campfire crates show their models with the lock on the chest's
-   front. Check north, east, south and west facings.
+1. Cabin, Homestead and Campfire crates show their new `_chest` models with the lock on
+   the chest's front. Check north, east, south and west facings.
 2. Right-click with the key opens the crate. Without a key you get the "You need a … Key"
    message. Left-click and sneak + right-click preview. Sneak + right-click with keys
    mass-opens. Animations play and rewards arrive as before.
@@ -227,8 +275,8 @@ Manual (needs a test server with the pack and real crates):
 5. Decline the pack (or join with packs disabled): you see plain chests that still work.
 6. Join on Bedrock: you see plain chests, and opening, preview and rewards work.
 7. On a Lifesteal server or world: no models (Survival only).
-8. Hitboxes (issue #1451): with F3+B, Cabin/Homestead/Campfire/Stockpile show a white box
-   around the model (Harvest shows none). Left-click the roof/crown: preview. Right-click it
+8. Hitboxes (issue #1451): with F3+B, Homestead/Campfire/Stockpile show a white box
+   around the model (Harvest and Cabin show none). Left-click the roof/crown: preview. Right-click it
    with a key: one open and one key spent, also when spam-clicking, and also with sneak
    (mass-open). Without a key: the "You need a … Key" message.
 9. Set `scale: 1.5` on one crate and `/joshymc reload`: the hitbox grows with the model and
