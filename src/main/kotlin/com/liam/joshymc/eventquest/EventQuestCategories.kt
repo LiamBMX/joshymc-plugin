@@ -7,18 +7,31 @@ package com.liam.joshymc.eventquest
  *
  * Bukkit-free so the rules can be checked by `scripts/EventQuestCategoryCheck.kt`.
  */
-enum class EventQuestCategory(val id: String, val defaultName: String, val defaultIcon: String) {
+enum class EventQuestCategory(
+    val id: String,
+    val defaultName: String,
+    val defaultIcon: String,
+    /** Player-facing name typed in commands (issue #1443: Elite is shown as Monthly; [id] stays `elite`). */
+    val commandName: String = id,
+    /** Earlier default display names, read as "not customized" so old config files show [defaultName]. */
+    val legacyDefaultNames: Set<String> = emptySet()
+) {
     FREE("free", "Free Event Quests", "EMERALD"),
-    ELITE("elite", "Elite Event Quests", "ENCHANTED_GOLDEN_APPLE");
+    // Issue #1443: renamed to Monthly Event Quests for players. The id, config key (`categories.elite`),
+    // `category: elite` values and progress rows are unchanged; `monthly` is accepted as an alias.
+    ELITE("elite", "Monthly Event Quests", "ENCHANTED_GOLDEN_APPLE",
+        commandName = "monthly", legacyDefaultNames = setOf("Elite Event Quests"));
 
     companion object {
         fun fromId(raw: String?): EventQuestCategory? =
-            raw?.trim()?.let { r -> entries.firstOrNull { it.id.equals(r, ignoreCase = true) } }
+            raw?.trim()?.let { r ->
+                entries.firstOrNull { it.id.equals(r, ignoreCase = true) || it.commandName.equals(r, ignoreCase = true) }
+            }
 
         /**
          * A set's `category` value: missing or blank = [FREE] (every legacy set), a known id = that
          * category, anything else = null so the set is skipped with a warning instead of a typo
-         * like `elitee` quietly landing in Free.
+         * like `monthlyy` quietly landing in Free.
          */
         fun parse(raw: String?): EventQuestCategory? = if (raw.isNullOrBlank()) FREE else fromId(raw)
     }
@@ -40,7 +53,8 @@ data class EventQuestCategorySettings(
             EventQuestCategorySettings(
                 category = category,
                 enabled = enabled as? Boolean ?: true,
-                displayName = (displayName as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: category.defaultName,
+                displayName = (displayName as? String)?.trim()
+                    ?.takeIf { it.isNotEmpty() && it !in category.legacyDefaultNames } ?: category.defaultName,
                 permission = (permission as? String)?.trim()?.takeIf { it.isNotEmpty() },
                 icon = (icon as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: category.defaultIcon
             )
@@ -143,5 +157,36 @@ object EventQuestLayout {
     fun categorySlot(category: EventQuestCategory): Int = when (category) {
         EventQuestCategory.FREE -> FREE_SLOT
         EventQuestCategory.ELITE -> ELITE_SLOT
+    }
+
+    // ── Issue #1438: one set's page (54 slots) ──
+    /** The set's reward (claim button), centered above the quests instead of the top row. */
+    const val SET_REWARD_SLOT = 13
+    /** "N% complete" info, unchanged. */
+    const val SET_INFO_SLOT = 40
+    /** Most quests a set can have (EventQuestManager.MAX_QUESTS). */
+    const val SET_MAX_QUESTS = 10
+    private const val QUEST_ROW_A = 2
+    private const val QUEST_ROW_B = 3
+    private const val ROW_WIDTH = 5
+
+    /**
+     * Slots for a set's [count] quests, in quest order, centered under the reward: up to 5 in one
+     * row (slot 22 is the center column), more split over two rows (top row gets the extra one).
+     * Even counts in a row leave the center column empty so the row stays symmetric.
+     */
+    fun questSlots(count: Int): List<Int> {
+        require(count in 0..SET_MAX_QUESTS) { "count $count outside 0..$SET_MAX_QUESTS" }
+        if (count <= ROW_WIDTH) return centeredRow(QUEST_ROW_A, count)
+        val top = (count + 1) / 2
+        return centeredRow(QUEST_ROW_A, top) + centeredRow(QUEST_ROW_B, count - top)
+    }
+
+    private fun centeredRow(row: Int, n: Int): List<Int> {
+        val center = row * 9 + 4
+        val half = n / 2
+        val offsets = if (n % 2 == 1) (-half..half).toList()
+            else (-half..-1).toList() + (1..half).toList()
+        return offsets.map { center + it }
     }
 }
