@@ -273,6 +273,30 @@ heart-items:
     maximum: "&cYou have already reached the maximum of {maximum} hearts!"
     inventory-full: "&cYou need inventory space to withdraw a heart!"
     redeem-failed: "&cUnable to redeem this heart. Please try again."
+  # Who may make tradeable Heart items (anti alt-account heart farming, docs/lifesteal-hearts.md).
+  # Both requirements must be met before /withdrawheart takes a heart. Lifesteal playtime is
+  # counted by the heart system itself: only while online in a Lifesteal world and not AFK, saved
+  # every minute, so it survives restarts and offline time never counts. It starts at 0 for
+  # everyone when this update is installed (older playtime isn't Lifesteal-only and includes AFK).
+  # Turning this off lets any player withdraw again, including brand-new alt accounts.
+  withdraw-eligibility:
+    enabled: true
+    # Minutes of active Lifesteal playtime needed (0 = no playtime requirement, at most 43200).
+    minimum-lifesteal-playtime-minutes: 120
+    # Hours since the player's first Lifesteal join needed (0 = no requirement, at most 720).
+    minimum-hours-since-first-join: 24
+    # {time} is what is still missing.
+    messages:
+      playtime: "&cYou need {time} more Lifesteal playtime before you can withdraw hearts."
+      account-age: "&cYour Lifesteal account is too new to withdraw hearts. You can withdraw in {time}."
+  # Heart items redeemed by an account that shared a connection with the player who withdrew them.
+  # A shared connection (household, school, public Wi-Fi) is not proof of one owner, so the only
+  # policy is "review": the redemption always goes through, the transfer is recorded once per item
+  # for staff (/lifesteal hearts reviews, the /admin log) and players are told nothing. Nobody is
+  # punished, blocked or has items taken automatically.
+  alt-transfer-review:
+    enabled: true
+    policy: review
 
 # Combat logging (docs/lifesteal-combat.md). The combat-tag duration is the existing
 # config.yml > combat.tag-duration-seconds (the blueprint defines none). Blueprint v1.1 defines no

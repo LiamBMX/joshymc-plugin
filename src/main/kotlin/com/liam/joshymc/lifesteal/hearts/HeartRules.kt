@@ -258,6 +258,73 @@ object HeartRules {
      */
     fun combatBlocksWithdraw(tagExpiresAt: Long?, now: Long): Boolean = tagExpiresAt != null && now < tagExpiresAt
 
+    // ── Withdrawal eligibility (issue #1457) ────────────────
+
+    /**
+     * What a player needs before they may withdraw a heart: [playtimeMillis] of active Lifesteal
+     * playtime and [accountAgeMillis] since their first Lifesteal join (their heart record's
+     * `created_at`). 0 = that requirement is off.
+     */
+    data class WithdrawRequirements(val playtimeMillis: Long, val accountAgeMillis: Long) {
+        companion object {
+            /** From lifesteal.yml; null when eligibility is turned off (every player may withdraw). */
+            fun of(settings: com.liam.joshymc.lifesteal.LifestealSettings.WithdrawEligibility): WithdrawRequirements? =
+                if (!settings.enabled) null
+                else WithdrawRequirements(settings.minimumPlaytimeMinutes * 60_000L, settings.minimumHoursSinceFirstJoin * 3_600_000L)
+        }
+    }
+
+    /** How much playtime and account age a player still lacks (0 = that one is met). */
+    data class Eligibility(val playtimeMissingMillis: Long, val accountAgeMissingMillis: Long) {
+        val eligible: Boolean get() = playtimeMissingMillis <= 0 && accountAgeMissingMillis <= 0
+
+        /** Short reason for the audit log (no private data). */
+        val auditReason: String get() = listOfNotNull(
+            "INELIGIBLE_PLAYTIME".takeIf { playtimeMissingMillis > 0 },
+            "INELIGIBLE_ACCOUNT_AGE".takeIf { accountAgeMissingMillis > 0 },
+        ).joinToString(",")
+
+        companion object {
+            val ELIGIBLE = Eligibility(0, 0)
+        }
+    }
+
+    /**
+     * [requirements] against what the store recorded. A first join "in the future" (the clock went
+     * back) counts as joining right now, so it can never make an account look older.
+     */
+    fun withdrawEligibility(playtimeMillis: Long, firstJoinAt: Long, now: Long, requirements: WithdrawRequirements?): Eligibility {
+        if (requirements == null) return Eligibility.ELIGIBLE
+        val playtimeMissing = (requirements.playtimeMillis - playtimeMillis.coerceAtLeast(0)).coerceAtLeast(0)
+        val age = (now - firstJoinAt).coerceAtLeast(0)
+        val ageMissing = (requirements.accountAgeMillis - age).coerceAtLeast(0)
+        return Eligibility(playtimeMissing, ageMissing)
+    }
+
+    /**
+     * Lifesteal playtime earned since [lastSampleAt]: the real time in between, at most
+     * [maxCreditMillis] (so a long server freeze or a missed sample can't add more than one
+     * interval), nothing when the clock went back.
+     */
+    fun playtimeCredit(lastSampleAt: Long, now: Long, maxCreditMillis: Long): Long =
+        if (now <= lastSampleAt) 0 else minOf(now - lastSampleAt, maxCreditMillis)
+
+    /** Minutes for an eligibility message: `1h 30m`, `45m`, `1m` (rounded up, at least a minute). */
+    fun formatWait(millis: Long): String {
+        val minutes = ((millis + 59_999) / 60_000).coerceAtLeast(1)
+        val days = minutes / 1440
+        val hours = (minutes % 1440) / 60
+        val rest = minutes % 60
+        return listOfNotNull(
+            "${days}d".takeIf { days > 0 },
+            "${hours}h".takeIf { hours > 0 },
+            "${rest}m".takeIf { rest > 0 },
+        ).joinToString(" ")
+    }
+
+    /** Withdrawal refusals of one kind are written to the audit log at most once per player per this window. */
+    const val INELIGIBLE_AUDIT_WINDOW_MILLIS = 10 * 60_000L
+
     sealed interface RedeemDecision {
         data class Redeem(val after: Int) : RedeemDecision
         /** Redeeming would take the player above the maximum: the item is kept. */

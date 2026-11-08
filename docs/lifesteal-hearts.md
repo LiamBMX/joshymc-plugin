@@ -1,4 +1,4 @@
-# Lifesteal hearts (issues #1341, #1344)
+# Lifesteal hearts (issues #1341, #1344, #1457)
 
 The core Lifesteal heart system: permanent hearts per player, shown as their maximum health, and
 PvP heart stealing (issue #1341), plus physical Heart items: `/withdrawheart` and right-click
@@ -151,6 +151,59 @@ withdraw hearts while in combat." and changes nothing: no heart taken, no serial
 transaction or audit row, inventory and combat tag untouched. Once the tag expires, withdrawing
 works normally again. Redeeming Heart items isn't restricted in combat.
 
+### Alt-account heart farming (issue #1457)
+
+Audit #1453 (finding P2-1): every new account starts with 10 hearts and can withdraw 9 of them as
+tradeable Heart items, so a freshly made alt could turn into 9 hearts for a main account. Two
+protections, neither of which removes trading:
+
+**Withdrawal eligibility** (`heart-items.withdraw-eligibility`). `/withdrawheart` needs both:
+
+- `minimum-lifesteal-playtime-minutes` (default 120) of **active Lifesteal playtime**, and
+- `minimum-hours-since-first-join` (default 24) since the player's **first Lifesteal join**.
+
+The first join is the heart record's `created_at` (written once, the first time the player
+entered a Lifesteal world here); nothing new is stored for it. Playtime can't come from the
+server-wide `/playtime` (`PlaytimeManager`): it also counts AFK time, time on a server that hosts
+Survival too, and time from before Lifesteal existed. So the heart system keeps its own counter,
+`lifesteal_heart_playtime` (milliseconds per UUID, only ever raised): a player counts while
+online, alive, loaded in a Lifesteal world and not AFK (`AFKManager.isAfk`). Every sample (once a
+minute, and on quit, world change, respawn, reload, shutdown and right before a withdrawal)
+credits the stretch since the previous sample, at most two minutes at once. Offline time is never
+counted, restarts keep everything already saved (at most the last minute is lost on a crash), and
+the counter starts at 0 for everyone when this update is installed.
+
+The check runs inside the withdrawal transaction, on a fresh read, before the heart is taken or
+the serial issued; a refusal changes nothing (`WithdrawResult.NotEligible`). The player sees what
+is missing (`messages.playtime`, `messages.account-age`, `{time}` = what is left, e.g. `1h 30m`).
+Each refusal kind is written to `lifesteal_heart_audit` (WITHDRAW_REJECTED,
+INELIGIBLE_PLAYTIME / INELIGIBLE_ACCOUNT_AGE) and `admin_logs` (HEART_WITHDRAW_INELIGIBLE) at most
+once per player per 10 minutes. `/lifesteal hearts get <player>` shows the playtime and what is
+still missing. `enabled: false` (or both values 0) lets everyone withdraw again, including
+brand-new alts. The minimum (1), maximum (20), starting hearts, combat rule and all transaction
+guarantees are unchanged.
+
+**Shared-connection transfer review** (`heart-items.alt-transfer-review`). The only account
+association JoshyMC has is AltManager's `player_connections` (salted connection hashes, issue
+#862). Households, schools and public networks share connections, so that evidence is never
+treated as proof of one owner and nothing is blocked on it: `policy` accepts only `review` (any
+other value makes lifesteal.yml invalid). When a **withdrawn** Heart item is redeemed by someone
+other than the player who withdrew it (the item row's `issued_to`) and the two accounts were ever
+seen on the same connection hash, the redemption goes through unchanged and, in the same
+transaction, one `lifesteal_heart_transfer_reviews` row (PK = serial, so once per item) and one
+TRANSFER_REVIEW audit row are written. Staff also get a console warning and an `admin_logs` row
+(HEART_TRANSFER_REVIEW, the two UUIDs and the serial). Staff-made items, your own items and
+unrelated accounts are never reviewed. Players are told nothing; no connection hash or address is
+shown or logged. Staff list them with `/lifesteal hearts reviews [player]` (admin permission).
+No bans, punishments or confiscation are automatic; staff decide (e.g. `/alts`, then
+`/lifesteal hearts set`).
+
+**Limits.** Someone willing to play an alt for 2 active hours over at least a day can still
+withdraw its hearts; the rule raises the cost, it can't stop that. Accounts on different
+connections (VPN, mobile data) leave no AltManager evidence, so their transfers aren't reviewed.
+AFK detection has its own delay, so a few idle minutes before someone is marked AFK still count.
+Items withdrawn before this update stay valid.
+
 ### Redemption
 
 Right-click (air, or a block that isn't interactable; sneak to redeem while looking at a chest or
@@ -168,6 +221,7 @@ is created and the player is told.
 /lifesteal hearts give <player> <amount>     # joshymc.lifesteal.hearts.give (op), online Lifesteal player, 1-36
 /lifesteal hearts items <player>             # outstanding (unredeemed) items issued to a player
 /lifesteal hearts void <serial> [refund]     # recovery, see below
+/lifesteal hearts reviews [player]           # shared-connection transfers (issue #1457)
 ```
 
 `give` makes real, recorded items (source ADMIN) without changing anyone's hearts. It needs
@@ -200,6 +254,10 @@ thread. What remains:
 `action-cooldown-millis` (0-60000) and `messages.*` (withdrawn, redeemed, final-heart, maximum,
 inventory-full, redeem-failed; `{maximum}` is filled in). A file from before this section exists
 gets the defaults with one warning. Nothing here can change the heart limits.
+`withdraw-eligibility` (`enabled`, `minimum-lifesteal-playtime-minutes` 0-43200,
+`minimum-hours-since-first-join` 0-720, `messages.playtime`, `messages.account-age`) and
+`alt-transfer-review` (`enabled`, `policy: review`) are issue #1457; a file without them gets the
+defaults (eligibility on, review on) with one warning each.
 
 ### Java and Bedrock
 

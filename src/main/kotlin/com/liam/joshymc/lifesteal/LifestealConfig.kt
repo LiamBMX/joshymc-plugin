@@ -185,7 +185,46 @@ data class LifestealSettings(
         /** Minimum time between two withdrawals or two redemptions by one player. */
         val actionCooldownMillis: Int = 500,
         val messages: HeartItemMessages = HeartItemMessages(),
+        /** `heart-items.withdraw-eligibility` (issue #1457). */
+        val withdrawEligibility: WithdrawEligibility = WithdrawEligibility(),
+        /** `heart-items.alt-transfer-review` (issue #1457). */
+        val altTransferReview: AltTransferReview = AltTransferReview(),
     )
+
+    /**
+     * Who may make tradeable Heart items (issue #1457, alt-account heart farming): a player needs
+     * [minimumPlaytimeMinutes] of active Lifesteal playtime (counted by the heart system, only while
+     * online in a Lifesteal world and not AFK) and [minimumHoursSinceFirstJoin] since their first
+     * Lifesteal join (their heart record's creation). 0 turns that requirement off; [enabled] false
+     * turns both off. `{time}` in the messages is what is still missing.
+     */
+    data class WithdrawEligibility(
+        val enabled: Boolean = true,
+        val minimumPlaytimeMinutes: Int = 120,
+        val minimumHoursSinceFirstJoin: Int = 24,
+        val playtimeMessage: String = "&cYou need {time} more Lifesteal playtime before you can withdraw hearts.",
+        val accountAgeMessage: String = "&cYour Lifesteal account is too new to withdraw hearts. You can withdraw in {time}.",
+    )
+
+    /**
+     * What happens when a withdrawn Heart item is redeemed by an account that shared a connection
+     * with the player who withdrew it (issue #1457). AltManager's only evidence is a shared
+     * connection hash, which households, schools and public networks also produce, so the one
+     * supported [policy] is [AltTransferPolicy.REVIEW]: the redemption goes through and the transfer
+     * is recorded for staff (`/lifesteal hearts reviews`). [enabled] false records nothing.
+     */
+    data class AltTransferReview(
+        val enabled: Boolean = true,
+        val policy: AltTransferPolicy = AltTransferPolicy.REVIEW,
+    )
+
+    enum class AltTransferPolicy(val id: String) {
+        REVIEW("review");
+
+        companion object {
+            fun fromId(raw: String?): AltTransferPolicy? = entries.firstOrNull { it.id.equals(raw?.trim(), ignoreCase = true) }
+        }
+    }
 
     /** `&` colour codes; `{maximum}` and `{hearts}` are filled in as plain text. */
     data class HeartItemMessages(
@@ -531,7 +570,85 @@ object LifestealConfigParser {
             inventoryFull = text("heart-items.messages.inventory-full", m.inventoryFull),
             redeemFailed = text("heart-items.messages.redeem-failed", m.redeemFailed),
         )
-        return LifestealSettings.HeartItems(withdraw, redeem, name, model, glint, cooldown, messages)
+        val eligibility = withdrawEligibility(get, problems)
+        val review = altTransferReview(get, problems)
+        return LifestealSettings.HeartItems(withdraw, redeem, name, model, glint, cooldown, messages, eligibility, review)
+    }
+
+    /** Most minutes of Lifesteal playtime a withdrawal can require (30 days). */
+    const val MAX_WITHDRAW_PLAYTIME_MINUTES = 43_200
+    /** Most hours since the first Lifesteal join a withdrawal can require (30 days). */
+    const val MAX_WITHDRAW_ACCOUNT_AGE_HOURS = 720
+
+    /**
+     * `heart-items.withdraw-eligibility` (issue #1457). A file from before it existed has no
+     * section: one warning and the (restrictive) defaults. A bad value inside it is severe.
+     */
+    private fun withdrawEligibility(get: (String) -> Any?, problems: MutableList<Problem>): LifestealSettings.WithdrawEligibility {
+        val d = LifestealSettings.WithdrawEligibility()
+        val base = "heart-items.withdraw-eligibility"
+        if (get(base) == null) {
+            problems += Problem(
+                false,
+                "$base is not set; using the defaults (withdrawing hearts needs ${d.minimumPlaytimeMinutes} minutes of Lifesteal playtime " +
+                    "and ${d.minimumHoursSinceFirstJoin} hours since the first Lifesteal join)."
+            )
+            return d
+        }
+        val enabled = when (val raw = get("$base.enabled")) {
+            null -> { problems += Problem(false, "$base.enabled is not set; using the default ${d.enabled}."); d.enabled }
+            is Boolean -> raw
+            else -> { problems += Problem(true, "$base.enabled '$raw' must be true or false."); d.enabled }
+        }
+        fun whole(key: String, default: Int, max: Int, meaning: String): Int {
+            val path = "$base.$key"
+            val raw = get(path) ?: run { problems += Problem(false, "$path is not set; using the default $default."); return default }
+            val value = wholeNumber(raw)
+            if (value == null || value < 0 || value > max) {
+                problems += Problem(true, "$path '$raw' must be a whole number from 0 to $max ($meaning; 0 = no requirement).")
+                return default
+            }
+            return value.toInt()
+        }
+        fun text(path: String, default: String): String = when (val raw = get(path)) {
+            null -> { problems += Problem(false, "$path is not set; using the default."); default }
+            is String -> if (raw.isBlank()) { problems += Problem(true, "$path is empty."); default } else raw
+            else -> { problems += Problem(true, "$path must be text."); default }
+        }
+        return LifestealSettings.WithdrawEligibility(
+            enabled = enabled,
+            minimumPlaytimeMinutes = whole("minimum-lifesteal-playtime-minutes", d.minimumPlaytimeMinutes, MAX_WITHDRAW_PLAYTIME_MINUTES, "minutes of Lifesteal playtime"),
+            minimumHoursSinceFirstJoin = whole("minimum-hours-since-first-join", d.minimumHoursSinceFirstJoin, MAX_WITHDRAW_ACCOUNT_AGE_HOURS, "hours since the first Lifesteal join"),
+            playtimeMessage = text("$base.messages.playtime", d.playtimeMessage),
+            accountAgeMessage = text("$base.messages.account-age", d.accountAgeMessage),
+        )
+    }
+
+    /** `heart-items.alt-transfer-review` (issue #1457). Missing section: one warning and the defaults. */
+    private fun altTransferReview(get: (String) -> Any?, problems: MutableList<Problem>): LifestealSettings.AltTransferReview {
+        val d = LifestealSettings.AltTransferReview()
+        val base = "heart-items.alt-transfer-review"
+        if (get(base) == null) {
+            problems += Problem(false, "$base is not set; using the defaults (shared-connection Heart item transfers are recorded for staff review).")
+            return d
+        }
+        val enabled = when (val raw = get("$base.enabled")) {
+            null -> { problems += Problem(false, "$base.enabled is not set; using the default ${d.enabled}."); d.enabled }
+            is Boolean -> raw
+            else -> { problems += Problem(true, "$base.enabled '$raw' must be true or false."); d.enabled }
+        }
+        val policy = when (val raw = get("$base.policy")) {
+            null -> { problems += Problem(false, "$base.policy is not set; using the default ${d.policy.id}."); d.policy }
+            else -> LifestealSettings.AltTransferPolicy.fromId(raw.toString()) ?: run {
+                problems += Problem(
+                    true,
+                    "$base.policy '$raw' is not supported. The only policy is 'review': AltManager's evidence is a shared connection, " +
+                        "which isn't proof of one owner, so Heart item redemptions are never blocked on it."
+                )
+                d.policy
+            }
+        }
+        return LifestealSettings.AltTransferReview(enabled, policy)
     }
 
     /** The day-numbered keys of issue #1336 ("day 1 = launch day"), replaced by hours from launch in issue #1352. */

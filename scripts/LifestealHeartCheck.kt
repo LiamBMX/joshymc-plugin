@@ -86,6 +86,11 @@ fun main() {
     heartItemWiring()
     heartItemCombat()
     heartItemConsumers()
+    altFarmingSettings()
+    altFarmingRules()
+    altFarmingStore()
+    altFarmingConcurrency()
+    altFarmingWiring()
     println("OK: $checks Lifesteal heart checks passed.")
 }
 
@@ -993,4 +998,297 @@ private fun heartItemCombat() {
         .map { it.name }.toList()
     check("combat: /withdrawheart is the only withdrawal entry point", callers == listOf("WithdrawHeartCommand.kt"))
     check("combat: tagExpiresAt is the live combat tag", "fun tagExpiresAt(uuid: UUID): Long? = combatTags[uuid]?.takeIf { System.currentTimeMillis() < it }" in source("manager/CombatManager.kt"))
+}
+
+// ── Alt-account heart farming (issue #1457) ──────────────────
+
+private const val HOUR = 3_600_000L
+private val REQUIREMENTS = HeartRules.WithdrawRequirements(playtimeMillis = 2 * HOUR, accountAgeMillis = 24 * HOUR)
+
+@Suppress("UNCHECKED_CAST")
+private fun withEligibility(edit: (MutableMap<String, Any?>) -> Unit): Map<String, Any?> = withHeartItems { items ->
+    val section = (items["withdraw-eligibility"] as Map<String, Any?>).toMutableMap()
+    edit(section)
+    items["withdraw-eligibility"] = section
+}
+
+@Suppress("UNCHECKED_CAST")
+private fun altFarmingSettings() {
+    val defaults = LifestealSettings.WithdrawEligibility()
+    val bundled = parseWith(bundledLifestealYml()).settings!!.heartItems
+    check("eligibility on by default", bundled.withdrawEligibility == defaults && defaults.enabled)
+    check("default playtime is 2 hours", defaults.minimumPlaytimeMinutes == 120)
+    check("default account age is 24 hours", defaults.minimumHoursSinceFirstJoin == 24)
+    check("review on, policy review", bundled.altTransferReview == LifestealSettings.AltTransferReview() &&
+        bundled.altTransferReview.enabled && bundled.altTransferReview.policy == LifestealSettings.AltTransferPolicy.REVIEW)
+    check("default requirements", HeartRules.WithdrawRequirements.of(defaults) == REQUIREMENTS)
+
+    val old = withHeartItems { it.remove("withdraw-eligibility"); it.remove("alt-transfer-review") }
+    val oldParsed = parseWith(old)
+    check("a heart-items section from before #1457 still loads with the safe defaults",
+        oldParsed.settings?.heartItems?.withdrawEligibility == defaults && oldParsed.settings?.heartItems?.altTransferReview == LifestealSettings.AltTransferReview())
+    check("missing sections are warnings only", oldParsed.problems.size == 2 && oldParsed.problems.none { it.severe })
+
+    val off = parseWith(withEligibility { it["enabled"] = false }).settings!!.heartItems.withdrawEligibility
+    check("eligibility can be turned off", !off.enabled && HeartRules.WithdrawRequirements.of(off) == null)
+    val custom = parseWith(withEligibility { it["minimum-lifesteal-playtime-minutes"] = 0; it["minimum-hours-since-first-join"] = 48 }).settings!!.heartItems.withdrawEligibility
+    check("requirements configurable, 0 = off", HeartRules.WithdrawRequirements.of(custom) == HeartRules.WithdrawRequirements(0, 48 * HOUR))
+    check("negative playtime refused", parseWith(withEligibility { it["minimum-lifesteal-playtime-minutes"] = -1 }).settings == null)
+    check("too long account age refused", parseWith(withEligibility { it["minimum-hours-since-first-join"] = 10_000 }).settings == null)
+    check("non-boolean enabled refused", parseWith(withEligibility { it["enabled"] = "no" }).settings == null)
+    check("blank message refused", parseWith(withEligibility { (it["messages"] as MutableMap<String, Any?>)["playtime"] = "" }).settings == null)
+    val block = withHeartItems { items -> items["alt-transfer-review"] = (items["alt-transfer-review"] as Map<String, Any?>).toMutableMap().also { it["policy"] = "block" } }
+    check("no automatic blocking policy exists", parseWith(block).settings == null)
+    check("eligibility can't touch the heart limits", parseWith(withEligibility { it["minimum"] = 0 }).settings!!.hearts == LifestealSettings.Hearts())
+}
+
+private fun altFarmingRules() {
+    val fresh = HeartRules.withdrawEligibility(0, T0, T0, REQUIREMENTS)
+    check("new player lacks both", !fresh.eligible && fresh.playtimeMissingMillis == 2 * HOUR && fresh.accountAgeMissingMillis == 24 * HOUR)
+    check("both reasons audited", fresh.auditReason == "INELIGIBLE_PLAYTIME,INELIGIBLE_ACCOUNT_AGE")
+    val played = HeartRules.withdrawEligibility(2 * HOUR, T0, T0 + 10 * HOUR, REQUIREMENTS)
+    check("playtime met, account still too new", played.playtimeMissingMillis == 0L && played.accountAgeMissingMillis == 14 * HOUR && played.auditReason == "INELIGIBLE_ACCOUNT_AGE")
+    val old = HeartRules.withdrawEligibility(HOUR, T0, T0 + 30 * HOUR, REQUIREMENTS)
+    check("old account still needs playtime (offline days don't count)", old.playtimeMissingMillis == HOUR && old.accountAgeMissingMillis == 0L)
+    check("both met = eligible", HeartRules.withdrawEligibility(2 * HOUR, T0, T0 + 24 * HOUR, REQUIREMENTS).eligible)
+    check("disabled = always eligible", HeartRules.withdrawEligibility(0, T0, T0, null).eligible)
+    check("clock going back never ages an account", HeartRules.withdrawEligibility(2 * HOUR, T0 + HOUR, T0, REQUIREMENTS).accountAgeMissingMillis == 24 * HOUR)
+    check("negative playtime counts as none", HeartRules.withdrawEligibility(-5, T0, T0 + 24 * HOUR, REQUIREMENTS).playtimeMissingMillis == 2 * HOUR)
+
+    check("credit = time between samples", HeartRules.playtimeCredit(T0, T0 + 60_000, 120_000) == 60_000L)
+    check("credit capped (freeze / missed sample)", HeartRules.playtimeCredit(T0, T0 + 10 * HOUR, 120_000) == 120_000L)
+    check("no credit when the clock went back", HeartRules.playtimeCredit(T0 + 1_000, T0, 120_000) == 0L)
+    check("wait format", HeartRules.formatWait(90 * 60_000L) == "1h 30m" && HeartRules.formatWait(1) == "1m" && HeartRules.formatWait(25 * HOUR) == "1d 1h")
+}
+
+private fun connections(db: SqliteDatabase, vararg rows: Pair<UUID, String>) {
+    db.createTable("CREATE TABLE IF NOT EXISTS player_connections (uuid TEXT NOT NULL, connection_hash TEXT NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY (uuid, connection_hash))")
+    for ((uuid, hash) in rows) db.execute("INSERT OR IGNORE INTO player_connections (uuid, connection_hash, last_seen) VALUES (?, ?, ?)", uuid.toString(), hash, T0)
+}
+
+private fun altFarmingStore() {
+    val dir = Files.createTempDirectory("joshymc-heart-alts").toFile()
+    try {
+        val main = UUID.randomUUID()
+        val alt = UUID.randomUUID()
+        val stranger = UUID.randomUUID()
+        val veteran = UUID.randomUUID()
+        val heldSerial = serial()
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            // No player_connections table yet: no evidence, redemptions unaffected.
+            check("no AltManager table = no evidence", !store.sharedConnection(main, alt))
+
+            store.ensure(veteran, 10, T0 - 30 * 24 * HOUR)
+            store.ensure(main, 10, T0)
+            store.ensure(alt, 10, T0)
+            store.ensure(stranger, 10, T0)
+
+            // 1. A new account can't withdraw: nothing taken, no item, one audit row per window.
+            val s1 = serial()
+            val r1 = store.withdraw(alt, s1, LIMITS, T0, requirements = REQUIREMENTS)
+            check("new account refused", r1 is HeartStore.WithdrawResult.NotEligible && !r1.eligibility.eligible && r1.audited)
+            check("refusal keeps hearts and issues no item", store.load(alt)!!.hearts == 10 && store.loadItem(s1) == null)
+            val r2 = store.withdraw(alt, serial(), LIMITS, T0 + 1_000, requirements = REQUIREMENTS)
+            check("repeated refusal not audited again", r2 is HeartStore.WithdrawResult.NotEligible && !r2.audited)
+            check("one ineligible audit row", store.audit(alt).count { it.operation == "WITHDRAW_REJECTED" } == 1)
+            check("refusal audited after the window", (store.withdraw(alt, serial(), LIMITS, T0 + HeartRules.INELIGIBLE_AUDIT_WINDOW_MILLIS + 2_000, requirements = REQUIREMENTS) as HeartStore.WithdrawResult.NotEligible).audited)
+            check("no heart moved by any refusal", store.load(alt)!!.hearts == 10 && store.itemCount() == 0)
+
+            // 4. Offline time doesn't count: a day later with no playtime credited, still refused.
+            val dayLater = T0 + 25 * HOUR
+            val offline = store.withdraw(alt, serial(), LIMITS, dayLater, requirements = REQUIREMENTS)
+            check("offline days don't count as playtime", offline is HeartStore.WithdrawResult.NotEligible &&
+                offline.eligibility.playtimeMissingMillis == 2 * HOUR && offline.eligibility.accountAgeMissingMillis == 0L)
+
+            // Playtime only goes up, only by positive credits.
+            store.addPlaytime(mapOf(alt to HOUR, main to 3 * HOUR, stranger to 0L), T0)
+            store.addPlaytime(mapOf(alt to -HOUR), T0)
+            check("playtime added", store.playtimeMillis(alt) == HOUR && store.playtimeMillis(main) == 3 * HOUR)
+            check("zero/negative credits ignored", store.playtimeMillis(stranger) == 0L)
+        }
+        // 3. Playtime survives a restart.
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            check("playtime survives restarts", store.playtimeMillis(alt) == HOUR && store.playtimeMillis(main) == 3 * HOUR)
+            store.addPlaytime(mapOf(alt to HOUR), T0 + HOUR)
+            check("playtime keeps accumulating after a restart", store.playtimeMillis(alt) == 2 * HOUR)
+
+            // 5. Account age: enough playtime but joined too recently.
+            val tooNew = store.withdraw(main, serial(), LIMITS, T0 + 23 * HOUR, requirements = REQUIREMENTS)
+            check("account age enforced", tooNew is HeartStore.WithdrawResult.NotEligible && tooNew.eligibility.accountAgeMissingMillis == HOUR &&
+                tooNew.eligibility.playtimeMissingMillis == 0L)
+
+            // 2. Eligible players withdraw normally.
+            val later = T0 + 24 * HOUR
+            val ok = store.withdraw(alt, heldSerial, LIMITS, later, requirements = REQUIREMENTS)
+            check("eligible player withdraws", ok is HeartStore.WithdrawResult.Withdrawn && ok.after == 9 && store.loadItem(heldSerial)!!.status == HeartStore.ItemStatus.ISSUED)
+            check("store eligibility read matches", store.eligibility(alt, REQUIREMENTS, later)!!.eligible && store.eligibility(UUID.randomUUID(), REQUIREMENTS, later) == null)
+
+            // 6. Disabling restores normal eligibility (a brand-new account withdraws again).
+            val newcomer = UUID.randomUUID().also { store.ensure(it, 10, later) }
+            check("disabled requirements = normal withdrawal", store.withdraw(newcomer, serial(), LIMITS, later, requirements = null) is HeartStore.WithdrawResult.Withdrawn)
+            // 12. The minimum still applies to eligible players.
+            store.adminChange(veteran, AdminOp.SET, 1, LIMITS, "console", "Console", later)
+            store.addPlaytime(mapOf(veteran to 10 * HOUR), later)
+            check("eligible player can't pass the minimum", store.withdraw(veteran, serial(), LIMITS, later, requirements = REQUIREMENTS) == HeartStore.WithdrawResult.AtMinimum(1))
+
+            // 8/9. Alt (shares a connection with main) gives main the heart: redeemed, recorded for review.
+            connections(db, main to "h-home", alt to "h-home", stranger to "h-cafe", main to "h-school")
+            check("shared connection seen", store.sharedConnection(alt, main) && store.sharedConnection(main, alt))
+            check("unrelated accounts not linked", !store.sharedConnection(alt, stranger) && !store.sharedConnection(main, stranger))
+            val before = store.load(main)!!.hearts!!
+            val redeemed = store.redeem(main, heldSerial, LIMITS, later + 1, reviewTransfers = true)
+            check("uncertain evidence never blocks the redemption", redeemed is HeartStore.RedeemResult.Redeemed && redeemed.after == before + 1)
+            val review = (redeemed as HeartStore.RedeemResult.Redeemed).review
+            check("transfer recorded for review", review != null && review.issuer == alt && review.redeemer == main && review.serial == heldSerial &&
+                review.evidence == HeartStore.EVIDENCE_SHARED_CONNECTION && review.issuerFirstJoin == T0)
+            check("review row stored once", store.transferReviews().single().serial == heldSerial && store.transferReviews(alt).size == 1 && store.transferReviews(main).size == 1 &&
+                store.transferReviews(stranger).isEmpty())
+            check("review audited without connection data", store.audit(main).any { it.operation == "TRANSFER_REVIEW" && it.itemSerial == heldSerial && "h-home" !in (it.reason ?: "") })
+            // 11. A copy of that item stays worthless (and isn't reviewed twice).
+            check("copy still refused", store.redeem(stranger, heldSerial, LIMITS, later + 2, reviewTransfers = true) is HeartStore.RedeemResult.AlreadyRedeemed && store.transferReviewCount() == 1)
+
+            // 7. Legitimate trading between unrelated accounts: no review.
+            val trade = serial().also { store.withdraw(alt, it, LIMITS, later, requirements = REQUIREMENTS) }
+            val traded = store.redeem(stranger, trade, LIMITS, later, reviewTransfers = true)
+            check("unrelated trade works, no review", traded is HeartStore.RedeemResult.Redeemed && traded.review == null && store.transferReviewCount() == 1)
+            // Own item back: no review. Staff-made item: no review. Review off: no review.
+            val own = serial().also { store.withdraw(alt, it, LIMITS, later, requirements = REQUIREMENTS) }
+            check("redeeming your own item isn't reviewed", (store.redeem(alt, own, LIMITS, later, reviewTransfers = true) as HeartStore.RedeemResult.Redeemed).review == null)
+            val staffItem = serial().also { store.grantItems(alt, listOf(it), "console", "Console", later) }
+            check("staff-made items aren't reviewed", (store.redeem(main, staffItem, LIMITS, later, reviewTransfers = true) as HeartStore.RedeemResult.Redeemed).review == null)
+            val unreviewed = serial().also { store.withdraw(alt, it, LIMITS, later, requirements = REQUIREMENTS) }
+            check("review off records nothing", (store.redeem(main, unreviewed, LIMITS, later, reviewTransfers = false) as HeartStore.RedeemResult.Redeemed).review == null &&
+                store.transferReviewCount() == 1)
+
+            // 13/10. The maximum still holds with review on; a refused redemption keeps item and hearts.
+            store.adminChange(main, AdminOp.SET, 20, LIMITS, "console", "Console", later)
+            val atMax = serial().also { store.withdraw(alt, it, LIMITS, later, requirements = REQUIREMENTS) }
+            check("maximum enforced with review on", store.redeem(main, atMax, LIMITS, later, reviewTransfers = true) == HeartStore.RedeemResult.AtMaximum(20))
+            check("refused item stays ISSUED, hearts unchanged, no review", store.loadItem(atMax)!!.status == HeartStore.ItemStatus.ISSUED &&
+                store.load(main)!!.hearts == 20 && store.transferReviewCount() == 1)
+            // 14. Items issued before this update (no requirements were checked then) still redeem.
+            check("existing issued items stay usable", store.redeem(stranger, atMax, LIMITS, later, reviewTransfers = true) is HeartStore.RedeemResult.Redeemed)
+            check("forged items still refused", store.redeem(main, serial(), LIMITS, later, reviewTransfers = true) == HeartStore.RedeemResult.UnknownItem)
+        }
+        // Reviews persist; heart counts were never touched by the new tables.
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            check("reviews survive restarts", store.transferReviewCount() == 1)
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+
+    // Migration: a database from before #1457 gets the new tables and keeps every heart and item.
+    val legacy = Files.createTempDirectory("joshymc-heart-alts-legacy").toFile()
+    try {
+        val p = UUID.randomUUID()
+        val outstanding = serial()
+        withDb(legacy) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            store.ensure(p, 10, T0)
+            store.withdraw(p, outstanding, LIMITS, T0)
+            db.execute("DROP TABLE lifesteal_heart_playtime")
+            db.execute("DROP TABLE lifesteal_heart_transfer_reviews")
+        }
+        withDb(legacy) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            check("migration leaves hearts alone", store.load(p)!!.hearts == 9)
+            check("migration keeps outstanding items valid", store.loadItem(outstanding)!!.status == HeartStore.ItemStatus.ISSUED)
+            check("migrated playtime starts at zero", store.playtimeMillis(p) == 0L)
+            check("old item redeems after migration", store.redeem(p, outstanding, LIMITS, T0, reviewTransfers = true) is HeartStore.RedeemResult.Redeemed)
+        }
+    } finally {
+        legacy.deleteRecursively()
+    }
+}
+
+/** 15. Concurrency: eligibility doesn't open a race, and concurrent redemptions of one serial still succeed once. */
+private fun altFarmingConcurrency() {
+    val dir = Files.createTempDirectory("joshymc-heart-alts-concurrency").toFile()
+    try {
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            val alt = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+            val main = UUID.randomUUID().also { store.ensure(it, 5, T0) }
+            connections(db, alt to "same", main to "same")
+            val later = T0 + 24 * HOUR
+
+            fun race(times: Int, action: () -> Unit): List<Throwable> {
+                val pool = Executors.newFixedThreadPool(8)
+                val start = CountDownLatch(1)
+                val errors = Collections.synchronizedList(mutableListOf<Throwable>())
+                repeat(times) { pool.execute { start.await(); try { action() } catch (e: Throwable) { errors += e } } }
+                start.countDown()
+                pool.shutdown()
+                check("race finished", pool.awaitTermination(60, TimeUnit.SECONDS))
+                return errors
+            }
+
+            // Ineligible: 40 concurrent attempts, none succeed.
+            val refused = AtomicInteger()
+            check("no errors (ineligible race)", race(40) {
+                if (store.withdraw(alt, serial(), LIMITS, later, requirements = REQUIREMENTS) is HeartStore.WithdrawResult.NotEligible) refused.incrementAndGet()
+            }.isEmpty())
+            check("all ineligible attempts refused", refused.get() == 40 && store.load(alt)!!.hearts == 10 && store.itemCount() == 0)
+
+            // Playtime credited from several threads adds up exactly.
+            check("no errors (playtime race)", race(40) { store.addPlaytime(mapOf(alt to 3 * 60_000L), later) }.isEmpty())
+            check("concurrent playtime credits add up", store.playtimeMillis(alt) == 2 * HOUR)
+
+            // Eligible: exactly 9 withdrawals.
+            val ok = AtomicInteger()
+            val serials = Collections.synchronizedList(mutableListOf<String>())
+            check("no errors (eligible race)", race(40) {
+                val r = store.withdraw(alt, serial(), LIMITS, later, requirements = REQUIREMENTS)
+                if (r is HeartStore.WithdrawResult.Withdrawn) { ok.incrementAndGet(); serials += r.serial }
+            }.isEmpty())
+            check("exactly 9 eligible withdrawals", ok.get() == 9 && store.load(alt)!!.hearts == 1)
+
+            // One serial redeemed by 20 threads with review on: one heart, one review.
+            val target = serials.first()
+            val redeemed = AtomicInteger()
+            race(20) { if (store.redeem(main, target, LIMITS, later, reviewTransfers = true) is HeartStore.RedeemResult.Redeemed) redeemed.incrementAndGet() }
+            check("a serial redeems once under concurrency", redeemed.get() == 1 && store.load(main)!!.hearts == 6 && store.transferReviewCount() == 1)
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+}
+
+private fun altFarmingWiring() {
+    val manager = source("lifesteal/hearts/LifestealHeartManager.kt")
+    val withdraw = manager.substringAfter("fun withdraw(player: Player)").substringBefore("private fun notEligible(")
+    check("withdraw passes the configured requirements", "HeartRules.WithdrawRequirements.of(settings.withdrawEligibility)" in withdraw &&
+        "store.withdraw(uuid, serial, limits, now, requirements = requirements)" in withdraw)
+    check("session playtime saved before the eligibility check", withdraw.indexOf("samplePlaytime(player, now)") in 0 until withdraw.indexOf("store.withdraw("))
+    check("ineligible withdrawals handled", "is HeartStore.WithdrawResult.NotEligible -> notEligible(" in withdraw)
+    check("combat check still before the transaction", withdraw.indexOf("HeartRules.combatBlocksWithdraw(") in 0 until withdraw.indexOf("store.withdraw("))
+    val redeem = manager.substringAfter("fun redeem(player: Player, hand: EquipmentSlot)").substringBefore("private fun reviewRecorded(")
+    check("redemption review follows the setting", "reviewTransfers = settings.altTransferReview.enabled" in redeem)
+    check("review handled only after a successful redemption", redeem.indexOf("removeRedeemed(player, hand, serial)") < redeem.indexOf("result.review?.let"))
+    val counting = manager.substringAfter("private fun countsPlaytime(player: Player): Boolean =").substringBefore("/**")
+    check("only Lifesteal, loaded, alive, non-AFK time counts", listOf("active", "isLifesteal(player)", "loaded.containsKey(player.uniqueId)", "!player.isDead", "afkManager.isAfk(player)").all { it in counting })
+    check("quit ends the stretch", manager.substringAfter("fun onQuit(player: Player)").substringBefore("loaded.remove").contains("stillCounting = false"))
+    check("playtime saved on stop", manager.substringAfter("fun stop()").substringBefore("loaded.clear()").contains("samplePlaytime("))
+    check("staff-visible logs", "\"HEART_WITHDRAW_INELIGIBLE\"" in manager && "\"HEART_TRANSFER_REVIEW\"" in manager)
+    val notice = manager.substringAfter("private fun reviewRecorded(").substringBefore("/** Takes exactly")
+    check("players are never told about a review", "send(" !in notice)
+    check("no automatic punishment", listOf("punishmentManager", "ban(", "kick(", "voidItem(").none { it in notice })
+    val messages = LifestealSettings.WithdrawEligibility()
+    check("playtime message", "Lifesteal playtime" in messages.playtimeMessage && "{time}" in messages.playtimeMessage)
+    check("account age message", "too new" in messages.accountAgeMessage && "{time}" in messages.accountAgeMessage)
+    val command = source("lifesteal/hearts/LifestealHeartsCommand.kt")
+    check("reviews need the admin permission", command.indexOf("if (!sender.hasPermission(PERMISSION))") < command.indexOf("\"reviews\" -> return reviews(sender, args)"))
+    // 16. Survival: the listener (and so playtime counting) exists only where Lifesteal is hosted.
+    check("Survival untouched: listener only on Lifesteal servers", Regex("""if \(plugin\.lifestealHeartManager\.hosted\) \{\s+pm\.registerEvents\(com\.liam\.joshymc\.lifesteal\.hearts\.LifestealHeartListener""").containsMatchIn(source("manager/ListenerManager.kt")))
+    check("no new Survival code paths", "lifestealHeartManager" !in source("manager/PlaytimeManager.kt") && "lifestealHeartManager" !in source("manager/AltManager.kt"))
 }
