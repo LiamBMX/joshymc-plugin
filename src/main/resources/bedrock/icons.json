@@ -42,6 +42,11 @@
       "icon": "joshymc/bubble_butt_leggings.png",
       "sha1": "1dd1405cb753899117ddedacb943e41a874d4086"
     },
+    "joshymc:cabin_chest": {
+      "bedrock_name": "cabin_chest",
+      "icon": "joshymc/cabin_chest.png",
+      "sha1": "4f2ba2bacea8dabd692800826fae998328d096e7"
+    },
     "joshymc:cabin_crate": {
       "bedrock_name": "cabin_crate",
       "icon": "joshymc/cabin_crate.png",
@@ -51,6 +56,11 @@
       "bedrock_name": "cabin_key",
       "icon": "joshymc/cabin_key.png",
       "sha1": "e4a1311d7b5dd27724d5c72451cb5db5914d1b75"
+    },
+    "joshymc:campfire_chest": {
+      "bedrock_name": "campfire_chest",
+      "icon": "joshymc/campfire_chest.png",
+      "sha1": "61b3afd2f427397d24fd88aae1fafa4d6d973070"
     },
     "joshymc:campfire_crate": {
       "bedrock_name": "campfire_crate",
@@ -586,6 +596,11 @@
       "bedrock_name": "hearthkeeper",
       "icon": "joshymc/hearthkeeper.png",
       "sha1": "73b9b80dca5b7b127546a9b712a422a0fd372038"
+    },
+    "joshymc:homestead_chest": {
+      "bedrock_name": "homestead_chest",
+      "icon": "joshymc/homestead_chest.png",
+      "sha1": "38efcaaed65e68a41ef2865a80ad0c2f5fd0587b"
     },
     "joshymc:homestead_crate": {
       "bedrock_name": "homestead_crate",

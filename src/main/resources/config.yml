@@ -665,21 +665,23 @@ crates:
       #   scale     0.5..2.0 (1.0 hides a chest exactly; the floor stays on the floor)
       #   hitbox    auto (default) = add a click hitbox only when the model reaches more
       #             than 1/4 block past its block, on = always, off = never
+      # Issue #1454: Cabin, Homestead and Campfire use the redesigned "_chest" models. The
+      # older "_crate" models stay in the pack: set model back to "joshymc:<id>_crate" to roll back.
       cabin:
         enabled: true
-        model: "joshymc:cabin_crate"
+        model: "joshymc:cabin_chest"
         offset: {x: 0.0, y: 0.0, z: 0.0}
         rotation: auto
         scale: 1.0
       homestead:
         enabled: true
-        model: "joshymc:homestead_crate"
+        model: "joshymc:homestead_chest"
         offset: {x: 0.0, y: 0.0, z: 0.0}
         rotation: auto
         scale: 1.0
       campfire:
         enabled: true
-        model: "joshymc:campfire_crate"
+        model: "joshymc:campfire_chest"
         offset: {x: 0.0, y: 0.0, z: 0.0}
         rotation: auto
         scale: 1.0
