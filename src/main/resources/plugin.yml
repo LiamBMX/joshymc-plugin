@@ -186,6 +186,11 @@ commands:
     description: Open the Survival Event Shop's current rotation
     usage: /eventshop [admin <add|remove|list|edit|enable|disable|reload|status|rotate|open|close>]
     aliases: [eshop]
+  milestones:
+    description: Open your Milestones (Farming, Mining, Fishing, Combat, Exploration; Survival only)
+    usage: /milestones [farming|mining|fishing|combat|exploration]
+    aliases: [milestone]
+    permission: joshymc.milestones.use
   overflow:
     description: View items held in your persistent Overflow storage
     usage: /overflow
@@ -931,6 +936,9 @@ permissions:
     default: op
   joshymc.overflow:
     description: View your persistent Overflow storage
+    default: true
+  joshymc.milestones.use:
+    description: Use /milestones and earn milestone progress and rewards (Survival only)
     default: true
   joshymc.jgm.lock:
     description: See and run /jgamemode lock <survival|lifesteal> confirm (restrict a gamemode's commands and features to that gamemode)

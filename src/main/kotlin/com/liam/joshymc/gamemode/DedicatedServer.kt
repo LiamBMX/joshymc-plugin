@@ -105,6 +105,7 @@ object DedicatedServerFeatures {
         "casino" to "/casino, /mines, /roulette, /crash and /towers",
         "candy-shop" to "/candy and its openings",
         "event-shop" to "/eventshop and its windows",
+        "milestones" to "/milestones and milestone progress",
     )
 
     /** Whether `features.<flag>` is on, given its configured value and the gamemodes this instance isolates. */

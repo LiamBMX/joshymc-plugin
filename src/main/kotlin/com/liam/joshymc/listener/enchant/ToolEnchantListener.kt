@@ -339,6 +339,7 @@ class ToolEnchantListener(private val plugin: Joshymc) : Listener {
                                     if (target.type !in explosiveBlacklist) {
                                         // No BlockBreakEvent fires here: count it for Daily/Weekly Quests first.
                                         plugin.questCycleManager.recordBlockBreak(player, target)
+                                        plugin.milestoneBlockBreak(player, target)
                                         target.breakNaturally(tool)
                                     }
                                 }

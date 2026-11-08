@@ -71,7 +71,7 @@ object GamemodeAssignments {
         // Claims, storage, hoppers, spawners (/team is routed per gamemode, see NETWORK_COMMANDS).
         "claim", "unclaim", "subclaim", "pv", "enderchest", "hopper", "spawner",
         // Quests, progression, streaks, votes.
-        "quests", "daily", "eventquests", "resurge", "booster", "loginstreak", "mcr", "jvote", "talisman", "fish",
+        "quests", "daily", "eventquests", "milestones", "resurge", "booster", "loginstreak", "mcr", "jvote", "talisman", "fish",
         // Cosmetics and chat perks unlocked through Survival crates, ranks and shops.
         "cosmetics", "killeffect", "tag", "chatcolor", "signitem", "skull",
         // Custom enchants (admin-applied, Survival gear).
@@ -140,7 +140,8 @@ enum class GamemodeFeature(val id: String, val scope: GamemodeScope, val descrip
     QUESTS("quests", GamemodeScope.SURVIVAL, "Daily / Weekly / Quest Master progress"),
     EVENT_QUESTS("event-quests", GamemodeScope.SURVIVAL, "Event Quest progress"),
     LOGIN_STREAK("login-streak", GamemodeScope.SURVIVAL, "daily login streak playtime and rewards"),
-    AFK_REWARDS("afk-rewards", GamemodeScope.SURVIVAL, "AFK money, XP and item rewards");
+    AFK_REWARDS("afk-rewards", GamemodeScope.SURVIVAL, "AFK money, XP and item rewards"),
+    MILESTONES("milestones", GamemodeScope.SURVIVAL, "Milestone progress (farming, mining, fishing, combat, exploration)");
 
     companion object {
         fun fromId(id: String?): GamemodeFeature? = entries.firstOrNull { it.id.equals(id?.trim(), ignoreCase = true) }

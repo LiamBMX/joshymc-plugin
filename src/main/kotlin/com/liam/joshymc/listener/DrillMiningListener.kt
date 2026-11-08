@@ -56,6 +56,7 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
                     // Event Quests before the block changes (air, already broken, never counts).
                     if (player.isOnline) {
                         plugin.questCycleManager.recordBlockBreak(player, block)
+                        plugin.milestoneBlockBreak(player, block)
                         plugin.eventQuestManager.recordBlockBreak(player, block)
                     }
                     block.breakNaturally(item)
