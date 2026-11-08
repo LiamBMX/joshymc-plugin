@@ -150,14 +150,15 @@ handles disconnects itself:
 
 - before the fight (PREPARING/COUNTDOWN): the match is cancelled; the leaver's snapshot waits for
   their return;
-- in the fight: they're out of **this match only** (DISCONNECT); no heart penalty, because the
-  blueprint defines none;
-- on rejoin: restored and moved back; they can't rejoin the match.
+- in the fight: a **forfeit** (issue #1465). They're out of the match (`DISCONNECT`), and one heart
+  may go to the opponent who hit them most recently, through the normal heart rules. Staff kicks
+  and server errors only take them out (`DISCONNECT_EXEMPT`), and a shutdown is left to shutdown;
+- on rejoin: restored and moved back, told what the forfeit did; they can't rejoin the match.
 
-**Open decision (not invented here)**: the blueprint has no ranked forfeiture rule. This issue only
-records `DISCONNECT` in the participant row and the event log. For Elo (issue #1365) a disconnect is
+The full policy (classification, recipient rule, Elo, same-tick tie-break, limitations) is in
+[lifesteal-ranked-beta.md](lifesteal-ranked-beta.md), section G. For Elo (issue #1365) a disconnect is
 an ordinary "out": the match result stands and the disconnected player is rated with their side, so
-quitting can't dodge a loss. No other forfeit penalty exists.
+quitting can't dodge a loss.
 
 ## Spectators
 

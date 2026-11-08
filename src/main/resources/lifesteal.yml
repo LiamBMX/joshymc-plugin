@@ -103,6 +103,15 @@ ranked-team-wars:
   # Minutes after which an unfinished match is cancelled with no winner (1 to 120). Inventories are
   # restored either way; hearts already stolen in the match stay stolen.
   max-match-minutes: 20
+  # Disconnecting from a fight that has started (docs/lifesteal-ranked-beta.md, issue #1465). The
+  # leaver is always out of that match (their side loses if nobody is left) and gets their gear back
+  # when they rejoin. Server shutdowns, staff kicks and server errors never cost a heart; connection
+  # timeouts follow combat-logging.count-timeouts.
+  disconnect-forfeit:
+    # last-opponent = one heart goes to the opponent who hit them most recently within one combat-tag
+    # duration, through the normal heart rules (1-heart minimum, maximum, same-victim cooldown,
+    # teammates). Nobody hit them = no heart moves. none = the match forfeit only.
+    heart-loss: last-opponent
   # Public matchmaking and team challenges (/ranked, docs/lifesteal-ranked-queue.md). These are
   # only waiting times and anti-spam limits; the ranked rules above don't change.
   matchmaking:

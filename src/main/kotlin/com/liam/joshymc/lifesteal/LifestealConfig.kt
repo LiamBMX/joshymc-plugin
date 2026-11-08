@@ -93,6 +93,11 @@ data class LifestealSettings(
         val maxMatchMinutes: Int = 20,
         val matchmaking: RankedMatchmaking = RankedMatchmaking(),
         val elo: RankedElo = RankedElo(),
+        /**
+         * Issue #1465: `ranked-team-wars.disconnect-forfeit.heart-loss`. What a counted disconnect
+         * from an ACTIVE match does to hearts (the match forfeit itself always applies).
+         */
+        val disconnectHeartLoss: RankedForfeitHeartLoss = RankedForfeitHeartLoss.LAST_OPPONENT,
     )
 
     /**
@@ -301,6 +306,21 @@ data class LifestealSettings(
  * only value; a later approved penalty is added here (and applied through the heart store, which
  * keeps the 1-heart minimum) instead of being invented.
  */
+/**
+ * Issue #1465: hearts on a counted disconnect from an ACTIVE ranked match.
+ * [LAST_OPPONENT]: one heart through the normal `HeartStore.transferPvp` to the opponent who hit
+ * the leaver most recently within one combat-tag duration (every heart rule applies; nobody
+ * eligible = no heart moves). [NONE]: the match forfeit only.
+ */
+enum class RankedForfeitHeartLoss(val id: String) {
+    LAST_OPPONENT("last-opponent"),
+    NONE("none");
+
+    companion object {
+        fun fromId(raw: String?): RankedForfeitHeartLoss? = entries.firstOrNull { it.id.equals(raw?.trim(), ignoreCase = true) }
+    }
+}
+
 enum class CombatLogHeartPenalty(val id: String) {
     NONE("none");
 
@@ -418,6 +438,16 @@ object LifestealConfigParser {
         val maxMatch = int("ranked-team-wars.max-match-minutes", d.rankedTeamWars.maxMatchMinutes, 1, 120, "minutes before an unfinished ranked match is cancelled without a winner")
         val matchmaking = rankedMatchmaking(get, ::int, problems)
         val elo = rankedElo(get, ::int, problems)
+        val forfeitHearts = when (val raw = get("ranked-team-wars.disconnect-forfeit.heart-loss")) {
+            null -> {
+                problems += Problem(false, "ranked-team-wars.disconnect-forfeit.heart-loss is not set; using ${d.rankedTeamWars.disconnectHeartLoss.id}.")
+                d.rankedTeamWars.disconnectHeartLoss
+            }
+            else -> RankedForfeitHeartLoss.fromId(raw.toString()) ?: run {
+                problems += Problem(true, "ranked-team-wars.disconnect-forfeit.heart-loss '$raw' must be last-opponent or none.")
+                d.rankedTeamWars.disconnectHeartLoss
+            }
+        }
 
         val months = int("seasons.length-months", d.seasons.lengthMonths, 1, MAX_SEASON_MONTHS, "season length in months")
 
@@ -432,7 +462,7 @@ object LifestealConfigParser {
                 hearts = LifestealSettings.Hearts(starting, maximum, minimum),
                 pvp = LifestealSettings.Pvp(cooldown),
                 teams = teams,
-                rankedTeamWars = LifestealSettings.RankedTeamWars(rankedEnabled, sizes, countdown, maxMatch, matchmaking, elo),
+                rankedTeamWars = LifestealSettings.RankedTeamWars(rankedEnabled, sizes, countdown, maxMatch, matchmaking, elo, forfeitHearts),
                 seasons = LifestealSettings.Seasons(months),
                 progression = progression,
                 heartItems = heartItems,

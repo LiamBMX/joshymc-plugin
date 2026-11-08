@@ -475,6 +475,63 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         }
     }
 
+    /**
+     * Issue #1465: [victim] disconnected from an ACTIVE ranked match and the match credited the
+     * forfeit to [killer] (`RankedMatchRules.forfeitRecipient`: the opponent who hit them most
+     * recently). Called from the quit (LOW, before this manager's own quit at MONITOR, so the
+     * victim's session is still loaded). Exactly the same [HeartRules.attribute] and
+     * [HeartStore.transferPvp] as a kill: 1-heart minimum, maximum, same-victim cooldown, the team
+     * check, the progression window and the audit rows. [dedupeKey] is per match + victim, so one
+     * disconnect moves a heart at most once. No Team XP and no Heart item: it isn't a kill.
+     * Returns the stored result, or null when nothing was evaluated.
+     */
+    fun onRankedForfeit(dedupeKey: String, victim: Player, killer: Player, note: String): HeartStore.PvpResult? {
+        if (!active) return null
+        val limits = limits ?: return null
+        if (killer.uniqueId == victim.uniqueId) return null
+        val attribution = HeartRules.attribute(deathFor(victim, killer, killer.uniqueId))
+        if (attribution != HeartRules.Attribution.PVP_KILL) {
+            plugin.logger.info("[Hearts] ${victim.name} forfeited a ranked match by disconnecting; no heart moved to ${killer.name} ($attribution).")
+            return null
+        }
+        val now = System.currentTimeMillis()
+        val request = HeartStore.PvpRequest(
+            dedupeKey = dedupeKey,
+            killer = killer.uniqueId,
+            victim = victim.uniqueId,
+            now = now,
+            cooldownMillis = HeartRules.cooldownMillis(cooldownMinutes),
+            limits = limits,
+            team = plugin.lifestealTeamManager.heartCheck(killer.uniqueId, victim.uniqueId),
+            window = plugin.lifestealProgressionManager.heartWindow(now),
+            note = note,
+        )
+        val result = try {
+            store.transferPvp(request)
+        } catch (e: Exception) {
+            plugin.logger.severe("[Hearts] Ranked forfeit transfer ${killer.name} <- ${victim.name} failed and was rolled back; no hearts changed: ${e.message}")
+            send(killer, HeartMessages.TRANSFER_FAILED)
+            return null
+        }
+        when (result) {
+            HeartStore.PvpResult.Duplicate -> Unit
+            is HeartStore.PvpResult.Unavailable -> plugin.logger.warning("[Hearts] ${victim.name} forfeited a ranked match, but no hearts changed: ${result.reason}.")
+            is HeartStore.PvpResult.Done -> {
+                if (result.decision.changesHearts) {
+                    loaded[victim.uniqueId] = result.victimAfter
+                    apply(victim, result.victimAfter)
+                    if (killer.isOnline && loaded.containsKey(killer.uniqueId)) {
+                        loaded[killer.uniqueId] = result.killerAfter
+                        apply(killer, result.killerAfter)
+                    }
+                }
+                // The victim is disconnecting: the ranked manager tells them when they're back.
+                notify(result, killer, victim.name, null, limits)
+            }
+        }
+        return result
+    }
+
     private fun notify(result: HeartStore.PvpResult.Done, killer: Player, victimName: String, victim: Player?, limits: HeartRules.Limits) {
         val names = mapOf("{victim}" to victimName, "{killer}" to killer.name, "{maximum}" to limits.maximum.toString())
         when (val decision = result.decision) {

@@ -1430,7 +1430,8 @@ private fun environmentalWiring() {
     check("env wiring: credited attacker re-checked by attribute()", "HeartRules.attribute(deathFor(victim, candidate, attacker)) == HeartRules.Attribution.PVP_KILL" in manager)
     check("env wiring: uses the configured combat-tag duration", "tagMillis = plugin.combatManager.tagDurationMillis" in manager)
     check("env wiring: same transferPvp request with the note", "note = note,\n        )\n        val result = try {\n            store.transferPvp(request)" in manager)
-    check("env wiring: one transferPvp call per death path (onDeath + Combat NPC)", Regex("store\\.transferPvp\\(").findAll(manager).count() == 2)
+    // Issue #1465 added the third path: a ranked disconnect forfeit (onRankedForfeit).
+    check("env wiring: one transferPvp call per heart path (onDeath + Combat NPC + ranked forfeit)", Regex("store\\.transferPvp\\(").findAll(manager).count() == 3)
     val npcDeath = manager.substringAfter("fun onCombatNpcDeath(").substringBefore("private fun notify(")
     check("env wiring: Combat NPC deaths unchanged (direct attribution only)", "combatTagKiller" !in npcDeath && "\"combatnpc:\$sessionId\"" in npcDeath)
 }

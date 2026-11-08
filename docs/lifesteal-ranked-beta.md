@@ -29,7 +29,7 @@ and a beta checklist written. Everything below comes from reading the merged cod
 | Day 3 unlock | COMPLETE | `canEnterRankedQueue()` uses the stored season launch time (never a missing timestamp). Player access also needs `ranked-team-wars.enabled: true`. |
 | Crash / disconnect recovery | COMPLETE | Startup recovery records FINISHING as COMPLETED and everything else as CANCELLED, and restores each player on join. A rating that failed is retried by the 5-minute sweep. |
 | Survival isolation | COMPLETE | No tables, listener or `/ranked` command on a server that doesn't host Lifesteal. |
-| Ranked forfeiture policy | BLOCKED (blueprint decision) | Disconnecting in a fight = out of that match only. No heart or Elo penalty beyond losing the match with your side. |
+| Ranked forfeiture policy | **IMPLEMENTED in #1465** (needs a live test) | Disconnecting in a fight = a forfeit: out of the match, the side loses if nobody is left, and one heart to the opponent who hit the leaver last, through the normal heart rules. See section G. The recipient rule is still an Owner decision to confirm. |
 
 ## B. Fixes in issue #1371
 
@@ -96,7 +96,8 @@ Between them, the existing suites already cover these on a real SQLite database:
 - **High: other plugins' items.** Items another plugin (not JoshyMC's deliveries) puts straight into
   a held player's inventory mid-match are overwritten by the restore.
 - **Open decisions (blueprint):**
-  - ranked forfeiture penalties;
+  - ranked forfeiture: implemented in #1465 (section G); the Owner still has to confirm who gets
+    the heart (`last-opponent`) or switch it off (`heart-loss: none`);
   - killer at 20 hearts gains nothing;
   - challenges unrated.
 - **Matchmaking is FIFO** (no skill matching), by design for the beta.
@@ -210,3 +211,142 @@ steps to item 5:
 - shoot an arrow and throw a trident out of the arena to a player outside (they can't pick it up);
 - throw a Loyalty trident as the match ends (no second trident);
 - empty a bundle in the arena.
+
+## G. Disconnect forfeits (issue #1465)
+
+Audit #1453 found that a player about to lose a ranked fight could quit to keep their hearts.
+Ranked hits never combat-tag, so no Combat NPC stood in, and a disconnect only took the player out
+of the match. Issue #1465 closes this without rebuilding anything: the match, the snapshot and the
+heart service are the same ones, with one disconnect policy on top.
+
+### Policy
+
+The server can't tell a rage-quit from a crash or a pulled cable, so it never guesses intent. Every
+disconnect of the same kind is treated the same way. The rule is the Bukkit-free
+`RankedMatchRules.disconnect`, and the kind comes from the existing `CombatLogRules.classify`
+(quit reason + kick cause, the same classification as ordinary Lifesteal combat logs):
+
+| When | What happens | Hearts |
+|---|---|---|
+| Before the fight (PREPARING / COUNTDOWN) | Match cancelled, unrated. Snapshot restored on rejoin. | never |
+| In the fight, counted disconnect (quit, alt-F4, crash, player-caused kick, timeout*) | **Forfeit**: out of the match (`DISCONNECT`), can't come back. Their side loses if nobody is left. | one heart to the last opposing hitter (below) |
+| In the fight, staff kick / ban / plugin kick / server error | Out of the match (`DISCONNECT_EXEMPT`). | never |
+| Already knocked out, or the match is FINISHING / over | Nothing. | never |
+| Server shutdown or restart (any state) | Nothing is decided at the quit. Shutdown cancels the match and restores everyone. | never |
+| Staff `/lifesteal admin ranked cancel`, time limit | Cancelled, no winner (unchanged). | never |
+
+\* Timeouts follow `combat-logging.count-timeouts` (default true), the same switch as ordinary
+combat logs. With it off, a timeout is handled like a server error.
+
+Every disconnect is written to the match's event log with the state, kind and action
+(`/lifesteal admin ranked info <match>`).
+
+### Elo
+
+The forfeit is an ordinary "out", so the existing rule decides the match: a side with nobody left
+loses. The result is recorded once by the conditional `finish`/`complete` and rated once by
+`RatingStore.finalize` (`elo:<match>`). There is no new formula and no separate forfeit rating. A
+disconnect alone never ends the match early: the leaver's teammates keep fighting.
+
+**Same-tick tie-break.** Before, if the last players of both sides went out in the same tick, the
+match was cancelled. A loser could quit in the tick their opponent's last player fell and turn a
+loss into an unrated cancel. Now, if one side lost players that tick only through counted
+disconnects and the other side lost someone another way, the disconnecting side forfeits and the
+other side wins. Deaths on both sides, or forfeits on both sides, are still a cancel.
+
+### Hearts (`ranked-team-wars.disconnect-forfeit.heart-loss`)
+
+The setting is `last-opponent` (default) or `none` (match forfeit only). With `last-opponent`:
+
+- **Recipient**: the opponent whose hit on the leaver landed most recently, no older than one
+  combat-tag duration. That is `combat.tag-duration-seconds`, the same window as the #1461
+  combat-tag credit. Only hits the match itself recorded count: MONITOR, not cancelled, between
+  opposite roster sides of an ACTIVE match. The recipient must still be fighting in that match, on
+  the other side, online and alive. If the latest hitter isn't eligible, the one before is tried.
+  **Nobody hit them = no heart moves.** Never a teammate, never a random opponent.
+- **Transfer**: `LifestealHeartManager.onRankedForfeit` makes the same `HeartStore.transferPvp`
+  call as a kill, so every rule applies:
+  - the 1-heart minimum: a leaver at 1 keeps it and nobody gains;
+  - the 20-heart maximum: an opponent at 20 gains nothing;
+  - the same-victim cooldown;
+  - the team and ally checks (roster sides first, #1371);
+  - the progression window.
+
+  Hearts are only moved, never created or destroyed.
+- **Once**: the dedupe key `rankedforfeit:<match>:<player>` is UNIQUE. A death and a forfeit can't
+  both happen: a death takes the player out of the match first, so the quit that follows finds
+  nothing to decide. Disconnecting after lethal damage is a death, handled by the normal kill path.
+- **Audit**: the usual `PVP_LOSS`/`PVP_GAIN` rows, with the note
+  `ranked disconnect forfeit, match <id> (<kind>)`.
+- **No Heart item, no Team XP**: it isn't a kill.
+
+**Owner decision still open.** The blueprint never said who gets a forfeited heart. The rule here
+("the last opponent who hit them, within the combat-tag window") is the most defensible one the code
+already has: it is the #1461 rule for environmental deaths. It is still new for disconnects. Until
+the Owner confirms it, `heart-loss: none` turns the heart part off and keeps the match forfeit.
+
+### Inventory, reconnects and restarts
+
+Nothing changed here:
+
+- The snapshot taken at the start stays PENDING while the leaver is offline, and it survives
+  restarts.
+- On rejoin it is *set* back exactly once (PENDING → RESTORED, conditional), so rapid reconnects
+  can't apply it twice.
+- Hearts are never part of the snapshot: a heart lost to a forfeit stays lost after the restore.
+- The leaver can't rejoin the match, because their roster entry is DEFEATED.
+
+On rejoin they also see what the forfeit did (forfeited, and the heart outcome). That notice lives
+in memory, so a restart in between loses it. The heart change itself is stored.
+
+### Tests
+
+`lifestealRankedCheck` (section `forfeits`, all automated):
+
+- the policy for every state and disconnect kind: before start, ACTIVE, after being knocked out,
+  after the match, shutdown, staff kick, timeouts;
+- 2v2-5v5 forfeits, several teammates disconnecting, and the same-tick disconnect + death
+  tie-break;
+- the recipient rule: most recent hit, window, future hits, teammates, self, bounded history;
+- on a real SQLite HeartStore:
+  - one heart moved, duplicates refused;
+  - the same-victim cooldown, and a kill after a forfeit;
+  - the 1-heart minimum and the 20-heart maximum;
+  - teammates refused;
+  - audit rows, and the heart total kept;
+- store: the forfeit recorded once, the snapshot pending across a restart and restored once, an
+  ordinary WIN record (rated like any other), no second result;
+- the settings and the wiring.
+
+`lifestealHeartCheck` now counts three `transferPvp` paths.
+
+**Needs a live Paper server:**
+
+- real quits, alt-F4 and timeouts mid-fight;
+- kick-cause ordering;
+- the heart moving to an online opponent;
+- the rejoin notice;
+- `/stop` mid-fight (expected: no forfeit, everyone restored);
+- Bedrock disconnects.
+
+### Remaining limitations
+
+- A player who quits before anyone hits them (or more than one tag duration after the last hit)
+  loses only the match, no heart.
+- The rejoin notice is lost on a restart (the heart change and the snapshot are not).
+- Profile PvP statistics read heart transactions, so a forfeit heart appears there like a kill.
+- If the match is later cancelled (time limit, staff), a forfeit heart that already moved stays
+  moved, like a kill in that match.
+- Dodging by disconnecting during the countdown (cancel, unrated) and by hiding until the time
+  limit are unchanged (section F).
+
+### Checklist additions (section E)
+
+15. In a 2v2, hit an opponent, then have them quit (alt-F4):
+    - they are out, and their teammate keeps fighting;
+    - the hitter gains one heart (`/lifesteal hearts get`);
+    - on rejoin the leaver is restored and told they forfeited.
+16. Quit without being hit: out of the match, no heart moves.
+17. Quit at 1 heart: no heart moves. Quit when the hitter has 20: no heart moves.
+18. `/kick` a participant mid-fight: out, no heart. `/stop` mid-fight: nobody forfeits, and
+    everyone is restored.
