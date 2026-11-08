@@ -102,6 +102,9 @@ object GamemodeAssignments {
         // Lifesteal profiles, statistics, achievements and leaderboards (issue #1429). Also only
         // registered where Lifesteal is hosted (released elsewhere), and refused outside Lifesteal worlds.
         "profile", "stats", "achievements", "lstop",
+        // The Lifesteal Protected Bank (issue #1427). Also only registered where Lifesteal is hosted,
+        // and the manager refuses outside Lifesteal worlds and on servers whose economy isn't Lifesteal's.
+        "bank",
     )
 
     val COMMANDS: Map<String, GamemodeScope> =

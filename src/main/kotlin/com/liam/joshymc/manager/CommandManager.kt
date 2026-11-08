@@ -212,11 +212,17 @@ class CommandManager(private val plugin: Joshymc) {
             }
             plugin.getCommand("lstop")?.let {
                 val cmd = com.liam.joshymc.lifesteal.profile.LifestealLeaderboardCommand(plugin)
+        // Issue #1427: the Lifesteal Protected Bank (/bank). Lifesteal only: released on servers that
+        // don't host Lifesteal, so Survival never has it (another plugin may own /bank there).
+        if (plugin.lifestealBankManager.hosted) {
+            plugin.getCommand("bank")?.let {
+                val cmd = com.liam.joshymc.lifesteal.bank.LifestealBankCommand(plugin)
                 it.setExecutor(cmd)
                 it.tabCompleter = cmd
             }
         } else {
             for (name in listOf("profile", "stats", "achievements", "lstop")) unregisterCommand(name)
+            unregisterCommand("bank")
         }
         // Issue #1331: cross-server transfers through the Velocity proxy.
         for (destination in com.liam.joshymc.network.transfer.TransferDestination.entries) {

@@ -77,6 +77,9 @@ fun main() {
     // issue #1429 /profile, /stats, /achievements and /lstop.
     check("only the Lifesteal commands are assigned to Lifesteal", table.filterValues { it == GamemodeScope.LIFESTEAL }.keys ==
         setOf("withdrawheart", "ranked", "ac", "profile", "stats", "achievements", "lstop"))
+    // Issue #1344: /withdrawheart is the first Lifesteal command; issue #1363 adds /ranked, issue #1405 /ac, issue #1427 /bank.
+    check("only /withdrawheart, /ranked, /ac and /bank are assigned to Lifesteal",
+        table.filterValues { it == GamemodeScope.LIFESTEAL }.keys == setOf("withdrawheart", "ranked", "ac", "bank"))
 
     // Scopes set by earlier issues are unchanged.
     check("jgamemode NETWORK", scopeOf("jgamemode") == NETWORK)
