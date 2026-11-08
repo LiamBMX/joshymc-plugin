@@ -50,6 +50,10 @@ object GamemodeAssignments {
         // system and everyone else to the Survival BountyCommand, applying the SURVIVAL scope (and
         // joshymc.bounty) itself, so Survival bounties behave exactly as before.
         "bounty",
+        // Issue #1425: /quests likewise. QuestCommandRouter sends Lifesteal senders to the Lifesteal quests
+        // and everyone else to the Survival QuestCycleCommand, applying the SURVIVAL scope (and
+        // joshymc.quests) itself, so Survival quests behave exactly as before. /daily stays Survival.
+        "quests",
         // Issue #1379: kits exist in both gamemodes. Every kit belongs to one gamemode in kits.yml
         // (missing = Survival) and KitManager only shows/claims kits of the sender's current
         // gamemode, so Survival kits never appear on Lifesteal and back.
@@ -71,7 +75,7 @@ object GamemodeAssignments {
         // Claims, storage, hoppers, spawners (/team is routed per gamemode, see NETWORK_COMMANDS).
         "claim", "unclaim", "subclaim", "pv", "enderchest", "hopper", "spawner",
         // Quests, progression, streaks, votes.
-        "quests", "daily", "eventquests", "milestones", "resurge", "booster", "loginstreak", "mcr", "jvote", "talisman", "fish",
+        "daily", "eventquests", "milestones", "resurge", "booster", "loginstreak", "mcr", "jvote", "talisman", "fish",
         // Cosmetics and chat perks unlocked through Survival crates, ranks and shops.
         "cosmetics", "killeffect", "tag", "chatcolor", "signitem", "skull",
         // Custom enchants (admin-applied, Survival gear).

@@ -259,12 +259,14 @@ class LifestealBountyManager(private val plugin: Joshymc) {
     // ── Claims ──────────────────────────────────────────────
 
     /** MONITOR on PlayerDeathEvent (deaths that really happen). Never changes the death, drops or hearts. */
-    fun onDeath(event: PlayerDeathEvent) {
-        if (!open) return
-        val victim = event.player
-        val causing = event.damageSource.causingEntity as? Player
+    /**
+     * The facts [BountyRules.eligibility] judges, for [victim] hurt or killed by [causing]
+     * (`damageSource.causingEntity`). Also used by the Lifesteal quests (issue #1425), so a kill
+     * or hit that can't claim a bounty can't advance a PvP quest either. Main thread.
+     */
+    fun pvpFacts(victim: Player, causing: Player?): BountyRules.Death {
         val killer = causing?.takeIf { it.uniqueId != victim.uniqueId }
-        val death = BountyRules.Death(
+        return BountyRules.Death(
             victim = victim.uniqueId,
             causingPlayer = causing?.uniqueId,
             killerIsNpc = killer?.hasMetadata("NPC") == true,
@@ -277,6 +279,14 @@ class LifestealBountyManager(private val plugin: Joshymc) {
             inRankedArena = inRankedArena(victim.location) || (killer != null && inRankedArena(killer.location)),
             team = if (killer == null) BountyRules.Team.NOT_TEAMMATES else teamRelation(killer.uniqueId, victim.uniqueId),
         )
+    }
+
+    fun onDeath(event: PlayerDeathEvent) {
+        if (!open) return
+        val victim = event.player
+        val causing = event.damageSource.causingEntity as? Player
+        val killer = causing?.takeIf { it.uniqueId != victim.uniqueId }
+        val death = pvpFacts(victim, causing)
         val hasBounty = activeFor(victim.uniqueId) != null
         when (val eligibility = BountyRules.eligibility(death)) {
             is BountyRules.Eligibility.Refused -> {
@@ -335,6 +345,8 @@ class LifestealBountyManager(private val plugin: Joshymc) {
                         // Issue #1426: Team XP for the hunter's team, once per payout.
                         plugin.teamProgression()?.onBountyClaimed(request.killer, request.victim, claim.payoutId)
                         killer?.let { deliverNotifications(it) }
+                        // Issue #1425: BOUNTY_CLAIM quest progress, once per paid claim.
+                        plugin.lifestealQuestBountyClaim(request.killer, request.victim)
                     }
                     is BountyStore.PayResult.Failed -> {
                         plugin.logger.severe("[Bounties] Payout ${claim.payoutId} (${BountyMoney.format(claim.amountCents)} to ${request.killerName}) failed and stays pending for retry: ${p.error}")
@@ -426,6 +438,7 @@ class LifestealBountyManager(private val plugin: Joshymc) {
         db("sweep") {
             val touched = mutableSetOf<UUID>()
             val announcements = mutableListOf<BountyStore.Payout>()
+            val paidClaims = mutableListOf<BountyStore.Payout>()
             var expired = 0
             var refunded = 0
             var paid = 0
@@ -442,7 +455,7 @@ class LifestealBountyManager(private val plugin: Joshymc) {
                 }
                 for (id in store.duePayouts(now)) {
                     when (val p = store.pay(id, now, s.retryDelaySeconds * 1000L) { hunterNotice(it, s) }) {
-                        is BountyStore.PayResult.Paid -> { paid++; touched += p.payout.killer }
+                        is BountyStore.PayResult.Paid -> { paid++; touched += p.payout.killer; paidClaims += p.payout }
                         is BountyStore.PayResult.Failed -> { failed++; plugin.logger.severe("[Bounties] Payout $id failed and stays pending: ${p.error}") }
                         else -> Unit
                     }
@@ -459,6 +472,8 @@ class LifestealBountyManager(private val plugin: Joshymc) {
             onMain {
                 if (paid > 0) invalidateBoards()
                 announcements.forEach { announceClaim(it, s) }
+                // Issue #1425: a claim whose first payout failed counts for quests once it is paid here.
+                paidClaims.forEach { plugin.lifestealQuestBountyClaim(it.killer, it.target) }
                 touched.mapNotNull { Bukkit.getPlayer(it) }.forEach { deliverNotifications(it) }
                 onDone?.invoke(summary)
             }

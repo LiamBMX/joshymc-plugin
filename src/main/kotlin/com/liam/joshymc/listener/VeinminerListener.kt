@@ -61,6 +61,7 @@ class VeinminerListener(private val plugin: Joshymc) : Listener {
                 // so mining quests count every vein hit.
                 plugin.questCycleManager.recordBlockBreak(player, veinBlock)
                 plugin.milestoneBlockBreak(player, veinBlock)
+                plugin.lifestealQuestBlockBreak(player, veinBlock)
                 plugin.eventQuestManager.recordBlockBreak(player, veinBlock)
 
                 if (shouldAutoSmelt) {

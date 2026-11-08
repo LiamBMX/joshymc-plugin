@@ -20,6 +20,7 @@ import java.util.UUID
 class PlacedBlockTracker(plugin: Plugin, keyName: String = "milestone_placed") {
 
     /** Issue #1426: Lifesteal Team XP keeps its own markers under another key ([keyName]). */
+    /** Issue #1425: the Lifesteal quests keep their own markers (`lifesteal_quest_placed`), so the two never share a cache. */
     private val key = NamespacedKey(plugin, keyName)
 
     private data class ChunkId(val world: UUID, val x: Int, val z: Int)
