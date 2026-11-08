@@ -305,7 +305,7 @@ commands:
     description: View the dynamic stock market
     usage: /market [price|trends|info]
   quests:
-    description: Open the quest menu (Daily, Weekly and Event Quests)
+    description: Open the quest menu (Survival Daily, Weekly and Event Quests; Lifesteal Daily and Weekly Quests in Lifesteal)
     usage: /quests
     aliases: [quest, q, questboard, questbook]
   eventquests:
@@ -716,6 +716,10 @@ commands:
     usage: /spawnstash
     permission: joshymc.spawnstash
 
+# processResources expands this file as a Groovy template, which can't hold more than 65535 characters of
+# plain text in one piece. The empty scriptlet on the next line splits the text in two and disappears from
+# the built plugin.yml (only the leading "#" stays). Keep it, and add another one if a piece outgrows the limit again.
+#<% /* template split */ %>
 permissions:
   joshymc.give:
     description: Allows giving custom items
@@ -1031,6 +1035,12 @@ permissions:
     default: op
   joshymc.lifesteal.bounty.admin:
     description: Investigate Lifesteal bounties (contributors, payouts, refunds, failures, suspicious kills) and run the safe retry sweep with /bounty admin
+    default: op
+  joshymc.lifesteal.quests.use:
+    description: Use /quests on the Lifesteal server (Daily and Weekly quests, claims and rerolls)
+    default: true
+  joshymc.lifesteal.quests.admin:
+    description: Read-only Lifesteal quest diagnostics with /quests admin status|view
     default: op
   joshymc.transfer.bypass-cooldown:
     description: Skip the cross-server transfer cooldown

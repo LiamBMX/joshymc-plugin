@@ -59,6 +59,7 @@ class TreeFellerListener(private val plugin: Joshymc) : Listener {
                 // before it changes. Leaves are cleanup, not chopping, and never count.
                 plugin.questCycleManager.recordBlockBreak(player, log)
                 plugin.milestoneBlockBreak(player, log)
+                plugin.lifestealQuestBlockBreak(player, log)
                 log.breakNaturally(tool)
                 applyDurability(player, tool)
                 if (isToolBroken(tool)) break

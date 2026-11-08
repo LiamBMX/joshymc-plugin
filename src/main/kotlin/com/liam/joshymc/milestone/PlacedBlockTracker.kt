@@ -17,9 +17,10 @@ import java.util.UUID
  * Loaded chunks keep a decoded copy in memory, dropped when the chunk unloads (bounded by the
  * loaded chunks). Main thread only.
  */
-class PlacedBlockTracker(plugin: Plugin) {
+class PlacedBlockTracker(plugin: Plugin, keyName: String = "milestone_placed") {
 
-    private val key = NamespacedKey(plugin, "milestone_placed")
+    /** Issue #1425: the Lifesteal quests keep their own markers (`lifesteal_quest_placed`), so the two never share a cache. */
+    private val key = NamespacedKey(plugin, keyName)
 
     private data class ChunkId(val world: UUID, val x: Int, val z: Int)
 

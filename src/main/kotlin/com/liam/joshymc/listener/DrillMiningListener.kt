@@ -57,6 +57,7 @@ class DrillMiningListener(private val plugin: Joshymc) : Listener {
                     if (player.isOnline) {
                         plugin.questCycleManager.recordBlockBreak(player, block)
                         plugin.milestoneBlockBreak(player, block)
+                        plugin.lifestealQuestBlockBreak(player, block)
                         plugin.eventQuestManager.recordBlockBreak(player, block)
                     }
                     block.breakNaturally(item)
