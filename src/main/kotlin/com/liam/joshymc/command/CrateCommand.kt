@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.crate.CrateFacing
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
@@ -17,6 +18,9 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     companion object {
         /** Most keys one /crate givekey hands each player: a full 36-slot inventory of 64-stacks. */
         private const val MAX_GIVEKEY_AMOUNT = 36 * 64
+
+        /** How far away the crate `/crate rotate` turns may be (same reach as `/crate setlocation`). */
+        private const val ROTATE_RANGE = 5
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
@@ -35,6 +39,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "locations" -> handleLocations(sender)
             "force" -> handleForceOpen(sender, args)
             "models" -> handleModels(sender, args)
+            "rotate" -> handleRotate(sender, args)
             else -> sendUsage(sender)
         }
         return true
@@ -111,6 +116,13 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                 Component.text("✔ Registered as crate: ", NamedTextColor.GREEN)
                     .append(Component.text(type, TextColor.color(0x55FFFF)))
             )
+            plugin.crateManager.getLocationAt(block)?.let { loc ->
+                val shown = plugin.crateManager.currentFacing(loc, block).id
+                plugin.commsManager.send(
+                    player,
+                    Component.text("Facing: ${loc.facing?.id ?: "auto"} (front shows $shown) — change with /crate rotate", NamedTextColor.GRAY)
+                )
+            }
         } else {
             plugin.commsManager.send(
                 player,
@@ -166,7 +178,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         val header = Component.text("Registered crate locations (${locations.size}):", NamedTextColor.GOLD)
         if (sender is Player) plugin.commsManager.send(sender, header) else sender.sendMessage(header)
         for (loc in locations) {
-            val line = Component.text("  • ${loc.crateType} @ ${loc.world} ${loc.x}, ${loc.y}, ${loc.z}", NamedTextColor.GRAY)
+            val line = Component.text("  • ${loc.crateType} @ ${loc.world} ${loc.x}, ${loc.y}, ${loc.z} (facing ${loc.facing?.id ?: "auto"})", NamedTextColor.GRAY)
             if (sender is Player) plugin.commsManager.send(sender, line) else sender.sendMessage(line)
         }
     }
@@ -471,6 +483,93 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
     }
 
+    /**
+     * `/crate rotate <north|south|east|west|auto|next>` and `/crate rotate mode [on|off]`
+     * (issue #1472): sets the facing of the crate the admin is looking at (only that
+     * location), or toggles quick rotation (sneak + right-click with an empty hand).
+     */
+    private fun handleRotate(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.crate.admin")) {
+            Msg.noPermission(sender)
+            return
+        }
+        val player = sender as? Player ?: run {
+            Msg.playersOnly(sender)
+            return
+        }
+        val crateManager = plugin.crateManager
+        val arg = args.getOrNull(1)?.lowercase()
+        if (arg == null) {
+            Msg.usage(player, "/crate rotate <north|south|east|west|auto|next>  or  /crate rotate mode [on|off]")
+            return
+        }
+        if (arg == "mode") {
+            val on = when (args.getOrNull(2)?.lowercase()) {
+                null -> !crateManager.isRotateMode(player)
+                "on" -> true
+                "off" -> false
+                else -> {
+                    Msg.usage(player, "/crate rotate mode [on|off]")
+                    return
+                }
+            }
+            if (on && !crateManager.quickRotateEnabled()) {
+                Msg.error(player, "Quick rotation is turned off (config.yml crates.rotation.quick-rotate). Use /crate rotate <direction>.")
+                crateManager.setRotateMode(player, false)
+                return
+            }
+            crateManager.setRotateMode(player, on)
+            if (on) {
+                Msg.success(player, "Rotate mode on: sneak + right-click a crate with an empty hand to turn it (north → east → south → west).")
+                Msg.reply(player, Component.text("Holding a key still opens crates as usual. Turn it off with /crate rotate mode off.", NamedTextColor.GRAY))
+            } else {
+                Msg.success(player, "Rotate mode off.")
+            }
+            return
+        }
+        val choice = CrateFacing.parseChoice(arg) ?: run {
+            Msg.error(player, "Unknown direction '$arg'. Use north, south, east, west, auto or next.")
+            return
+        }
+        val block = player.getTargetBlockExact(ROTATE_RANGE)
+        if (block == null || block.type.isAir) {
+            Msg.error(player, "Look at a crate block (within $ROTATE_RANGE blocks) to rotate it.")
+            return
+        }
+        val loc = crateManager.getLocationAt(block)
+        if (loc == null) {
+            if (crateManager.getCrateTypeAt(block) != null) {
+                Msg.error(player, "That block is next to a crate but isn't a registered crate location. Look at the registered block (see /crate diagnose).")
+            } else {
+                Msg.error(player, "That block isn't a registered crate (${block.type.name} at ${block.x}, ${block.y}, ${block.z}).")
+            }
+            return
+        }
+        val target = CrateFacing.target(choice, crateManager.currentFacing(loc, block))
+        if (target == loc.facing && choice != CrateFacing.Choice.Next) {
+            Msg.reply(player, Component.text("This crate already ${if (target == null) "uses automatic facing" else "faces ${target.id}"}.", NamedTextColor.GRAY))
+            return
+        }
+        val change = crateManager.setCrateFacing(block, target) ?: run {
+            Msg.error(player, "That block isn't a registered crate.")
+            return
+        }
+        plugin.logger.info("[Crates] ${player.name} set the facing of the ${loc.crateType} crate at ${loc.world} ${loc.x}, ${loc.y}, ${loc.z} to ${target?.name ?: "auto"} (was ${change.previous?.name ?: "auto"}; block ${change.block.name.lowercase()}).")
+        if (target == null) {
+            Msg.success(player, "The ${loc.crateType} crate at ${loc.x}, ${loc.y}, ${loc.z} uses automatic facing again (it follows the crate's rotation setting or the block's facing).")
+        } else {
+            Msg.success(player, "The ${loc.crateType} crate at ${loc.x}, ${loc.y}, ${loc.z} now faces ${target.id}.")
+        }
+        val note = when (change.block) {
+            CrateFacing.BlockAlign.ROTATED -> "The crate block was turned to match."
+            CrateFacing.BlockAlign.DOUBLE_CHEST -> "This is half of a double chest, so only the model turns; the chest block keeps its facing."
+            CrateFacing.BlockAlign.NO_FACING -> "This block has no matching facing, so only the model turns."
+            CrateFacing.BlockAlign.DISABLED -> "Only the model turns (crates.rotation.rotate-block is off)."
+            CrateFacing.BlockAlign.ALREADY, CrateFacing.BlockAlign.NOT_REQUESTED -> null
+        }
+        if (note != null) Msg.reply(player, Component.text(note, NamedTextColor.GRAY))
+    }
+
     private fun sendUsage(sender: CommandSender) {
         if (sender is Player) {
             plugin.commsManager.send(sender, Component.text("Crate Commands:", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
@@ -488,7 +587,9 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "/crate force <type> [player]  (open a crate without clicking — testing only)",
             "/crate models [refresh]  (custom crate model status / redraw)",
             "/crate models monthly  (monthly model rotation status)",
-            "/crate models set <crate> <model>  (change a crate's custom model)"
+            "/crate models set <crate> <model>  (change a crate's custom model)",
+            "/crate rotate <north|south|east|west|auto|next>  (turn the crate you look at)",
+            "/crate rotate mode [on|off]  (sneak + right-click with an empty hand to turn crates)"
         )
         for (usage in usages) {
             sender.sendMessage(
@@ -508,7 +609,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             1 -> {
                 val subs = mutableListOf("list", "preview")
                 if (sender.hasPermission("joshymc.crate.admin")) {
-                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force", "models"))
+                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force", "models", "rotate"))
                 }
                 subs.filter { it.startsWith(args[0], ignoreCase = true) }
             }
@@ -519,9 +620,17 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                     if (sender.hasPermission("joshymc.crate.admin")) {
                         listOf("refresh", "monthly", "set").filter { it.startsWith(args[1], ignoreCase = true) }
                     } else emptyList()
+                "rotate" ->
+                    if (sender.hasPermission("joshymc.crate.admin")) {
+                        (CrateFacing.CHOICES + "mode").filter { it.startsWith(args[1], ignoreCase = true) }
+                    } else emptyList()
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
+                "rotate" ->
+                    if (sender.hasPermission("joshymc.crate.admin") && args[1].equals("mode", ignoreCase = true)) {
+                        listOf("on", "off").filter { it.startsWith(args[2], ignoreCase = true) }
+                    } else emptyList()
                 "models" ->
                     if (sender.hasPermission("joshymc.crate.admin") && args[1].equals("set", ignoreCase = true)) {
                         plugin.crateManager.getCrateTypes().filter { it.startsWith(args[2], ignoreCase = true) }

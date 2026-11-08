@@ -645,6 +645,14 @@ chat-games:
 # production.
 crates:
   debug-interactions: false
+  # Per-crate facing (issue #1472). /crate rotate <north|south|east|west|auto> sets the
+  # direction of the crate you look at; it is saved on that crate location only.
+  rotation:
+    # Also turn the vanilla crate block to the chosen facing (single chests, ender chests,
+    # barrels, ...). Never for half of a double chest. false = only the model turns.
+    rotate-block: true
+    # Allow /crate rotate mode (sneak + right-click a crate with an empty hand to turn it).
+    quick-rotate: true
   # Custom crate chest models (issue #1389). Each registered crate block keeps working exactly
   # as before; JoshyMC draws the crate's custom model over it (an ItemDisplay, no hitbox) for
   # Java players whose JoshyMC resource pack has loaded. Bedrock players, players without the

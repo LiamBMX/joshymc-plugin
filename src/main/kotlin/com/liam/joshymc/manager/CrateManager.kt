@@ -16,6 +16,7 @@ import org.bukkit.Material
 import org.bukkit.NamespacedKey
 import org.bukkit.Particle
 import org.bukkit.Sound
+import com.liam.joshymc.crate.CrateFacing
 import org.bukkit.block.Block
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.enchantments.Enchantment
@@ -174,8 +175,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val x: Int,
         val y: Int,
         val z: Int,
-        val crateType: String
-    )
+        val crateType: String,
+        /** Issue #1472: this location's own facing; null = automatic (the crate type's `rotation`). */
+        val facing: CrateFacing.Direction? = null,
+    ) {
+        fun isAt(block: Block): Boolean = world == block.world.name && x == block.x && y == block.y && z == block.z
+    }
 
     /** In-progress "Select 3" pick state for one player. Lives only as long as the picker/confirm GUI is open. */
     private data class Select3Session(val crateId: String, val selectedIndices: MutableSet<Int> = mutableSetOf())
@@ -240,6 +245,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 PRIMARY KEY (world, x, y, z)
             )
         """.trimIndent())
+        // Issue #1472: per-location facing. NULL (every older row) = automatic, as before.
+        val locationColumns = plugin.databaseManager.query("PRAGMA table_info(crate_locations)") { it.getString("name") }.toSet()
+        if ("facing" !in locationColumns) plugin.databaseManager.execute("ALTER TABLE crate_locations ADD COLUMN facing TEXT")
 
         // Save default crates.yml if missing
         cratesFile = plugin.configFile("crates.yml")
@@ -450,15 +458,22 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     private fun loadLocations() {
         crateLocations.clear()
         val rows = plugin.databaseManager.query(
-            "SELECT world, x, y, z, crate_type FROM crate_locations"
+            "SELECT world, x, y, z, crate_type, facing FROM crate_locations"
         ) { rs ->
-            CrateLocation(
-                rs.getString("world"),
-                rs.getInt("x"),
-                rs.getInt("y"),
-                rs.getInt("z"),
-                rs.getString("crate_type")
-            )
+            val world = rs.getString("world")
+            val x = rs.getInt("x")
+            val y = rs.getInt("y")
+            val z = rs.getInt("z")
+            // A facing this build can't read is treated as automatic and left in the row untouched.
+            val facing = when (val stored = CrateFacing.parseStored(rs.getString("facing"))) {
+                is CrateFacing.Stored.Face -> stored.direction
+                is CrateFacing.Stored.Invalid -> {
+                    plugin.logger.warning("[Crates] Crate location $world $x, $y, $z has an unknown facing '${stored.raw}'; using automatic facing. Fix it with /crate rotate.")
+                    null
+                }
+                CrateFacing.Stored.Auto -> null
+            }
+            CrateLocation(world, x, y, z, rs.getString("crate_type"), facing)
         }
         crateLocations.addAll(rows)
     }
@@ -633,13 +648,16 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     fun setCrateLocation(block: Block, crateType: String): Boolean {
         if (!crates.containsKey(crateType)) return false
 
+        // Re-registering a block keeps the facing it was given (issue #1472).
+        val keptFacing = getLocationAt(block)?.facing
+
         // Remove existing location at this block if any
         removeCrateLocation(block)
 
-        val loc = CrateLocation(block.world.name, block.x, block.y, block.z, crateType)
+        val loc = CrateLocation(block.world.name, block.x, block.y, block.z, crateType, keptFacing)
         plugin.databaseManager.execute(
-            "INSERT OR REPLACE INTO crate_locations (world, x, y, z, crate_type) VALUES (?, ?, ?, ?, ?)",
-            loc.world, loc.x, loc.y, loc.z, loc.crateType
+            "INSERT OR REPLACE INTO crate_locations (world, x, y, z, crate_type, facing) VALUES (?, ?, ?, ?, ?, ?)",
+            loc.world, loc.x, loc.y, loc.z, loc.crateType, CrateFacing.storedValue(keptFacing)
         )
         crateLocations.add(loc)
         refreshModel(block)
@@ -709,6 +727,115 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             if (match != null) return resolveCrateId(match.crateType)
         }
         return null
+    }
+
+    /** The crate location registered at exactly [block] (no neighbour fallback), or null. */
+    fun getLocationAt(block: Block): CrateLocation? = crateLocations.firstOrNull { it.isAt(block) }
+
+    /** Outcome of [setCrateFacing]. */
+    data class FacingChange(
+        val location: CrateLocation,
+        val previous: CrateFacing.Direction?,
+        val block: CrateFacing.BlockAlign,
+    )
+
+    /** The direction the crate at [loc] currently shows (its facing, the configured rotation, or the block's). */
+    fun currentFacing(loc: CrateLocation, block: Block): CrateFacing.Direction {
+        val configured = models.settings.models[resolveCrateId(loc.crateType).lowercase()]?.rotation
+        val blockFacing = (block.blockData as? org.bukkit.block.data.Directional)?.facing?.name
+        return CrateFacing.currentDirection(loc.facing, configured, blockFacing)
+    }
+
+    /**
+     * Issue #1472: gives the crate registered at exactly [block] its own [facing] (null =
+     * automatic again), saves it on its `crate_locations` row, turns the vanilla block to match
+     * when that is safe (`crates.rotation.rotate-block`), and redraws only this location's model.
+     * Returns null when [block] is not a registered crate location. Crates, keys, rewards and
+     * every other location are untouched.
+     */
+    fun setCrateFacing(block: Block, facing: CrateFacing.Direction?): FacingChange? {
+        val index = crateLocations.indexOfFirst { it.isAt(block) }
+        if (index < 0) return null
+        val old = crateLocations[index]
+        plugin.databaseManager.execute(
+            "UPDATE crate_locations SET facing = ? WHERE world = ? AND x = ? AND y = ? AND z = ?",
+            CrateFacing.storedValue(facing), old.world, old.x, old.y, old.z
+        )
+        val updated = old.copy(facing = facing)
+        crateLocations[index] = updated
+        val align = try {
+            alignBlock(block, facing)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Crates] Could not turn the crate block at ${old.world} ${old.x}, ${old.y}, ${old.z}: ${e.message}")
+            CrateFacing.BlockAlign.NO_FACING
+        }
+        refreshModel(block)
+        return FacingChange(updated, old.facing, align)
+    }
+
+    /**
+     * Turns the crate block itself to [facing] when that can't hurt anything: only a block that
+     * supports that facing, never half of a double chest (turning one half splits the pair),
+     * the same block type (so its block entity and contents stay), and without physics so
+     * neighbouring blocks aren't updated.
+     */
+    private fun alignBlock(block: Block, facing: CrateFacing.Direction?): CrateFacing.BlockAlign {
+        val data = block.blockData as? org.bukkit.block.data.Directional
+        val decision = CrateFacing.blockAlign(
+            target = facing,
+            enabled = plugin.config.getBoolean("crates.rotation.rotate-block", true),
+            faces = data?.faces?.map { it.name }?.toSet() ?: emptySet(),
+            blockFacing = data?.facing?.name,
+            chestType = (data as? org.bukkit.block.data.type.Chest)?.type?.name,
+        )
+        if (decision != CrateFacing.BlockAlign.ROTATED || data == null || facing == null) return decision
+        val turned = data.clone() as org.bukkit.block.data.Directional
+        turned.facing = org.bukkit.block.BlockFace.valueOf(facing.name)
+        block.setBlockData(turned, false)
+        return decision
+    }
+
+    /** Admins who turned on quick rotation with `/crate rotate mode` (memory only, cleared on quit). */
+    private val rotateMode = mutableSetOf<UUID>()
+
+    fun isRotateMode(player: Player): Boolean = player.uniqueId in rotateMode
+
+    fun setRotateMode(player: Player, on: Boolean) {
+        if (on) rotateMode += player.uniqueId else rotateMode -= player.uniqueId
+    }
+
+    /** `crates.rotation.quick-rotate`: lets admins turn quick rotation off server-wide. */
+    fun quickRotateEnabled(): Boolean = plugin.config.getBoolean("crates.rotation.quick-rotate", true)
+
+    /**
+     * Sneak + right-click with an empty hand while in rotate mode (issue #1472): turns the crate
+     * one step (NORTH → EAST → SOUTH → WEST) instead of the preview. Returns false (normal crate
+     * flow) for everyone and everything else, so keys, previews and mass opening are unchanged.
+     */
+    private fun tryQuickRotate(player: Player, block: Block): Boolean {
+        if (player.uniqueId !in rotateMode) return false
+        val admin = player.hasPermission("joshymc.crate.admin")
+        if (!admin) rotateMode -= player.uniqueId
+        val quick = CrateFacing.isQuickRotate(
+            featureEnabled = quickRotateEnabled(),
+            isAdmin = admin,
+            inRotateMode = player.uniqueId in rotateMode,
+            sneaking = player.isSneaking,
+            rightClick = true,
+            emptyHand = player.inventory.itemInMainHand.type.isAir,
+        )
+        if (!quick) return false
+        val loc = getLocationAt(block)
+        if (loc == null) {
+            plugin.commsManager.send(player, Component.text("Only the registered crate block can be rotated; this is its neighbour.", NamedTextColor.RED))
+            return true
+        }
+        val next = currentFacing(loc, block).next()
+        val change = setCrateFacing(block, next) ?: return true
+        plugin.commsManager.sendActionBar(player, Component.text("Crate now faces ${next.id}", NamedTextColor.GREEN))
+        player.playSound(player.location, Sound.UI_BUTTON_CLICK, 0.6f, 1.4f)
+        plugin.logger.info("[Crates] ${player.name} turned the ${loc.crateType} crate at ${loc.world} ${loc.x}, ${loc.y}, ${loc.z} to face ${next.name} (was ${change.previous?.name ?: "auto"}; block ${change.block.name.lowercase()}).")
+        return true
     }
 
     /** Snapshot of every registered crate location, for `/crate locations`. */
@@ -2225,6 +2352,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * have identical behaviour.
      */
     private fun handleCrateClick(player: Player, crateType: String, block: Block, leftClick: Boolean) {
+        // Issue #1472: only crate admins in rotate mode, sneaking with an empty hand.
+        if (!leftClick && tryQuickRotate(player, block)) return
         if (leftClick) {
             openPreview(player, crateType)
             return
@@ -2415,6 +2544,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         activeAnimations.remove(event.player.uniqueId)
         lastActivation.remove(event.player.uniqueId)
         clickGate.forget(event.player.uniqueId)
+        rotateMode.remove(event.player.uniqueId)
     }
 
     @EventHandler
