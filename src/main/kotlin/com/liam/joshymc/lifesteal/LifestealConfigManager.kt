@@ -2,6 +2,9 @@ package com.liam.joshymc.lifesteal
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.lifesteal.bank.BankConfig
+import com.liam.joshymc.lifesteal.bank.BankSettings
+import com.liam.joshymc.lifesteal.bank.CoinStealSettings
 import com.liam.joshymc.lifesteal.bounty.BountyConfig
 import com.liam.joshymc.lifesteal.ranked.stats.DivisionConfig
 import org.bukkit.configuration.ConfigurationSection
@@ -43,6 +46,14 @@ class LifestealConfigManager(private val plugin: Joshymc) {
      */
     @Volatile var bounties: BountyConfig.Result = BountyConfig.Result(null, emptyList())
         private set
+    /**
+     * Issue #1427: `bank` and `pvp-coins`, each read on its own: a mistake in one only pauses
+     * deposits (bank) or coin stealing (pvp-coins), never hearts or the other section.
+     */
+    @Volatile var bank: BankConfig.Result<BankSettings> = BankConfig.Result(null, emptyList())
+        private set
+    @Volatile var pvpCoins: BankConfig.Result<CoinStealSettings> = BankConfig.Result(null, emptyList())
+        private set
 
     /** Called at startup and on every reload, after the network identity is loaded. */
     fun load() {
@@ -53,6 +64,8 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             divisions = DivisionConfig.Result(null, DivisionConfig.Status.DISABLED, emptyList())
             leaderboards = DivisionConfig.LeaderboardResult(null, emptyList())
             bounties = BountyConfig.Result(null, emptyList())
+            bank = BankConfig.Result(null, emptyList())
+            pvpCoins = BankConfig.Result(null, emptyList())
             return
         }
         try {
@@ -69,11 +82,14 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             status = if (result.settings != null) Status.READY else Status.INVALID
             loadRankedDisplay(yaml, result.settings)
             loadBounties(yaml)
+            loadBank(yaml)
         } catch (e: Exception) {
             problems = listOf(LifestealConfigParser.Problem(true, "Could not read $CONFIG_FILE: ${e.message}"))
             settings = null
             status = Status.INVALID
             bounties = BountyConfig.Result(null, listOf(BountyConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
+            bank = BankConfig.Result(null, listOf(BankConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
+            pvpCoins = BankConfig.Result(null, listOf(BankConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
         }
 
         for (problem in problems) {
@@ -130,6 +146,28 @@ class LifestealConfigManager(private val plugin: Joshymc) {
         bounties = if (source == null) BountyConfig.Result(null, listOf(BountyConfig.Problem(true, "no bounties section found.")))
         else BountyConfig.parse { path -> source.get("bounties.$path", null) }
         for (problem in bounties.problems) {
+            if (problem.severe) plugin.logger.severe("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+            else plugin.logger.warning("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+        }
+    }
+
+    /**
+     * Bank and PvP coin settings (issue #1427). A lifesteal.yml from before them has no section:
+     * the bundled file's section is used (logged), like the bounties.
+     */
+    private fun loadBank(yaml: YamlConfiguration) {
+        val bundled by lazy { plugin.getResource(CONFIG_FILE)?.reader(Charsets.UTF_8)?.use { YamlConfiguration.loadConfiguration(it) } }
+        fun pick(section: String): YamlConfiguration? = if (yaml.get(section, null) != null) yaml else {
+            plugin.logger.warning("[Lifesteal] $CONFIG_FILE has no $section section; using the bundled defaults (copy the section from the plugin's $CONFIG_FILE to change it).")
+            bundled
+        }
+        val b = pick("bank")
+        bank = if (b == null) BankConfig.Result(null, listOf(BankConfig.Problem(true, "no bank section found.")))
+        else BankConfig.parseBank { path -> b.get("bank.$path", null) }
+        val c = pick("pvp-coins")
+        pvpCoins = if (c == null) BankConfig.Result(null, listOf(BankConfig.Problem(true, "no pvp-coins section found.")))
+        else BankConfig.parseCoinSteal { path -> c.get("pvp-coins.$path", null) }
+        for (problem in bank.problems + pvpCoins.problems) {
             if (problem.severe) plugin.logger.severe("[Lifesteal] $CONFIG_FILE: ${problem.message}")
             else plugin.logger.warning("[Lifesteal] $CONFIG_FILE: ${problem.message}")
         }
