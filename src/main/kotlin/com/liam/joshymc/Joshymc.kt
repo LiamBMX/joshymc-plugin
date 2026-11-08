@@ -375,6 +375,7 @@ class Joshymc : JavaPlugin() {
     lateinit var lifestealBountyManager: com.liam.joshymc.lifesteal.bounty.LifestealBountyManager
         private set
     lateinit var lifestealQuestManager: com.liam.joshymc.lifesteal.quests.LifestealQuestManager
+    lateinit var lifestealBankManager: com.liam.joshymc.lifesteal.bank.LifestealBankManager
         private set
     lateinit var gamemodeLockManager: com.liam.joshymc.gamemode.GamemodeLockManager
         private set
@@ -641,6 +642,8 @@ class Joshymc : JavaPlugin() {
         lifestealBountyManager = com.liam.joshymc.lifesteal.bounty.LifestealBountyManager(this)
         // Issue #1425: Lifesteal Daily & Weekly Quests. Only does anything on the dedicated Lifesteal server.
         lifestealQuestManager = com.liam.joshymc.lifesteal.quests.LifestealQuestManager(this)
+        // Issue #1427: Lifesteal Protected Bank + PvP coin stealing. Only does anything on the dedicated Lifesteal server.
+        lifestealBankManager = com.liam.joshymc.lifesteal.bank.LifestealBankManager(this)
         flightTimeManager = com.liam.joshymc.flight.FlightTimeManager(this)
         flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
@@ -743,6 +746,7 @@ class Joshymc : JavaPlugin() {
         lifestealBountyManager.refresh()
         // After crates and chat tags (reward validation); its payout sweep waits for the purchase queue to start.
         lifestealQuestManager.refresh()
+        lifestealBankManager.refresh()
         flightTimeManager.start()
         flyVoucherManager.start()
 
@@ -857,6 +861,8 @@ class Joshymc : JavaPlugin() {
         shutdown.step("lifestealBountyManager.stop", { ::lifestealBountyManager.isInitialized }) { lifestealBountyManager.stop() }
         // Saves every online player's Lifesteal quest progress while the database is still open.
         shutdown.step("lifestealQuestManager.stop", { ::lifestealQuestManager.isInitialized }) { lifestealQuestManager.stop() }
+        // Drops bank chat prompts; every bank transfer is one synchronous transaction, so nothing is pending.
+        shutdown.step("lifestealBankManager.stop", { ::lifestealBankManager.isInitialized }) { lifestealBankManager.stop() }
         shutdown.step("lifestealRankedStatsManager.stop", { ::lifestealRankedStatsManager.isInitialized }) { lifestealRankedStatsManager.stop() }
         shutdown.step("lifestealRatingManager.stop", { ::lifestealRatingManager.isInitialized }) { lifestealRatingManager.stop() }
         shutdown.step("lifestealRankedQueueManager.stop", { ::lifestealRankedQueueManager.isInitialized }) { lifestealRankedQueueManager.stop() }
@@ -1085,6 +1091,7 @@ class Joshymc : JavaPlugin() {
         safe("lifestealBountyManager.refresh") { lifestealBountyManager.refresh() }
         // Saves progress, rereads lifesteal-quests.yml and reloads the online players' boards.
         safe("lifestealQuestManager.refresh") { lifestealQuestManager.refresh() }
+        safe("lifestealBankManager.refresh") { lifestealBankManager.refresh() }
         safe("beaconPotionManager.start") { beaconPotionManager.start() }
 
         // 8. Restart Discord

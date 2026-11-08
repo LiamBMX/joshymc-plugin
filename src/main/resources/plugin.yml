@@ -227,6 +227,10 @@ commands:
     description: Ranked Team Wars queues, match confirmations, team challenges, leaderboards, divisions and statistics (Lifesteal only)
     usage: /ranked [queue <2v2|3v3|4v4|5v5> [teammates]|leave|status|accept|decline|challenge <team> <size> [teammates]|challenge accept|decline <team>|challenge cancel|challenges|stats [player]|rating|history [player] [page]|top [players|teams] [page]|teamstats [team]|divisions|season]
     permission: joshymc.lifesteal.ranked.use
+  bank:
+    description: Your Lifesteal Protected Bank (coins in the bank can't be stolen in PvP)
+    usage: /bank [balance|deposit <amount|all>|withdraw <amount|all>|admin]
+    permission: joshymc.lifesteal.bank.use
   ac:
     description: Alliance chat with your Lifesteal team and its allied team (Lifesteal only)
     usage: /ac <message>
@@ -1006,6 +1010,15 @@ permissions:
   joshymc.lifesteal.bounty.use:
     description: Use /bounty on the Lifesteal server (browse, contribute, stats, leaderboards)
     default: true
+  joshymc.lifesteal.bank.use:
+    description: Use /bank on the Lifesteal server (balances, deposits, withdrawals)
+    default: true
+  joshymc.lifesteal.bank.admin:
+    description: Investigate Lifesteal banks with /bank admin (balances, history, PvP transfers, suspicious kills, failed transactions)
+    default: op
+  joshymc.lifesteal.bank.admin.adjust:
+    description: Correct a Lifesteal bank balance with /bank admin add|remove (capped, reason required, audited)
+    default: op
   joshymc.lifesteal.bounty.admin:
     description: Investigate Lifesteal bounties (contributors, payouts, refunds, failures, suspicious kills) and run the safe retry sweep with /bounty admin
     default: op
