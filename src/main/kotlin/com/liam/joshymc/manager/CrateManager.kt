@@ -646,6 +646,19 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return true
     }
 
+    /**
+     * Re-reads `crates.custom-models` and redraws every crate model (issue #1460, after
+     * `/crate models set`). Crates, keys, rewards and locations are untouched.
+     */
+    fun restartModels() {
+        try {
+            models.stop()
+            models.start()
+        } catch (e: Exception) {
+            plugin.logger.warning("[Crates] Custom crate models failed to restart; crates keep their vanilla look: ${e.message}")
+        }
+    }
+
     /** Redraws (or clears) the custom model at [block]; a model failure never affects the crate. */
     private fun refreshModel(block: Block) {
         try {

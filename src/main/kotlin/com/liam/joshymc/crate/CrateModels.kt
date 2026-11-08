@@ -1,5 +1,10 @@
 package com.liam.joshymc.crate
 
+import java.time.DateTimeException
+import java.time.Instant
+import java.time.Month
+import java.time.ZoneId
+
 /**
  * Custom crate chest models (issue #1389), the Bukkit-free part: the `crates.custom-models`
  * settings in config.yml and the rules that place a model over a crate block.
@@ -64,6 +69,8 @@ object CrateModels {
         val models: Map<String, Model>,
         /** One line per entry or value that was refused; those crates keep the vanilla look. */
         val problems: List<String>,
+        /** `monthly` (issue #1460): which crates swap their model each calendar month. */
+        val monthly: Monthly = Monthly.DISABLED,
     ) {
         /** The model to draw for [crateId], or null to keep the vanilla crate block. */
         fun modelFor(crateId: String): Model? =
@@ -114,7 +121,8 @@ object CrateModels {
             }
             models[crateId] = model
         }
-        return Settings(enabled, gamemodes, models, problems)
+        val monthly = parseMonthly(source, problems)
+        return Settings(enabled, gamemodes, models, problems, monthly)
     }
 
     private fun parseModel(source: Source, path: String, crateId: String, problems: MutableList<String>): Model? {
@@ -371,5 +379,176 @@ object CrateModels {
         val dy = maxOf(box.minY - py, 0.0, py - box.maxY)
         val dz = maxOf(box.minZ - pz, 0.0, pz - box.maxZ)
         return dx * dx + dy * dy + dz * dz
+    }
+
+    // ── Monthly rotation (issue #1460) ─────────────────────────────────
+
+    /** Timezone the calendar month is read in when `monthly.timezone` is missing. */
+    const val DEFAULT_TIMEZONE = "America/New_York"
+
+    /** The month ids `monthly.models` accepts: january .. december. */
+    val MONTH_IDS: List<String> = Month.entries.map { it.name.lowercase() }
+
+    /**
+     * Longest the rotation waits between two month checks, so a lagging tick clock or a changed
+     * system clock is still caught within the hour.
+     */
+    const val MAX_CHECK_DELAY_MILLIS = 60L * 60L * 1000L
+
+    /**
+     * `crates.custom-models.monthly`. Rotation only changes which item model a crate's display
+     * holds: the crate id, keys, rewards and locations are never touched, and only the crates
+     * listed in [crates] rotate.
+     */
+    data class Monthly(
+        val enabled: Boolean,
+        val zone: ZoneId,
+        /** Crate ids (lower case, as written; aliases are resolved by the caller) that rotate. */
+        val crates: Set<String>,
+        /** Month -> item model key. A month without an entry falls back like a missing model. */
+        val models: Map<Month, String>,
+    ) {
+        /** True when rotation is on and has at least one crate to rotate. */
+        val active: Boolean get() = enabled && crates.isNotEmpty()
+
+        fun modelFor(month: Month): String? = models[month]
+
+        companion object {
+            val DISABLED = Monthly(false, ZoneId.of(DEFAULT_TIMEZONE), emptySet(), emptyMap())
+        }
+    }
+
+    /** Where a crate's drawn model came from. */
+    enum class ModelSource {
+        /** This month's monthly model. */
+        MONTHLY,
+        /** The crate's own `models.<id>.model` (a crate that doesn't rotate). */
+        STATIC,
+        /** A rotating crate whose month model is missing: its own static model instead. */
+        STATIC_FALLBACK,
+        /** Nothing to draw: the crate keeps the vanilla block. */
+        NONE,
+    }
+
+    /** The model to draw for one crate in one month, with why. [model] is null for [ModelSource.NONE]. */
+    data class Resolved(val model: Model?, val source: ModelSource, val note: String?)
+
+    private fun parseMonthly(source: Source, problems: MutableList<String>): Monthly {
+        val p = "monthly"
+        var enabled = when (val v = source.value("$p.enabled")) {
+            null -> false
+            is Boolean -> v
+            else -> { problems += "$p.enabled must be true or false (was '$v'); monthly rotation is off"; false }
+        }
+        val zoneText = source.value("$p.timezone")?.toString()?.trim().orEmpty()
+        var zone = ZoneId.of(DEFAULT_TIMEZONE)
+        if (zoneText.isNotEmpty()) {
+            val parsed = parseZone(zoneText)
+            if (parsed == null) {
+                problems += "$p.timezone '$zoneText' is not a timezone like America/New_York; monthly rotation is off"
+                enabled = false
+            } else {
+                zone = parsed
+            }
+        }
+        val crates = when (val v = source.value("$p.crates")) {
+            null -> emptySet()
+            is List<*> -> v.mapNotNull { it?.toString()?.trim()?.lowercase()?.takeIf(String::isNotEmpty) }.toSet()
+            else -> { problems += "$p.crates must be a list of crate ids (was '$v'); no crate rotates"; emptySet() }
+        }
+        val models = sortedMapOf<Month, String>()
+        for (raw in source.keys("$p.models")) {
+            val month = monthOf(raw)
+            if (month == null) {
+                problems += "$p.models.$raw is not a month (use ${MONTH_IDS.first()} .. ${MONTH_IDS.last()}); ignored"
+                continue
+            }
+            val text = source.value("$p.models.$raw")?.toString()?.trim().orEmpty()
+            if (text.isEmpty()) continue
+            val key = text.lowercase()
+            if (!MODEL_KEY.matches(key)) {
+                problems += "$p.models.$raw: model '$text' is not a namespaced key like joshymc:january_chest (that month uses the fallback)"
+                continue
+            }
+            models[month] = key
+        }
+        return Monthly(enabled, zone, crates, models)
+    }
+
+    /** A month id (`january`, case-insensitive) or null. */
+    fun monthOf(id: String): Month? = Month.entries.firstOrNull { it.name.equals(id.trim(), ignoreCase = true) }
+
+    fun monthId(month: Month): String = month.name.lowercase()
+
+    /** True for a well-formed namespaced item model key (`joshymc:cabin_chest`). */
+    fun isModelKey(key: String): Boolean = MODEL_KEY.matches(key)
+
+    /** An IANA zone id (`America/New_York`, `UTC`, `Europe/London`) or null; never guessed. */
+    fun parseZone(text: String): ZoneId? = try {
+        ZoneId.of(text.trim())
+    } catch (e: DateTimeException) {
+        null
+    }
+
+    /** The calendar month [now] falls in, read in [zone]. */
+    fun monthAt(now: Instant, zone: ZoneId): Month = now.atZone(zone).month
+
+    /** The first instant of the month after the one [now] falls in, in [zone] (handles DST and the year end). */
+    fun nextMonthStart(now: Instant, zone: ZoneId): Instant =
+        now.atZone(zone).toLocalDate().withDayOfMonth(1).plusMonths(1).atStartOfDay(zone).toInstant()
+
+    /**
+     * How long the rotation waits before checking the month again: until just past the next
+     * month start, but never longer than [MAX_CHECK_DELAY_MILLIS] (and at least one second).
+     */
+    fun checkDelayMillis(now: Instant, zone: ZoneId): Long {
+        val untilNext = nextMonthStart(now, zone).toEpochMilli() - now.toEpochMilli() + 1000L
+        return untilNext.coerceIn(1000L, MAX_CHECK_DELAY_MILLIS)
+    }
+
+    /** Server ticks for [millis] (rounded up), for the scheduler. */
+    fun ticksFor(millis: Long): Long = (millis + 49L) / 50L
+
+    /** True when [crateId] rotates: rotation on and the id listed (directly, or through [canonical], which resolves aliases). */
+    fun rotates(settings: Settings, crateId: String, canonical: (String) -> String = { it }): Boolean {
+        if (!settings.monthly.active) return false
+        val id = crateId.lowercase()
+        return settings.monthly.crates.any { it == id || canonical(it).lowercase() == id }
+    }
+
+    /**
+     * The model [crateId] should show in [month]. [available] says whether an item model key is
+     * in the bundled pack; a key that isn't is never drawn.
+     *
+     * - Custom models off, or the crate's entry disabled: nothing (vanilla).
+     * - A rotating crate: this month's model if it is set and in the pack, drawn with the crate's
+     *   own entry's offset/rotation/scale/hitbox (defaults when it has none); otherwise its
+     *   static model if that is in the pack; otherwise vanilla.
+     * - Any other crate: exactly the static behaviour from before rotation existed.
+     */
+    fun resolve(
+        settings: Settings,
+        crateId: String,
+        month: Month,
+        available: (String) -> Boolean,
+        canonical: (String) -> String = { it },
+    ): Resolved {
+        if (!settings.enabled) return Resolved(null, ModelSource.NONE, "custom crate models are off")
+        val id = crateId.lowercase()
+        val entry = settings.models[id]
+        if (entry != null && !entry.enabled) return Resolved(null, ModelSource.NONE, "disabled")
+        if (!rotates(settings, id, canonical)) {
+            if (entry == null) return Resolved(null, ModelSource.NONE, "no model configured")
+            if (!available(entry.model)) return Resolved(null, ModelSource.NONE, "${entry.model} is not in the resource pack")
+            return Resolved(entry, ModelSource.STATIC, null)
+        }
+        val monthKey = settings.monthly.modelFor(month)
+        if (monthKey != null && available(monthKey)) {
+            val base = entry ?: Model(id, true, monthKey, 0.0, 0.0, 0.0, Rotation.Auto, 1.0, HitboxMode.AUTO)
+            return Resolved(base.copy(model = monthKey), ModelSource.MONTHLY, null)
+        }
+        val why = if (monthKey == null) "no ${monthId(month)} model set" else "$monthKey is not in the resource pack"
+        if (entry != null && available(entry.model)) return Resolved(entry, ModelSource.STATIC_FALLBACK, why)
+        return Resolved(null, ModelSource.NONE, "$why and no static model to fall back to")
     }
 }

@@ -698,6 +698,30 @@ crates:
         offset: {x: 0.0, y: 0.0, z: 0.0}
         rotation: auto
         scale: 1.0
+    # Monthly model rotation (issue #1460). Only the crates listed in "crates" rotate: they
+    # show the current calendar month's model (month read in "timezone"), keeping their own
+    # models.<id> offset/rotation/scale/hitbox. A month whose model is unset or not in the
+    # resource pack uses that crate's static models.<id>.model, else the vanilla block.
+    # Rotation only changes the look: crate ids, keys, rewards and locations never change.
+    # The 12 monthly models are not in the pack yet; until they are, every month falls back.
+    monthly:
+      enabled: true
+      timezone: America/New_York
+      # Crate ids from crates.yml (aliases work). Empty = nothing rotates.
+      crates: []
+      models:
+        january: "joshymc:january_chest"
+        february: "joshymc:february_chest"
+        march: "joshymc:march_chest"
+        april: "joshymc:april_chest"
+        may: "joshymc:may_chest"
+        june: "joshymc:june_chest"
+        july: "joshymc:july_chest"
+        august: "joshymc:august_chest"
+        september: "joshymc:september_chest"
+        october: "joshymc:october_chest"
+        november: "joshymc:november_chest"
+        december: "joshymc:december_chest"
 
 # Lag Cleaner — entity-threshold-based, only clears when needed
 # Checks entity counts every check-interval-seconds

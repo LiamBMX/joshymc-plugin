@@ -12,6 +12,10 @@ import com.liam.joshymc.crate.CrateModelBounds
 import com.liam.joshymc.crate.CrateModels
 import com.liam.joshymc.crate.CrateModels.Rotation
 import java.io.File
+import java.time.Clock
+import java.time.Instant
+import java.time.Month
+import java.time.ZoneId
 import java.util.UUID
 import java.util.zip.ZipFile
 import kotlin.system.exitProcess
@@ -186,7 +190,178 @@ fun main() {
     // ── Hitboxes (issue #1451) ──────────────────────────
     hitboxChecks(manager, displays)
 
+    // ── Monthly rotation (issue #1460) ──────────────────
+    monthlyChecks(config, section, manager, displays)
+
     println("All $checks crate model checks passed.")
+}
+
+private val NY = ZoneId.of("America/New_York")
+
+/** Every month mapped, like the bundled config. */
+private fun monthlyConfig(vararg extra: Pair<String, Any?>): CrateModels.Settings {
+    val values = linkedMapOf<String, Any?>(
+        "enabled" to true,
+        "models.harvest.model" to "joshymc:harvest_chest",
+        "models.harvest.scale" to 1.25,
+        "models.harvest.hitbox" to "on",
+        "models.cabin.model" to "joshymc:cabin_chest",
+        "monthly.enabled" to true,
+        "monthly.timezone" to "America/New_York",
+        "monthly.crates" to listOf("harvest", "Seasonal"),
+    )
+    for (id in CrateModels.MONTH_IDS) values["monthly.models.$id"] = "joshymc:${id}_chest"
+    values.putAll(extra)
+    return CrateModels.parse(MapSource(values))
+}
+
+private fun monthlyChecks(config: String, section: String, manager: String, displays: String) {
+    val all = { _: String -> true }
+    val s = monthlyConfig()
+    check("monthly config parses cleanly", s.problems.isEmpty())
+    check("monthly rotation is active", s.monthly.active && s.monthly.zone == NY)
+    check("all 12 months mapped", s.monthly.models.size == 12 && Month.entries.all { s.monthly.modelFor(it) != null })
+
+    // 1-3. Every month selects its own model.
+    check("January selects the January model", CrateModels.resolve(s, "harvest", Month.JANUARY, all).model?.model == "joshymc:january_chest")
+    check("February selects the February model", CrateModels.resolve(s, "harvest", Month.FEBRUARY, all).model?.model == "joshymc:february_chest")
+    for (month in Month.entries) {
+        val r = CrateModels.resolve(s, "harvest", month, all)
+        check("${month.name} selects its model", r.source == CrateModels.ModelSource.MONTHLY &&
+            r.model?.model == "joshymc:${month.name.lowercase()}_chest")
+        // 11. The crate's identity never changes with the month.
+        check("${month.name} keeps the crate id", r.model?.crateId == "harvest")
+        // Display integration: the entry's placement settings are kept.
+        check("${month.name} keeps scale and hitbox", r.model?.scale == 1.25 && r.model?.hitbox == CrateModels.HitboxMode.ON)
+    }
+    check("month ids", CrateModels.MONTH_IDS.size == 12 && CrateModels.monthOf("December") == Month.DECEMBER &&
+        CrateModels.monthOf("dec") == null && CrateModels.monthId(Month.MAY) == "may")
+
+    // 4. December -> January, across the year boundary.
+    val lastMinute = Instant.parse("2026-12-31T23:59:00-05:00")
+    check("Dec 31 23:59 New York is December", CrateModels.monthAt(lastMinute, NY) == Month.DECEMBER)
+    check("two minutes later is January", CrateModels.monthAt(lastMinute.plusSeconds(120), NY) == Month.JANUARY)
+    check("next month after mid-December is 1 Jan next year", CrateModels.nextMonthStart(Instant.parse("2026-12-15T12:00:00Z"), NY) ==
+        Instant.parse("2027-01-01T05:00:00Z"))
+    // DST: April starts in EDT (UTC-4), November in EDT too, December in EST (UTC-5).
+    check("month start follows DST", CrateModels.nextMonthStart(Instant.parse("2026-03-20T12:00:00Z"), NY) == Instant.parse("2026-04-01T04:00:00Z") &&
+        CrateModels.nextMonthStart(Instant.parse("2026-11-08T12:00:00Z"), NY) == Instant.parse("2026-12-01T05:00:00Z"))
+
+    // 5. Timezone boundary: the same instant is a different month in another zone.
+    val utcDecember = Instant.parse("2026-12-01T03:00:00Z")
+    check("1 Dec 03:00 UTC is still November in New York", CrateModels.monthAt(utcDecember, NY) == Month.NOVEMBER)
+    check("... and December in UTC", CrateModels.monthAt(utcDecember, ZoneId.of("UTC")) == Month.DECEMBER)
+    val utc = monthlyConfig("monthly.timezone" to "UTC")
+    check("timezone is configurable", utc.monthly.zone == ZoneId.of("UTC") && utc.problems.isEmpty())
+    check("missing timezone defaults to America/New_York", monthlyConfig("monthly.timezone" to null).monthly.zone == NY)
+
+    // 6. Restart during a month change: the month is always read from the clock, never stored,
+    // and the next check is never far away.
+    check("a check is scheduled just past the boundary", CrateModels.checkDelayMillis(Instant.parse("2026-11-30T23:59:59-05:00"), NY) == 2000L)
+    check("checks are at most an hour apart", CrateModels.checkDelayMillis(Instant.parse("2026-11-08T12:00:00Z"), NY) == CrateModels.MAX_CHECK_DELAY_MILLIS)
+    check("checks are at least a second apart", CrateModels.checkDelayMillis(Instant.parse("2026-12-01T05:00:00Z").minusMillis(1), NY) >= 1000L)
+    check("ticks round up", CrateModels.ticksFor(1000) == 20L && CrateModels.ticksFor(1001) == 21L)
+    val fixedClock = Clock.fixed(Instant.parse("2027-01-01T05:00:01Z"), ZoneId.of("UTC"))
+    check("a server starting just after the boundary uses the new month", CrateModels.monthAt(fixedClock.instant(), NY) == Month.JANUARY)
+    check("start reads the month from the clock", "activeMonth = CrateModels.monthAt(clock.instant(), settings.monthly.zone)" in displays)
+
+    // 7. Rotation disabled: everything is the static behaviour.
+    val off = monthlyConfig("monthly.enabled" to false)
+    check("disabled rotation keeps the static model", CrateModels.resolve(off, "harvest", Month.MAY, all).let {
+        it.source == CrateModels.ModelSource.STATIC && it.model?.model == "joshymc:harvest_chest" })
+    check("missing monthly section = off", !parse("enabled" to true).monthly.enabled && !parse("enabled" to true).monthly.active)
+    check("no listed crates = not active", !monthlyConfig("monthly.crates" to emptyList<String>()).monthly.active)
+    check("master switch off hides monthly models too", CrateModels.resolve(monthlyConfig("enabled" to false), "harvest", Month.MAY, all).model == null)
+    check("disabled entry is not drawn even when it rotates", CrateModels.resolve(monthlyConfig("models.harvest.enabled" to false), "harvest", Month.MAY, all).model == null)
+
+    // 8. Missing models fall back safely, never to a key that isn't in the pack.
+    val noMonthly = { key: String -> !key.endsWith("_chest") || key == "joshymc:harvest_chest" }
+    val fallback = CrateModels.resolve(s, "harvest", Month.JUNE, noMonthly)
+    check("missing month model falls back to the static model", fallback.source == CrateModels.ModelSource.STATIC_FALLBACK &&
+        fallback.model?.model == "joshymc:harvest_chest" && fallback.note != null)
+    val noStatic = CrateModels.resolve(s, "seasonal", Month.JUNE, noMonthly)
+    check("no static model either = vanilla block", noStatic.source == CrateModels.ModelSource.NONE && noStatic.model == null)
+    val unset = monthlyConfig("monthly.models.june" to "")
+    check("blank month = unset, quietly", unset.problems.isEmpty() && unset.monthly.modelFor(Month.JUNE) == null &&
+        CrateModels.resolve(unset, "harvest", Month.JUNE, all).source == CrateModels.ModelSource.STATIC_FALLBACK)
+    check("a rotating crate without an entry uses default placement", CrateModels.resolve(s, "seasonal", Month.JUNE, all).let {
+        it.source == CrateModels.ModelSource.MONTHLY && it.model?.scale == 1.0 && it.model?.crateId == "seasonal" })
+    check("a missing static model is never drawn", CrateModels.resolve(s, "cabin", Month.JUNE, available = { false }).model == null)
+
+    // 9. Invalid configuration is refused, never guessed.
+    val badZone = monthlyConfig("monthly.timezone" to "Mars/Olympus")
+    check("bad timezone turns rotation off", !badZone.monthly.active && badZone.problems.size == 1)
+    check("bad timezone leaves static models alone", CrateModels.resolve(badZone, "harvest", Month.MAY, all).source == CrateModels.ModelSource.STATIC)
+    val badMonth = monthlyConfig("monthly.models.smarch" to "joshymc:x")
+    check("unknown month key reported", badMonth.problems.size == 1 && badMonth.monthly.models.size == 12)
+    val badKey = monthlyConfig("monthly.models.july" to "not a key")
+    check("bad monthly model key: that month falls back", badKey.problems.size == 1 && badKey.monthly.modelFor(Month.JULY) == null &&
+        CrateModels.resolve(badKey, "harvest", Month.JULY, all).source == CrateModels.ModelSource.STATIC_FALLBACK)
+    check("bad monthly switch refused", monthlyConfig("monthly.enabled" to "yes").let { !it.monthly.enabled && it.problems.size == 1 })
+    check("crates must be a list", monthlyConfig("monthly.crates" to "harvest").let { !it.monthly.active && it.problems.size == 1 })
+    check("monthly keys are lower-cased", monthlyConfig("monthly.models.august" to "JoshyMC:August_Chest").monthly.modelFor(Month.AUGUST) == "joshymc:august_chest")
+    check("model key validator", CrateModels.isModelKey("joshymc:january_chest") && !CrateModels.isModelKey("january chest"))
+    check("timezone parser", CrateModels.parseZone("Europe/London") != null && CrateModels.parseZone("EST5") == null)
+
+    // 10. Crates that don't rotate keep exactly their static model.
+    val cabin = CrateModels.resolve(s, "cabin", Month.MARCH, all)
+    check("non-rotating crate is unchanged", cabin.source == CrateModels.ModelSource.STATIC && cabin.model == s.modelFor("cabin"))
+    check("non-rotating crate behaves as before rotation existed", (1..12).all {
+        CrateModels.resolve(s, "cabin", Month.of(it), all).model == CrateModels.resolve(off, "cabin", Month.of(it), all).model })
+    check("unconfigured crate keeps the vanilla block", CrateModels.resolve(s, "common", Month.MARCH, all).model == null)
+
+    // Aliases: a listed alias rotates the crate it resolves to; ids are compared case-insensitively.
+    val aliases = mapOf("seasonal" to "harvest_old")
+    check("listed alias rotates its crate", CrateModels.rotates(s, "harvest_old") { aliases[it] ?: it })
+    check("unlisted crate doesn't rotate", !CrateModels.rotates(s, "cabin") { aliases[it] ?: it })
+    check("crate ids are case-insensitive", CrateModels.rotates(s, "HARVEST"))
+
+    // ── Bundled config: no invented crate ids, all 12 months, the default timezone ──
+    val monthly = section.substringAfter("    monthly:\n")
+    check("bundled monthly section", "      enabled: true" in monthly && "      timezone: America/New_York" in monthly)
+    check("bundled config lists no live crate ids", "      crates: []" in monthly)
+    for (id in CrateModels.MONTH_IDS) check("bundled $id mapping", "        $id: \"joshymc:${id}_chest\"" in monthly)
+    val bundledParsed = CrateModels.parse(MapSource(buildMap {
+        put("enabled", true); put("monthly.enabled", true); put("monthly.crates", emptyList<String>())
+        for (id in CrateModels.MONTH_IDS) put("monthly.models.$id", "joshymc:${id}_chest")
+    }))
+    check("bundled monthly mapping parses", bundledParsed.problems.isEmpty() && !bundledParsed.monthly.active)
+    check("monthly section is inside custom-models", "\n    monthly:\n" in section && "chest-models-migrated" !in config)
+
+    // ── Wiring ──
+    check("one delayed month check, no repeating task", "runTaskLater(" in displays && "runTaskTimer" !in displays)
+    check("the month check is cancelled on stop", displays.substringAfter("fun stop() {").substringBefore("}").contains("rotationTask?.cancel()"))
+    val checkMonth = displays.substringAfter("fun checkMonth(): Int {").substringBefore("\n    }\n")
+    check("no redraw while the month is unchanged", "if (now == activeMonth) return 0" in checkMonth)
+    val rotating = displays.substringAfter("private fun refreshRotating(): Int {").substringBefore("\n    }\n")
+    check("only rotating crates whose model changed are redrawn", "rotates(" in rotating && "if (want == have) continue" in rotating)
+    check("month redraws go through refresh (removes before spawning)", "refresh(world, loc.x, loc.y, loc.z)" in rotating)
+    val refresh = displays.substringAfter("fun refresh(world: World").substringBefore("\n    }\n")
+    check("refresh removes the old display and tagged copies first", "remove(key)" in refresh && "removeTaggedNear(" in refresh)
+    check("spawns use the resolved model", "resolve(loc.crateType).model" in displays && "model.model)" in displays)
+    check("monthly models are measured for hitboxes", "allModelKeys()" in displays && "settings.monthly.models.values" in displays)
+    check("never spawns a key outside the pack", displays.substringAfter("private fun expectedModel(").substringBefore("\n    }\n").contains("modelAvailable(model)"))
+    check("visibility rules unchanged", "CrateModels.canSee(BedrockUtil.isBedrockPlayer(player), player.uniqueId in packLoaded)" in displays)
+    check("missing monthly models warn once per start", "fun warnMissingMonthlyModels()" in displays)
+
+    // 12. Keys, rewards and opening are not part of rotation.
+    for (word in listOf("consumeOneKey", "isKeyFor", "rewards", "beginOpening", "crate_locations")) {
+        check("model rotation never touches $word", word !in displays)
+    }
+
+    // 14. Administrative commands: behind joshymc.crate.admin, validated, one entry changed.
+    val command = File("src/main/kotlin/com/liam/joshymc/command/CrateCommand.kt").readText()
+    val models = command.substringAfter("private fun handleModels(").substringBefore("\n    }\n")
+    check("/crate models checks the admin permission first", models.indexOf("hasPermission(\"joshymc.crate.admin\")") in 0 until models.indexOf("\"set\" ->"))
+    val set = command.substringAfter("private fun handleModelSet(").substringBefore("\n    }\n")
+    check("set validates the crate id (aliases resolved)", "resolveCrateId(" in set && "getCrate(crateId) == null" in set)
+    check("set validates the model against the pack", "modelProblem(model)" in set)
+    check("set changes only that crate's model key", "\"crates.custom-models.models.\$entryId.model\"" in set && set.split("plugin.config.set(").size == 3)
+    check("set backs up and saves config.yml", "ConfigUtil.backup(" in set && "plugin.saveConfig()" in set)
+    check("set redraws through the existing restart", "restartModels()" in set && "fun restartModels()" in manager)
+    check("set never touches locations or keys", "setCrateLocation" !in set && "removeCrateLocation" !in set && "giveKey" !in set)
+    check("model problems explain missing pack entries", "fun modelProblem(" in displays)
+    check("set tab completion is admin only", command.split("sender.hasPermission(\"joshymc.crate.admin\") && args[1].equals(\"set\", ignoreCase = true)").size == 3)
 }
 
 private fun near(a: Double, b: Double, eps: Double = 1e-6) = kotlin.math.abs(a - b) < eps
