@@ -4,6 +4,8 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.lifesteal.ranks.LifestealRankConfig
+import com.liam.joshymc.lifesteal.ranks.LifestealRankRules
 import com.liam.joshymc.util.giveItemSafely
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -62,8 +64,13 @@ class KitManager(private val plugin: Joshymc) {
         val gamemode: String? = null,
         /** Raw kits.yml `category` (null = inferred from the name), see [KitCatalog]. */
         val category: String? = null,
+        /** kits.yml `enabled` (missing = true). Issue #1428: only Lifesteal kits honor it (hidden and unclaimable while false). */
+        val enabled: Boolean = true,
     ) {
         val entry: KitCatalog.Entry get() = KitCatalog.Entry(name, gamemode, category)
+        val isLifesteal: Boolean get() = ServerGamemode.fromId(gamemode) == ServerGamemode.LIFESTEAL
+        /** False only for a Lifesteal kit turned off in kits.yml; Survival kits are never affected. */
+        val available: Boolean get() = !isLifesteal || enabled
     }
 
     data class EditSession(
@@ -184,7 +191,7 @@ class KitManager(private val plugin: Joshymc) {
                 plugin.logger.warning("[KitManager] Kit '$name' has unknown category '$category' (starter, rank or special); using its name instead.")
             }
 
-            kits[name] = KitDef(name, icon, cooldownHours, permission, items, gamemode, category)
+            kits[name] = KitDef(name, icon, cooldownHours, permission, items, gamemode, category, section.getBoolean("enabled", true))
         }
     }
 
@@ -211,7 +218,7 @@ class KitManager(private val plugin: Joshymc) {
         }
 
         kitsConfig.save(kitsFile)
-        kits[name] = KitDef(name, icon, cooldownHours, permission, items, gamemode, category)
+        kits[name] = KitDef(name, icon, cooldownHours, permission, items, gamemode, category, kitsConfig.getBoolean("$path.enabled", true))
     }
 
     fun deleteKit(name: String): Boolean {
@@ -231,12 +238,12 @@ class KitManager(private val plugin: Joshymc) {
 
     /** [name] if it is a kit of [player]'s current gamemode, else null (Survival kits never resolve on Lifesteal and back). */
     fun getKitFor(player: Player, name: String): KitDef? =
-        kits[name]?.takeIf { KitCatalog.visibleIn(it.entry, gamemodeOf(player)) }
+        kits[name]?.takeIf { it.available && KitCatalog.visibleIn(it.entry, gamemodeOf(player)) }
 
     /** Kit names [player] can see in their current gamemode, in kits.yml order. */
     fun getKitNamesFor(player: Player): List<String> {
         val current = gamemodeOf(player)
-        return kits.values.filter { KitCatalog.visibleIn(it.entry, current) }.map { it.name }
+        return kits.values.filter { it.available && KitCatalog.visibleIn(it.entry, current) }.map { it.name }
     }
 
     /**
@@ -246,16 +253,123 @@ class KitManager(private val plugin: Joshymc) {
      */
     fun rankOrder(gamemode: ServerGamemode): List<String> {
         val path = "kits.rank-order.${gamemode.id}"
-        if (plugin.config.isList(path)) return KitCatalog.normalizeOrder(plugin.config.getStringList(path))
+        val configured = if (plugin.config.isList(path)) KitCatalog.normalizeOrder(plugin.config.getStringList(path)) else null
         return when (gamemode) {
-            ServerGamemode.SURVIVAL -> KitCatalog.DEFAULT_SURVIVAL_RANK_ORDER
-            ServerGamemode.LIFESTEAL -> emptyList()
+            ServerGamemode.SURVIVAL -> configured ?: KitCatalog.DEFAULT_SURVIVAL_RANK_ORDER
+            // Issue #1428: an empty Lifesteal order follows the Lifesteal rank hierarchy (lifesteal-ranks.yml `kits`).
+            ServerGamemode.LIFESTEAL -> configured?.takeIf { it.isNotEmpty() } ?: lifestealRanks()?.let { LifestealRankRules.kitOrder(it) }.orEmpty()
         }
+    }
+
+    // ── Lifesteal rank kits (issue #1428) ───────────────────────────────
+
+    private fun lifestealRanks(): LifestealRankConfig.Settings? = plugin.lifestealRanksOrNull()?.takeIf { it.hosted }?.settings
+
+    /**
+     * Whether [player] may claim [kit]. Survival kits (and Lifesteal kits no rank lists): the kit's
+     * permission, as before. A Lifesteal rank kit: only the Lifesteal rank hierarchy decides (its rank
+     * or any higher one, both enabled), never a permission node, so a shared or inherited LuckPerms
+     * node can't unlock it.
+     */
+    fun canUse(player: Player, kit: KitDef): Boolean {
+        if (!kit.isLifesteal) return player.hasPermission(kit.permission)
+        val ranks = plugin.lifestealRanksOrNull()
+        val settings = lifestealRanks()
+        if (ranks == null || settings == null) return player.hasPermission(kit.permission)
+        return when (LifestealRankRules.kitAccess(settings, ranks.ownedRanks(player.uniqueId), kit.name)) {
+            LifestealRankRules.KitAccess.NOT_A_RANK_KIT -> player.hasPermission(kit.permission)
+            LifestealRankRules.KitAccess.ALLOWED -> true
+            else -> false
+        }
+    }
+
+    /** The Lifesteal rank a kit belongs to, for its icon. */
+    private fun lifestealRankFor(kit: KitDef): LifestealRankConfig.RankDef? =
+        if (kit.isLifesteal) lifestealRanks()?.rankForKit(kit.name) else null
+
+    /** [kit]'s cooldown for [player]: Lifesteal rank kits get the `kit-cooldown-reduction-percent` perk. */
+    fun cooldownMillisFor(player: Player, kit: KitDef): Long {
+        val base = kit.cooldownHours.toLong() * 3600_000L
+        val ranks = plugin.lifestealRanksOrNull()
+        if (!kit.isLifesteal || ranks == null || lifestealRankFor(kit) == null) return base
+        val reduction = ranks.perk(player, LifestealRankConfig.Perk.KIT_COOLDOWN_REDUCTION_PERCENT)
+        return LifestealRankRules.kitCooldownMillis(kit.cooldownHours, reduction)
+    }
+
+    /**
+     * The duplication-safe claim used for every Lifesteal kit: refuses where the items could be
+     * lost or rolled back (Mod Mode, a Ranked match, the event world, combat), refuses unless every
+     * item fits (nothing is ever dropped or discarded), reserves the cooldown in one conditional
+     * statement *before* handing anything out (a second click, alias or reconnect can't claim twice;
+     * a crash can only lose a claim, never duplicate one), then gives and saves the player.
+     */
+    private fun claimLifestealKit(player: Player, kit: KitDef): Boolean {
+        val ranks = plugin.lifestealRanksOrNull()
+        fun refuse(message: String): Boolean {
+            plugin.commsManager.send(player, Component.text(message, NamedTextColor.RED))
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+            return false
+        }
+        if (ranks == null) return refuse("Kits are unavailable right now.")
+        if (player.isDead) return refuse("You can't claim kits while dead.")
+        if (plugin.modModeManager.isModMode(player)) return refuse("Leave Mod Mode to claim kits.")
+        if (plugin.lifestealRankedManager.holds(player)) return refuse("You can't claim kits during a Ranked match.")
+        if (plugin.eventManager.isInEventWorld(player)) return refuse("You can't claim kits in the event world.")
+        if ((ranks.settings?.refuseKitsWhileCombatTagged ?: true) && plugin.combatManager.isTagged(player)) {
+            return refuse("You can't claim kits while in combat.")
+        }
+
+        val items = kit.items.toSortedMap().values.map { item ->
+            item.clone().also { clone ->
+                if (plugin.creditVoucherManager.isCreditVoucher(clone)) {
+                    clone.editMeta { meta ->
+                        meta.persistentDataContainer.set(plugin.creditVoucherManager.voucherUuidKey, PersistentDataType.STRING, UUID.randomUUID().toString())
+                    }
+                }
+            }
+        }
+        // Simulate on a copy of the storage slots: refuse unless everything fits.
+        val probe = Bukkit.createInventory(null, 36)
+        val storage = player.inventory.storageContents
+        for (i in storage.indices) if (i < probe.size) probe.setItem(i, storage[i]?.clone())
+        if (probe.addItem(*items.map { it.clone() }.toTypedArray()).isNotEmpty()) {
+            return refuse("Your inventory is full. Free up space for ${items.size} item stack(s) and claim the kit again; nothing was used up.")
+        }
+
+        val now = System.currentTimeMillis()
+        val cooldown = if (hasBypass(player, kit.name)) 0L else cooldownMillisFor(player, kit)
+        val previous = ranks.store.kitClaimedAt(player.uniqueId, kit.name)
+        val reserved = try {
+            ranks.store.reserveKitClaim(player.uniqueId, kit.name, now, cooldown)
+        } catch (e: Exception) {
+            plugin.logger.warning("[KitManager] Could not reserve Lifesteal kit ${kit.name} for ${player.name}: ${e.message}")
+            return refuse("Kits are unavailable right now. Please try again.")
+        }
+        if (!reserved) return refuse("Kit '${kit.name}' is on cooldown: ${formatCooldown(getCooldownRemaining(player, kit.name))} remaining.")
+
+        val failed = player.inventory.addItem(*items.toTypedArray())
+        if (failed.isNotEmpty()) {
+            // Can't happen after the simulation; never lose what didn't fit.
+            if (failed.size == items.size) {
+                ranks.store.releaseKitClaim(player.uniqueId, kit.name, now, previous)
+                return refuse("Your inventory is full. Free up space and claim the kit again; nothing was used up.")
+            }
+            failed.values.forEach { plugin.giveItemSafely(player, it) }
+            plugin.logger.warning("[KitManager] ${player.name}'s Lifesteal kit ${kit.name}: ${failed.size} stack(s) didn't fit and were dropped at their feet.")
+        }
+        try { player.saveData() } catch (e: Exception) {
+            plugin.logger.warning("[KitManager] Could not save ${player.name}'s data after kit ${kit.name}: ${e.message}")
+        }
+        plugin.logger.info("[KitManager] ${player.name} (${player.uniqueId}) claimed Lifesteal kit ${kit.name} (${items.size} stack(s)).")
+        plugin.commsManager.send(player, Component.text("Kit '${kit.name}' claimed!", NamedTextColor.GREEN))
+        player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.2f)
+        if (isStarterKit(player, kit)) plugin.tutorialSignal(player, com.liam.joshymc.tutorial.TutorialSignal.StarterKitClaimed)
+        return true
     }
 
     private fun kitsIn(player: Player, category: KitCatalog.Category): List<KitDef> {
         val current = gamemodeOf(player)
-        return KitCatalog.kitsFor(category, kits.values.map { it.entry }, current, rankOrder(current))
+        return KitCatalog.kitsFor(category, kits.values.filter { it.available }.map { it.entry }, current, rankOrder(current))
             .mapNotNull { kits[it] }
     }
 
@@ -267,8 +381,10 @@ class KitManager(private val plugin: Joshymc) {
             return false
         }
 
-        if (!player.hasPermission(kit.permission)) {
-            plugin.commsManager.send(player, Component.text("You don't have permission to use this kit.", NamedTextColor.RED))
+        if (!canUse(player, kit)) {
+            val rank = lifestealRankFor(kit)
+            val message = if (rank != null) "This kit needs the ${rank.displayName} rank or higher (see /lsranks)." else "You don't have permission to use this kit."
+            plugin.commsManager.send(player, Component.text(message, NamedTextColor.RED))
             return false
         }
 
@@ -279,6 +395,9 @@ class KitManager(private val plugin: Joshymc) {
             player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
             return false
         }
+
+        // Issue #1428: every Lifesteal kit goes through the reserved, fit-checked claim.
+        if (kit.isLifesteal) return claimLifestealKit(player, kit)
 
         // Give items
         for ((slot, item) in kit.items) {
@@ -348,7 +467,7 @@ class KitManager(private val plugin: Joshymc) {
             player.uniqueId.toString(), name
         ) { rs -> rs.getLong("claimed_at") } ?: return 0L
 
-        val cooldownMs = kit.cooldownHours.toLong() * 3600_000L
+        val cooldownMs = cooldownMillisFor(player, kit)
         val elapsed = System.currentTimeMillis() - claimedAt
         val remaining = cooldownMs - elapsed
         return if (remaining > 0) remaining else 0L
@@ -424,7 +543,7 @@ class KitManager(private val plugin: Joshymc) {
         description: String,
     ) {
         val inCategory = kitsIn(player, category)
-        val ready = inCategory.count { player.hasPermission(it.permission) && canClaim(player, it.name) }
+        val ready = inCategory.count { canUse(player, it) && canClaim(player, it.name) }
         val lore = mutableListOf(line(description, NamedTextColor.GRAY), Component.empty())
         if (inCategory.isEmpty()) {
             lore += line("No kits here yet.", NamedTextColor.GRAY)
@@ -527,7 +646,8 @@ class KitManager(private val plugin: Joshymc) {
     /** A kit's icon: name colored by state, cooldown, status (Ready / remaining / Locked) and the click hints. */
     private fun kitIcon(player: Player, kitDef: KitDef, material: Material, name: String, rank: String? = null): ItemStack {
         val onCooldown = !canClaim(player, kitDef.name)
-        val hasPermission = player.hasPermission(kitDef.permission)
+        val hasPermission = canUse(player, kitDef)
+        val lifestealRank = lifestealRankFor(kitDef)
         val ready = hasPermission && !onCooldown
         val locked = !hasPermission
 
@@ -553,7 +673,7 @@ class KitManager(private val plugin: Joshymc) {
                 lore.add(
                     Component.text("Cooldown: ", NamedTextColor.GRAY)
                         .decoration(TextDecoration.ITALIC, false)
-                        .append(Component.text("${kitDef.cooldownHours}h", NamedTextColor.WHITE))
+                        .append(Component.text(cooldownLabel(player, kitDef), NamedTextColor.WHITE))
                 )
 
                 val statusValue = when {
@@ -566,7 +686,11 @@ class KitManager(private val plugin: Joshymc) {
                         .decoration(TextDecoration.ITALIC, false)
                         .append(statusValue.decoration(TextDecoration.ITALIC, false))
                 )
-                if (locked && rank != null) {
+                if (lifestealRank != null) {
+                    // Issue #1428: Lifesteal rank kits always name their rank; higher ranks can claim them too.
+                    lore.add(line("Required rank: ${lifestealRank.displayName} or higher", if (locked) NamedTextColor.RED else NamedTextColor.GRAY))
+                    lore.add(line("Contents: ${kitDef.items.size} item stack(s), right-click to preview", NamedTextColor.GRAY))
+                } else if (locked && rank != null) {
                     lore.add(line("Requires the ${DonorTiers.displayName(rank)} rank", NamedTextColor.RED))
                 }
 
@@ -784,6 +908,13 @@ class KitManager(private val plugin: Joshymc) {
         Component.text(EDIT_KIT_TITLE_PREFIX)
             .append(Component.text(name, NamedTextColor.AQUA))
             .decoration(TextDecoration.ITALIC, false)
+
+    /** The cooldown shown on a kit icon: whole hours as before, the reduced cooldown for Lifesteal rank kits. */
+    private fun cooldownLabel(player: Player, kit: KitDef): String {
+        if (lifestealRankFor(kit) == null) return "${kit.cooldownHours}h"
+        val ms = cooldownMillisFor(player, kit)
+        return if (ms <= 0L) "none" else formatCooldown(ms)
+    }
 
     private fun formatCooldown(millis: Long): String {
         if (millis <= 0) return "Ready"

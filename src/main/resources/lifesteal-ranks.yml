@@ -1,0 +1,106 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Lifesteal ranks, rank perks, rank kits and progression (issue #1428)
+# ──────────────────────────────────────────────────────────────────────────────
+# Lifesteal only: this file is only created and read on a server that runs Lifesteal.
+# See docs/lifesteal-ranks.md.
+#
+# ONLY TWO LIFESTEAL RANK NAMES ARE APPROVED SO FAR: Rogue (the free starter rank,
+# issue #1295) and Legacy (the last rank of the ladder, issue #1379). Everything else
+# about them (perk values, requirements, store availability, kit contents, colors) and
+# any ranks between them still need the Owner's decision, so this file ships them
+# with NO perks, NO requirements and NOT for sale. Add the approved values here; no
+# code change is needed. Never invent ranks the Owner hasn't approved.
+#
+# Any mistake makes the whole file invalid: rank perks, rank kits and new rank grants
+# then pause (owned ranks are always kept). Check with /lsranks admin problems, fix, then
+# /lsranks admin reload.
+config-version: 1
+
+# Master switch. false = no Lifesteal rank perks, kits or grants (owned ranks are kept).
+enabled: true
+
+luckperms:
+  # Every rank adds ONE LuckPerms parent group by UUID (never "parent set", never removes
+  # another group). Empty = a global node, right when this Lifesteal server has its own
+  # LuckPerms database. If LuckPerms is shared with Survival, put this server's LuckPerms
+  # `server` name here so the groups only apply on Lifesteal.
+  server-context: ""
+
+# Perks to turn off for every rank without editing the ranks (values are kept):
+# homes, vaults, sell-bonus-percent, auction-extra-listings, order-extra-orders,
+# kit-cooldown-reduction-percent
+disabled-perks: []
+
+kits:
+  # Refuse Lifesteal kit claims while combat-tagged (kits mid-fight would be pay-to-win).
+  refuse-while-combat-tagged: true
+
+# Ranks, lowest `order` first. A player's rank is the highest enabled rank they own; they
+# get the perks, permissions and kits of every enabled rank at or below it. Ownership is
+# permanent and is never reset by a season. Disabling a rank only stops it counting.
+#
+# Per rank:
+#   display-name, color (#RRGGBB), order (unique), description, enabled
+#   group: the LuckPerms group added for it (default = the rank id). Staff groups,
+#          Survival donor tiers, JoshyMC display ranks and `default` are refused.
+#   acquisition: free (/freerank, once per player), progression (claimed in /lsranks once
+#                every requirement is met), store (/purchase fulfill <player> lsrank <rank>).
+#                Staff can always grant an enabled rank with /lsranks admin grant.
+#   requirements: playtime-hours, pvp-kills, unique-victims (PvP kills only count when a
+#                 heart actually moved, i.e. every anti-abuse rule of the heart system passed)
+#   requirements-scope: lifetime | season (season = PvP counts since this season's launch)
+#   permissions: JoshyMC player nodes applied by JoshyMC itself while in a Lifesteal world
+#                (admin, staff, punishment, economy-admin, heart, ranked, kit, gamemode,
+#                heal/feed/fly/god/speed and other plugins' nodes are refused)
+#   kits: kit names in kits.yml (gamemode: lifesteal) that this rank and higher ranks can claim
+#   perks: homes (0-100), vaults (0-54, capped at vaults.max), sell-bonus-percent (0-25),
+#          auction-extra-listings (0-100), order-extra-orders (0-100),
+#          kit-cooldown-reduction-percent (0-50). Hearts, damage, defense, combat-tag,
+#          enchant-limit and Elo perks are refused.
+#   cosmetics: prefix (shown in /lsranks; the chat prefix is the LuckPerms group's prefix),
+#              chat-color, icon (a Material), unlocks (text lines listing cosmetic unlocks)
+ranks:
+  rogue:
+    display-name: Rogue
+    color: "#A8B2BD"
+    order: 1
+    description: "The free Lifesteal starter rank."
+    enabled: true
+    group: rogue
+    acquisition:
+      free: true
+      progression: false
+      store: false
+    requirements: {}
+    requirements-scope: lifetime
+    permissions: []
+    # Create the kit on Lifesteal with /createkit rogue, then it appears under Rank Kits.
+    kits: [rogue]
+    perks: {}
+    cosmetics:
+      prefix: ""
+      chat-color: ""
+      icon: LEATHER_HELMET
+      unlocks: []
+  legacy:
+    display-name: Legacy
+    color: "#F2C94C"
+    order: 100
+    description: "The highest Lifesteal rank."
+    enabled: true
+    group: legacy
+    # How Legacy is obtained isn't approved yet: staff grants only until the Owner decides.
+    acquisition:
+      free: false
+      progression: false
+      store: false
+    requirements: {}
+    requirements-scope: lifetime
+    permissions: []
+    kits: [legacy]
+    perks: {}
+    cosmetics:
+      prefix: ""
+      chat-color: ""
+      icon: NETHERITE_HELMET
+      unlocks: []

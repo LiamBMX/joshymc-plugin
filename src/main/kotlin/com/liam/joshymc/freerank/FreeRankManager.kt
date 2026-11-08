@@ -43,6 +43,12 @@ class FreeRankManager(private val plugin: Joshymc) : Listener {
     fun claim(player: Player) {
         val uuid = player.uniqueId
         val gamemode = plugin.gamemodeLockManager.gamemodeOf(player)
+        // Issue #1428: Lifesteal's starter rank (Rogue) lives in the Lifesteal rank system, not in the
+        // Survival donor tiers. It is granted there, once per player (UNIQUE reference), never as a donor tier.
+        if (gamemode == ServerGamemode.LIFESTEAL && plugin.lifestealRankManager.hosted) {
+            plugin.lifestealRankManager.claimFree(player)
+            return
+        }
         val starter = FreeRanks.starterRank(gamemode)
         if (starter == null) {
             Msg.error(player, "There is no free rank to claim on ${gamemode.displayName} yet.")
