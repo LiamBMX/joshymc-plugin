@@ -91,6 +91,12 @@ fun main() {
     check("set slots distinct", EventQuestLayout.SET_SLOTS.toSet().size == EventQuestLayout.SET_SLOTS.size)
     check("set slots never overlap navigation", EventQuestLayout.SET_SLOTS.none { it in nav })
     check("room for every existing set (6+)", EventQuestLayout.SET_SLOTS.size >= 6)
+    // Issue #1439: lime panes in the Free page's rows 2-5, black above; Elite untouched.
+    check("free accent covers rows 2-5", EventQuestLayout.FREE_ACCENT_SLOTS == 18..53)
+    check("free accent includes slots 18-44", (18..44).all { EventQuestLayout.usesAccentFiller(EventQuestCategory.FREE, it) })
+    check("free top rows keep standard filler", (0..17).none { EventQuestLayout.usesAccentFiller(EventQuestCategory.FREE, it) })
+    check("elite page never uses the accent", (0 until 54).none { EventQuestLayout.usesAccentFiller(EventQuestCategory.ELITE, it) })
+    check("first seven set slots are 10-16", EventQuestLayout.SET_SLOTS.take(7) == (10..16).toList())
 
     // ── Issue #1438: set page layout ──
     check("reward in the central area (row 1 center)", EventQuestLayout.SET_REWARD_SLOT == 13)

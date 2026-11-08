@@ -127,6 +127,16 @@ object EventQuestLayout {
     val SET_SLOTS: List<Int> = (10..16) + (19..25) + (28..34) + (37..43)
 
     /**
+     * Issue #1439: on the Free page the black filler blends into the dark slot background, so the
+     * unused slots of rows 2-5 (18..53) get lime panes instead. Rows 0-1 keep the black filler.
+     */
+    val FREE_ACCENT_SLOTS: IntRange = 18 until PAGE_SIZE
+
+    /** Whether an unused slot of [category]'s page gets the accent pane instead of the standard filler. */
+    fun usesAccentFiller(category: EventQuestCategory, slot: Int): Boolean =
+        category == EventQuestCategory.FREE && slot in FREE_ACCENT_SLOTS
+
+    /**
      * Issue #1440: the Elite category page has a purple pane border across the top row (0..8)
      * and the row right above the navigation (36..44). Sets sit in the three rows between them
      * (rows 1..3, columns 1..7), centered both ways, so one set lands in the middle at slot 22.

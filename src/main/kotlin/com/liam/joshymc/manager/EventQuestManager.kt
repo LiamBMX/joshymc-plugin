@@ -1123,6 +1123,8 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     // ── GUI ─────────────────────────────────────────────────────
 
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
+    /** Issue #1439: the Free page's lower filler, visible against the dark slot background. */
+    private val FREE_FILLER = ItemStack(Material.LIME_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
     /** Issue #1440: decorative border of the Elite category page (no click handler, so clicks are just cancelled). */
     private val ELITE_BORDER = ItemStack(Material.PURPLE_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
 
@@ -1249,6 +1251,11 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
         list.take(slots.size).forEachIndexed { i, event -> gui.setItem(slots[i], eventIcon(player, event)) { p, _ -> openEventGui(p, event) } }
         gui.setItem(EventQuestLayout.PAGE_BACK_SLOT, GuiStyle.back("Back to Event Quests")) { p, _ -> GuiStyle.clickSound(p); openGui(p) }
         gui.setItem(EventQuestLayout.PAGE_CLOSE_SLOT, GuiStyle.close()) { p, _ -> p.closeInventory() }
+        for (slot in 0 until EventQuestLayout.PAGE_SIZE) {
+            if (gui.inventory.getItem(slot) == null && EventQuestLayout.usesAccentFiller(category, slot)) {
+                gui.setItem(slot, FREE_FILLER)
+            }
+        }
         if (elite) EventQuestLayout.ELITE_BORDER_SLOTS.forEach { gui.setItem(it, ELITE_BORDER) }
         gui.fill(FILLER)
         plugin.guiManager.open(player, gui)
