@@ -7,6 +7,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
+import java.util.UUID
 
 /**
  * `/lifesteal hearts get|set|add|remove <player> [amount]` (issue #1341). `/lifesteal` itself is
@@ -34,6 +35,7 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         when (args.firstOrNull()?.lowercase()) {
             "items" -> return items(sender, args)
             "void" -> return void(sender, args)
+            "reviews" -> return reviews(sender, args)
         }
         val hearts = plugin.lifestealHeartManager
         if (!hearts.hosted) {
@@ -87,6 +89,7 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
                     .append(Component.text(" (limits ${limits.minimum}-${limits.maximum})", NamedTextColor.GRAY))
             }
             Msg.reply(sender, line)
+            withdrawStatus(sender, uuid)
             return
         }
 
@@ -203,6 +206,69 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         }
     }
 
+    /** Issue #1457: Lifesteal playtime and withdrawal eligibility under `get`. */
+    private fun withdrawStatus(sender: CommandSender, uuid: UUID) {
+        val status = try {
+            plugin.lifestealHeartManager.withdrawStatus(uuid)
+        } catch (e: Exception) {
+            Msg.error(sender, "Couldn't read the withdrawal eligibility: ${e.message}")
+            return
+        } ?: return
+        val (playtime, eligibility) = status
+        val played = if (playtime <= 0) "none" else HeartRules.formatWait(playtime)
+        val verdict = if (eligibility.eligible) Component.text("may withdraw hearts", NamedTextColor.GREEN)
+        else Component.text(
+            listOfNotNull(
+                "needs ${HeartRules.formatWait(eligibility.playtimeMissingMillis)} more playtime".takeIf { eligibility.playtimeMissingMillis > 0 },
+                "account too new for ${HeartRules.formatWait(eligibility.accountAgeMissingMillis)}".takeIf { eligibility.accountAgeMissingMillis > 0 },
+            ).joinToString(", "),
+            NamedTextColor.YELLOW
+        )
+        sender.sendMessage(Component.text(" Lifesteal playtime: $played. Withdrawal: ", NamedTextColor.GRAY).append(verdict))
+    }
+
+    /**
+     * `reviews [player]` (issue #1457): withdrawn Heart items redeemed by an account that shared a
+     * connection with the player who withdrew them. Names and UUIDs only, never connection data.
+     */
+    private fun reviews(sender: CommandSender, args: List<String>) {
+        if (!ready(sender)) return
+        if (args.size !in 1..2) {
+            Msg.usage(sender, "/lifesteal hearts reviews [player]")
+            return
+        }
+        val target = args.getOrNull(1)?.let { name ->
+            plugin.playerResolver.resolve(name) ?: run {
+                Msg.playerNotFound(sender, name)
+                return
+            }
+        }
+        val rows = try {
+            plugin.lifestealHeartManager.transferReviews(target?.uniqueId)
+        } catch (e: Exception) {
+            Msg.error(sender, "Couldn't read the transfer reviews: ${e.message}")
+            return
+        }
+        val scope = target?.let { " involving ${it.name ?: args[1]}" } ?: ""
+        if (rows.isEmpty()) {
+            Msg.reply(sender, Component.text("No shared-connection Heart item transfers$scope.", NamedTextColor.GRAY))
+            return
+        }
+        Msg.reply(sender, Component.text("Shared-connection Heart item transfers$scope (newest first, up to 20). A shared connection isn't proof of one owner:", NamedTextColor.GRAY))
+        val format = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(java.time.ZoneId.systemDefault())
+        fun name(uuid: UUID) = plugin.playerResolver.lastKnownName(uuid) ?: uuid.toString()
+        for (row in rows) {
+            val age = row.issuerFirstJoin?.let { " (issuer's account was ${HeartRules.formatWait((row.issuedAt - it).coerceAtLeast(0))} old)" } ?: ""
+            sender.sendMessage(
+                Component.text(" ${format.format(java.time.Instant.ofEpochMilli(row.at))} ", NamedTextColor.GRAY)
+                    .append(Component.text(name(row.issuer), NamedTextColor.WHITE))
+                    .append(Component.text(" -> ", NamedTextColor.GRAY))
+                    .append(Component.text(name(row.redeemer), NamedTextColor.WHITE))
+                    .append(Component.text(" ${row.serial}$age", NamedTextColor.DARK_GRAY))
+            )
+        }
+    }
+
     /** `void <serial> [refund]`: recovery for a lost Heart item (see [HeartStore.voidItem]). */
     private fun void(sender: CommandSender, args: List<String>) {
         if (!ready(sender)) return
@@ -235,7 +301,7 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         val admin = sender.hasPermission(PERMISSION)
         return when (args.size) {
             1 -> buildList {
-                if (admin) addAll(listOf("get", "set", "add", "remove", "items", "void"))
+                if (admin) addAll(listOf("get", "set", "add", "remove", "items", "void", "reviews"))
                 if (sender.hasPermission(GIVE_PERMISSION)) add("give")
             }.filter { it.startsWith(args[0].lowercase()) }
             2 -> if (args[0].equals("void", ignoreCase = true)) emptyList()
@@ -249,7 +315,7 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         const val PERMISSION = "joshymc.lifesteal.hearts.admin"
         /** Making Heart items (issue #1344) is its own permission, not part of [PERMISSION]. */
         const val GIVE_PERMISSION = "joshymc.lifesteal.hearts.give"
-        const val USAGE = "/lifesteal hearts <get|set|add|remove> <player> [amount] | items <player> | void <serial> [refund]"
+        const val USAGE = "/lifesteal hearts <get|set|add|remove> <player> [amount] | items <player> | void <serial> [refund] | reviews [player]"
         const val GIVE_USAGE = "/lifesteal hearts give <player> <amount>"
     }
 }

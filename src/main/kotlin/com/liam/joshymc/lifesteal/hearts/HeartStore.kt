@@ -24,6 +24,11 @@ import java.util.UUID
  *   is only real while its row is ISSUED; redeeming moves it to REDEEMED in the same transaction
  *   that adds the heart, so a copied item (creative clone, dupe glitch, inventory rollback) finds
  *   its serial already used, and a hand-made item finds no row at all.
+ * - `lifesteal_heart_playtime` (issue #1457): active Lifesteal playtime per player UUID, only ever
+ *   raised by [addPlaytime], for the withdrawal eligibility rule.
+ * - `lifesteal_heart_transfer_reviews` (issue #1457): one row per withdrawn Heart item redeemed by
+ *   an account that shared a connection (AltManager's `player_connections`) with the player who
+ *   withdrew it, for staff review. Never blocks anything.
  *
  * Every change runs inside one [SqliteDatabase.transaction] (which holds the DB lock), reads the
  * rows fresh, and writes them back with `WHERE version = <read version>`; a row that changed in
@@ -43,6 +48,8 @@ class HeartStore(private val db: SqliteDatabase) {
         val version: Long,
         val updatedAt: Long,
         val lastTransaction: String?,
+        /** When the record was made: the player's first Lifesteal join here (issue #1457). */
+        val createdAt: Long = updatedAt,
     )
 
     data class AuditRow(
@@ -156,6 +163,31 @@ class HeartStore(private val db: SqliteDatabase) {
             """.trimIndent()
         )
         db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_heart_items_owner ON lifesteal_heart_items (issued_to, status)")
+        // Issue #1457: new tables only; no existing row (hearts, items, audit) is touched.
+        db.createTable(
+            """
+            CREATE TABLE IF NOT EXISTS lifesteal_heart_playtime (
+                uuid TEXT PRIMARY KEY,
+                active_millis INTEGER NOT NULL DEFAULT 0,
+                updated_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.createTable(
+            """
+            CREATE TABLE IF NOT EXISTS lifesteal_heart_transfer_reviews (
+                serial TEXT PRIMARY KEY,
+                issuer TEXT NOT NULL,
+                redeemer TEXT NOT NULL,
+                evidence TEXT NOT NULL,
+                issued_at INTEGER NOT NULL,
+                issuer_first_join INTEGER,
+                redeem_transaction TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_heart_reviews_created ON lifesteal_heart_transfer_reviews (created_at)")
     }
 
     // ── Reads ───────────────────────────────────────────────
@@ -191,6 +223,87 @@ class HeartStore(private val db: SqliteDatabase) {
 
     fun transactionCount(): Int =
         db.queryFirst("SELECT COUNT(*) AS n FROM lifesteal_heart_transactions") { it.getInt("n") } ?: 0
+
+    // ── Lifesteal playtime (issue #1457) ────────────────────
+
+    /** Stored active Lifesteal playtime of [uuid] in milliseconds (0 when none was recorded). */
+    fun playtimeMillis(uuid: UUID): Long =
+        db.queryFirst("SELECT active_millis FROM lifesteal_heart_playtime WHERE uuid = ?", uuid.toString()) { it.getLong("active_millis") } ?: 0L
+
+    /**
+     * Adds earned playtime ([credits], milliseconds per player) in one transaction. Only positive
+     * amounts are written and the stored value only ever goes up.
+     */
+    fun addPlaytime(credits: Map<UUID, Long>, now: Long) {
+        val positive = credits.filterValues { it > 0 }
+        if (positive.isEmpty()) return
+        db.transaction {
+            for ((uuid, millis) in positive) {
+                db.execute(
+                    "INSERT INTO lifesteal_heart_playtime (uuid, active_millis, updated_at) VALUES (?, ?, ?) " +
+                        "ON CONFLICT (uuid) DO UPDATE SET active_millis = active_millis + excluded.active_millis, updated_at = excluded.updated_at",
+                    uuid.toString(), millis, now
+                )
+            }
+        }
+    }
+
+    /** What [uuid] still lacks for [requirements] (fresh from the database), or null with no readable record. */
+    fun eligibility(uuid: UUID, requirements: HeartRules.WithdrawRequirements?, now: Long): HeartRules.Eligibility? {
+        val record = load(uuid) ?: return null
+        return HeartRules.withdrawEligibility(playtimeMillis(uuid), record.createdAt, now, requirements)
+    }
+
+    // ── Shared-connection transfer reviews (issue #1457) ────
+
+    data class TransferReview(
+        val serial: String,
+        val issuer: UUID,
+        val redeemer: UUID,
+        val evidence: String,
+        val issuedAt: Long,
+        val issuerFirstJoin: Long?,
+        val redeemTransaction: String,
+        val at: Long,
+    )
+
+    /** Newest first; with [player], only reviews where they withdrew or redeemed the item. */
+    fun transferReviews(player: UUID? = null, limit: Int = 20): List<TransferReview> =
+        if (player == null) db.query("SELECT * FROM lifesteal_heart_transfer_reviews ORDER BY created_at DESC, serial LIMIT ?", limit) { reviewRow(it) }
+        else db.query(
+            "SELECT * FROM lifesteal_heart_transfer_reviews WHERE issuer = ? OR redeemer = ? ORDER BY created_at DESC, serial LIMIT ?",
+            player.toString(), player.toString(), limit
+        ) { reviewRow(it) }
+
+    fun transferReviewCount(): Int =
+        db.queryFirst("SELECT COUNT(*) AS n FROM lifesteal_heart_transfer_reviews") { it.getInt("n") } ?: 0
+
+    /**
+     * Whether [a] and [b] were ever seen on the same connection, from AltManager's
+     * `player_connections` (salted hashes only; nothing about the connection is read or kept here).
+     * False when that table doesn't exist. Uncertain evidence by design: households share one.
+     */
+    fun sharedConnection(a: UUID, b: UUID): Boolean {
+        if (a == b) return false
+        val exists = db.queryFirst("SELECT 1 AS hit FROM sqlite_master WHERE type = 'table' AND name = 'player_connections'") { true } == true
+        if (!exists) return false
+        return db.queryFirst(
+            "SELECT 1 AS hit FROM player_connections x JOIN player_connections y ON x.connection_hash = y.connection_hash " +
+                "WHERE x.uuid = ? AND y.uuid = ? LIMIT 1",
+            a.toString(), b.toString()
+        ) { true } == true
+    }
+
+    private fun reviewRow(rs: ResultSet): TransferReview = TransferReview(
+        serial = rs.getString("serial"),
+        issuer = UUID.fromString(rs.getString("issuer")),
+        redeemer = UUID.fromString(rs.getString("redeemer")),
+        evidence = rs.getString("evidence"),
+        issuedAt = rs.getLong("issued_at"),
+        issuerFirstJoin = rs.getLong("issuer_first_join").takeUnless { rs.wasNull() },
+        redeemTransaction = rs.getString("redeem_transaction"),
+        at = rs.getLong("created_at"),
+    )
 
     // ── Initial grant ───────────────────────────────────────
 
@@ -376,6 +489,12 @@ class HeartStore(private val db: SqliteDatabase) {
         data class AtMinimum(val hearts: Int) : WithdrawResult
         /** No record, or an unreadable one: nothing changed. */
         data class Unavailable(val reason: String) : WithdrawResult
+        /**
+         * Issue #1457: the player hasn't met the withdrawal requirements yet; nothing changed.
+         * [audited] = this refusal was written to the audit log (at most once per player and
+         * reason per [HeartRules.INELIGIBLE_AUDIT_WINDOW_MILLIS]).
+         */
+        data class NotEligible(val eligibility: HeartRules.Eligibility, val audited: Boolean) : WithdrawResult
     }
 
     /**
@@ -383,8 +502,14 @@ class HeartStore(private val db: SqliteDatabase) {
      * update, the ISSUED item row for [serial], the transaction row (dedupe key `withdraw:<serial>`)
      * and a WITHDRAW audit row. Rejections are audited (WITHDRAW_REJECTED). Any error rolls it all
      * back and is rethrown: no heart is taken and the serial doesn't exist.
+     *
+     * Issue #1457: with [requirements], the player's Lifesteal playtime and first join are read in
+     * the same transaction and checked before anything is written ([WithdrawResult.NotEligible]).
      */
-    fun withdraw(uuid: UUID, serial: String, limits: HeartRules.Limits, now: Long, transactionId: String = UUID.randomUUID().toString()): WithdrawResult {
+    fun withdraw(
+        uuid: UUID, serial: String, limits: HeartRules.Limits, now: Long, transactionId: String = UUID.randomUUID().toString(),
+        requirements: HeartRules.WithdrawRequirements? = null,
+    ): WithdrawResult {
         require(HeartRules.parseSerial(serial) == serial) { "not a Heart item serial: $serial" }
         var result: WithdrawResult? = null
         db.transaction {
@@ -394,6 +519,17 @@ class HeartStore(private val db: SqliteDatabase) {
                 val reason = if (record == null) "no heart record" else "heart record is unreadable"
                 insertAudit(null, uuid, "WITHDRAW_REJECTED", stored, stored, uuid.toString(), reason, now)
                 result = WithdrawResult.Unavailable(reason)
+                return@transaction
+            }
+            val eligibility = HeartRules.withdrawEligibility(playtimeMillis(uuid), record.createdAt, now, requirements)
+            if (!eligibility.eligible) {
+                val reason = eligibility.auditReason
+                val recent = db.queryFirst(
+                    "SELECT 1 AS hit FROM lifesteal_heart_audit WHERE uuid = ? AND operation = 'WITHDRAW_REJECTED' AND reason = ? AND created_at > ? LIMIT 1",
+                    uuid.toString(), reason, now - HeartRules.INELIGIBLE_AUDIT_WINDOW_MILLIS
+                ) { true } == true
+                if (!recent) insertAudit(null, uuid, "WITHDRAW_REJECTED", stored, stored, uuid.toString(), reason, now)
+                result = WithdrawResult.NotEligible(eligibility, audited = !recent)
                 return@transaction
             }
             when (val decision = HeartRules.withdraw(stored, limits)) {
@@ -414,8 +550,11 @@ class HeartStore(private val db: SqliteDatabase) {
     }
 
     sealed interface RedeemResult {
-        /** [serial] used up and one heart added; the caller now removes the item. */
-        data class Redeemed(val transactionId: String, val serial: String, val before: Int, val after: Int) : RedeemResult
+        /**
+         * [serial] used up and one heart added; the caller now removes the item. [review] is set
+         * when the transfer was recorded for staff review (issue #1457); it never changes the outcome.
+         */
+        data class Redeemed(val transactionId: String, val serial: String, val before: Int, val after: Int, val review: TransferReview? = null) : RedeemResult
         /** At the maximum: nothing changed, the item stays valid. */
         data class AtMaximum(val hearts: Int) : RedeemResult
         /** No item with this serial was ever issued here: a forged item. */
@@ -434,8 +573,16 @@ class HeartStore(private val db: SqliteDatabase) {
      * the item row moved to REDEEMED with `WHERE status = 'ISSUED'`, the conditional heart
      * update, the transaction row (dedupe key `redeem:<serial>`, UNIQUE, so a serial can be
      * redeemed once ever) and a REDEEM audit row. Refusals are audited (REDEEM_REJECTED).
+     *
+     * Issue #1457: with [reviewTransfers], a WITHDRAW item redeemed by someone other than its issuer
+     * who shared a connection with them gets one `lifesteal_heart_transfer_reviews` row (keyed by
+     * serial) and a TRANSFER_REVIEW audit row in the same transaction. The redemption itself is
+     * exactly the same either way.
      */
-    fun redeem(uuid: UUID, serial: String, limits: HeartRules.Limits, now: Long, transactionId: String = UUID.randomUUID().toString()): RedeemResult {
+    fun redeem(
+        uuid: UUID, serial: String, limits: HeartRules.Limits, now: Long, transactionId: String = UUID.randomUUID().toString(),
+        reviewTransfers: Boolean = false,
+    ): RedeemResult {
         var result: RedeemResult? = null
         db.transaction {
             val item = HeartRules.parseSerial(serial)?.let { loadItem(it) }
@@ -462,7 +609,24 @@ class HeartStore(private val db: SqliteDatabase) {
             closeItem(serial, ItemStatus.REDEEMED, uuid.toString(), transactionId, now)
             writeHearts(record!!, after, transactionId, now)
             insertAudit(transactionId, uuid, "REDEEM", stored, after, uuid.toString(), "redeemed 1 heart issued to ${item!!.issuedTo}", now, 1, serial)
-            result = RedeemResult.Redeemed(transactionId, serial, limits.clamp(stored), after)
+            var review: TransferReview? = null
+            if (reviewTransfers && item.source == ItemSource.WITHDRAW && item.issuedTo != uuid) {
+                // A failed lookup is "no evidence", never a reason to refuse or roll back the redemption.
+                val shared = runCatching { sharedConnection(item.issuedTo, uuid) }.getOrDefault(false)
+                if (shared) {
+                    val candidate = TransferReview(serial, item.issuedTo, uuid, EVIDENCE_SHARED_CONNECTION, item.issuedAt, load(item.issuedTo)?.createdAt, transactionId, now)
+                    val inserted = db.executeUpdate(
+                        "INSERT OR IGNORE INTO lifesteal_heart_transfer_reviews (serial, issuer, redeemer, evidence, issued_at, issuer_first_join, redeem_transaction, created_at) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        serial, candidate.issuer.toString(), uuid.toString(), candidate.evidence, candidate.issuedAt, candidate.issuerFirstJoin, transactionId, now
+                    ) == 1
+                    if (inserted) {
+                        insertAudit(transactionId, uuid, "TRANSFER_REVIEW", after, after, item.issuedTo.toString(), "$EVIDENCE_SHARED_CONNECTION with issuer ${item.issuedTo}", now, 1, serial)
+                        review = candidate
+                    }
+                }
+            }
+            result = RedeemResult.Redeemed(transactionId, serial, limits.clamp(stored), after, review)
         }
         return result!!
     }
@@ -648,6 +812,7 @@ class HeartStore(private val db: SqliteDatabase) {
         version = rs.getLong("version"),
         updatedAt = rs.getLong("updated_at"),
         lastTransaction = rs.getString("last_transaction"),
+        createdAt = rs.getLong("created_at"),
     )
 
     private fun auditRow(rs: ResultSet): AuditRow = AuditRow(
@@ -664,6 +829,9 @@ class HeartStore(private val db: SqliteDatabase) {
     )
 
     companion object {
+        /** The only alt evidence there is: AltManager saw both accounts on one (hashed) connection. */
+        const val EVIDENCE_SHARED_CONNECTION = "SHARED_CONNECTION"
+
         /** A stored hearts value as a whole number, or null when it isn't one (malformed row). */
         fun wholeHearts(raw: Any?): Int? = when (raw) {
             is Int -> raw

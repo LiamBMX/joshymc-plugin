@@ -15,6 +15,7 @@ import org.bukkit.attribute.Attribute
 import org.bukkit.entity.Player
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.persistence.PersistentDataType
+import org.bukkit.scheduler.BukkitTask
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -69,6 +70,15 @@ class LifestealHeartManager(private val plugin: Joshymc) {
     /** Server tick of each player's last redemption attempt: one attempt per tick, whatever the hand. */
     private val lastRedeemTick = ConcurrentHashMap<UUID, Int>()
 
+    // Lifesteal playtime (issue #1457), for the withdrawal eligibility rule. A player is "counting"
+    // while online, alive, loaded in a Lifesteal world and not AFK; [playtimeSince] holds when
+    // their uncounted stretch began. Every sample (each minute, quit, world change, respawn,
+    // withdrawal) credits that stretch to `lifesteal_heart_playtime` and starts a new one only if
+    // they are still counting, so offline, AFK and non-Lifesteal time never count and at most one
+    // sample interval is ever only in memory.
+    private val playtimeSince = ConcurrentHashMap<UUID, Long>()
+    private var playtimeTask: BukkitTask? = null
+
     /** This server runs Lifesteal (fixed per reload). The listener is only registered when true. */
     val hosted: Boolean get() = ServerGamemode.LIFESTEAL in plugin.networkIdentityManager.hostedGamemodes
 
@@ -88,12 +98,15 @@ class LifestealHeartManager(private val plugin: Joshymc) {
     /** Startup and every reload, after lifestealConfigManager.load(). */
     fun refresh() {
         if (!hosted) {
+            samplePlaytime(System.currentTimeMillis())
             if (limits != null || loaded.isNotEmpty()) plugin.logger.info("[Hearts] This server no longer runs Lifesteal; the heart system is off.")
             limits = null
             loaded.clear()
             for (player in Bukkit.getOnlinePlayers()) restoreVanilla(player)
             return
         }
+        // Issue #1457: credit what was earned under the old settings before anything changes (reload).
+        samplePlaytime(System.currentTimeMillis())
         val settings = plugin.lifestealConfigManager.settings
         if (settings == null) {
             limits = null
@@ -122,12 +135,66 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         )
         loaded.clear()
         for (player in Bukkit.getOnlinePlayers()) sync(player)
+        if (playtimeTask == null) {
+            playtimeTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { samplePlaytime(System.currentTimeMillis()) }, PLAYTIME_SAMPLE_TICKS, PLAYTIME_SAMPLE_TICKS)
+        }
     }
 
     fun stop() {
+        samplePlaytime(System.currentTimeMillis())
+        playtimeTask?.cancel()
+        playtimeTask = null
+        playtimeSince.clear()
         loaded.clear()
         limits = null
     }
+
+    // ── Lifesteal playtime (issue #1457) ────────────────────
+
+    private fun countsPlaytime(player: Player): Boolean =
+        active && player.isOnline && !player.isDead && isLifesteal(player) && loaded.containsKey(player.uniqueId) &&
+            !(runCatching { plugin.afkManager.isAfk(player) }.getOrDefault(false))
+
+    /** Credits every online player's stretch since the last sample in one transaction (the minute task, reload, stop). */
+    private fun samplePlaytime(now: Long) {
+        val credits = HashMap<UUID, Long>()
+        val online = HashSet<UUID>()
+        for (player in Bukkit.getOnlinePlayers()) {
+            val uuid = player.uniqueId
+            online += uuid
+            playtimeSince[uuid]?.let { credits[uuid] = HeartRules.playtimeCredit(it, now, PLAYTIME_MAX_CREDIT_MILLIS) }
+            if (countsPlaytime(player)) playtimeSince[uuid] = now else playtimeSince.remove(uuid)
+        }
+        playtimeSince.keys.retainAll(online)
+        savePlaytime(credits, now)
+    }
+
+    /** The same for one player ([stillCounting] false on quit). */
+    private fun samplePlaytime(player: Player, now: Long, stillCounting: Boolean = countsPlaytime(player)) {
+        val uuid = player.uniqueId
+        val credit = playtimeSince[uuid]?.let { HeartRules.playtimeCredit(it, now, PLAYTIME_MAX_CREDIT_MILLIS) } ?: 0L
+        if (stillCounting) playtimeSince[uuid] = now else playtimeSince.remove(uuid)
+        if (credit > 0) savePlaytime(mapOf(uuid to credit), now)
+    }
+
+    private fun savePlaytime(credits: Map<UUID, Long>, now: Long) {
+        if (credits.values.none { it > 0 } || !tablesReady) return
+        try {
+            store.addPlaytime(credits, now)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Hearts] Couldn't save Lifesteal playtime for ${credits.size} player(s); that stretch isn't counted: ${e.message}")
+        }
+    }
+
+    /** Staff view: stored Lifesteal playtime and what [uuid] still lacks to withdraw, or null with no record. */
+    fun withdrawStatus(uuid: UUID): Pair<Long, HeartRules.Eligibility>? {
+        Bukkit.getPlayer(uuid)?.let { if (it.isOnline) samplePlaytime(it, System.currentTimeMillis()) }
+        val requirements = HeartRules.WithdrawRequirements.of(itemSettings.withdrawEligibility)
+        val eligibility = store.eligibility(uuid, requirements, System.currentTimeMillis()) ?: return null
+        return store.playtimeMillis(uuid) to eligibility
+    }
+
+    fun transferReviews(player: UUID?): List<HeartStore.TransferReview> = store.transferReviews(player)
 
     // ── Sessions ────────────────────────────────────────────
 
@@ -137,6 +204,12 @@ class LifestealHeartManager(private val plugin: Joshymc) {
      * maximum health if the heart system had set it. Join, respawn, world change and reload.
      */
     fun sync(player: Player) {
+        syncHearts(player)
+        // Issue #1457: a world change, respawn or join starts or ends a playtime stretch.
+        if (player.isOnline) samplePlaytime(player, System.currentTimeMillis())
+    }
+
+    private fun syncHearts(player: Player) {
         if (!player.isOnline) return
         if (!hosted || !isLifesteal(player)) {
             loaded.remove(player.uniqueId)
@@ -175,6 +248,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
     }
 
     fun onQuit(player: Player) {
+        samplePlaytime(player, System.currentTimeMillis(), stillCounting = false)
         loaded.remove(player.uniqueId)
         malformedLogged.remove(player.uniqueId)
         lastWithdrawAt.remove(player.uniqueId)
@@ -440,9 +514,12 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         if (!busy.add(uuid)) return
         try {
             lastWithdrawAt[uuid] = now
+            // Issue #1457: the stretch so far is saved first, so the store's eligibility check sees it.
+            samplePlaytime(player, now)
+            val requirements = HeartRules.WithdrawRequirements.of(settings.withdrawEligibility)
             val serial = UUID.randomUUID().toString()
             val result = try {
-                store.withdraw(uuid, serial, limits, now)
+                store.withdraw(uuid, serial, limits, now, requirements = requirements)
             } catch (e: Exception) {
                 plugin.logger.severe("[Hearts] Heart withdrawal for ${player.name} failed and was rolled back; nothing changed: ${e.message}")
                 return send(player, HeartMessages.WITHDRAW_FAILED)
@@ -457,6 +534,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                     plugin.logger.warning("[Hearts] ${player.name} couldn't withdraw a heart: ${result.reason}.")
                     send(player, HeartMessages.WITHDRAW_FAILED)
                 }
+                is HeartStore.WithdrawResult.NotEligible -> notEligible(player, result, settings.withdrawEligibility)
                 is HeartStore.WithdrawResult.Withdrawn -> {
                     loaded[uuid] = result.after
                     apply(player, result.after)
@@ -466,6 +544,26 @@ class LifestealHeartManager(private val plugin: Joshymc) {
             }
         } finally {
             busy.remove(uuid)
+        }
+    }
+
+    /** Issue #1457: tells the player what is missing; staff logs only when the store audited it (rate-limited there). */
+    private fun notEligible(player: Player, result: HeartStore.WithdrawResult.NotEligible, settings: LifestealSettings.WithdrawEligibility) {
+        val e = result.eligibility
+        if (e.playtimeMissingMillis > 0) send(player, settings.playtimeMessage, mapOf("{time}" to HeartRules.formatWait(e.playtimeMissingMillis)))
+        if (e.accountAgeMissingMillis > 0) send(player, settings.accountAgeMessage, mapOf("{time}" to HeartRules.formatWait(e.accountAgeMissingMillis)))
+        if (!result.audited) return
+        val details = "reason=${e.auditReason} playtime_missing=${HeartRules.formatWait(e.playtimeMissingMillis)} age_missing=${HeartRules.formatWait(e.accountAgeMissingMillis)}"
+        plugin.logger.info("[Hearts] ${player.name} (${player.uniqueId}) can't withdraw hearts yet: $details.")
+        staffLog("HEART_WITHDRAW_INELIGIBLE", player.uniqueId, player.name, details)
+    }
+
+    /** One `admin_logs` row by the heart system (shown in /admin); a failure is only logged. */
+    private fun staffLog(action: String, target: UUID, targetName: String?, details: String) {
+        try {
+            plugin.adminManager.logAction(null, SYSTEM_ACTOR, action, target, targetName, details)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Hearts] Couldn't write the $action staff log: ${e.message}")
         }
     }
 
@@ -532,7 +630,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         if (!busy.add(uuid)) return
         try {
             val result = try {
-                store.redeem(uuid, serial, limits, now)
+                store.redeem(uuid, serial, limits, now, reviewTransfers = settings.altTransferReview.enabled)
             } catch (e: Exception) {
                 plugin.logger.severe("[Hearts] Redeeming Heart item $serial for ${player.name} failed and was rolled back; nothing changed: ${e.message}")
                 return send(player, settings.messages.redeemFailed)
@@ -544,6 +642,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                     apply(player, result.after)
                     savePlayer(player)
                     send(player, settings.messages.redeemed, maximum + ("{hearts}" to result.after.toString()))
+                    result.review?.let { reviewRecorded(player, it) }
                 }
                 is HeartStore.RedeemResult.AtMaximum -> {
                     loaded[uuid] = result.hearts
@@ -569,6 +668,20 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         } finally {
             busy.remove(uuid)
         }
+    }
+
+    /**
+     * Issue #1457: a shared-connection transfer was recorded (once per serial). Staff only; the
+     * player is told nothing and nothing about the connection is logged, only the two UUIDs.
+     */
+    private fun reviewRecorded(player: Player, review: HeartStore.TransferReview) {
+        val issuerName = plugin.playerResolver.lastKnownName(review.issuer) ?: review.issuer.toString()
+        plugin.logger.warning(
+            "[Hearts] Heart item ${review.serial} withdrawn by $issuerName (${review.issuer}) was redeemed by ${player.name} (${player.uniqueId}), " +
+                "an account AltManager saw on the same connection. Recorded for staff review (/lifesteal hearts reviews); nothing was blocked " +
+                "(a shared connection isn't proof of one owner)."
+        )
+        staffLog("HEART_TRANSFER_REVIEW", player.uniqueId, player.name, "serial=${review.serial} issuer_uuid=${review.issuer} evidence=${review.evidence}")
     }
 
     /** Takes exactly the redeemed item: the one in [hand], or wherever that serial is now (it can't have moved within the tick). */
@@ -664,5 +777,12 @@ class LifestealHeartManager(private val plugin: Joshymc) {
 
         /** A vanilla player's max health base value (10 hearts). */
         const val VANILLA_MAX_HEALTH = 20.0
+
+        /** Lifesteal playtime is sampled once a minute (issue #1457). */
+        const val PLAYTIME_SAMPLE_TICKS = 1200L
+        /** One sample never credits more than two intervals (server freeze, missed run). */
+        const val PLAYTIME_MAX_CREDIT_MILLIS = 120_000L
+        /** Name the heart system's own `admin_logs` rows carry. */
+        const val SYSTEM_ACTOR = "Lifesteal Hearts"
     }
 }
