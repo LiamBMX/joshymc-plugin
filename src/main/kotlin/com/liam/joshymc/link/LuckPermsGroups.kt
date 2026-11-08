@@ -41,10 +41,23 @@ class LuckPermsGroups private constructor(private val api: Any, apiClass: Class<
     private val asBoolean = type("net.luckperms.api.util.Tristate").getMethod("asBoolean")
     private val wasSuccessful = type("net.luckperms.api.model.data.DataMutateResult").getMethod("wasSuccessful")
     private val inheritanceBuilder = type("net.luckperms.api.node.types.InheritanceNode").getMethod("builder", String::class.java)
-    private val build = type("net.luckperms.api.node.NodeBuilder").getMethod("build")
+    private val nodeBuilderClass = type("net.luckperms.api.node.NodeBuilder")
+    private val build = nodeBuilderClass.getMethod("build")
+    // Lazy, so a LuckPerms API without it can never break the global-node paths (Discord group sync).
+    private val withContext by lazy { nodeBuilderClass.getMethod("withContext", String::class.java, String::class.java) }
 
     /** The global, permanent `group.<name>` node, the only node this class touches. */
     private fun groupNode(group: String): Any = build.invoke(inheritanceBuilder.invoke(null, group))
+
+    /**
+     * Issue #1428: the permanent `group.<name>` node, global when [server] is null, otherwise
+     * with only the `server=<server>` context (Lifesteal rank groups on a shared LuckPerms).
+     */
+    private fun groupNode(group: String, server: String?): Any {
+        if (server == null) return groupNode(group)
+        val builder = withContext.invoke(inheritanceBuilder.invoke(null, group), "server", server)
+        return build.invoke(builder)
+    }
 
     /**
      * True/false when LuckPerms has [uuid] loaded (online players), null when it doesn't.
@@ -61,6 +74,29 @@ class LuckPermsGroups private constructor(private val api: Any, apiClass: Class<
      */
     fun setGroup(uuid: UUID, group: String, present: Boolean): CompletableFuture<Change> {
         val node = groupNode(group)
+        var change = Change.UNCHANGED
+        val action = Consumer<Any> { user ->
+            val nodes = data.invoke(user)
+            val result = if (present) add.invoke(nodes, node) else remove.invoke(nodes, node)
+            if (wasSuccessful.invoke(result) as Boolean) change = if (present) Change.ADDED else Change.REMOVED
+        }
+        @Suppress("UNCHECKED_CAST")
+        val saved = modifyUser.invoke(userManager, uuid, action) as CompletableFuture<Void>
+        return saved.thenApply { change }
+    }
+
+    /** [hasGroup] for the node [groupNode] with [server] builds (issue #1428). */
+    fun hasGroup(uuid: UUID, group: String, server: String?): Boolean? {
+        val user = getUser.invoke(userManager, uuid) ?: return null
+        return asBoolean.invoke(contains.invoke(data.invoke(user), groupNode(group, server), exact)) as Boolean
+    }
+
+    /**
+     * [setGroup] for the node [groupNode] with [server] builds (issue #1428): adds or removes exactly
+     * that one parent node, by UUID, online or offline. Every other node is left alone.
+     */
+    fun setGroup(uuid: UUID, group: String, present: Boolean, server: String?): CompletableFuture<Change> {
+        val node = groupNode(group, server)
         var change = Change.UNCHANGED
         val action = Consumer<Any> { user ->
             val nodes = data.invoke(user)

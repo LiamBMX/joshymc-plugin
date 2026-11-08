@@ -105,6 +105,11 @@ object GamemodeAssignments {
         "ac",
         // Lifesteal friends and chat channels (issue #1430). Also only registered where Lifesteal is hosted.
         "friend", "channel",
+        // Lifesteal profiles, statistics, achievements and leaderboards (issue #1429). Also only
+        // registered where Lifesteal is hosted (released elsewhere), and refused outside Lifesteal worlds.
+        "profile", "stats", "achievements", "lstop",
+        // Lifesteal ranks, benefits and progression (issue #1428). Also only registered where Lifesteal is hosted.
+        "lsranks",
         // The Lifesteal Protected Bank (issue #1427). Also only registered where Lifesteal is hosted,
         // and the manager refuses outside Lifesteal worlds and on servers whose economy isn't Lifesteal's.
         "bank",

@@ -1123,6 +1123,8 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
     // ── GUI ─────────────────────────────────────────────────────
 
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
+    /** Issue #1440: decorative border of the Elite category page (no click handler, so clicks are just cancelled). */
+    private val ELITE_BORDER = ItemStack(Material.PURPLE_STAINED_GLASS_PANE).apply { editMeta { it.displayName(Component.empty()) } }
 
     private fun plain(text: String, color: NamedTextColor, bold: Boolean = false): Component =
         Component.text(text, color).decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, bold)
@@ -1240,10 +1242,14 @@ class EventQuestManager(private val plugin: Joshymc) : Listener {
                     listOf(plain("Check back soon!", NamedTextColor.GRAY)))
             gui.setItem(EventQuestLayout.EMPTY_SLOT, empty)
         }
-        val slots = EventQuestLayout.SET_SLOTS
+        // Issue #1440: Elite sets are centered between a purple pane border (top row and the row above
+        // navigation); the Free page keeps its original layout.
+        val elite = category == EventQuestCategory.ELITE
+        val slots = if (elite) EventQuestLayout.eliteSetSlots(list.size) else EventQuestLayout.SET_SLOTS
         list.take(slots.size).forEachIndexed { i, event -> gui.setItem(slots[i], eventIcon(player, event)) { p, _ -> openEventGui(p, event) } }
         gui.setItem(EventQuestLayout.PAGE_BACK_SLOT, GuiStyle.back("Back to Event Quests")) { p, _ -> GuiStyle.clickSound(p); openGui(p) }
         gui.setItem(EventQuestLayout.PAGE_CLOSE_SLOT, GuiStyle.close()) { p, _ -> p.closeInventory() }
+        if (elite) EventQuestLayout.ELITE_BORDER_SLOTS.forEach { gui.setItem(it, ELITE_BORDER) }
         gui.fill(FILLER)
         plugin.guiManager.open(player, gui)
         GuiStyle.clickSound(player)

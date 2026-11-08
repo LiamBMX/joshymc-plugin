@@ -39,10 +39,12 @@ default) are JoshyMC display ranks. None of them is a donor tier.
 
 ### Lifesteal
 
-The repository has **no Lifesteal rank hierarchy**: no Lifesteal tier ids, no Legacy rank, no
-Lifesteal rank perks, `kits.rank-order.lifesteal: []`, and `FreeRanks.starterRank(LIFESTEAL)` is
-null (the planned starter rank Rogue has no rank system yet, so `/freerank` refuses there). If
-Lifesteal ranks (including Legacy) exist, they exist only in LuckPerms and can't be verified here.
+**Since issue #1428** Lifesteal has its own rank system (`lifesteal/ranks/`, `lifesteal-ranks.yml`,
+`docs/lifesteal-ranks.md`), separate from `DonorTiers` (which stay Survival-only). It ships only the
+two approved names, Rogue (free via `/freerank` on Lifesteal) and Legacy (staff grant only), with no
+perks, requirements or store packages until the Owner approves them. `FreeRanks.starterRank(LIFESTEAL)`
+is still null because Rogue isn't a donor tier; `/freerank` on Lifesteal routes to the Lifesteal rank
+system instead.
 
 ## B. Perk inventory (CURRENT)
 
@@ -90,7 +92,7 @@ Bonuses from `rank-perks` never stack: only the single highest eligible tier cou
 | 5 | Donor grants (`grantDonorTier`: vouchers, Credit Shop, `/purchase fulfill … rank`) never check the gamemode. Rank vouchers and the Credit Shop are SURVIVAL commands, but `/purchase` is NETWORK, so a store package pointed at the Lifesteal server would add a Survival tier group there. | Only fulfill Survival rank packages on the Survival server. If LuckPerms is shared between servers, give tier nodes a `server=survival` context so Survival perks never apply on Lifesteal. |
 | 6 | Pioneer has no code-level "exclusive" flag. | Don't create Pioneer vouchers/packages; if that must be enforced, add an explicit exclusive-tier rule (needs approval). |
 | 7 | The bundled `kits.yml` has example kits (knight, warrior, samurai, champion, paladin) whose names don't match `kits.rank-order.survival`, so on a fresh install they are listed after the (missing) tier kits. | Name the live tier kits after the tiers, or set `category: rank` and the right order. |
-| 8 | Lifesteal has no rank system in the plugin (section A). | Define Lifesteal tiers (incl. Legacy) before any Lifesteal perk is wired; keep them out of `DonorTiers`, which is Survival-only. |
+| 8 | Lifesteal has no rank system in the plugin (section A). **Implemented in issue #1428** (`docs/lifesteal-ranks.md`); the ranks between Rogue and Legacy and every perk value still need approval. | Kept out of `DonorTiers`, which is Survival-only. |
 
 ## Permission matrix
 
@@ -106,7 +108,7 @@ Bonuses from `rank-perks` never stack: only the single highest eligible tier cou
 | Ranger | `group.ranger`, `joshymc.rankperk.ranger` | +20 / +20 / ×1.30 | + `joshymc.mcr` (intended) | same | parent `voyager` | D3, D4 |
 | Pioneer (exclusive) | `group.pioneer`, `joshymc.rankperk.pioneer` | +25 / +25 / ×1.40 | inherits Ranger's `joshymc.mcr` (intended) | same | parent `ranger` | D6 |
 | Media / Discord (special) | not tiers | none | Special Kits | separate | never parent a tier | none |
-| Lifesteal ranks | none in the repo | none | none | n/a | | D8 |
+| Lifesteal ranks (Rogue, Legacy) | `group.rogue` / `group.legacy` (Lifesteal server only) | `lifesteal-ranks.yml` perks (none bundled) | rank kits + perks, Lifesteal worlds only (`docs/lifesteal-ranks.md`) | admin/staff/heart/ranked nodes refused | | D8 |
 
 Every rank: never `*`, `joshymc.*`, `joshymc.kit.*`, `joshymc.admin*`, `joshymc.staff.*`,
 `joshymc.punish.<level>`, `joshymc.eco`, `joshymc.give`, `joshymc.vouchers`,

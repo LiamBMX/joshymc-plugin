@@ -4,7 +4,12 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.lifesteal.teams.LifestealTeamManager.Companion.command
 import com.liam.joshymc.lifesteal.teams.LifestealTeamManager.Companion.teamName
 import com.liam.joshymc.lifesteal.teams.LifestealTeamManager.Companion.text
+import com.liam.joshymc.lifesteal.bounty.BountyMoney
 import com.liam.joshymc.lifesteal.teams.LifestealTeamStore.Team
+import com.liam.joshymc.lifesteal.teams.progression.TeamLevels
+import com.liam.joshymc.lifesteal.teams.progression.TeamPerks
+import com.liam.joshymc.lifesteal.teams.progression.TeamUpgradesMenu
+import com.liam.joshymc.lifesteal.teams.progression.UpgradeCategory
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -60,6 +65,12 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
             "disband" -> teams.disband(sender, confirmed(args, 1))
             "ally", "alliance" -> ally(sender, args.drop(1))
             "rival", "rivalry" -> rival(sender, args.drop(1))
+            // Issue #1426: Team Upgrades and shared progression.
+            "upgrades", "upgrade", "progression", "level" -> TeamUpgradesMenu(plugin).open(sender)
+            "objectives" -> TeamUpgradesMenu(plugin).openObjectives(sender)
+            "milestones" -> TeamUpgradesMenu(plugin).openMilestones(sender)
+            "style" -> TeamUpgradesMenu(plugin).openStyle(sender)
+            "bank" -> bank(sender, args.drop(1))
             else -> help(sender)
         }
         return true
@@ -93,6 +104,31 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
         }
     }
 
+    /**
+     * Issue #1426: `/team bank` (menu) and `/team bank deposit <amount> [confirm]`. Deposits are
+     * never refunded (coins only buy upgrades), so the typed form asks for `confirm` first.
+     */
+    private fun bank(player: Player, args: List<String>) {
+        when (args.firstOrNull()?.lowercase()) {
+            null -> TeamUpgradesMenu(plugin).openBank(player)
+            "deposit", "add" -> {
+                val raw = args.getOrNull(1) ?: return Msg.usage(player, "/team bank deposit <amount>")
+                val cents = when (val parsed = BountyMoney.parse(raw)) {
+                    is BountyMoney.Parsed.Ok -> parsed.cents
+                    else -> return Msg.error(player, "'$raw' isn't an amount of coins.")
+                }
+                if (!args.getOrNull(2).equals("confirm", ignoreCase = true)) {
+                    val amount = BountyMoney.format(cents)
+                    val typed = BountyMoney.format(cents).removePrefix("$").replace(",", "")
+                    return Msg.reply(player, text("Deposit $amount of your coins into the team bank? It can only be spent on team upgrades and is never refunded. ", NamedTextColor.YELLOW)
+                        .append(command("[Confirm]", "/team bank deposit $typed confirm", NamedTextColor.GREEN)))
+                }
+                plugin.lifestealTeamProgressionManager.deposit(player, cents, "deposit:" + java.util.UUID.randomUUID())
+            }
+            else -> Msg.usage(player, "/team bank [deposit <amount>]")
+        }
+    }
+
     private fun confirmed(args: Array<out String>, index: Int): Boolean = args.getOrNull(index).equals("confirm", ignoreCase = true)
 
     private fun help(sender: CommandSender) {
@@ -114,6 +150,10 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
             "/team rival <team>" to "Declare a rival team (leader; a label only)",
             "/team rival remove" to "Withdraw your rivalry (leader)",
             "/ac <message>" to "Chat with your team and its allies",
+            "/team upgrades" to "Team Level, upgrades, objectives and milestones",
+            "/team bank [deposit <amount>]" to "The team bank (coins only buy upgrades)",
+            "/team objectives" to "Shared team objectives",
+            "/team milestones" to "Team milestone rewards",
             "/team info [team]" to "Show a team",
             "/team list [page]" to "List all teams",
         )
@@ -122,6 +162,7 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
             lines += "/team admin disband <team>" to "Staff: disband a team"
             lines += "/team admin transfer <team> <player>" to "Staff: change a team's leader"
             lines += "/team admin pvp <player> <player>" to "Staff: team PvP and heart eligibility of two players"
+            lines += "/team admin progression <team>" to "Staff: Team Level, upgrades, bank and recent audit"
         }
         Msg.reply(sender, text("Lifesteal Teams (up to ${teams.maxSize} players)", NamedTextColor.GOLD))
         sender.sendMessage(text(" Friendly fire: ", NamedTextColor.GRAY).append(text(teams.friendlyFireSummary(), NamedTextColor.WHITE)))
@@ -166,6 +207,11 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
         }
         sender.sendMessage(text("  ", NamedTextColor.GRAY).append(roster))
         line(sender, "Created", formatDate(team.createdAt, sender))
+        // Issue #1426: Team Level and chosen title (cosmetic).
+        plugin.lifestealTeamProgressionManager.takeIf { it.active }?.let { progression ->
+            line(sender, "Team Level", progression.level(team.id).toString())
+            progression.snapshot(team.id)?.title?.let { line(sender, "Title", it) }
+        }
         line(sender, "Friendly fire", teams.friendlyFireSummary())
         relationLines(sender, team, admin)
         if (admin) {
@@ -254,13 +300,19 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
                 if (name == null || player == null) return Msg.usage(sender, "/team admin transfer <team> <player> [confirm]")
                 teams.adminTransfer(sender, name, player, args.getOrNull(3).equals("confirm", ignoreCase = true))
             }
+            "progression", "upgrades" -> {
+                val name = args.getOrNull(1) ?: return Msg.usage(sender, "/team admin progression <team>")
+                teams.unavailableReason()?.let { return Msg.error(sender, it) }
+                val team = teams.teamByName(name) ?: return Msg.error(sender, "There's no team called $name.")
+                progressionInfo(sender, team)
+            }
             "pvp" -> {
                 val first = args.getOrNull(1)
                 val second = args.getOrNull(2)
                 if (first == null || second == null) return Msg.usage(sender, "/team admin pvp <player> <player>")
                 pvpDiagnostics(sender, first, second)
             }
-            else -> Msg.usage(sender, "/team admin <info|disband|transfer|pvp> ...")
+            else -> Msg.usage(sender, "/team admin <info|disband|transfer|pvp|progression> ...")
         }
     }
 
@@ -312,11 +364,34 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
         line(sender, "Cooldown $nameB -> $nameA", cooldown(cooldownBA))
     }
 
+    /** `/team admin progression <team>` (issue #1426): read-only, straight from the database. */
+    private fun progressionInfo(sender: CommandSender, team: Team) {
+        val progression = plugin.lifestealTeamProgressionManager
+        val s = progression.settings ?: return Msg.error(sender, progression.unavailableReason() ?: "Team Upgrades are unavailable.")
+        val season = progression.seasonId()
+        progression.read("admin " + team.id, { store -> store.snapshot(team.id, progression.cycle(s, season), season) to store.audit(team.id, 8) }) { data ->
+            val (snap, audit) = data ?: return@read Msg.error(sender, "Couldn't read that team's progression (see the console).")
+            val levels = TeamLevels.progress(snap.totalXp, s.levels)
+            val perks = TeamPerks.of(snap.tiers, s)
+            Msg.reply(sender, text("Team progression: ", NamedTextColor.GRAY).append(teamName(team)))
+            line(sender, "Level", "${levels.level} (${levels.xpIntoLevel}/${levels.xpForNext} XP, total ${snap.totalXp}, season $season ${snap.seasonXp})")
+            line(sender, "Upgrades", UpgradeCategory.entries.joinToString { it.id + " " + (snap.tiers[it] ?: 0) })
+            line(sender, "Bank", BountyMoney.format(snap.bankCents) + " / " + BountyMoney.format(perks.bankCapacityCents))
+            line(sender, "XP bonus", "+" + perks.xpBonusPercent + "%")
+            line(sender, "Milestones claimed", snap.claimed.sorted().joinToString().ifEmpty { "none" })
+            line(sender, "Objectives (" + snap.cycle + ")", snap.objectives.entries.joinToString { it.key + " " + it.value.progress + (if (it.value.completed) " done" else "") }.ifEmpty { "none" })
+            for (row in audit) {
+                sender.sendMessage(text("  " + formatDate(row.at, sender) + " " + row.action + " " + (row.actorName ?: "") + " " + (row.details ?: ""), NamedTextColor.DARK_GRAY))
+            }
+        }
+    }
+
     // ── Tab completion ──────────────────────────────────────
 
     override fun onTabComplete(sender: CommandSender, command: Command, label: String, args: Array<out String>): List<String> {
         val player = sender as? Player
-        val subs = mutableListOf("create", "invite", "accept", "deny", "leave", "kick", "transfer", "promote", "disband", "ally", "rival", "info", "list", "help")
+        val subs = mutableListOf("create", "invite", "accept", "deny", "leave", "kick", "transfer", "promote", "disband", "ally", "rival",
+            "upgrades", "bank", "objectives", "milestones", "style", "info", "list", "help")
         if (teams.canAdmin(sender)) subs += "admin"
         val own = player?.let { teams.teamOf(it.uniqueId) }
         val options: List<String> = when (args.size) {
@@ -326,7 +401,8 @@ class LifestealTeamCommand(private val plugin: Joshymc) : CommandExecutor, TabCo
                 "kick", "remove", "transfer", "promote" -> own?.members?.filter { it.uuid != player?.uniqueId }?.map { teams.nameOf(it.uuid) }.orEmpty()
                 "accept", "join", "deny", "decline" -> player?.let { p -> teams.invitesFor(p.uniqueId).mapNotNull { teams.team(it.teamId)?.name } }.orEmpty()
                 "info" -> teams.allTeams().map { it.name }
-                "admin" -> if (teams.canAdmin(sender)) listOf("info", "disband", "transfer", "pvp") else emptyList()
+                "admin" -> if (teams.canAdmin(sender)) listOf("info", "disband", "transfer", "pvp", "progression") else emptyList()
+                "bank" -> listOf("deposit")
                 "ally", "alliance" -> listOf("accept", "deny", "cancel", "leave") + otherTeams(own)
                 "rival", "rivalry" -> listOf("remove") + otherTeams(own)
                 else -> emptyList()

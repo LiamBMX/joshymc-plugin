@@ -23,7 +23,12 @@ object PurchaseRewards {
         /** Inventory items; queued until the recipient is online with room. */
         ITEM,
         /** A donor tier through LuckPerms; needs the recipient online to confirm. */
-        RANK
+        RANK,
+        /**
+         * Issue #1428: a Lifesteal rank through the Lifesteal rank system (one LuckPerms group added
+         * by UUID through the API, which works while the recipient is offline).
+         */
+        LIFESTEAL_RANK
     }
 
     enum class Kind(val id: String, val delivery: Delivery, val usage: String) {
@@ -35,7 +40,8 @@ object PurchaseRewards {
         RANK_VOUCHER("rankvoucher", Delivery.ITEM, "rankvoucher <tier> <quantity>"),
         MONEY_VOUCHER("moneyvoucher", Delivery.ITEM, "moneyvoucher <voucher-id> <quantity>"),
         CHAT_TAG_VOUCHER("chattagvoucher", Delivery.ITEM, "chattagvoucher <tag-id> <quantity>"),
-        RANK("rank", Delivery.RANK, "rank <tier>");
+        RANK("rank", Delivery.RANK, "rank <tier>"),
+        LIFESTEAL_RANK("lsrank", Delivery.LIFESTEAL_RANK, "lsrank <lifesteal-rank>");
 
         companion object {
             fun of(id: String): Kind? = entries.firstOrNull { it.id == id.lowercase(Locale.ROOT) }
@@ -61,6 +67,12 @@ object PurchaseRewards {
         fun crateExists(id: String): Boolean
         fun moneyVoucherExists(id: String): Boolean
         fun chatTagVoucherExists(id: String): Boolean
+        /**
+         * Issue #1428: a Lifesteal rank defined in this server's lifesteal-ranks.yml that the store may
+         * sell (`acquisition.store`). False on servers that don't host Lifesteal, so a Lifesteal package
+         * pointed at the Survival server is rejected and recorded, never granted there.
+         */
+        fun lifestealRankPurchasable(id: String): Boolean = false
     }
 
     sealed class Result<out T> {
@@ -143,6 +155,12 @@ object PurchaseRewards {
             val tier = DonorTiers.normalize(a[0])
             if (tier == null) Result.Error("Unknown donor tier '${a[0]}'. Tiers: ${DonorTiers.ORDER.joinToString(", ")}.")
             else Result.Ok(Spec(kind, tier, 1))
+        }
+        Kind.LIFESTEAL_RANK -> {
+            val id = a[0].lowercase(Locale.ROOT)
+            if (!catalog.lifestealRankPurchasable(id)) {
+                Result.Error("'${a[0]}' is not a Lifesteal rank the store may sell on this server (lifesteal-ranks.yml: enabled with acquisition.store).")
+            } else Result.Ok(Spec(kind, id, 1))
         }
     }
 

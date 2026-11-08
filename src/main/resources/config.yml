@@ -1820,6 +1820,6 @@ kits:
   # match these ids. Rank kits not listed follow in kits.yml order.
   rank-order:
     survival: [scout, pathfinder, lumberjack, trailblazer, voyager, ranger, pioneer]
-    # JoshyMC has no Lifesteal rank hierarchy yet: list the Lifesteal rank kit
-    # names here (ending with legacy) once those kits exist.
+    # Empty = follow the Lifesteal rank hierarchy in lifesteal-ranks.yml (each rank's
+    # `kits`, lowest rank first, ending with legacy; issue #1428).
     lifesteal: []

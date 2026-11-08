@@ -19,7 +19,17 @@ class SetHomeCommand(private val plugin: Joshymc) : CommandExecutor {
 
     // Returns -1 for unlimited, otherwise the highest home limit across this player's ranks and
     // their donor tier (issue #1381: tiers live in LuckPerms, so getPlayerRankIds never has them).
-    private fun homeLimit(player: org.bukkit.entity.Player): Int = RankLimits.resolve(
+    private fun homeLimit(player: org.bukkit.entity.Player): Int {
+        // Issue #1428: in a Lifesteal world the Lifesteal rank `homes` perk can only raise the base limit.
+        val lifesteal = plugin.lifestealRanksOrNull()?.takeIf { it.appliesTo(player) }
+        if (lifesteal != null) {
+            val base = plugin.config.getInt("homes.max-per-player", 3)
+            return maxOf(base, lifesteal.perk(player, com.liam.joshymc.lifesteal.ranks.LifestealRankConfig.Perk.HOMES))
+        }
+        return survivalHomeLimit(player)
+    }
+
+    private fun survivalHomeLimit(player: org.bukkit.entity.Player): Int = RankLimits.resolve(
         plugin.rankManager.getPlayerRankIds(player.uniqueId),
         plugin.rankManager.currentDonorTier(player.uniqueId),
         { rankId -> plugin.config.getInt("homes.limits-by-rank.$rankId", Int.MIN_VALUE).takeIf { it != Int.MIN_VALUE } },

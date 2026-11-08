@@ -77,6 +77,9 @@ fun main() {
     // issue #1427 /bank, issue #1430 /friend and /channel.
     check("only /withdrawheart, /ranked, /ac, /bank, /friend and /channel are assigned to Lifesteal",
         table.filterValues { it == GamemodeScope.LIFESTEAL }.keys == setOf("withdrawheart", "ranked", "ac", "bank", "friend", "channel"))
+    // issue #1427 /bank, issue #1428 /lsranks, issue #1429 /profile, /stats, /achievements and /lstop.
+    check("only the Lifesteal commands are assigned to Lifesteal", table.filterValues { it == GamemodeScope.LIFESTEAL }.keys ==
+        setOf("withdrawheart", "ranked", "ac", "bank", "lsranks", "profile", "stats", "achievements", "lstop"))
 
     // Scopes set by earlier issues are unchanged.
     check("jgamemode NETWORK", scopeOf("jgamemode") == NETWORK)
