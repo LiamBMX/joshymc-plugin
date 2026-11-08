@@ -135,6 +135,8 @@ object EventQuestLayout {
     /** Whether an unused slot of [category]'s page gets the accent pane instead of the standard filler. */
     fun usesAccentFiller(category: EventQuestCategory, slot: Int): Boolean =
         category == EventQuestCategory.FREE && slot in FREE_ACCENT_SLOTS
+
+    /**
      * Issue #1440: the Elite category page has a purple pane border across the top row (0..8)
      * and the row right above the navigation (36..44). Sets sit in the three rows between them
      * (rows 1..3, columns 1..7), centered both ways, so one set lands in the middle at slot 22.
