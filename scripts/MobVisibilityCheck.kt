@@ -1,5 +1,5 @@
-// Checks the Bukkit-free Mobs OFF rules (issue #1421). The Gradle build has no test source
-// set, so it runs through an init script, from the repo root:
+// Checks the Bukkit-free Mobs OFF rules (issues #1421, #1475). The Gradle build has no test
+// source set, so it runs through an init script, from the repo root:
 //
 //   ./gradlew -I scripts/mob-visibility-check.init.gradle.kts mobVisibilityCheck
 //
@@ -19,57 +19,69 @@ private fun check(name: String, condition: Boolean) {
     }
 }
 
-/** Hidden from a Mobs OFF player? */
-private fun hidden(type: String, targetIsPlayer: Boolean = false, angry: Boolean = false, exempt: Boolean = false): Boolean {
-    val kind = MobVisibilityRules.kindOf(type)
-    val aggressive = MobVisibilityRules.isAggressive(targetIsPlayer, angry)
-    return MobVisibilityRules.shouldHide(kind, exempt, aggressive)
-}
+/** Covered (hidden + harmless + unhittable) for a Mobs OFF player? */
+private fun covered(type: String, enemy: Boolean = false, exempt: Boolean = false): Boolean =
+    MobVisibilityRules.covers(MobVisibilityRules.kindOf(type, enemy), exempt)
 
 fun main() {
-    // Hostile: always hidden, peaceful or not
-    for (type in listOf("ZOMBIE", "SKELETON", "CREEPER", "SPIDER", "CAVE_SPIDER", "ENDERMITE",
-            "PIGLIN_BRUTE", "HOGLIN", "WITCH", "GHAST", "WARDEN", "SOME_FUTURE_MOB")) {
+    // Hostile: covered, also unlisted / future types
+    val hostile = listOf("ZOMBIE", "ZOMBIE_VILLAGER", "HUSK", "DROWNED", "SKELETON", "STRAY", "BOGGED",
+        "WITHER_SKELETON", "CREEPER", "SPIDER", "CAVE_SPIDER", "WITCH", "SLIME", "MAGMA_CUBE", "PHANTOM",
+        "PILLAGER", "VINDICATOR", "EVOKER", "RAVAGER", "GUARDIAN", "ELDER_GUARDIAN", "BLAZE", "GHAST",
+        "PIGLIN_BRUTE", "HOGLIN", "ZOGLIN", "SILVERFISH", "ENDERMITE", "SHULKER", "WARDEN", "BREEZE",
+        "SOME_FUTURE_MOB")
+    for (type in hostile) {
         check("$type is hostile", MobVisibilityRules.kindOf(type) == Kind.HOSTILE)
-        check("$type hidden while peaceful", hidden(type))
-        check("$type hidden while aggressive", hidden(type, targetIsPlayer = true))
+        check("$type covered", covered(type))
     }
 
-    // Neutral: visible while peaceful, hidden while aggressive
-    for (type in listOf("ENDERMAN", "PIGLIN", "ZOMBIFIED_PIGLIN", "WOLF", "BEE", "IRON_GOLEM",
-            "POLAR_BEAR", "LLAMA", "TRADER_LLAMA", "PANDA", "GOAT", "FOX", "DOLPHIN")) {
+    // Neutral (#1475): covered whether provoked or not (no aggression input exists any more)
+    val neutral = listOf("ENDERMAN", "PIGLIN", "ZOMBIFIED_PIGLIN", "WOLF", "BEE", "IRON_GOLEM",
+        "POLAR_BEAR", "LLAMA", "TRADER_LLAMA", "PANDA", "GOAT", "FOX", "DOLPHIN")
+    for (type in neutral) {
         check("$type is neutral", MobVisibilityRules.kindOf(type) == Kind.NEUTRAL)
-        check("peaceful $type visible", !hidden(type))
-        check("$type targeting a player hidden", hidden(type, targetIsPlayer = true))
-        check("angry $type hidden", hidden(type, angry = true))
-        check("tamed/exempt aggressive $type visible", !hidden(type, targetIsPlayer = true, exempt = true))
+        check("never-provoked $type covered", covered(type))
+        check("$type marked Enemy still neutral and covered", covered(type, enemy = true))
+        check("tamed/exempt $type not covered", !covered(type, exempt = true))
     }
 
-    // Passive: always visible
+    // Passive: never covered
     for (type in listOf("COW", "SHEEP", "PIG", "CHICKEN", "VILLAGER", "AXOLOTL", "CAT", "HORSE",
             "SNOW_GOLEM", "COPPER_GOLEM", "HAPPY_GHAST", "ARMOR_STAND")) {
         check("$type is passive", MobVisibilityRules.kindOf(type) == Kind.PASSIVE)
-        check("$type visible", !hidden(type))
-        check("$type visible even with a target", !hidden(type, targetIsPlayer = true, angry = true))
+        check("$type not covered", !covered(type))
     }
+    check("Enemy interface wins over the passive list", MobVisibilityRules.kindOf("COW", isEnemy = true) == Kind.HOSTILE)
     check("no type is both passive and neutral",
         MobVisibilityRules.PASSIVE_TYPES.intersect(MobVisibilityRules.NEUTRAL_TYPES).isEmpty())
-    check("exempt hostile (xray helper) visible", !hidden("SHULKER", exempt = true))
+    check("exempt hostile (xray helper, event mob) not covered", !covered("SHULKER", exempt = true))
 
-    // Watch list: kept while aggressive, dropped after enough calm checks
-    check("aggressive resets the calm count", MobVisibilityRules.nextCalmCount(true, 3) == 0)
-    var calm: Int? = 0
-    var steps = 0
-    while (calm != null) {
-        calm = MobVisibilityRules.nextCalmCount(false, calm)
-        steps++
+    // Targeting: covered mob never targets a Mobs OFF player; Mobs ON players unchanged
+    check("covered mob can't target Mobs OFF player", !MobVisibilityRules.allowsTarget(true, true))
+    check("covered mob targets Mobs ON player", MobVisibilityRules.allowsTarget(true, false))
+    check("passive/exempt mob may target anyone", MobVisibilityRules.allowsTarget(false, true))
+
+    // Damage both directions
+    check("covered mob hit on Mobs OFF player blocked", MobVisibilityRules.blocksMobHittingPlayer(true, true))
+    check("covered mob hit on Mobs ON player allowed", !MobVisibilityRules.blocksMobHittingPlayer(true, false))
+    check("exempt mob hit on Mobs OFF player allowed", !MobVisibilityRules.blocksMobHittingPlayer(false, true))
+    check("Mobs OFF player can't farm a hidden mob", MobVisibilityRules.blocksPlayerHittingMob(true, true))
+    check("Mobs ON player hits mobs normally", !MobVisibilityRules.blocksPlayerHittingMob(false, true))
+    check("Mobs OFF player hits passive mobs normally", !MobVisibilityRules.blocksPlayerHittingMob(true, false))
+
+    // Two nearby players with opposite settings, same zombie
+    val zombie = covered("ZOMBIE")
+    check("zombie targets the Mobs ON player", MobVisibilityRules.allowsTarget(zombie, false))
+    check("zombie can't target the Mobs OFF player", !MobVisibilityRules.allowsTarget(zombie, true))
+
+    // Source-less mob effects (Elder Guardian / mob melee = ATTACK, Warden Darkness = WARDEN)
+    check("warden darkness blocked for Mobs OFF", MobVisibilityRules.blocksEffect("WARDEN", true, false))
+    check("elder guardian fatigue blocked for Mobs OFF", MobVisibilityRules.blocksEffect("ATTACK", true, false))
+    check("effects kept for Mobs ON", !MobVisibilityRules.blocksEffect("WARDEN", false, false))
+    check("effects kept in a hosted game", !MobVisibilityRules.blocksEffect("ATTACK", true, true))
+    for (cause in listOf("POTION_DRINK", "POTION_SPLASH", "PLUGIN", "BEACON", "COMMAND", "FOOD", "AREA_EFFECT_CLOUD")) {
+        check("$cause effect never blocked", !MobVisibilityRules.blocksEffect(cause, true, false))
     }
-    check("calm mob unwatched after the configured checks", steps == MobVisibilityRules.CALM_CHECKS_BEFORE_UNWATCH)
 
-    // Aggression lifecycle: provoked -> hidden, calms down -> visible again
-    val states = listOf(false to false, true to false, true to true, false to true, false to false)
-    val seen = states.map { (target, angry) -> hidden("ENDERMAN", target, angry) }
-    check("enderman lifecycle visible, hidden, hidden, hidden, visible", seen == listOf(false, true, true, true, false))
-
-    println("Mobs OFF visibility checks passed ($checks checks).")
+    println("Mobs OFF checks passed ($checks checks).")
 }

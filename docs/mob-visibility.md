@@ -1,57 +1,87 @@
 # Mobs OFF (`mob_visibility` setting)
 
-Issue #1421. Works the same on Survival and Lifesteal (the listener is unscoped).
+Issue #1475 (replaces the #1421 "visibility only" behavior). Works the same on Survival and
+Lifesteal (the listener is unscoped). The setting is the existing `mob_visibility` player
+setting in `/settings` (stored by SettingsManager, so it survives reconnects and restarts).
 
 ## What it does
 
-A player who turns **Mob Visibility** off in `/settings` stops seeing:
+For a player with **Mob Visibility** off, every *covered* mob is:
 
-| Kind | Examples | Hidden? |
-|---|---|---|
-| Hostile | Zombie, Skeleton, Creeper, Spider, Cave Spider, Endermite, Piglin Brute, Hoglin, Warden, any type not listed below | Always |
-| Neutral | Enderman, Piglin, Zombified Piglin, Wolf, Bee, Iron Golem, Polar Bear, Llama, Trader Llama, Panda, Goat, Fox, Dolphin, Nautilus, Sulfur Cube | Only while aggressive |
-| Passive | Cow, Sheep, Pig, Villager, Axolotl, Cat, Horse, Snow/Copper Golem, Happy Ghast, ... | Never |
+1. **hidden** from that player (Paper `Player.hideEntity`), and no one else;
+2. **unable to target** them (`EntityTargetEvent` cancelled at HIGHEST; existing targets and
+   Warden anger are dropped on toggle and by the 2s sweep);
+3. **unable to hurt** them: melee, projectiles (arrows, tridents, fireballs, shulker bullets,
+   llama spit), creeper/ghast explosions, evoker fangs, guardian beams, fire from a mob, a
+   witch's splash potions and lingering clouds, and the source-less mob effects (Elder
+   Guardian Mining Fatigue and mob melee effects = cause `ATTACK`, Warden Darkness = `WARDEN`);
+4. **unhittable and unusable** by that player (damage they cause to a covered mob is
+   cancelled, and right-clicks on one are refused), so hidden mobs can't be farmed.
 
-Always visible whatever their kind: tamed animals, villagers, armor stands, xray helper shulkers.
-The lists live in `mobvisibility/MobVisibilityRules` (Bukkit-free).
+Nothing changes for players with Mobs ON, and nothing is spawned, removed or changed globally.
 
-"Aggressive" means the mob's live target is a player, or its own anger state is on:
-Wolf / Zombified Piglin `isAngry`, Bee anger > 0, a screaming Enderman. Hunting other mobs
-(a wolf chasing sheep, an iron golem fighting zombies) is not aggression for this setting.
+## Classification
 
-## Visibility only
+Rules: `mobvisibility/MobVisibilityRules` (Bukkit-free). Only `Mob` entities are ever covered.
 
-The setting only calls Paper's `Player.hideEntity` / `showEntity` for that player. It does
-**not** cancel spawning, targeting or damage, touch AI, drops or despawning, or change what
-other players see. (Before #1421 it also cancelled mob targeting/damage and all explosion,
-magic and wither damage for Mobs OFF players; that is gone, so a hidden mob can now hurt a
-player who has Mobs OFF, the same as for everyone else.) `showEntity(plugin, ...)` only lifts
-JoshyMC's own hide, so vanish and other plugins' hides are kept.
+| Kind | Rule | Examples | Covered? |
+|---|---|---|---|
+| Neutral | `NEUTRAL_TYPES` | Enderman, Piglin, Zombified Piglin, Wolf, Bee, Iron Golem, Polar Bear, Llama, Trader Llama, Panda, Goat, Fox, Dolphin, Nautilus, Sulfur Cube | **Always**, provoked or not |
+| Hostile | implements Bukkit `Enemy`, **or** not in either list | Zombie (all variants), Skeleton/Stray/Bogged/Wither Skeleton, Creeper, Spiders, Witch, Slime, Magma Cube, Phantom, illagers, Ravager, Guardians, Blaze, Ghast, Piglin Brute, Hoglin, Zoglin, Silverfish, Endermite, Shulker, Warden, Breeze, bosses, any future mob | Always |
+| Passive | `PASSIVE_TYPES` and not `Enemy` | Cow, Sheep, Pig, Villager, Axolotl, Cat, Horse, Snow/Copper Golem, Happy Ghast, ... | Never |
 
-## How changes are detected
+Never covered whatever their kind: tamed animals (anyone's pets, including tamed llamas),
+villagers, armor stands and other non-`Mob` living entities (Mannequin NPCs, combat-log NPCs),
+Citizens NPCs (`NPC` metadata), xray helper shulkers (`joshymc_xray`) and Mob Waves event mobs
+(`joshymc_event_mob`, so hosted events play normally).
+
+## Attribution
+
+Damage is judged by `damageSource.causingEntity`, falling back to the damager, a projectile's
+shooter or a primed TNT's source. Only mob-caused harm to a Mobs OFF player is cancelled:
+player TNT, other players' potions, PvP, fall, lava, fire ticks and drowning are untouched (the
+pre-#1421 blanket explosion/magic cancel made Mobs OFF players immune to player TNT and potions;
+that is not repeated).
+
+## When it applies
 
 - Spawns (`CreatureSpawnEvent`) and every entity added to a world, including chunk loads
   (`EntityAddToWorldEvent`).
-- Target changes (`EntityTargetEvent`) and damage to a neutral mob put it on a watch list;
-  the mob is re-checked one tick later and every 10 ticks while watched, and dropped after
-  3 seconds calm or when it leaves the world. Anger that simply expires is seen there.
-- A sweep every 2 seconds, only around players with Mobs OFF (64 blocks), re-hides hostiles
-  and catches aggression no event reported.
-- Join, world change, teleport and toggling the setting re-apply to the whole world.
-- Paper keeps a player's hidden entities by UUID, so leaving and re-entering tracking range
-  keeps the hide.
+- Join (5 ticks later), world change and teleport (1 and 40 ticks later), and toggling.
+- A sweep every 2 seconds, only around players with Mobs OFF (64 blocks, loaded entities only).
+- Toggling ON lifts JoshyMC's hides (`showEntity(plugin, …)`, so vanish and other plugins'
+  hides stay), and doesn't force any target: AI resumes naturally.
+- No per-player state is kept by the listener; Paper's hidden set ends with the session.
 
-## API limitations
+## Limitations
 
-- **Goat**: ramming is brain-driven and not exposed as a target, so a goat stays visible while
-  it rams.
-- **Piglin**: no anger API; it counts as aggressive while it targets a player (no gold armor,
-  or provoked). A piglin admiring gold is visible.
-- **Enderman**: aggression is its player target or `isScreaming`; the stare itself has no event.
-- **Bee / Wolf / Zombified Piglin**: anger toward any target counts, also toward a mob.
-- Brain-driven targeting that fires no `EntityTargetEvent` is caught by the 2-second sweep,
-  so it can take up to 2 seconds to hide.
-- A mob already shown by the client when it turns aggressive is removed from that client by
-  Paper (`hideEntity` despawns it client-side); it reappears when it calms down.
+- **Collision**: a hidden mob still exists server-side. The client can't collide with an entity
+  it doesn't know, and covered mobs don't chase the player, but server-side pushing between a
+  mob and the player can still happen if a mob walks into them. Paper has no per-player
+  collision API short of per-entity exemption lists, which would grow without bound.
+- **Environmental farms**: a mob killed by lava, fall damage or another mob still drops loot and
+  XP normally (drops are never changed); only damage the Mobs OFF player causes is blocked.
+- **Sounds/particles**: some mob sounds are played at a location, not by the entity, and can
+  still be heard.
+- Targeting set by brain AI without an `EntityTargetEvent` is cleared by the sweep within 2s;
+  it can't deal damage meanwhile, because damage is judged separately.
+
+## Live-server checklist
+
+With two players A (Mobs OFF) and B (Mobs ON) standing together:
+
+1. Zombies, skeletons, creepers already loaded vanish for A at once; B still sees them.
+2. Unprovoked Enderman, Piglin, Wolf, Iron Golem, Bee, Llama, Goat vanish for A.
+3. Anger a Zombified Piglin with B, then turn A's setting off while it targets A: it vanishes and
+   stops attacking A, keeps attacking B.
+4. New spawns (spawn egg, night spawns) and mobs in freshly loaded chunks are hidden for A.
+5. Skeleton arrows, ghast fireballs, a creeper exploding next to A (lit by B), a witch's potion,
+   Warden Darkness / Elder Guardian Mining Fatigue: none affect A; B is affected normally.
+6. A's own TNT, a player's harming potion and fall/lava damage still hurt A.
+7. A can't damage hidden mobs (sweeping edge, arrows into a crowd) and can't right-click them.
+8. Cows, villagers, tamed wolves/cats stay visible and usable for A.
+9. Reconnect, restart, `/rtp`, warp and world change keep everything hidden for A.
+10. Turn A's setting back on: mobs reappear immediately and behave normally; no duplicates.
+11. A Mob Waves event: event mobs are visible and fight A normally.
 
 Checks: `./gradlew -I scripts/mob-visibility-check.init.gradle.kts mobVisibilityCheck`.
