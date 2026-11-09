@@ -711,7 +711,7 @@ crates:
     # models.<id> offset/rotation/scale/hitbox. A month whose model is unset or not in the
     # resource pack uses that crate's static models.<id>.model, else the vanilla block.
     # Rotation only changes the look: crate ids, keys, rewards and locations never change.
-    # The 12 monthly models are not in the pack yet; until they are, every month falls back.
+    # January-March are in the pack (issue #1464); April-December are not yet and fall back.
     monthly:
       enabled: true
       timezone: America/New_York

@@ -24,8 +24,10 @@ REPO = PACK.parent
 ITEMS = PACK / "assets" / kit.NAMESPACE / "items"
 CONFIG = REPO / "src" / "main" / "resources" / "config.yml"
 
+# issue #1464: the first monthly models (January-March)
+MONTHLY = ("january_chest", "february_chest", "march_chest")
 CRATES = ("cabin_crate", "homestead_crate", "campfire_crate", "harvest_chest", "stockpile_chest",
-          "homestead_chest", "campfire_chest", "cabin_chest")
+          "homestead_chest", "campfire_chest", "cabin_chest") + MONTHLY
 # the crates redesign (issues #1447, #1454): models that must look different from one another
 REDESIGN = ("harvest_chest", "stockpile_chest", "homestead_chest", "campfire_chest", "cabin_chest")
 # issue #1454: crate id -> model the bundled config uses, and the legacy model kept for rollback
@@ -95,6 +97,28 @@ class CrateChestModelsTest(unittest.TestCase):
             for b in REDESIGN[n + 1:]:
                 self.assertFalse(painted[a] & painted[b], f"{a} and {b} share a texture")
                 self.assertGreater(abs(tops[a] - tops[b]), 0.5, f"{a} and {b} are the same height")
+
+    def test_monthly_models_are_distinct(self):
+        """The monthly chests share no texture with each other or with the permanent chests,
+        and each has its own silhouette height (crystal spire, bow, standing clover)."""
+        textures = PACK / "assets" / kit.NAMESPACE / "textures" / "item"
+        painted = {i: {p.read_bytes() for p in (textures / i).glob("*.png")} for i in MONTHLY + REDESIGN}
+        tops = {i: kit.bounds(self._main(i))[1][1] for i in MONTHLY}
+        for n, a in enumerate(MONTHLY):
+            self.assertTrue(painted[a], f"run python3 -m art.build {a}")
+            for b in MONTHLY[n + 1:] + REDESIGN:
+                self.assertFalse(painted[a] & painted[b], f"{a} and {b} share a texture")
+            for b in MONTHLY[n + 1:]:
+                self.assertGreater(abs(tops[a] - tops[b]), 0.5, f"{a} and {b} are the same height")
+
+    def test_bundled_config_maps_built_monthly_models(self):
+        """config.yml maps january..march to the models this pack now has."""
+        text = CONFIG.read_text()
+        section = text[text.index("    monthly:"):]
+        for item_id in MONTHLY:
+            month = item_id.split("_")[0]
+            self.assertIn(f'        {month}: "joshymc:{item_id}"', section)
+            self.assertTrue((ITEMS / f"{item_id}.json").exists(), item_id)
 
     def test_1454_models_replace_the_legacy_ones_without_removing_them(self):
         """Homestead, Campfire and Cabin got new models; the old ones stay built for rollback,
