@@ -89,6 +89,7 @@ fun main() {
     deathDetection()
     heartFeedback()
     cooldownRegression()
+    environmentalDeaths()
     monitoring()
     wiring()
     println("OK: $checks Ranked Team Wars checks passed.")
@@ -750,9 +751,10 @@ private fun deathDetection() {
     val heartListener = source("lifesteal/hearts/LifestealHeartListener.kt")
     val rankedListener = source("lifesteal/ranked/LifestealRankedListener.kt")
     check("#1474 the ranked match is copied at LOWEST, before the HIGHEST defeat", heartListener.contains("@EventHandler(priority = EventPriority.LOWEST)\n    fun onDeathCaptureTag(event: PlayerDeathEvent) = hearts.captureCombatTag(event)") &&
-        heart.contains("plugin.lifestealRankedManager.matchOf(uuid)?.let { rankedDeaths[uuid] = RankedMatchRules.DeathCapture(it.id, Bukkit.getCurrentTick()) }") &&
+        heart.contains("rankedDeaths[uuid] = RankedMatchRules.DeathCapture(it.id, Bukkit.getCurrentTick(),") &&
         rankedListener.contains("@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)\n    fun onDeath(event: PlayerDeathEvent)"))
-    check("#1474 the heart death handler decides it once through deathMatch", heart.contains("val rankedMatch = RankedMatchRules.deathMatch(rankedDeaths.remove(event.player.uniqueId), tick,"))
+    check("#1474 the heart death handler decides it once through deathMatch", heart.contains("val rankedCapture = rankedDeaths.remove(event.player.uniqueId)") &&
+        heart.contains("val rankedMatch = RankedMatchRules.deathMatch(rankedCapture, tick,"))
     check("#1474 the combat-tag exclusion no longer depends on `held`", heart.contains("rankedMatch != null ||") && !heart.contains("lifestealRankedManager.matchOf(victim.uniqueId) != null"))
     check("#1474 the copy is dropped on quit", heart.contains("rankedDeaths.remove(player.uniqueId)"))
     check("#1474 still one transferPvp per heart path (no second transfer for the summary)", Regex("store\\.transferPvp\\(").findAll(heart).count() == 3)
@@ -911,6 +913,159 @@ private fun cooldownRegression() {
         rating.isNotEmpty() && rating.none { it.contains("lifesteal_heart") || it.contains("HeartStore") || it.contains("heartOutcomes") || it.contains("RankedHeartSummary") }
     )
     check("#1474 the shared cooldown default stays 30 minutes", resourceText("lifesteal.yml").contains("same-victim-cooldown-minutes: 30"))
+}
+
+// ── Issue #1478: environmental deaths in ranked matches ──────
+
+private fun environmentalDeaths() {
+    val m = "rtw-0000000014e1"
+    val tick = 300
+    val window = 15_000L // combat.tag-duration-seconds: 15
+    val now = 5_000_000L
+    // A 3v3: victim + two teammates on A, three opponents on B.
+    val victim = UUID(1L, 0)
+    val mate = UUID(1L, 1)
+    val foe1 = UUID(2L, 0)
+    val foe2 = UUID(2L, 1)
+    val r = roster(3, 3)
+    val opposite: (UUID) -> Boolean = { r.sameSide(it, victim) == false }
+    fun cap(vararg hits: HeartRules.RecentHit, match: String = m, at: Long = now, t: Int = tick) = RankedMatchRules.DeathCapture(match, t, hits.toList(), at)
+    fun credit(
+        capture: RankedMatchRules.DeathCapture?,
+        direct: HeartRules.Attribution = HeartRules.Attribution.ENVIRONMENT,
+        match: String? = m,
+        currentTick: Int = tick,
+        excluded: Boolean = false,
+        eligible: (UUID) -> Boolean = opposite,
+    ) = RankedMatchRules.environmentalKiller(direct, victim, match, capture, currentTick, window, excluded, eligible)
+    val hit = cap(HeartRules.RecentHit(foe1, now - 3_000))
+
+    // 1. A direct ranked kill keeps its killer (this rule never replaces it).
+    check("#1478 a direct ranked PvP kill is left alone", credit(hit, HeartRules.Attribution.PVP_KILL) == null)
+    check("#1478 an invalid or unloaded killer is never replaced", credit(hit, HeartRules.Attribution.INVALID_KILLER) == null && credit(hit, HeartRules.Attribution.NOT_LOADED) == null)
+    // 2-4. Knocked into lava / the void / a fatal fall: the final damage has no player behind it.
+    check("#1478 knocked into lava, void or a fatal fall credits the opponent", credit(hit) == foe1)
+    check(
+        "#1478 the audit note names the match and the cause",
+        listOf("lava", "out_of_world", "fall").all { RankedMatchRules.environmentalNote(m, it) == "ranked environmental credit, match $m, died to $it" }
+    )
+    // 5. Jumping into lava (or own TNT) after an opponent's hit.
+    check("#1478 a self-inflicted death after a recent hit still credits the opponent", credit(hit, HeartRules.Attribution.SELF) == foe1)
+    // 6-7. No recent opponent: nobody, never a guess.
+    check("#1478 no recorded hit = no heart", credit(cap()) == null)
+    check("#1478 a hit one window old has expired", credit(cap(HeartRules.RecentHit(foe1, now - window))) == null)
+    check("#1478 a hit just inside the window counts", credit(cap(HeartRules.RecentHit(foe1, now - window + 1))) == foe1)
+    check("#1478 a hit 'in the future' doesn't count", credit(cap(HeartRules.RecentHit(foe1, now + 1))) == null)
+    // 8. Several attackers: the most recent eligible one.
+    val both = cap(HeartRules.RecentHit(foe1, now - 8_000), HeartRules.RecentHit(foe2, now - 1_000))
+    check("#1478 the most recent attacker is credited", credit(both) == foe2)
+    check("#1478 an ineligible latest attacker falls back to the previous one", credit(both, eligible = { it == foe1 }) == foe1)
+    // 9-10. Teammates and the victim themselves.
+    check("#1478 teammate damage is never credited", credit(cap(HeartRules.RecentHit(mate, now - 500))) == null)
+    check("#1478 a teammate's later hit doesn't hide the opponent's", credit(cap(HeartRules.RecentHit(foe1, now - 5_000), HeartRules.RecentHit(mate, now - 500))) == foe1)
+    check("#1478 self-inflicted damage is never credited", credit(cap(HeartRules.RecentHit(victim, now - 500))) == null)
+    // 14-18. One copy, one death, one match.
+    check("#1478 /kill is excluded", credit(hit, excluded = true) == null)
+    check("#1478 an ordinary (non-ranked) death never uses the ranked rule", credit(hit, match = null) == null)
+    check("#1478 a copy from another tick (an earlier death, a restart) never counts", credit(hit, currentTick = tick + 1) == null)
+    check("#1478 hits never leak from another match", credit(cap(HeartRules.RecentHit(foe1, now - 1_000), match = "rtw-0000000014e2")) == null)
+    check("#1478 no copy = nothing", credit(null) == null)
+    check("#1478 a cancelled/finished match (manager says not ACTIVE) credits nobody", credit(hit, eligible = { false }) == null)
+    check("#1478 a second defeat of the same player is refused (no double-counted defeat)", r.defeat(victim, DefeatReason.DEATH)!!.defeat(victim, DefeatReason.DISCONNECT) == null)
+    check("#1478 a defeated attacker keeps their side, so their hit still counts", r.defeat(foe1, DefeatReason.DEATH)!!.sameSide(foe1, victim) == false)
+    // 19. 2v2 .. 5v5: always the opposite side, never one's own.
+    for (size in 2..5) {
+        val rs = roster(size, size)
+        val v = UUID(1L, 0)
+        val hits = (0 until size).map { HeartRules.RecentHit(UUID(2L, it.toLong()), now - 10_000 + it) } +
+            (1 until size).map { HeartRules.RecentHit(UUID(1L, it.toLong()), now - 100 + it) }
+        val got = RankedMatchRules.environmentalKiller(
+            HeartRules.Attribution.ENVIRONMENT, v, m, RankedMatchRules.DeathCapture(m, tick, hits, now), tick, window, false
+        ) { rs.sameSide(it, v) == false }
+        check("#1478 ${size}v$size credits the latest opponent, never a teammate", got == UUID(2L, (size - 1).toLong()))
+    }
+
+    // 11-14. Hearts through the real HeartStore: same limits, cooldown and dedupe as any kill.
+    val dir = Files.createTempDirectory("ranked-env").toFile()
+    try {
+        val db = DatabaseManager(dir, quietLogger())
+        db.start()
+        try {
+            val hs = HeartStore(db)
+            hs.createTables()
+            fun player(n: Long, hearts: Int): UUID {
+                val u = UUID(147L, n)
+                hs.ensure(u, 10, 1)
+                if (hearts != 10) hs.adminChange(u, HeartRules.AdminOp.SET, hearts, LIMITS, "test", "test", 1)
+                return u
+            }
+            val cooldown = 30 * 60_000L
+            fun env(k: UUID, v: UUID, at: Long, t: Int) = hs.transferPvp(
+                HeartStore.PvpRequest("pvp:boot:$v:$t", k, v, at, cooldown, LIMITS, note = RankedMatchRules.environmentalNote(m, "lava"))
+            )
+            val v1 = player(1, 10)
+            val k1 = player(2, 10)
+            val first = env(k1, v1, 1_000_000, 1)
+            check(
+                "#1478 a credited environmental death moves exactly one heart",
+                first is HeartStore.PvpResult.Done && first.decision is HeartRules.Decision.Transfer && hs.load(v1)?.hearts == 9 && hs.load(k1)?.hearts == 11
+            )
+            check("#1478 the same death processed twice moves nothing more", env(k1, v1, 1_000_001, 1) == HeartStore.PvpResult.Duplicate && hs.load(v1)?.hearts == 9)
+            val again = env(k1, v1, 1_060_000, 2)
+            check("#1478 the shared 30-minute cooldown applies", again is HeartStore.PvpResult.Done && again.decision is HeartRules.Decision.Cooldown && hs.load(v1)?.hearts == 9)
+            val openWorld = hs.transferPvp(HeartStore.PvpRequest("pvp:boot:$v1:3", k1, v1, 1_100_000, cooldown, LIMITS)) as HeartStore.PvpResult.Done
+            check("#1478 ... and it is the same cooldown as open-world kills", openWorld.decision is HeartRules.Decision.Cooldown)
+            val low = player(3, 1)
+            val k3 = player(4, 10)
+            check(
+                "#1478 a 1-heart victim keeps it",
+                (env(k3, low, 1_000_000, 4) as HeartStore.PvpResult.Done).decision == HeartRules.Decision.VictimAtMinimum && hs.load(low)?.hearts == 1 && hs.load(k3)?.hearts == 10
+            )
+            val v5 = player(5, 10)
+            val full = player(6, 20)
+            check(
+                "#1478 a killer at 20 gains nothing",
+                (env(full, v5, 1_000_000, 5) as HeartStore.PvpResult.Done).decision == HeartRules.Decision.KillerAtMaximum && hs.load(full)?.hearts == 20 && hs.load(v5)?.hearts == 10
+            )
+            val audit = db.query("SELECT reason FROM lifesteal_heart_audit WHERE uuid = ? AND operation = 'PVP_LOSS'", v1.toString()) { it.getString("reason") }
+            check("#1478 the transfer is audited once, with its match and cause", audit.size == 1 && audit[0].contains("ranked environmental credit, match $m, died to lava"))
+            val total = db.queryFirst("SELECT SUM(hearts) AS s FROM lifesteal_hearts") { it.getInt("s") }
+            check("#1478 hearts are never created or destroyed", total == 9 + 11 + 1 + 10 + 10 + 20)
+        } finally {
+            db.shutdown()
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+
+    // Summary wording.
+    val e = RankedHeartSummary.Entry(foe1, "Ann", victim, "Bob", RankedHeartSummary.Outcome.STOLEN, RankedHeartSummary.Source.ENVIRONMENT)
+    check("#1478 the summary names the credited opponent", RankedHeartSummary.line(e).let { it.moved && it.text == "Bob died after a hit from Ann: heart stolen" })
+    check("#1478 kill wording is unchanged", RankedHeartSummary.line(e.copy(source = RankedHeartSummary.Source.KILL)).text == "Ann killed Bob: heart stolen")
+
+    // Wiring.
+    val heart = source("lifesteal/hearts/LifestealHeartManager.kt")
+    val manager = source("lifesteal/ranked/LifestealRankedManager.kt")
+    check(
+        "#1478 the hits are copied at LOWEST with the match, before the defeat drops them",
+        heart.contains("RankedMatchRules.DeathCapture(it.id, Bukkit.getCurrentTick(), plugin.lifestealRankedManager.opponentHitsOn(uuid), System.currentTimeMillis())")
+    )
+    check("#1478 the death handler uses the ranked rule with the combat-tag window", heart.contains("RankedMatchRules.environmentalKiller(") && heart.contains("windowMillis = plugin.combatManager.tagDurationMillis"))
+    check(
+        "#1478 the credited opponent must be on the other side of this ACTIVE match and a valid killer",
+        heart.contains("plugin.lifestealRankedManager.isCreditableOpponent(rankedMatch, attacker, victim.uniqueId) &&") &&
+            manager.contains("match.state == MatchState.ACTIVE && match.roster.sameSide(attacker, victim) == false")
+    )
+    val onDeath = Regex("""fun onDeath\(event: PlayerDeathEvent\)[\s\S]*?\n    }\n""").find(heart)!!.value
+    check("#1478 only after the Lifesteal/active gate (Survival untouched)", onDeath.indexOf("if (!active) return") in 0 until onDeath.indexOf("RankedMatchRules.environmentalKiller("))
+    check(
+        "#1478 it feeds the one transferPvp with the per-death dedupe key",
+        onDeath.indexOf("RankedMatchRules.environmentalKiller(") < onDeath.indexOf("store.transferPvp(request)") &&
+            onDeath.contains("dedupeKey = \"pvp:\$bootId:\${victim.uniqueId}:\${Bukkit.getCurrentTick()}\"") &&
+            Regex("store\\.transferPvp\\(").findAll(onDeath).count() == 1
+    )
+    check("#1478 the heart path never touches ranked inventories", !onDeath.contains("restore") && !onDeath.contains("snapshot", ignoreCase = true))
+    check("#1478 only landed opponent hits of the ACTIVE fight are recorded", manager.contains("if (match.state != MatchState.ACTIVE || !isMatchFight(attacker, victim)) return"))
 }
 
 // ── Issue #1474: anti-farming monitoring (logging only) ──────
