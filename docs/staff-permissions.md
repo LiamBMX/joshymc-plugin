@@ -119,6 +119,25 @@ Never from display names, chat prefixes or tags. Only these sources count:
 - Players in Creative can't take or move JoshyMC items through the Creative inventory.
 - Existing `command` portals run with the player's own permissions.
 
+### `/invsee` (issue #1353, audit finding D-H2)
+
+`/invsee <online player>` used to open the live inventory for every `joshymc.invsee` holder.
+Items taken from a player held by a Lifesteal ranked match came back when the match restored
+its inventory snapshot, which duplicated them. Any holder could also strip gear from higher staff.
+
+- `/invsee` now opens the **read-only copy** (the same view as ModMode's read-only Invsee).
+  The live, editable inventory needs the new node **`joshymc.invsee.edit`** (default op).
+  ModMode keeps its own `joshymc.modmode.edit` node.
+- For both `/invsee` and ModMode, the view is always read-only while the target is held by a
+  ranked match or is waiting for its snapshot restore, and when staff-rank protection refuses
+  the viewer (equal or higher staff). The viewer is told why.
+- If a live view was opened *before* the target joined a match, `InvseeGuardListener` cancels
+  every click and drag in it and closes it as soon as the target is held.
+- Every open writes an audit row (`INVSEE` or `MODMODE_INVSEE`) recording the mode and the reason.
+- Offline `/invsee` was already read-only and is unchanged.
+- **Capability change:** staff who were given only `joshymc.invsee` can no longer edit. Give
+  `joshymc.invsee.edit` to the ranks that should (recommended: Admin).
+
 ---
 
 ## 4. Punishment limits (CURRENT)
@@ -176,7 +195,8 @@ only, L = Lifesteal only (`gamemode/GamemodeAssignments.kt`).
 | `joshymc.reload` (op) | `/joshymc reload [hard]` | permission | MODERATE | Lead Admin | N |
 | `joshymc.jgm.lock` / `.unlock` (false) | gamemode locks | literal confirm | HIGH | Owner | N |
 | `joshymc.purchase.admin` (op) | `/purchase list|info` (manage needs op) | op + node | MODERATE | Admin (view) | N |
-| `joshymc.invsee` (op) | `/invsee` (live, editable) | permission | MODERATE | Lead Mod | N |
+| `joshymc.invsee` (op) | `/invsee` (read-only copy since #1353) | permission, audited `INVSEE` | LOW | Lead Mod | N |
+| `joshymc.invsee.edit` (op) | live, editable `/invsee` (not for ranked-held players or protected staff) | permission + rank protection | MODERATE | Admin | N |
 | `joshymc.enderchest.others` / `.clear` (op) | editable ender chests | permission | MODERATE | Lead Mod / Admin | S |
 | `joshymc.modmode` / `.edit` (op) | Moderator Mode | permission | LOW / MODERATE | Mod / Lead Mod | N |
 | `joshymc.vanish`, `joshymc.hidestaff` (op) | vanish | permission | LOW | Mod | N |
@@ -447,7 +467,7 @@ Requires Owner approval:
    amounts (audit Part 3 H1). They are now audited, but still allowed for whoever holds the node.
 
 Audit findings not fixed here (outside this issue's scope, or a separate behaviour change):
-- `/invsee` and `/enderchest <player>` are editable (Part 2.6, Part 3 M2).
+- `/enderchest <player>` is editable (Part 3 M2). `/invsee` is read-only unless `joshymc.invsee.edit` since issue #1353.
 - Mutes don't block `/msg` and `/r` (Part 2.3).
 - `/credits` base permission blocks `bal`/`baltop`/`pay` for players (Part 1 3b, Part 3 3.2).
 - `/enchant` level 255, `/booster` and `/sellwand` multiplier caps (Part 3 H1, H4).

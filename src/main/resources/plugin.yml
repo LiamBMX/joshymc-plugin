@@ -1359,6 +1359,9 @@ permissions:
   joshymc.invsee:
     description: View player inventories
     default: op
+  joshymc.invsee.edit:
+    description: Edit inventories opened with /invsee
+    default: op
   joshymc.enderchest:
     description: Open ender chest
     default: op

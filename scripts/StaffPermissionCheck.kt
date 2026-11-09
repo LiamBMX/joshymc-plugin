@@ -18,6 +18,7 @@ import com.liam.joshymc.gamemode.GamemodeScope
 import com.liam.joshymc.punish.PunishDurations
 import com.liam.joshymc.punish.StaffLevel
 import com.liam.joshymc.staff.CreativeItemRules
+import com.liam.joshymc.staff.InvseeRules
 import com.liam.joshymc.staff.LegacyPunishAuthority
 import com.liam.joshymc.staff.LegacyPunishAuthority.Action
 import com.liam.joshymc.staff.PortalActionRules
@@ -223,6 +224,30 @@ fun main() {
         "command/RankVoucherCommand.kt" to "RANK_VOUCHER_GIVE", "command/CreditVoucherCommand.kt" to "CREDIT_VOUCHER_GIVE",
         "command/SellWandCommand.kt" to "SELLWAND_GIVE", "command/VoucherCommand.kt" to "VOUCHER_GIVE",
     )) check("$action is audited", "AdminAudit.log(plugin, sender, \"$action\"" in source(file))
+
+    // ── /invsee and ModMode Invsee (issue #1353, D-H2) ─────
+    val live = InvseeRules.Mode.LIVE
+    val ro = InvseeRules.Mode.READ_ONLY
+    check("invsee without the edit node is read-only", InvseeRules.decide(canEdit = false, rankedHeld = false, protectionRefused = false, self = false).mode == ro)
+    check("invsee with the edit node is live", InvseeRules.decide(true, false, false, false).mode == live)
+    check("a ranked-held target is never live (snapshot dupe)", InvseeRules.decide(true, true, false, false).let { it.mode == ro && it.reason == InvseeRules.Reason.RANKED })
+    check("a ranked-held self is never live either", InvseeRules.decide(true, true, false, true).mode == ro)
+    check("protected staff are view-only", InvseeRules.decide(true, false, true, false).let { it.mode == ro && it.reason == InvseeRules.Reason.PROTECTED })
+    check("your own inventory isn't refused by protection", InvseeRules.decide(true, false, true, true).mode == live)
+    check("live clicks by others are refused while held", InvseeRules.liveClickRefused(viewerIsHolder = false, holderRankedHeld = true))
+    check("the holder's own clicks and unheld targets are fine", !InvseeRules.liveClickRefused(true, true) && !InvseeRules.liveClickRefused(false, false))
+    check("refusal reasons that are shown have a message", listOf(InvseeRules.Reason.RANKED, InvseeRules.Reason.PROTECTED).all { !it.message.isNullOrBlank() })
+    val invsee = source("command/EssentialsCommands.kt").substringAfter("class InvseeCommand").substringBefore("class EnderchestCommand")
+    check("/invsee no longer opens the live inventory directly", "openInventory(online.inventory)" !in invsee &&
+        "InvseeAccess.open(plugin, sender, online" in invsee && "InvseeRules.EDIT_PERMISSION" in invsee && "auditAction = \"INVSEE\"" in invsee)
+    val modMode = source("manager/ModModeManager.kt").substringAfter("fun openInvsee(").substringBefore("// ---- Tool 6")
+    check("ModMode Invsee uses the same access rule", "InvseeAccess.open(plugin, moderator, target, canEdit = canEdit(moderator), auditAction = \"MODMODE_INVSEE\")" in modMode &&
+        "openInventory(target.inventory)" !in modMode)
+    val access = source("staff/InvseeAccess.kt")
+    check("live view only when the rule says LIVE; held check includes pending restores",
+        "hasPendingRestore(uuid)" in access && "if (decision.mode == InvseeRules.Mode.LIVE)" in access && "protectionProblem(viewer, target.uniqueId)" in access)
+    check("the live-view guard listener is registered", "InvseeGuardListener(plugin)" in source("manager/ListenerManager.kt"))
+    check("joshymc.invsee.edit is declared op", (perms["joshymc.invsee.edit"] as? Map<*, *>)?.get("default") == "op")
 
     // ── Gamemode isolation of the commands above ────────────
     val scopes = GamemodeAssignments.COMMANDS
