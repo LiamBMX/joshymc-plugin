@@ -235,9 +235,20 @@ crates:
 ## E2. Monthly model rotation (issue #1460)
 
 Part of the crates redesign (issue #1407, audit #1446). Rotation lets chosen crates show a
-different model each calendar month. The 12 monthly models themselves (`january_chest` …
-`december_chest`) are made in later phases; until they are in the pack every month falls back
-(see below), so nothing changes in game yet.
+different model each calendar month. The 12 monthly models are `january_chest` …
+`december_chest`. **January, February and March are in the pack (issue #1464)**; April to
+December are made in later phases and fall back until then (see below). The bundled config
+lists no rotating crates, so nothing changes in game until the Owner lists some.
+
+| Month | Model | Look |
+|---|---|---|
+| January | `joshymc:january_chest` | frozen winter: frosted ice-brick walls, rime-crusted silver frame, snow-buried lid with heaped corner caps, icicles on every side, a blue crystal cluster on top, a silver snowflake on an ice medallion |
+| February | `joshymc:february_chest` | Valentine's gift box: red lacquer with embossed hearts, a pink satin ribbon round every wall, a big pink bow on a quilted pillow, rose gold frame, roses on the corners, a pink enamel heart emblem and heart-framed lock |
+| March | `joshymc:march_chest` | lucky spring: mint-green boards, gold bands, a grassy lid with tufts, flowers and gold coins, a large four-leaf clover on a gold stem, gold horseshoes on the sides, ivy on the front corners, raindrops on the lid edge, a clover medallion |
+
+All three sit on the shared skeleton `art/items/_crate_chest.py` (they hide a vanilla chest
+and reach at most 1/4 block past their block, so `hitbox: auto` adds no hitbox) and are
+checked by `art/tests/test_crate_chests.py`.
 
 ### Configuration
 
@@ -334,7 +345,8 @@ and players without the JoshyMC pack always see the vanilla block.
 
 ### Limitations
 
-- The 12 monthly models don't exist yet (later phases); until then every month falls back.
+- Only January to March exist yet (issue #1464); April to December fall back until their
+  later phases.
 - One month → model map is shared by every rotating crate (no per-crate monthly models).
 - Rotation is per crate id, so every location of a listed crate rotates together.
 - `/crate models set` only edits static models; monthly mappings are edited in config.yml.

@@ -132,6 +132,11 @@
       "icon": "joshymc/fast_hopper.png",
       "sha1": "ee99f4681e29cc14dcb0c17465de7f4bdca2ea4d"
     },
+    "joshymc:february_chest": {
+      "bedrock_name": "february_chest",
+      "icon": "joshymc/february_chest.png",
+      "sha1": "6e115cd86cc0b5a74e7e0351996b25e971bc4c76"
+    },
     "joshymc:february_key": {
       "bedrock_name": "february_key",
       "icon": "joshymc/february_key.png",
@@ -622,6 +627,11 @@
       "icon": "joshymc/jack_o_lantern_mask.png",
       "sha1": "1e214f0a50c77797c4cf4d4df479c90af018d983"
     },
+    "joshymc:january_chest": {
+      "bedrock_name": "january_chest",
+      "icon": "joshymc/january_chest.png",
+      "sha1": "b154824dceca5cd96a496a355d02db1418af60a0"
+    },
     "joshymc:january_key": {
       "bedrock_name": "january_key",
       "icon": "joshymc/january_key.png",
@@ -716,6 +726,11 @@
       "bedrock_name": "maplefang",
       "icon": "joshymc/maplefang.png",
       "sha1": "15139865170284e35f4c9f71aba1addb9ca40bea"
+    },
+    "joshymc:march_chest": {
+      "bedrock_name": "march_chest",
+      "icon": "joshymc/march_chest.png",
+      "sha1": "f16b3e2d9d9c755731cb29f87cbfc4b8c48de00a"
     },
     "joshymc:march_key": {
       "bedrock_name": "march_key",
