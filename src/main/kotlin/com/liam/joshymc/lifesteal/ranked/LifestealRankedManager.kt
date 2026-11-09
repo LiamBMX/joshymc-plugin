@@ -161,6 +161,23 @@ class LifestealRankedManager(private val plugin: Joshymc) {
 
     fun isSpectator(uuid: UUID): Boolean = spectating.containsKey(uuid)
 
+    /**
+     * Issue #1478: the opponent hits [uuid]'s match recorded on them (landed hits between opposite
+     * sides of the ACTIVE fight, bounded, dropped by their defeat and with the match). A copy.
+     */
+    fun opponentHitsOn(uuid: UUID): List<HeartRules.RecentHit> = matchOf(uuid)?.recentHits?.get(uuid).orEmpty()
+
+    /**
+     * Issue #1478: [attacker] may be credited with [victim]'s environmental death in [matchId]: that
+     * match is still ACTIVE (a death before the fight cancels it, so it never is) and the two are on
+     * opposite roster sides. A defeated attacker keeps their side, so a hit that sent the victim
+     * into lava still counts after the attacker died too; never a teammate, never another match.
+     */
+    fun isCreditableOpponent(matchId: String, attacker: UUID, victim: UUID): Boolean {
+        val match = matches[matchId] ?: return false
+        return match.state == MatchState.ACTIVE && match.roster.sameSide(attacker, victim) == false
+    }
+
     /** Both are still fighting in the same ACTIVE match (no combat tag, PvP toggles don't apply). */
     fun isMatchFight(a: Player, b: Player): Boolean {
         val m = matchOf(a.uniqueId) ?: return false

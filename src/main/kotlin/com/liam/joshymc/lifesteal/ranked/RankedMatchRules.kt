@@ -256,7 +256,18 @@ object RankedMatchRules {
      * ranked death handler (HIGHEST) takes them out of the match. [tick] is the server tick of
      * that death, so a copy is only ever used by the death it was taken for.
      */
-    data class DeathCapture(val matchId: String, val tick: Int)
+    data class DeathCapture(
+        val matchId: String,
+        val tick: Int,
+        /**
+         * Issue #1478: the opponent hits the match had recorded on the victim (`Match.recentHits`,
+         * landed hits between opposite roster sides only), copied with the match id because the
+         * defeat at HIGHEST drops them. Used only by [environmentalKiller] for this one death.
+         */
+        val hits: List<HeartRules.RecentHit> = emptyList(),
+        /** Wall-clock time of the copy, the "now" the hits' ages are measured against. */
+        val at: Long = 0,
+    )
 
     /**
      * The ranked match a death belongs to, or null for an ordinary death. [captured] is the copy
@@ -267,6 +278,42 @@ object RankedMatchRules {
      */
     fun deathMatch(captured: DeathCapture?, currentTick: Int, stillHeld: String?): String? =
         captured?.takeIf { it.tick == currentTick }?.matchId ?: stillHeld
+
+    // ── Environmental ranked deaths (issue #1478) ───────────
+
+    /**
+     * Who gets the kill when a participant of ranked match [matchId] dies with no other player behind
+     * the final damage ([HeartRules.Attribution.ENVIRONMENT]: knocked into lava or the void, a fatal
+     * fall, fire, drowning, ... or [HeartRules.Attribution.SELF]: jumping into lava, their own TNT).
+     * Any other [direct] attribution returns null: a real PvP kill keeps its killer, and an invalid
+     * killer or unloaded record is never replaced by somebody else.
+     *
+     * Only the copy taken for this death counts ([captured]: same tick and same match, else nothing
+     * is credited). Its hits are the match's own record of opponent hits that landed in the ACTIVE
+     * fight, so they can't come from another match. They are chosen exactly like a disconnect forfeit's
+     * ([forfeitRecipient]): the most recent hit younger than [windowMillis] (one combat-tag duration)
+     * whose attacker passes [eligible] (the manager: on the other roster side of this ACTIVE match and
+     * a valid heart killer). [excluded] (`/kill`) turns it off. Null = no heart moves; the death
+     * still counts for the match.
+     */
+    fun environmentalKiller(
+        direct: HeartRules.Attribution,
+        victim: UUID,
+        matchId: String?,
+        captured: DeathCapture?,
+        currentTick: Int,
+        windowMillis: Long,
+        excluded: Boolean,
+        eligible: (UUID) -> Boolean,
+    ): UUID? {
+        if (direct != HeartRules.Attribution.ENVIRONMENT && direct != HeartRules.Attribution.SELF) return null
+        if (excluded || matchId == null || captured == null) return null
+        if (captured.tick != currentTick || captured.matchId != matchId) return null
+        return forfeitRecipient(victim, captured.hits, captured.at, windowMillis, eligible)
+    }
+
+    /** Audit note on a ranked environmental-death transfer (`HeartStore.PvpRequest.note`); [cause] is the damage type. */
+    fun environmentalNote(matchId: String, cause: String): String = "ranked environmental credit, match $matchId, died to $cause"
 
     // ── Validation ──────────────────────────────────────────
 

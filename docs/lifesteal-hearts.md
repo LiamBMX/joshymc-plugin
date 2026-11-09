@@ -79,9 +79,9 @@ counted. Now:
   `HeartRules.combatTagKiller`.
 - **Never credited**: a death while not tagged (unrelated environmental deaths keep the old
   behaviour), a kill by the old combat-log villager path (`isCombatLogged`; there is still no
-  combat-log heart penalty), a death while in a ranked match (`matchOf`; ranked hits never tag,
-  so the ranked system provides no verified attacker for an environmental death), and `/kill`
-  (`minecraft:generic_kill`).
+  combat-log heart penalty), a death while in a ranked match (ranked hits never tag; since issue
+  #1478 those deaths use the match's own record of opponent hits instead, see
+  `docs/lifesteal-ranked-beta.md` section I), and `/kill` (`minecraft:generic_kill`).
 - **Same transfer**: the credited death goes through the unchanged `HeartStore.transferPvp` with
   the same dedupe key as any other death (`pvp:<boot>:<victim>:<tick>`), so the launch window,
   teammates/allies (`heartCheck(killer, victim)`), the 1-heart minimum, the 20-heart maximum

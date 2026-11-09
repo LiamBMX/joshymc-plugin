@@ -309,13 +309,19 @@ class LifestealHeartManager(private val plugin: Joshymc) {
      */
     private val rankedDeaths = HashMap<UUID, RankedMatchRules.DeathCapture>()
 
-    /** PlayerDeathEvent at LOWEST (issue #1461): remember the victim's still-running combat tag (and, #1474, their ranked match). */
+    /**
+     * PlayerDeathEvent at LOWEST (issue #1461): remember the victim's still-running combat tag (and,
+     * #1474, their ranked match, plus, #1478, the opponent hits that match recorded on them, which
+     * the defeat at HIGHEST drops).
+     */
     fun captureCombatTag(event: PlayerDeathEvent) {
         val uuid = event.player.uniqueId
         deathTags.remove(uuid)
         rankedDeaths.remove(uuid)
         if (!active || !isLifesteal(event.player)) return
-        plugin.lifestealRankedManager.matchOf(uuid)?.let { rankedDeaths[uuid] = RankedMatchRules.DeathCapture(it.id, Bukkit.getCurrentTick()) }
+        plugin.lifestealRankedManager.matchOf(uuid)?.let {
+            rankedDeaths[uuid] = RankedMatchRules.DeathCapture(it.id, Bukkit.getCurrentTick(), plugin.lifestealRankedManager.opponentHitsOn(uuid), System.currentTimeMillis())
+        }
         val combat = plugin.combatManager
         val expiresAt = combat.tagExpiresAt(uuid) ?: return
         val hits = combat.recentPvpAttackers(uuid).map { HeartRules.RecentHit(it.attacker, it.at) }
@@ -338,7 +344,8 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         val tick = Bukkit.getCurrentTick()
         val tag = deathTags.remove(event.player.uniqueId)?.takeIf { it.tick == tick }
         // Issue #1474: decided once, here, and used for the whole death (exclusion and summary).
-        val rankedMatch = RankedMatchRules.deathMatch(rankedDeaths.remove(event.player.uniqueId), tick, plugin.lifestealRankedManager.matchOf(event.player.uniqueId)?.id)
+        val rankedCapture = rankedDeaths.remove(event.player.uniqueId)
+        val rankedMatch = RankedMatchRules.deathMatch(rankedCapture, tick, plugin.lifestealRankedManager.matchOf(event.player.uniqueId)?.id)
         if (!active) return
         val victim = event.player
         val limits = limits ?: return
@@ -372,6 +379,33 @@ class LifestealHeartManager(private val plugin: Joshymc) {
             note = HeartRules.combatTagNote(damageType?.removePrefix("minecraft:") ?: "the environment")
         }
 
+        // Issue #1478: the ranked counterpart. An environmental (or self-inflicted) death inside an
+        // ACTIVE ranked match is credited to the opponent the match saw hit the victim most recently,
+        // within one combat-tag duration (the forfeit rule, #1465), on the other roster side of that
+        // same match. Same dedupe key and same transferPvp below, so it can't add a second transfer.
+        var rankedSource = RankedHeartSummary.Source.KILL
+        if (rankedMatch != null && credited == null) {
+            val rankedCredit = RankedMatchRules.environmentalKiller(
+                direct = attribution,
+                victim = victim.uniqueId,
+                matchId = rankedMatch,
+                captured = rankedCapture,
+                currentTick = tick,
+                windowMillis = plugin.combatManager.tagDurationMillis,
+                excluded = damageType == GENERIC_KILL,
+            ) { attacker ->
+                val candidate = Bukkit.getPlayer(attacker)
+                candidate != null && plugin.lifestealRankedManager.isCreditableOpponent(rankedMatch, attacker, victim.uniqueId) &&
+                    HeartRules.attribute(deathFor(victim, candidate, attacker)) == HeartRules.Attribution.PVP_KILL
+            }
+            if (rankedCredit != null) {
+                killer = Bukkit.getPlayer(rankedCredit)
+                attribution = HeartRules.attribute(deathFor(victim, killer, rankedCredit))
+                note = RankedMatchRules.environmentalNote(rankedMatch, damageType?.removePrefix("minecraft:") ?: "the environment")
+                rankedSource = RankedHeartSummary.Source.ENVIRONMENT
+            }
+        }
+
         if (attribution == HeartRules.Attribution.NOT_LOADED) {
             plugin.logger.warning("[Hearts] ${killer?.name} killed ${victim.name}, but one of them has no loaded heart record; no hearts changed.")
         }
@@ -399,11 +433,11 @@ class LifestealHeartManager(private val plugin: Joshymc) {
             plugin.logger.severe("[Hearts] Heart transfer ${killer.name} <- ${victim.name} failed and was rolled back; no hearts changed: ${e.message}")
             send(killer, HeartMessages.TRANSFER_FAILED)
             send(victim, HeartMessages.TRANSFER_FAILED)
-            rankedOutcome(rankedMatch, killer, victim, null)
+            rankedOutcome(rankedMatch, killer, victim, null, rankedSource)
             return
         }
         // Issue #1474: the stored result, exactly as returned, for the ranked match summary (no second transfer).
-        rankedOutcome(rankedMatch, killer, victim, result)
+        rankedOutcome(rankedMatch, killer, victim, result, rankedSource)
         when (result) {
             HeartStore.PvpResult.Duplicate -> return
             is HeartStore.PvpResult.Unavailable -> {
@@ -432,12 +466,12 @@ class LifestealHeartManager(private val plugin: Joshymc) {
      * nothing, an Unavailable result or a rolled-back error ([result] null) is shown as no heart,
      * and a failure here is only logged, never reaching the transfer.
      */
-    private fun rankedOutcome(matchId: String?, killer: Player, victim: Player, result: HeartStore.PvpResult?) {
+    private fun rankedOutcome(matchId: String?, killer: Player, victim: Player, result: HeartStore.PvpResult?, source: RankedHeartSummary.Source) {
         if (matchId == null || result == HeartStore.PvpResult.Duplicate) return
         val outcome = (result as? HeartStore.PvpResult.Done)?.let { RankedHeartSummary.Outcome.of(it.decision) } ?: RankedHeartSummary.Outcome.UNAVAILABLE
         try {
             plugin.lifestealRankedManager.recordHeartOutcome(
-                matchId, RankedHeartSummary.Entry(killer.uniqueId, killer.name, victim.uniqueId, victim.name, outcome, RankedHeartSummary.Source.KILL)
+                matchId, RankedHeartSummary.Entry(killer.uniqueId, killer.name, victim.uniqueId, victim.name, outcome, source)
             )
         } catch (e: Exception) {
             plugin.logger.warning("[Hearts] Couldn't add ${killer.name} -> ${victim.name} to the summary of ranked match $matchId: ${e.message}")

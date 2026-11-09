@@ -498,3 +498,96 @@ the `#1474` checks:
   across many accounts only shows up through the heart-transfer and shared-connection findings.
 - `SHARED_CONNECTION` only knows what AltManager recorded (`player_connections`). Accounts never
   seen on one connection are never flagged.
+
+## I. Environmental deaths in ranked matches (issue #1478)
+
+Follow-up to the heart system audit (#1453), the ranked cooldown audit (#1469), the open-world
+environmental credit (#1461) and the disconnect forfeits (#1465). **No rule changed**: heart limits
+(10 start, 1-20), the 30-minute same-victim cooldown, the order of the heart checks, Elo,
+matchmaking, forfeits, inventory snapshots and restart recovery are exactly as before.
+
+### Root cause
+
+A heart only moved when the final damage had a causing player. The #1461 combat-tag credit covers
+environmental deaths in the open world, but it is switched off in ranked (ranked hits never
+combat-tag), and nothing replaced it there. So a participant who was knocked into lava or the void,
+fell to their death after a hit, or jumped into lava on purpose died "to the environment" and kept
+their heart. The death still counted toward the match result.
+
+### How the credit works
+
+- **Hits**: the match already records the opponent hits on each participant for the #1465 forfeits
+  (`Match.recentHits`, MONITOR with `ignoreCancelled`, only damage that landed, only between
+  opposite roster sides of an ACTIVE fight, never self-damage, at most 8 per participant). There is
+  no second combat tracker and no new table.
+- **Capture**: the ranked death handler (HIGHEST) defeats the victim, which drops their hits. The
+  heart listener's existing LOWEST handler therefore copies them with the match id, the server tick
+  and the time into the #1474 `RankedMatchRules.DeathCapture`. That copy is in memory only, used
+  only by the death in its own tick, and removed when used and on quit.
+- **Who is credited** (`RankedMatchRules.environmentalKiller`): only when the final damage had no
+  other player behind it (`ENVIRONMENT`: lava, fire, void, fall, drowning, ... or `SELF`: own TNT,
+  jumping into lava). The candidate is the **most recent** recorded hit that is younger than one
+  combat-tag duration (`combat.tag-duration-seconds`, the same window as #1461 and the forfeits).
+  The attacker must be on the **other roster side of the same match, which must still be ACTIVE**
+  (`isCreditableOpponent`; a defeated attacker keeps their side). They must also pass the normal
+  attribution checks (online, Lifesteal, not an NPC, heart record loaded). If the newest attacker
+  fails these checks, the next newest is used.
+- **Never credited**: a direct PvP kill (it keeps its killer), a teammate, the victim themselves, a
+  hit older than the window, a hit from another match, a copy from another tick, a death before the
+  fight (that cancels the match), and `/kill`. With no eligible attacker, no heart moves: there is no
+  random recipient and no Heart item, and the death still counts for the match.
+
+### Hearts, dedupe and feedback
+
+The credited death goes through the same `HeartStore.transferPvp` with the same per-death dedupe key
+(`pvp:<boot>:<victim>:<tick>`) as a direct kill. Only one killer is chosen per death, so the two
+paths can never both move a heart. The launch window, the team check (roster sides decide inside a
+match), the 1-heart minimum, the 20-heart maximum (`NO_TRANSFER`) and the shared 30-minute cooldown
+all apply unchanged. The audit reason gets `(ranked environmental credit, match <id>, died to
+<damage type>)`.
+
+Players get the normal heart messages naming the credited opponent ("You lost 1 heart to Ann!",
+cooldown, last heart, maximum). The match summary lists it as `Bob died after a hit from Ann: heart
+stolen` (or the refusal reason). Players never see the attribution data itself.
+
+A death and a disconnect can't both decide: after the death the player is no longer held, so their
+quit is not a forfeit, and a defeated player can't be defeated again.
+
+### Inventory and match result
+
+Unchanged. Drops and XP are still cleared at HIGHEST and the snapshot is restored at respawn. The
+heart path never touches inventories or snapshots, and the defeat and the next-tick winner decision
+run exactly as before.
+
+### Tests
+
+`./gradlew -I scripts/lifesteal-ranked-check.init.gradle.kts lifestealRankedCheck` adds the `#1478`
+checks:
+
+- the rule for lava, void, fall and self deaths, no hits, an expired window, several attackers,
+  teammates, self-damage, `/kill`, ordinary deaths, stale copies, other matches and non-ACTIVE
+  matches, and 2v2 to 5v5;
+- against the real `HeartStore`: one heart moved, duplicate death events, the shared cooldown (also
+  against open-world kills), 1-heart victims, killers at 20, the audit note and heart conservation;
+- the summary wording and the wiring (captured at LOWEST, the one `transferPvp`, after the
+  Lifesteal gate, no inventory access).
+
+The existing Elo-independence, forfeit, restart and snapshot checks still pass unchanged.
+
+**Needs a live Paper server:**
+
+1. Knock an opponent into lava, into the void and off a high ledge: each costs one heart to the
+   last hitter.
+2. Hit an opponent, then let them jump into lava on purpose: the heart goes to you.
+3. Wait longer than the combat-tag duration after the last hit, then die to lava: no heart.
+4. With two attackers on one victim, the later hitter gets the heart; a teammate never does.
+5. A rematch of the same pair within 30 minutes: "no heart, same-victim cooldown" in the summary.
+6. After each death, respawn and check that the inventory is restored exactly.
+
+### Remaining limitations
+
+- Credit only follows hits the match recorded. Damage with no player behind it (a TNT minecart, or
+  lava a player placed but never hit with) can't be attributed.
+- The window is the combat-tag duration, not a separate ranked setting.
+- The copy is memory only. A server crash in the middle of the death event leaves that death
+  without credit (match recovery itself is unchanged).

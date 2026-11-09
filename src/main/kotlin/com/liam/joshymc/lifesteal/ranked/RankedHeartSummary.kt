@@ -21,7 +21,8 @@ object RankedHeartSummary {
     /** Lines shown before the rest is folded into "... and N more". */
     const val MAX_LINES = 12
 
-    enum class Source { KILL, FORFEIT }
+    /** [ENVIRONMENT] (issue #1478): an environmental/self death credited to the opponent who hit the victim last. */
+    enum class Source { KILL, FORFEIT, ENVIRONMENT }
 
     enum class Outcome(val moved: Boolean, val label: String) {
         STOLEN(true, "heart stolen"),
@@ -81,6 +82,7 @@ object RankedHeartSummary {
     fun line(entry: Entry): Line = when (entry.source) {
         Source.KILL -> Line("${entry.killerName} killed ${entry.victimName}: ${entry.outcome.label}", entry.outcome.moved)
         Source.FORFEIT -> Line("${entry.victimName} forfeited to ${entry.killerName}: ${entry.outcome.label}", entry.outcome.moved)
+        Source.ENVIRONMENT -> Line("${entry.victimName} died after a hit from ${entry.killerName}: ${entry.outcome.label}", entry.outcome.moved)
     }
 
     /**
