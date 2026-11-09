@@ -524,7 +524,7 @@ commands:
     aliases: [fix]
   gencave:
     description: Generate a natural cave
-    usage: /gencave <radius>
+    usage: /gencave <radius|confirm>
   world:
     description: World management commands
     usage: /world <create|delete|list|tp|setspawn|import|info>
@@ -1394,6 +1394,9 @@ permissions:
     default: op
   joshymc.world:
     description: World management commands
+    default: op
+  joshymc.world.delete:
+    description: Delete worlds with /world delete
     default: op
   joshymc.arena:
     description: Manage PvP arenas

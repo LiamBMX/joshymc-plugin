@@ -1,10 +1,15 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.staff.AdminAudit
+import com.liam.joshymc.staff.WorldAdminRules
 import com.liam.joshymc.util.Msg
+import com.liam.joshymc.util.WorldGuardBuild
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
+import org.bukkit.Chunk
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -12,10 +17,30 @@ import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.bukkit.scheduler.BukkitRunnable
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import kotlin.math.floor
 import kotlin.math.sqrt
 
+/**
+ * `/gencave [radius]` then `/gencave confirm` (issue #1353, audit finding P5-H1). The first
+ * step checks the area and shows what will be overwritten; nothing changes until the same
+ * player confirms within [WorldAdminRules.CONFIRM_SECONDS]. Refused: blocked worlds, any claim
+ * overlapping the area, WorldGuard build denied (or not checkable) at sample points, any block
+ * entity (chest, shulker, spawner, sign, ...) the cave would overwrite, and a second cave while
+ * one is running. Every confirmed run writes a `GENCAVE` audit row.
+ */
 class GenCaveCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
+
+    private data class Pending(val center: Location, val radius: Int, val createdAt: Long)
+
+    private val pending = mutableMapOf<UUID, Pending>()
+
+    companion object {
+        /** One cave at a time server-wide: each one fills up to ~33 million blocks. */
+        @Volatile private var running = false
+        private val ALWAYS_BLOCKED = setOf("spawn", "afk", "pvp")
+    }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) { Msg.playersOnly(sender); return true }
@@ -24,15 +49,107 @@ class GenCaveCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return true
         }
 
-        val radius = args.getOrNull(0)?.toIntOrNull() ?: 50
-        if (radius < 10 || radius > 200) {
-            sender.sendMessage(Component.text("Radius must be 10-200.", NamedTextColor.RED))
+        if (args.getOrNull(0).equals(WorldAdminRules.CONFIRM, ignoreCase = true)) {
+            confirm(sender)
             return true
         }
 
-        sender.sendMessage(Component.text("Generating cave (radius $radius)... This may take a moment.", NamedTextColor.YELLOW))
+        val radius = args.getOrNull(0)?.toIntOrNull() ?: 50
+        WorldAdminRules.radiusProblem(radius)?.let { Msg.error(sender, it.message); return true }
+        if (running) { Msg.error(sender, WorldAdminRules.CaveProblem.RUNNING.message); return true }
 
         val center = sender.location.clone()
+        areaProblem(sender, center, radius)?.let { Msg.error(sender, it.message); return true }
+
+        pending[sender.uniqueId] = Pending(center, radius, System.currentTimeMillis())
+        Msg.reply(sender, Component.text(
+            "This overwrites about ${"%,d".format(WorldAdminRules.approximateBlocks(radius))} blocks in a sphere of radius $radius " +
+                "around ${center.blockX}, ${center.blockY}, ${center.blockZ} in '${center.world.name}'. It can't be undone. " +
+                "Run /gencave confirm within ${WorldAdminRules.CONFIRM_SECONDS}s to generate it.",
+            NamedTextColor.YELLOW,
+        ))
+        return true
+    }
+
+    /** World, claim and WorldGuard checks (no chunk loads). Block entities are checked on confirm. */
+    private fun areaProblem(player: Player, center: Location, radius: Int): WorldAdminRules.CaveProblem? {
+        val world = center.world
+        val blocked = ALWAYS_BLOCKED.toMutableSet()
+        blocked += try { plugin.eventManager.eventWorldName } catch (_: UninitializedPropertyAccessException) { "event" }
+        blocked += plugin.config.getString("afk.world") ?: "afk"
+        blocked += plugin.config.getStringList("gencave.blocked-worlds")
+        if (blocked.any { it.equals(world.name, ignoreCase = true) }) return WorldAdminRules.CaveProblem.WORLD
+
+        val area = WorldAdminRules.area(center.blockX, center.blockZ, radius)
+        val claims = try { plugin.claimManager.getClaimsInWorld(world.name) } catch (_: UninitializedPropertyAccessException) { emptyList() }
+        if (claims.any { WorldAdminRules.overlaps(area, it.x1, it.z1, it.x2, it.z2) }) return WorldAdminRules.CaveProblem.CLAIM
+
+        val d = (radius * 0.7).toInt()
+        val offsets = listOf(
+            Triple(0, 0, 0), Triple(radius, 0, 0), Triple(-radius, 0, 0), Triple(0, 0, radius), Triple(0, 0, -radius),
+            Triple(0, radius, 0), Triple(0, -radius, 0), Triple(d, 0, d), Triple(d, 0, -d), Triple(-d, 0, d), Triple(-d, 0, -d),
+        )
+        for ((dx, dy, dz) in offsets) {
+            val y = (center.blockY + dy).coerceIn(world.minHeight, world.maxHeight - 1)
+            val point = Location(world, center.blockX + dx + 0.5, y.toDouble(), center.blockZ + dz + 0.5)
+            when (WorldGuardBuild.canBuild(player, point, plugin.logger)) {
+                WorldGuardBuild.Result.DENIED, WorldGuardBuild.Result.UNKNOWN -> return WorldAdminRules.CaveProblem.WORLDGUARD
+                else -> {}
+            }
+        }
+        return null
+    }
+
+    private fun confirm(player: Player) {
+        val request = pending.remove(player.uniqueId)
+            ?: run { Msg.error(player, WorldAdminRules.CaveProblem.NO_PENDING.message); return }
+        if (WorldAdminRules.expired(request.createdAt, System.currentTimeMillis())) {
+            Msg.error(player, WorldAdminRules.CaveProblem.EXPIRED.message); return
+        }
+        if (running) { Msg.error(player, WorldAdminRules.CaveProblem.RUNNING.message); return }
+        // Claims or regions may have changed since the first step.
+        areaProblem(player, request.center, request.radius)?.let { Msg.error(player, it.message); return }
+
+        running = true
+        val world = request.center.world
+        val cx = request.center.blockX
+        val cy = request.center.blockY
+        val cz = request.center.blockZ
+        val area = WorldAdminRules.area(cx, cz, request.radius)
+        val futures = mutableListOf<CompletableFuture<Chunk>>()
+        for (chunkX in (area.minX shr 4)..(area.maxX shr 4)) {
+            for (chunkZ in (area.minZ shr 4)..(area.maxZ shr 4)) futures += world.getChunkAtAsync(chunkX, chunkZ)
+        }
+        Msg.reply(player, Component.text("Checking ${futures.size} chunks for containers...", NamedTextColor.GRAY))
+        CompletableFuture.allOf(*futures.toTypedArray()).whenComplete { _, error ->
+            Bukkit.getScheduler().runTask(plugin, Runnable {
+                val online = Bukkit.getPlayer(player.uniqueId)
+                if (error != null || online == null) {
+                    running = false
+                    online?.let { Msg.error(it, "Couldn't load the area: ${error?.message ?: "you left"}.") }
+                    return@Runnable
+                }
+                val blockEntities = futures.sumOf { future ->
+                    future.join().getTileEntities(false).count { state ->
+                        WorldAdminRules.touches(state.x - cx, state.y - cy, state.z - cz, request.radius)
+                    }
+                }
+                if (blockEntities > 0) {
+                    running = false
+                    Msg.error(online, "${WorldAdminRules.CaveProblem.CONTAINER.message} ($blockEntities found)")
+                    return@Runnable
+                }
+                AdminAudit.log(plugin, online, "GENCAVE",
+                    details = "world=${world.name} x=$cx y=$cy z=$cz radius=${request.radius}")
+                generate(online, request.center, request.radius)
+            })
+        }
+    }
+
+    private fun generate(sender: Player, centerLocation: Location, radius: Int) {
+        sender.sendMessage(Component.text("Generating cave (radius $radius)... This may take a moment.", NamedTextColor.YELLOW))
+
+        val center = centerLocation.clone()
         val world = center.world
         val cx = center.blockX
         val cy = center.blockY
@@ -190,6 +307,7 @@ class GenCaveCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                     }
 
                     // Done
+                    running = false
                     cancel()
                     val player = Bukkit.getPlayer(sender.uniqueId) ?: return
                     player.sendMessage(
@@ -199,11 +317,10 @@ class GenCaveCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                     return
                 }
 
+                running = false
                 cancel()
             }
         }.runTaskTimer(plugin, 1L, 1L)
-
-        return true
     }
 
     private fun noise3d(x: Double, y: Double, z: Double, seed: Long): Double {
@@ -228,7 +345,7 @@ class GenCaveCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         return when (args.size) {
-            1 -> listOf("25", "50", "75", "100", "150").filter { it.startsWith(args[0]) }
+            1 -> listOf("confirm", "25", "50", "75", "100", "150").filter { it.startsWith(args[0], ignoreCase = true) }
             else -> emptyList()
         }
     }

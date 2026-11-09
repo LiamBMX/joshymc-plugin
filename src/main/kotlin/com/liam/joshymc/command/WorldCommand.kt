@@ -1,6 +1,8 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.staff.AdminAudit
+import com.liam.joshymc.staff.WorldAdminRules
 import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
@@ -148,7 +150,7 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         sender.sendMessage(Component.text("World Management", NamedTextColor.GOLD).decorate(TextDecoration.BOLD))
         sender.sendMessage(Component.text("/world create <name> [type]", NamedTextColor.YELLOW)
             .append(Component.text(" — Create a world", NamedTextColor.GRAY)))
-        sender.sendMessage(Component.text("/world delete <name>", NamedTextColor.YELLOW)
+        sender.sendMessage(Component.text("/world delete <name> confirm", NamedTextColor.YELLOW)
             .append(Component.text(" — Delete a world", NamedTextColor.GRAY)))
         sender.sendMessage(Component.text("/world list", NamedTextColor.YELLOW)
             .append(Component.text(" — List loaded worlds", NamedTextColor.GRAY)))
@@ -230,22 +232,48 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         Msg.success(sender, "World '$name' created successfully!")
     }
 
+    /**
+     * Worlds `/world delete` never touches (issue #1353): the vanilla defaults, the main world,
+     * every world JoshyMC runs (spawn, resource, AFK, event, PvP, dungeon), every world mapped
+     * to a gamemode, and `world-management.protected-worlds`.
+     */
+    private fun protectedWorlds(): Set<String> {
+        val names = PROTECTED_WORLDS.toMutableSet()
+        Bukkit.getWorlds().firstOrNull()?.let { names += it.name }
+        names += listOf("spawn", "pvp", "dungeon")
+        names += plugin.config.getString("resource-world.world-name") ?: "resource"
+        names += plugin.config.getString("afk.world") ?: "afk"
+        names += try { plugin.eventManager.eventWorldName } catch (_: UninitializedPropertyAccessException) { "event" }
+        plugin.config.getConfigurationSection("gamemode-lock.worlds")?.getKeys(false)?.let { names += it }
+        names += plugin.config.getStringList("world-management.protected-worlds")
+        return names
+    }
+
     private fun handleDelete(sender: CommandSender, args: Array<out String>) {
         if (args.size < 2) {
-            Msg.usage(sender, "/world delete <name>")
+            Msg.usage(sender, "/world delete <name> confirm")
+            return
+        }
+        // Deleting is its own node on top of joshymc.world (issue #1353).
+        if (!sender.hasPermission(WorldAdminRules.DELETE_PERMISSION)) {
+            Msg.noPermission(sender)
             return
         }
 
-        val name = args[1].lowercase()
-
-        if (name in PROTECTED_WORLDS) {
-            Msg.error(sender, "Cannot delete default world '$name'.")
+        val name = args[1]
+        val world = if (WorldAdminRules.validWorldName(name)) Bukkit.getWorld(name) else null
+        val confirmed = args.getOrNull(2).equals(WorldAdminRules.CONFIRM, ignoreCase = true)
+        val problem = WorldAdminRules.deleteProblem(world?.name ?: name, protectedWorlds(), world != null, confirmed)
+        if (problem != null || world == null) {
+            Msg.error(sender, problem?.message ?: WorldAdminRules.DeleteProblem.NOT_LOADED.message)
             return
         }
+        val worldName = world.name
 
-        val world = Bukkit.getWorld(name)
-        if (world == null) {
-            Msg.error(sender, "World '$name' is not loaded.")
+        // Only ever delete the world's own folder directly inside the world container.
+        val worldFolder = world.worldFolder.canonicalFile
+        if (worldFolder.parentFile != Bukkit.getWorldContainer().canonicalFile) {
+            Msg.error(sender, "World '$worldName' isn't stored in the server's world folder; refusing to delete it.")
             return
         }
 
@@ -253,22 +281,21 @@ class WorldCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         val mainWorld = Bukkit.getWorlds().first()
         for (player in world.players) {
             PvpTeleportGuard.forced { player.teleport(mainWorld.spawnLocation) }
-            player.sendMessage(Component.text("You were moved to the main world because '$name' is being deleted.", NamedTextColor.YELLOW))
+            player.sendMessage(Component.text("You were moved to the main world because '$worldName' is being deleted.", NamedTextColor.YELLOW))
         }
 
         // Unload the world
         if (!Bukkit.unloadWorld(world, false)) {
-            Msg.error(sender, "Failed to unload world '$name'.")
+            Msg.error(sender, "Failed to unload world '$worldName'.")
             return
         }
 
-        // Delete the world folder
-        val worldFolder = File(Bukkit.getWorldContainer(), name)
         if (worldFolder.exists()) {
             worldFolder.deleteRecursively()
         }
 
-        Msg.success(sender, "World '$name' deleted.")
+        AdminAudit.log(plugin, sender, "WORLD_DELETE", details = "world=$worldName folder=${worldFolder.name}")
+        Msg.success(sender, "World '$worldName' deleted.")
     }
 
     private fun handleList(sender: CommandSender) {
