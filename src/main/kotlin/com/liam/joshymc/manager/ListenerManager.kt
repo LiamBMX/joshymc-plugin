@@ -142,7 +142,7 @@ class ListenerManager(private val plugin: Joshymc) {
         scoped(VeinminerListener(plugin), GamemodeFeature.MINING_PERKS)
         scoped(AutoSmeltListener(plugin), GamemodeFeature.MINING_PERKS)
         scoped(TreeFellerListener(plugin), GamemodeFeature.MINING_PERKS)
-        // Mobs OFF (issue #1421): visibility only, both gamemodes; start() runs the watch/sweep tasks
+        // Mobs OFF (issue #1475): hide + target/damage protection, both gamemodes; start() runs the sweep
         MobVisibilityListener(plugin).also {
             it.start()
             pm.registerEvents(it, plugin)
