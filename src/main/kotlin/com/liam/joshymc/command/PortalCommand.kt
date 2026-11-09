@@ -7,6 +7,8 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import com.liam.joshymc.staff.AdminAudit
+import com.liam.joshymc.staff.DelegatedCommandRules
+import com.liam.joshymc.staff.DelegatedCommands
 import com.liam.joshymc.staff.PortalActionRules
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -129,9 +131,16 @@ class PortalCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
 
         val data = if (args.size > 3) args.drop(3).joinToString(" ") else ""
+        // A `command` action runs as whoever walks in (issue #1353): same policy as /sudo and NPCs.
+        if (PortalActionRules.runnerFor(action) == PortalActionRules.Runner.PLAYER) {
+            DelegatedCommands.problem(data, DelegatedCommandRules.Context.PORTAL)?.let {
+                Msg.error(sender, it)
+                return
+            }
+        }
 
         portalManager.setAction(name, action, data)
-        AdminAudit.log(plugin, sender, "PORTAL_ACTION", details = "portal=$name action=$action")
+        AdminAudit.log(plugin, sender, "PORTAL_ACTION", details = "portal=$name action=$action data=${data.take(240)}")
         Msg.reply(sender,
             Component.text("Portal '$name' action set to ", NamedTextColor.GREEN)
                 .append(Component.text(action, NamedTextColor.YELLOW))

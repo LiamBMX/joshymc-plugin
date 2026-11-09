@@ -119,6 +119,39 @@ Never from display names, chat prefixes or tags. Only these sources count:
 - Players in Creative can't take or move JoshyMC items through the Creative inventory.
 - Existing `command` portals run with the player's own permissions.
 
+### Delegated commands: `/sudo`, NPCs and portal `command` actions (issue #1353)
+
+All three run a command that one person wrote with somebody else's permissions and belongings
+(the `/sudo` target, the player who clicks the NPC, the player who walks into the portal).
+Before #1353, `/sudo` only blocked a short label list, and NPC and portal commands weren't
+filtered at all. A `joshymc.npc` or `joshymc.portal` holder could set `pay <self> 1000000`,
+and every player who clicked would pay them. An Owner who clicked an NPC running
+`lp user <x> parent add owner` or `world delete <x>` would run it with Owner rights.
+
+One Bukkit-free policy, `staff/DelegatedCommandRules`, now decides all three
+(`staff/DelegatedCommands` resolves aliases and `plugin:` names through the command map). It
+refuses:
+
+| Refused | Examples |
+|---|---|
+| Staff commands: JoshyMC's staff commands by name, known permission/operator/server commands, and any other plugin's or vanilla command whose permission doesn't default to every player | `/lp`, `/op`, `/world`, `/joshymc`, `/gencave`, `/eco`, `/invsee`, `/god`, `/punish`, `/minecraft:give`, CoreProtect |
+| Staff subcommands (first argument) | `admin`, `give`, `givekey`, `force`, `reload`, `set`, `take`, `reset`, `hearts`, … (`/crate givekey`, `/team admin`, `/lifesteal admin`) |
+| Commands that move the user's belongings | `/pay`, `/creditspay`, `/trade`, `/trash`, `/withdrawheart`, `/tpaccept`, `/sethome`, `/delhome` |
+| Arguments to market/team/claim commands (the bare menu is fine) | `/team transfer x`, `/claim trust x`, `/ah sell 1`, `/bounty add x 1`, `/coinflip create 1`, `/tokens sell 64`, `/bank withdraw all` |
+
+- `/npc setcommand` and `/portal action <name> command …` refuse such a command when it's set,
+  and NPC clicks/portal entries check it again when they run, so **commands stored before
+  #1353 are covered too**. A refused run is logged to the console as
+  `[DelegatedCommands] Refused …`, so check the log after updating and re-set any NPC or
+  portal that relied on one.
+- Menus, warps, kits, shops and similar player commands (`/spawn`, `/warp x`, `/kit`, `/shop`,
+  `/advent`, `/pv`, `/crate preview x`, `/event join`) are unchanged.
+- The console's own `/sudo` and console-only `console` portal actions aren't delegated, so
+  they aren't limited.
+- Audit rows: `SUDO` now stores the whole command line (amounts and recipients), and there
+  are new `NPC_COMMAND`, `NPC_CREATE` and `NPC_DELETE` rows. `PORTAL_ACTION` now also stores
+  the action data.
+
 ---
 
 ## 4. Punishment limits (CURRENT)

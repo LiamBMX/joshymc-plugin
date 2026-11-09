@@ -2,6 +2,9 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
+import com.liam.joshymc.staff.AdminAudit
+import com.liam.joshymc.staff.DelegatedCommandRules
+import com.liam.joshymc.staff.DelegatedCommands
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -68,6 +71,7 @@ class NPCCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val name = args.drop(2).joinToString(" ")
         plugin.npcManager.createNPC(id, name, player.location)
+        AdminAudit.log(plugin, player, "NPC_CREATE", details = "npc=$id")
         plugin.commsManager.send(player, Component.text("NPC '$id' created at your location.", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
     }
 
@@ -79,6 +83,7 @@ class NPCCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val id = args[1].lowercase()
         if (plugin.npcManager.deleteNPC(id)) {
+            AdminAudit.log(plugin, player, "NPC_DELETE", details = "npc=$id")
             plugin.commsManager.send(player, Component.text("NPC '$id' deleted.", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
         } else {
             plugin.commsManager.send(player, Component.text("NPC '$id' not found.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
@@ -92,9 +97,16 @@ class NPCCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         val id = args[1].lowercase()
-        val cmd = args.drop(2).joinToString(" ")
+        val cmd = args.drop(2).joinToString(" ").removePrefix("/")
+
+        // NPC commands run as whoever clicks (issue #1353): refuse what the policy refuses.
+        DelegatedCommands.problem(cmd, DelegatedCommandRules.Context.NPC)?.let {
+            plugin.commsManager.send(player, Component.text(it, NamedTextColor.RED), CommunicationsManager.Category.ADMIN)
+            return
+        }
 
         if (plugin.npcManager.setCommand(id, cmd)) {
+            AdminAudit.log(plugin, player, "NPC_COMMAND", details = "npc=$id command=/${cmd.take(240)}")
             plugin.commsManager.send(player, Component.text("Command for NPC '$id' set to: $cmd", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
         } else {
             plugin.commsManager.send(player, Component.text("NPC '$id' not found.", NamedTextColor.RED), CommunicationsManager.Category.ADMIN)

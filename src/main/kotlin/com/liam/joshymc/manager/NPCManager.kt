@@ -211,7 +211,11 @@ class NPCManager(private val plugin: Joshymc) : Listener {
 
         if (command.isBlank()) return
 
-        val resolved = command.replace("{player}", player.name)
+        val resolved = command.replace("{player}", player.name).removePrefix("/")
+        // Runs with the clicker's permissions, so the shared delegated-command policy applies
+        // at click time too, also to commands stored before issue #1353.
+        if (!com.liam.joshymc.staff.DelegatedCommands.allowRun(plugin, player, resolved,
+                com.liam.joshymc.staff.DelegatedCommandRules.Context.NPC, "NPC '$npcId'")) return
         player.performCommand(resolved)
     }
 

@@ -47,22 +47,16 @@ object PortalActionRules {
 /**
  * `/sudo` limits for players (issue #1383). Bukkit-free. `/sudo` runs a command with the
  * *target's* permissions, so a player sending it may only target players below them
- * ([StaffProtection]), and never commands that change permissions or operators, mint
- * currency, or run other commands. The console is not limited.
+ * ([StaffProtection]). Which commands may run is the shared [DelegatedCommandRules] policy
+ * (issue #1353: staff commands, asset transfers like `/pay`, `/creditspay`, `/trade`, and
+ * arguments to market/team/claim commands are refused). The console is not limited.
  */
 object SudoRules {
-    private val BLOCKED = setOf(
-        "lp", "luckperms", "perm", "perms", "permission", "permissions", "lpb", "lpv",
-        "op", "deop", "sudo", "execute", "pex", "manuadd", "eco", "economy", "credits", "purchase",
-        "voucher", "rank", "rankvoucher", "creditvoucher", "jgamemode", "stop", "restart", "reload", "rl",
-        "whitelist", "ban", "pardon", "ban-ip", "pardon-ip",
-    )
-
     /** The command's base label: no slash, no `plugin:` namespace, lower case. */
-    fun label(command: String): String =
-        command.trim().removePrefix("/").substringBefore(' ').substringAfter(':').lowercase()
+    fun label(command: String): String = DelegatedCommandRules.label(command)
 
-    fun blocked(command: String): Boolean = label(command) in BLOCKED
+    /** Label-only check; `/sudo` itself also resolves aliases and permissions ([DelegatedCommands]). */
+    fun blocked(command: String): Boolean = !DelegatedCommandRules.decide(command).allowed
 }
 
 /**

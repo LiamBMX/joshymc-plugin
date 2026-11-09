@@ -324,6 +324,10 @@ class PortalManager(private val plugin: Joshymc) : Listener {
                     // used to run commands its builder couldn't.
                     if (portal.actionData.isBlank()) return
                     val cmd = portal.actionData.replace("{player}", player.name).removePrefix("/")
+                    // Same delegated-command policy as /sudo and NPCs (issue #1353), checked at
+                    // run time too so actions stored earlier are covered.
+                    if (!com.liam.joshymc.staff.DelegatedCommands.allowRun(plugin, player, cmd,
+                            com.liam.joshymc.staff.DelegatedCommandRules.Context.PORTAL, "portal '${portal.name}'")) return
                     player.performCommand(cmd)
                 }
                 "console" -> {
