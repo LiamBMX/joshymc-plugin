@@ -955,12 +955,14 @@ class SudoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             if (target.uniqueId != sender.uniqueId) {
                 plugin.staffRankManager.protectionProblem(sender, target.uniqueId)?.let { Msg.error(sender, it); return true }
             }
-            if (com.liam.joshymc.staff.SudoRules.blocked(cmd)) {
-                Msg.error(sender, "/${com.liam.joshymc.staff.SudoRules.label(cmd)} can't be run through /sudo.")
+            // One policy for every run-as-someone-else path (issue #1353).
+            com.liam.joshymc.staff.DelegatedCommands.problem(cmd, com.liam.joshymc.staff.DelegatedCommandRules.Context.SUDO)?.let {
+                Msg.error(sender, it)
                 return true
             }
         }
-        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "SUDO", target.uniqueId, target.name, "command=/${com.liam.joshymc.staff.SudoRules.label(cmd)}")
+        // The whole command line, not just the label (issue #1353): amounts and recipients matter.
+        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "SUDO", target.uniqueId, target.name, "command=/${cmd.take(240)}")
         target.performCommand(cmd)
         if (sender is Player) plugin.commsManager.send(sender, Component.text("Forced ${target.name} to run: /$cmd", NamedTextColor.GREEN))
         return true
