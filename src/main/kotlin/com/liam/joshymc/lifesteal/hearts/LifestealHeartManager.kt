@@ -2,6 +2,8 @@ package com.liam.joshymc.lifesteal.hearts
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
+import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.eligible
 import com.liam.joshymc.lifesteal.LifestealSettings
 import com.liam.joshymc.lifesteal.hearts.HeartRules.changesHearts
 import com.liam.joshymc.lifesteal.ranked.RankedHeartSummary
@@ -371,7 +373,9 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 damageType == GENERIC_KILL,
         ) { attacker ->
             val candidate = Bukkit.getPlayer(attacker)
-            candidate != null && HeartRules.attribute(deathFor(victim, candidate, attacker)) == HeartRules.Attribution.PVP_KILL
+            candidate != null && HeartRules.attribute(deathFor(victim, candidate, attacker)) == HeartRules.Attribution.PVP_KILL &&
+                // Issue #1487: an attacker who used staff abilities can't be credited through the tag either.
+                plugin.competitiveEligibility.verdict(candidate, victim.uniqueId).eligible
         }
         if (credited != null) {
             killer = Bukkit.getPlayer(credited)
@@ -396,7 +400,8 @@ class LifestealHeartManager(private val plugin: Joshymc) {
             ) { attacker ->
                 val candidate = Bukkit.getPlayer(attacker)
                 candidate != null && plugin.lifestealRankedManager.isCreditableOpponent(rankedMatch, attacker, victim.uniqueId) &&
-                    HeartRules.attribute(deathFor(victim, candidate, attacker)) == HeartRules.Attribution.PVP_KILL
+                    HeartRules.attribute(deathFor(victim, candidate, attacker)) == HeartRules.Attribution.PVP_KILL &&
+                    plugin.competitiveEligibility.verdict(candidate, victim.uniqueId).eligible
             }
             if (rankedCredit != null) {
                 killer = Bukkit.getPlayer(rankedCredit)
@@ -425,6 +430,8 @@ class LifestealHeartManager(private val plugin: Joshymc) {
             // window, so a team change after the fatal hit (or in the same tick) can't unlock a transfer.
             team = plugin.lifestealTeamManager.heartCheck(killer.uniqueId, victim.uniqueId),
             window = plugin.lifestealProgressionManager.heartWindow(now),
+            // Issue #1487: settled now, from the killer's live state and every hit they made on this victim.
+            attacker = plugin.competitiveEligibility.verdict(killer, victim.uniqueId),
             note = note,
         )
         val result = try {
@@ -453,7 +460,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                         apply(killer, result.killerAfter)
                     }
                 }
-                notify(result, killer, victim.name, victim, limits)
+                notify(result, killer, victim.name, victim, limits, victim.uniqueId, request)
                 // Issue #1426: Team XP only for kills the heart service accepted as legitimate.
                 plugin.teamProgression()?.onPvpKill(killer.uniqueId, victim.uniqueId, result.decision, request.dedupeKey)
             }
@@ -517,6 +524,8 @@ class LifestealHeartManager(private val plugin: Joshymc) {
             limits = limits,
             team = plugin.lifestealTeamManager.heartCheck(killer.uniqueId, victim),
             window = plugin.lifestealProgressionManager.heartWindow(now),
+            // Issue #1487: the same check as a normal kill; hits on the NPC count as hits on its owner.
+            attacker = plugin.competitiveEligibility.verdict(killer, victim),
         )
         val result = try {
             store.transferPvp(request)
@@ -541,7 +550,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                         apply(killer, result.killerAfter)
                     }
                 }
-                notify(result, killer, victimName, Bukkit.getPlayer(victim)?.takeIf { it.isOnline }, limits)
+                notify(result, killer, victimName, Bukkit.getPlayer(victim)?.takeIf { it.isOnline }, limits, victim, request)
                 plugin.teamProgression()?.onPvpKill(killer.uniqueId, victim, result.decision, request.dedupeKey)
             }
         }
@@ -576,6 +585,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
             limits = limits,
             team = plugin.lifestealTeamManager.heartCheck(killer.uniqueId, victim.uniqueId),
             window = plugin.lifestealProgressionManager.heartWindow(now),
+            attacker = plugin.competitiveEligibility.verdict(killer, victim.uniqueId),
             note = note,
         )
         val result = try {
@@ -598,15 +608,24 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                     }
                 }
                 // The victim is disconnecting: the ranked manager tells them when they're back.
-                notify(result, killer, victim.name, null, limits)
+                notify(result, killer, victim.name, null, limits, victim.uniqueId, request)
             }
         }
         return result
     }
 
-    private fun notify(result: HeartStore.PvpResult.Done, killer: Player, victimName: String, victim: Player?, limits: HeartRules.Limits) {
+    private fun notify(
+        result: HeartStore.PvpResult.Done, killer: Player, victimName: String, victim: Player?, limits: HeartRules.Limits,
+        victimId: UUID, request: HeartStore.PvpRequest,
+    ) {
         val names = mapOf("{victim}" to victimName, "{killer}" to killer.name, "{maximum}" to limits.maximum.toString())
         when (val decision = result.decision) {
+            is HeartRules.Decision.IneligibleAttacker -> {
+                (request.attacker as? CompetitiveEligibility.Verdict.Ineligible)?.let {
+                    plugin.competitiveEligibility.reportBlocked(killer, victimId, victimName, "HEART", it, request.dedupeKey + " tx=" + result.transactionId)
+                }
+                send(victim, HeartMessages.VICTIM_INELIGIBLE_ATTACKER, names)
+            }
             is HeartRules.Decision.Transfer -> {
                 send(killer, HeartMessages.KILLER_STOLE, names + ("{hearts}" to result.killerAfter.toString()))
                 send(victim, HeartMessages.VICTIM_LOST, names + ("{hearts}" to result.victimAfter.toString()))

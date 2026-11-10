@@ -201,7 +201,9 @@ only, L = Lifesteal only (`gamemode/GamemodeAssignments.kt`).
 | `joshymc.tokens.give` (op) | `/tokens give` | audited | CRITICAL | Owner / Head Manager (approval) | S |
 | `joshymc.creditvoucher.admin`, `joshymc.rankvoucher.admin` (op) | physical Credit/Rank Vouchers | signed + audited | CRITICAL | Owner | S |
 | `joshymc.give` (op) | `/joshymc give` (incl. tokens) | audited | HIGH | Lead Admin | **N** |
-| `joshymc.enchant` (op) | `/enchant` up to level 255 | permission | HIGH | Admin; deny on Lifesteal | **N** |
+| `joshymc.enchant` (op) | `/enchant` within vanilla limits (max level, item, conflicts) | permission | MEDIUM | Admin; deny on Lifesteal | **N** |
+| `joshymc.enchant.unsafe` (false) | `/enchant` past vanilla limits, up to 255 (issue #1487) | audited (`ENCHANT_UNSAFE`); such gear earns no Lifesteal rewards | HIGH | explicit grant only | **N** |
+| `joshymc.god` (op) / `joshymc.god.others` (op) | `/god` self / another player (issue #1487) | audited (`GOD_MODE`, `GOD_MODE_OTHER`); God Mode kills earn no Lifesteal rewards | MEDIUM | Admin | **N** |
 | `joshymc.crate.admin`, `joshymc.crateeditor` (op) | `/crate givekey|force`, editor | audited | HIGH | Lead Admin | S |
 | `joshymc.sellwand.give`, `joshymc.booster` (op) | sell wands, boosters (no multiplier cap) | sell wands audited | HIGH | Head Manager (approval) | S |
 | `joshymc.spawners.admin` (op) | `/spawner give` | permission | HIGH | Lead Admin | S |
@@ -426,7 +428,7 @@ with `lp user <name> permission check <node>` on each server.
   crates, shops, events) are refused on a dedicated Lifesteal server through its implied lock.
   LIFESTEAL commands (`/withdrawheart`, `/ranked`) are only registered where Lifesteal runs.
   NETWORK commands run on both servers.
-- **High-risk NETWORK commands:** `/joshymc give` (can give `token`), `/enchant` (level 255),
+- **High-risk NETWORK commands:** `/joshymc give` (can give `token`), `/enchant` with `joshymc.enchant.unsafe` (level 255),
   `/sudo`, `/admin`, `/rank`, `/gamemode`, `/portal`, `/punish` and the legacy punishments.
   They work wherever the node is granted. Keep them apart with LuckPerms `server=` contexts (§7),
   for example `joshymc.enchant false server=lifesteal`.
@@ -483,7 +485,8 @@ Audit findings not fixed here (outside this issue's scope, or a separate behavio
 - `/invsee` and `/enderchest <player>` are editable (Part 2.6, Part 3 M2).
 - Mutes don't block `/msg` and `/r` (Part 2.3).
 - `/credits` base permission blocks `bal`/`baltop`/`pay` for players (Part 1 3b, Part 3 3.2).
-- `/enchant` level 255, `/booster` and `/sellwand` multiplier caps (Part 3 H1, H4).
+- `/booster` and `/sellwand` multiplier caps (Part 3 H1, H4). (`/enchant` level 255 is fixed by
+  issue #1487: vanilla limits unless `joshymc.enchant.unsafe`.)
 - `/crate force` opens a crate without a key (now audited; Part 3 H3).
 - Physical money vouchers and tokens carry no per-item id (Part 3 M1). Creative copying is
   blocked, but a separate duplication bug could still copy them.

@@ -5,6 +5,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.lifesteal.LifestealSettings
 import com.liam.joshymc.lifesteal.combat.npc.CombatNpcRules.JoinAction
+import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
 import com.liam.joshymc.lifesteal.combat.npc.CombatNpcRules.Outcome
 import com.liam.joshymc.lifesteal.combat.npc.CombatNpcRules.StartupAction
 import com.liam.joshymc.lifesteal.combat.npc.CombatNpcRules.State
@@ -517,6 +518,11 @@ class LifestealCombatNpcManager(private val plugin: Joshymc) {
         if (attacker.uniqueId == live.owner) return HitDecision.DENY
         if (attacker.gameMode == GameMode.SPECTATOR) return HitDecision.DENY
         if (plugin.modModeManager.isModMode(attacker)) return HitDecision.DENY
+        // Issue #1487 (D-H4): Creative, God Mode and Vanish (the staff abilities, not gear) can't
+        // kill a combat logger's NPC. Over-limit gear may still hit; the kill just earns nothing
+        // (the heart/coin settlement checks the same tracker, including the hits made before).
+        val staffState = plugin.competitiveEligibility.currentReasons(attacker) - CompetitiveEligibility.Reason.UNSAFE_ENCHANT
+        if (staffState.isNotEmpty()) return HitDecision.DENY
         // Lifesteal friendly fire applies to the owner's NPC as it would to the owner.
         val policy = plugin.lifestealTeamManager.combatPolicy()
         val relation = plugin.lifestealTeamManager.combatRelation(attacker.uniqueId, live.owner)

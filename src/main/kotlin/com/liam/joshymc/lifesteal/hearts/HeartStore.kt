@@ -1,5 +1,6 @@
 package com.liam.joshymc.lifesteal.hearts
 
+import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
 import com.liam.joshymc.lifesteal.hearts.HeartRules.changesHearts
 import com.liam.joshymc.lifesteal.progression.ProgressionRules
 import com.liam.joshymc.lifesteal.teams.TeamCombatRules
@@ -352,6 +353,12 @@ class HeartStore(private val db: SqliteDatabase) {
          * this death's audit reasons so staff can tell it from a direct kill; nothing else changes.
          */
         val note: String? = null,
+        /**
+         * Issue #1487 (D-H4): the killer's competitive eligibility, taken at settlement from their
+         * live state plus every hit they made on this victim in the window. Anything but Eligible
+         * moves no heart and is recorded as `INELIGIBLE_ATTACKER` (same dedupe key, so once).
+         */
+        val attacker: CompetitiveEligibility.Verdict = CompetitiveEligibility.Verdict.Eligible,
     )
 
     sealed interface PvpResult {
@@ -403,7 +410,7 @@ class HeartStore(private val db: SqliteDatabase) {
             }
 
             val remaining = HeartRules.cooldownRemaining(lastTransferAt(request.killer, request.victim), request.now, request.cooldownMillis)
-            val decision = HeartRules.decide(victimHearts, killerHearts, remaining, request.limits, request.policy, request.team, request.window)
+            val decision = HeartRules.decide(victimHearts, killerHearts, remaining, request.limits, request.policy, request.team, request.window, request.attacker)
             val victimBefore = request.limits.clamp(victimHearts)
             val killerBefore = request.limits.clamp(killerHearts)
             var victimAfter = victimBefore
@@ -431,7 +438,8 @@ class HeartStore(private val db: SqliteDatabase) {
                     insertAudit(transactionId, request.killer, "PVP_GAIN", killerHearts, killerAfter, request.victim.toString(), noted("killed ${request.victim}", request.note), request.now)
                 }
             } else {
-                insertAudit(transactionId, request.victim, "PVP_REJECTED", victimHearts, victimHearts, request.killer.toString(), noted(outcome(decision), request.note), request.now)
+                val reason = if (decision is HeartRules.Decision.IneligibleAttacker) "${outcome(decision)}: ${decision.reasons}" else outcome(decision)
+                insertAudit(transactionId, request.victim, "PVP_REJECTED", victimHearts, victimHearts, request.killer.toString(), noted(reason, request.note), request.now)
             }
             result = PvpResult.Done(transactionId, decision, victimBefore, victimAfter, killerBefore, killerAfter)
         }
@@ -814,6 +822,7 @@ class HeartStore(private val db: SqliteDatabase) {
         HeartRules.Decision.NotLaunched -> "NOT_LAUNCHED"
         HeartRules.Decision.GracePeriod -> "GRACE_PERIOD"
         HeartRules.Decision.ProgressionUnknown -> "PROGRESSION_UNKNOWN"
+        is HeartRules.Decision.IneligibleAttacker -> "INELIGIBLE_ATTACKER"
     }
 
     private fun record(rs: ResultSet): Record = Record(

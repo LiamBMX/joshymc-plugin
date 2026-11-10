@@ -351,9 +351,13 @@ class LifestealBankManager(private val plugin: Joshymc) {
             heartCheck = try { plugin.lifestealTeamManager.heartCheck(killer.uniqueId, victim) } catch (_: UninitializedPropertyAccessException) { TeamCombatRules.HeartCheck.UNKNOWN },
             relation = try { plugin.lifestealTeamManager.combatRelation(killer.uniqueId, victim, now) } catch (_: UninitializedPropertyAccessException) { TeamCombatRules.Relation.UNKNOWN },
             sharedConnection = shared,
+            attacker = plugin.competitiveEligibility.verdict(killer, victim),
         )
         when (val e = BankRules.eligibility(death, s)) {
             is BankRules.Eligibility.Refused -> {
+                (death.attacker as? com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.Verdict.Ineligible)?.let {
+                    plugin.competitiveEligibility.reportBlocked(killer, victim, victimName, "COINS", it, dedupeKey)
+                }
                 if (e.reason != BankRules.StealRefusal.DISABLED && e.reason != BankRules.StealRefusal.NOT_PVP) {
                     plugin.logger.info("[Bank] ${killer.name} killed $victimName: no coins moved (${e.reason.log}).")
                 }
