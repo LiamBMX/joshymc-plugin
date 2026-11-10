@@ -726,6 +726,7 @@ class CommandManager(private val plugin: Joshymc) {
         plugin.getCommand("feed")?.let { it.setExecutor(feedCmd); it.tabCompleter = feedCmd }
 
         val godCmd = GodCommand(plugin)
+        plugin.godCommand = godCmd
         plugin.getCommand("god")?.let { it.setExecutor(godCmd); it.tabCompleter = godCmd }
 
         val speedCmd = SpeedCommand(plugin)
