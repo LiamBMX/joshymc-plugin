@@ -1027,7 +1027,10 @@ permissions:
     description: Use /lifesteal to go to Lifesteal SMP
     default: true
   joshymc.lifesteal.hearts.admin:
-    description: Use /lifesteal hearts get|set|add|remove|items|void on the Lifesteal server (admin heart management and lost Heart item recovery)
+    description: Admin heart management (/lifesteal hearts)
+    default: op
+  joshymc.lifesteal.hearts.monitor:
+    description: View heart transfer review flags and get their alerts
     default: op
   joshymc.lifesteal.hearts.give:
     description: Use /lifesteal hearts give to make recorded Heart items for an online Lifesteal player

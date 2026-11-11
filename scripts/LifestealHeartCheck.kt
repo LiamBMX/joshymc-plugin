@@ -906,10 +906,13 @@ private fun wiring() {
     check("/lifesteal hearts routed to the heart command", "args.firstOrNull()?.equals(\"hearts\", ignoreCase = true) == true" in transfer)
     check("plain /lifesteal still transfers", "plugin.transferManager.request(sender, destination)" in transfer)
     val command = source("lifesteal/hearts/LifestealHeartsCommand.kt")
-    // Only `give` (issue #1344, its own permission) is routed before the admin permission check.
+    // Only `give` (issue #1344) and `monitor` (issue #1508), each with its own permission, are routed
+    // before the admin permission check.
     check("admin command checks its permission first", Regex(
-        """fun execute\(sender: CommandSender, args: List<String>\) \{\s+// .*\n\s+if \(args\.firstOrNull\(\)\?\.equals\("give", ignoreCase = true\) == true\) \{\s+give\(sender, args\)\s+return\s+\}\s+if \(!sender\.hasPermission\(PERMISSION\)\)"""
+        """fun execute\(sender: CommandSender, args: List<String>\) \{\s+// .*\n\s+if \(args\.firstOrNull\(\)\?\.equals\("give", ignoreCase = true\) == true\) \{\s+give\(sender, args\)\s+return\s+\}\s+// .*\n\s+if \(args\.firstOrNull\(\)\?\.equals\("monitor", ignoreCase = true\) == true\) \{\s+monitor\(sender, args\)\s+return\s+\}\s+if \(!sender\.hasPermission\(PERMISSION\)\)"""
     ).containsMatchIn(command))
+    check("monitor subcommand checks its own permission first",
+        command.substringAfter("private fun monitor(sender: CommandSender, args: List<String>) {").trimStart().startsWith("if (!sender.hasPermission(MONITOR_PERMISSION))"))
     check("admin command refuses off Lifesteal", "if (!hearts.hosted)" in command)
     check("offline players resolved without Mojang lookups", "plugin.playerResolver.resolve(" in command && "getOfflinePlayer(" !in command)
     val pluginYml = File("src/main/resources/plugin.yml").readText()
@@ -919,7 +922,8 @@ private fun wiring() {
     check("killer message", "You stole 1 heart from &f{victim}&a!" in messages)
     check("victim message", "You lost 1 heart to &f{killer}&c!" in messages)
 
-    val all = File("src/main/kotlin/com/liam/joshymc/lifesteal/hearts").listFiles()!!.joinToString("\n") { it.readText() }
+    // Issue #1508 added the monitor/ subpackage: read every file below hearts/.
+    val all = File("src/main/kotlin/com/liam/joshymc/lifesteal/hearts").walkTopDown().filter { it.isFile && it.extension == "kt" }.joinToString("\n") { it.readText() }
     // Heart items exist since issue #1344, but still no crafting recipe, shop or elimination.
     check("no elimination, revival or recipes", listOf("ban(", "ShapedRecipe", "ShapelessRecipe", "revive").none { it in all })
 }

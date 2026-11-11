@@ -1,6 +1,9 @@
 package com.liam.joshymc.lifesteal.hearts
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.lifesteal.hearts.monitor.HeartMonitorRules
+import com.liam.joshymc.lifesteal.hearts.monitor.HeartTransferMonitor
+import com.liam.joshymc.lifesteal.hearts.monitor.HeartTransferMonitorStore
 import com.liam.joshymc.util.BedrockUtil
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
@@ -19,13 +22,19 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
 
     /** Whether [sender] should see the subcommand at all (permission and a Lifesteal server). */
     fun visibleTo(sender: CommandSender): Boolean =
-        (sender.hasPermission(PERMISSION) || sender.hasPermission(GIVE_PERMISSION)) && plugin.lifestealHeartManager.hosted
+        (sender.hasPermission(PERMISSION) || sender.hasPermission(GIVE_PERMISSION) || sender.hasPermission(MONITOR_PERMISSION)) &&
+            plugin.lifestealHeartManager.hosted
 
     /** [args] starts after `hearts`. */
     fun execute(sender: CommandSender, args: List<String>) {
         // Heart item grants (issue #1344) have their own permission, checked before anything else.
         if (args.firstOrNull()?.equals("give", ignoreCase = true) == true) {
             give(sender, args)
+            return
+        }
+        // Heart transfer monitoring (issue #1508) has its own permission too: it shows connection signals.
+        if (args.firstOrNull()?.equals("monitor", ignoreCase = true) == true) {
+            monitor(sender, args)
             return
         }
         if (!sender.hasPermission(PERMISSION)) {
@@ -269,6 +278,102 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         }
     }
 
+    /**
+     * `monitor [open|all|<player>|<flag id> [reviewed|dismissed|open [note]]]` (issue #1508): the
+     * logging-only heart transfer review flags. [MONITOR_PERMISSION] only, since the reasons name
+     * shared-connection evidence; names, UUIDs, heart counts and signal names only, never a hash
+     * or an address. Marking a flag only records the review: it changes no heart.
+     */
+    private fun monitor(sender: CommandSender, args: List<String>) {
+        if (!sender.hasPermission(MONITOR_PERMISSION)) {
+            Msg.noPermission(sender)
+            return
+        }
+        if (!plugin.lifestealHeartManager.hosted) {
+            Msg.error(sender, "Hearts only exist on the Lifesteal server.")
+            return
+        }
+        val monitor = plugin.lifestealHeartManager.monitor
+        if (!monitor.active) Msg.reply(sender, Component.text("Heart transfer monitoring is off (lifesteal.yml > heart-transfer-monitoring); showing stored flags.", NamedTextColor.YELLOW))
+        val arg = args.getOrNull(1)
+        val id = arg?.removePrefix("#")?.toLongOrNull()
+        try {
+            if (id != null) {
+                if (args.size == 2) return flagDetails(sender, id)
+                val status = when (args[2].lowercase()) {
+                    "reviewed" -> HeartTransferMonitorStore.Status.REVIEWED
+                    "dismissed", "dismiss" -> HeartTransferMonitorStore.Status.DISMISSED
+                    "open", "reopen" -> HeartTransferMonitorStore.Status.OPEN
+                    else -> return Msg.usage(sender, MONITOR_USAGE)
+                }
+                val note = args.drop(3).joinToString(" ").takeIf { it.isNotBlank() }
+                if (monitor.flag(id) == null) return Msg.error(sender, "No heart transfer flag #$id.")
+                if (monitor.review(id, status, (sender as? Player)?.uniqueId, sender.name, note)) {
+                    Msg.success(sender, "Flag #$id is now ${status.name.lowercase()}. No hearts were changed.")
+                } else {
+                    Msg.reply(sender, Component.text("Flag #$id is already ${status.name.lowercase()}.", NamedTextColor.GRAY))
+                }
+                return
+            }
+            if (args.size > 2) return Msg.usage(sender, MONITOR_USAGE)
+            val (player, status) = when (arg?.lowercase()) {
+                null, "open" -> null to HeartTransferMonitorStore.Status.OPEN
+                "all" -> null to null
+                else -> {
+                    val target = plugin.playerResolver.resolve(arg) ?: return Msg.playerNotFound(sender, arg)
+                    target.uniqueId to null
+                }
+            }
+            val rows = monitor.flags(player, status)
+            val scope = buildString {
+                append(if (status == HeartTransferMonitorStore.Status.OPEN) "Open heart transfer flags" else "Heart transfer flags")
+                if (player != null) append(" involving ${name(player)}")
+            }
+            if (rows.isEmpty()) {
+                Msg.reply(sender, Component.text("$scope: none.", NamedTextColor.GRAY))
+                return
+            }
+            Msg.reply(sender, Component.text("$scope (newest first, up to 15). Review signals, not proof of abuse:", NamedTextColor.GRAY))
+            for (f in rows) {
+                sender.sendMessage(
+                    Component.text(" #${f.id} ${time(f.at)} ", NamedTextColor.GRAY)
+                        .append(Component.text("${name(f.victim)} → ${name(f.killer)}", NamedTextColor.WHITE))
+                        .append(Component.text(" ${HeartMonitorRules.reason(f.signals)}", NamedTextColor.YELLOW))
+                        .append(Component.text(" [${f.status?.name?.lowercase() ?: "?"}]", NamedTextColor.DARK_GRAY))
+                        .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/lifesteal hearts monitor ${f.id}"))
+                )
+            }
+        } catch (e: Exception) {
+            Msg.error(sender, "Couldn't read the heart transfer flags: ${e.message}")
+        }
+    }
+
+    private fun flagDetails(sender: CommandSender, id: Long) {
+        val f = plugin.lifestealHeartManager.monitor.flag(id) ?: return Msg.error(sender, "No heart transfer flag #$id.")
+        fun line(label: String, value: String) = sender.sendMessage(
+            Component.text(" $label: ", NamedTextColor.GRAY).append(Component.text(value, NamedTextColor.WHITE))
+        )
+        Msg.reply(sender, Component.text("Heart transfer flag #${f.id} (${f.status?.name?.lowercase() ?: "?"}). A review signal, not proof of abuse:", NamedTextColor.GRAY))
+        line("When", time(f.transferAt))
+        line("Source", (f.source?.label ?: "PvP") + (f.matchId?.let { " (match $it)" } ?: ""))
+        line("Victim", "${name(f.victim)} (${f.victim}) ${f.victimBefore} -> ${f.victimAfter} hearts")
+        line("Killer", "${name(f.killer)} (${f.killer}) ${f.killerBefore} -> ${f.killerAfter} hearts")
+        line("Reason", HeartMonitorRules.reason(f.signals))
+        line(
+            "In the last ${f.windowHours}h",
+            "${f.forward} heart(s) victim -> killer, ${f.reverse} back" +
+                if (HeartMonitorRules.Signal.ASSOCIATED_ACCOUNTS in f.signals) ", ${f.associatedAccounts} associated account(s) gave the killer hearts" else ""
+        )
+        line("Heart transaction", "${f.transactionId} (${f.dedupeKey})")
+        if (f.reviewedAt != null) line("Reviewed", "${f.reviewedBy?.let { runCatching { name(UUID.fromString(it)) }.getOrDefault(it) }} at ${time(f.reviewedAt)}${f.reviewNote?.let { ": $it" } ?: ""}")
+        sender.sendMessage(Component.text(" Mark: /lifesteal hearts monitor ${f.id} reviewed|dismissed [note]. Use /alts to compare accounts.", NamedTextColor.DARK_GRAY))
+    }
+
+    private fun name(uuid: UUID): String = plugin.playerResolver.lastKnownName(uuid) ?: uuid.toString()
+
+    private fun time(at: Long): String =
+        java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.ofEpochMilli(at))
+
     /** `void <serial> [refund]`: recovery for a lost Heart item (see [HeartStore.voidItem]). */
     private fun void(sender: CommandSender, args: List<String>) {
         if (!ready(sender)) return
@@ -303,10 +408,16 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
             1 -> buildList {
                 if (admin) addAll(listOf("get", "set", "add", "remove", "items", "void", "reviews"))
                 if (sender.hasPermission(GIVE_PERMISSION)) add("give")
+                if (sender.hasPermission(MONITOR_PERMISSION)) add("monitor")
             }.filter { it.startsWith(args[0].lowercase()) }
-            2 -> if (args[0].equals("void", ignoreCase = true)) emptyList()
+            2 -> if (args[0].equals("monitor", ignoreCase = true)) {
+                if (sender.hasPermission(MONITOR_PERMISSION)) (listOf("open", "all") + plugin.server.onlinePlayers.map { it.name }).filter { it.startsWith(args[1], ignoreCase = true) }
+                else emptyList()
+            } else if (args[0].equals("void", ignoreCase = true)) emptyList()
                 else plugin.server.onlinePlayers.map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
-            3 -> if (args[0].equals("void", ignoreCase = true) && admin) listOf("refund").filter { it.startsWith(args[2].lowercase()) } else emptyList()
+            3 -> if (args[0].equals("monitor", ignoreCase = true) && sender.hasPermission(MONITOR_PERMISSION) && args[1].removePrefix("#").toLongOrNull() != null)
+                listOf("reviewed", "dismissed", "open").filter { it.startsWith(args[2].lowercase()) }
+            else if (args[0].equals("void", ignoreCase = true) && admin) listOf("refund").filter { it.startsWith(args[2].lowercase()) } else emptyList()
             else -> emptyList()
         }
     }
@@ -317,5 +428,8 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         const val GIVE_PERMISSION = "joshymc.lifesteal.hearts.give"
         const val USAGE = "/lifesteal hearts <get|set|add|remove> <player> [amount] | items <player> | void <serial> [refund] | reviews [player]"
         const val GIVE_USAGE = "/lifesteal hearts give <player> <amount>"
+        /** Heart transfer monitoring (issue #1508): flags, details, review status and staff notifications. */
+        const val MONITOR_PERMISSION = HeartTransferMonitor.PERMISSION
+        const val MONITOR_USAGE = "/lifesteal hearts monitor [open|all|<player>|<id> [reviewed|dismissed|open [note]]]"
     }
 }

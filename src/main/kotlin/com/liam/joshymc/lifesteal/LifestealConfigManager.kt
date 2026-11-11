@@ -6,6 +6,7 @@ import com.liam.joshymc.lifesteal.bank.BankConfig
 import com.liam.joshymc.lifesteal.bank.BankSettings
 import com.liam.joshymc.lifesteal.bank.CoinStealSettings
 import com.liam.joshymc.lifesteal.bounty.BountyConfig
+import com.liam.joshymc.lifesteal.hearts.monitor.HeartMonitorConfig
 import com.liam.joshymc.lifesteal.ranked.monitor.RankedMonitorConfig
 import com.liam.joshymc.lifesteal.ranked.stats.DivisionConfig
 import com.liam.joshymc.lifesteal.teams.progression.TeamProgressionConfig
@@ -65,6 +66,9 @@ class LifestealConfigManager(private val plugin: Joshymc) {
     /** Issue #1474: `ranked-team-wars.monitoring`, read on its own; null settings = monitoring off, nothing else affected. */
     @Volatile var rankedMonitoring: RankedMonitorConfig.Result = RankedMonitorConfig.Result(null, emptyList())
         private set
+    /** Issue #1508: `heart-transfer-monitoring`, read on its own; null settings = monitoring off, hearts unaffected. */
+    @Volatile var heartMonitoring: HeartMonitorConfig.Result = HeartMonitorConfig.Result(null, emptyList())
+        private set
 
     /** Called at startup and on every reload, after the network identity is loaded. */
     fun load() {
@@ -79,6 +83,7 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             bank = BankConfig.Result(null, emptyList())
             pvpCoins = BankConfig.Result(null, emptyList())
             rankedMonitoring = RankedMonitorConfig.Result(null, emptyList())
+            heartMonitoring = HeartMonitorConfig.Result(null, emptyList())
             return
         }
         try {
@@ -98,6 +103,7 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             loadTeamProgression(yaml)
             loadBank(yaml)
             loadRankedMonitoring(yaml)
+            loadHeartMonitoring(yaml)
         } catch (e: Exception) {
             problems = listOf(LifestealConfigParser.Problem(true, "Could not read $CONFIG_FILE: ${e.message}"))
             settings = null
@@ -107,6 +113,7 @@ class LifestealConfigManager(private val plugin: Joshymc) {
             bank = BankConfig.Result(null, listOf(BankConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
             pvpCoins = BankConfig.Result(null, listOf(BankConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
             rankedMonitoring = RankedMonitorConfig.Result(null, listOf(RankedMonitorConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
+            heartMonitoring = HeartMonitorConfig.Result(null, listOf(HeartMonitorConfig.Problem(true, "Could not read $CONFIG_FILE: ${e.message}")))
         }
 
         for (problem in problems) {
@@ -226,6 +233,24 @@ class LifestealConfigManager(private val plugin: Joshymc) {
         rankedMonitoring = if (source == null) RankedMonitorConfig.Result(null, listOf(RankedMonitorConfig.Problem(true, "no $base section found.")))
         else RankedMonitorConfig.parse { path -> source.get(if (path.isEmpty()) base else "$base.$path", null) }
         for (problem in rankedMonitoring.problems) {
+            if (problem.severe) plugin.logger.severe("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+            else plugin.logger.warning("[Lifesteal] $CONFIG_FILE: ${problem.message}")
+        }
+    }
+
+    /**
+     * Heart transfer monitoring (issue #1508). A lifesteal.yml from before it has no section: the
+     * bundled file's section is used (logged), like the ranked monitoring. Invalid = monitoring off only.
+     */
+    private fun loadHeartMonitoring(yaml: YamlConfiguration) {
+        val base = HeartMonitorConfig.BASE
+        val source = if (yaml.get(base, null) != null) yaml else {
+            plugin.logger.warning("[Lifesteal] $CONFIG_FILE has no $base section; using the bundled defaults (copy the section from the plugin's $CONFIG_FILE to change it).")
+            plugin.getResource(CONFIG_FILE)?.reader(Charsets.UTF_8)?.use { YamlConfiguration.loadConfiguration(it) }
+        }
+        heartMonitoring = if (source == null) HeartMonitorConfig.Result(null, listOf(HeartMonitorConfig.Problem(true, "no $base section found.")))
+        else HeartMonitorConfig.parse { path -> source.get(if (path.isEmpty()) base else "$base.$path", null) }
+        for (problem in heartMonitoring.problems) {
             if (problem.severe) plugin.logger.severe("[Lifesteal] $CONFIG_FILE: ${problem.message}")
             else plugin.logger.warning("[Lifesteal] $CONFIG_FILE: ${problem.message}")
         }
