@@ -53,14 +53,20 @@ enum class ParticipantStatus { ACTIVE, DEFEATED }
  * Why a participant stopped fighting. Only [DEATH] (the normal heart service) and [DISCONNECT] (the
  * issue #1465 disconnect forfeit, [RankedMatchRules.forfeitRecipient]) can ever move a heart.
  */
-enum class DefeatReason(val label: String) {
+enum class DefeatReason(val label: String, val forfeit: Boolean = false) {
     DEATH("died"),
     /** Issue #1465: a counted disconnect from an ACTIVE match (quit, timeout, player-caused kick): a forfeit. */
-    DISCONNECT("disconnected (forfeit)"),
+    DISCONNECT("disconnected (forfeit)", forfeit = true),
     /** Issue #1465: kicked by staff/the server or a server error mid-fight: out of the match, never a heart. */
     DISCONNECT_EXEMPT("disconnected (staff kick or server error)"),
     /** Staff took them out of the match (`/lifesteal admin ranked remove`). */
     REMOVED("removed by staff"),
+    /**
+     * Issue #1498: found in a restricted state (God Mode, Vanish, Creative/Spectator, Mod Mode,
+     * over-limit gear) during the fight: out as a forfeit, never a heart, and their side's win
+     * can't be rated ([RankedIntegrity]).
+     */
+    INELIGIBLE("used a restricted ability (forfeit)", forfeit = true),
 }
 
 /** How a match ended. Only a WIN can change Elo (issue #1365); there is no draw outcome. */
@@ -160,7 +166,8 @@ object RankedMatchRules {
     private fun simultaneous(outThisTick: List<MatchParticipant>): Decision {
         fun forfeited(side: Side): Boolean {
             val outs = outThisTick.filter { it.side == side }
-            return outs.isNotEmpty() && outs.all { it.defeatReason == DefeatReason.DISCONNECT }
+            // Issue #1498: going ineligible in that tick is a forfeit too, never a way out of a loss.
+            return outs.isNotEmpty() && outs.all { it.defeatReason?.forfeit == true }
         }
         val a = forfeited(Side.A)
         val b = forfeited(Side.B)
@@ -412,10 +419,21 @@ object RankedMatchRules {
      */
     val ALLOWED_COMMANDS: Set<String> = setOf("msg", "tell", "w", "whisper", "m", "r", "reply", "message")
 
-    fun commandAllowed(message: String): Boolean {
-        val label = message.removePrefix("/").substringBefore(' ').lowercase().substringAfter(':')
-        return label in ALLOWED_COMMANDS
+    /**
+     * [canonical] (issue #1498) is the real name of the command the label resolves to in the
+     * server's command map (null = unknown or not resolved): an allowed label that is really an
+     * alias of some other command is refused, so `plugin:` names and re-registered aliases can't
+     * get past the list.
+     */
+    fun commandAllowed(message: String, canonical: String? = null): Boolean {
+        val label = message.trim().removePrefix("/").substringBefore(' ').lowercase().substringAfter(':')
+        if (label !in ALLOWED_COMMANDS) return false
+        val real = canonical?.lowercase()?.substringAfter(':') ?: return true
+        return real in ALLOWED_COMMANDS || real in ALLOWED_CANONICAL
     }
+
+    /** Real command names the allowed labels resolve to (JoshyMC's `/msg` and `/reply`, vanilla `tell`). */
+    val ALLOWED_CANONICAL: Set<String> = setOf("msg", "reply", "tell")
 
     // ── Match projectiles (issue #1377) ─────────────────────
 

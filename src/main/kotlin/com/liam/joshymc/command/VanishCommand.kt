@@ -162,6 +162,8 @@ class VanishCommand(private val plugin: Joshymc) : CommandExecutor, Listener, Ta
             plugin.commsManager.send(sender, Component.text("${target.name} is now ", NamedTextColor.GRAY)
                 .append(Component.text("visible", NamedTextColor.GREEN)), CommunicationsManager.Category.ADMIN)
         } else {
+            // Issue #1498 (F-2/F-4): nobody vanishes during a ranked match.
+            if (plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.VANISH)) return true
             vanish(target)
             plugin.commsManager.send(sender, Component.text("${target.name} is now ", NamedTextColor.GRAY)
                 .append(Component.text("vanished", NamedTextColor.RED)), CommunicationsManager.Category.ADMIN)

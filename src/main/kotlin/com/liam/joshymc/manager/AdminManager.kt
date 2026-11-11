@@ -1129,6 +1129,8 @@ class AdminManager(private val plugin: Joshymc) : Listener {
                 val tp = target.player
                 if (tp == null) { notOnline(p); return@guardedItem }
                 if (!isFrozen(tp.uniqueId) && refused(p, plugin.staffRankManager.protectionProblem(p, tp.uniqueId))) return@guardedItem
+                // Issue #1498 (F-4): no freezing ranked participants.
+                if (!isFrozen(tp.uniqueId) && plugin.lifestealRankedManager.refusesStaffAction(p, tp, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.FREEZE)) return@guardedItem
                 val nowFrozen = toggleFreeze(tp)
                 logAction(p, if (nowFrozen) "FREEZE" else "UNFREEZE", target)
                 if (nowFrozen) {

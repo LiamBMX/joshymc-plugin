@@ -6,6 +6,7 @@ import com.liam.joshymc.lifesteal.LifestealSettings
 import com.liam.joshymc.lifesteal.RankedForfeitHeartLoss
 import com.liam.joshymc.lifesteal.combat.CombatLogRules
 import com.liam.joshymc.lifesteal.combat.npc.CombatNpcRules
+import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
 import com.liam.joshymc.lifesteal.hearts.HeartRules
 import com.liam.joshymc.lifesteal.hearts.HeartStore
 import com.liam.joshymc.lifesteal.progression.ProgressionRules
@@ -108,6 +109,11 @@ class LifestealRankedManager(private val plugin: Joshymc) {
          */
         var heartOutcomes: List<RankedHeartSummary.Entry> = emptyList()
             internal set
+        /**
+         * Issue #1498: sides that had a player in a restricted state during the fight. Written with
+         * the winner, so a win by such a side is never rated ([RankedIntegrity.ratingBlocked]).
+         */
+        val ineligibleSides = HashSet<Side>()
 
         fun team(side: Side): LifestealTeamStore.Team = if (side == Side.A) teamA else teamB
         val label: String get() = "${teamA.name} vs ${teamB.name} (${size}v$size${when (kind) { MatchKind.TEST -> ", TEST"; MatchKind.CHALLENGE -> ", challenge"; MatchKind.PUBLIC -> "" }})"
@@ -543,7 +549,8 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             safe { plugin.adminManager.isFrozen(uuid) } -> "is frozen"
             safe { plugin.tradeManager.isTrading(player) } -> "is trading"
             safe { plugin.eventManager.isInEventWorld(player) } -> "is in the event world"
-            else -> null
+            // Issue #1498: God Mode, Vanish, Creative/Spectator, Mod Mode, over-limit gear (the #1487 rule).
+            else -> RankedIntegrity.eligibilityProblem(competitiveReasons(player))
         }
         return RankedMatchRules.ParticipantFacts(
             uuid = uuid,
@@ -562,6 +569,17 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             survivalMode = player.gameMode == GameMode.SURVIVAL,
             restricted = restricted,
         )
+    }
+
+    /**
+     * Issue #1498: [player]'s restricted competitive states right now, by the one #1487 rule
+     * (game mode, `/god`, `/vanish`, Mod Mode, over-limit worn gear). If the tracker isn't running
+     * the player counts as Mod Mode, so nobody gets in unchecked.
+     */
+    fun competitiveReasons(player: Player): Set<CompetitiveEligibility.Reason> = try {
+        plugin.competitiveEligibility.currentReasons(player)
+    } catch (_: Exception) {
+        setOf(CompetitiveEligibility.Reason.MOD_MODE)
     }
 
     /** A check that throws (system not started) counts as true, so it refuses rather than lets through. */
@@ -848,6 +866,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             plugin.server.scheduler.runTask(plugin, Runnable {
                 if (match.state != MatchState.PREPARING) return@Runnable
                 if (futures.any { it.getNow(false) != true }) return@Runnable cancel(match, "a participant couldn't be moved into the arena")
+                if (!checkIntegrity(match, "preparation")) return@Runnable
                 startCountdown(match)
             })
         }
@@ -876,6 +895,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         var left = settings?.countdownSeconds ?: 10
         match.track(plugin.server.scheduler.runTaskTimer(plugin, Runnable {
             if (match.state != MatchState.COUNTDOWN) return@Runnable
+            if (!checkIntegrity(match, "countdown")) return@Runnable
             if (left <= 0) {
                 begin(match)
                 return@Runnable
@@ -886,12 +906,18 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     }
 
     private fun begin(match: Match) {
+        // Issue #1498: the last check before anything is at stake.
+        if (!checkIntegrity(match, "activation")) return
         if (!move(match, MatchState.ACTIVE)) return cancel(match, "the match start couldn't be recorded")
         title(match, Component.text("FIGHT!", NamedTextColor.RED), Component.text("Hearts are at stake. Your gear comes back afterwards.", NamedTextColor.GRAY))
         val minutes = settings?.maxMatchMinutes ?: 20
         match.track(plugin.server.scheduler.runTaskLater(plugin, Runnable {
             if (match.state == MatchState.ACTIVE) cancel(match, "time limit ($minutes min) reached without a winner")
         }, minutes * 60L * 20L))
+        // Issue #1498: backstop for restricted states that weren't blocked before they happened.
+        match.track(plugin.server.scheduler.runTaskTimer(plugin, Runnable {
+            if (match.state == MatchState.ACTIVE) checkIntegrity(match, "fight")
+        }, INTEGRITY_CHECK_TICKS, INTEGRITY_CHECK_TICKS))
         // A participant who left between the last teleport and now is decided at once.
         scheduleDecision(match)
     }
@@ -941,8 +967,18 @@ class LifestealRankedManager(private val plugin: Joshymc) {
 
     private fun win(match: Match, side: Side) {
         val team = match.team(side)
+        // Issue #1498: the winners still fighting are checked once more; a restricted state now
+        // keeps the result but makes it unrated (they aren't taken out: that would change the winner).
+        for (p in match.roster.active(side)) {
+            val player = Bukkit.getPlayer(p.uuid)?.takeIf { it.isOnline } ?: continue
+            val reasons = competitiveReasons(player)
+            if (reasons.isEmpty()) continue
+            match.ineligibleSides += side
+            auditIntegrity(match, player.uniqueId, player.name, "RANKED_INELIGIBLE_AT_RESULT", "stage=result reasons=${codeOf(reasons)}")
+        }
+        val suppressed = side in match.ineligibleSides
         val ok = try {
-            store.finish(match.id, side, team.id, System.currentTimeMillis())
+            store.finish(match.id, side, team.id, System.currentTimeMillis(), match.ineligibleSides.toSet())
         } catch (e: Exception) {
             plugin.logger.severe("[Ranked] Couldn't record the winner of ${match.id}: ${e.message}")
             false
@@ -951,6 +987,10 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         match.state = MatchState.FINISHING
         broadcast(match, Component.text("${team.name} won the ranked match!", NamedTextColor.GOLD))
         heartSummary(match)
+        if (suppressed) {
+            broadcast(match, Component.text("This result is unrated: a player on ${team.name} used a restricted ability during the match.", NamedTextColor.RED))
+            auditIntegrity(match, null, team.name, "RANKED_RESULT_SUPPRESSED", "winner=${side.name} team=${team.id} ineligible_sides=${RankedIntegrity.encodeSides(match.ineligibleSides)}")
+        }
         plugin.logger.info("[Ranked] Match ${match.id} (${match.label}) won by ${team.name}.")
         complete(match, shutdown = false)
         monitorEnded(match)
@@ -1255,6 +1295,105 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         return true
     }
 
+    // ── Match integrity (issue #1498) ───────────────────────
+
+    private val integrityThrottle = CompetitiveEligibility.Throttle()
+
+    private fun codeOf(reasons: Set<CompetitiveEligibility.Reason>): String = reasons.sortedBy { it.ordinal }.joinToString(",") { it.id }
+
+    /**
+     * Checks every participant [match] still holds. Flight is taken away again (and logged); a
+     * restricted competitive state is resolved by [RankedIntegrity.resolve]: before the fight the
+     * match is cancelled unrated, in the fight the player is out as a forfeit and their side's
+     * win can't be rated. Returns false when the match is no longer running afterwards.
+     */
+    fun checkIntegrity(match: Match, stage: String): Boolean {
+        if (match.state.terminal) return false
+        for (p in match.roster.participants) {
+            if (held[p.uuid] != match.id) continue
+            val player = Bukkit.getPlayer(p.uuid)?.takeIf { it.isOnline } ?: continue
+            if (player.allowFlight && player.gameMode == GameMode.SURVIVAL) {
+                player.isFlying = false
+                player.allowFlight = false
+                auditIntegrity(match, player.uniqueId, player.name, "RANKED_RESTRICTED_ABILITY_BLOCKED", "ability=flight stage=$stage")
+            }
+            val reasons = competitiveReasons(player)
+            if (reasons.isEmpty()) continue
+            val problem = RankedIntegrity.eligibilityProblem(reasons) ?: "used a restricted ability"
+            when (RankedIntegrity.resolve(match.state, match.roster.isActive(p.uuid))) {
+                RankedIntegrity.Resolution.NONE -> Unit
+                RankedIntegrity.Resolution.CANCEL_MATCH -> {
+                    auditIntegrity(match, player.uniqueId, player.name, "RANKED_MATCH_INVALIDATED", "stage=$stage reasons=${codeOf(reasons)} action=cancel")
+                    cancel(match, "${player.name} $problem before the fight")
+                    return false
+                }
+                RankedIntegrity.Resolution.FORFEIT -> {
+                    match.ineligibleSides += p.side
+                    auditIntegrity(match, player.uniqueId, player.name, "RANKED_MATCH_INVALIDATED", "stage=$stage reasons=${codeOf(reasons)} action=forfeit side=${p.side.name}")
+                    tell(player, "You're out of the ranked match: you $problem. Your team's win can't be rated.", NamedTextColor.RED)
+                    defeat(match, p.uuid, DefeatReason.INELIGIBLE)
+                    // Out like a staff removal: the snapshot comes back now and they leave the arena (no heart moves).
+                    if (!player.isDead) restoreIfPending(player, "out of the match (restricted ability)")
+                }
+            }
+        }
+        return !match.state.terminal
+    }
+
+    /** Issue #1498: a held participant's attempt to switch on a restricted [ability] was refused before it happened. */
+    fun logBlockedAbility(player: Player, ability: String, cause: String) {
+        val match = matchOf(player.uniqueId) ?: return
+        auditIntegrity(match, player.uniqueId, player.name, "RANKED_RESTRICTED_ABILITY_BLOCKED", "ability=$ability cause=$cause state=${match.state.name}")
+    }
+
+    /** Issue #1498 (F-5): a command that would have run as held [player] through /sudo, an NPC or a portal was refused. */
+    fun logBlockedDelegated(player: Player, source: String, command: String) {
+        val match = matchOf(player.uniqueId) ?: return
+        auditIntegrity(match, player.uniqueId, player.name, "RANKED_DELEGATED_COMMAND_BLOCKED", "source=$source command=/${command.take(120)}")
+    }
+
+    /** One `admin_logs` row (AdminAudit's table) + console line, at most once per match + player + action per minute. */
+    private fun auditIntegrity(match: Match, uuid: UUID?, name: String, action: String, details: String) {
+        if (!integrityThrottle.allow(RankedIntegrity.throttleKey(match.id, uuid?.toString() ?: name, action), System.currentTimeMillis())) return
+        val full = "match=${match.id} kind=${match.kind.name} $details".take(500)
+        try {
+            plugin.adminManager.logAction(null, RankedFarmingMonitor.SYSTEM_ACTOR, action, uuid, name, full)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Ranked] Couldn't write the staff log ($action) for ${match.id}: ${e.message}")
+        }
+        plugin.logger.warning("[Ranked] $action: $name | $full")
+        if (uuid != null) plugin.databaseManager.async("ranked integrity ${match.id}") { store.logEvent(match.id, "INTEGRITY", uuid, "$action $details", System.currentTimeMillis()) }
+    }
+
+    /**
+     * Issue #1498 (F-4): the server-side check every staff command that changes another player
+     * (or the sender themselves) runs before it acts. True = refused: [sender] is told why and the
+     * attempt is logged (AdminAudit, throttled per sender + target + action).
+     */
+    fun refusesStaffAction(sender: CommandSender, target: Player, action: RankedIntegrity.StaffAction): Boolean {
+        val isHeld = holds(target)
+        val pending = hasPendingRestore(target.uniqueId)
+        if (!isHeld && !pending) return false
+        val self = sender is Player && sender.uniqueId == target.uniqueId
+        val refusal = RankedIntegrity.staffActionRefusal(action, target.name, isHeld, pending, self) ?: return false
+        com.liam.joshymc.util.Msg.error(sender, refusal)
+        val actor = (sender as? Player)?.uniqueId?.toString() ?: sender.name
+        if (integrityThrottle.allow(RankedIntegrity.throttleKey(actor, target.uniqueId.toString(), action.id), System.currentTimeMillis())) {
+            com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "RANKED_STAFF_ACTION_BLOCKED", target.uniqueId, target.name,
+                "action=${action.id} match=${held[target.uniqueId] ?: "none"} held=$isHeld pending_restore=$pending")
+        }
+        return true
+    }
+
+    /** Issue #1498: whether [sender] may cancel [match] or remove its players (null = may). Console always may. */
+    fun interventionProblem(sender: CommandSender, match: Match): String? {
+        val actor = sender as? Player ?: return null
+        val onRoster = match.roster.of(actor.uniqueId) != null
+        val team = try { plugin.lifestealTeamManager.teamOf(actor.uniqueId)?.id } catch (_: Exception) { null }
+        val onTeam = team != null && (team == match.teamA.id || team == match.teamB.id)
+        return RankedIntegrity.interventionRefusal(onRoster, onTeam, match.test)
+    }
+
     // ── Admin recovery ──────────────────────────────────────
 
     /** Takes [target] out of their match now (restored and moved back), or cancels it before it starts. */
@@ -1322,5 +1461,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         const val SPECTATE_PERMISSION = "joshymc.lifesteal.ranked.spectate"
         /** Chunk loads and teleports into the arena must finish within this, or the match is cancelled. */
         const val PREPARATION_TIMEOUT_TICKS = 20L * 20L
+        /** Issue #1498: how often the fight re-checks its participants for restricted states (1s). */
+        const val INTEGRITY_CHECK_TICKS = 20L
     }
 }

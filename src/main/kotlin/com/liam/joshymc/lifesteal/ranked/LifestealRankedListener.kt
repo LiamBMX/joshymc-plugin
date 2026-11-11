@@ -4,6 +4,7 @@ import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent
 import com.liam.joshymc.Joshymc
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import org.bukkit.GameMode
 import org.bukkit.Location
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.AbstractArrow
@@ -40,6 +41,7 @@ import org.bukkit.event.player.PlayerBucketEmptyEvent
 import org.bukkit.event.player.PlayerBucketFillEvent
 import org.bukkit.event.player.PlayerCommandPreprocessEvent
 import org.bukkit.event.player.PlayerDropItemEvent
+import org.bukkit.event.player.PlayerGameModeChangeEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerItemConsumeEvent
@@ -50,6 +52,7 @@ import org.bukkit.event.player.PlayerPickupArrowEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerRespawnEvent
 import org.bukkit.event.player.PlayerTeleportEvent
+import org.bukkit.event.player.PlayerToggleFlightEvent
 import org.bukkit.event.vehicle.VehicleEnterEvent
 import org.bukkit.persistence.PersistentDataType
 import java.util.UUID
@@ -289,12 +292,45 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
     fun onCommand(event: PlayerCommandPreprocessEvent) {
         val player = event.player
         if (!ranked.holds(player)) return
-        if (RankedMatchRules.commandAllowed(event.message)) return
+        // Issue #1498: the label is resolved like delegated commands are, so an allowed alias that
+        // really belongs to another command is refused.
+        if (RankedMatchRules.commandAllowed(event.message, com.liam.joshymc.staff.DelegatedCommands.canonicalName(event.message))) return
         // Staff in a test match can still run the ranked admin tools (to cancel it, for example).
         val label = event.message.removePrefix("/").trim().lowercase()
         if (player.hasPermission(LifestealRankedManager.ADMIN_PERMISSION) && (label.startsWith("lifesteal admin ranked") || label.startsWith("joshymc:lifesteal admin ranked"))) return
         event.isCancelled = true
         hint(player, "Only private messages work during a ranked match.")
+    }
+
+    // ── Restricted abilities (issue #1498) ──────────────────
+
+    /**
+     * A held participant stays in Survival, whoever asks (their own command, staff, console,
+     * another plugin). Leaving the match (death respawn, cancel, removal) is never blocked: they
+     * aren't held any more by then.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    fun onGameModeChange(event: PlayerGameModeChangeEvent) {
+        val player = event.player
+        val held = ranked.holds(player)
+        if (RankedIntegrity.gameModeChangeAllowed(held, event.newGameMode == GameMode.SURVIVAL)) return
+        event.isCancelled = true
+        hint(player, "Your game mode can't change during a ranked match.")
+        ranked.logBlockedAbility(player, "gamemode:${event.newGameMode.name.lowercase()}", event.cause.name)
+    }
+
+    /** Flight is taken at preparation; nothing turns it back on while held. */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    fun onToggleFlight(event: PlayerToggleFlightEvent) {
+        if (!event.isFlying) return
+        val player = event.player
+        if (RankedIntegrity.flightAllowed(ranked.holds(player))) return
+        event.isCancelled = true
+        if (player.gameMode == GameMode.SURVIVAL) {
+            player.allowFlight = false
+        }
+        hint(player, "You can't fly during a ranked match.")
+        ranked.logBlockedAbility(player, "flight", "toggle")
     }
 
     // ── Inventory protection ────────────────────────────────

@@ -677,3 +677,80 @@ wiring, unchanged challenges/matchmaking/restoration).
 - The staff member must be online when the last player accepts (their rank and permission are
   re-checked live); otherwise the proposal is cancelled.
 - Proposals are memory only (a restart cancels them before anything was touched).
+
+## K. Restricted abilities, staff commands and delegated commands (issue #1498, findings F-2, F-4, F-5)
+
+### Root causes
+
+- **F-2**: the match entry rule (`RankedMatchRules.participantProblem`) checked game mode, Mod Mode
+  and freeze, but not God Mode, Vanish or over-limit gear, and nothing re-checked a participant
+  after the snapshot. The #1487 eligibility rule only blocked heart/bounty/coin rewards, so a
+  player could switch on `/god`, `/vanish` or Creative mid-match and still win a rated match.
+- **F-4**: `/heal`, `/feed`, `/fly`, `/god`, `/gamemode`, `/tp`, `/tphere`, `/smite`, `/vanish` and
+  freeze acted on any online player, including ranked participants.
+- **F-5**: the command allowlist for held players lived only in `PlayerCommandPreprocessEvent`.
+  `Player.performCommand` (used by `/sudo`, NPC clicks and portal `command` actions) never fires
+  that event, so those paths ran any command as a held player. The listener also judged only the
+  typed label, so an allowed alias registered by another plugin for another command got through.
+
+### Behavior
+
+- **Entry**: `participantProblem` now also refuses everything `CompetitiveEligibility.problems`
+  reports (God Mode, Vanish, Creative, Spectator, Mod Mode, over-limit worn gear), with a clear
+  message (`RankedIntegrity.eligibilityProblem`). Queue registration, challenges, match acceptance,
+  TEST consent and match creation already used it. The manager re-checks after preparation, every
+  countdown second and immediately before ACTIVE.
+- **Blocked before they happen**: any game mode change of a held player away from Survival
+  (`PlayerGameModeChangeEvent`, whatever caused it: command, console, plugin), flight toggles
+  (`PlayerToggleFlightEvent`), `/god` and `/vanish` on (self or others), Mod Mode on, and the staff
+  commands above aimed at a held player (`refusesStaffAction`, server side in each executor, console
+  included). `/tp`, `/tphere` and `/sudo` also wait while a player's snapshot is still pending.
+- **Backstop**: once a second during the fight, every held participant is checked. Flight is taken
+  away again. A restricted state found **before** the fight cancels the match (unrated, nobody's
+  hearts change; the same as a disconnect before the fight). Found **in** the fight, the player is
+  out as a forfeit (`DefeatReason.INELIGIBLE`), their snapshot is restored and their side is marked
+  ineligible for this match. No heart moves for that forfeit; heart decisions already committed stay.
+- **Result**: `win()` re-checks the winners still fighting; `ineligible_sides` is stored with the
+  winner. `RatingRules` keeps a win by an ineligible side as the result but **never rates it**
+  (`RankedIntegrity.UNRATED_REASON`). A **loss** by an ineligible side stays rated, so switching state
+  can't be used to escape a loss. Going ineligible in the same tick as the opponent's last death is a
+  forfeit (like a counted disconnect), so it can't turn a loss into a no-winner cancel. Exactly-once
+  rating is unchanged (still one conditional `finish`/`complete` and one rating result row).
+- **Delegated commands**: `DelegatedCommands.allowRun` (NPC, portal) and `/sudo` (every sender,
+  console too) call `DelegatedCommands.rankedProblem` before `performCommand`: the same allowlist as
+  typed commands, with the label resolved through the command map (`canonicalName`), so aliases and
+  `plugin:` names can't slip past. The typed-command listener uses the same resolution.
+- **Emergency interventions**: staff step in only through `/lifesteal admin ranked cancel|remove`
+  (now written to `admin_logs`). A player of that match, or a member of either team, can't use them
+  on a PUBLIC/CHALLENGE match (`RankedIntegrity.interventionRefusal`); TEST matches are exempt.
+- **Audit** (`admin_logs`, throttled to one row per match/actor + target + action per minute):
+  `RANKED_STAFF_ACTION_BLOCKED`, `RANKED_RESTRICTED_ABILITY_BLOCKED`, `RANKED_DELEGATED_COMMAND_BLOCKED`,
+  `RANKED_MATCH_INVALIDATED`, `RANKED_INELIGIBLE_AT_RESULT`, `RANKED_RESULT_SUPPRESSED`,
+  `RANKED_MATCH_CANCEL`, `RANKED_PARTICIPANT_REMOVE`. Invalidations also go to the match event log.
+- No bans, mutes or other penalties are applied automatically.
+
+### Checks
+
+`./gradlew -I scripts/ranked-integrity-check.init.gradle.kts rankedIntegrityCheck` (Bukkit-free rules,
+the result/Elo decision through a real SQLite `RankedStore`, and the wiring at every boundary).
+
+**Needs a live Paper server:**
+
+1. `/god`, then `/ranked queue`: refused ("has God Mode on"). Same with `/vanish`, `/gmc`, `/gmsp`, Mod Mode.
+2. Start a match; during the countdown run `/god <participant>` from console: refused. Run
+   `/gamemode creative <participant>` from console: refused (game mode stays Survival).
+3. In the fight, `/heal`, `/feed`, `/fly`, `/tp`, `/tphere`, `/smite`, freeze on a participant: each
+   refused with the cancel/remove hint, one `RANKED_STAFF_ACTION_BLOCKED` row.
+4. `/sudo <participant> spawn` (as Owner and as console), an NPC with `spawn`, a portal `command`
+   action: refused; `/sudo <participant> msg x hi` works.
+5. With another plugin's god/vanish (or a test plugin forcing Creative), activate it mid-fight: within
+   a second the player is out ("restricted ability"), restored and moved out; if their side still
+   wins, the win message says "unrated" and `/lifesteal admin ranked rating match <id>` shows UNRATED.
+6. A participant (staff) tries `/lifesteal admin ranked cancel <their match>`: refused.
+
+### Limitations
+
+- God Mode and Vanish from **other** plugins aren't detected (only JoshyMC's `/god`, `/vanish` and
+  Mod Mode); Creative/Spectator are, whatever sets them.
+- Other plugins' commands that heal or teleport a player directly (not through JoshyMC's executors)
+  are only covered by the existing teleport/boundary listener, not by `refusesStaffAction`.

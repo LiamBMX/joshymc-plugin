@@ -146,6 +146,8 @@ class ModModeManager(private val plugin: Joshymc) {
     }
 
     fun enable(player: Player) {
+        // Issue #1498: checked before the inventory is touched (Mod Mode clears it and sets Creative).
+        if (plugin.lifestealRankedManager.refusesStaffAction(player, player, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.MOD_MODE)) return
         if (isModMode(player)) {
             plugin.commsManager.send(player, Component.text("Moderator Mode is already enabled.", NamedTextColor.YELLOW), CommunicationsManager.Category.ADMIN)
             return
@@ -502,6 +504,8 @@ class ModModeManager(private val plugin: Joshymc) {
             return
         }
 
+        // Issue #1498 (F-4): no freezing ranked participants.
+        if (!plugin.adminManager.isFrozen(target.uniqueId) && plugin.lifestealRankedManager.refusesStaffAction(moderator, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.FREEZE)) return
         val nowFrozen = plugin.adminManager.toggleFreeze(target)
         plugin.adminManager.logAction(moderator, if (nowFrozen) "FREEZE" else "UNFREEZE", target)
 

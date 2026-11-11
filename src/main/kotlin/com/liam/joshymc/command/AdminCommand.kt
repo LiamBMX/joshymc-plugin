@@ -126,6 +126,8 @@ class AdminCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
 
+        // Issue #1498 (F-4): freezing a ranked participant would decide their match; cancel or remove instead.
+        if (!plugin.adminManager.isFrozen(target.uniqueId) && plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.FREEZE)) return
         if (!plugin.adminManager.isFrozen(target.uniqueId)) {
             plugin.staffRankManager.protectionProblem(sender, target.uniqueId)?.let {
                 Msg.error(sender, it, CommunicationsManager.Category.ADMIN)

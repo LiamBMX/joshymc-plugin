@@ -1305,7 +1305,7 @@ private fun wiring() {
     check("validation refuses combat-tagged players", manager.contains("combatTagged = plugin.combatManager.isTagged(player)"))
     check("shared teleport guard blocks held players (team home, GUIs, warmups)", guard.contains("if (plugin.lifestealRankedManager.holds(player)) {"))
     check("every teleport out of the arena is refused (all causes)", listener.contains("fun onTeleport(event: PlayerTeleportEvent)") && listener.contains("if (inside(match.arena, to)) return"))
-    check("commands limited while held", listener.contains("RankedMatchRules.commandAllowed(event.message)"))
+    check("commands limited while held (alias resolved, issue #1498)", listener.contains("RankedMatchRules.commandAllowed(event.message, com.liam.joshymc.staff.DelegatedCommands.canonicalName(event.message))"))
     check("transfers refused while held or still waiting for a restore", transfer.contains("list += TransferBlocker.RANKED_MATCH") && TransferBlocker.entries.contains(TransferBlocker.RANKED_MATCH))
     check("validation refuses players switching servers", manager.contains("transferring = safe { plugin.transferManager.isTransferPending(uuid) }"))
     check("boundary: walking out pushed back, walking in refused", listener.contains("if (inside(match.arena, from) && !inside(match.arena, to))") && listener.contains("!inside(it.arena, from) && inside(it.arena, to)"))

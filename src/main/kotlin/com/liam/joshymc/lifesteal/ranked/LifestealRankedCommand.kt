@@ -201,15 +201,23 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
             "cancel" -> {
                 val id = a.getOrNull(0) ?: return Msg.usage(sender, "/lifesteal admin ranked cancel <match> [confirm]")
                 val match = ranked.match(id) ?: return Msg.error(sender, "No running match '$id'.")
+                // Issue #1498: players of the match (and their teams) can't end it themselves.
+                ranked.interventionProblem(sender, match)?.let { return Msg.error(sender, it) }
                 if (!confirmed(a, 1)) return confirm(sender, "This cancels ${match.id} (${match.label}) with no winner and restores everyone's inventory. Hearts already stolen stay stolen.", "/lifesteal admin ranked cancel ${match.id} confirm")
+                com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "RANKED_MATCH_CANCEL", null, match.id,
+                    "match=${match.id} kind=${match.kind.name} state=${match.state.name} teams=${match.teamA.id},${match.teamB.id}")
                 ranked.cancel(match, "cancelled by ${sender.name}")
                 Msg.success(sender, "Match ${match.id} cancelled.")
             }
             "remove" -> {
                 val name = a.getOrNull(0) ?: return Msg.usage(sender, "/lifesteal admin ranked remove <player> [confirm]")
                 val target = Bukkit.getPlayerExact(name) ?: return Msg.playerNotFound(sender, name)
+                ranked.matchOf(target.uniqueId)?.let { m -> ranked.interventionProblem(sender, m)?.let { return Msg.error(sender, it) } }
                 if (!confirmed(a, 1)) return confirm(sender, "This takes ${target.name} out of their match (restored and moved back). Before the fight starts it cancels the match.", "/lifesteal admin ranked remove ${target.name} confirm")
+                val removedFrom = ranked.matchOf(target.uniqueId)
                 ranked.removeParticipant(sender, target)?.let { return Msg.error(sender, it) }
+                com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "RANKED_PARTICIPANT_REMOVE", target.uniqueId, target.name,
+                    "match=${removedFrom?.id} kind=${removedFrom?.kind?.name}")
                 Msg.success(sender, "${target.name} was taken out of their ranked match.")
             }
             "restore" -> {
