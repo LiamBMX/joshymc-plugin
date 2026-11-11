@@ -21,6 +21,9 @@ import com.liam.joshymc.lifesteal.progression.ProgressionRules
 import com.liam.joshymc.lifesteal.progression.ProgressionRules.RankedStatus
 import com.liam.joshymc.lifesteal.ranked.MatchKind
 import com.liam.joshymc.lifesteal.ranked.MatchParticipant
+import com.liam.joshymc.lifesteal.ranked.MatchState
+import com.liam.joshymc.lifesteal.ranked.monitor.RankedMonitorRules
+import com.liam.joshymc.lifesteal.ranked.monitor.RankedMonitorSettings
 import com.liam.joshymc.lifesteal.ranked.Point
 import com.liam.joshymc.lifesteal.ranked.RankedArena
 import com.liam.joshymc.lifesteal.ranked.RankedMatchRules
@@ -101,6 +104,7 @@ fun main() {
     settings()
     store()
     wiring()
+    oneMatchPerTeam()
     println("OK: $checks Ranked Team Wars matchmaking checks passed.")
 }
 
@@ -569,3 +573,95 @@ private fun wiring() {
     val guarded = queueManager.substringAfter("val result = try {", "").substringBefore("when (result) {")
     check("#1377: match creation errors cancel any half-made match and release the queue entries", guarded.contains("ranked.createQueuedMatch(") && guarded.contains("catch (e: Exception)") && guarded.contains("ranked.cancel(it,") && guarded.contains("return fail(p, emptySet()"))
 }
+
+// ── Issue #1499 (A-1): one ranked match per team ────────────
+
+private fun oneMatchPerTeam() {
+    val q = source("lifesteal/ranked/queue/LifestealRankedQueueManager.kt")
+    val r = source("lifesteal/ranked/LifestealRankedManager.kt")
+    val store = source("lifesteal/ranked/RankedStore.kt")
+    fun body(src: String, start: String, end: String) = src.substringAfter(start, "").substringBefore(end)
+    check("#1499 queue registration: a team in a match can't queue (startProblem)", body(q, "fun startProblem(", "\n    }").contains("ranked.teamMatch(team.id) != null"))
+    check("#1499 challenges: the challenging team (startProblem) and the target are both checked", body(q, "fun challengeProblem(", "\n    }").let { it.contains("startProblem(") && it.contains("ranked.teamMatch(target.id) != null") })
+    check("#1499 answering a challenge checks both teams", body(q, "fun answerProblem(", "\n    }").let { it.contains("ranked.teamMatch(own.id)") && it.contains("ranked.teamMatch(c.fromTeamId)") })
+    check("#1499 agreeing and accepting a found match check the team", body(q, "QueueState.FORMING ->", "QueueState.CONFIRMING ->").contains("ranked.teamMatch(team.id)") && body(q, "private fun acceptMatch(", "when (val r").contains("ranked.teamMatch(team.id)"))
+    check("#1499 matchmaking, challenges and the start revalidate it (softProblem)", body(q, "private fun softProblem(", "\n    }").contains("ranked.teamMatch(team.id) != null") &&
+        body(q, "private fun start(", "val kind =").contains("softProblem(e)"))
+    check("#1499 every match start (queue, challenge, TEST) is refused for a busy team", body(r, "private fun startMatch(", "val id = RankedMatchRules.newMatchId()").contains("busyTeams = listOfNotNull(teamA?.id, teamB?.id).filter { teamMatch(it) != null }"))
+    check("#1499 the team check reads the open matches (no separate lock that could get stuck)", body(r, "fun teamMatch(", "\n\n").contains("matches.values.firstOrNull { !it.state.terminal"))
+    check("#1499 the database refuses a second open match per team (simultaneous starts)", store.contains("trg_lifesteal_ranked_matches_one_per_team") && store.contains("BEFORE INSERT ON lifesteal_ranked_matches"))
+
+    // Against a real database: one open match per team, released by completion, cancellation and restart recovery.
+    val dir = Files.createTempDirectory("ranked-one-per-team").toFile()
+    fun snap(u: UUID) = RankedStore.SnapshotData(u, List(41) { null }, 0, "lifesteal", Point(0.0, 64.0, 0.0))
+    try {
+        DatabaseManager(dir, quietTeamLogger()).let { db ->
+            db.start()
+            try {
+                val s = RankedStore(db)
+                s.createTables()
+                for (id in listOf("duel", "duel2", "duel3")) s.createArena(RankedArena(id, id, "lifesteal", null, enabled = true), 1)
+                val ids = mutableListOf<String>()
+                fun open(arena: String, a: String, b: String, ua: UUID, ub: UUID): Boolean {
+                    val id = "rtw-%012x".format(0x1499000L + ids.size + 1)
+                    val parts = listOf(MatchParticipant(ua, Side.A, a), MatchParticipant(ub, Side.B, b))
+                    return try {
+                        s.insertMatch(RankedStore.NewMatch(id, "season-1", arena, a, a, b, b, 2, false, "queue:x", ids.size.toLong(), MatchKind.PUBLIC, null), parts, parts.map { snap(it.uuid) })
+                        ids += id
+                        true
+                    } catch (_: Exception) { false }
+                }
+                check("#1499 first match of team a", open("duel", "a", "b", UUID(70, 1), UUID(71, 1)))
+                val first = ids.last()
+                check("#1499 team a can't start a second match with other members", !open("duel2", "a", "c", UUID(70, 2), UUID(72, 1)))
+                check("#1499 ...nor as side B", !open("duel2", "c", "a", UUID(72, 1), UUID(70, 2)))
+                check("#1499 the opposing team is busy too", !open("duel2", "b", "c", UUID(71, 2), UUID(72, 1)))
+                check("#1499 a refused start writes nothing", s.openMatchIds().size == 1 && s.pendingSnapshot(UUID(70, 2)) == null)
+                check("#1499 unrelated teams play at the same time", open("duel2", "c", "d", UUID(72, 1), UUID(73, 1)))
+                val unrelated = ids.last()
+                check("#1499 completion releases the teams", s.moveState(first, MatchState.PREPARING, MatchState.COUNTDOWN, 10) &&
+                    s.moveState(first, MatchState.COUNTDOWN, MatchState.ACTIVE, 11) && s.finish(first, Side.A, "a", 12) && s.complete(first, 13) &&
+                    open("duel", "a", "e", UUID(70, 3), UUID(74, 1)))
+                val third = ids.last()
+                check("#1499 cancellation releases the teams", s.cancel(third, "check", 14) && open("duel", "a", "b", UUID(70, 4), UUID(71, 4)))
+                check("#1499 the unrelated match is still open", unrelated in s.openMatchIds())
+                // Crash here: two open matches.
+            } finally { db.shutdown() }
+        }
+        DatabaseManager(dir, quietTeamLogger()).let { db ->
+            db.start()
+            try {
+                val s = RankedStore(db)
+                s.createTables()
+                check("#1499 restart recovery closes the interrupted matches", s.recoverInterrupted(100).size == 2 && s.openMatchIds().isEmpty())
+                val parts = listOf(MatchParticipant(UUID(70, 9), Side.A, "a"), MatchParticipant(UUID(72, 9), Side.B, "c"))
+                check("#1499 after recovery the same teams can play again (no stale lock)", !throws {
+                    s.insertMatch(RankedStore.NewMatch("rtw-0000001499ff", "season-1", "duel3", "a", "a", "c", "c", 2, false, "queue:x", 101, MatchKind.PUBLIC, null), parts, parts.map { snap(it.uuid) })
+                })
+            } finally { db.shutdown() }
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+
+    // Monitoring stays logging-only.
+    val monitor = source("lifesteal/ranked/monitor/RankedFarmingMonitor.kt")
+    val limited = body(monitor, "fun onRatingLimited(", "\n    }\n")
+    check("#1499 the rating-limit review only writes the review log", limited.contains("store.record(") && listOf("withdraw", "setHearts", "ban(", "transferPvp", "lifesteal_ranked_ratings", "disband").none { it in limited })
+    val f = RankedMonitorRules.ratingLimitFinding(
+        "REPEATED_ROSTER", listOf(UUID(1, 1), UUID(1, 2)), listOf(UUID(2, 1), UUID(2, 2)), listOf("x", "y2"), 3, setOf("y"), RankedMonitorSettings.DEFAULTS,
+    )
+    check("#1499 a rating-limit finding names the possible team recreation", f != null && f.kind == RankedMonitorRules.Kind.RATING_LIMIT_REACHED && "team recreation" in f.reason && f.players.size == 4)
+    val swapped = RankedMonitorRules.ratingLimitFinding(
+        "REPEATED_ROSTER", listOf(UUID(2, 2), UUID(2, 1)), listOf(UUID(1, 2), UUID(1, 1)), listOf("y3", "x"), 3, emptySet(), RankedMonitorSettings.DEFAULTS,
+    )
+    check("#1499 the same roster keeps one subject (order and sides don't matter)", f?.subject == swapped?.subject)
+    check("#1499 monitoring off = no finding", RankedMonitorRules.ratingLimitFinding("TEAM_PAIR", listOf(UUID(1, 1)), listOf(UUID(2, 1)), emptyList(), 3, emptySet(), RankedMonitorSettings(enabled = false)) == null)
+    val rating = source("lifesteal/ranked/rating/LifestealRatingManager.kt")
+    check("#1499 unrated notices go to every participant of both teams and keep the heart reminder",
+        rating.contains("for (uuid in result.participants) Bukkit.getPlayer(uuid)?.let { plugin.commsManager.send(it, prefix().append(line)) }") && rating.contains("Hearts won or lost in it still count."))
+}
+
+private fun throws(block: () -> Unit): Boolean = try { block(); false } catch (_: Exception) { true }
+
+private fun quietTeamLogger(): java.util.logging.Logger = java.util.logging.Logger.getAnonymousLogger().apply { useParentHandlers = false; level = java.util.logging.Level.OFF }

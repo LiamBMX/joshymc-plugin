@@ -108,6 +108,10 @@ class RatingStore(private val db: SqliteDatabase) {
         )
         db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_ranked_rating_results_status ON lifesteal_ranked_rating_results(status, processed_at)")
         db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_ranked_rating_results_pair ON lifesteal_ranked_rating_results(season_id, team_a_id, team_b_id, match_ended_at)")
+        // Issue #1499: the repeated-roster limit looks up earlier rated matches by player and window
+        // (indexes only; the participant history itself already exists and is never deleted).
+        db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_ranked_rating_results_window ON lifesteal_ranked_rating_results(status, season_id, match_ended_at)")
+        db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_ranked_participants_uuid ON lifesteal_ranked_participants (uuid, match_id)")
         // Append-only history (only the player's "result shown" flag may change).
         db.createTable(
             """
@@ -165,7 +169,20 @@ class RatingStore(private val db: SqliteDatabase) {
             val players: Map<UUID, EloRating.Change>,
             val teams: Map<String, EloRating.Change>,
         ) : Finalized
-        data class Unrated(override val matchId: String, val reason: String, val participants: List<UUID>, val test: Boolean) : Finalized
+        data class Unrated(
+            override val matchId: String,
+            val reason: String,
+            val participants: List<UUID>,
+            val test: Boolean,
+            /** Issue #1499: the same-opponent limit that made it unrated (null = another reason). */
+            val limit: RatingRules.Limit? = null,
+            val sides: Map<UUID, Side> = emptyMap(),
+            val teamIds: List<String> = emptyList(),
+            /** Earlier rated matches that counted toward [limit]. */
+            val earlierCount: Int = 0,
+            /** Team ids those earlier matches were played under, other than this match's (a recreated team shows up here). */
+            val earlierOtherTeams: Set<String> = emptySet(),
+        ) : Finalized
         data class Invalid(override val matchId: String, val reason: String) : Finalized
         data class AlreadyProcessed(override val matchId: String, val status: ResultStatus) : Finalized
         data class NotReady(override val matchId: String, val reason: String) : Finalized
@@ -188,12 +205,24 @@ class RatingStore(private val db: SqliteDatabase) {
             }
             val match = matches.match(matchId) ?: return@transaction
             val participants = matches.participants(matchId)
-            val pairCount = if (policy.sameOpponentLimit > 0) ratedBetween(match.seasonId, match.teamAId, match.teamBId, (match.endedAt ?: now) - policy.sameOpponentWindowMillis, matchId) else 0
-            when (val verdict = RatingRules.decide(match, participants, policy.rateChallenges, policy.sameOpponentLimit, pairCount)) {
+            val since = (match.endedAt ?: now) - policy.sameOpponentWindowMillis
+            val pairCount = if (policy.sameOpponentLimit > 0) ratedBetween(match.seasonId, match.teamAId, match.teamBId, since, matchId) else 0
+            // Issue #1499: the same limit by player UUIDs, so recreated/renamed teams don't reset it.
+            // Read inside this transaction, like the team count, so matches finishing together are
+            // counted one after the other.
+            val repeats = if (policy.sameOpponentLimit > 0) repeatedRosterMatches(match.seasonId, participants, since, matchId) else emptyList()
+            when (val verdict = RatingRules.decide(match, participants, policy.rateChallenges, policy.sameOpponentLimit, pairCount, repeats.size)) {
                 is RatingRules.Verdict.NotReady -> result = Finalized.NotReady(matchId, verdict.reason)
                 is RatingRules.Verdict.Unrated -> {
                     writeResult(match, ResultStatus.UNRATED, verdict.reason, now)
-                    result = Finalized.Unrated(matchId, verdict.reason, participants.map { it.uuid }, match.test || match.kind == com.liam.joshymc.lifesteal.ranked.MatchKind.TEST)
+                    result = Finalized.Unrated(
+                        matchId, verdict.reason, participants.map { it.uuid }, match.test || match.kind == com.liam.joshymc.lifesteal.ranked.MatchKind.TEST,
+                        limit = verdict.limit,
+                        sides = participants.associate { it.uuid to it.side },
+                        teamIds = listOf(match.teamAId, match.teamBId),
+                        earlierCount = if (verdict.limit == RatingRules.Limit.TEAM_PAIR) pairCount else repeats.size,
+                        earlierOtherTeams = if (verdict.limit == null) emptySet() else repeats.flatMap { listOf(it.teamAId, it.teamBId) }.toSet() - setOf(match.teamAId, match.teamBId),
+                    )
                 }
                 is RatingRules.Verdict.Invalid -> {
                     writeResult(match, ResultStatus.INVALID, verdict.reason, now)
@@ -279,6 +308,36 @@ class RatingStore(private val db: SqliteDatabase) {
             "SELECT COUNT(*) AS n FROM lifesteal_ranked_rating_results WHERE season_id = ? AND team_a_id = ? AND team_b_id = ? AND status = 'RATED' AND match_ended_at >= ? AND match_id <> ?",
             season, x, y, since, except,
         ) { it.getInt("n") } ?: 0
+    }
+
+    data class EarlierMatch(val matchId: String, val teamAId: String, val teamBId: String)
+
+    /**
+     * Issue #1499: RATED matches of [season] that ended at or after [since] (not [except]) whose
+     * rosters are the same opponents as [participants] by [RatingRules.sameOpponents], whatever team
+     * ids they were played under. Read from the stored participant history
+     * (`lifesteal_ranked_participants`, never deleted with a team), so it survives disbanding,
+     * recreating and renaming teams, and restarts. Only matches sharing a player are loaded.
+     */
+    fun repeatedRosterMatches(season: String, participants: List<RankedStore.ParticipantRecord>, since: Long, except: String): List<EarlierMatch> {
+        val curA = participants.filter { it.side == Side.A }.map { it.uuid }
+        val curB = participants.filter { it.side == Side.B }.map { it.uuid }
+        if (curA.isEmpty() || curB.isEmpty()) return emptyList()
+        val uuids = (curA + curB).distinct()
+        val marks = uuids.joinToString(",") { "?" }
+        val candidates = db.query(
+            "SELECT DISTINCT r.match_id AS id FROM lifesteal_ranked_rating_results r JOIN lifesteal_ranked_participants p ON p.match_id = r.match_id " +
+                "WHERE r.status = 'RATED' AND r.season_id = ? AND r.match_ended_at >= ? AND r.match_id <> ? AND p.uuid IN ($marks) ORDER BY r.match_id",
+            season, since, except, *uuids.map { it.toString() }.toTypedArray(),
+        ) { it.getString("id") }
+        return candidates.mapNotNull { id ->
+            val earlier = matches.participants(id)
+            val prevA = earlier.filter { it.side == Side.A }.map { it.uuid }
+            val prevB = earlier.filter { it.side == Side.B }.map { it.uuid }
+            if (!RatingRules.sameOpponents(curA, curB, prevA, prevB)) return@mapNotNull null
+            val rec = matches.match(id)
+            EarlierMatch(id, rec?.teamAId ?: earlier.firstOrNull { it.side == Side.A }?.teamId ?: "", rec?.teamBId ?: earlier.firstOrNull { it.side == Side.B }?.teamId ?: "")
+        }
     }
 
     /** A failed attempt (nothing of it was written): FAILED with the error, retried later. Never touches a final row. */

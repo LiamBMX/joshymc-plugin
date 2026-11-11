@@ -237,6 +237,9 @@ private fun validation() {
     check("size not in lifesteal.yml refused", RankedMatchRules.validate(request(4).copy(allowedSizes = listOf(2, 3))).any { "isn't an allowed size" in it })
     check("ranked locked for the season refused", RankedMatchRules.validate(request(2, rankedUnlocked = false)).any { "unlocked" in it })
     check("a team can't play itself", RankedMatchRules.validate(request(2, sameTeam = true)).any { "itself" in it })
+    check("#1499 a team already in a match is refused (side A)", RankedMatchRules.validate(request(2).copy(busyTeams = setOf("team-a"))) == listOf(RankedMatchRules.teamBusyProblem("Alpha")))
+    check("#1499 a team already in a match is refused (side B)", RankedMatchRules.validate(request(2).copy(busyTeams = setOf("team-b"))).any { "Bravo is already playing a ranked match" in it })
+    check("#1499 other busy teams don't matter", RankedMatchRules.validate(request(2).copy(busyTeams = setOf("team-z"))).isEmpty())
     check("missing team refused", RankedMatchRules.validate(request(2).copy(teamB = RankedMatchRules.TeamFacts("", "Ghost", false, 0))).any { "doesn't exist" in it })
     check("missing arena reported", RankedMatchRules.validate(request(2).copy(arenaProblem = "No available arena")).contains("No available arena"))
     check("teams unavailable refused", RankedMatchRules.validate(request(2).copy(teamsAvailable = false)).isNotEmpty())
@@ -458,7 +461,17 @@ private fun store() {
             // A PREPARING match at a crash is cancelled.
             s.createArena(readyArena(id = "duel3"), 110)
             val w = listOf(UUID(50L, 1), UUID(50L, 2))
-            s.insertMatch(newMatch("rtw-000000000007", arena = "duel3", now = 111), participants(w[0] to Side.A, w[1] to Side.B), w.map { snap(it) })
+            // Issue #1499: other teams (team-a/team-b are still in the FINISHING match above, and a team plays one match at a time).
+            check("#1499 a team already in an open match can't get a second one (other members, other arena)", throws {
+                s.insertMatch(newMatch("rtw-00000000000a", arena = "duel3", now = 111), participants(w[0] to Side.A, w[1] to Side.B), w.map { snap(it) })
+            })
+            check("#1499 ...not even on the other side", throws {
+                s.insertMatch(RankedStore.NewMatch("rtw-00000000000b", "season-1", "duel3", "team-x", "X", "team-a", "Alpha", 2, true, "console", 111),
+                    listOf(MatchParticipant(w[0], Side.A, "team-x"), MatchParticipant(w[1], Side.B, "team-a")), w.map { snap(it) })
+            })
+            check("#1499 a refused second match writes nothing", s.match("rtw-00000000000a") == null && s.match("rtw-00000000000b") == null && s.pendingSnapshot(w[0]) == null)
+            s.insertMatch(RankedStore.NewMatch("rtw-000000000007", "season-1", "duel3", "team-c", "Charlie", "team-d", "Delta", 2, true, "console", 111),
+                listOf(MatchParticipant(w[0], Side.A, "team-c"), MatchParticipant(w[1], Side.B, "team-d")), w.map { snap(it) })
         }
         withDb(dir) { s, _ ->
             val recovered = s.recoverInterrupted(200).associateBy { it.matchId }
@@ -466,6 +479,21 @@ private fun store() {
             check("PREPARING at a crash is cancelled", recovered["rtw-000000000007"]?.to == MatchState.CANCELLED)
             check("cancelled match records no winner", s.match("rtw-000000000007")?.winner == null)
             check("recent records newest first", s.recentMatches(3).first().id == "rtw-000000000007")
+            // Issue #1499: no team lock survives the crash (the rule reads the match rows' own state).
+            val again = listOf(UUID(51L, 1), UUID(51L, 2))
+            check("#1499 restart recovery leaves no stale team lock: the teams of interrupted matches can play again", !throws {
+                s.insertMatch(newMatch("rtw-00000000000c", arena = "duel3", now = 201), participants(again[0] to Side.A, again[1] to Side.B), again.map { snap(it) })
+            })
+            check("#1499 cancelling releases the team", s.cancel("rtw-00000000000c", "check", 202) && !throws {
+                s.insertMatch(RankedStore.NewMatch("rtw-00000000000d", "season-1", "duel3", "team-a", "Alpha", "team-z", "Zulu", 2, true, "console", 203),
+                    listOf(MatchParticipant(UUID(52L, 1), Side.A, "team-a"), MatchParticipant(UUID(52L, 2), Side.B, "team-z")), listOf(snap(UUID(52L, 1)), snap(UUID(52L, 2))))
+            })
+            check("#1499 completing releases the team", s.moveState("rtw-00000000000d", MatchState.PREPARING, MatchState.COUNTDOWN, 204) &&
+                s.moveState("rtw-00000000000d", MatchState.COUNTDOWN, MatchState.ACTIVE, 205) && s.finish("rtw-00000000000d", Side.A, "team-a", 206) && s.complete("rtw-00000000000d", 207) && !throws {
+                s.insertMatch(RankedStore.NewMatch("rtw-00000000000e", "season-1", "duel3", "team-z", "Zulu", "team-a", "Alpha", 2, true, "console", 208),
+                    listOf(MatchParticipant(UUID(53L, 1), Side.A, "team-z"), MatchParticipant(UUID(53L, 2), Side.B, "team-a")), listOf(snap(UUID(53L, 1)), snap(UUID(53L, 2))))
+            })
+            s.cancel("rtw-00000000000e", "check", 209)
         }
     } finally {
         dir.deleteRecursively()

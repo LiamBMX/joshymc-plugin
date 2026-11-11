@@ -170,9 +170,14 @@ class LifestealRatingManager(private val plugin: Joshymc) {
             }
             is RatingStore.Finalized.Unrated -> {
                 plugin.logger.info("[RankedElo] Match ${result.matchId} is unrated: ${result.reason}.")
-                if (!result.test) for (uuid in result.participants) Bukkit.getPlayer(uuid)?.let {
-                    plugin.commsManager.send(it, prefix().append(Component.text("This match didn't change Elo: ${result.reason}.", NamedTextColor.GRAY)))
+                // Issue #1499: every participant of both teams gets the same line; an unrated match is
+                // never heart-safe, so the heart reminder goes with it.
+                if (!result.test) {
+                    val line = unratedNotice(result)
+                    for (uuid in result.participants) Bukkit.getPlayer(uuid)?.let { plugin.commsManager.send(it, prefix().append(line)) }
                 }
+                // Issue #1499: a match the rating limit stopped is logged for staff review (logging only).
+                if (result.limit != null) plugin.lifestealRankedManager.monitor.onRatingLimited(result)
             }
             is RatingStore.Finalized.Invalid -> plugin.logger.severe("[RankedElo] Match ${result.matchId} was NOT rated: its record is inconsistent (${result.reason}). Nothing changed; see /lifesteal admin ranked rating match ${result.matchId}.")
             is RatingStore.Finalized.NotReady -> plugin.logger.warning("[RankedElo] Match ${result.matchId} isn't over (${result.reason}); not rated.")
@@ -182,6 +187,17 @@ class LifestealRatingManager(private val plugin: Joshymc) {
     }
 
     // ── Result messages ─────────────────────────────────────
+
+    /** Issue #1499: why an unrated match changed no Elo, the same for both teams. */
+    private fun unratedNotice(result: RatingStore.Finalized.Unrated): Component {
+        val why = when (result.limit) {
+            RatingRules.Limit.TEAM_PAIR -> "same-opponent rating limit reached: these two teams already played ${result.earlierCount} rated match(es) against each other recently"
+            RatingRules.Limit.REPEATED_ROSTER -> "repeated opponent roster limit reached: mostly the same players already played ${result.earlierCount} rated match(es) against each other recently, whatever their teams"
+            null -> result.reason
+        }
+        return Component.text("This match didn't change Elo ($why). ", NamedTextColor.GRAY)
+            .append(Component.text("Hearts won or lost in it still count.", NamedTextColor.YELLOW))
+    }
 
     /** Shows [player] every committed rating change they haven't seen (each once). */
     fun deliverNotices(player: Player) {

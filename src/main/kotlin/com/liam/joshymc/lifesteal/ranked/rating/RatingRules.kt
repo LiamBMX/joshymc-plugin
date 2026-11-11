@@ -4,6 +4,7 @@ import com.liam.joshymc.lifesteal.ranked.MatchKind
 import com.liam.joshymc.lifesteal.ranked.MatchState
 import com.liam.joshymc.lifesteal.ranked.RankedStore
 import com.liam.joshymc.lifesteal.ranked.Side
+import java.util.UUID
 
 /**
  * Whether a finished match may change Elo (issue #1365), Bukkit-free. It only reads the stored
@@ -16,6 +17,14 @@ import com.liam.joshymc.lifesteal.ranked.Side
  * - `CHALLENGE` = DIRECT_TEAM_CHALLENGE (`/ranked challenge`): unrated unless
  *   `ranked-team-wars.elo.rate-challenges` is true.
  * - `TEST` = ADMIN_TEST_MATCH (`/lifesteal admin ranked testmatch`): never rated.
+ *
+ * Issue #1499 (anti-farming): `same-opponent-limit` rated matches per `same-opponent-window-hours`
+ * apply twice, and exceeding **either** makes the match UNRATED for both sides (Player Elo and Team
+ * Elo alike, one verdict):
+ * - [Limit.TEAM_PAIR]: rated matches between the same two team ids (the original rule).
+ * - [Limit.REPEATED_ROSTER]: rated matches, under any team ids, whose rosters are the same
+ *   opponents by [sameOpponents]. Disbanding, recreating or renaming a team changes nothing here,
+ *   because it is computed from the participants' UUIDs in the stored match history.
  */
 object RatingRules {
 
@@ -36,20 +45,49 @@ object RatingRules {
     sealed interface Verdict {
         /** Rate it: [winner] won, [sideA]/[sideB] are the validated participant UUIDs. */
         data class Rated(val winner: Side, val sideA: List<java.util.UUID>, val sideB: List<java.util.UUID>) : Verdict
-        /** A valid result that doesn't change Elo by policy (recorded UNRATED, never retried). */
-        data class Unrated(val reason: String) : Verdict
+        /** A valid result that doesn't change Elo by policy (recorded UNRATED, never retried). [limit] = which anti-farming limit, if any. */
+        data class Unrated(val reason: String, val limit: Limit? = null) : Verdict
         /** The stored result doesn't add up (recorded INVALID and reported, never rated, never guessed). */
         data class Invalid(val reason: String) : Verdict
         /** The match isn't over yet: nothing is recorded. */
         data class NotReady(val reason: String) : Verdict
     }
 
+    /** Which same-opponent limit made a match unrated (issue #1499). */
+    enum class Limit { TEAM_PAIR, REPEATED_ROSTER }
+
+    /**
+     * Issue #1499: the roster-overlap rule. An earlier match ([prevA] vs [prevB]) counts as **the
+     * same opponents** as this one ([curA] vs [curB]) when, with the sides lined up either way
+     * (A with A and B with B, or A with B and B with A), both of these hold:
+     * 1. each side of this match shares at least half (rounded up) of the smaller of the two lined-up
+     *    rosters with its counterpart, and
+     * 2. at least two opposing player pairs of this match also stood on opposite sides then
+     *    (shared on one side x shared on the other >= 2).
+     *
+     * So a single incidental opponent (one player of each side met before) never counts, but the same
+     * players under a new team id do, and so does swapping a minority of either roster: 2v2 with one
+     * player replaced (3 of 4 the same), 3v3/4v4 with two of each side kept, 5v5 with three of each.
+     */
+    fun sameOpponents(curA: Collection<UUID>, curB: Collection<UUID>, prevA: Collection<UUID>, prevB: Collection<UUID>): Boolean =
+        lined(curA, curB, prevA, prevB) || lined(curA, curB, prevB, prevA)
+
+    private fun lined(x: Collection<UUID>, y: Collection<UUID>, px: Collection<UUID>, py: Collection<UUID>): Boolean {
+        if (x.isEmpty() || y.isEmpty() || px.isEmpty() || py.isEmpty()) return false
+        val sx = x.toSet().intersect(px.toSet()).size
+        val sy = y.toSet().intersect(py.toSet()).size
+        return sx >= half(x.size, px.size) && sy >= half(y.size, py.size) && sx * sy >= 2
+    }
+
+    private fun half(a: Int, b: Int): Int = (minOf(a, b) + 1) / 2
+
     /** `none` is what the match lifecycle stores when no season exists. */
     fun validSeason(id: String?): Boolean = !id.isNullOrBlank() && id != "none" && id.length <= 64
 
     /**
      * [ratedBetweenPair] = rated matches between these two teams inside the same-opponent window,
-     * not counting this one.
+     * not counting this one. [repeatedRosters] = rated matches inside the same window, under any
+     * team ids, whose rosters are the same opponents by [sameOpponents] (issue #1499), not counting this one.
      */
     fun decide(
         match: RankedStore.MatchRecord,
@@ -57,6 +95,7 @@ object RatingRules {
         rateChallenges: Boolean,
         sameOpponentLimit: Int,
         ratedBetweenPair: Int,
+        repeatedRosters: Int = 0,
     ): Verdict {
         when (match.state) {
             MatchState.COMPLETED -> Unit
@@ -87,7 +126,10 @@ object RatingRules {
             return Verdict.Unrated(com.liam.joshymc.lifesteal.ranked.RankedIntegrity.UNRATED_REASON)
         }
         if (sameOpponentLimit > 0 && ratedBetweenPair >= sameOpponentLimit) {
-            return Verdict.Unrated("these two teams already played $ratedBetweenPair rated match(es) recently (same-opponent limit $sameOpponentLimit)")
+            return Verdict.Unrated("these two teams already played $ratedBetweenPair rated match(es) recently (same-opponent limit $sameOpponentLimit)", Limit.TEAM_PAIR)
+        }
+        if (sameOpponentLimit > 0 && repeatedRosters >= sameOpponentLimit) {
+            return Verdict.Unrated("most of these players already played $repeatedRosters rated match(es) against each other recently, under any team (repeated-opponent limit $sameOpponentLimit)", Limit.REPEATED_ROSTER)
         }
         return Verdict.Rated(winner, a.map { it.uuid }, b.map { it.uuid })
     }

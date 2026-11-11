@@ -221,6 +221,15 @@ class LifestealRankedManager(private val plugin: Joshymc) {
 
     fun match(id: String): Match? = matches[id]
 
+    /**
+     * Issue #1499 (A-1): the match that isn't over in which team [teamId] plays (either side), or
+     * null. Derived from the open matches themselves (removed when a match completes or is
+     * cancelled, and nothing survives a restart), so there is no separate lock that could get stuck;
+     * the database refuses a second open match per team as well (see [RankedStore]).
+     */
+    fun teamMatch(teamId: String): Match? =
+        matches.values.firstOrNull { !it.state.terminal && (it.teamA.id == teamId || it.teamB.id == teamId) }
+
     /** Matches whose arena is in [world] and that hold players. */
     fun heldArenasIn(world: World): List<Match> = matches.values.filter { it.state.holdsPlayers && it.arena.world == world.name }
 
@@ -489,6 +498,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             teamsAvailable = teams.active,
             heartsAvailable = plugin.lifestealHeartManager.active,
             arenaProblem = arenaChoice.second,
+            busyTeams = listOfNotNull(teamA?.id, teamB?.id).filter { teamMatch(it) != null }.toSet(),
         )
         val problems = RankedMatchRules.validate(request).toMutableList()
         if (problems.isEmpty() && arena != null) outsidersIn(arena, participants.map { it.uuid }.toSet())?.let { problems += it }
@@ -519,7 +529,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             )
         } catch (e: Exception) {
             plugin.logger.warning("[Ranked] Match $id couldn't be recorded, so it didn't start: ${e.message}")
-            return CreateResult.Refused(listOf("The match couldn't be recorded (a player or the arena may already be in another match): ${e.message}"))
+            return CreateResult.Refused(listOf("The match couldn't be recorded (a player, a team or the arena may already be in another match): ${e.message}"))
         }
         match.state = MatchState.PREPARING
         matches[id] = match

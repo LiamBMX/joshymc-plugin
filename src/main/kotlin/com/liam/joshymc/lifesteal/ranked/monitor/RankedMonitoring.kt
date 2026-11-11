@@ -89,6 +89,29 @@ object RankedMonitorRules {
         REPEATED_HEART_TRANSFERS("the same killer keeps taking hearts from the same victim"),
         SHARED_CONNECTION("opponents were seen on one connection"),
         REPEATED_FORFEITS("a player keeps forfeiting by disconnecting"),
+        /** Issue #1499: a match the same-opponent rating limit made unrated (teams or rosters kept meeting after it). */
+        RATING_LIMIT_REACHED("the same opponents kept playing after the rating limit"),
+    }
+
+    /**
+     * Issue #1499: the finding for a match the rating limit made unrated. [limit] is the
+     * `RatingRules.Limit` name; [earlierOtherTeams] are team ids the earlier counted matches were
+     * played under besides this match's (non-empty = the same players came back as another team,
+     * e.g. a disbanded and recreated team). The subject is the roster (both sides, order-free), so
+     * the same group keeps one entry per window however often it re-forms. Logging only.
+     */
+    fun ratingLimitFinding(
+        limit: String, sideA: List<UUID>, sideB: List<UUID>, teams: List<String>,
+        earlierCount: Int, earlierOtherTeams: Set<String>, settings: RankedMonitorSettings?,
+    ): Finding? {
+        if (settings == null || !settings.enabled || sideA.isEmpty() || sideB.isEmpty()) return null
+        val subject = pairKey(sideA.map { it.toString() }.sorted().joinToString(","), sideB.map { it.toString() }.sorted().joinToString(","))
+        val what = if (limit == "REPEATED_ROSTER") "mostly the same players" else "the same two teams"
+        val recreated = if (earlierOtherTeams.isEmpty()) "" else "; the earlier matches were played under ${earlierOtherTeams.size} other team id(s) (possible team recreation)"
+        return Finding(
+            Kind.RATING_LIMIT_REACHED, subject, sideA + sideB, teams,
+            "$what played again after $earlierCount rated match(es) against each other inside the rating window ($limit limit), so this match was unrated$recreated",
+        )
     }
 
     /** What one finished match looked like (taken on the main thread when it ended). */

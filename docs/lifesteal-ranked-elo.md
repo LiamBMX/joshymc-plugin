@@ -123,9 +123,42 @@ Only created where Lifesteal is hosted.
 - **Test matches**: never rated. **Challenges**: unrated by default (two friendly teams could farm).
 - **Repeated rematches**: `same-opponent-limit` per `same-opponent-window-hours`, counted on RATED
   results of the same pair in either order and the same season.
+- **Repeated rosters (issue #1499)**: the same limit also applies by **player UUID**, so it can't be
+  reset by disbanding and recreating a team, renaming it, or swapping a minority of the roster.
+  Inside the finalize transaction, `RatingStore.repeatedRosterMatches` reads the RATED matches of
+  the season inside the window that share a player with this one (from the stored
+  `lifesteal_ranked_participants` history, which is never deleted with a team and survives
+  restarts) and counts those whose rosters are the same opponents by `RatingRules.sameOpponents`:
+
+  > With the sides lined up either way (A with A and B with B, or A with B and B with A), each side
+  > of this match shares at least half (rounded up) of the smaller of the two lined-up rosters, **and**
+  > at least two opposing player pairs met as opponents again (shared on one side × shared on the
+  > other ≥ 2).
+
+  Examples: the same players under a new team id = same; 2v2 with one player replaced (3 of 4 the
+  same) = same; 3v3 or 4v4 keeping two of each side = same; 5v5 keeping three of each side = same;
+  one player of each side met before (a single incidental opponent pair) = **not** the same;
+  unrelated teams = not the same. A match is UNRATED when **either** the team-pair count or the
+  roster count reaches `same-opponent-limit` (one verdict: no Player Elo and no Team Elo for
+  anyone). Only RATED matches count, so the first three stay rated and unrated rematches never
+  extend the block. Heart rules and inventory restoration are untouched: hearts still move in an
+  unrated match, and the players are told so.
 - **Disbanding / recreating / renaming**: Team Elo is keyed by the team id; a new team (even with
   a reused name) gets a new id and the initial rating. A disbanded team's rows and history stay for
-  audits (`/lifesteal admin ranked rating team <id>`); it is no longer an active team.
+  audits (`/lifesteal admin ranked rating team <id>`); it is no longer an active team. Its players'
+  earlier rated matches still count toward the repeated-roster limit above.
+- **One match per team (issue #1499, A-1)**: a team plays at most one ranked match at a time,
+  whichever members it would send. Checked when queueing, challenging, answering a challenge,
+  agreeing, accepting a found match, when matchmaking proposes and right before the match is
+  created (`LifestealRankedManager.teamMatch`, read from the open matches, and
+  `RankedMatchRules.validate`'s `busyTeams` for every kind incl. TEST). The database enforces it as
+  well: the trigger `trg_lifesteal_ranked_matches_one_per_team` refuses inserting an open match
+  for a team that already has one, reading the match rows' own state, so completion, cancellation
+  and the startup recovery release the team and no lock can get stuck after a crash.
+- **Monitoring**: a match the rating limit made unrated is logged (logging only) as a
+  `RATING_LIMIT_REACHED` review (`/lifesteal admin ranked reviews`), one per roster per monitoring
+  window, naming any other team ids the earlier matches were played under (possible team
+  recreation). Repeated opponent UUID pairs were already logged (`REPEATED_PLAYER_MATCHUP`).
 - **Leaving a team after a loss / leadership transfer**: Player Elo follows the player, Team Elo
   stays with the team; neither changes.
 - **Disconnects / forfeits**: a disconnect in the fight is an ordinary "out" in the match (#1361),
@@ -216,4 +249,11 @@ restart; plus lifesteal.yml parsing and the wiring.
 9. Disband a rated team, recreate it with the same name: it starts at the initial Team Elo; the old
    id still shows its history under `rating team <old id>`.
 10. Play the same two teams four times within 24 hours: the fourth is UNRATED (same-opponent).
-11. On the Survival server: `/ranked` doesn't exist and no `lifesteal_ranked_rating*` table exists.
+    Then disband one team, recreate it (same or another name) with the same players and play
+    again: UNRATED ("repeated opponent roster limit reached"), both teams see the same line with the
+    heart reminder, and `/lifesteal admin ranked reviews` shows a `RATING_LIMIT_REACHED` entry.
+11. (#1499) With a 4-member team in a 2v2 match, try `/ranked queue 2` with the other two members,
+    challenge another team, and answer a challenge: all refused ("already playing a ranked match").
+    The same while the team is in a staff TEST match. After the match ends (or is cancelled, or the
+    server restarts) the team can queue again.
+12. On the Survival server: `/ranked` doesn't exist and no `lifesteal_ranked_rating*` table exists.

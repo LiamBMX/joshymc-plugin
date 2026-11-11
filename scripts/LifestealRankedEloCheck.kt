@@ -75,6 +75,8 @@ fun main() {
     rules()
     config()
     database()
+    rosterRule()
+    antiFarming()
     wiring()
     println("Ranked Elo checks passed ($checks checks).")
 }
@@ -444,6 +446,140 @@ private fun database() {
                 check("restart: the crashed match is still waiting", pending.size == 1)
                 check("restart: rated once afterwards", ratings.finalize(pending[0], POLICY, 40_000_100) is Finalized.Rated && ratings.finalize(pending[0], POLICY, 40_000_200) is Finalized.AlreadyProcessed)
                 check("restart: no duplicate history", count(db, "SELECT COUNT(*) FROM (SELECT match_id, rating_type, subject_id FROM lifesteal_ranked_rating_history GROUP BY 1, 2, 3 HAVING COUNT(*) > 1)") == 0)
+            } finally { db.shutdown() }
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+}
+
+// ── Issue #1499: roster-overlap rule ─────────────────────────
+
+private fun rosterRule() {
+    val a = players(1, 5)
+    val b = players(2, 5)
+    val x = players(8, 5)
+    val y = players(9, 5)
+    fun same(ca: List<UUID>, cb: List<UUID>, pa: List<UUID>, pb: List<UUID>) = RatingRules.sameOpponents(ca, cb, pa, pb)
+    check("#1499 roster: identical 2v2 = same opponents", same(a.take(2), b.take(2), a.take(2), b.take(2)))
+    check("#1499 roster: sides swapped = same opponents", same(b.take(2), a.take(2), a.take(2), b.take(2)))
+    check("#1499 roster: 2v2 with one player replaced (3 of 4 the same) = same opponents", same(a.take(2), listOf(b[0], y[0]), a.take(2), b.take(2)))
+    check("#1499 roster: 2v2 with one player of each side replaced (one incidental opponent pair) = NOT the same", !same(listOf(a[0], x[0]), listOf(b[0], y[0]), a.take(2), b.take(2)))
+    check("#1499 roster: one shared player only = NOT the same", !same(listOf(a[0], x[0]), y.take(2), a.take(2), b.take(2)))
+    check("#1499 roster: teammates who now play each other = NOT the same opponents", !same(listOf(a[0], x[0]), listOf(a[1], y[0]), a.take(2), b.take(2)))
+    check("#1499 roster: 3v3 keeping two of each side = same opponents", same(listOf(a[0], a[1], x[0]), listOf(b[0], b[1], y[0]), a.take(3), b.take(3)))
+    check("#1499 roster: 3v3 keeping one of one side = NOT the same", !same(listOf(a[0], a[1], a[2]), listOf(b[0], y[0], y[1]), a.take(3), b.take(3)))
+    check("#1499 roster: 4v4 keeping two of each side = same opponents", same(a.take(2) + x.take(2), b.take(2) + y.take(2), a.take(4), b.take(4)))
+    check("#1499 roster: 5v5 keeping three of each side = same opponents", same(a.take(3) + x.take(2), b.take(3) + y.take(2), a, b))
+    check("#1499 roster: 5v5 keeping two of each side = NOT the same", !same(a.take(2) + x.take(3), b.take(2) + y.take(3), a, b))
+    check("#1499 roster: unrelated teams = NOT the same", !same(x.take(2), y.take(2), a.take(2), b.take(2)))
+    check("#1499 roster: a 2v2 cut from an earlier 5v5 (3 of 4 met) = same opponents", same(a.take(2), listOf(b[0], y[0]), a, b))
+    check("#1499 roster: deterministic and symmetric in the current sides", (1..10).all { same(a.take(2), listOf(b[0], y[0]), a.take(2), b.take(2)) && same(listOf(b[0], y[0]), a.take(2), a.take(2), b.take(2)) })
+
+    check("#1499 decide: the roster limit makes the match unrated", (RatingRules.decide(record(), parts(), false, 3, 0, 3) as? RatingRules.Verdict.Unrated)?.limit == RatingRules.Limit.REPEATED_ROSTER)
+    check("#1499 decide: below the roster limit stays rated", RatingRules.decide(record(), parts(), false, 3, 0, 2) is RatingRules.Verdict.Rated)
+    check("#1499 decide: the team limit is checked too (either limit)", (RatingRules.decide(record(), parts(), false, 3, 3, 0) as? RatingRules.Verdict.Unrated)?.limit == RatingRules.Limit.TEAM_PAIR)
+    check("#1499 decide: limit 0 turns both off", RatingRules.decide(record(), parts(), false, 0, 9, 9) is RatingRules.Verdict.Rated)
+    check("#1499 decide: TEST stays unrated (not a limit)", (RatingRules.decide(record(kind = MatchKind.TEST, test = true), parts(), true, 3, 0, 0) as? RatingRules.Verdict.Unrated)?.limit == null)
+    check("#1499 decide: challenges keep their setting", RatingRules.decide(record(kind = MatchKind.CHALLENGE), parts(), false, 3, 0, 0) is RatingRules.Verdict.Unrated &&
+        RatingRules.decide(record(kind = MatchKind.CHALLENGE), parts(), true, 3, 0, 0) is RatingRules.Verdict.Rated &&
+        (RatingRules.decide(record(kind = MatchKind.CHALLENGE), parts(), true, 3, 0, 3) as? RatingRules.Verdict.Unrated)?.limit == RatingRules.Limit.REPEATED_ROSTER)
+    check("#1499 decide: an invalid record is still invalid (limits never hide it)", RatingRules.decide(record(winner = null), parts(), false, 3, 9, 9) is RatingRules.Verdict.Invalid)
+}
+
+// ── Issue #1499: team recreation / repeated opponents against a real database ──
+
+private fun antiFarming() {
+    val dir = Files.createTempDirectory("ranked-elo-farming").toFile()
+    val policy = POLICY.copy(sameOpponentLimit = 3, sameOpponentWindowMillis = 24 * 3_600_000L)
+    val x = "aaaa0000-0000-4000-8000-000000000001" to "Xeno"
+    val y = "bbbb0000-0000-4000-8000-000000000002" to "Yak"
+    val y2 = "bbbb0000-0000-4000-8000-000000000003" to "Yak"      // Y disbanded and recreated with the same name
+    val y3 = "bbbb0000-0000-4000-8000-000000000004" to "Yeti"     // and again under a new name
+    val z = "cccc0000-0000-4000-8000-000000000005" to "Zebra"
+    val xs = players(11, 2)
+    val ys = players(12, 2)
+    val other = players(13, 2)
+    val h = 3_600_000L
+    lateinit var recreated: String
+    try {
+        DatabaseManager(dir, quietLogger()).let { db ->
+            db.start()
+            try {
+                val ranked = RankedStore(db)
+                ranked.createTables()
+                val ratings = RatingStore(db)
+                ratings.createTables()
+                fun history() = count(db, "SELECT COUNT(*) FROM lifesteal_ranked_rating_history")
+                fun elo(u: UUID) = ratings.rating("season-1", RatingType.PLAYER_ELO, u.toString())?.rating
+
+                val first = (1..3).map { i ->
+                    val id = play(ranked, "season-1", x, y, xs, ys, if (i % 2 == 0) Side.B else Side.A, 100 * h + i * h)
+                    ratings.finalize(id, policy, 100 * h + i * h + 1)
+                }
+                check("#1499 1st, 2nd and 3rd rated match between the same opponents award Elo", first.all { it is Finalized.Rated })
+                val historyAfter3 = history()
+                val xBefore = elo(xs[0])
+                val teamXBefore = ratings.rating("season-1", RatingType.TEAM_ELO, x.first)!!.rating
+
+                val fourth = play(ranked, "season-1", x, y, xs, ys, Side.A, 104 * h)
+                val r4 = ratings.finalize(fourth, policy, 104 * h + 1)
+                check("#1499 4th match against the same team inside 24h: unrated (team limit)", r4 is Finalized.Unrated && (r4 as Finalized.Unrated).limit == RatingRules.Limit.TEAM_PAIR)
+
+                // The exploit: Y disbands, the same players make Y2 and keep playing X.
+                recreated = play(ranked, "season-1", x, y2, xs, ys, Side.A, 105 * h)
+                val r5 = ratings.finalize(recreated, policy, 105 * h + 1)
+                check("#1499 team recreation does not reset the limit: unrated by the roster limit", r5 is Finalized.Unrated && (r5 as Finalized.Unrated).limit == RatingRules.Limit.REPEATED_ROSTER)
+                r5 as Finalized.Unrated
+                check("#1499 the earlier rated matches all count (3) and the old team id is reported", r5.earlierCount == 3 && r5.earlierOtherTeams == setOf(y.first))
+                check("#1499 both teams get the same verdict (participants of both sides)", r5.participants.toSet() == (xs + ys).toSet() && r5.sides.values.toSet() == setOf(Side.A, Side.B))
+                check("#1499 unrated: no Player Elo change", elo(xs[0]) == xBefore && elo(ys[0]) != null)
+                check("#1499 unrated: no Team Elo change (old team, and the new team gets no rating row)", ratings.rating("season-1", RatingType.TEAM_ELO, x.first)!!.rating == teamXBefore && ratings.rating("season-1", RatingType.TEAM_ELO, y2.first) == null)
+                check("#1499 unrated: no history rows written", history() == historyAfter3)
+                check("#1499 unrated is final: never rated on a retry", ratings.finalize(recreated, policy, 105 * h + 2) is Finalized.AlreadyProcessed && ratings.result(recreated)?.status == RatingStore.ResultStatus.UNRATED)
+
+                val renamed = play(ranked, "season-1", y3, x, ys, xs, Side.A, 106 * h)
+                check("#1499 renaming (and sides swapped) doesn't reset it either", (ratings.finalize(renamed, policy, 106 * h + 1) as? Finalized.Unrated)?.limit == RatingRules.Limit.REPEATED_ROSTER)
+
+                val partial = play(ranked, "season-1", x, y2, xs, listOf(ys[0], other[0]), Side.B, 106 * h + 1000)
+                check("#1499 partial roster change (3 of 4 the same): unrated by the overlap rule", (ratings.finalize(partial, policy, 106 * h + 2000) as? Finalized.Unrated)?.limit == RatingRules.Limit.REPEATED_ROSTER)
+
+                val incidental = play(ranked, "season-1", x, y2, listOf(xs[0], other[1]), listOf(ys[0], players(14, 1)[0]), Side.A, 106 * h + 3000)
+                check("#1499 one incidental opponent pair (2 of 4 changed): still rated", ratings.finalize(incidental, policy, 106 * h + 4000) is Finalized.Rated)
+
+                val unrelated = play(ranked, "season-1", z, y2, players(15, 2), players(16, 2), Side.A, 107 * h)
+                check("#1499 unrelated teams earn Elo", ratings.finalize(unrelated, policy, 107 * h + 1) is Finalized.Rated)
+                val xVsZ = play(ranked, "season-1", x, z, xs, players(15, 2), Side.A, 107 * h + 1000)
+                check("#1499 X against a different opponent still earns Elo", ratings.finalize(xVsZ, policy, 107 * h + 2000) is Finalized.Rated)
+
+                val test = play(ranked, "season-1", x, y2, xs, ys, Side.A, 107 * h + 3000, MatchKind.TEST)
+                check("#1499 TEST matches stay unrated without a limit verdict", (ratings.finalize(test, policy, 107 * h + 4000) as? Finalized.Unrated)?.let { it.test && it.limit == null } == true)
+
+                // The window: matches 1..3 ended at 101..103h; after 24h of them the rosters may be rated again.
+                val later = play(ranked, "season-1", x, y2, xs, ys, Side.A, 128 * h)
+                check("#1499 after the window the same opponents are rated again", ratings.finalize(later, policy, 128 * h + 1) is Finalized.Rated)
+                check("#1499 unrated matches never count toward the limit (only RATED ones do)",
+                    ratings.repeatedRosterMatches("season-1", ranked.participants(later), 104 * h, later).isEmpty())
+                val fresh = play(ranked, "season-1", "dddd0000-0000-4000-8000-000000000006" to "Delta", "eeee0000-0000-4000-8000-000000000007" to "Echo", players(17, 2), players(18, 2), Side.A, 129 * h)
+                val rf = ratings.finalize(fresh, policy, 129 * h + 1) as Finalized.Rated
+                check("#1499 the Elo formula is unchanged (new equals still +16 / -16)", rf.teams.values.map { it.delta }.toSet() == setOf(16, -16) && rf.players.values.map { it.delta }.toSet() == setOf(16, -16))
+                check("#1499 no duplicate rating rows", count(db, "SELECT COUNT(*) FROM (SELECT match_id, rating_type, subject_id FROM lifesteal_ranked_rating_history GROUP BY 1, 2, 3 HAVING COUNT(*) > 1)") == 0)
+                check("#1499 history of the disbanded team is intact", ratings.history(RatingType.TEAM_ELO, y.first, null, 10).size == 3)
+            } finally { db.shutdown() }
+        }
+        // Restart: the participant history is persistent, so the limit still applies.
+        DatabaseManager(dir, quietLogger()).let { db ->
+            db.start()
+            try {
+                val ranked = RankedStore(db)
+                ranked.createTables()
+                val ratings = RatingStore(db)
+                ratings.createTables()
+                val again = play(ranked, "season-1", x, y3, xs, ys, Side.A, 128 * h + 5000)
+                val r = ratings.finalize(again, policy, 128 * h + 6000)
+                check("#1499 opponent history survives a restart (only one rated rematch since the window reopened, so rated)", r is Finalized.Rated)
+                val counted = ratings.repeatedRosterMatches("season-1", ranked.participants(again), 104 * h, "none").map { it.matchId }
+                check("#1499 after a restart the earlier rated rosters are still found (and unrated ones aren't)", counted.size == 2 && recreated !in counted)
             } finally { db.shutdown() }
         }
     } finally {
