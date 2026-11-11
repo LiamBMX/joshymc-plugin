@@ -50,12 +50,15 @@ class RankedMonitorStore(private val db: SqliteDatabase) {
 
     // ── Counts over existing history ────────────────────────
 
-    /** Non-test matches between [teamA] and [teamB] (either order) that reached the fight, created at or after [since]. */
-    fun teamMatchCount(teamA: String, teamB: String, since: Long): Int =
+    /**
+     * Matches between [teamA] and [teamB] (either order) that reached the fight, created at or after
+     * [since]: non-test matches, or (issue #1491, [test]) only staff TEST matches.
+     */
+    fun teamMatchCount(teamA: String, teamB: String, since: Long, test: Boolean = false): Int =
         db.queryFirst(
-            "SELECT COUNT(*) AS n FROM lifesteal_ranked_matches WHERE test = 0 AND started_at IS NOT NULL AND created_at >= ? AND " +
+            "SELECT COUNT(*) AS n FROM lifesteal_ranked_matches WHERE test = ? AND started_at IS NOT NULL AND created_at >= ? AND " +
                 "((team_a_id = ? AND team_b_id = ?) OR (team_a_id = ? AND team_b_id = ?))",
-            since, teamA, teamB, teamB, teamA
+            if (test) 1 else 0, since, teamA, teamB, teamB, teamA
         ) { it.getInt("n") } ?: 0
 
     /**
@@ -63,11 +66,12 @@ class RankedMonitorStore(private val db: SqliteDatabase) {
      * [since] in which they stood on opposite sides (whatever team they played for), by
      * [RankedMonitorRules.pairKey]. One query.
      */
-    fun playerPairMatches(sideA: List<UUID>, sideB: List<UUID>, since: Long): Map<String, Int> {
+    fun playerPairMatches(sideA: List<UUID>, sideB: List<UUID>, since: Long, test: Boolean = false): Map<String, Int> {
         if (sideA.isEmpty() || sideB.isEmpty()) return emptyMap()
         val a = sideA.joinToString(",") { "?" }
         val b = sideB.joinToString(",") { "?" }
         val params = ArrayList<Any?>()
+        params += if (test) 1 else 0
         params += since
         sideA.mapTo(params) { it.toString() }
         sideB.mapTo(params) { it.toString() }
@@ -75,7 +79,7 @@ class RankedMonitorStore(private val db: SqliteDatabase) {
             "SELECT x.uuid AS a, y.uuid AS b, COUNT(DISTINCT x.match_id) AS n FROM lifesteal_ranked_participants x " +
                 "JOIN lifesteal_ranked_participants y ON y.match_id = x.match_id AND y.side <> x.side " +
                 "JOIN lifesteal_ranked_matches m ON m.match_id = x.match_id " +
-                "WHERE m.test = 0 AND m.started_at IS NOT NULL AND m.created_at >= ? AND x.uuid IN ($a) AND y.uuid IN ($b) " +
+                "WHERE m.test = ? AND m.started_at IS NOT NULL AND m.created_at >= ? AND x.uuid IN ($a) AND y.uuid IN ($b) " +
                 "GROUP BY x.uuid, y.uuid",
             *params.toTypedArray()
         ) { rs -> RankedMonitorRules.pairKey(rs.getString("a"), rs.getString("b")) to rs.getInt("n") }
@@ -108,8 +112,8 @@ class RankedMonitorStore(private val db: SqliteDatabase) {
         val since = now - settings.windowMillis
         val pairs = RankedMonitorRules.opponentPairs(facts)
         return RankedMonitorRules.Counts(
-            teamMatches = if (settings.repeatedTeamMatches > 0) teamMatchCount(facts.teamAId, facts.teamBId, since) else 0,
-            playerPairMatches = if (settings.repeatedPlayerMatches > 0) playerPairMatches(facts.sideA, facts.sideB, since) else emptyMap(),
+            teamMatches = if (settings.repeatedTeamMatches > 0) teamMatchCount(facts.teamAId, facts.teamBId, since, facts.test) else 0,
+            playerPairMatches = if (settings.repeatedPlayerMatches > 0) playerPairMatches(facts.sideA, facts.sideB, since, facts.test) else emptyMap(),
             pairTransfers = if (settings.repeatedHeartTransfers > 0) facts.transfers.distinct().associate { (k, v) -> RankedMonitorRules.directedKey(k, v) to transferCount(k, v, since) } else emptyMap(),
             forfeits = if (settings.repeatedForfeits > 0) facts.forfeited.distinct().associateWith { forfeitCount(it, since) } else emptyMap(),
             sharedPairs = if (settings.sharedConnections) pairs.filter { (a, b) -> sharedConnection(a, b) }.map { (a, b) -> RankedMonitorRules.pairKey(a, b) }.toSet() else emptySet(),

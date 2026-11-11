@@ -54,7 +54,9 @@ class RankedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             return true
         }
         // Issue #1369: closed to players until lifesteal.yml > ranked-team-wars.enabled is true.
-        if (!queue.commandVisibleTo(player)) {
+        // Issue #1491: a player asked to play a staff test match can still answer it.
+        val answeringTest = args.firstOrNull()?.lowercase() in setOf("accept", "decline", "deny") && queue.tests.busy(player.uniqueId)
+        if (!queue.commandVisibleTo(player) && !answeringTest) {
             Msg.error(player, LifestealRankedQueueManager.CLOSED_MESSAGE)
             return true
         }

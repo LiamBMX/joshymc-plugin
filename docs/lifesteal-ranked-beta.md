@@ -112,7 +112,8 @@ player and one mixed Java + Bedrock team. Run it on the Lifesteal server after t
    `setspawn a|b` (as many as the team size), `setspectator` (outside), `sizes`, `enable`.
    `arena info` shows READY.
 2. With `enabled: false`, a player's `/ranked` is refused and hidden. Staff can still open it.
-3. Run `/lifesteal admin ranked testmatch A B 2` once per arena. Players move in, the countdown
+3. Run `/lifesteal admin ranked testmatch A B 2` once per arena, confirm it, and have every player
+   accept (section J). Players move in, the countdown
    runs with no damage, then the fight starts. The match is recorded TEST and not rated.
 4. Set `ranked-team-wars.enabled: true` and `/joshymc reload`. For each of 2v2, 3v3, 4v4 and 5v5:
    - the leader runs `/ranked queue <n> <names>` (or uses the GUI);
@@ -591,3 +592,88 @@ The existing Elo-independence, forfeit, restart and snapshot checks still pass u
 - The window is the combat-tag duration, not a separate ranked setting.
 - The copy is memory only. A server crash in the middle of the death event leaves that death
   without credit (match recovery itself is unchanged).
+
+## J. Staff TEST matches need confirmation and every player's consent (issue #1491, finding F-3)
+
+### Root cause
+
+`/lifesteal admin ranked testmatch <teamA> <teamB> <size>` called `createMatch` directly: the first
+`size` online members of each team were snapshotted and teleported into a fight at once. TEST
+matches move real permanent hearts, so a staff member could force players into a heart fight with
+no consent, no confirmation, no staff hierarchy check and no `admin_logs` row, and the farming
+monitor skipped TEST matches.
+
+### New flow
+
+1. **Staff preview** (`testmatch <teamA> <teamB> <size> [arena]`, `joshymc.lifesteal.ranked.admin`):
+   checks permission, the staff hierarchy (`StaffRankManager.protectionProblem` for every
+   participant: self, equal and higher staff are refused; console is allowed), the normal ranked
+   eligibility of every player (`participantProblem`: online, team member, Lifesteal world, loaded
+   hearts, combat tag, other match, pending restore, transfer, death, game mode, Mod Mode/frozen/
+   trading/event world), not already in a queue/challenge/other test, the season unlock, arena and
+   size. Then it shows both teams, the players, the size, the heart risk and a `[Confirm]` button.
+   Nothing else happens. Audited `RANKED_TESTMATCH_REQUESTED`.
+2. **Staff confirmation** (`testmatch confirm <rx-token>`): 60s, bound to the staff member (player
+   UUID or console) and to the exact plan (teams by id, size, arena, the players on each side). The
+   plan is rebuilt from live data and must match, else the confirmation is spent. Single use; a new
+   request replaces the older one. All checks above run again. Audited `RANKED_TESTMATCH_CONFIRMED`.
+3. **Player consent**: every participant gets the warning (permanent hearts at risk under the normal
+   rules, the 1-20 range, the last heart can't be lost, no Elo, inventory saved, both teams and the
+   size, who set it up) and `[Accept]`/`[Decline]` for that proposal (`/ranked accept|decline rt-...`).
+   A token is required: a bare `/ranked accept` shows the proposal again. Leaders can't accept for
+   anyone. The window is `ranked-team-wars.matchmaking.consent-seconds` (default 60). These two
+   `/ranked` subcommands work for an asked player even while `/ranked` is closed to players.
+   One decline, the timeout, a disconnect, a team change, another match/pending restore or joining a
+   queue ends it (`RANKED_TESTMATCH_DECLINED` / `_EXPIRED` / `_CANCELLED`). Each accept is audited
+   (`RANKED_TESTMATCH_ACCEPTED`).
+4. **Start**: once (the single CONFIRMING → STARTING gate), only if the staff member is still online
+   and authorized and every check passes again, through `LifestealRankedManager.createTestMatch`
+   with exactly the accepted players. That runs the same validation, inventory snapshots and
+   lifecycle as every other match (`RANKED_TESTMATCH_CREATED`). The end is audited once
+   (`RANKED_TESTMATCH_COMPLETED` / `RANKED_TESTMATCH_MATCH_CANCELLED`) with every heart decision.
+
+Staff can cancel an open test proposal with `/lifesteal admin ranked cancelproposal rt-...`; it also
+shows in `/lifesteal admin ranked queue`. Nothing is persisted: a restart or reload ends every
+confirmation and proposal (nothing was touched before the start).
+
+### Hearts and Elo (unchanged)
+
+TEST matches are still not heart-safe: kills, forfeits and environmental deaths go through the one
+`HeartStore.transferPvp` with the normal cooldown, 1-heart minimum and 20-heart maximum. TEST matches
+are never rated. Inventory snapshots and restoration are unchanged.
+
+### Farming monitor
+
+TEST matches are now checked when they end, with the same thresholds. Team and player matchups of
+a TEST match are counted against other TEST matches only (so staff testing never inflates the public
+counts); heart transfers and shared connections are counted as always. TEST findings get a `test:`
+subject (separate suppression) and name the staff member who started the match, in
+`lifesteal_ranked_reviews` and `admin_logs`. Still logging only.
+
+### Checks
+
+`./gradlew -I scripts/lifesteal-ranked-test-match-check.init.gradle.kts lifestealRankedTestMatchCheck`
+(96 checks: permission, hierarchy, eligibility, confirmation expiry/reuse/ownership/changes, consent
+per player and per proposal, decline/timeout/disconnect, start once, the warnings, unrated, heart
+transfer + cooldown + minimum against the real `HeartStore`, TEST monitoring against SQLite, audit
+wiring, unchanged challenges/matchmaking/restoration).
+
+**Needs a live Paper server:**
+
+1. As Admin, `testmatch A B 2`: only a preview. Confirm: the four players get the warning and
+   buttons; nobody moves.
+2. Three accept, one declines: everyone is told, nothing happens. Repeat and let it time out.
+3. Repeat and have one player log out, or leave the team: the proposal ends at once.
+4. Confirm after a teammate logs in/out between preview and confirm: "changed", not confirmed.
+5. Include a staff member ranked equal or above the Admin, or the Admin themselves: refused.
+6. All four accept: the match runs as before; a kill moves a heart; no Elo; inventories restored.
+7. `/admin` logs show the REQUESTED, CONFIRMED, ACCEPTED, CREATED and COMPLETED rows.
+8. Play four TEST matches between the same teams in 24h: one `test:` review entry naming the Admin.
+
+### Limitations
+
+- Staff can't include themselves in a test match (the hierarchy rule refuses self). Use console, or
+  another staff member, to start one that involves you.
+- The staff member must be online when the last player accepts (their rank and permission are
+  re-checked live); otherwise the proposal is cancelled.
+- Proposals are memory only (a restart cancels them before anything was touched).

@@ -554,7 +554,7 @@ private fun wiring() {
 
     // Delegation to the existing match lifecycle; no inventory/heart/teleport code in the queue.
     check("matches are created only through the existing lifecycle", manager.contains("ranked.createQueuedMatch(a.teamId, b.teamId, p.size, arena.id, kind, a.participants, b.participants, p.id)") && rankedManager.contains("fun createQueuedMatch("))
-    check("queued matches run the same validation/snapshot path as test matches", Regex("""fun createQueuedMatch\([\s\S]*?return startMatch\(""").containsMatchIn(rankedManager) && Regex("""fun createMatch\([\s\S]*?return startMatch\(""").containsMatchIn(rankedManager))
+    check("queued matches run the same validation/snapshot path as test matches", Regex("""fun createQueuedMatch\([\s\S]*?return startMatch\(""").containsMatchIn(rankedManager) && Regex("""fun createTestMatch\([\s\S]*?return startMatch\(""").containsMatchIn(rankedManager))
     check("the queue never touches inventories, positions, hearts or tags", queueSources.none { s ->
         listOf(".inventory", "setItem(Equipment", "teleport", "serializeAsBytes", "HeartStore", "lifestealHeartManager.adminChange", "transferPvp", "untag", ".health").any { s.contains(it) }
     })

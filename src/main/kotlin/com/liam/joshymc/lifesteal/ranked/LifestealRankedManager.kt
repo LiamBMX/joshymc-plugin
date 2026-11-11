@@ -10,6 +10,7 @@ import com.liam.joshymc.lifesteal.hearts.HeartStore
 import com.liam.joshymc.lifesteal.progression.ProgressionRules
 import com.liam.joshymc.lifesteal.ranked.monitor.RankedFarmingMonitor
 import com.liam.joshymc.lifesteal.ranked.monitor.RankedMonitorRules
+import com.liam.joshymc.lifesteal.ranked.queue.TestMatchPlan
 import com.liam.joshymc.lifesteal.teams.LifestealTeamStore
 import com.liam.joshymc.recovery.SafeSpots
 import net.kyori.adventure.text.Component
@@ -417,20 +418,21 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     }
 
     /**
-     * Creates and prepares a match between Lifesteal teams [teamAName] and [teamBName] with [size]
-     * players per side: the first [size] online members of each team (leader first, then by join
-     * time). Everything is validated before any player is touched.
+     * Issue #1491 (F-3): the only way a staff TEST match is created, and only by
+     * [com.liam.joshymc.lifesteal.ranked.queue.RankedTestMatchService] after the staff member
+     * confirmed [plan] and every one of its players accepted proposal [proposalId] themselves. Exactly
+     * those players, on those sides: the same validation, snapshot and preparation as every other
+     * match (a player who went offline, changed team or became ineligible refuses it). Hearts move
+     * under the normal heart rules; TEST matches are never rated.
      */
-    fun createMatch(sender: CommandSender, teamAName: String, teamBName: String, size: Int, arenaId: String?, test: Boolean): CreateResult {
+    fun createTestMatch(actor: String, actorName: String, plan: TestMatchPlan, proposalId: String): CreateResult {
         arenaUnavailable()?.let { return CreateResult.Refused(listOf(it)) }
         val teams = plugin.lifestealTeamManager
-        val teamA = teams.teamByName(teamAName)
-        val teamB = teams.teamByName(teamBName)
-        fun online(team: LifestealTeamStore.Team?): List<UUID> =
-            team?.members?.mapNotNull { Bukkit.getPlayer(it.uuid)?.takeIf { p -> p.isOnline }?.uniqueId }?.take(size).orEmpty()
+        val teamA = teams.team(plan.teamAId)
+        val teamB = teams.team(plan.teamBId)
         return startMatch(
-            actorOf(sender), sender.name, teamA, teamAName, teamB, teamBName, size, arenaId,
-            if (test) MatchKind.TEST else MatchKind.PUBLIC, null, online(teamA), online(teamB),
+            actor, "$actorName (staff test $proposalId)", teamA, teamA?.name ?: plan.teamAName, teamB, teamB?.name ?: plan.teamBName,
+            plan.size, plan.arenaId, MatchKind.TEST, proposalId, plan.sideA, plan.sideB,
         )
     }
 
@@ -910,6 +912,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         match.state = MatchState.COMPLETED
         release(match)
         if (ok) plugin.logger.info("[Ranked] Match ${match.id} completed.")
+        if (match.test) auditTestEnd(match, "RANKED_TESTMATCH_COMPLETED", "recorded=$ok")
         // Issue #1365: Elo is computed from the stored record, off the main thread. At shutdown (or if
         // the COMPLETED write failed) the rating sweep picks it up after the next start instead.
         if (ok && !shutdown) plugin.lifestealRatingManager.onMatchCompleted(match.id)
@@ -933,6 +936,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         heartSummary(match)
         plugin.logger.warning("[Ranked] Match ${match.id} (${match.label}) cancelled: $reason.")
         release(match)
+        if (match.test) auditTestEnd(match, "RANKED_TESTMATCH_MATCH_CANCELLED", "reason=$reason")
         if (fought && !shutdown) monitorEnded(match)
     }
 
@@ -962,6 +966,23 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         }
     }
 
+    /**
+     * Issue #1491: one `admin_logs` row when a staff TEST match ends, with the initiating staff
+     * member, the proposal and every heart decision of the match (what the heart service already
+     * decided; nothing is re-evaluated). Never throws.
+     */
+    private fun auditTestEnd(match: Match, action: String, extra: String) {
+        try {
+            val hearts = match.heartOutcomes.joinToString(",") { "${it.killer}>${it.victim}:${it.outcome.name}" }
+            val moved = match.heartOutcomes.count { it.outcome.moved }
+            val details = "match=${match.id} initiator=${match.createdBy} teams=${match.teamA.id},${match.teamB.id} size=${match.size}v${match.size} " +
+                "players=${match.roster.uuids.joinToString(",")} $extra hearts_moved=$moved/${match.heartOutcomes.size} hearts=$hearts"
+            plugin.adminManager.logAction(null, RankedFarmingMonitor.SYSTEM_ACTOR, action, null, null, details.take(500))
+        } catch (e: Exception) {
+            plugin.logger.warning("[Ranked] Couldn't write the staff log for test match ${match.id}: ${e.message}")
+        }
+    }
+
     /** Hands a match that reached the fight to the logging-only monitor (after its result is recorded). */
     private fun monitorEnded(match: Match) {
         try {
@@ -974,9 +995,12 @@ class LifestealRankedManager(private val plugin: Joshymc) {
                 sideB = roster.filter { it.side == Side.B }.map { it.uuid },
                 forfeited = roster.filter { it.defeatReason == DefeatReason.DISCONNECT }.map { it.uuid },
                 transfers = match.heartOutcomes.filter { it.outcome.moved }.map { it.killer to it.victim },
+                // Issue #1491: staff TEST matches are monitored too (counted against other TEST matches), with who started them.
+                test = match.test,
+                initiator = if (match.test) initiatorLabel(match.createdBy) else null,
             )
             val names = roster.associate { it.uuid to (Bukkit.getPlayer(it.uuid)?.name ?: plugin.lifestealTeamManager.nameOf(it.uuid)) }
-            monitor.onMatchEnded(facts, match.test, names)
+            monitor.onMatchEnded(facts, names)
         } catch (e: Exception) {
             plugin.logger.warning("[Ranked] Couldn't queue the monitoring check of match ${match.id}: ${e.message}")
         }
@@ -1233,7 +1257,12 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     fun recordEvents(id: String, limit: Int) = store.events(id, limit)
     fun recordSnapshots(id: String) = store.snapshotsOf(id)
 
-    private fun actorOf(sender: CommandSender): String = if (sender is Player) sender.uniqueId.toString() else sender.name
+    /** "Name (uuid)" for a player actor key, the key itself otherwise (console). */
+    private fun initiatorLabel(actor: String): String {
+        val uuid = runCatching { UUID.fromString(actor) }.getOrNull() ?: return actor
+        val name = Bukkit.getPlayer(uuid)?.name ?: plugin.lifestealTeamManager.nameOf(uuid)
+        return "$name ($uuid)"
+    }
 
     companion object {
         const val ADMIN_PERMISSION = "joshymc.lifesteal.ranked.admin"

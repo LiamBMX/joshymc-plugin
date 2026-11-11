@@ -104,6 +104,10 @@ object RankedMonitorRules {
         val forfeited: List<UUID>,
         /** Killer → victim pairs whose heart decision in this match actually moved a heart. */
         val transfers: List<Pair<UUID, UUID>>,
+        /** Issue #1491: a staff TEST match (matchups are counted against other TEST matches only). */
+        val test: Boolean = false,
+        /** Who started a TEST match ("Name (uuid)" or CONSOLE), for the review log. */
+        val initiator: String? = null,
     )
 
     /** Counts read from existing history inside the window (this match included). */
@@ -125,6 +129,8 @@ object RankedMonitorRules {
         val players: List<UUID>,
         val teams: List<String>,
         val reason: String,
+        /** Issue #1491: the staff member who started the TEST match this finding is about (null = not a TEST match). */
+        val initiator: String? = null,
     ) {
         /** One row per finding per match: re-processing the same match never adds another. */
         fun dedupeKey(matchId: String): String = "${kind.name}:$subject:$matchId"
@@ -139,8 +145,26 @@ object RankedMonitorRules {
     fun opponentPairs(facts: MatchFacts): List<Pair<UUID, UUID>> =
         facts.sideA.flatMap { a -> facts.sideB.filter { it != a }.map { b -> a to b } }
 
-    /** The findings for [facts], given [counts]; empty when monitoring is off or nothing is unusual. */
+    /**
+     * The findings for [facts], given [counts]; empty when monitoring is off or nothing is unusual.
+     * Issue #1491: for a staff TEST match the same thresholds apply, the subjects get a `test:`
+     * prefix (a TEST finding never suppresses a public one, or the other way round) and the reason
+     * says it was a TEST match and who started it.
+     */
     fun evaluate(facts: MatchFacts, counts: Counts, settings: RankedMonitorSettings?): List<Finding> {
+        val found = evaluatePlain(facts, counts, settings)
+        if (!facts.test) return found
+        val who = facts.initiator ?: "unknown staff"
+        return found.map { f ->
+            val reason = if (f.kind == Kind.REPEATED_TEAM_MATCHUP || f.kind == Kind.REPEATED_PLAYER_MATCHUP) f.reason.replace("ranked matches", "staff TEST matches") else f.reason
+            f.copy(subject = TEST_SUBJECT_PREFIX + f.subject, reason = "$reason; staff TEST match started by $who", initiator = who)
+        }
+    }
+
+    /** Prefix of a TEST match finding's subject. */
+    const val TEST_SUBJECT_PREFIX = "test:"
+
+    private fun evaluatePlain(facts: MatchFacts, counts: Counts, settings: RankedMonitorSettings?): List<Finding> {
         if (settings == null || !settings.enabled) return emptyList()
         val hours = settings.windowHours
         val out = mutableListOf<Finding>()
