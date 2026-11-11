@@ -792,6 +792,11 @@
       "icon": "joshymc/nordic_plate.png",
       "sha1": "a2295c6fb0fb72c42db8c0fcb8a3a35ad146bb70"
     },
+    "joshymc:november_chest": {
+      "bedrock_name": "november_chest",
+      "icon": "joshymc/november_chest.png",
+      "sha1": "0d6ee713f8b66b77c8fca5386178e0884dbb673d"
+    },
     "joshymc:november_key": {
       "bedrock_name": "november_key",
       "icon": "joshymc/november_key.png",
