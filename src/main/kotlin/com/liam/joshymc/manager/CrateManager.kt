@@ -224,6 +224,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     val models = com.liam.joshymc.crate.CrateModelDisplays(plugin, this)
 
     /**
+     * The physical opening animation (issue #1503): cosmetic, player-specific, played before the
+     * unchanged reward GUI. It never draws, stores or delivers a reward and never takes a key.
+     */
+    val opening = com.liam.joshymc.crate.CrateOpeningAnimator(plugin, models)
+
+    /**
      * One crate action per player, click kind and tick, shared by the block and the model hitbox
      * (issue #1451), so one click can never run the crate flow twice.
      */
@@ -278,6 +284,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         } catch (e: Exception) {
             plugin.logger.warning("[Crates] Custom crate models failed to start; crates keep their vanilla look: ${e.message}")
         }
+        // Never lets an animation config problem stop crates: they then open without it.
+        try {
+            opening.start()
+        } catch (e: Exception) {
+            plugin.logger.warning("[Crates] Crate opening animations failed to start; crates open without them: ${e.message}")
+        }
 
         // Retry held rewards for online players (inventory was full, or a reload interrupted them).
         pendingRetryTask?.cancel()
@@ -295,6 +307,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     }
 
     fun stop() {
+        // First: removes every temporary animation model and re-shows the real ones. No reveal
+        // runs; rewards already drawn are settled below like any interrupted animation.
+        try {
+            opening.stop()
+        } catch (e: Exception) {
+            plugin.logger.warning("[Crates] Could not stop crate opening animations: ${e.message}")
+        }
         try {
             models.stop()
         } catch (e: Exception) {
@@ -1074,11 +1093,16 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
         val crate = openableCrate(player, crateType, massOpen = false) ?: return
-        beginOpening(player, crate)
+        beginOpening(player, crate, block)
     }
 
-    /** Starts the opening flow for a crate that already passed [openableCrate] (and had its key taken, for RANDOM). */
-    private fun beginOpening(player: Player, crate: CrateDef) {
+    /**
+     * Starts the opening flow for a crate that already passed [openableCrate] (and had its key
+     * taken, for RANDOM). With a crate [block] and animations on for this crate, the physical
+     * opening animation (issue #1503) plays first and the same flow continues at its reveal.
+     */
+    private fun beginOpening(player: Player, crate: CrateDef, block: Block? = null) {
+        if (block != null && opening.enabledFor(crate.id) && beginAnimatedOpening(player, crate, block)) return
         // SELECT mode: open a pick GUI instead of animating
         if (crate.mode == CrateMode.SELECT) {
             openSelectGui(player, crate)
@@ -1098,6 +1122,68 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             AnimationType.INSTANT -> openInstant(player, crate)
             AnimationType.PULSE -> openPulse(player, crate)
             AnimationType.SPIN -> openSpin(player, crate)
+        }
+    }
+
+    /**
+     * Issue #1503: plays the physical opening animation, then continues with the crate's normal
+     * flow. Returns false when the animation didn't start (the caller then opens as before).
+     *
+     * - Select / Select 3: nothing is drawn or consumed yet (the key is still only taken when
+     *   the pick is confirmed); the pick GUI opens at the reveal. Quitting or a reload during
+     *   the animation just ends it.
+     * - Random (Spin / Pulse / Instant): the key is already gone, so the winner is drawn with
+     *   the same single weighted draw and written to `crate_pending_rewards` **before** the
+     *   animation starts, and that stored reward is what the GUI then reveals and pays. If the
+     *   animation is interrupted by a quit or a reload/shutdown, the existing recovery settles
+     *   that row (join / [stop]); any other interruption only skips ahead to the GUI.
+     */
+    private fun beginAnimatedOpening(player: Player, crate: CrateDef, block: Block): Boolean {
+        val uuid = player.uniqueId
+        if (isManualPickMode(crate.mode)) {
+            activeAnimations.add(uuid)
+            val started = opening.play(player, block, crate.id) {
+                activeAnimations.remove(uuid)
+                if (player.isOnline) openManualPick(player, crate)
+            }
+            if (!started) activeAnimations.remove(uuid)
+            return started
+        }
+        activeAnimations.add(uuid)
+        val winner = selectWeightedReward(crate)
+        val pendingId = registerPendingReward(player, winner)
+        val started = opening.play(player, block, crate.id) { revealRandom(player, crate, winner, pendingId) }
+        // Couldn't animate: the same stored winner goes straight into the normal GUI.
+        if (!started) revealRandom(player, crate, winner, pendingId)
+        return true
+    }
+
+    private fun openManualPick(player: Player, crate: CrateDef) {
+        if (crate.mode == CrateMode.SELECT) {
+            openSelectGui(player, crate)
+        } else {
+            select3Sessions[player.uniqueId] = Select3Session(crate.id)
+            openSelect3Gui(player, crate)
+        }
+    }
+
+    /** The reward GUI for an animated random open, paying exactly the reward stored as [pendingId]. */
+    private fun revealRandom(player: Player, crate: CrateDef, winner: CrateReward, pendingId: String) {
+        if (!player.isOnline || inFlightRewards[player.uniqueId] != pendingId) {
+            // Already settled elsewhere (quit, shutdown): nothing to reveal or pay here.
+            activeAnimations.remove(player.uniqueId)
+            return
+        }
+        when (crate.animationType) {
+            AnimationType.INSTANT -> {
+                if (finishInFlight(player, pendingId)) {
+                    spawnWinParticles(player, crate)
+                    player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
+                }
+                activeAnimations.remove(player.uniqueId)
+            }
+            AnimationType.PULSE -> openPulse(player, crate, winner, pendingId)
+            AnimationType.SPIN -> openSpin(player, crate, winner, pendingId)
         }
     }
 
@@ -1528,7 +1614,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     // --- PULSE animation ---
 
-    private fun openPulse(player: Player, crate: CrateDef) {
+    private fun openPulse(player: Player, crate: CrateDef, preDrawn: CrateReward? = null, preDrawnId: String? = null) {
         val title = Component.text(CRATE_GUI_TITLE_PREFIX)
             .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
             .decoration(TextDecoration.ITALIC, false)
@@ -1548,9 +1634,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         plugin.guiManager.open(player, gui)
 
-        // The winner is pre-selected and stored before the animation starts
-        val winnerReward = selectWeightedReward(crate)
-        val pendingId = registerPendingReward(player, winnerReward)
+        // The winner is pre-selected and stored before the animation starts (issue #1503: an
+        // opening animation already drew and stored it before playing).
+        val winnerReward = preDrawn ?: selectWeightedReward(crate)
+        val pendingId = preDrawnId ?: registerPendingReward(player, winnerReward)
 
         schedulePulseStep(player, gui.inventory, crate, displayRewards.toMutableList(), winnerReward, pendingId, 0, 12)
     }
@@ -1614,7 +1701,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     // --- SPIN animation (original) ---
 
-    private fun openSpin(player: Player, crate: CrateDef) {
+    private fun openSpin(player: Player, crate: CrateDef, preDrawn: CrateReward? = null, preDrawnId: String? = null) {
         val title = Component.text(CRATE_GUI_TITLE_PREFIX)
             .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
             .decoration(TextDecoration.ITALIC, false)
@@ -1649,8 +1736,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         // The winner is drawn and stored now (the key is already gone), then fed into the reel
         // so it stops in slot 13 on the last step. Same single weighted draw as before.
-        val winner = selectWeightedReward(crate)
-        val pendingId = registerPendingReward(player, winner)
+        val winner = preDrawn ?: selectWeightedReward(crate)
+        val pendingId = preDrawnId ?: registerPendingReward(player, winner)
 
         scheduleAnimationStep(player, gui.inventory, crate, reel, winner, pendingId, 2L, 0, 40)
     }
@@ -2236,6 +2323,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }
 
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
+        // Issue #1503: one short burst for the whole mass open, never an animation per key.
+        opening.burst(player, block, crate.id)
     }
 
     // --- Particle task ---
@@ -2417,7 +2506,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         if (!isManualPickMode(crate.mode)) {
             consumeOneKey(player)
         }
-        beginOpening(player, crate)
+        beginOpening(player, crate, block)
     }
 
     /**
@@ -2541,6 +2630,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // A running animation stops here; its reward stays in crate_pending_rewards and is
         // delivered when they log back in.
         inFlightRewards.remove(event.player.uniqueId)
+        // Issue #1503: its opening animation (if any) ends silently; nothing reveals for it.
+        opening.cancel(event.player.uniqueId)
         activeAnimations.remove(event.player.uniqueId)
         lastActivation.remove(event.player.uniqueId)
         clickGate.forget(event.player.uniqueId)

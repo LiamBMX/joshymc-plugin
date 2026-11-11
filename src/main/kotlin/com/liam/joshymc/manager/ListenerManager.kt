@@ -171,6 +171,8 @@ class ListenerManager(private val plugin: Joshymc) {
         pm.registerEvents(plugin.crateManager, plugin)
         // Issue #1389: custom crate chest models (chunk + resource pack status events only).
         pm.registerEvents(plugin.crateManager.models, plugin)
+        // Issue #1503: removes any saved temporary opening-animation model when its chunk loads.
+        pm.registerEvents(plugin.crateManager.opening, plugin)
 
         // Sign Shops, Hoppers, Spawners, Teams
         pm.registerEvents(plugin.signShopManager, plugin)
