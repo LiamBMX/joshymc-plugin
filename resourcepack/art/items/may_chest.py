@@ -33,7 +33,7 @@ from art.kit import animate, arc, bar, box, canvas, copy, display, model, prism,
 ID = "may_chest"
 NAME = "May Chest"
 
-CREAM = ["#6b5a40", "#8f7c5c", "#b4a27e", "#d3c49f", "#e8dcbb", "#f3ead2", "#faf5e6", "#fffcf4"]
+CREAM = ["#8a7652", "#ad9a72", "#cdbb92", "#e2d4ae", "#efe6c8", "#f6efd9", "#fbf7ea", "#fffdf6"]
 LEAF = ["#163810", "#214f18", "#2d6a21", "#3c852c", "#51a039", "#6cba4c", "#90d06a", "#bfe69a"]
 PINK = ["#5c1d3a", "#8a2d56", "#b84375", "#dc6795", "#ef8fb4", "#f8b8cf", "#fde0ea", "#fff4f8"]
 YELLOW = ["#6a3b06", "#9a5d0a", "#ca880f", "#e8b01d", "#f7cf3b", "#ffe76d", "#fff5b6", "#fffde8"]
@@ -90,7 +90,7 @@ def tulip(size: int = 16) -> object:
 
 
 def cream_boards(size: int = 32) -> object:
-    return planks(CREAM, size=size, rows=4, seed=37, vertical=False, knots=2, seam_dark=2)
+    return planks(CREAM, size=size, rows=4, seed=37, vertical=False, knots=1, seam_dark=1)
 
 
 def lid_boards(size: int = 32) -> object:
@@ -297,6 +297,7 @@ def textures() -> None:
     save(plate(), "plate")
     save(metal(LEAF[1:], rivets=(3, 12)), "band")
     save(metal(CREAM[:7], rivets=(4, 11)), "creamband")
+    save(metal(YELLOW[:7], rivets=(4, 11)), "gold")
     save_animation(animate(seeds, 10), "seeds", frametime=3, interpolate=True)
     save_animation(animate(bloom, 12), "bloom", frametime=3)
     save_animation(animate(heart, 10), "heart", frametime=3, interpolate=True)
@@ -362,7 +363,7 @@ def sunflower(x: float, z: float, lean: float, yaw: float) -> list[dict]:
         turn(lf, yaw + 90, "y", (x, ly, z))
         parts.append(lf)
     head = []
-    head += prism((x, hy, z + 0.2), 1.45, 0.46, "seeds", axis="z", sides=16, cap="seeds")
+    head += prism((x, hy, z + 0.2), 1.45, 0.46, "seeds", axis="z", sides=16, cap="seeds", uv="full")
     head += prism((x, hy, z - 0.12), 1.2, 0.3, "stem", axis="z", sides=8, cap="hedge")
     for k in range(14):
         r = only((x - 0.62, hy + 1.15, z + 0.06), (x + 0.62, hy + 2.85, z + 0.13),
@@ -407,7 +408,9 @@ def planter() -> list[dict]:
     # hedge mounds
     for (x0, z0, x1, z1, h) in ((1.2, 1.2, 6.0, 3.6, 1.2), (10.0, 1.2, 14.8, 3.6, 1.1), (5.6, 1.4, 10.4, 3.0, 0.8),
                                 (1.2, 3.4, 3.2, 9.0, 0.8), (12.8, 3.4, 14.8, 9.5, 0.9), (6.4, 6.6, 9.6, 9.4, 1.0),
-                                (7.0, 7.2, 9.0, 8.8, 1.5), (1.2, 12.6, 3.4, 14.8, 0.7), (12.6, 12.6, 14.8, 14.8, 0.7)):
+                                (7.0, 7.2, 9.0, 8.8, 1.5), (1.2, 12.6, 3.4, 14.8, 0.7), (12.6, 12.6, 14.8, 14.8, 0.7),
+                                (4.0, 5.0, 5.4, 6.6, 0.5), (10.4, 9.6, 12.0, 11.0, 0.55), (5.6, 11.6, 7.2, 12.8, 0.45),
+                                (9.6, 4.0, 11.4, 5.0, 0.4)):
         parts.append(box((x0, BED - 0.02, z0), (x1, BED + h, z1), "hedge", skip=("down",)))
     # flowers: tulips and daisies standing in the bed, buttercups lying in it
     for (x, z) in ((4.6, 5.4), (5.4, 9.4), (10.6, 5.2), (11.4, 9.6), (8.0, 11.6), (4.0, 12.2), (12.0, 12.4),
@@ -432,7 +435,7 @@ def emblem() -> list[dict]:
         p = box((cx - 0.6, cy + 0.3, z - 0.02), (cx + 0.6, cy + 2.05, z + 0.1), "bloom", uv="full")
         turn(p, k * 45, "z", (cx, cy, z))
         parts.append(p)
-    parts += prism((cx, cy, z + 0.12), 0.72, 0.16, "heart", axis="z", sides=8, cap="heart", glow=5)
+    parts += prism((cx, cy, z + 0.12), 0.72, 0.16, "heart", axis="z", sides=8, cap="heart", glow=5, uv="full")
     # leafy wreath behind it
     for k in range(10):
         a = k * 36 + 18
@@ -451,9 +454,9 @@ def lock() -> list[dict]:
                      "down": [0, 0, 4, 1], "south": [0, 0, 16, 16]})]
     for (x, y) in ((5.8, 5.6), (5.8, 7.4), (10.2, 5.6), (10.2, 7.4), (7.0, 5.0), (9.0, 5.0)):
         parts += prism((x, y, (z0 + zf) / 2), 0.55, zf - z0 - 0.04, "creamband", axis="z", sides=8, cap="plate")
-    parts.append(box((7.45, 7.0, zf - 0.03), (8.55, 8.1, zf + 0.04), "keyhole", glow=11, shade=False, uv="full"))
-    parts.append(box((7.72, 5.75, zf - 0.03), (8.28, 7.2, zf + 0.04), "keyhole", glow=11, shade=False, uv="full"))
-    parts += arc((8.0, 7.55, zf + 0.06), 0.85, 0, 360, 8, 0.2, 0.12, "band", plane="xy")
+    parts.append(box((7.35, 7.05, zf - 0.03), (8.65, 8.35, zf + 0.04), "keyhole", glow=11, shade=False, uv="full"))
+    parts.append(box((7.68, 6.0, zf - 0.03), (8.32, 7.25, zf + 0.04), "keyhole", glow=11, shade=False, uv="full"))
+    parts += arc((8.0, 7.25, zf + 0.06), 1.15, 0, 360, 10, 0.3, 0.14, "gold", plane="xy")
     return parts
 
 
@@ -546,6 +549,6 @@ def models() -> dict:
     p += emblem()
     p += lock()
     p += back_hinges()
-    p += butterfly((8.0, BED + 1.6, 8.0), "wing_pink", yaw=35, s=1.5)
-    p += butterfly((13.8, BED + 1.05, 13.6), "wing_yellow", yaw=-50, open_=25, s=1.2)
+    p += butterfly((8.0, BED + 1.6, 8.0), "wing_pink", yaw=35, open_=50, s=1.5)
+    p += butterfly((12.6, BED + 2.9, L1 - 0.3), "wing_yellow", yaw=90, open_=55, s=1.2)
     return {"main": model(p, display(KIND, p, size=1.0, gui_rotation=(28, 25, 0), gui_span=15.0))}

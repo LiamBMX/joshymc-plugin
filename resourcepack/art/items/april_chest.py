@@ -33,12 +33,13 @@ from art.kit import animate, arc, bar, box, canvas, copy, display, model, prism,
 ID = "april_chest"
 NAME = "April Chest"
 
-LAV = ["#3d2f5e", "#55447e", "#6e5c9c", "#8774b6", "#a08fcc", "#bbaee0", "#d6cdf0", "#f1edfc"]
+LAV = ["#56589a", "#6c6aae", "#857fc3", "#9e95d4", "#b4a9e2", "#c7bcec", "#d9d0f4", "#f3effc"]
+SOFT = ["#6c9cc9", "#82b0da", "#94bfe4", "#a3cbec", "#b0d5f1", "#bfdef5", "#d6ebfa", "#eef7fe"]
 DEEP = ["#1f1838", "#2c2350", "#3b3068", "#4c3f80", "#5f5298", "#7568ae", "#8f85c4"]
 SKY = ["#203e62", "#2f5885", "#4375a8", "#5f95c8", "#82b5df", "#a8d0ef", "#cfe7f9", "#eff8ff"]
 PINK = ["#5e2440", "#87355a", "#b25079", "#d6759c", "#eb9cbc", "#f6c2d7", "#fce2ec", "#fff5f9"]
 PEWTER = ["#262838", "#3d4054", "#575b70", "#787c91", "#9a9eb2", "#bcc0cf", "#dcdfe8", "#ffffff"]
-CLOUD = ["#6c6594", "#8b85b0", "#aba6ca", "#c9c6df", "#e2e0ef", "#f3f2fa", "#ffffff"]
+CLOUD = ["#55688f", "#6e82aa", "#8fa2c6", "#b3c2de", "#dfe4f1", "#f3f5fb", "#ffffff"]
 RAIN = ["#173a63", "#25598d", "#3c7fb9", "#62a6dc", "#93cbf1", "#c8e8fb", "#ffffff"]
 GLOW = ["#0b1d38", "#143561", "#215a92", "#3a86c3", "#6cb3e6", "#ade0fa", "#f2fbff"]
 BARK = ["#2c1a20", "#41272e", "#583740", "#704a52"]
@@ -65,10 +66,9 @@ def rain_boards(size: int = 32) -> object:
 
 def vault(size: int = 32) -> object:
     """The lid's light blue boards, laid across, with a pink pinstripe on every board."""
-    img = planks(SKY, size=size, rows=4, seed=29, vertical=False, knots=0, seam_dark=1)
+    img = planks(SOFT, size=size, rows=4, seed=29, vertical=False, knots=0, seam_dark=0)
     for x in range(size):
-        for y in (2, 18):
-            put(img, x, y, PINK[5] if (x // 4) % 2 else PINK[4])
+        put(img, x, 19, PINK[5])
     return img
 
 
@@ -143,7 +143,7 @@ def cloud(t: float) -> object:
     img = canvas(16)
     for y in range(16):
         for x in range(16):
-            tone = 6 if y < 6 else 5 if y < 11 else 4
+            tone = 6 if y < 5 else 5 if y < 9 else 4 if y < 12 else 3 if y < 14 else 2
             if (x * 3 + y * 5) % 17 == 0:
                 tone -= 1
             put(img, x, y, CLOUD[tone])
@@ -370,13 +370,13 @@ def cloud_emblem() -> list[dict]:
         parts += prism((x, y, cz + d / 2 - 0.05), r, d, "cloud", axis="z", sides=n, cap="cloud")
     parts.append(box((5.4, 10.25, cz - 0.08), (10.6, 11.2, cz + 0.12), "cloud", uv="full"))
     # three drops falling out of it
-    for (x, y) in ((6.5, 9.4), (8.0, 8.9), (9.5, 9.4)):
-        d = box((x - 0.26, y - 0.26, cz - 0.08), (x + 0.26, y + 0.26, cz + 0.16), "drop", uv="full", glow=6)
+    for (x, y) in ((6.4, 9.3), (8.0, 8.75), (9.6, 9.3)):
+        d = box((x - 0.36, y - 0.36, cz - 0.08), (x + 0.36, y + 0.36, cz + 0.16), "drop", uv="full", glow=6)
         turn(d, 45, "z", (x, y, cz))
         parts.append(d)
         parts.append(box((x - 0.12, y + 0.18, cz - 0.04), (x + 0.12, y + 0.62, cz + 0.12), "drop", uv="full", glow=6))
     # the raindrop keyhole
-    parts += prism((8.0, 6.5, zf + 0.0), 0.62, 0.08, "keyhole", axis="z", sides=8, cap="keyhole", glow=11,
+    parts += prism((8.0, 6.5, zf + 0.0), 0.62, 0.08, "keyhole", axis="z", sides=8, cap="keyhole", glow=11, uv="full",
                    shade=False)
     tip = box((7.62, 6.6, zf - 0.03), (8.38, 7.36, zf + 0.04), "keyhole", glow=11, shade=False, uv="full")
     turn(tip, 45, "z", (8.0, 6.98, zf))
@@ -402,9 +402,9 @@ def walls() -> list[dict]:
         parts += frame_front(a0, a1)
         cx = (a0 + a1) / 2
         # a raindrop pendant in each front panel
-        parts += prism((cx, 4.4, B1 + 0.3), 0.62, 0.26, "drop", axis="z", sides=8, cap="drop", glow=4)
-        d = box((cx - 0.44, 4.4, B1 + 0.18), (cx + 0.44, 5.28, B1 + 0.4), "drop", uv="full", glow=4)
-        turn(d, 45, "z", (cx, 4.84, B1 + 0.3))
+        parts += prism((cx, 4.2, B1 + 0.3), 0.92, 0.3, "drop", axis="z", sides=8, cap="drop", glow=4)
+        d = box((cx - 0.66, 4.2, B1 + 0.16), (cx + 0.66, 5.52, B1 + 0.42), "drop", uv="full", glow=4)
+        turn(d, 45, "z", (cx, 4.86, B1 + 0.3))
         parts.append(d)
     # side walls: the same frame and a blossom sprig, built on the front and turned round
     side = []
@@ -445,8 +445,8 @@ def raindrops() -> list[dict]:
     y = SEAM - 0.05
 
     def drip(x, z, ln):
-        d = [box((x - 0.14, y - ln - 0.25, z - 0.14), (x + 0.14, y + 0.05, z + 0.14), "drop", uv="full", glow=4),
-             box((x - 0.34, y - ln - 0.95, z - 0.34), (x + 0.34, y - ln - 0.25, z + 0.34), "drop", uv="full", glow=4)]
+        d = [box((x - 0.2, y - ln - 0.35, z - 0.2), (x + 0.2, y + 0.05, z + 0.2), "drop", uv="full", glow=4),
+             box((x - 0.4, y - ln - 1.3, z - 0.4), (x + 0.4, y - ln - 0.35, z + 0.4), "drop", uv="full", glow=4)]
         turn(d, 45, "y", (x, y, z))
         return d
 

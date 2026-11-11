@@ -5,7 +5,7 @@
     "joshymc:april_chest": {
       "bedrock_name": "april_chest",
       "icon": "joshymc/april_chest.png",
-      "sha1": "d86a6a89f1009ef03d4954c33778e0f8cb727b8f"
+      "sha1": "f0927d7779ce77d0e2de3d2661f49fb3e3457933"
     },
     "joshymc:april_key": {
       "bedrock_name": "april_key",
@@ -652,6 +652,11 @@
       "icon": "joshymc/july_key.png",
       "sha1": "e571cf7a45f7077d66c8de72f3b568fefaa28d6c"
     },
+    "joshymc:june_chest": {
+      "bedrock_name": "june_chest",
+      "icon": "joshymc/june_chest.png",
+      "sha1": "5f3c9bc6f245d1635d03691ccce9a2fff4892015"
+    },
     "joshymc:june_key": {
       "bedrock_name": "june_key",
       "icon": "joshymc/june_key.png",
@@ -745,7 +750,7 @@
     "joshymc:may_chest": {
       "bedrock_name": "may_chest",
       "icon": "joshymc/may_chest.png",
-      "sha1": "667f08a080004bc996ca8bf3a4d6e7fefda1e1ad"
+      "sha1": "40d63f64004ddd577410107dfa90842a4adbfa01"
     },
     "joshymc:may_key": {
       "bedrock_name": "may_key",
