@@ -12,6 +12,11 @@
       "icon": "joshymc/april_key.png",
       "sha1": "3e15c6adbf0fa8e7f851c450a1799edbc35f6f52"
     },
+    "joshymc:august_chest": {
+      "bedrock_name": "august_chest",
+      "icon": "joshymc/august_chest.png",
+      "sha1": "9e07503901eb1e74148f9c4f0ae1a85e76f418c3"
+    },
     "joshymc:august_key": {
       "bedrock_name": "august_key",
       "icon": "joshymc/august_key.png",
@@ -647,6 +652,11 @@
       "icon": "joshymc/joshees_bar.png",
       "sha1": "9dde6c80ce2bb6dd192f8ccbadc7b497e16666db"
     },
+    "joshymc:july_chest": {
+      "bedrock_name": "july_chest",
+      "icon": "joshymc/july_chest.png",
+      "sha1": "c67de0b039f7ee89264916d0d2fcdb5afe240ebf"
+    },
     "joshymc:july_key": {
       "bedrock_name": "july_key",
       "icon": "joshymc/july_key.png",
@@ -831,6 +841,11 @@
       "bedrock_name": "sell_wand",
       "icon": "joshymc/sell_wand.png",
       "sha1": "a50b7db93c84583df6f4d40ee302d7b61bcafce0"
+    },
+    "joshymc:september_chest": {
+      "bedrock_name": "september_chest",
+      "icon": "joshymc/september_chest.png",
+      "sha1": "ba1e4dda53aad922c83bd34f11f25ca126e4057d"
     },
     "joshymc:september_key": {
       "bedrock_name": "september_key",

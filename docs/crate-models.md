@@ -236,8 +236,9 @@ crates:
 
 Part of the crates redesign (issue #1407, audit #1446). Rotation lets chosen crates show a
 different model each calendar month. The 12 monthly models are `january_chest` …
-`december_chest`. **January, February and March (issue #1464) and April, May and June (issue
-#1482) are in the pack**; July to December are made in later phases and fall back until then (see below). The bundled config
+`december_chest`. **January, February and March (issue #1464), April, May and June (issue
+#1482) and July, August and September (issue #1495) are in the pack**; October to December are
+made in later phases and fall back until then (see below). The bundled config
 lists no rotating crates, so nothing changes in game until the Owner lists some.
 
 | Month | Model | Look |
@@ -248,8 +249,11 @@ lists no rotating crates, so nothing changes in game until the Owner lists some.
 | April | `joshymc:april_chest` | spring showers: light lavender boards, pink corner posts, a soft light blue barrel-vault lid with pewter straps, an open pink and lavender umbrella standing in it, a rain cloud emblem dropping glowing raindrops over a raindrop keyhole, cherry blossom sprigs, raindrops hanging off the lid |
 | May | `joshymc:may_chest` | blooming garden: cream boards, leaf green corner posts, a green trellis with a flowering vine on each side, a picket-fenced flower bed lid with two tall sunflowers, tulips, daisies, buttercups, hedges and two butterflies, a pink flower emblem on a leaf wreath, leaf-shaped hinges |
 | June | `joshymc:june_chest` | sunny summer: turquoise boards on a rolling surf band, sand gold rope trim and corners, a sandy lid with a tipped straw hat, a palm sprig, shells, a starfish and a pearl, a coral life ring and a starfish on the sides, a glowing sun emblem, a gold-framed lock with a turquoise keyhole and a scallop shell |
+| July | `joshymc:july_chest` | summer fireworks: star-sprinkled deep navy boards, red corner posts with gold bands and caps, a red and warm white pennant garland round the lid, a stepped three-tier lid with a launch rack of three rockets under a glowing starburst, rockets clamped to both side walls with glowing fuses, a firework burst emblem in red, gold, white and cyan, a gold five-point star lock with a cyan keyhole |
+| August | `joshymc:august_chest` | golden summer sunset: sandy beige boards in warm amber framing with stepped corner plates and sun rivets, a low rounded vault lid banded coral, orange, amber and gold, a glowing half sun on the horizon in the vault's front arch with layered rays and a gold-to-dusk sky, a round amber sun lock with an ember keyhole, wheat sheaves with coral ribbons and flowers on the side walls, ray-fan hinges |
+| September | `joshymc:september_chest` | early autumn: dark oak boards in burnished copper with corner brackets and rivets, a flat lid buried in leaf litter and loose maple leaves spilling over the eaves, two ribbed pumpkins and acorns in the leaves, a standing golden wheat bundle, a layered maple leaf emblem in a copper ring, an acorn lock with an amber keyhole, copper leaf hinges |
 
-All six sit on the shared skeleton `art/items/_crate_chest.py` (they hide a vanilla chest
+All nine sit on the shared skeleton `art/items/_crate_chest.py` (they hide a vanilla chest
 and reach at most 1/4 block past their block, so `hitbox: auto` adds no hitbox) and are
 checked by `art/tests/test_crate_chests.py`.
 
@@ -348,8 +352,8 @@ and players without the JoshyMC pack always see the vanilla block.
 
 ### Limitations
 
-- Only January to June exist yet (issues #1464, #1482); July to December fall back until
-  their later phases.
+- Only January to September exist yet (issues #1464, #1482, #1495); October to December
+  fall back until their later phases.
 - One month → model map is shared by every rotating crate (no per-crate monthly models).
 - Rotation is per crate id, so every location of a listed crate rotates together.
 - `/crate models set` only edits static models; monthly mappings are edited in config.yml.
