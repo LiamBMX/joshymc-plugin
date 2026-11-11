@@ -236,9 +236,9 @@ crates:
 
 Part of the crates redesign (issue #1407, audit #1446). Rotation lets chosen crates show a
 different model each calendar month. The 12 monthly models are `january_chest` …
-`december_chest`. **January, February and March (issue #1464), April, May and June (issue
-#1482) and July, August and September (issue #1495) are in the pack**; October to December are
-made in later phases and fall back until then (see below). The bundled config
+`december_chest`. **All twelve are in the pack**: January, February and March (issue #1464),
+April, May and June (issue #1482), July, August and September (issue #1495) and October,
+November and December (issue #1497). The bundled config
 lists no rotating crates, so nothing changes in game until the Owner lists some.
 
 | Month | Model | Look |
@@ -252,8 +252,11 @@ lists no rotating crates, so nothing changes in game until the Owner lists some.
 | July | `joshymc:july_chest` | summer fireworks: star-sprinkled deep navy boards, red corner posts with gold bands and caps, a red and warm white pennant garland round the lid, a stepped three-tier lid with a launch rack of three rockets under a glowing starburst, rockets clamped to both side walls with glowing fuses, a firework burst emblem in red, gold, white and cyan, a gold five-point star lock with a cyan keyhole |
 | August | `joshymc:august_chest` | golden summer sunset: sandy beige boards in warm amber framing with stepped corner plates and sun rivets, a low rounded vault lid banded coral, orange, amber and gold, a glowing half sun on the horizon in the vault's front arch with layered rays and a gold-to-dusk sky, a round amber sun lock with an ember keyhole, wheat sheaves with coral ribbons and flowers on the side walls, ray-fan hinges |
 | September | `joshymc:september_chest` | early autumn: dark oak boards in burnished copper with corner brackets and rivets, a flat lid buried in leaf litter and loose maple leaves spilling over the eaves, two ribbed pumpkins and acorns in the leaves, a standing golden wheat bundle, a layered maple leaf emblem in a copper ring, an acorn lock with an amber keyhole, copper leaf hinges |
+| October | `joshymc:october_chest` | haunted Halloween: dark oak boards in an ornate black iron frame with a scalloped seam fringe and deep purple corner caps, a carved pumpkin lid (layered bulging ribs, a ten-rib dome, a crooked stem with a curled tendril and vine leaves), a jack-o'-lantern face lit by a flickering candle, a bat lock with spread wings and a green glowing keyhole, small bats, cobwebs, twisted vines, curled branch hinges |
+| November | `joshymc:november_chest` | cozy autumn campfire: rustic brown boards in warm hammered copper, a curved vault lid with copper eaves, a cream and maple red plaid blanket thrown over its right side, a twine garland of maple leaves, a glowing copper lantern ringed by acorns and pinecones, a small campfire with drifting embers, a maple leaf emblem, a golden leaf lock with a glowing keyhole, twig hinges |
+| December | `joshymc:december_chest` | winter wonderland: honey wood boards in red lacquer and gold, frosted icy corners topped with snow, a thick layered snow lid with a little star-topped evergreen in three snowy tiers, wrapped gifts and candy canes, an evergreen garland with twinkling lights swagged to a golden snowflake emblem, wrapped gift ornaments on the walls, a gold lock with a snowflake keyhole glowing icy blue |
 
-All nine sit on the shared skeleton `art/items/_crate_chest.py` (they hide a vanilla chest
+All twelve sit on the shared skeleton `art/items/_crate_chest.py` (they hide a vanilla chest
 and reach at most 1/4 block past their block, so `hitbox: auto` adds no hitbox) and are
 checked by `art/tests/test_crate_chests.py`.
 
@@ -352,8 +355,6 @@ and players without the JoshyMC pack always see the vanilla block.
 
 ### Limitations
 
-- Only January to September exist yet (issues #1464, #1482, #1495); October to December
-  fall back until their later phases.
 - One month → model map is shared by every rotating crate (no per-crate monthly models).
 - Rotation is per crate id, so every location of a listed crate rotates together.
 - `/crate models set` only edits static models; monthly mappings are edited in config.yml.

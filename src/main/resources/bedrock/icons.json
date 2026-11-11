@@ -107,6 +107,11 @@
       "icon": "joshymc/credit_key.png",
       "sha1": "7abac4bf66498d825ea9bf0b79202eb91b9631df"
     },
+    "joshymc:december_chest": {
+      "bedrock_name": "december_chest",
+      "icon": "joshymc/december_chest.png",
+      "sha1": "b4f4799f3ee2400d2ddc68e578e44507250b889c"
+    },
     "joshymc:december_key": {
       "bedrock_name": "december_key",
       "icon": "joshymc/december_key.png",
