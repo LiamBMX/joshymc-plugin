@@ -754,3 +754,100 @@ the result/Elo decision through a real SQLite `RankedStore`, and the wiring at e
   Mod Mode); Creative/Spectator are, whatever sets them.
 - Other plugins' commands that heal or teleport a player directly (not through JoshyMC's executors)
   are only covered by the existing teleport/boundary listener, not by `refusesStaffAction`.
+
+## L. Inventory snapshot completeness and restore safety (issue #1506, findings B-2, B-3/E-2)
+
+### Root causes
+
+- **B-2**: `capture` closed the player's menu before taking the snapshot, so the server put cursor and
+  crafting-grid items back into the inventory. Anything that didn't fit was **dropped at the
+  player's feet**, outside the snapshot (and pickable by anyone), and the close happened before the
+  snapshot was stored.
+- **B-3 / E-2**: the restore set the inventory, saved the player, then did `PENDING → RESTORED`. When
+  that last write failed the row stayed PENDING, so the next join or respawn applied the same old
+  snapshot again, overwriting (or duplicating against) everything the player had gained since.
+
+### Snapshot (B-2)
+
+- `capture` now **only reads**. Cursor items and the crafting grid (the 2x2 grid, or an open crafting
+  table's 3x3 grid) are copied and placed into the snapshot's storage slots 0..35 the way vanilla
+  returns them (similar partial stacks first, then empty slots; never armor/off-hand), by the
+  Bukkit-free `RankedInventorySafety.place`. Stacks only merge when `isSimilar` (all metadata equal);
+  every stack is serialized with `serializeAsBytes`, so custom ids, enchantments, durability, custom
+  model data, amounts and PDC are kept exactly. The crafting result slot is derived and never captured.
+- If they don't fit, or an anvil/grindstone/enchanting/smithing/stonecutter/loom/cartography/
+  merchant/beacon menu that hands its items back on close holds anything, the match is **refused**
+  ("make room first" / "close it first"), nothing changed, `RANKED_SNAPSHOT_REFUSED` in `admin_logs`.
+- Only after `insertMatch` committed does `applyCapture` make the live inventory equal the snapshot:
+  cursor and grid emptied first, then the changed slots, then the menu closes with nothing to drop.
+  A failed insert returns before anything is touched. The snapshot format is unchanged (still 41
+  slots), so the #1490 XP/effect fields and every older snapshot work as before.
+
+### Restore protocol (B-3 / E-2)
+
+A Bukkit inventory change can't be inside a SQLite transaction, so each restore is three durable steps
+on the snapshot row (`RankedInventorySafety`, the allowed moves enforced by a trigger):
+
+1. `PENDING → RESTORING` (conditional UPDATE with this plugin instance's `restore_boot` id) **before**
+   the player is touched. A failed write: nothing changes, it stays PENDING, retried on the next
+   join/respawn/staff restore (`RANKED_RESTORE_DB_FAILED`). Zero rows changed: another restore already
+   took it and nothing is applied (`RANKED_RESTORE_DUPLICATE_PREVENTED`), so concurrent join + respawn
+   or completion + rejoin can't apply it twice.
+2. Inventory, XP and effects set (the unchanged #1490 logic), player saved.
+3. `RESTORING → RESTORED`. If this write fails (`RANKED_RESTORE_MARK_FAILED`) the row stays
+   RESTORING: it is not PENDING, so no join/respawn/startup applies it again; the mark is retried on
+   joins, restores, staff restores and at shutdown.
+
+At startup, a RESTORING row from **another** boot (crash, or a failed confirm before a restart) is
+ambiguous: the player's saved inventory may already be the restored one. It becomes **REVIEW**
+(`review_reason`, `RANKED_RESTORE_REVIEW`, match `restoration = REVIEW`) and is never applied
+automatically; the data is kept. A partial UNIQUE index allows one PENDING/RESTORING/REVIEW snapshot
+per player, and the participant check treats one as "waiting to be restored", so such a player can't
+enter a new match whose inventory the old snapshot could later overwrite.
+
+Staff:
+
+- `/lifesteal admin ranked restores`: snapshots waiting for review.
+- `/lifesteal admin ranked restore <player>`: restores a PENDING snapshot, or explains a REVIEW one.
+- `/lifesteal admin ranked restore <player> apply confirm`: check the player's inventory first; if the
+  pre-match items did not come back, applies it (`REVIEW → RESTORING → RESTORED`, replaces the current
+  inventory, no teleport).
+- `/lifesteal admin ranked restore <player> resolve confirm`: the items did come back; `REVIEW →
+  RESTORED` without applying anything. Both are in `admin_logs` (`RANKED_RESTORE_APPLY` / `_RESOLVE`).
+
+Migration: four nullable columns (`restore_started_at`, `restore_boot`, `review_reason`,
+`reviewed_at`), one partial index and one trigger, all `IF NOT EXISTS` / `ADD COLUMN`. Existing PENDING
+and RESTORED rows are unchanged and go through the new protocol; nothing is reset or deleted.
+
+Hearts, Elo, matchmaking, team sizes, TEST/CHALLENGE rules, forfeits and the own-gear rule are unchanged.
+
+### Checks
+
+`./gradlew -I scripts/ranked-inventory-check.init.gradle.kts rankedInventoryCheck` (the placement
+rules with stand-in stacks, the protocol against a real SQLite database reopened to simulate restarts
+and closed to simulate failed writes, old-schema rows, and the wiring). The existing
+`lifestealRankedCheck`, `lifestealRankedQueueCheck`, `lifestealHeartCheck`, `rankedIntegrityCheck`,
+`lifestealRankedTestMatchCheck` and `lifestealRankedEloCheck` still pass.
+
+**Needs a live Paper server:**
+
+1. Hold a custom item (e.g. an enchanted, damaged Autumn's Edge) on the cursor in your inventory
+   screen when the match starts: it lands in a free slot, nothing drops, and after the match it's
+   there exactly once with the same enchants, durability and model.
+2. Put items in the 2x2 grid (and separately in an open crafting table) when the match starts: same.
+3. Fill your inventory completely, hold an item on the cursor and accept the match: refused with
+   "make room first", nothing dropped, inventory unchanged.
+4. Put items in an anvil and accept the match with it open: refused ("close it first").
+5. Die in a match, respawn: restored once (`lifesteal_ranked_snapshots.status = RESTORED`).
+6. Disconnect mid-fight, rejoin: restored once; die again outside ranked and respawn: nothing reapplied.
+7. Kill the server process (not `/stop`) right after a restore message: on restart the snapshot is
+   REVIEW, the player is told it needs a staff check and `/ranked queue` is refused; `restore <p>
+   resolve confirm` or `apply confirm` settles it and they can queue again.
+
+### Limitations
+
+- A crash between step 1 and the player's save always needs a staff decision; the database can't tell
+  whether Paper wrote the restored inventory.
+- A failed RESTORED mark is retried only while the server runs (memory); if it still fails at shutdown
+  the snapshot becomes REVIEW after the restart.
+- Only crafting grids are placed automatically; other open menus with items refuse the match.

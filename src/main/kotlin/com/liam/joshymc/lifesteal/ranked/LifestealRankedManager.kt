@@ -30,8 +30,8 @@ import org.bukkit.entity.EnderCrystal
 import org.bukkit.entity.ExperienceOrb
 import org.bukkit.entity.Item
 import org.bukkit.entity.Player
-import org.bukkit.event.inventory.InventoryType
 import org.bukkit.event.player.PlayerTeleportEvent
+import org.bukkit.inventory.CraftingInventory
 import org.bukkit.inventory.ItemStack
 import org.bukkit.potion.PotionEffect
 import org.bukkit.scheduler.BukkitTask
@@ -151,6 +151,17 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     private val cachedSnapshots = HashMap<UUID, RankedStore.Snapshot>()
     /** Players being restored right now (re-entry guard). */
     private val restoring = HashSet<UUID>()
+    /**
+     * Issue #1506: this plugin instance's id, written on every RESTORING row it starts. A RESTORING
+     * row with another boot's id was interrupted and goes to REVIEW at startup.
+     */
+    private val bootId: String = UUID.randomUUID().toString()
+    /** Issue #1506: players with a RESTORING or REVIEW snapshot (never applied automatically; no new match). */
+    private val unsettled: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
+    /** Issue #1506: restores applied this boot whose RESTORED mark failed, by snapshot id (retried). */
+    private val unconfirmed = LinkedHashMap<String, Unconfirmed>()
+
+    private data class Unconfirmed(val uuid: UUID, val name: String, val matchId: String, val reason: String)
     /** Teleports this system started, by player: the listener lets exactly these through. */
     private val expectedTeleports = HashMap<UUID, Location>()
 
@@ -387,6 +398,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         if (!recoveredThisBoot) {
             recoveredThisBoot = true
             recover()
+            flagInterruptedRestores()
         }
         monitor.refresh()
         try {
@@ -395,11 +407,15 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             for (a in loaded) arenas[a.arena.id] = a
             pendingRestore.clear()
             pendingRestore += store.pendingSnapshotOwners()
+            unsettled.clear()
+            unsettled += store.unsettledSnapshotOwners()
+            unsettled += unconfirmed.values.map { it.uuid }
         } catch (e: Exception) {
             plugin.logger.severe("[Ranked] Could not read the ranked arenas/snapshots: ${e.message}")
         }
         for (a in arenas.values) a.problem?.let { plugin.logger.warning("[Ranked] Arena ${a.arena.id} is unreadable: $it") }
         plugin.logger.info("[Ranked] ${arenas.size} arena(s), ${pendingRestore.size} inventory snapshot(s) waiting for their players.")
+        if (unsettled.isNotEmpty()) plugin.logger.warning("[Ranked] ${unsettled.size} ranked inventory snapshot(s) need a staff decision before they're applied: /lifesteal admin ranked restores")
         // Players already online (plugman / reload) who still have a snapshot waiting.
         for (player in Bukkit.getOnlinePlayers()) if (!holds(player)) restoreIfPending(player, "startup")
     }
@@ -417,11 +433,34 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         }
     }
 
+    /**
+     * Issue #1506: RESTORING rows another boot started and never confirmed. Whether the player's saved
+     * inventory is the restored one can't be known, so they wait for staff (REVIEW) instead of being
+     * applied a second time over whatever the player owns now.
+     */
+    private fun flagInterruptedRestores() {
+        val flagged = try {
+            store.flagInterruptedRestores(bootId, System.currentTimeMillis())
+        } catch (e: Exception) {
+            plugin.logger.severe("[Ranked] Could not check for interrupted inventory restores: ${e.message}. They stay RESTORING and are never applied automatically.")
+            return
+        }
+        for (s in flagged) {
+            val name = runCatching { plugin.lifestealTeamManager.nameOf(s.uuid) }.getOrNull() ?: s.uuid.toString()
+            auditSnapshot("RANKED_RESTORE_REVIEW", s.uuid, name, s,
+                "reason=${RankedInventorySafety.INTERRUPTED_REASON} started_at=${s.restoreStartedAt ?: "unknown"}")
+        }
+    }
+
     /** Shutdown: cancel every match and restore everyone online now (synchronously, before the database closes). */
     fun stop() {
         for (m in matches.values.toList()) {
             if (m.state == MatchState.FINISHING) complete(m, shutdown = true)
             else cancel(m, "server shutdown", shutdown = true)
+        }
+        retryUnconfirmed()
+        for ((id, u) in unconfirmed) {
+            plugin.logger.severe("[Ranked] ${u.name}'s snapshot $id was restored this session but couldn't be confirmed; after the restart it waits for staff review (never applied again automatically).")
         }
         matches.clear()
         held.clear()
@@ -516,21 +555,31 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         // listener already protects these players.
         val players = roster.uuids.mapNotNull { Bukkit.getPlayer(it) }
         if (players.size != roster.uuids.size) return CreateResult.Refused(listOf("A participant went offline."))
-        val snapshots = try {
+        // Issue #1506 (B-2): capture reads only; cursor and crafting grid items are placed into the
+        // snapshot's slots, and the live inventory is changed to match only after it was stored.
+        val captures = try {
             players.map { capture(it) }
+        } catch (e: CaptureRefused) {
+            val who = players.firstOrNull { it.uniqueId == e.uuid }
+            auditSnapshot("RANKED_SNAPSHOT_REFUSED", e.uuid, who?.name ?: e.uuid.toString(), null, "match=$id reason=${e.message}")
+            return CreateResult.Refused(listOf("${e.message}; nothing changed."))
         } catch (e: Exception) {
             plugin.logger.severe("[Ranked] Couldn't snapshot the inventories for a match ($id): ${e.message}")
+            try { plugin.adminManager.logAction(null, RankedFarmingMonitor.SYSTEM_ACTOR, "RANKED_SNAPSHOT_FAILED", null, null, "match=$id error=${e.message}".take(500)) } catch (_: Exception) { }
             return CreateResult.Refused(listOf("An inventory couldn't be saved (${e.message}); nothing changed."))
         }
+        val snapshots = captures.map { it.data }
         try {
             store.insertMatch(
                 RankedStore.NewMatch(id, seasonId, arena.id, teamA.id, teamA.name, teamB.id, teamB.name, size, match.test, match.createdBy, now, kind, queueRef),
                 roster.participants, snapshots,
             )
         } catch (e: Exception) {
-            plugin.logger.warning("[Ranked] Match $id couldn't be recorded, so it didn't start: ${e.message}")
+            plugin.logger.warning("[Ranked] Match $id couldn't be recorded, so it didn't start (no inventory was changed): ${e.message}")
             return CreateResult.Refused(listOf("The match couldn't be recorded (a player, a team or the arena may already be in another match): ${e.message}"))
         }
+        // Stored: now the live inventories become exactly the snapshots (same tick, nothing ran between).
+        for (c in captures) applyCapture(c)
         match.state = MatchState.PREPARING
         matches[id] = match
         for (s in snapshots) {
@@ -572,7 +621,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             sessionLoaded = plugin.lifestealHeartManager.heartsOf(uuid) != null,
             hearts = plugin.lifestealHeartManager.heartsOf(uuid),
             inOtherMatch = holds(uuid) || isSpectator(uuid),
-            pendingRestore = pendingRestore.contains(uuid),
+            pendingRestore = pendingRestore.contains(uuid) || unsettled.contains(uuid),
             transferring = safe { plugin.transferManager.isTransferPending(uuid) },
             combatTagged = plugin.combatManager.isTagged(player),
             dead = player.isDead,
@@ -650,21 +699,75 @@ class LifestealRankedManager(private val plugin: Joshymc) {
 
     // ── Snapshots ───────────────────────────────────────────
 
+    /** Issue #1506: a participant's snapshot plus the slot changes that make the live inventory equal it. */
+    private class Captured(
+        val player: Player,
+        val data: RankedStore.SnapshotData,
+        val changes: Map<Int, ItemStack?>,
+        val grid: CraftingInventory?,
+    )
+
+    /** Issue #1506: the snapshot can't hold everything the player owns right now; the match is refused. */
+    private class CaptureRefused(val uuid: UUID, message: String) : Exception(message)
+
+    private object PaperStacks : RankedInventorySafety.Stacks<ItemStack> {
+        override fun similar(a: ItemStack, b: ItemStack): Boolean = a.isSimilar(b)
+        override fun amount(stack: ItemStack): Int = stack.amount
+        override fun maxStack(stack: ItemStack): Int = stack.maxStackSize
+        override fun withAmount(stack: ItemStack, amount: Int): ItemStack = stack.clone().also { it.amount = amount }
+    }
+
     /**
-     * The player's whole inventory, exactly. The cursor and 2x2 crafting grid are emptied into the
-     * inventory first (closing it), so nothing is outside the snapshot. Issue #1490: also their
-     * experience and active potion effects (see [RankedPlayerState]).
+     * The player's whole inventory, exactly, **without changing anything** (issue #1506, B-2). Items
+     * on the cursor and in the crafting grid (2x2, or an open crafting table's 3x3) are placed into
+     * the snapshot's storage slots the way the server would return them on close (copies, so every
+     * byte of their metadata is kept); if they don't fit, or another menu that hands its items back
+     * on close holds any, the match is refused instead of dropping or losing anything. Issue #1490:
+     * also their experience and active potion effects (see [RankedPlayerState]).
      */
-    private fun capture(player: Player): RankedStore.SnapshotData {
-        // Always close: the server puts the cursor and 2x2 grid back into the inventory (anything that
-        // doesn't fit drops at their feet, before the match), so the snapshot holds everything they own.
-        player.closeInventory()
+    private fun capture(player: Player): Captured {
         val inventory = player.inventory
-        val slots = inventory.contents.map { stack -> stack?.takeIf { !it.type.isAir && it.amount > 0 }?.let { Base64.getEncoder().encodeToString(it.serializeAsBytes()) } }
+        val view = player.openInventory
+        val top = view.topInventory
+        val menuType = top.type.name
+        RankedInventorySafety.openMenuProblem(player.name, menuType, top.contents.any { it != null && !it.type.isAir && it.amount > 0 })
+            ?.let { throw CaptureRefused(player.uniqueId, it) }
+        val grid = (top as? CraftingInventory)?.takeIf { menuType in RankedInventorySafety.CRAFTING_GRIDS }
+        val loose = buildList {
+            player.itemOnCursor.takeIf { !it.type.isAir && it.amount > 0 }?.let { add(it.clone()) }
+            grid?.matrix?.forEach { stack -> if (stack != null && !stack.type.isAir && stack.amount > 0) add(stack.clone()) }
+        }
+        val current = inventory.contents.map { stack -> stack?.takeIf { !it.type.isAir && it.amount > 0 }?.clone() }
+        val placement = RankedInventorySafety.place(current, loose, PaperStacks)
+        RankedInventorySafety.looseItemsProblem(player.name, placement.leftover.size)?.let { throw CaptureRefused(player.uniqueId, it) }
+        val slots = placement.slots.map { stack -> stack?.let { Base64.getEncoder().encodeToString(it.serializeAsBytes()) } }
         val loc = player.location
         val xp = RankedPlayerState.Xp(player.level, player.exp, player.totalExperience)
         val effects = player.activePotionEffects.map { effectOf(it) }
-        return RankedStore.SnapshotData(player.uniqueId, slots, inventory.heldItemSlot, loc.world?.name, Point(loc.x, loc.y, loc.z, loc.yaw, loc.pitch), xp, effects)
+        val data = RankedStore.SnapshotData(player.uniqueId, slots, inventory.heldItemSlot, loc.world?.name, Point(loc.x, loc.y, loc.z, loc.yaw, loc.pitch), xp, effects)
+        return Captured(player, data, placement.changed.associateWith { placement.slots[it] }, grid)
+    }
+
+    /**
+     * Issue #1506: after the snapshot is stored, the same placement on the live player: cursor and
+     * grid emptied first (so a failure can only leave items in the snapshot, never in two places),
+     * then the changed slots, then the menu closes with nothing left to hand back or drop.
+     */
+    private fun applyCapture(c: Captured) {
+        val player = c.player
+        try {
+            player.setItemOnCursor(null)
+            c.grid?.let { g ->
+                g.matrix = arrayOfNulls(g.matrix.size)
+                g.result = null
+            }
+            for ((slot, stack) in c.changes) player.inventory.setItem(slot, stack)
+            player.closeInventory()
+            player.updateInventory()
+        } catch (e: Exception) {
+            // The snapshot already holds these items; the restore sets the inventory from it.
+            plugin.logger.severe("[Ranked] Couldn't move ${player.name}'s cursor/crafting items into their inventory: ${e.message}. Their snapshot holds them.")
+        }
     }
 
     private fun effectOf(effect: PotionEffect) = CombatNpcRules.Effect(
@@ -687,6 +790,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
 
     /** Restores [player] from their PENDING snapshot (if any) and moves them back. */
     fun restoreIfPending(player: Player, reason: String, moveBack: Boolean = true): Boolean {
+        retryUnconfirmed()
         if (!pendingRestore.contains(player.uniqueId) || holds(player) || player.isDead) return false
         val snapshot = cachedSnapshots[player.uniqueId]?.takeIf { it.status == "PENDING" } ?: try {
             store.pendingSnapshot(player.uniqueId)
@@ -704,13 +808,19 @@ class LifestealRankedManager(private val plugin: Joshymc) {
 
     /**
      * Sets the inventory, XP and potion effects back to [snapshot], saves the player, then marks it
-     * RESTORED. Applying it twice gives the same result (it is a set, not an add; effects count down
-     * from the snapshot time, so a second apply never extends them), so a crash between the save
-     * and the mark is harmless; if the snapshot can't be read nothing is changed and it stays PENDING.
+     * RESTORED, through the durable protocol of issue #1506 ([RankedInventorySafety]): the snapshot
+     * is moved [from] → RESTORING *before* the player is touched (a failed write changes nothing and
+     * it stays [from]; a row that is no longer [from] was taken by another restore and is never
+     * applied twice), then applied and saved, then RESTORED. If that last write fails the row stays
+     * RESTORING: never applied again automatically, the mark is retried this boot, and after a
+     * restart it waits for staff review. If the snapshot can't be read nothing is changed.
      */
-    private fun restore(player: Player, snapshot: RankedStore.Snapshot, reason: String, moveBack: Boolean): Boolean {
+    private fun restore(player: Player, snapshot: RankedStore.Snapshot, reason: String, moveBack: Boolean, from: String = RankedInventorySafety.PENDING): Boolean {
         val uuid = player.uniqueId
-        if (!restoring.add(uuid)) return false
+        if (!restoring.add(uuid)) {
+            auditSnapshot("RANKED_RESTORE_DUPLICATE_PREVENTED", uuid, player.name, snapshot, "status=$from reason=$reason detail=another restore of this player is already running")
+            return false
+        }
         try {
             val now = System.currentTimeMillis()
             // Everything is read and checked before the player is touched (issue #1490).
@@ -721,10 +831,30 @@ class LifestealRankedManager(private val plugin: Joshymc) {
                 tell(player, "Your ranked inventory couldn't be restored yet; staff have been notified. Nothing was lost.", NamedTextColor.RED)
                 return false
             }
-            // Nothing outside the inventory: cursor and crafting grid are match items, discarded.
+            // Step 1 (issue #1506): the intent is durable before the player is touched.
+            val claimed = try {
+                store.beginRestore(snapshot.id, from, bootId, reason, now)
+            } catch (e: Exception) {
+                auditSnapshot("RANKED_RESTORE_DB_FAILED", uuid, player.name, snapshot, "step=begin status=$from reason=$reason error=${e.message}")
+                tell(player, "Your ranked inventory couldn't be restored yet (it will be tried again); nothing was changed and nothing was lost.", NamedTextColor.RED)
+                return false
+            }
+            if (!claimed) {
+                // Another restore already took it (or it is waiting for review): never applied twice.
+                if (from == RankedInventorySafety.PENDING) pendingRestore.remove(uuid)
+                cachedSnapshots.remove(uuid)
+                refreshUnsettled(uuid)
+                auditSnapshot("RANKED_RESTORE_DUPLICATE_PREVENTED", uuid, player.name, snapshot, "status=$from reason=$reason detail=the snapshot is no longer $from")
+                return false
+            }
+            pendingRestore.remove(uuid)
+            cachedSnapshots.remove(uuid)
+            unsettled += uuid
+            // Nothing outside the inventory: cursor, crafting grids and menus that hand items back on
+            // close hold match items, discarded (never dropped next to the restored gear).
             player.setItemOnCursor(null)
             val top = player.openInventory.topInventory
-            if (top.type == InventoryType.CRAFTING) top.clear()
+            if (top.type.name in RankedInventorySafety.CRAFTING_GRIDS || top.type.name in RankedInventorySafety.RETURNED_ON_CLOSE) top.clear()
             player.closeInventory()
             val inventory = player.inventory
             if (contents.size == inventory.contents.size) {
@@ -743,15 +873,13 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             val marked = try {
                 store.markRestored(snapshot.id, reason, System.currentTimeMillis())
             } catch (e: Exception) {
-                plugin.logger.severe("[Ranked] Restored ${player.name}'s inventory but couldn't mark snapshot ${snapshot.id} restored: ${e.message}. It will be applied again on their next join (same items, nothing duplicated unless they change their inventory meanwhile).")
+                auditSnapshot("RANKED_RESTORE_MARK_FAILED", uuid, player.name, snapshot,
+                    "step=confirm status=RESTORING reason=$reason error=${e.message} detail=applied and saved; stays RESTORING (never applied again), retried this boot")
                 false
             }
-            // Only forget it once the database agrees it's no longer pending (else the next join retries).
-            val settled = marked || try { store.snapshot(snapshot.id)?.status != "PENDING" } catch (_: Exception) { false }
-            if (settled) {
-                pendingRestore.remove(uuid)
-                cachedSnapshots.remove(uuid)
-            }
+            // Step 3 (issue #1506): confirmed, or remembered for a retry. Either way it is no longer PENDING.
+            if (marked) unsettled.remove(uuid) else unconfirmed[snapshot.id] = Unconfirmed(uuid, player.name, snapshot.matchId, reason)
+            plugin.logger.info("[Ranked] Restored ${player.name}'s snapshot ${snapshot.id} ($reason)${if (marked) "" else "; confirmation pending"}.")
             if (moveBack) moveToReturn(player, snapshot)
             val what = if (state.xp != null) "inventory, equipment, XP and effects were" else "inventory and equipment were"
             tell(player, "Your $what restored to how they were before the ranked match.", NamedTextColor.GREEN)
@@ -781,6 +909,46 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             }
         }
         if (restored.isNotEmpty()) player.addPotionEffects(restored)
+    }
+
+    /**
+     * Issue #1506: retries the RESTORED mark of restores applied this boot whose confirmation failed.
+     * A row that is no longer RESTORING (resolved meanwhile) is dropped.
+     */
+    private fun retryUnconfirmed() {
+        if (unconfirmed.isEmpty()) return
+        for ((id, u) in unconfirmed.entries.toList()) {
+            val done = try {
+                store.markRestored(id, "${u.reason} (confirmed late)", System.currentTimeMillis()) || store.snapshot(id)?.status != RankedInventorySafety.RESTORING
+            } catch (_: Exception) {
+                false
+            }
+            if (!done) continue
+            unconfirmed.remove(id)
+            refreshUnsettled(u.uuid)
+            plugin.logger.info("[Ranked] Confirmed ${u.name}'s restored snapshot $id.")
+        }
+    }
+
+    /** Issue #1506: re-reads whether [uuid] has a RESTORING/REVIEW snapshot (kept as is when the database can't answer). */
+    private fun refreshUnsettled(uuid: UUID) {
+        try {
+            if (store.unsettledSnapshot(uuid) != null || unconfirmed.values.any { it.uuid == uuid }) unsettled += uuid else unsettled.remove(uuid)
+        } catch (_: Exception) { }
+    }
+
+    /**
+     * Issue #1506: one `admin_logs` row (AdminAudit's table, system actor) + console line for a
+     * snapshot/restore problem, with player UUID, match, snapshot and status. Never punishes.
+     */
+    private fun auditSnapshot(action: String, uuid: UUID, name: String, snapshot: RankedStore.Snapshot?, details: String) {
+        val full = (listOfNotNull(snapshot?.let { "match=${it.matchId} snapshot=${it.id}" }, details).joinToString(" ") + " at=${System.currentTimeMillis()}").take(500)
+        try {
+            plugin.adminManager.logAction(null, RankedFarmingMonitor.SYSTEM_ACTOR, action, uuid, name, full)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Ranked] Couldn't write the staff log ($action) for $name: ${e.message}")
+        }
+        plugin.logger.warning("[Ranked] $action: $name ($uuid) | $full")
     }
 
     /** The authoritative return spot of [snapshot], or null when its world is gone. */
@@ -1183,7 +1351,11 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     fun onJoin(player: Player) {
         if (!hosted) return
         // They logged in where they left (usually inside an arena). Dead players are restored at respawn.
+        retryUnconfirmed()
         if (pendingRestore.contains(player.uniqueId)) restoreIfPending(player, "rejoined")
+        else if (unsettled.contains(player.uniqueId) && unconfirmed.values.none { it.uuid == player.uniqueId }) {
+            tell(player, "Your last ranked inventory restore needs a quick staff check; nothing was lost and nothing will be replaced without staff.", NamedTextColor.YELLOW)
+        }
         forfeitNotices.remove(player.uniqueId)?.let { lines -> for (line in lines) tell(player, line, NamedTextColor.YELLOW) }
     }
 
@@ -1419,18 +1591,55 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         return null
     }
 
-    /** Restores a waiting snapshot for an online player who isn't in a match. */
-    fun adminRestore(target: Player): String? {
-        if (holds(target)) return "${target.name} is still in a match; use remove first."
-        if (target.isDead) return "${target.name} is dead; they're restored when they respawn."
-        if (!pendingRestore.contains(target.uniqueId)) {
-            // Re-read in case the memory set is behind the database.
-            val pending = try { store.pendingSnapshot(target.uniqueId) } catch (e: Exception) { return "Couldn't read the snapshot: ${e.message}" }
-            if (pending == null) return "${target.name} has no ranked inventory waiting to be restored."
-            pendingRestore += target.uniqueId
+    /** What a staff restore did: [ok] and the line to show. */
+    data class AdminRestoreResult(val ok: Boolean, val message: String)
+
+    /**
+     * Restores a waiting snapshot for an online player who isn't in a match. Issue #1506: a REVIEW
+     * snapshot (an interrupted restore) is never applied by the plain command; staff pick [mode]
+     * `apply` (REVIEW → RESTORING → RESTORED, replaces the current inventory) or `resolve` (it
+     * already came back: REVIEW → RESTORED, nothing applied). Both are audited by the caller.
+     */
+    fun adminRestore(sender: CommandSender, target: Player, mode: String? = null): AdminRestoreResult {
+        if (holds(target)) return AdminRestoreResult(false, "${target.name} is still in a match; use remove first.")
+        if (target.isDead) return AdminRestoreResult(false, "${target.name} is dead; they're restored when they respawn.")
+        retryUnconfirmed()
+        val uuid = target.uniqueId
+        val pending = try { store.pendingSnapshot(uuid) } catch (e: Exception) { return AdminRestoreResult(false, "Couldn't read the snapshot: ${e.message}") }
+        val open = if (pending != null) null else try { store.unsettledSnapshot(uuid) } catch (e: Exception) { return AdminRestoreResult(false, "Couldn't read the snapshot: ${e.message}") }
+        if (mode == null) {
+            if (pending != null) {
+                pendingRestore += uuid
+                return if (restoreIfPending(target, "staff restore by ${sender.name}")) AdminRestoreResult(true, "Restored ${target.name}'s pre-match inventory.")
+                else AdminRestoreResult(false, "The snapshot couldn't be restored; see the console.")
+            }
+            return when (open?.status) {
+                null -> AdminRestoreResult(false, "${target.name} has no ranked inventory waiting to be restored.")
+                RankedInventorySafety.RESTORING -> AdminRestoreResult(false, "${target.name}'s snapshot ${open.id} was restored but the database hasn't confirmed it yet; it is retried automatically and never applied again.")
+                else -> AdminRestoreResult(false, "${target.name}'s snapshot ${open.id} (match ${open.matchId}) needs review: ${open.reviewReason ?: "restore not confirmed"}. " +
+                    "Check their inventory first. If their pre-match items did NOT come back: /lifesteal admin ranked restore ${target.name} apply confirm (replaces their current inventory). " +
+                    "If they did: /lifesteal admin ranked restore ${target.name} resolve confirm.")
+            }
         }
-        return if (restoreIfPending(target, "staff restore")) null else "The snapshot couldn't be restored; see the console."
+        if (open == null || open.status != RankedInventorySafety.REVIEW) return AdminRestoreResult(false, "${target.name} has no ranked snapshot waiting for review.")
+        return when (mode) {
+            "apply" -> {
+                val ok = restore(target, open, "staff applied review (${sender.name})", moveBack = false, from = RankedInventorySafety.REVIEW)
+                if (ok) AdminRestoreResult(true, "Applied ${target.name}'s reviewed snapshot ${open.id}.") else AdminRestoreResult(false, "The snapshot couldn't be applied; see the console.")
+            }
+            "resolve" -> {
+                val ok = try { store.resolveReview(open.id, "resolved by ${sender.name}: already restored", System.currentTimeMillis()) } catch (e: Exception) {
+                    return AdminRestoreResult(false, "Couldn't record that: ${e.message}")
+                }
+                refreshUnsettled(uuid)
+                if (ok) AdminRestoreResult(true, "Marked ${target.name}'s snapshot ${open.id} as already restored (nothing applied).") else AdminRestoreResult(false, "The snapshot changed meanwhile; check again.")
+            }
+            else -> AdminRestoreResult(false, "Unknown mode '$mode' (apply or resolve).")
+        }
     }
+
+    /** Issue #1506: snapshots waiting for a staff decision (read-only). */
+    fun reviewSnapshots(limit: Int = 20): List<RankedStore.Snapshot> = store.reviewSnapshots(limit)
 
     fun spectate(staff: Player, matchId: String): String? {
         val match = matches[matchId] ?: return "No running match '$matchId'."
