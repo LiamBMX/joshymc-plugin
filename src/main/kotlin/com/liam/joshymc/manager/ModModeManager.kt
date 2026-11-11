@@ -532,16 +532,11 @@ class ModModeManager(private val plugin: Joshymc) {
     // ---- Tool 5: Invsee ----
 
     fun openInvsee(moderator: Player, target: Player) {
-        if (canEdit(moderator)) {
-            moderator.openInventory(target.inventory)
-        } else {
-            // AdminManager.openInvsee clones items into a CustomGui with no click
-            // handlers — GuiManager cancels every click on it, so this is read-only.
-            // restricted=true keeps its "Back" button from reopening the full
-            // (rank/balance-editable) player panel — see issue #725.
-            plugin.adminManager.openInvsee(moderator, target, restricted = true)
-        }
-        plugin.adminManager.logAction(moderator, "MODMODE_INVSEE", target)
+        // Live only with joshymc.modmode.edit, and never for ranked-held players or protected
+        // staff (issue #1353). The read-only copy is AdminManager.openInvsee: a CustomGui with
+        // no click handlers, restricted so its "Back" button can't reopen the full player
+        // panel (issue #725). Writes the MODMODE_INVSEE audit row.
+        com.liam.joshymc.staff.InvseeAccess.open(plugin, moderator, target, canEdit = canEdit(moderator), auditAction = "MODMODE_INVSEE")
     }
 
     // ---- Tool 6: Spectator ----

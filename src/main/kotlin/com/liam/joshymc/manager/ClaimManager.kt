@@ -461,6 +461,9 @@ class ClaimManager(private val plugin: Joshymc) : Listener {
 
     fun getClaimById(id: Int): Claim? = claims.find { it.id == id }
 
+    /** Every claim in [worldName] (a copy), e.g. for area overlap checks (issue #1353). */
+    fun getClaimsInWorld(worldName: String): List<Claim> = claims.filter { it.world == worldName }
+
     fun getClaimsByPlayer(uuid: UUID): List<Claim> = claims.filter { it.ownerUuid == uuid }
 
     fun getClaimsTrustedBy(uuid: UUID): List<Claim> = claims.filter { it.trusted.contains(uuid) }

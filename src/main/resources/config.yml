@@ -1872,3 +1872,12 @@ kits:
     # Empty = follow the Lifesteal rank hierarchy in lifesteal-ranks.yml (each rank's
     # `kits`, lowest rank first, ending with legacy; issue #1428).
     lifesteal: []
+
+# Destructive world tools (issue #1353, docs/staff-permissions.md).
+world-management:
+  # Extra worlds /world delete refuses. The vanilla defaults, the main world, spawn, resource,
+  # AFK, event, pvp, dungeon and every gamemode-lock world are always protected.
+  protected-worlds: []
+gencave:
+  # Worlds /gencave refuses. Spawn, AFK, event and pvp are always refused.
+  blocked-worlds: []

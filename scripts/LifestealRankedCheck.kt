@@ -17,6 +17,8 @@ import com.liam.joshymc.lifesteal.LifestealConfigParser
 import com.liam.joshymc.lifesteal.RankedForfeitHeartLoss
 import com.liam.joshymc.lifesteal.combat.CombatLogRules
 import com.liam.joshymc.lifesteal.combat.CombatLogRules.DisconnectKind
+import com.liam.joshymc.lifesteal.combat.npc.CombatNpcRules
+import com.liam.joshymc.lifesteal.ranked.RankedPlayerState
 import com.liam.joshymc.lifesteal.ranked.RankedMatchRules.DisconnectAction
 import com.liam.joshymc.lifesteal.hearts.HeartRules
 import com.liam.joshymc.lifesteal.hearts.HeartRules.changesHearts
@@ -92,6 +94,7 @@ fun main() {
     environmentalDeaths()
     monitoring()
     wiring()
+    playerState()
     println("OK: $checks Ranked Team Wars checks passed.")
 }
 
@@ -1318,4 +1321,188 @@ private fun wiring() {
     check("the match manager itself doesn't register the ranked system (the queue does)", !manager.contains("rankedTeamWarsSystem ="))
     check("no packet-level or Geyser code", rankedSources.none { it.contains("Geyser") || it.contains("packet") || it.contains("Floodgate") })
     check("database work during combat is queued, not synchronous", manager.contains("plugin.databaseManager.async(\"ranked defeat"))
+}
+
+// ── XP and potion effects (issue #1490, audit finding B-1) ───
+
+/** A stand-in for the player's XP/effect state, changed by the match and set back by a restore plan. */
+private data class FakeState(var level: Int, var progress: Float, var total: Int, val effects: MutableMap<String, CombatNpcRules.Effect>) {
+    /** What LifestealRankedManager.applyState does: XP set (never added), every effect removed, the plan's put back. */
+    fun apply(plan: RankedPlayerState.Plan) {
+        plan.xp?.let { level = it.level; progress = it.progress; total = it.total }
+        val effects = plan.effects ?: return
+        this.effects.clear()
+        for (e in effects) this.effects[e.type] = e
+    }
+}
+
+private fun effect(type: String, amplifier: Int, ticks: Int) = CombatNpcRules.Effect(type, amplifier, ticks, ambient = false, particles = true, icon = true)
+
+private fun playerState() {
+    val before = RankedPlayerState.Xp(level = 12, progress = 0.25f, total = 300)
+    val speed = effect("minecraft:speed", 0, 20 * 60 * 8) // 8 minutes of Speed I before the match
+    val nightVision = effect("minecraft:night_vision", 0, CombatNpcRules.INFINITE_DURATION)
+    val startedAt = 1_000_000L
+    val encoded = RankedPlayerState.encodeEffects(listOf(speed, nightVision))
+
+    fun plan(now: Long, effects: String? = encoded, xp: RankedPlayerState.Xp? = before) =
+        RankedPlayerState.plan(xp?.level, xp?.progress?.toDouble(), xp?.total, effects, startedAt, now)
+
+    // A match: Bottles o' Enchanting, kills, potions, golden apples, an Ominous Bottle effect (if one
+    // slipped through), a beacon, Speed stronger than before.
+    fun afterMatch() = FakeState(31, 0.9f, 1_800, mutableMapOf(
+        "minecraft:speed" to effect("minecraft:speed", 1, 20 * 60 * 3), // strengthened in the match
+        "minecraft:strength" to effect("minecraft:strength", 1, 20 * 90),
+        "minecraft:regeneration" to effect("minecraft:regeneration", 1, 100),
+        "minecraft:absorption" to effect("minecraft:absorption", 3, 20 * 120), // enchanted golden apple
+        "minecraft:resistance" to effect("minecraft:resistance", 0, 20 * 300),
+        "minecraft:fire_resistance" to effect("minecraft:fire_resistance", 0, 20 * 300),
+        "minecraft:haste" to effect("minecraft:haste", 1, 260), // beacon
+        "minecraft:bad_omen" to effect("minecraft:bad_omen", 4, 20 * 6000),
+        "minecraft:trial_omen" to effect("minecraft:trial_omen", 0, 20 * 900),
+        "minecraft:poison" to effect("minecraft:poison", 0, 100), // tipped arrow / splash / lingering
+        "minecraft:slowness" to effect("minecraft:slowness", 3, 400),
+        "minecraft:night_vision" to nightVision,
+    ))
+
+    // 1. Snapshot creation round trip.
+    val luck = CombatNpcRules.Effect("minecraft:luck", 2, 40, true, false, false)
+    check("#1490 effect encoding round trip keeps type, amplifier, duration, ambient, particles, icon",
+        CombatNpcRules.decodeEffects(encoded) == listOf(speed, nightVision) &&
+            CombatNpcRules.decodeEffects(RankedPlayerState.encodeEffects(listOf(luck))).single() == luck)
+    check("#1490 no effects is stored as an empty string (had none), not NULL (older snapshot)", RankedPlayerState.encodeEffects(emptyList()) == "")
+
+    // 2-9. Every match ending goes through the same restore: the plan is the same set whatever the ending.
+    val oneMinute = startedAt + 60_000L
+    for (ending in listOf("victory", "defeat", "death and respawn", "disconnect then rejoin", "cancellation", "shutdown", "crash recovery on join")) {
+        val state = afterMatch()
+        state.apply(plan(oneMinute))
+        check("#1490 $ending: XP is exactly the pre-match XP (bottles/kills gave nothing permanent)", state.level == 12 && state.progress == 0.25f && state.total == 300)
+        check("#1490 $ending: every effect gained in the match is gone", state.effects.keys == setOf("minecraft:speed", "minecraft:night_vision"))
+        check("#1490 $ending: a strengthened effect goes back to the pre-match one, counted down", state.effects["minecraft:speed"] == speed.copy(durationTicks = speed.durationTicks - 1_200))
+        check("#1490 $ending: Ominous Bottle omens never survive", "minecraft:bad_omen" !in state.effects && "minecraft:trial_omen" !in state.effects && "minecraft:raid_omen" !in state.effects)
+        check("#1490 $ending: golden apple / splash / lingering / tipped arrow / beacon effects removed",
+            listOf("absorption", "regeneration", "poison", "slowness", "haste", "strength", "resistance", "fire_resistance").none { "minecraft:$it" in state.effects })
+        check("#1490 $ending: infinite pre-match effects (server-managed night vision) stay", state.effects["minecraft:night_vision"] == nightVision)
+    }
+
+    // Duration policy: pre-match effects keep counting down in real time (match, offline, restart).
+    check("#1490 effects that ran out during the match are not given back", plan(startedAt + 9 * 60_000L).effects == listOf(nightVision))
+    check("#1490 offline for days: only infinite effects remain", plan(startedAt + 3 * 86_400_000L).effects == listOf(nightVision))
+    check("#1490 a clock going backwards never extends an effect", plan(startedAt - 60_000L).effects!!.first { it.type == "minecraft:speed" }.durationTicks == speed.durationTicks)
+    check("#1490 no pre-match effects: every effect is removed", run {
+        val s = afterMatch()
+        s.apply(plan(oneMinute, effects = ""))
+        s.effects.isEmpty()
+    })
+
+    // 10 / 22. Repeated matches and repeated restoration attempts never add XP or time.
+    val state = FakeState(before.level, before.progress, before.total, mutableMapOf("minecraft:speed" to speed, "minecraft:night_vision" to nightVision))
+    repeat(5) { round ->
+        state.level += 20
+        state.total += 1_500 // bottles drunk in this match
+        state.apply(plan(startedAt + round * 1_000L))
+    }
+    check("#1490 five matches of XP bottles in a row leave the XP where it started", state.level == 12 && state.total == 300 && state.progress == 0.25f)
+    val first = plan(oneMinute)
+    val again = plan(oneMinute + 30_000L)
+    check("#1490 a second apply of the same snapshot (failed RESTORED mark, B-3) gives the same XP", first.xp == again.xp)
+    check("#1490 a second apply never extends an effect (counts from the snapshot time)",
+        again.effects!!.first { it.type == "minecraft:speed" }.durationTicks < first.effects!!.first { it.type == "minecraft:speed" }.durationTicks)
+
+    // 21. Older snapshots (no stored XP/effects): left untouched, never reset to invented values.
+    val legacyPlan = plan(oneMinute, effects = null, xp = null)
+    check("#1490 an older snapshot has no XP/effect plan", legacyPlan.xp == null && legacyPlan.effects == null)
+    check("#1490 restoring an older snapshot leaves XP and effects as they are", run {
+        val s = afterMatch()
+        s.apply(legacyPlan)
+        s.level == 31 && s.total == 1_800 && s.effects.size == 12
+    })
+    // Partial or broken stored XP: the restore changes nothing and the snapshot stays pending.
+    check("#1490 incomplete stored XP refuses the restore (nothing guessed)", throws { RankedPlayerState.plan(12, null, 300, "", startedAt, oneMinute) })
+    check("#1490 negative / out-of-range stored XP refuses the restore",
+        throws { RankedPlayerState.xp(-1, 0.0, 0) } && throws { RankedPlayerState.xp(1, 1.5, 0) } && throws { RankedPlayerState.xp(1, Double.NaN, 0) } && throws { RankedPlayerState.xp(1, 0.0, -5) })
+    check("#1490 level 0 with no progress is a valid snapshot", RankedPlayerState.xp(0, 0.0, 0) == RankedPlayerState.Xp(0, 0f, 0))
+
+    // 14. Ominous Bottles can't be drunk in a match; legitimate consumables stay usable.
+    check("#1490 Ominous Bottles are refused while held", RankedPlayerState.consumeRefused("minecraft:ominous_bottle"))
+    check("#1490 potions, golden apples, XP bottles, stew, food stay usable",
+        listOf("potion", "golden_apple", "enchanted_golden_apple", "experience_bottle", "suspicious_stew", "cooked_beef", "honey_bottle", "milk_bucket").none { RankedPlayerState.consumeRefused("minecraft:$it") })
+
+    // Persistence: new snapshots store XP/effects; a database from before #1490 migrates in place.
+    val dir = Files.createTempDirectory("ranked-state-check").toFile()
+    try {
+        val legacyPlayer = UUID(90L, 1L)
+        val db = DatabaseManager(dir, quietLogger())
+        db.start()
+        try {
+            // The snapshot table exactly as issue #1361 created it, with one pending row.
+            db.createTable(
+                """CREATE TABLE IF NOT EXISTS lifesteal_ranked_snapshots (
+                    snapshot_id TEXT PRIMARY KEY, match_id TEXT NOT NULL, uuid TEXT NOT NULL, contents TEXT NOT NULL,
+                    slot_count INTEGER NOT NULL, held_slot INTEGER NOT NULL, return_world TEXT,
+                    return_x REAL, return_y REAL, return_z REAL, return_yaw REAL, return_pitch REAL,
+                    status TEXT NOT NULL, created_at INTEGER NOT NULL, restored_at INTEGER, restore_reason TEXT,
+                    UNIQUE (match_id, uuid))"""
+            )
+            db.execute(
+                "INSERT INTO lifesteal_ranked_snapshots (snapshot_id, match_id, uuid, contents, slot_count, held_slot, status, created_at) VALUES (?, ?, ?, ?, 2, 0, 'PENDING', 5)",
+                "rtw-legacy:$legacyPlayer", "rtw-legacy", legacyPlayer.toString(), item("old_sword") + ",",
+            )
+        } finally {
+            db.shutdown()
+        }
+        withDb(dir) { s, _ ->
+            val legacy = s.pendingSnapshot(legacyPlayer)
+            check("#1490 an older pending snapshot survives the migration (still pending, same items)", legacy != null && legacy.slots == listOf(item("old_sword"), null))
+            check("#1490 an older snapshot reads with no XP/effects", legacy!!.xpLevel == null && legacy.xpProgress == null && legacy.xpTotal == null && legacy.effects == null)
+            check("#1490 the migration runs twice harmlessly", !throws { s.createTables() })
+            check("#1490 the older snapshot still restores once", s.markRestored(legacy.id, "rejoined", 6) && !s.markRestored(legacy.id, "rejoined", 7))
+
+            s.createArena(readyArena(), 10)
+            s.updateArena(readyArena().copy(version = s.arena("duel")!!.arena.version), 11)
+            val withState = snap(P1, item("bottle_o_enchanting")).copy(xp = before, effects = listOf(speed, nightVision))
+            val noState = snap(P2).copy(xp = RankedPlayerState.Xp(0, 0f, 0), effects = emptyList())
+            s.insertMatch(newMatch("rtw-000000001490", now = startedAt), participants(P1 to Side.A, P2 to Side.B), listOf(withState, noState))
+            val p1 = s.pendingSnapshot(P1)!!
+            val stored = RankedPlayerState.plan(p1.xpLevel, p1.xpProgress, p1.xpTotal, p1.effects, p1.createdAt, oneMinute)
+            check("#1490 XP level, progress and total stored and read back exactly", stored.xp == before)
+            check("#1490 pre-match effects stored and read back", stored.effects == listOf(speed.copy(durationTicks = speed.durationTicks - 1_200), nightVision))
+            check("#1490 inventory stays exactly as before (consumables come back)", p1.slots[0] == item("bottle_o_enchanting") && p1.slots.size == 41)
+            val p2 = s.pendingSnapshot(P2)!!
+            check("#1490 a player with 0 XP and no effects is stored as such (not as an older snapshot)", p2.xpLevel == 0 && p2.xpTotal == 0 && p2.effects == "")
+            check("#1490 restoration still marks once", s.markRestored(p1.id, "match completed", startedAt + 2) && !s.markRestored(p1.id, "again", startedAt + 3))
+        }
+        withDb(dir) { s, _ ->
+            val p2 = s.pendingSnapshot(P2)
+            check("#1490 XP/effects survive a restart (crash recovery on join)", p2 != null && p2.xpLevel == 0 && p2.effects == "")
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+
+    // Wiring: one restore path for every ending, everything read before the player is touched.
+    val manager = source("lifesteal/ranked/LifestealRankedManager.kt")
+    val listener = source("lifesteal/ranked/LifestealRankedListener.kt")
+    check("#1490 the snapshot captures XP (level, progress, total) and active effects",
+        manager.contains("RankedPlayerState.Xp(player.level, player.exp, player.totalExperience)") && manager.contains("player.activePotionEffects.map { effectOf(it) }"))
+    check("#1490 the cached snapshot carries the same XP/effects as the stored one",
+        manager.contains("xpLevel = s.xp?.level") && manager.contains("effects = s.effects?.let { RankedPlayerState.encodeEffects(it) }"))
+    check("#1490 XP/effects are decoded with the inventory, before anything changes", manager.contains("decode(snapshot) to RankedPlayerState.plan("))
+    val restoreBody = manager.substringAfter("private fun restore(player: Player, snapshot: RankedStore.Snapshot").substringBefore("\n    }\n")
+    val apply = restoreBody.indexOf("applyState(player, snapshot, state)")
+    check("#1490 XP/effects applied inside the one restore, after the inventory and before the save and the RESTORED mark",
+        restoreBody.indexOf("inventory.contents = contents") in 0 until apply && apply < restoreBody.indexOf("player.saveData()") &&
+            restoreBody.indexOf("player.saveData()") < restoreBody.indexOf("store.markRestored("))
+    check("#1490 XP/effects are applied nowhere else (no second restoration path)", Regex("""applyState\(""").findAll(manager).count() == 2)
+    check("#1490 shutdown, cancellation, completion, respawn, rejoin and staff restores all use restore()",
+        manager.contains("restoreForShutdown(player) else restoreIfPending(player") && manager.contains("if (restore(player, snapshot, \"server shutdown\"") &&
+            manager.contains("restoreIfPending(player, \"rejoined\")") && listener.contains("ranked.restoreIfPending(event.player, \"respawned\")"))
+    check("#1490 XP is set, never added",
+        manager.contains("player.level = xp.level") && manager.contains("player.exp = xp.progress") && manager.contains("player.totalExperience = xp.total") && !manager.contains("giveExp(") && !manager.contains("giveExpLevels("))
+    check("#1490 every current effect is removed before the pre-match ones return", manager.indexOf("player.removePotionEffect(active.type)") in 0 until manager.indexOf("player.addPotionEffects(restored)"))
+    check("#1490 deaths still drop no XP orbs and the arena's XP orbs are cleared", listener.contains("event.droppedExp = 0") && manager.contains("e is ExperienceOrb"))
+    check("#1490 Ominous Bottles are refused only for held players",
+        Regex("""fun onConsume\(event: PlayerItemConsumeEvent\) \{\s*\n\s*if \(!ranked\.holds\(event\.player\)\) return""").containsMatchIn(listener) && listener.contains("RankedPlayerState.consumeRefused("))
+    check("#1490 hearts are untouched by the XP/effect restore", !manager.substringAfter("private fun applyState").substringBefore("\n    }\n").contains("heart", ignoreCase = true))
 }

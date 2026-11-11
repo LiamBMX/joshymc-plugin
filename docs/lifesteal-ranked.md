@@ -126,9 +126,39 @@ command except private messages, Heart item redeem/withdraw, all vouchers, and s
 (removed afterwards). Consumables used in the match (potions, golden apples, pearls, totems) come back
 with the snapshot; anything picked up in the arena doesn't.
 
-**Not restored on purpose**: hearts (normal Lifesteal rules), XP levels (kept on death, XP orbs never
-drop), potion effects, hunger. Other plugins that put items straight into a held player's inventory
-mid-match (not through JoshyMC's deliveries) would be overwritten by the restore.
+### XP and potion effects (issue #1490, audit finding B-1)
+
+Before #1490 the snapshot held only the inventory, so XP from Bottles o' Enchanting (and kills) and
+effects from potions, golden apples, Ominous Bottles or beacons stayed after the match while the
+consumables themselves came back: free, repeatable XP and buffs. The snapshot now also stores the
+pre-match **experience** (`xp_level`, `xp_progress`, `xp_total`) and **active potion effects**
+(`effects`: type, amplifier, remaining ticks, ambient, particles, icon; `""` = none), captured with
+the inventory and written in the same transaction. They follow the inventory's lifecycle exactly:
+read and checked together with the items before anything changes, applied inside the same
+`restore()` (every ending above), then the player save, then the one PENDING → RESTORED mark.
+
+- **XP is set** (level, progress, total), never added: nothing gained in the match survives, and a
+  second apply (a failed RESTORED mark, finding B-3) gives the same XP.
+- **Effects**: every current effect is removed, then the pre-match ones come back. Durations are
+  **not frozen**: they keep counting down in real time from the snapshot (during the match, while
+  offline, across restarts, like the Combat NPC), so a match or a second apply never extends one;
+  infinite effects stay; ran-out ones are dropped. Effects gained or strengthened in the match
+  (potions, splash/lingering, tipped arrows, golden apples, beacons, suspicious stew, Bad/Trial/Raid
+  Omen) are gone. A pre-match effect whose type no longer exists is skipped and logged.
+- **Ominous Bottles can't be drunk** while a match holds the player (`RankedPlayerState.REFUSED_CONSUMABLES`).
+  Restoring would remove the omen anyway, but Bad Omen only acts outside the fight (a raid it starts
+  keeps going after the omen is gone), so it is refused instead. Outside ranked nothing changes.
+- **Older snapshots** (rows from before #1490, still PENDING) have NULL in the new columns; the
+  columns are added with `ALTER TABLE` on start and nothing is rewritten. Such a snapshot restores
+  the inventory only and leaves XP and effects untouched (never an invented value). Stored XP that
+  is incomplete or out of range refuses the restore (nothing changes, it stays pending).
+- XP orbs never drop from match deaths (`droppedExp = 0`, level kept) and leftover orbs in the
+  arena are removed when the match ends.
+
+**Not restored on purpose**: hearts (normal Lifesteal rules), hunger, health. Other plugins that put
+items straight into a held player's inventory mid-match (not through JoshyMC's deliveries) would be
+overwritten by the restore; effects other plugins add again on their own timers (talismans, custom
+armor) come back on their next tick.
 
 ## Teleports, transfers, boundaries
 
@@ -246,3 +276,10 @@ Not covered by the checks (item serialization, teleports and events need a runni
    (`kill -9`): on restart the match is CANCELLED and each player is restored on join.
 8. Same with a Bedrock (Geyser/Floodgate) player on a team with a Java player.
 9. On the Survival server: `/lifesteal admin arena list` refuses; nothing else changes.
+10. Issue #1490: note each player's XP (`/xp query <p> levels` and `points`) and give one a long
+    Speed I and an infinite Night Vision. In the match drink Bottles o' Enchanting, Strength II,
+    splash/lingering potions, eat (enchanted) golden apples, get hit by tipped arrows, stand in a
+    beacon. Try an Ominous Bottle: refused. After winning, losing, dying (respawn), a disconnect +
+    rejoin, `cancel`, a server stop and a `kill -9` + rejoin: XP is exactly the noted value, only
+    the pre-match effects remain (Speed with less time left, Night Vision infinite), the bottles and
+    apples are back in the inventory, hearts and Elo moved as usual. Repeat two matches: no XP gain.
