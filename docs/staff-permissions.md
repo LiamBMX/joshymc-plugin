@@ -119,6 +119,31 @@ Never from display names, chat prefixes or tags. Only these sources count:
 - Players in Creative can't take or move JoshyMC items through the Creative inventory.
 - Existing `command` portals run with the player's own permissions.
 
+### `/world delete` and `/gencave` (issue #1353, audit findings D-M6 and P5-H1)
+
+- **`/world delete <name> confirm`**
+  - Needs the new node **`joshymc.world.delete`** (default op) on top of `joshymc.world`, and
+    the literal `confirm`.
+  - Always refused for: the vanilla defaults, the main world, `spawn`, the resource world,
+    the AFK world, the event world, `pvp`, `dungeon`, every `gamemode-lock.worlds` world, and
+    `config.yml > world-management.protected-worlds`.
+  - World names must be folder-safe (letters, digits, `_`, `-`). Only the world's own folder
+    directly inside the server's world container is deleted.
+  - Each deletion writes a `WORLD_DELETE` audit row.
+- **`/gencave <radius>` then `/gencave confirm`**
+  - The first step only checks the area and says how many blocks will be overwritten. Nothing
+    changes until the same player confirms within 60 seconds, and a confirmation works once.
+  - Refused:
+    - in `spawn`, AFK, event and `pvp`, and in `config.yml > gencave.blocked-worlds`;
+    - when any claim overlaps the area;
+    - when WorldGuard denies the player build rights at any of 11 sample points, or WorldGuard
+      can't be checked;
+    - when any block entity (chest, barrel, shulker, hopper, spawner, sign, …) sits inside the
+      sphere. Chunks are loaded asynchronously to check this;
+    - while another cave is still generating (one at a time, server-wide).
+  - Each confirmed run writes a `GENCAVE` audit row (world, centre, radius).
+  - **There is no rollback.** A sphere can hold up to about 33 million blocks, too many to
+    snapshot. Check the area first.
 ### `/invsee` (issue #1353, audit finding D-H2)
 
 `/invsee <online player>` used to open the live inventory for every `joshymc.invsee` holder.
