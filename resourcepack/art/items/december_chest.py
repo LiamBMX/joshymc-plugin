@@ -39,7 +39,7 @@ from art.kit import animate, arc, bar, box, canvas, copy, display, lathe, model,
 ID = "december_chest"
 NAME = "December Chest"
 
-HONEY = ["#3a200c", "#52300f", "#6c4116", "#86521d", "#9e6426", "#b67832", "#cc8e42", "#e0a858"]
+HONEY = ["#2a180c", "#3a2212", "#4b2d18", "#5c391f", "#6e4526", "#80522e", "#8f5e34", "#9c6a3a"]
 RED = ["#2c0406", "#4c070b", "#6e0c12", "#901419", "#ae1e22", "#c8302c", "#de4c40", "#f07a66"]
 GOLD = ["#4a2c04", "#76480a", "#a06a10", "#c48c1c", "#dcaa30", "#eec654", "#fae08a", "#fff4c8"]
 SNOW = ["#6e86a6", "#8ea4c2", "#aec2da", "#cad8ea", "#e0eaf5", "#eff5fb", "#fbfdff"]
@@ -57,7 +57,16 @@ STAR_TOP = 20.7 - SNOW2       # how far the tree (star included) rises above the
 # ======================================================================================
 
 def boards(size: int = 32) -> object:
-    return planks(HONEY[1:], size=size, rows=4, seed=411, vertical=False, knots=3, seam_dark=0)
+    """Warm walnut boards with a little pale blue frost along the top edge of each board."""
+    img = planks(HONEY[1:], size=size, rows=4, seed=411, vertical=False, knots=3, seam_dark=0)
+    rng = random.Random(412)
+    step = size // 4
+    for b in range(0, size, step):
+        for x in range(size):
+            r = rng.random()
+            if r < 0.12:
+                put(img, x, b, SNOW[3] if r < 0.07 else ICE[6])
+    return img
 
 
 def lacquer(size: int = 16) -> object:
@@ -95,9 +104,11 @@ def snow(t: float) -> object:
     for y in range(16):
         for x in range(16):
             r = rng.random()
-            tone = 5 if r > 0.45 else 4 if r > 0.15 else 6
-            if (x * 3 + y * 7) % 23 == 0:
-                tone = 3
+            # brightest in the middle, a soft cool mottle drifting toward one side, no edge ring
+            d = math.hypot(x + 0.5 - 7, y + 0.5 - 7) / 9
+            tone = 6 if d < 0.45 and r > 0.3 else 5
+            if r < 0.12 + 0.25 * max(0.0, (x + y) / 30 - 0.4):
+                tone = 4
             put(img, x, y, SNOW[tone])
     for k, (sx, sy) in enumerate(((3, 4), (11, 2), (7, 11), (13, 12))):
         sparkle(img, sx, sy, wave(t, k / 4) ** 3, colour="#ffffff", reach=1)
@@ -110,8 +121,8 @@ def snow_side(size: int = 16) -> object:
     rng = random.Random(417)
     for y in range(size):
         for x in range(size):
-            tone = 6 if y < 3 else 5 if y < 8 else 4 if y < 12 else 3
-            if rng.random() < 0.12:
+            tone = 6 if y < 3 else 5 if y < 7 else 4 if y < 10 else 3 if y < 14 else 1
+            if rng.random() < 0.12 and y < 14:
                 tone -= 1
             put(img, x, y, SNOW[max(0, tone)])
     return img
@@ -342,6 +353,15 @@ def keyhole(t: float) -> object:
     return out
 
 
+def icicle(size: int = 16) -> object:
+    """Clear ice: pale on the lit side, blue in the middle, a white edge."""
+    img = canvas(size)
+    for y in range(size):
+        for x in range(size):
+            put(img, x, y, ICE[7] if x < 4 else ICE[6] if x < 10 else ICE[5])
+    return img
+
+
 def silver(size: int = 16) -> object:
     """Frosted silver for the hinges."""
     img = canvas(size)
@@ -372,6 +392,7 @@ def textures() -> None:
     save(field(), "field")
     save(plate(), "plate")
     save(silver(), "silver")
+    save(icicle(), "icicle")
     save_animation(animate(gold, 12), "gold", frametime=3)
     save_animation(animate(snow, 8), "snow", frametime=4)
     save_animation(animate(star, 12), "star", frametime=2)
@@ -389,8 +410,8 @@ BULBS = ("bulb_red", "bulb_gold", "bulb_blue", "bulb_green")
 
 
 def frame() -> list[dict]:
-    """Red lacquer plinth and seam band edged in gold, red corner posts, frosted caps on
-    every corner and snow banked round the foot."""
+    """Red lacquer plinth and seam band edged in gold, candy-cane corner posts, frosted caps
+    on every corner, a snow ledge on the plinth and snow banked round the foot."""
     parts = [box((B0 - 0.22, 0.0, B0 - 0.22), (B1 + 0.22, 1.0, B1 + 0.22), "lacquer", skip=("down",)),
              box((B0 - 0.2, SEAM - 0.85, B0 - 0.2), (B1 + 0.2, SEAM, B1 + 0.2), "lacquer", skip=("up",))]
     for y in (1.0, SEAM - 0.85):
@@ -400,14 +421,17 @@ def frame() -> list[dict]:
         for cz in (B0, B1):
             sx, sz = (1 if cx == B0 else -1), (1 if cz == B0 else -1)
             parts.append(box((cx - 0.2 * sx, 1.0, cz - 0.2 * sz), (cx + 1.1 * sx, SEAM - 0.85, cz + 1.1 * sz),
-                             "lacquer"))
+                             "cane", uv="full"))
             for (y0, y1) in ((0.0, 2.2), (SEAM - 2.4, SEAM + 0.05)):
                 parts.append(box((cx - 0.34 * sx, y0, cz - 0.34 * sz), (cx + 1.6 * sx, y1, cz + 1.6 * sz), "frost",
                                  uv="full", skip=("down",) if y0 == 0 else ()))
                 parts.append(box((cx - 0.38 * sx, y1, cz - 0.38 * sz), (cx + 1.5 * sx, y1 + 0.35, cz + 1.5 * sz),
                                  "snow", faces={"north": "snow_side", "south": "snow_side", "east": "snow_side",
                                                 "west": "snow_side"}, uv="full", skip=("down",)))
-    # snow banked round the foot of the front and sides in soft lumps
+    # a ledge of snow along the plinth's top, and snow banked round the foot in soft lumps
+    parts.append(box((B0 - 0.3, 1.0, B0 - 0.3), (B1 + 0.3, 1.3, B1 + 0.3), "snow",
+                     faces={"north": "snow_side", "south": "snow_side", "east": "snow_side", "west": "snow_side"},
+                     uv="full", skip=("down",)))
     rng = random.Random(431)
     bank = []
     for x in (3.0, 5.4, 10.6, 13.0):
@@ -421,22 +445,44 @@ def frame() -> list[dict]:
 
 
 def lid_snow() -> list[dict]:
-    """The thick snow blanket over the lid, lumps drooping over every edge, a drift on top."""
+    """The thick snow over the lid: a blanket bulging past every edge as a cornice, an uneven
+    mound of overlapping drifts (highest behind the tree, slumping toward the edges), and
+    lumps drooping over every edge with an icicle under each."""
     side = {"north": "snow_side", "south": "snow_side", "east": "snow_side", "west": "snow_side"}
-    parts = [box((L0 - 0.15, LID_TOP - 0.05, L0 - 0.15), (L1 + 0.15, SNOW1, L1 + 0.15), "snow", faces=side,
-                 uv="full", skip=("down",)),
-]
-    parts += lathe((8.0, SNOW1 - 0.05, 8.0), [(0.0, 6.6), (0.3, 6.1), (0.55, 4.8), (SNOW2 - SNOW1 + 0.05, 3.0)],
-                   "snow_side", sides=8, cap="snow", uv="full")
+    parts = [box((L0 - 0.25, LID_TOP - 0.05, L0 - 0.25), (L1 + 0.25, SNOW1, L1 + 0.25), "snow", faces=side,
+                 uv="full", skip=("down",))]
+    # uneven drifts, each turned and tipped a little, with a round heap under the tree
+    for (cx, cz, hx, hz, top, yaw, tilt) in ((7.8, 7.4, 5.4, 4.8, 0.42, 14, 0), (9.2, 5.4, 3.9, 3.1, 0.56, -27, 4),
+                                             (4.2, 11.0, 2.7, 2.5, 0.26, 33, -6), (11.9, 11.6, 2.3, 2.2, 0.34, -18, 7)):
+        d = box((cx - hx, SNOW1 - 0.05, cz - hz), (cx + hx, SNOW1 + top, cz + hz), "snow", faces=side, uv="full",
+                skip=("down",))
+        turn(d, yaw, "y", (cx, SNOW1, cz))
+        if tilt:
+            turn(d, tilt, "x", (cx, SNOW1, cz))
+        parts.append(d)
+    parts += prism((8.0, (SNOW1 + SNOW2) / 2, 7.2), 3.3, SNOW2 - SNOW1 + 0.05, "snow_side", sides=8, cap="snow",
+                   uv="full")
     rng = random.Random(433)
     lumps = []
     for x in (1.8, 4.3, 11.7, 14.2):
-        w = rng.uniform(0.9, 1.25)
-        drop = rng.uniform(0.6, 1.0)
-        lumps.append(box((x - w, LID_TOP - drop, L1 + 0.05), (x + w, SNOW1 - 0.1, L1 + 0.22), "snow", faces=side,
-                         uv="full", skip=("north",)))
+        w = rng.uniform(0.95, 1.3)
+        drop = rng.uniform(0.6, 1.6)
+        z0, z1 = L1 + 0.1, L1 + 0.32
+        lumps.append(box((x - w, LID_TOP - 0.45, z0), (x + w, SNOW1 - 0.1, z1), "snow", faces=side, uv="full",
+                         skip=("north",)))
+        lumps.append(box((x - w * 0.6, LID_TOP - drop, z0), (x + w * 0.6, LID_TOP - 0.4, z1 - 0.04), "snow_side",
+                         uv="full", skip=("north", "up")))
+        lumps.append(bar((x, LID_TOP - drop + 0.05, z0 + 0.1), (x + 0.05, LID_TOP - drop - 0.6, z0 + 0.1), 0.3, 0.2,
+                         "icicle", uv="full"))
     for yaw in (0, 90, 180, 270):
         parts += turn(copy(lumps), yaw, "y", (8.0, 0.0, 8.0))
+    # more drips on the front edge, over the garland, so the cornice line breaks up
+    z0, z1 = L1 + 0.12, L1 + 0.34
+    for (x, w, drop) in ((3.0, 0.7, 1.45), (6.1, 0.6, 0.75), (9.9, 0.65, 0.85), (13.0, 0.7, 1.25)):
+        parts.append(box((x - w, LID_TOP - drop, z0), (x + w, SNOW1 - 0.15, z1), "snow_side", uv="full",
+                         skip=("north",)))
+        parts.append(bar((x, LID_TOP - drop + 0.05, z0 + 0.1), (x - 0.04, LID_TOP - drop - 0.45, z0 + 0.1), 0.26,
+                         0.18, "icicle", uv="full"))
     return parts
 
 
@@ -535,14 +581,15 @@ def gifts() -> list[dict]:
 def candy_cane(c, h: float, face: float) -> list[dict]:
     """A candy cane standing in the snow: a straight shaft and a hooked top."""
     x, y, z = c
-    parts = [bar((x, y - 0.3, z), (x, y + h, z), 0.5, 0.5, "cane")]
-    parts += arc((x + 0.55, y + h, z), 0.55, 180, 0, 5, 0.46, 0.46, "cane", plane="xy")
-    parts.append(bar((x + 1.1, y + h, z), (x + 1.1, y + h - 0.6, z), 0.44, 0.44, "cane"))
+    parts = [bar((x, y - 0.3, z), (x, y + h, z), 0.62, 0.62, "cane")]
+    parts += arc((x + 0.62, y + h, z), 0.62, 180, 0, 5, 0.56, 0.56, "cane", plane="xy")
+    parts.append(bar((x + 1.24, y + h, z), (x + 1.24, y + h - 0.6, z), 0.52, 0.52, "cane"))
     return turn(parts, face, "y", (x, y, z))
 
 
 def candy_canes() -> list[dict]:
-    return candy_cane((1.7, SNOW1 - 0.1, 14.1), 2.3, -30) + candy_cane((14.3, SNOW1 - 0.1, 14.1), 1.9, 210)
+    """One candy cane standing in the snow beside the red gift."""
+    return candy_cane((2.3, SNOW1 + 0.1, 13.4), 2.0, -20)
 
 
 def gift_ornaments() -> list[dict]:
@@ -550,11 +597,11 @@ def gift_ornaments() -> list[dict]:
     green with red ribbon) and one on each side wall."""
     parts = []
     z = B1
-    for (cx, cy, w, tex, rib, yaw) in ((3.9, 3.9, 1.15, "gift_red", "ribbon_gold", 0),
-                                       (12.1, 3.6, 1.0, "gift_green", "ribbon_red", 0)):
-        g = [box((cx - w, cy - w, z - 0.1), (cx + w, cy + w, z + 0.8), tex, uv="full", skip=("north",)),
-             box((cx - 0.2, cy - w - 0.03, z - 0.1), (cx + 0.2, cy + w + 0.03, z + 0.83), rib, skip=("north",)),
-             box((cx - w - 0.03, cy - 0.2, z - 0.1), (cx + w + 0.03, cy + 0.2, z + 0.83), rib, skip=("north",))]
+    for (cx, cy, w, tex, rib, yaw) in ((3.9, 2.05, 1.0, "gift_red", "ribbon_gold", 0),
+                                       (12.1, 1.95, 0.9, "gift_green", "ribbon_red", 0)):
+        g = [box((cx - w, cy - w, z - 0.1), (cx + w, cy + w, z + 0.78), tex, uv="full", skip=("north",)),
+             box((cx - 0.2, cy - w - 0.03, z - 0.1), (cx + 0.2, cy + w + 0.03, z + 0.8), rib, skip=("north",)),
+             box((cx - w - 0.03, cy - 0.2, z - 0.1), (cx + w + 0.03, cy + 0.2, z + 0.8), rib, skip=("north",))]
         for sx in (1, -1):
             g.append(bar((cx, cy + w, z + 0.4), (cx + 0.55 * sx, cy + w + 0.4, z + 0.4), 0.32, 0.18, rib))
         parts += g
@@ -573,6 +620,12 @@ def hinges() -> list[dict]:
         parts += prism((x, SEAM, L0 - 0.08), 0.45, 2.0, "silver", axis="x", sides=8, cap="frost")
         parts.append(box((x - 0.7, SEAM - 2.4, B0 - 0.18), (x + 0.7, SEAM - 0.3, B0), "silver"))
         parts.append(box((x - 0.7, SEAM + 0.3, L0 - 0.18), (x + 0.7, LID_TOP - 0.8, L0), "silver"))
+        parts.append(box((x - 1.05, SEAM + 0.42, L0 - 0.5), (x + 1.05, SEAM + 0.7, L0 - 0.05), "snow",
+                         faces={"north": "snow_side", "east": "snow_side", "west": "snow_side"}, uv="full",
+                         skip=("down", "south")))
+        for dx, ln in ((-0.5, 0.9), (0.45, 0.6)):
+            parts.append(bar((x + dx, SEAM - 0.4, L0 - 0.3), (x + dx, SEAM - 0.4 - ln, L0 - 0.3), 0.22, 0.18, "icicle",
+                             uv="full"))
     return parts
 
 

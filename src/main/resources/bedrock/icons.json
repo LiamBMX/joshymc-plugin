@@ -110,7 +110,7 @@
     "joshymc:december_chest": {
       "bedrock_name": "december_chest",
       "icon": "joshymc/december_chest.png",
-      "sha1": "b4f4799f3ee2400d2ddc68e578e44507250b889c"
+      "sha1": "d63df7741c7b37e6c6e6b5169ef6310ea582bd04"
     },
     "joshymc:december_key": {
       "bedrock_name": "december_key",
@@ -800,7 +800,7 @@
     "joshymc:november_chest": {
       "bedrock_name": "november_chest",
       "icon": "joshymc/november_chest.png",
-      "sha1": "0d6ee713f8b66b77c8fca5386178e0884dbb673d"
+      "sha1": "f976f4b0c7c876ff16e1fe9080e0ef475ae436ff"
     },
     "joshymc:november_key": {
       "bedrock_name": "november_key",
@@ -810,7 +810,7 @@
     "joshymc:october_chest": {
       "bedrock_name": "october_chest",
       "icon": "joshymc/october_chest.png",
-      "sha1": "ae49317f60c081bbe83db4154c6482d8d101ff4f"
+      "sha1": "a9cf5dd133ac37f00a74eaccc36477a43ff47d4d"
     },
     "joshymc:october_key": {
       "bedrock_name": "october_key",

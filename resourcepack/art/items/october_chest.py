@@ -44,7 +44,7 @@ IRON = ["#060509", "#0d0b12", "#16131c", "#201b27", "#2b2533", "#383041", "#4a40
 PURPLE = ["#160a24", "#24103a", "#351852", "#48226b", "#5c2e84", "#73409c", "#8f5ab8", "#b384d6"]
 RIND = ["#4a1c04", "#702c07", "#93400b", "#b55510", "#cf6a16", "#e2821f", "#f09c34", "#f9ba5a"]
 FLESH = ["#8a4a10", "#b46a1c", "#d4892c", "#e8a640", "#f4c262", "#fbdc8e"]
-VINE = ["#0c120a", "#141d10", "#1d2a16", "#27391c", "#324a22", "#3f5c2a", "#527234"]
+VINE = ["#1d2a16", "#27391c", "#324a22", "#3f5c2a", "#4d6e32", "#5e843c", "#749a4a"]
 EERIE = ["#06140a", "#0b2a12", "#12461c", "#1d6a28", "#2f9638", "#52c450", "#9cf08a", "#e0ffd2"]
 CANDLE = ["#3a0e02", "#7a2204", "#b84208", "#e66a10", "#fb9a24", "#ffc84a", "#ffe98a", "#fffbe0"]
 WEB = "#d6d2dc"
@@ -114,25 +114,23 @@ def purple(t: float) -> object:
 
 
 def rind(size: int = 16) -> object:
-    """Pumpkin rind across one rib: dark grooves at both edges, a lit bulge, a little
-    mottling (the lid's ribs and the dome)."""
+    """Pumpkin rind across one rib: a rounded bulge from a soft dark edge to a bright middle,
+    lit a little more on the left, with faint mottling (the lid's ribs and the dome)."""
     img = canvas(size)
     rng = random.Random(219)
     for y in range(size):
         for x in range(size):
             u = (x + 0.5) / size
-            bulge = math.sin(math.pi * u)
-            tone = 1 + round(bulge * 5.2 - (0.6 if u > 0.6 else 0.0))
+            bulge = math.sin(math.pi * u) ** 0.8
+            tone = 2 + bulge * 5.0 + (0.4 if u < 0.45 else -0.3)
             if x == 0 or x == size - 1:
-                tone = 0
+                tone = 1.6
             r = rng.random()
-            if r < 0.07:
+            if r < 0.06:
                 tone += 1
-            elif r < 0.12:
+            elif r < 0.1:
                 tone -= 1
-            if (y * 7 + x * 3) % 23 == 0 and 2 < x < size - 3:
-                tone -= 1
-            put(img, x, y, RIND[max(0, min(7, tone))])
+            put(img, x, y, RIND[max(1, min(7, round(tone)))])
     return img
 
 
@@ -204,7 +202,8 @@ def ivy(size: int = 16) -> object:
                        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
             tone = 2 if edge else 5 if x < 8 and y < 9 else 4
             if x == 8 and 3 < y < 14:
-                tone = 1
+                put(img, x, y, EERIE[3])
+                continue
             put(img, x, y, VINE[tone])
     return img
 
@@ -300,15 +299,18 @@ def bat(size: int = 16) -> object:
             if not bat_mask(x, y):
                 continue
             dx = abs(x + 0.5 - 8)
-            edge = not bat_mask(x, y - 1) if y > 0 else True
+            top = y == 0 or not bat_mask(x, y - 1)          # only the upper edge catches light
+            bottom = y == 15 or not bat_mask(x, y + 1)
             if dx < 1.7:
-                c = IRON[2] if edge else IRON[1]
-            elif edge:
-                c = PURPLE[5]
+                c = PURPLE[6] if top else IRON[1]           # ear tips lit, body dark
+            elif top:
+                c = PURPLE[6]
+            elif bottom:
+                c = IRON[0]                                 # dark scalloped hem
             elif int(dx) % 3 == 0:
                 c = IRON[1]                 # wing fingers
             else:
-                c = PURPLE[2] if y > 8 else PURPLE[3]
+                c = PURPLE[3] if y > 8 else PURPLE[4]
             put(img, x, y, c)
     put(img, 7, 7, EERIE[6])                # eyes
     put(img, 8, 7, EERIE[6])
@@ -402,9 +404,11 @@ def lid_ribs() -> list[dict]:
     for (x0, x1, out) in RIBS:
         wall.append(box((x0, SEAM + 0.1, L1 - 0.05), (x1, LID_TOP + 0.05, L1 + out), "rind", uv="full",
                         skip=("north", "down")))
-    # a thinner step on the big rib, so its edges read as rounded
-    wall.append(box((4.6, SEAM + 0.05, L1 + 0.3), (11.4, LID_TOP + 0.02, L1 + 0.42), "rind", uv="full",
-                    skip=("north", "down", "south")))
+    # a thinner inner step on every rib, so all three bulge
+    for (x0, x1, out) in RIBS:
+        inset = (x1 - x0) * 0.2
+        wall.append(box((x0 + inset, SEAM + 0.05, L1 + out - 0.02), (x1 - inset, LID_TOP + 0.02, L1 + out + 0.12),
+                        "rind", uv="full", skip=("north", "down")))
     out = []
     for yaw in (0, 90, 180, 270):
         out += turn(copy(wall), yaw, "y", (8.0, 0.0, 8.0))
@@ -451,7 +455,7 @@ def dome() -> list[dict]:
 
 def jack_face() -> list[dict]:
     """The carved face on the front rib: the cut flesh, then the candle light inside."""
-    z = L1 + 0.42
+    z = L1 + 0.54
     x0, x1, y0, y1 = 3.9, 12.1, 10.0, 14.1
     uv = {"south": [0, 0, 16, 8]}
     return [
@@ -473,7 +477,6 @@ def frame() -> list[dict]:
         if 5.6 < x < 10.4:
             continue
         fringe.append(box((x - 0.45, SEAM - 1.35, B1 + 0.05), (x + 0.45, SEAM - 0.8, B1 + 0.2), "iron"))
-        fringe.append(box((x - 0.2, SEAM - 1.7, B1 + 0.05), (x + 0.2, SEAM - 1.35, B1 + 0.2), "iron"))
     for yaw in (0, 90, -90):
         parts += turn(copy(fringe), yaw, "y", (8.0, 0.0, 8.0))
     parts += corner_brackets("iron", e=0.24, arm=1.2)[:16]            # body corners only
@@ -483,8 +486,11 @@ def frame() -> list[dict]:
             sx = 1 if cx == B0 else -1
             sz = 1 if cz == B0 else -1
             for (y0, y1) in ((0.0, 2.0), (SEAM - 2.2, SEAM + 0.05)):
-                parts.append(box((cx - 0.34 * sx, y0, cz - 0.34 * sz), (cx + 1.9 * sx, y1, cz + 1.9 * sz),
+                parts.append(box((cx - 0.3 * sx, y0, cz - 0.3 * sz), (cx + 1.9 * sx, y1, cz + 1.9 * sz),
                                  "purple", uv="full", skip=("down",) if y0 == 0 else ()))
+                # a raised inner plate with a stud, so each cap is bevelled
+                parts.append(box((cx - 0.42 * sx, y0 + 0.35, cz - 0.42 * sz), (cx + 1.35 * sx, y1 - 0.35, cz + 1.35 * sz),
+                                 "purple", uv="full", skip=("down", "up")))
     for cx in (L0, L1):
         for cz in (L0, L1):
             sx = 1 if cx == L0 else -1
@@ -493,7 +499,7 @@ def frame() -> list[dict]:
                              "purple", uv="full"))
             # a spike on each lid corner cap
             parts.append(bar((cx + 0.55 * sx, LID_TOP + 0.2, cz + 0.55 * sz),
-                             (cx + 0.3 * sx, LID_TOP + 1.1, cz + 0.3 * sz), 0.45, 0.45, "purple", uv="full"))
+                             (cx + 0.3 * sx, LID_TOP + 1.2, cz + 0.3 * sz), 0.6, 0.6, "purple", uv="full"))
     # studs down the middle of the side walls and on the front corners
     for y in (2.6, 4.6):
         for x in (B0 + 0.6, B1 - 0.6):
@@ -524,9 +530,9 @@ def bat_lock() -> list[dict]:
     wing = []
     for (ang, ln) in ((28, 3.2), (6, 3.6), (-16, 2.9)):
         a = math.radians(ang)
-        wing.append(bar((9.6, 8.6, zf - 0.08), (9.6 + ln * math.cos(a), 8.6 + ln * math.sin(a), zf - 0.08),
-                        0.28, 0.2, "branch"))
-    wing.append(box((9.6, 6.9, zf - 0.16), (12.8, 10.4, zf - 0.13), "bat", uv={"south": [8, 2, 16, 12]},
+        wing.append(bar((9.6, 8.6, zf + 0.06), (9.6 + ln * math.cos(a), 8.6 + ln * math.sin(a), zf + 0.06),
+                        0.3, 0.12, "purple", uv="full"))
+    wing.append(box((9.6, 6.9, zf), (12.8, 10.4, zf + 0.02), "bat", uv={"south": [8, 2, 16, 12]},
                     skip=("north", "east", "west", "up", "down")))
     parts += wing + mirror(wing, "x", 8.0)
     # hasp: a purple tab from the face rib down over the plate's top, with a ring
@@ -584,15 +590,18 @@ def branch_hinges() -> list[dict]:
     parts = []
     z = L0 - 0.48
     for x in (4.0, 12.0):
-        parts.append(box((x - 1.1, SEAM - 0.45, z), (x + 1.1, SEAM + 0.45, L0), "branch"))
-        parts.append(bar((x, SEAM - 2.6, B0 - 0.25), (x + 0.3, SEAM - 0.3, B0 - 0.25), 0.5, 0.4, "branch"))
-        parts.append(bar((x, SEAM + 0.3, z + 0.12), (x - 0.25, SEAM + 2.6, z + 0.12), 0.48, 0.36, "branch"))
-        parts += arc((x + 0.45, SEAM + 3.0, z + 0.12), 0.75, 180, 470, 6, 0.3, 0.3, "branch", plane="xy")
+        parts.append(box((x - 1.4, SEAM - 0.5, z), (x + 1.4, SEAM + 0.5, L0), "branch"))
+        for dx in (-0.75, 0.75):
+            parts.append(box((x + dx - 0.18, SEAM - 0.58, z - 0.02), (x + dx + 0.18, SEAM + 0.58, L0), "purple",
+                             uv="full"))
+        parts.append(bar((x, SEAM - 2.8, B0 - 0.2), (x + 0.3, SEAM - 0.3, B0 - 0.2), 0.7, 0.36, "branch"))
+        parts.append(bar((x, SEAM + 0.3, z + 0.1), (x - 0.25, SEAM + 2.6, z + 0.1), 0.7, 0.4, "branch"))
+        parts += arc((x + 0.55, SEAM + 3.05, z + 0.1), 0.8, 180, 470, 6, 0.42, 0.38, "branch", plane="xy")
     return parts
 
 
 def front_bats() -> list[dict]:
-    return bat_card((4.1, 3.7), 4.2, B1 + 0.06, spin=12) + bat_card((12.0, 3.1), 3.6, B1 + 0.06, spin=-14)
+    return bat_card((4.1, 3.8), 4.8, B1 + 0.06, spin=12) + bat_card((12.0, 3.3), 4.2, B1 + 0.06, spin=-14)
 
 
 def models() -> dict:
