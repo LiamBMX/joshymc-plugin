@@ -31,6 +31,9 @@ object HeartMessages {
     const val NOT_LAUNCHED = "&7Lifesteal hasn't launched yet, so no heart was stolen."
     const val PROGRESSION_UNKNOWN = "&7The launch schedule couldn't be checked just now, so no heart was stolen."
 
+    // Competitive eligibility (issue #1487). The killer gets the tracker's own (throttled) message.
+    const val VICTIM_INELIGIBLE_ATTACKER = "&7{killer} used staff abilities or over-limit gear in this fight, so you kept your heart."
+
     const val TRANSFER_FAILED = "&cYour hearts couldn't be updated just now, so nothing changed."
 
     const val ADMIN_CHANGED_TARGET = "&7Your hearts are now &c{hearts}❤&7."

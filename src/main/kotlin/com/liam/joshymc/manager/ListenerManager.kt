@@ -278,6 +278,8 @@ class ListenerManager(private val plugin: Joshymc) {
         // Issue #1341: Lifesteal hearts. Never registered on a server that doesn't run Lifesteal.
         if (plugin.lifestealHeartManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.hearts.LifestealHeartListener(plugin.lifestealHeartManager), plugin)
+            // Issue #1487: remembers hits made in Creative/Spectator/God/Vanish/with over-limit enchants.
+            pm.registerEvents(com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibilityListener(plugin), plugin)
         }
         // Issue #1346: Lifesteal team session bookkeeping. Never registered on a server that doesn't run Lifesteal.
         if (plugin.lifestealTeamManager.hosted) {
@@ -336,6 +338,8 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // Creative mode can't create or copy JoshyMC items (issue #1383). Protection: unscoped.
         pm.registerEvents(com.liam.joshymc.listener.CreativeValuablesListener(plugin), plugin)
+        // No edits through a live /invsee of a ranked-held player (issue #1353). Protection: unscoped.
+        pm.registerEvents(com.liam.joshymc.staff.InvseeGuardListener(plugin), plugin)
 
         // Trainee Mode was removed (issue #987) — this only restores any leftover
         // legacy backup inventory, see TraineeModeBackupRestoreListener.

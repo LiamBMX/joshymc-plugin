@@ -198,11 +198,15 @@ object BankRules {
         /** The raw team relation, for [CoinStealSettings.blockTeamFarming]. */
         val relation: TeamCombatRules.Relation,
         val sharedConnection: Boolean,
+        /** Issue #1487 (D-H4): the killer's competitive eligibility; anything but Eligible moves no coins. */
+        val attacker: com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.Verdict =
+            com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.Verdict.Eligible,
     )
 
     enum class StealRefusal(val log: String, val killerMessage: String?) {
         DISABLED("coin stealing is disabled", null),
         NOT_PVP("not a player kill", null),
+        INELIGIBLE_ATTACKER("the killer used staff abilities or over-limit enchantments", null),
         EVENT("event deaths never move coins", null),
         RANKED("ranked match deaths don't move coins (pvp-coins.ranked-enabled is false)", null),
         NOT_LAUNCHED("the season hasn't launched", null),
@@ -232,6 +236,7 @@ object BankRules {
         fun refuse(reason: StealRefusal) = Eligibility.Refused(reason)
         if (!settings.enabled) return refuse(StealRefusal.DISABLED)
         if (death.attribution != HeartRules.Attribution.PVP_KILL) return refuse(StealRefusal.NOT_PVP)
+        if (death.attacker is com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.Verdict.Ineligible) return refuse(StealRefusal.INELIGIBLE_ATTACKER)
         if (death.inEvent) return refuse(StealRefusal.EVENT)
         if (death.inRankedMatch && !settings.rankedEnabled) return refuse(StealRefusal.RANKED)
         when (death.window) {

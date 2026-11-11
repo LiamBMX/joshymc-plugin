@@ -18,6 +18,10 @@ import com.liam.joshymc.gamemode.GamemodeScope
 import com.liam.joshymc.punish.PunishDurations
 import com.liam.joshymc.punish.StaffLevel
 import com.liam.joshymc.staff.CreativeItemRules
+import com.liam.joshymc.staff.InvseeRules
+import com.liam.joshymc.staff.DelegatedCommandRules
+import com.liam.joshymc.staff.DelegatedCommandRules.Decision
+import com.liam.joshymc.staff.DelegatedCommandRules.NodeDefault
 import com.liam.joshymc.staff.LegacyPunishAuthority
 import com.liam.joshymc.staff.LegacyPunishAuthority.Action
 import com.liam.joshymc.staff.PortalActionRules
@@ -213,7 +217,52 @@ fun main() {
     check("/voucher gates reward commands", "VoucherAdminRules.gate(args[0], args.getOrNull(2))" in source("command/VoucherCommand.kt"))
     val portal = source("manager/PortalManager.kt")
     check("portal command runs as the player", "player.performCommand(cmd)" in portal)
-    check("/sudo is limited and audited", "SudoRules.blocked(cmd)" in source("command/EssentialsCommands.kt") && "\"SUDO\"" in source("command/EssentialsCommands.kt"))
+    val essentials = source("command/EssentialsCommands.kt")
+    check("/sudo uses the delegated-command policy and audits the whole line",
+        "DelegatedCommands.problem(cmd, com.liam.joshymc.staff.DelegatedCommandRules.Context.SUDO)" in essentials &&
+            "\"SUDO\", target.uniqueId, target.name, \"command=/\${cmd.take(240)}\"" in essentials)
+
+    // ── Delegated commands: /sudo, NPCs, portals (issue #1353, D-H1 / D-H3) ──
+    fun dc(cmd: String, canonical: String? = null, staff: Boolean = false) = DelegatedCommandRules.decide(cmd, canonical, staff)
+    for (cmd in listOf("pay Holder 1000000", "/creditspay Holder 500", "trade Holder", "trash", "withdrawheart", "tpaccept", "sethome", "delhome base")) {
+        check("delegated '$cmd' is an asset transfer", dc(cmd) == Decision.TRANSFER)
+    }
+    for (cmd in listOf("team transfer Holder", "claim trust Holder", "ah sell 1", "bounty add Holder 1000000", "gift send Holder", "orders create diamond", "coinflip create 1000", "tokens sell 64", "bank withdraw all", "mines 1000000")) {
+        check("delegated '$cmd' may only open the menu", dc(cmd) == Decision.MENU_ONLY)
+    }
+    for (cmd in listOf("team", "claim", "ah", "orders", "bounty", "coinflip", "bank")) check("delegated '$cmd' (menu only) is allowed", dc(cmd).allowed)
+    for (cmd in listOf("lp user Holder parent add owner", "world delete spawn", "joshymc reload hard", "gencave 200", "op Holder", "eco give Holder 1dc",
+            "minecraft:give Holder diamond 64", "npc setcommand x pay y 1", "invsee Holder", "god", "rank add Holder admin", "punish Holder 1")) {
+        check("delegated '$cmd' is a staff command", dc(cmd) == Decision.STAFF_COMMAND)
+    }
+    for (cmd in listOf("crate givekey Holder vote 64", "team admin disband x", "lifesteal admin ranked remove x", "lifesteal hearts set Holder 20", "spawner give Holder zombie", "eventshop admin open", "orders admin cancel 1")) {
+        check("delegated '$cmd' is a staff subcommand", dc(cmd) == Decision.STAFF_SUBCOMMAND)
+    }
+    for (cmd in listOf("spawn", "/warp shop", "warp spawn", "kit", "kit starter", "shop", "advent", "crate preview vote", "pv 1", "rtp", "discord", "quests", "event join", "tutorial", "pwarp Holder")) {
+        check("delegated '$cmd' is allowed", dc(cmd) == Decision.ALLOWED)
+    }
+    check("an alias resolving to a transfer is refused", dc("money2 Holder 1", canonical = "pay") == Decision.TRANSFER)
+    check("a plugin namespace doesn't hide the label", dc("joshymc:pay Holder 1") == Decision.TRANSFER && dc("essentials:sudo x y") == Decision.STAFF_COMMAND)
+    check("a resolved staff permission is refused", dc("someplugin rollback", staff = true) == Decision.STAFF_COMMAND)
+    check("empty commands are refused", dc("  ") == Decision.EMPTY)
+    check("every refusal has a message", Decision.entries.filter { !it.allowed }.all {
+        it.message("x", DelegatedCommandRules.Context.NPC)?.isNotBlank() == true })
+    check("a command with a player-default node is a player command", !DelegatedCommandRules.staffCommand(listOf(NodeDefault.OP, NodeDefault.TRUE)))
+    check("op/false/unregistered nodes make a staff command", DelegatedCommandRules.staffCommand(listOf(NodeDefault.OP, NodeDefault.FALSE, NodeDefault.UNREGISTERED)))
+    check("no declared permission isn't judged by default", !DelegatedCommandRules.staffCommand(emptyList()))
+    check("SudoRules shares the delegated policy", SudoRules.blocked("pay x 1") && SudoRules.blocked("lp") && !SudoRules.blocked("spawn"))
+    val npcManager = source("manager/NPCManager.kt")
+    check("NPC clicks check the policy before performCommand",
+        npcManager.indexOf("DelegatedCommands.allowRun(") in 0 until npcManager.indexOf("player.performCommand(resolved)"))
+    val npcCommand = source("command/NPCCommand.kt")
+    check("/npc setcommand checks the policy and audits", "DelegatedCommands.problem(cmd, DelegatedCommandRules.Context.NPC)" in npcCommand &&
+        "\"NPC_COMMAND\"" in npcCommand && "\"NPC_CREATE\"" in npcCommand && "\"NPC_DELETE\"" in npcCommand)
+    check("portal command actions check the policy before performCommand",
+        portal.indexOf("DelegatedCommands.allowRun(") in 0 until portal.indexOf("player.performCommand(cmd)"))
+    check("/portal action command checks the policy and audits the data",
+        source("command/PortalCommand.kt").let { "DelegatedCommands.problem(data, DelegatedCommandRules.Context.PORTAL)" in it && "data=\${data.take(240)}" in it })
+    check("only JoshyMC's own commands skip the permission-default test",
+        "(resolved as? PluginCommand)?.plugin is Joshymc" in source("staff/DelegatedCommands.kt"))
     check("creative listener is registered", "CreativeValuablesListener(plugin)" in source("manager/ListenerManager.kt"))
     check("credit vouchers are signed and checked", source("manager/CreditVoucherManager.kt").let { "premiumVoucherSigner.sign(" in it && "premiumVoucherSigner.check(" in it })
     check("rank vouchers are signed and checked", source("manager/RankVoucherManager.kt").let { "premiumVoucherSigner.sign(" in it && "premiumVoucherSigner.check(" in it })
@@ -223,6 +272,30 @@ fun main() {
         "command/RankVoucherCommand.kt" to "RANK_VOUCHER_GIVE", "command/CreditVoucherCommand.kt" to "CREDIT_VOUCHER_GIVE",
         "command/SellWandCommand.kt" to "SELLWAND_GIVE", "command/VoucherCommand.kt" to "VOUCHER_GIVE",
     )) check("$action is audited", "AdminAudit.log(plugin, sender, \"$action\"" in source(file))
+
+    // ── /invsee and ModMode Invsee (issue #1353, D-H2) ─────
+    val live = InvseeRules.Mode.LIVE
+    val ro = InvseeRules.Mode.READ_ONLY
+    check("invsee without the edit node is read-only", InvseeRules.decide(canEdit = false, rankedHeld = false, protectionRefused = false, self = false).mode == ro)
+    check("invsee with the edit node is live", InvseeRules.decide(true, false, false, false).mode == live)
+    check("a ranked-held target is never live (snapshot dupe)", InvseeRules.decide(true, true, false, false).let { it.mode == ro && it.reason == InvseeRules.Reason.RANKED })
+    check("a ranked-held self is never live either", InvseeRules.decide(true, true, false, true).mode == ro)
+    check("protected staff are view-only", InvseeRules.decide(true, false, true, false).let { it.mode == ro && it.reason == InvseeRules.Reason.PROTECTED })
+    check("your own inventory isn't refused by protection", InvseeRules.decide(true, false, true, true).mode == live)
+    check("live clicks by others are refused while held", InvseeRules.liveClickRefused(viewerIsHolder = false, holderRankedHeld = true))
+    check("the holder's own clicks and unheld targets are fine", !InvseeRules.liveClickRefused(true, true) && !InvseeRules.liveClickRefused(false, false))
+    check("refusal reasons that are shown have a message", listOf(InvseeRules.Reason.RANKED, InvseeRules.Reason.PROTECTED).all { !it.message.isNullOrBlank() })
+    val invsee = source("command/EssentialsCommands.kt").substringAfter("class InvseeCommand").substringBefore("class EnderchestCommand")
+    check("/invsee no longer opens the live inventory directly", "openInventory(online.inventory)" !in invsee &&
+        "InvseeAccess.open(plugin, sender, online" in invsee && "InvseeRules.EDIT_PERMISSION" in invsee && "auditAction = \"INVSEE\"" in invsee)
+    val modMode = source("manager/ModModeManager.kt").substringAfter("fun openInvsee(").substringBefore("// ---- Tool 6")
+    check("ModMode Invsee uses the same access rule", "InvseeAccess.open(plugin, moderator, target, canEdit = canEdit(moderator), auditAction = \"MODMODE_INVSEE\")" in modMode &&
+        "openInventory(target.inventory)" !in modMode)
+    val access = source("staff/InvseeAccess.kt")
+    check("live view only when the rule says LIVE; held check includes pending restores",
+        "hasPendingRestore(uuid)" in access && "if (decision.mode == InvseeRules.Mode.LIVE)" in access && "protectionProblem(viewer, target.uniqueId)" in access)
+    check("the live-view guard listener is registered", "InvseeGuardListener(plugin)" in source("manager/ListenerManager.kt"))
+    check("joshymc.invsee.edit is declared op", (perms["joshymc.invsee.edit"] as? Map<*, *>)?.get("default") == "op")
 
     // ── Gamemode isolation of the commands above ────────────
     val scopes = GamemodeAssignments.COMMANDS

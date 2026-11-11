@@ -1,7 +1,8 @@
 package com.liam.joshymc.mobvisibility
 
 /**
- * Bukkit-free rules for the per-player Mobs OFF setting (`mob_visibility`, issues #1421, #1475).
+ * Bukkit-free rules for the per-player Mobs OFF setting (`mob_visibility`, issues #1421, #1475,
+ * #1481).
  *
  * Every non-player mob is one of three kinds, matched by `EntityType` name so a type missing
  * from the running API is simply never seen:
@@ -40,9 +41,20 @@ object MobVisibilityRules {
         "NAUTILUS", "SULFUR_CUBE"
     )
 
+    /**
+     * Hostile types named explicitly (issue #1481) so the ambiguous ones are a decision, not an
+     * accident: bosses, and mobs that hurt players without implementing `Enemy` (Pufferfish).
+     * Everything else hostile is caught by `Enemy` or by being unlisted.
+     */
+    val HOSTILE_TYPES: Set<String> = setOf(
+        "ENDER_DRAGON", "WITHER", "WARDEN", "ELDER_GUARDIAN", "PUFFERFISH", "SHULKER",
+        "SLIME", "MAGMA_CUBE", "PHANTOM", "GHAST", "HOGLIN", "ZOGLIN", "CREAKING"
+    )
+
     /** Classify a mob type. [isEnemy] is the entity implementing Bukkit's `Enemy` interface. */
     fun kindOf(typeName: String, isEnemy: Boolean = false): Kind = when {
         typeName in NEUTRAL_TYPES -> Kind.NEUTRAL
+        typeName in HOSTILE_TYPES -> Kind.HOSTILE
         isEnemy -> Kind.HOSTILE
         typeName in PASSIVE_TYPES -> Kind.PASSIVE
         else -> Kind.HOSTILE
@@ -63,6 +75,22 @@ object MobVisibilityRules {
 
     fun blocksPlayerHittingMob(attackerMobsOff: Boolean, mobCovered: Boolean): Boolean =
         attackerMobsOff && mobCovered
+
+    /**
+     * One side of a hit (damage, projectile impact, knockback, ignition), after attribution to
+     * the responsible entity (issue #1481). [NONE] = no attributable entity (fall, lava, fire
+     * ticks, drowning, poison ticks), [OTHER] = anything that isn't a player or a covered mob.
+     */
+    enum class Party { NONE, PLAYER_MOBS_ON, PLAYER_MOBS_OFF, COVERED_MOB, OTHER }
+
+    /**
+     * The one harm rule every listener path uses: a covered mob never harms a Mobs OFF player,
+     * and a Mobs OFF player never harms a covered mob. Everything else (PvP, players' TNT and
+     * potions, the environment, mob vs mob, Mobs ON players) is left alone.
+     */
+    fun blocksHarm(source: Party, victim: Party): Boolean =
+        (source == Party.COVERED_MOB && victim == Party.PLAYER_MOBS_OFF) ||
+            (source == Party.PLAYER_MOBS_OFF && victim == Party.COVERED_MOB)
 
     /** Whether a mob may keep / acquire a player as its target. */
     fun allowsTarget(mobCovered: Boolean, targetMobsOff: Boolean): Boolean =

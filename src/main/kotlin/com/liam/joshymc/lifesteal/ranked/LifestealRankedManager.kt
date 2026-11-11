@@ -5,6 +5,7 @@ import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.lifesteal.LifestealSettings
 import com.liam.joshymc.lifesteal.RankedForfeitHeartLoss
 import com.liam.joshymc.lifesteal.combat.CombatLogRules
+import com.liam.joshymc.lifesteal.combat.npc.CombatNpcRules
 import com.liam.joshymc.lifesteal.hearts.HeartRules
 import com.liam.joshymc.lifesteal.hearts.HeartStore
 import com.liam.joshymc.lifesteal.progression.ProgressionRules
@@ -18,6 +19,8 @@ import net.kyori.adventure.title.Title
 import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.Location
+import org.bukkit.NamespacedKey
+import org.bukkit.Registry
 import org.bukkit.World
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.AbstractArrow
@@ -28,6 +31,7 @@ import org.bukkit.entity.Player
 import org.bukkit.event.inventory.InventoryType
 import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.inventory.ItemStack
+import org.bukkit.potion.PotionEffect
 import org.bukkit.scheduler.BukkitTask
 import org.bukkit.util.BoundingBox
 import java.time.Duration
@@ -514,7 +518,11 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         for (s in snapshots) {
             held[s.uuid] = id
             pendingRestore += s.uuid
-            cachedSnapshots[s.uuid] = RankedStore.Snapshot(store.snapshotId(id, s.uuid), id, s.uuid, s.slots, s.heldSlot, s.returnWorld, s.returnPoint, "PENDING", now)
+            cachedSnapshots[s.uuid] = RankedStore.Snapshot(
+                store.snapshotId(id, s.uuid), id, s.uuid, s.slots, s.heldSlot, s.returnWorld, s.returnPoint, "PENDING", now,
+                xpLevel = s.xp?.level, xpProgress = s.xp?.progress?.toDouble(), xpTotal = s.xp?.total,
+                effects = s.effects?.let { RankedPlayerState.encodeEffects(it) },
+            )
         }
         plugin.logger.info("[Ranked] $actorName created match $id: ${match.label} in arena ${arena.id}.")
         prepare(match)
@@ -614,7 +622,8 @@ class LifestealRankedManager(private val plugin: Joshymc) {
 
     /**
      * The player's whole inventory, exactly. The cursor and 2x2 crafting grid are emptied into the
-     * inventory first (closing it), so nothing is outside the snapshot.
+     * inventory first (closing it), so nothing is outside the snapshot. Issue #1490: also their
+     * experience and active potion effects (see [RankedPlayerState]).
      */
     private fun capture(player: Player): RankedStore.SnapshotData {
         // Always close: the server puts the cursor and 2x2 grid back into the inventory (anything that
@@ -623,7 +632,24 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         val inventory = player.inventory
         val slots = inventory.contents.map { stack -> stack?.takeIf { !it.type.isAir && it.amount > 0 }?.let { Base64.getEncoder().encodeToString(it.serializeAsBytes()) } }
         val loc = player.location
-        return RankedStore.SnapshotData(player.uniqueId, slots, inventory.heldItemSlot, loc.world?.name, Point(loc.x, loc.y, loc.z, loc.yaw, loc.pitch))
+        val xp = RankedPlayerState.Xp(player.level, player.exp, player.totalExperience)
+        val effects = player.activePotionEffects.map { effectOf(it) }
+        return RankedStore.SnapshotData(player.uniqueId, slots, inventory.heldItemSlot, loc.world?.name, Point(loc.x, loc.y, loc.z, loc.yaw, loc.pitch), xp, effects)
+    }
+
+    private fun effectOf(effect: PotionEffect) = CombatNpcRules.Effect(
+        type = effect.type.key.toString(),
+        amplifier = effect.amplifier,
+        durationTicks = if (effect.isInfinite) CombatNpcRules.INFINITE_DURATION else effect.duration,
+        ambient = effect.isAmbient,
+        particles = effect.hasParticles(),
+        icon = effect.hasIcon(),
+    )
+
+    /** The Paper effect for a stored one, or null when its type no longer exists (logged, never invented). */
+    private fun potionOf(effect: CombatNpcRules.Effect): PotionEffect? {
+        val type = NamespacedKey.fromString(effect.type)?.let { Registry.EFFECT.get(it) } ?: return null
+        return PotionEffect(type, effect.durationTicks, effect.amplifier, effect.ambient, effect.particles, effect.icon)
     }
 
     private fun decode(snapshot: RankedStore.Snapshot): Array<ItemStack?> =
@@ -647,16 +673,19 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     }
 
     /**
-     * Sets the inventory back to [snapshot], saves the player, then marks it RESTORED. Applying it
-     * twice gives the same inventory (it is a set, not an add), so a crash between the save and the
-     * mark is harmless; if the snapshot can't be read nothing is changed and it stays PENDING.
+     * Sets the inventory, XP and potion effects back to [snapshot], saves the player, then marks it
+     * RESTORED. Applying it twice gives the same result (it is a set, not an add; effects count down
+     * from the snapshot time, so a second apply never extends them), so a crash between the save
+     * and the mark is harmless; if the snapshot can't be read nothing is changed and it stays PENDING.
      */
     private fun restore(player: Player, snapshot: RankedStore.Snapshot, reason: String, moveBack: Boolean): Boolean {
         val uuid = player.uniqueId
         if (!restoring.add(uuid)) return false
         try {
-            val contents = try {
-                decode(snapshot)
+            val now = System.currentTimeMillis()
+            // Everything is read and checked before the player is touched (issue #1490).
+            val (contents, state) = try {
+                decode(snapshot) to RankedPlayerState.plan(snapshot.xpLevel, snapshot.xpProgress, snapshot.xpTotal, snapshot.effects, snapshot.createdAt, now)
             } catch (e: Exception) {
                 plugin.logger.severe("[Ranked] ${player.name}'s snapshot ${snapshot.id} can't be read (${e.message}); nothing was changed and it stays pending. Staff: /lifesteal admin ranked restore ${player.name} after fixing it.")
                 tell(player, "Your ranked inventory couldn't be restored yet; staff have been notified. Nothing was lost.", NamedTextColor.RED)
@@ -679,6 +708,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             }
             if (snapshot.heldSlot in 0..8) inventory.heldItemSlot = snapshot.heldSlot
             player.updateInventory()
+            applyState(player, snapshot, state)
             try { player.saveData() } catch (e: Exception) { plugin.logger.warning("[Ranked] Couldn't save ${player.name}'s data right after restoring: ${e.message}") }
             val marked = try {
                 store.markRestored(snapshot.id, reason, System.currentTimeMillis())
@@ -693,11 +723,34 @@ class LifestealRankedManager(private val plugin: Joshymc) {
                 cachedSnapshots.remove(uuid)
             }
             if (moveBack) moveToReturn(player, snapshot)
-            tell(player, "Your inventory and equipment were restored to how they were before the ranked match.", NamedTextColor.GREEN)
+            val what = if (state.xp != null) "inventory, equipment, XP and effects were" else "inventory and equipment were"
+            tell(player, "Your $what restored to how they were before the ranked match.", NamedTextColor.GREEN)
             return true
         } finally {
             restoring.remove(uuid)
         }
+    }
+
+    /**
+     * Issue #1490: XP and effects back to the pre-match state, as a set. Older snapshots (no stored
+     * state) leave that part untouched. Every current effect is removed first, so nothing gained or
+     * strengthened in the match (potions, golden apples, Ominous Bottles, beacons, ...) survives.
+     */
+    private fun applyState(player: Player, snapshot: RankedStore.Snapshot, state: RankedPlayerState.Plan) {
+        state.xp?.let { xp ->
+            player.level = xp.level
+            player.exp = xp.progress
+            player.totalExperience = xp.total
+        }
+        val effects = state.effects ?: return
+        for (active in player.activePotionEffects) player.removePotionEffect(active.type)
+        val restored = effects.mapNotNull { e ->
+            potionOf(e) ?: run {
+                plugin.logger.warning("[Ranked] ${player.name}'s snapshot ${snapshot.id} has an unknown effect '${e.type}'; it was skipped.")
+                null
+            }
+        }
+        if (restored.isNotEmpty()) player.addPotionEffects(restored)
     }
 
     /** The authoritative return spot of [snapshot], or null when its world is gone. */

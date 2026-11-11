@@ -144,6 +144,56 @@ Never from display names, chat prefixes or tags. Only these sources count:
   - Each confirmed run writes a `GENCAVE` audit row (world, centre, radius).
   - **There is no rollback.** A sphere can hold up to about 33 million blocks, too many to
     snapshot. Check the area first.
+### `/invsee` (issue #1353, audit finding D-H2)
+
+`/invsee <online player>` used to open the live inventory for every `joshymc.invsee` holder.
+Items taken from a player held by a Lifesteal ranked match came back when the match restored
+its inventory snapshot, which duplicated them. Any holder could also strip gear from higher staff.
+
+- `/invsee` now opens the **read-only copy** (the same view as ModMode's read-only Invsee).
+  The live, editable inventory needs the new node **`joshymc.invsee.edit`** (default op).
+  ModMode keeps its own `joshymc.modmode.edit` node.
+- For both `/invsee` and ModMode, the view is always read-only while the target is held by a
+  ranked match or is waiting for its snapshot restore, and when staff-rank protection refuses
+  the viewer (equal or higher staff). The viewer is told why.
+- If a live view was opened *before* the target joined a match, `InvseeGuardListener` cancels
+  every click and drag in it and closes it as soon as the target is held.
+- Every open writes an audit row (`INVSEE` or `MODMODE_INVSEE`) recording the mode and the reason.
+- Offline `/invsee` was already read-only and is unchanged.
+- **Capability change:** staff who were given only `joshymc.invsee` can no longer edit. Give
+  `joshymc.invsee.edit` to the ranks that should (recommended: Admin).
+### Delegated commands: `/sudo`, NPCs and portal `command` actions (issue #1353)
+
+All three run a command that one person wrote with somebody else's permissions and belongings
+(the `/sudo` target, the player who clicks the NPC, the player who walks into the portal).
+Before #1353, `/sudo` only blocked a short label list, and NPC and portal commands weren't
+filtered at all. A `joshymc.npc` or `joshymc.portal` holder could set `pay <self> 1000000`,
+and every player who clicked would pay them. An Owner who clicked an NPC running
+`lp user <x> parent add owner` or `world delete <x>` would run it with Owner rights.
+
+One Bukkit-free policy, `staff/DelegatedCommandRules`, now decides all three
+(`staff/DelegatedCommands` resolves aliases and `plugin:` names through the command map). It
+refuses:
+
+| Refused | Examples |
+|---|---|
+| Staff commands: JoshyMC's staff commands by name, known permission/operator/server commands, and any other plugin's or vanilla command whose permission doesn't default to every player | `/lp`, `/op`, `/world`, `/joshymc`, `/gencave`, `/eco`, `/invsee`, `/god`, `/punish`, `/minecraft:give`, CoreProtect |
+| Staff subcommands (first argument) | `admin`, `give`, `givekey`, `force`, `reload`, `set`, `take`, `reset`, `hearts`, … (`/crate givekey`, `/team admin`, `/lifesteal admin`) |
+| Commands that move the user's belongings | `/pay`, `/creditspay`, `/trade`, `/trash`, `/withdrawheart`, `/tpaccept`, `/sethome`, `/delhome` |
+| Arguments to market/team/claim commands (the bare menu is fine) | `/team transfer x`, `/claim trust x`, `/ah sell 1`, `/bounty add x 1`, `/coinflip create 1`, `/tokens sell 64`, `/bank withdraw all` |
+
+- `/npc setcommand` and `/portal action <name> command …` refuse such a command when it's set,
+  and NPC clicks/portal entries check it again when they run, so **commands stored before
+  #1353 are covered too**. A refused run is logged to the console as
+  `[DelegatedCommands] Refused …`, so check the log after updating and re-set any NPC or
+  portal that relied on one.
+- Menus, warps, kits, shops and similar player commands (`/spawn`, `/warp x`, `/kit`, `/shop`,
+  `/advent`, `/pv`, `/crate preview x`, `/event join`) are unchanged.
+- The console's own `/sudo` and console-only `console` portal actions aren't delegated, so
+  they aren't limited.
+- Audit rows: `SUDO` now stores the whole command line (amounts and recipients), and there
+  are new `NPC_COMMAND`, `NPC_CREATE` and `NPC_DELETE` rows. `PORTAL_ACTION` now also stores
+  the action data.
 
 ---
 
@@ -194,7 +244,9 @@ only, L = Lifesteal only (`gamemode/GamemodeAssignments.kt`).
 | `joshymc.tokens.give` (op) | `/tokens give` | audited | CRITICAL | Owner / Head Manager (approval) | S |
 | `joshymc.creditvoucher.admin`, `joshymc.rankvoucher.admin` (op) | physical Credit/Rank Vouchers | signed + audited | CRITICAL | Owner | S |
 | `joshymc.give` (op) | `/joshymc give` (incl. tokens) | audited | HIGH | Lead Admin | **N** |
-| `joshymc.enchant` (op) | `/enchant` up to level 255 | permission | HIGH | Admin; deny on Lifesteal | **N** |
+| `joshymc.enchant` (op) | `/enchant` within vanilla limits (max level, item, conflicts) | permission | MEDIUM | Admin; deny on Lifesteal | **N** |
+| `joshymc.enchant.unsafe` (false) | `/enchant` past vanilla limits, up to 255 (issue #1487) | audited (`ENCHANT_UNSAFE`); such gear earns no Lifesteal rewards | HIGH | explicit grant only | **N** |
+| `joshymc.god` (op) / `joshymc.god.others` (op) | `/god` self / another player (issue #1487) | audited (`GOD_MODE`, `GOD_MODE_OTHER`); God Mode kills earn no Lifesteal rewards | MEDIUM | Admin | **N** |
 | `joshymc.crate.admin`, `joshymc.crateeditor` (op) | `/crate givekey|force`, editor | audited | HIGH | Lead Admin | S |
 | `joshymc.sellwand.give`, `joshymc.booster` (op) | sell wands, boosters (no multiplier cap) | sell wands audited | HIGH | Head Manager (approval) | S |
 | `joshymc.spawners.admin` (op) | `/spawner give` | permission | HIGH | Lead Admin | S |
@@ -202,7 +254,8 @@ only, L = Lifesteal only (`gamemode/GamemodeAssignments.kt`).
 | `joshymc.reload` (op) | `/joshymc reload [hard]` | permission | MODERATE | Lead Admin | N |
 | `joshymc.jgm.lock` / `.unlock` (false) | gamemode locks | literal confirm | HIGH | Owner | N |
 | `joshymc.purchase.admin` (op) | `/purchase list|info` (manage needs op) | op + node | MODERATE | Admin (view) | N |
-| `joshymc.invsee` (op) | `/invsee` (live, editable) | permission | MODERATE | Lead Mod | N |
+| `joshymc.invsee` (op) | `/invsee` (read-only copy since #1353) | permission, audited `INVSEE` | LOW | Lead Mod | N |
+| `joshymc.invsee.edit` (op) | live, editable `/invsee` (not for ranked-held players or protected staff) | permission + rank protection | MODERATE | Admin | N |
 | `joshymc.enderchest.others` / `.clear` (op) | editable ender chests | permission | MODERATE | Lead Mod / Admin | S |
 | `joshymc.modmode` / `.edit` (op) | Moderator Mode | permission | LOW / MODERATE | Mod / Lead Mod | N |
 | `joshymc.vanish`, `joshymc.hidestaff` (op) | vanish | permission | LOW | Mod | N |
@@ -419,7 +472,7 @@ with `lp user <name> permission check <node>` on each server.
   crates, shops, events) are refused on a dedicated Lifesteal server through its implied lock.
   LIFESTEAL commands (`/withdrawheart`, `/ranked`) are only registered where Lifesteal runs.
   NETWORK commands run on both servers.
-- **High-risk NETWORK commands:** `/joshymc give` (can give `token`), `/enchant` (level 255),
+- **High-risk NETWORK commands:** `/joshymc give` (can give `token`), `/enchant` with `joshymc.enchant.unsafe` (level 255),
   `/sudo`, `/admin`, `/rank`, `/gamemode`, `/portal`, `/punish` and the legacy punishments.
   They work wherever the node is granted. Keep them apart with LuckPerms `server=` contexts (§7),
   for example `joshymc.enchant false server=lifesteal`.
@@ -473,10 +526,11 @@ Requires Owner approval:
    amounts (audit Part 3 H1). They are now audited, but still allowed for whoever holds the node.
 
 Audit findings not fixed here (outside this issue's scope, or a separate behaviour change):
-- `/invsee` and `/enderchest <player>` are editable (Part 2.6, Part 3 M2).
+- `/enderchest <player>` is editable (Part 3 M2). `/invsee` is read-only unless `joshymc.invsee.edit` since issue #1353.
 - Mutes don't block `/msg` and `/r` (Part 2.3).
 - `/credits` base permission blocks `bal`/`baltop`/`pay` for players (Part 1 3b, Part 3 3.2).
-- `/enchant` level 255, `/booster` and `/sellwand` multiplier caps (Part 3 H1, H4).
+- `/booster` and `/sellwand` multiplier caps (Part 3 H1, H4). (`/enchant` level 255 is fixed by
+  issue #1487: vanilla limits unless `joshymc.enchant.unsafe`.)
 - `/crate force` opens a crate without a key (now audited; Part 3 H3).
 - Physical money vouchers and tokens carry no per-item id (Part 3 M1). Creative copying is
   blocked, but a separate duplication bug could still copy them.

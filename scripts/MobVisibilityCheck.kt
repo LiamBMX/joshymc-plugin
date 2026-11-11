@@ -7,6 +7,7 @@
 
 import com.liam.joshymc.mobvisibility.MobVisibilityRules
 import com.liam.joshymc.mobvisibility.MobVisibilityRules.Kind
+import com.liam.joshymc.mobvisibility.MobVisibilityRules.Party
 import kotlin.system.exitProcess
 
 private var checks = 0
@@ -82,6 +83,36 @@ fun main() {
     for (cause in listOf("POTION_DRINK", "POTION_SPLASH", "PLUGIN", "BEACON", "COMMAND", "FOOD", "AREA_EFFECT_CLOUD")) {
         check("$cause effect never blocked", !MobVisibilityRules.blocksEffect(cause, true, false))
     }
+
+    // Issue #1481: bosses and the non-Enemy hostiles are named explicitly
+    for (type in listOf("ENDER_DRAGON", "WITHER", "WARDEN", "ELDER_GUARDIAN", "PUFFERFISH", "CREAKING")) {
+        check("$type explicitly hostile", MobVisibilityRules.kindOf(type, isEnemy = false) == Kind.HOSTILE)
+        check("$type covered even without Enemy", covered(type))
+    }
+    check("no type is both hostile and passive",
+        MobVisibilityRules.HOSTILE_TYPES.intersect(MobVisibilityRules.PASSIVE_TYPES).isEmpty())
+    check("no type is both hostile and neutral",
+        MobVisibilityRules.HOSTILE_TYPES.intersect(MobVisibilityRules.NEUTRAL_TYPES).isEmpty())
+
+    // Issue #1481: the one harm rule shared by damage, projectiles, knockback, fire, potions, clouds
+    val all = Party.values().toList()
+    for (source in all) for (victim in all) {
+        val expected = (source == Party.COVERED_MOB && victim == Party.PLAYER_MOBS_OFF) ||
+            (source == Party.PLAYER_MOBS_OFF && victim == Party.COVERED_MOB)
+        check("blocksHarm($source -> $victim) == $expected", MobVisibilityRules.blocksHarm(source, victim) == expected)
+    }
+    check("zombie / skeleton arrow / creeper blast / bee / wolf / boss vs Mobs OFF blocked",
+        MobVisibilityRules.blocksHarm(Party.COVERED_MOB, Party.PLAYER_MOBS_OFF))
+    check("same mob vs Mobs ON player allowed", !MobVisibilityRules.blocksHarm(Party.COVERED_MOB, Party.PLAYER_MOBS_ON))
+    check("PvP unaffected (OFF -> OFF)", !MobVisibilityRules.blocksHarm(Party.PLAYER_MOBS_OFF, Party.PLAYER_MOBS_OFF))
+    check("PvP unaffected (ON -> OFF)", !MobVisibilityRules.blocksHarm(Party.PLAYER_MOBS_ON, Party.PLAYER_MOBS_OFF))
+    check("PvP unaffected (OFF -> ON)", !MobVisibilityRules.blocksHarm(Party.PLAYER_MOBS_OFF, Party.PLAYER_MOBS_ON))
+    check("environment unaffected", !MobVisibilityRules.blocksHarm(Party.NONE, Party.PLAYER_MOBS_OFF))
+    check("passive / tamed / event mob vs Mobs OFF allowed", !MobVisibilityRules.blocksHarm(Party.OTHER, Party.PLAYER_MOBS_OFF))
+    check("Mobs OFF player hits passive / tamed normally", !MobVisibilityRules.blocksHarm(Party.PLAYER_MOBS_OFF, Party.OTHER))
+    check("Mobs OFF player can't farm a hidden mob", MobVisibilityRules.blocksHarm(Party.PLAYER_MOBS_OFF, Party.COVERED_MOB))
+    check("Mobs ON player farms normally", !MobVisibilityRules.blocksHarm(Party.PLAYER_MOBS_ON, Party.COVERED_MOB))
+    check("mob vs mob untouched", !MobVisibilityRules.blocksHarm(Party.COVERED_MOB, Party.COVERED_MOB))
 
     println("Mobs OFF checks passed ($checks checks).")
 }

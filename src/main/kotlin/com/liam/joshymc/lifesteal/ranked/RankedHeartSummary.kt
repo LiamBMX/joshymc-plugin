@@ -36,6 +36,8 @@ object RankedHeartSummary {
         GRACE_PERIOD(false, "no heart, grace period"),
         NOT_LAUNCHED(false, "no heart, season not launched"),
         PROGRESSION_UNKNOWN(false, "no heart, season state unknown"),
+        /** Issue #1487: the killer used staff abilities or over-limit enchantments in the fight. */
+        INELIGIBLE_ATTACKER(false, "no heart, staff abilities or over-limit gear used"),
         /** The heart service couldn't evaluate it (missing record, rolled-back error): nothing moved. */
         UNAVAILABLE(false, "no heart, heart data unavailable");
 
@@ -52,6 +54,7 @@ object RankedHeartSummary {
                 HeartRules.Decision.GracePeriod -> GRACE_PERIOD
                 HeartRules.Decision.NotLaunched -> NOT_LAUNCHED
                 HeartRules.Decision.ProgressionUnknown -> PROGRESSION_UNKNOWN
+                is HeartRules.Decision.IneligibleAttacker -> INELIGIBLE_ATTACKER
             }
         }
     }

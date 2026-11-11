@@ -362,6 +362,9 @@ class Joshymc : JavaPlugin() {
         private set
     lateinit var lifestealHeartManager: com.liam.joshymc.lifesteal.hearts.LifestealHeartManager
         private set
+    /** Issue #1487: who may earn competitive Lifesteal rewards (hearts, bounties, coins) from a kill. */
+    lateinit var competitiveEligibility: com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibilityTracker
+        private set
     lateinit var lifestealTeamManager: com.liam.joshymc.lifesteal.teams.LifestealTeamManager
         private set
     lateinit var lifestealCombatManager: com.liam.joshymc.lifesteal.combat.LifestealCombatManager
@@ -444,6 +447,7 @@ class Joshymc : JavaPlugin() {
     lateinit var chatGamesManager: com.liam.joshymc.manager.ChatGamesManager
         private set
     lateinit var vanishCommand: VanishCommand
+    lateinit var godCommand: com.liam.joshymc.command.GodCommand
     lateinit var rtpCommand: com.liam.joshymc.command.RtpCommand
     lateinit var sellCommand: com.liam.joshymc.command.SellCommand
     lateinit var questCycleManager: QuestCycleManager
@@ -647,6 +651,8 @@ class Joshymc : JavaPlugin() {
         tutorialManager = com.liam.joshymc.tutorial.TutorialManager(this)
         // Issue #1341: Lifesteal hearts. Only does anything on a server that runs Lifesteal.
         lifestealHeartManager = com.liam.joshymc.lifesteal.hearts.LifestealHeartManager(this)
+        // Issue #1487: Creative/Spectator/God/Vanish/over-limit enchant kills earn no Lifesteal rewards.
+        competitiveEligibility = com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibilityTracker(this)
         // Issue #1346: Lifesteal teams (separate from Survival teams). Only does anything where Lifesteal runs.
         lifestealTeamManager = com.liam.joshymc.lifesteal.teams.LifestealTeamManager(this)
         // Issue #1350: Lifesteal combat logging (an observer of the existing combat tag). Only does anything where Lifesteal runs.

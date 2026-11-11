@@ -552,7 +552,7 @@ commands:
     aliases: [staffpanel, modpanel]
     permission: joshymc.admin;joshymc.admin.moderate;joshymc.admin.helper
   enchant:
-    description: Enchant held item (no limits)
+    description: Enchant held item
     usage: /enchant <enchantment> [level]
   smite:
     description: Strike lightning
@@ -1344,6 +1344,9 @@ permissions:
   joshymc.god:
     description: Toggle god mode
     default: op
+  joshymc.god.others:
+    description: Toggle god mode for others
+    default: op
   joshymc.speed:
     description: Set speed
     default: op
@@ -1358,6 +1361,9 @@ permissions:
     default: op
   joshymc.invsee:
     description: View player inventories
+    default: op
+  joshymc.invsee.edit:
+    description: Edit inventories opened with /invsee
     default: op
   joshymc.enderchest:
     description: Open ender chest
@@ -1494,8 +1500,11 @@ permissions:
       joshymc.ban: false
       joshymc.unban: false
   joshymc.enchant:
-    description: Use /enchant command (no level limits)
+    description: Use /enchant (vanilla limits)
     default: op
+  joshymc.enchant.unsafe:
+    description: /enchant past vanilla limits
+    default: false
   joshymc.smite:
     description: Strike lightning
     default: op
