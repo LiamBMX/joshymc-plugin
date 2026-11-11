@@ -43,6 +43,20 @@ features:
   milestones: true
   stuck-recovery: true
   bedrock-pack: true
+  # Issue #1516: large 3D back cosmetics (Eagle Wings). Settings in back-cosmetics below.
+  back-cosmetics: true
+
+# Back cosmetics (issue #1516): while a player wears an item like the Eagle Wings in the chest
+# slot, its big 3D model follows them as a non-persistent display (never saved, no hitbox).
+# Only Java players whose JoshyMC resource pack loaded see it; everyone else sees the armor.
+# See docs/back-cosmetics.md.
+back-cosmetics:
+  # The wearer also sees their own wings (third person / F5).
+  show-to-wearer: true
+  # Hide the wings while the wearer is combat-tagged, so they never block anyone's view in a fight.
+  hide-in-combat: true
+  # Ticks the client smooths each move over (0-5). Higher is smoother but trails a little more.
+  smoothing-ticks: 2
 
 # Bedrock custom items through Geyser (issue #1314). On startup JoshyMC writes
 # packs/JoshyMC-Bedrock.mcpack and custom_mappings/joshymc.json into Geyser's folder (only

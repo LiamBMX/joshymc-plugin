@@ -122,6 +122,11 @@
       "icon": "joshymc/discord_icon.png",
       "sha1": "1bddba773a103193e55f2be394b7f6405243e5e1"
     },
+    "joshymc:eagle_wings": {
+      "bedrock_name": "eagle_wings",
+      "icon": "joshymc/eagle_wings.png",
+      "sha1": "49382ef46446a7d7f760517615efb8f46ca2534e"
+    },
     "joshymc:easter_egg": {
       "bedrock_name": "easter_egg",
       "icon": "joshymc/easter_egg.png",

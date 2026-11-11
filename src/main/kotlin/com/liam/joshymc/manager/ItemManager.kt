@@ -127,6 +127,8 @@ class ItemManager(private val plugin: Joshymc) {
         register(ChristmasTreeElytra())
         // Peppermint Pickaxe (Survival only, Christmas 2026, issue #1399)
         register(PeppermintPickaxe())
+        // Eagle Wings back cosmetic (Survival only, issue #1516)
+        register(EagleWings())
 
         // Retextured Trial Keys
         register(JanuaryKey())
