@@ -391,6 +391,12 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
 
     private fun rotates(crateId: String): Boolean = CrateModels.rotates(settings, crateId, crates::resolveCrateId)
 
+    /** Issue #1514: true when [crateId] is one of the monthly (rotating) crates, for the `/crate` browser. */
+    fun isMonthlyCrate(crateId: String): Boolean = rotates(crateId)
+
+    /** Issue #1514: the calendar month right now in the rotation's timezone (read from [clock], never stored). */
+    fun currentMonth(): Month = CrateModels.monthAt(clock.instant(), settings.monthly.zone)
+
     /** The model this location should show, ignoring whether its chunks are loaded. */
     private fun expectedModel(loc: CrateManager.CrateLocation): CrateModels.Model? {
         val model = resolve(loc.crateType).model ?: return null
