@@ -842,6 +842,11 @@
       "icon": "joshymc/sell_wand.png",
       "sha1": "a50b7db93c84583df6f4d40ee302d7b61bcafce0"
     },
+    "joshymc:september_chest": {
+      "bedrock_name": "september_chest",
+      "icon": "joshymc/september_chest.png",
+      "sha1": "05f523d9fb798d91f834f82131d3eec4a2d9df04"
+    },
     "joshymc:september_key": {
       "bedrock_name": "september_key",
       "icon": "joshymc/september_key.png",
