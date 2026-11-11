@@ -107,6 +107,11 @@
       "icon": "joshymc/credit_key.png",
       "sha1": "7abac4bf66498d825ea9bf0b79202eb91b9631df"
     },
+    "joshymc:december_chest": {
+      "bedrock_name": "december_chest",
+      "icon": "joshymc/december_chest.png",
+      "sha1": "d63df7741c7b37e6c6e6b5169ef6310ea582bd04"
+    },
     "joshymc:december_key": {
       "bedrock_name": "december_key",
       "icon": "joshymc/december_key.png",
@@ -792,10 +797,20 @@
       "icon": "joshymc/nordic_plate.png",
       "sha1": "a2295c6fb0fb72c42db8c0fcb8a3a35ad146bb70"
     },
+    "joshymc:november_chest": {
+      "bedrock_name": "november_chest",
+      "icon": "joshymc/november_chest.png",
+      "sha1": "f976f4b0c7c876ff16e1fe9080e0ef475ae436ff"
+    },
     "joshymc:november_key": {
       "bedrock_name": "november_key",
       "icon": "joshymc/november_key.png",
       "sha1": "1ec11a358f6ec5a2790159122151a2f05d342797"
+    },
+    "joshymc:october_chest": {
+      "bedrock_name": "october_chest",
+      "icon": "joshymc/october_chest.png",
+      "sha1": "a9cf5dd133ac37f00a74eaccc36477a43ff47d4d"
     },
     "joshymc:october_key": {
       "bedrock_name": "october_key",
