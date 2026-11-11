@@ -24,9 +24,10 @@ REPO = PACK.parent
 ITEMS = PACK / "assets" / kit.NAMESPACE / "items"
 CONFIG = REPO / "src" / "main" / "resources" / "config.yml"
 
-# issue #1464: the first monthly models (January-March); issue #1482: April-June; issue #1495: July-September
+# issue #1464: the first monthly models (January-March); issue #1482: April-June; issue #1495: July-September;
+# issue #1497: October-December
 MONTHLY = ("january_chest", "february_chest", "march_chest", "april_chest", "may_chest", "june_chest",
-           "july_chest", "august_chest", "september_chest")
+           "july_chest", "august_chest", "september_chest", "october_chest")
 CRATES = ("cabin_crate", "homestead_crate", "campfire_crate", "harvest_chest", "stockpile_chest",
           "homestead_chest", "campfire_chest", "cabin_chest") + MONTHLY
 # the crates redesign (issues #1447, #1454): models that must look different from one another

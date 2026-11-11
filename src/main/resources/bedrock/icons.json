@@ -797,6 +797,11 @@
       "icon": "joshymc/november_key.png",
       "sha1": "1ec11a358f6ec5a2790159122151a2f05d342797"
     },
+    "joshymc:october_chest": {
+      "bedrock_name": "october_chest",
+      "icon": "joshymc/october_chest.png",
+      "sha1": "ae49317f60c081bbe83db4154c6482d8d101ff4f"
+    },
     "joshymc:october_key": {
       "bedrock_name": "october_key",
       "icon": "joshymc/october_key.png",
