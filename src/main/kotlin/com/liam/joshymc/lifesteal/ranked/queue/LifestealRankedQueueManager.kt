@@ -42,6 +42,9 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
     private val book = RankedQueueBook()
     private val store = RankedQueueStore(plugin.databaseManager)
 
+    /** Issue #1491: staff TEST matches, which need the staff member's confirmation and every participant's own acceptance. */
+    val tests = RankedTestMatchService(plugin, this)
+
     /** How opponents are picked. A later Elo system swaps this; nothing else changes. */
     var selector: OpponentSelector = FirstInFirstOut
 
@@ -109,6 +112,7 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
     /** Startup and every reload, after lifesteal.yml, teams, progression and the match manager. */
     fun refresh() {
         cancelAll("ranked queues were reset by a server reload")
+        tests.clear("ranked queues were reset by a server reload")
         task?.cancel()
         task = null
         val progression = plugin.lifestealProgressionManager
@@ -151,6 +155,7 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
     /** Shutdown (before the match manager stops): every queue entry, found match and challenge ends. */
     fun stop() {
         cancelAll("the server is shutting down")
+        tests.clear("the server is shutting down")
         task?.cancel()
         task = null
         plugin.lifestealProgressionManager.rankedTeamWarsSystem = null
@@ -222,6 +227,7 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
             teams.teamOf(uuid)?.id != team.id -> "$name isn't in ${team.name}."
             player == null -> "$name isn't online."
             book.entryOf(uuid) != null -> "$name is already in a ranked queue or challenge."
+            tests.busy(uuid) -> "$name is asked to play a staff test match right now."
             seconds(playerCooldown.remaining(uuid, now)) > 0 -> "$name declined or missed a ranked match recently (${seconds(playerCooldown.remaining(uuid, now))}s left)."
             else -> ranked.participantProblem(player, team)?.let { "$name $it." }
         }
@@ -364,6 +370,7 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
     fun accept(player: Player, token: String?) {
         if (spamming(player)) return
         if (!hosted) return Msg.error(player, "Ranked Team Wars only exist on the Lifesteal server.")
+        if (tests.handles(player.uniqueId, token)) return tests.accept(player, token)
         val entry = book.entryOf(player.uniqueId) ?: return Msg.error(player, if (token != null) STALE else "You have no ranked request to accept.")
         val now = System.currentTimeMillis()
         when (entry.state) {
@@ -413,6 +420,7 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
     /** `/ranked decline [token]`: refuse to play (FORMING) or refuse a found match (CONFIRMING). */
     fun decline(player: Player, token: String?) {
         if (spamming(player)) return
+        if (tests.handles(player.uniqueId, token)) return tests.decline(player, token)
         val entry = book.entryOf(player.uniqueId) ?: return Msg.error(player, if (token != null) STALE else "You have no ranked request to decline.")
         // A button only answers the stage it was sent for: an old "agree" prompt can't decline a found match.
         val current = if (entry.state == QueueState.CONFIRMING) entry.proposalId else entry.id
@@ -712,6 +720,7 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
 
     /** A participant disconnected: their team's entry ends (a running match is the match manager's job). */
     fun onQuit(player: Player) {
+        tests.onQuit(player)
         val uuid = player.uniqueId
         val entry = book.entryOf(uuid) ?: return
         if (entry.state == QueueState.PREPARING || entry.state.terminal) return
@@ -724,6 +733,8 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
         ticks++
         val now = System.currentTimeMillis()
         if (ticks % 60L == 0L) { teamCooldown.sweep(now); playerCooldown.sweep(now); challengeCooldown.sweep(now); actionSpam.sweep(now) }
+        // Staff test matches also run while matchmaking is closed to players.
+        tests.tick(now, reminders = ticks % 5L == 0L)
         if (book.isEmpty) return
         val s = settings
         if (s == null || !systemReady) return cancelAll("ranked matchmaking became unavailable")
@@ -771,7 +782,9 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
     }
 
     /** Ends a found match and both of its entries (players can queue again at once). */
-    fun adminCancelProposal(actor: String, id: String): String? {
+    fun adminCancelProposal(sender: org.bukkit.command.CommandSender, id: String): String? {
+        if (TestMatchBook.isProposalToken(id)) return tests.adminCancel(sender, id)
+        val actor = sender.name
         val p = book.proposal(id) ?: return "No open match proposal '$id'."
         if (p.state != ProposalState.CONFIRMING) return "That proposal is ${p.state.name.lowercase()}."
         audit("ADMIN_CANCEL", p.id, null, null, "by $actor")

@@ -225,7 +225,8 @@ All `joshymc.lifesteal.ranked.admin` (op), subcommands of the existing `/lifeste
 /lifesteal admin arena enable|disable <id>
 /lifesteal admin arena list | info <id>
 /lifesteal admin arena delete <id> confirm
-/lifesteal admin ranked testmatch <teamA> <teamB> <2-5> [arena]
+/lifesteal admin ranked testmatch <teamA> <teamB> <2-5> [arena]   (preview only, issue #1491)
+/lifesteal admin ranked testmatch confirm <token>      (then every player must /ranked accept)
 /lifesteal admin ranked list | info <match>
 /lifesteal admin ranked cancel <match> confirm
 /lifesteal admin ranked remove <player> confirm        (admin recovery)

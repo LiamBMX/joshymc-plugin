@@ -47,11 +47,13 @@ class RankedFarmingMonitor(private val plugin: Joshymc) {
 
     /**
      * Queues the check of one finished match. [names] are the participants' names, taken on the
-     * main thread for the log lines. Staff TEST matches are skipped (staff run them on purpose).
+     * main thread for the log lines. Issue #1491: staff TEST matches are checked too (their real
+     * hearts can be farmed); they are counted against other TEST matches only, so staff testing
+     * never inflates the public counts, and their findings name the staff member who started them.
      */
-    fun onMatchEnded(facts: RankedMonitorRules.MatchFacts, test: Boolean, names: Map<UUID, String>) {
+    fun onMatchEnded(facts: RankedMonitorRules.MatchFacts, names: Map<UUID, String>) {
         val s = settings ?: return
-        if (!ready || !s.enabled || test) return
+        if (!ready || !s.enabled) return
         val now = System.currentTimeMillis()
         plugin.databaseManager.async("ranked monitoring ${facts.matchId}") {
             try {
@@ -76,7 +78,7 @@ class RankedFarmingMonitor(private val plugin: Joshymc) {
             val target = f.players.firstOrNull()
             plugin.adminManager.logAction(
                 null, SYSTEM_ACTOR, "RANKED_REVIEW_${f.kind.name}", target, target?.let { names[it] },
-                "match=$matchId players=${f.players.joinToString(",")} teams=${f.teams.joinToString(",")} reason=${f.reason}".take(500),
+                "match=$matchId players=${f.players.joinToString(",")} teams=${f.teams.joinToString(",")}${f.initiator?.let { " test=1 initiator=$it" } ?: ""} reason=${f.reason}".take(500),
             )
         } catch (e: Exception) {
             plugin.logger.warning("[RankedMonitor] Couldn't write the staff log for match $matchId: ${e.message}")

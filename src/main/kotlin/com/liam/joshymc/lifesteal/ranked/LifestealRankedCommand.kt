@@ -2,7 +2,6 @@ package com.liam.joshymc.lifesteal.ranked
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.lifesteal.ranked.LifestealRankedManager.ArenaResult
-import com.liam.joshymc.lifesteal.ranked.LifestealRankedManager.CreateResult
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -184,18 +183,15 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
 
     private fun ranked(sender: CommandSender, sub: String?, a: List<String>) {
         when (sub) {
+            // Issue #1491: a preview + confirmation for staff, then every participant accepts for themselves.
             "testmatch" -> {
+                val tests = plugin.lifestealRankedQueueManager.tests
+                if (a.size == 2 && a[0].equals("confirm", ignoreCase = true)) return tests.confirm(sender, a[1])
                 val teamA = a.getOrNull(0)
                 val teamB = a.getOrNull(1)
                 val size = a.getOrNull(2)?.let { RankedArenaRules.parseSize(it) }
-                if (teamA == null || teamB == null || size == null) return Msg.usage(sender, "/lifesteal admin ranked testmatch <teamA> <teamB> <2-5> [arena]")
-                when (val result = ranked.createMatch(sender, teamA, teamB, size, a.getOrNull(3), test = true)) {
-                    is CreateResult.Started -> Msg.success(sender, "TEST match ${result.match.id} started: ${result.match.label} in ${result.match.arena.id}. Players are being moved in.")
-                    is CreateResult.Refused -> {
-                        Msg.error(sender, "The test match can't start:")
-                        for (p in result.problems) sender.sendMessage(Component.text(" - $p", NamedTextColor.RED))
-                    }
-                }
+                if (teamA == null || teamB == null || size == null || a.size > 4) return Msg.usage(sender, TESTMATCH_USAGE)
+                tests.request(sender, teamA, teamB, size, a.getOrNull(3))
             }
             "list" -> listMatches(sender)
             "info" -> {
@@ -244,7 +240,7 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
             "cancelproposal" -> {
                 val id = a.getOrNull(0) ?: return Msg.usage(sender, "/lifesteal admin ranked cancelproposal <proposal> [confirm]")
                 if (!confirmed(a, 1)) return confirm(sender, "This ends found match '$id' and both of its queue entries (players can queue again at once).", "/lifesteal admin ranked cancelproposal $id confirm")
-                plugin.lifestealRankedQueueManager.adminCancelProposal(sender.name, id)?.let { return Msg.error(sender, it) }
+                plugin.lifestealRankedQueueManager.adminCancelProposal(sender, id)?.let { return Msg.error(sender, it) }
                 Msg.success(sender, "Proposal '$id' cancelled.")
             }
             "rating" -> rating.execute(sender, a)
@@ -316,6 +312,9 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
             val a = q.entry(p.entryA)?.teamName ?: p.entryA
             val b = q.entry(p.entryB)?.teamName ?: p.entryB
             sender.sendMessage(Component.text("${p.id} ${p.kind} $a vs $b ${p.size}v${p.size} ${p.state} arena ${p.arenaId}, accepted ${p.accepted.size}/${p.participants.size}, ${secs(p.expiresAt - now)}s left", NamedTextColor.AQUA))
+        }
+        for (t in q.tests.proposals()) {
+            sender.sendMessage(Component.text("${t.id} TEST ${t.plan.teamAName} vs ${t.plan.teamBName} ${t.plan.size}v${t.plan.size} ${t.state} by ${t.actorName}, accepted ${t.accepted.size}/${t.participants.size}, ${secs(t.expiresAt - now)}s left", NamedTextColor.AQUA))
         }
         for (c in q.challenges()) {
             sender.sendMessage(Component.text("${c.id} challenge ${c.fromTeamName} -> ${c.toTeamName} ${c.size}v${c.size} ${c.state}${if (c.state == com.liam.joshymc.lifesteal.ranked.queue.ChallengeState.PENDING) ", ${secs(c.expiresAt - now)}s left" else ""}", NamedTextColor.LIGHT_PURPLE))
@@ -409,7 +408,7 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
                 group == "ranked" && admin && args[1].lowercase() in setOf("remove", "restore") -> filter(Bukkit.getOnlinePlayers().map { it.name }, args[2])
                 group == "ranked" && admin && args[1].equals("testmatch", true) -> filter(plugin.lifestealTeamManager.allTeams().map { it.name }, args[2])
                 group == "ranked" && admin && args[1].equals("cancelqueue", true) -> filter(plugin.lifestealRankedQueueManager.entries().flatMap { listOf(it.id, it.teamName) }, args[2])
-                group == "ranked" && admin && args[1].equals("cancelproposal", true) -> filter(plugin.lifestealRankedQueueManager.proposals().map { it.id }, args[2])
+                group == "ranked" && admin && args[1].equals("cancelproposal", true) -> filter(plugin.lifestealRankedQueueManager.proposals().map { it.id } + plugin.lifestealRankedQueueManager.tests.proposals().map { it.id }, args[2])
                 else -> emptyList()
             }
             4 -> when {
@@ -429,6 +428,7 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
     }
 
     companion object {
+        const val TESTMATCH_USAGE = "/lifesteal admin ranked testmatch <teamA> <teamB> <size> [arena] | testmatch confirm <token>"
         const val ARENA_USAGE = "/lifesteal admin arena <create|delete|list|info|setname|setcorner|setspawn|setspectator|clearspawns|sizes|enable|disable> ..."
         const val RANKED_USAGE = "/lifesteal admin ranked <testmatch <teamA> <teamB> <size> [arena]|list|info|cancel|remove|restore|spectate|unspectate|queue|cancelqueue|cancelproposal|queuelog|rating|stats|reviews> ..."
         private val ARENA_SUBS = listOf("create", "delete", "list", "info", "setname", "setcorner", "setspawn", "setspectator", "clearspawns", "sizes", "enable", "disable")

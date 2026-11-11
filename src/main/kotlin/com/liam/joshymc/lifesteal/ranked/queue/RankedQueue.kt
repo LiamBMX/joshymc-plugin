@@ -537,7 +537,8 @@ class RankedQueueBook(val limits: Limits = Limits()) {
     companion object {
         fun newId(prefix: String, random: UUID = UUID.randomUUID()): String = prefix + "-" + random.toString().replace("-", "").take(10)
         private val TOKEN = Regex("r[qpc]-[0-9a-f]{10}")
-        fun validToken(raw: String): Boolean = TOKEN.matches(raw)
+        /** Queue, proposal and challenge tokens, plus staff test match proposals (`rt-`, issue #1491). */
+        fun validToken(raw: String): Boolean = TOKEN.matches(raw) || TestMatchBook.isProposalToken(raw)
 
         /** `2v2`, `2`, `2V2` → 2; anything else (or `2v3`) → null. */
         fun parseSize(raw: String): Int? {
