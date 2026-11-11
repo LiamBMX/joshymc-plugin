@@ -730,6 +730,222 @@ crates:
         october: "joshymc:october_chest"
         november: "joshymc:november_chest"
         december: "joshymc:december_chest"
+  # Physical crate opening animation (issue #1503), played before the usual reward GUI (Spin,
+  # Pulse, Instant, Select, Select 3). Cosmetic only: keys, rewards, odds, Select 3 picks and
+  # pending-reward recovery are unchanged. Only the opener sees it: their own temporary copy of
+  # the crate model pulses, wobbles, lifts and tilts (the models have no separate lid), with
+  # particles and sounds only they get. Other players keep seeing the normal model. Players
+  # without the pack, Bedrock players and crates without a model get the particles and sounds.
+  # Moving away, changing world or the chunk unloading skips straight to the reward GUI.
+  opening-animation:
+    enabled: true
+    # Ticks from the click to the reward GUI (20 = 1 s), 10..80.
+    duration-ticks: 30
+    # Ticks the model takes to settle back after the GUI opens, 0..40.
+    close-ticks: 8
+    # Particle amount multiplier, 0..2 (counts are capped either way).
+    particle-intensity: 1.0
+    # Volume of the animation sounds, 0..1.
+    sound-volume: 0.8
+    # How far the model moves, 0..2 (0 = particles and sounds only).
+    movement-intensity: 1.0
+    # Blocks the opener may move from the crate before the animation skips to the GUI, 4..64.
+    max-distance: 16
+    # Sneak + right-click mass opening: burst (one short burst) or none.
+    mass-open: burst
+    # Profile used when a crate has no override and no profile named after its id.
+    default-profile: default
+    # Use the month's profile (january..december) while a crate shows its monthly model.
+    monthly-themes: true
+    # Per-crate overrides, keyed by crate id: enabled, profile, duration-ticks, close-ticks,
+    # particle-intensity, sound-volume, movement-intensity. Example:
+    #   harvest: {profile: harvest, duration-ticks: 24}
+    crates: {}
+    # Effect profiles. A crate uses: its override's profile, else this month's theme, else
+    # the profile with its crate id, else default-profile. Particles are Bukkit names
+    # (DUST, TINTED_LEAVES and other colour particles use "color"); sounds are Minecraft
+    # sound keys, or "none".
+    profiles:
+      default:
+        ambient: END_ROD
+        accent: DUST
+        burst: FIREWORK
+        color: "#FFD27F"
+        activate-sound: block.amethyst_block.chime
+        build-sound: block.note_block.chime
+        open-sound: block.chest.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.chest.close
+      harvest:
+        ambient: WAX_ON
+        accent: DUST
+        burst: END_ROD
+        color: "#FFC83D"
+        activate-sound: block.amethyst_block.chime
+        build-sound: block.note_block.chime
+        open-sound: block.chest.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.chest.close
+      stockpile:
+        ambient: ELECTRIC_SPARK
+        accent: DUST
+        burst: CRIT
+        color: "#C9CED6"
+        activate-sound: block.chain.place
+        build-sound: block.note_block.iron_xylophone
+        open-sound: block.iron_door.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.iron_door.close
+      homestead:
+        ambient: WITCH
+        accent: DUST
+        burst: ENCHANT
+        color: "#B57BFF"
+        activate-sound: block.amethyst_block.chime
+        build-sound: block.amethyst_cluster.step
+        open-sound: block.chest.open
+        reveal-sound: block.enchantment_table.use
+        close-sound: block.chest.close
+      campfire:
+        ambient: FLAME
+        accent: DUST
+        burst: LAVA
+        color: "#FF7A1F"
+        activate-sound: item.firecharge.use
+        build-sound: block.campfire.crackle
+        open-sound: block.chest.open
+        reveal-sound: entity.blaze.shoot
+        close-sound: block.chest.close
+      cabin:
+        ambient: CHERRY_LEAVES
+        accent: DUST
+        burst: HAPPY_VILLAGER
+        color: "#FFB7D5"
+        activate-sound: block.cherry_wood.place
+        build-sound: block.note_block.chime
+        open-sound: block.chest.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.chest.close
+      january:
+        ambient: SNOWFLAKE
+        accent: DUST
+        burst: END_ROD
+        color: "#BFE6FF"
+        activate-sound: block.powder_snow.place
+        build-sound: block.note_block.bell
+        open-sound: block.chest.open
+        reveal-sound: block.amethyst_block.resonate
+        close-sound: block.chest.close
+      february:
+        ambient: HEART
+        accent: DUST
+        burst: CHERRY_LEAVES
+        color: "#FF6B9A"
+        activate-sound: block.amethyst_block.chime
+        build-sound: block.note_block.chime
+        open-sound: block.chest.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.chest.close
+      march:
+        ambient: HAPPY_VILLAGER
+        accent: DUST
+        burst: COMPOSTER
+        color: "#4CC46A"
+        activate-sound: block.grass.place
+        build-sound: block.note_block.chime
+        open-sound: block.chest.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.chest.close
+      april:
+        ambient: DRIPPING_WATER
+        accent: DUST
+        burst: CHERRY_LEAVES
+        color: "#9FD8FF"
+        activate-sound: weather.rain
+        build-sound: block.note_block.chime
+        open-sound: block.chest.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.chest.close
+      may:
+        ambient: SPORE_BLOSSOM_AIR
+        accent: DUST
+        burst: HAPPY_VILLAGER
+        color: "#B6E3A1"
+        activate-sound: block.azalea.place
+        build-sound: block.note_block.flute
+        open-sound: block.chest.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.chest.close
+      june:
+        ambient: WAX_ON
+        accent: DUST
+        burst: END_ROD
+        color: "#FFE066"
+        activate-sound: block.amethyst_block.chime
+        build-sound: block.note_block.chime
+        open-sound: block.chest.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.chest.close
+      july:
+        ambient: ELECTRIC_SPARK
+        accent: DUST
+        burst: FIREWORK
+        color: "#FF4D4D"
+        activate-sound: entity.firework_rocket.launch
+        build-sound: block.note_block.chime
+        open-sound: entity.firework_rocket.blast
+        reveal-sound: entity.firework_rocket.twinkle
+        close-sound: block.chest.close
+      august:
+        ambient: WAX_ON
+        accent: DUST
+        burst: FLAME
+        color: "#FF9F40"
+        activate-sound: block.amethyst_block.chime
+        build-sound: block.note_block.chime
+        open-sound: block.chest.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.chest.close
+      september:
+        ambient: TINTED_LEAVES
+        accent: DUST
+        burst: TINTED_LEAVES
+        color: "#E0782B"
+        activate-sound: block.azalea_leaves.place
+        build-sound: block.note_block.chime
+        open-sound: block.chest.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.chest.close
+      october:
+        ambient: SOUL_FIRE_FLAME
+        accent: DUST
+        burst: WITCH
+        color: "#FF8C1A"
+        activate-sound: block.soul_sand.place
+        build-sound: block.note_block.bass
+        open-sound: block.chest.open
+        reveal-sound: entity.witch.celebrate
+        close-sound: block.chest.close
+      november:
+        ambient: FLAME
+        accent: DUST
+        burst: TINTED_LEAVES
+        color: "#B5371F"
+        activate-sound: block.campfire.crackle
+        build-sound: block.note_block.chime
+        open-sound: block.chest.open
+        reveal-sound: entity.experience_orb.pickup
+        close-sound: block.chest.close
+      december:
+        ambient: SNOWFLAKE
+        accent: DUST
+        burst: FIREWORK
+        color: "#E63946"
+        activate-sound: block.note_block.bell
+        build-sound: block.note_block.chime
+        open-sound: block.chest.open
+        reveal-sound: block.amethyst_block.resonate
+        close-sound: block.chest.close
 
 # Lag Cleaner — entity-threshold-based, only clears when needed
 # Checks entity counts every check-interval-seconds

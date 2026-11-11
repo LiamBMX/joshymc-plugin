@@ -173,6 +173,18 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
         for (loc in crates.getAllLocations()) spawn(loc)
     }
 
+    /**
+     * The live model display drawn over the crate at these coordinates, or null (vanilla look,
+     * chunk not loaded, ...). Issue #1503: the opening animation copies it for the opener only.
+     */
+    fun displayAt(world: String, x: Int, y: Int, z: Int): ItemDisplay? {
+        val parts = spawned[CrateModels.locationKey(world, x, y, z)] ?: return null
+        return (Bukkit.getEntity(parts.display) as? ItemDisplay)?.takeIf { it.isValid }
+    }
+
+    /** True when [player] is shown custom crate models (Java with the JoshyMC pack loaded). */
+    fun showsModelsTo(player: Player): Boolean = eligible(player)
+
     /** `/crate models`: overall counts, then one line per configured model, then problems. */
     fun describe(): List<String> {
         val out = mutableListOf<String>()
