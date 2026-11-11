@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.crate.CrateDisplayTuning
 import com.liam.joshymc.crate.CrateFacing
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.util.Msg
@@ -21,6 +22,9 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
         /** How far away the crate `/crate rotate` turns may be (same reach as `/crate setlocation`). */
         private const val ROTATE_RANGE = 5
+
+        /** `/crate display` subcommands (issue #1517). */
+        private val DISPLAY_SUBCOMMANDS = listOf("info", "facing", "rotate", "offset", "scale", "reset", "refresh")
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
@@ -48,6 +52,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "force" -> handleForceOpen(sender, args)
             "models" -> handleModels(sender, args)
             "rotate" -> handleRotate(sender, args)
+            "display" -> handleDisplay(sender, args)
             else -> sendUsage(sender)
         }
         return true
@@ -578,6 +583,124 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         if (note != null) Msg.reply(player, Component.text(note, NamedTextColor.GRAY))
     }
 
+    /**
+     * `/crate display [info|facing|rotate|offset|scale|reset|refresh]` (issue #1517): views and
+     * changes the display placement of the one registered crate the admin is looking at. Only
+     * the drawn model moves: the crate block (except a facing change, same as /crate rotate),
+     * keys, rewards and every other location are untouched.
+     */
+    private fun handleDisplay(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.crate.admin")) {
+            Msg.noPermission(sender)
+            return
+        }
+        val player = sender as? Player ?: run {
+            Msg.playersOnly(sender)
+            return
+        }
+        val crateManager = plugin.crateManager
+        val sub = args.getOrNull(1)?.lowercase() ?: "info"
+        if (sub !in DISPLAY_SUBCOMMANDS) {
+            Msg.usage(player, "/crate display [info|facing|rotate|offset|scale|reset|refresh]")
+            return
+        }
+        // Facing is the issue #1472 path: same command, same block handling, same log.
+        if (sub == "facing") {
+            val dir = args.getOrNull(2) ?: run {
+                Msg.usage(player, "/crate display facing <north|south|east|west|auto|next>")
+                return
+            }
+            handleRotate(sender, arrayOf("rotate", dir))
+            return
+        }
+        val block = player.getTargetBlockExact(ROTATE_RANGE)
+        if (block == null || block.type.isAir) {
+            Msg.error(player, "Look at a crate block (within $ROTATE_RANGE blocks).")
+            return
+        }
+        val loc = crateManager.getLocationAt(block)
+        if (loc == null) {
+            if (crateManager.getCrateTypeAt(block) != null) {
+                Msg.error(player, "That block is next to a crate but isn't a registered crate location. Look at the registered block (see /crate diagnose).")
+            } else {
+                Msg.error(player, "That block isn't a registered crate (${block.type.name} at ${block.x}, ${block.y}, ${block.z}).")
+            }
+            return
+        }
+        val where = "${loc.crateType} crate at ${loc.x}, ${loc.y}, ${loc.z}"
+        val next: CrateDisplayTuning.Tuning = when (sub) {
+            "info" -> {
+                Msg.reply(player, Component.text("─── Crate Display ───", NamedTextColor.GOLD))
+                for (line in crateManager.models.describeLocation(loc)) {
+                    Msg.reply(player, Component.text(line, NamedTextColor.GRAY))
+                }
+                return
+            }
+            "refresh" -> {
+                crateManager.refreshCrateModel(block)
+                Msg.success(player, "Redrew the model of the $where.")
+                return
+            }
+            "reset" -> CrateDisplayTuning.NONE
+            "rotate" -> {
+                val text = args.getOrNull(2) ?: run {
+                    Msg.usage(player, "/crate display rotate <degrees -180..180|default>")
+                    return
+                }
+                when (val p = CrateDisplayTuning.parseYawAdjust(text)) {
+                    is CrateDisplayTuning.Parsed.Bad -> { Msg.error(player, p.reason.replaceFirstChar { it.uppercase() } + "."); return }
+                    CrateDisplayTuning.Parsed.Clear -> loc.tuning.copy(yawAdjust = 0f)
+                    is CrateDisplayTuning.Parsed.Ok -> loc.tuning.copy(yawAdjust = p.value)
+                }
+            }
+            "offset" -> {
+                if (args.size == 3 && args[2].lowercase() in setOf("default", "reset")) {
+                    loc.tuning.copy(offsetX = null, offsetY = null, offsetZ = null)
+                } else {
+                    if (args.size < 5) {
+                        Msg.usage(player, "/crate display offset <x> <y> <z>  (blocks, -1..1; 'default' per axis, or /crate display offset default)")
+                        return
+                    }
+                    when (val p = CrateDisplayTuning.withOffsets(loc.tuning, args[2], args[3], args[4])) {
+                        is CrateDisplayTuning.Parsed.Bad -> { Msg.error(player, p.reason.replaceFirstChar { it.uppercase() } + "."); return }
+                        CrateDisplayTuning.Parsed.Clear -> loc.tuning
+                        is CrateDisplayTuning.Parsed.Ok -> p.value
+                    }
+                }
+            }
+            "scale" -> {
+                val text = args.getOrNull(2) ?: run {
+                    Msg.usage(player, "/crate display scale <${CrateDisplayTuning.fmt(com.liam.joshymc.crate.CrateModels.MIN_SCALE)}..${CrateDisplayTuning.fmt(com.liam.joshymc.crate.CrateModels.MAX_SCALE)}|default>")
+                    return
+                }
+                when (val p = CrateDisplayTuning.parseScale(text)) {
+                    is CrateDisplayTuning.Parsed.Bad -> { Msg.error(player, p.reason.replaceFirstChar { it.uppercase() } + "."); return }
+                    CrateDisplayTuning.Parsed.Clear -> loc.tuning.copy(scale = null)
+                    is CrateDisplayTuning.Parsed.Ok -> loc.tuning.copy(scale = p.value)
+                }
+            }
+            else -> return
+        }
+        if (next == loc.tuning) {
+            Msg.reply(player, Component.text("Nothing changed for the $where.", NamedTextColor.GRAY))
+            return
+        }
+        // Refuse a placement that would draw the model beside its block instead of saving it.
+        crateManager.models.tuningProblem(loc, next)?.let { problem ->
+            Msg.error(player, "Not saved: $problem.")
+            return
+        }
+        val updated = crateManager.setCrateTuning(block, next) ?: run {
+            Msg.error(player, "That block isn't a registered crate.")
+            return
+        }
+        plugin.logger.info("[Crates] ${player.name} set the display of the $where (${loc.world}) to $next (was ${loc.tuning}).")
+        Msg.success(player, if (sub == "reset") "The $where uses its crate type's rotation, offset and scale again." else "Updated the display of the $where.")
+        for (line in CrateDisplayTuning.describe(updated.tuning, crateManager.models.resolve(updated.crateType).model)) {
+            Msg.reply(player, Component.text(line, NamedTextColor.GRAY))
+        }
+    }
+
     private fun sendUsage(sender: CommandSender) {
         if (sender is Player) {
             plugin.commsManager.send(sender, Component.text("Crate Commands:", NamedTextColor.GREEN), CommunicationsManager.Category.ADMIN)
@@ -598,7 +721,14 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "/crate models monthly  (monthly model rotation status)",
             "/crate models set <crate> <model>  (change a crate's custom model)",
             "/crate rotate <north|south|east|west|auto|next>  (turn the crate you look at)",
-            "/crate rotate mode [on|off]  (sneak + right-click with an empty hand to turn crates)"
+            "/crate rotate mode [on|off]  (sneak + right-click with an empty hand to turn crates)",
+            "/crate display [info]  (the crate you look at: model, facing, rotation, offset, scale)",
+            "/crate display facing <north|south|east|west|auto|next>",
+            "/crate display rotate <degrees|default>  (fine rotation, -180..180)",
+            "/crate display offset <x> <y> <z>  (blocks, -1..1, 'default' per axis)",
+            "/crate display scale <0.5..2|default>",
+            "/crate display reset  (back to the crate type's rotation, offset and scale)",
+            "/crate display refresh  (redraw this crate's model)"
         )
         for (usage in usages) {
             sender.sendMessage(
@@ -618,7 +748,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             1 -> {
                 val subs = mutableListOf("menu", "list", "preview", "help")
                 if (sender.hasPermission("joshymc.crate.admin")) {
-                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force", "models", "rotate"))
+                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force", "models", "rotate", "display"))
                 }
                 subs.filter { it.startsWith(args[0], ignoreCase = true) }
             }
@@ -633,6 +763,10 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                     if (sender.hasPermission("joshymc.crate.admin")) {
                         (CrateFacing.CHOICES + "mode").filter { it.startsWith(args[1], ignoreCase = true) }
                     } else emptyList()
+                "display" ->
+                    if (sender.hasPermission("joshymc.crate.admin")) {
+                        DISPLAY_SUBCOMMANDS.filter { it.startsWith(args[1], ignoreCase = true) }
+                    } else emptyList()
                 else -> emptyList()
             }
             3 -> when (args[0].lowercase()) {
@@ -643,6 +777,16 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                 "models" ->
                     if (sender.hasPermission("joshymc.crate.admin") && args[1].equals("set", ignoreCase = true)) {
                         plugin.crateManager.getCrateTypes().filter { it.startsWith(args[2], ignoreCase = true) }
+                    } else emptyList()
+                "display" ->
+                    if (sender.hasPermission("joshymc.crate.admin")) {
+                        when (args[1].lowercase()) {
+                            "facing" -> CrateFacing.CHOICES
+                            "rotate" -> listOf("-45", "-15", "15", "45", "default")
+                            "offset" -> listOf("0", "0.5", "-0.5", "default")
+                            "scale" -> listOf("0.75", "1", "1.25", "1.5", "default")
+                            else -> emptyList()
+                        }.filter { it.startsWith(args[2], ignoreCase = true) }
                     } else emptyList()
                 "givekey" -> {
                     val names = plugin.server.onlinePlayers.map { it.name } + listOf("@a", "@r")

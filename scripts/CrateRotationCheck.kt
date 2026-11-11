@@ -168,7 +168,7 @@ fun main() {
         "PRAGMA table_info(crate_locations)" in manager && "if (\"facing\" !in locationColumns)" in manager &&
             "ALTER TABLE crate_locations ADD COLUMN facing TEXT" in manager)
     check("one crate location table (no second store)", Regex("CREATE TABLE IF NOT EXISTS crate_loc").findAll(manager).count() == 1)
-    check("locations load their facing", "SELECT world, x, y, z, crate_type, facing FROM crate_locations" in manager)
+    check("locations load their facing", "SELECT world, x, y, z, crate_type, facing, " in manager)
     val setFacing = manager.substringAfter("fun setCrateFacing(").substringBefore("private fun alignBlock(")
     check("facing saved on that row only", "UPDATE crate_locations SET facing = ? WHERE world = ? AND x = ? AND y = ? AND z = ?" in setFacing)
     check("facing change redraws only that location", "refreshModel(block)" in setFacing && "refreshAll" !in setFacing && "restartModels" !in setFacing)

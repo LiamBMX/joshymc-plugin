@@ -195,6 +195,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val crateType: String,
         /** Issue #1472: this location's own facing; null = automatic (the crate type's `rotation`). */
         val facing: CrateFacing.Direction? = null,
+        /** Issue #1517: this location's own fine rotation, offsets and scale (NONE = the crate type's). */
+        val tuning: com.liam.joshymc.crate.CrateDisplayTuning.Tuning = com.liam.joshymc.crate.CrateDisplayTuning.NONE,
     ) {
         fun isAt(block: Block): Boolean = world == block.world.name && x == block.x && y == block.y && z == block.z
     }
@@ -274,6 +276,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // Issue #1472: per-location facing. NULL (every older row) = automatic, as before.
         val locationColumns = plugin.databaseManager.query("PRAGMA table_info(crate_locations)") { it.getString("name") }.toSet()
         if ("facing" !in locationColumns) plugin.databaseManager.execute("ALTER TABLE crate_locations ADD COLUMN facing TEXT")
+        // Issue #1517: per-location display placement. NULL (every older row) = the crate type's value.
+        for (column in listOf("yaw_adjust", "offset_x", "offset_y", "offset_z", "scale")) {
+            if (column !in locationColumns) plugin.databaseManager.execute("ALTER TABLE crate_locations ADD COLUMN $column REAL")
+        }
 
         // Save default crates.yml if missing
         cratesFile = plugin.configFile("crates.yml")
@@ -520,7 +526,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     private fun loadLocations() {
         crateLocations.clear()
         val rows = plugin.databaseManager.query(
-            "SELECT world, x, y, z, crate_type, facing FROM crate_locations"
+            "SELECT world, x, y, z, crate_type, facing, yaw_adjust, offset_x, offset_y, offset_z, scale FROM crate_locations"
         ) { rs ->
             val world = rs.getString("world")
             val x = rs.getInt("x")
@@ -535,7 +541,16 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 }
                 CrateFacing.Stored.Auto -> null
             }
-            CrateLocation(world, x, y, z, rs.getString("crate_type"), facing)
+            // Issue #1517: an out-of-range stored value (hand-edited row) is ignored, reported and left untouched.
+            val problems = mutableListOf<String>()
+            fun real(column: String): Double? = (rs.getObject(column) as? Number)?.toDouble()
+            val tuning = com.liam.joshymc.crate.CrateDisplayTuning.fromStored(
+                real("yaw_adjust"), real("offset_x"), real("offset_y"), real("offset_z"), real("scale"), problems,
+            )
+            if (problems.isNotEmpty()) {
+                plugin.logger.warning("[Crates] Crate location $world $x, $y, $z: ${problems.joinToString("; ")}; using the crate type's value. Fix it with /crate display.")
+            }
+            CrateLocation(world, x, y, z, rs.getString("crate_type"), facing, tuning)
         }
         crateLocations.addAll(rows)
     }
@@ -713,16 +728,20 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     fun setCrateLocation(block: Block, crateType: String): Boolean {
         if (!crates.containsKey(crateType)) return false
 
-        // Re-registering a block keeps the facing it was given (issue #1472).
-        val keptFacing = getLocationAt(block)?.facing
+        // Re-registering a block keeps the facing it was given (issue #1472) and its display
+        // placement (issue #1517).
+        val kept = getLocationAt(block)
+        val keptFacing = kept?.facing
+        val keptTuning = kept?.tuning ?: com.liam.joshymc.crate.CrateDisplayTuning.NONE
 
         // Remove existing location at this block if any
         removeCrateLocation(block)
 
-        val loc = CrateLocation(block.world.name, block.x, block.y, block.z, crateType, keptFacing)
+        val loc = CrateLocation(block.world.name, block.x, block.y, block.z, crateType, keptFacing, keptTuning)
         plugin.databaseManager.execute(
-            "INSERT OR REPLACE INTO crate_locations (world, x, y, z, crate_type, facing) VALUES (?, ?, ?, ?, ?, ?)",
-            loc.world, loc.x, loc.y, loc.z, loc.crateType, CrateFacing.storedValue(keptFacing)
+            "INSERT OR REPLACE INTO crate_locations (world, x, y, z, crate_type, facing, yaw_adjust, offset_x, offset_y, offset_z, scale) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            loc.world, loc.x, loc.y, loc.z, loc.crateType, CrateFacing.storedValue(keptFacing),
+            com.liam.joshymc.crate.CrateDisplayTuning.storedYaw(keptTuning), keptTuning.offsetX, keptTuning.offsetY, keptTuning.offsetZ, keptTuning.scale
         )
         crateLocations.add(loc)
         refreshModel(block)
@@ -837,6 +856,31 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         refreshModel(block)
         return FacingChange(updated, old.facing, align)
     }
+
+    /**
+     * Issue #1517: gives the crate registered at exactly [block] its own display placement (fine
+     * rotation, offsets, scale; `CrateDisplayTuning.NONE` = the crate type's again), saves it on
+     * its `crate_locations` row and redraws only this location's model. Returns the updated
+     * location, or null when [block] is not a registered crate location. The crate block, keys,
+     * rewards and every other location are untouched.
+     */
+    fun setCrateTuning(block: Block, tuning: com.liam.joshymc.crate.CrateDisplayTuning.Tuning): CrateLocation? {
+        val index = crateLocations.indexOfFirst { it.isAt(block) }
+        if (index < 0) return null
+        val old = crateLocations[index]
+        plugin.databaseManager.execute(
+            "UPDATE crate_locations SET yaw_adjust = ?, offset_x = ?, offset_y = ?, offset_z = ?, scale = ? WHERE world = ? AND x = ? AND y = ? AND z = ?",
+            com.liam.joshymc.crate.CrateDisplayTuning.storedYaw(tuning), tuning.offsetX, tuning.offsetY, tuning.offsetZ, tuning.scale,
+            old.world, old.x, old.y, old.z
+        )
+        val updated = old.copy(tuning = tuning)
+        crateLocations[index] = updated
+        refreshModel(block)
+        return updated
+    }
+
+    /** Issue #1517: redraws only the model at [block] (`/crate display refresh`). */
+    fun refreshCrateModel(block: Block) = refreshModel(block)
 
     /**
      * Turns the crate block itself to [facing] when that can't hurt anything: only a block that

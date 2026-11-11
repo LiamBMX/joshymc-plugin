@@ -458,6 +458,66 @@ never touched either way.
 5. A double chest crate: the model turns, the chest stays paired.
 6. `/crate rotate auto`: back to the automatic facing.
 
+## E4. Per-crate display placement (issue #1517)
+
+Facing (E3) picks which way a crate's front points. Each physical crate can also get its own
+fine rotation, offset and scale, so one pedestal can be lined up without changing every crate
+of that type (`crates.custom-models.models.<id>` stays the shared default).
+
+### Commands (`joshymc.crate.admin`, op; look at the registered crate block, within 5 blocks)
+
+- `/crate display` (or `/crate display info`): crate, model (and whether it is static,
+  monthly or a fallback), facing, fine rotation, offsets and scale (this crate's own value or
+  the crate type's), the drawn yaw, centre and hitbox, and whether it is drawn.
+- `/crate display facing <north|south|east|west|auto|next>`: the same as `/crate rotate`.
+- `/crate display rotate <degrees|default>`: a fine rotation added on top of the facing,
+  -180..180 degrees (`0` or `default` clears it). With automatic facing it starts from the
+  direction the crate shows now.
+- `/crate display offset <x> <y> <z>`: offsets in blocks, -1..1, along the **world** axes
+  (the X/Y/Z of F3), so turning the crate never moves it. `default` on one axis uses the crate
+  type's value for that axis; `/crate display offset default` clears all three.
+- `/crate display scale <0.5..2|default>`.
+- `/crate display reset`: clears this crate's rotation, offsets and scale (not its facing; use
+  `/crate rotate auto` for that).
+- `/crate display refresh`: redraws only this crate's model and hitbox.
+
+A change that would draw the model beside its block instead of on it is refused before it is
+saved. Every change is logged to the console with the old and new values.
+
+### How it works
+
+- Stored on the crate's own `crate_locations` row: columns `yaw_adjust`, `offset_x`,
+  `offset_y`, `offset_z`, `scale` (REAL, added on start when missing). NULL = the crate type's
+  value, so every older row draws exactly as before. A stored value out of range (hand-edited)
+  is ignored with a warning and left in the row. Re-registering the block with
+  `/crate setlocation` keeps it.
+- The model turns about its own centre over the block, then is offset and scaled with its
+  floor kept on the block floor. The hitbox (issue #1451) is recomputed from the same
+  placement, so it follows every rotation, offset and scale.
+- Bukkit-free rules: `crate/CrateDisplayTuning` (`apply`, parsing, stored columns).
+  `CrateModelDisplays.placementFor` is the only place a location's placement is computed, so
+  chunk loads, restarts, `/joshymc reload`, `/crate models refresh` and the monthly swap all
+  draw the same thing. Monthly crates keep their own placement across months.
+- The opening animation (issue #1503) copies the live display's position, yaw and
+  transformation, so it plays from the tuned placement and hands back to the unchanged
+  permanent display.
+- Only the drawn model and hitbox change: the crate block, keys, rewards, previews and every
+  other location are untouched.
+
+### Verifying (needs a test server)
+
+1. Place three crates side by side. `/crate display rotate 20` on the middle one: only it
+   tilts; `/crate display` shows `Fine rotation: 20°`.
+2. `/crate display offset 0 0.125 0`, `/crate display scale 1.25`: it rises and grows, its
+   floor stays on the block; with F3+B the hitbox follows. Click each of the three: each opens
+   its own crate, one key spent per open.
+3. `/crate display offset 0 1 0` with `scale 0.5`: refused ("drawn beside its crate block").
+4. Restart, `/joshymc reload`, and fly away until the chunk unloads and come back: same
+   placement, and `/crate models` shows no untracked entities.
+5. `/crate display reset`: back to the crate type's look, facing kept.
+6. Open the crate with a key: the animation plays from the tuned spot and the model is back in
+   place afterwards. Without the pack or on Bedrock: the plain block, clicks work.
+
 ## F. Java and Bedrock
 
 - **Java (Paper 26.2):** Java players see the models once the required JoshyMC pack has
@@ -490,6 +550,13 @@ Automated:
   vanilla-block rules, quick-rotate gating, the models' +Z front, and the wiring (exact
   location, admin permission, one row updated, one location redrawn, key/reward paths
   untouched).
+- `./gradlew -I scripts/crate-display-check.init.gradle.kts crateDisplayCheck` (issue
+  #1517) covers each direction with fine rotation (same pivot), offsets, scale, reset and
+  inheritance, command parsing and bounds, stored-column round trips and bad rows, every
+  bundled model (5 permanent, 12 monthly, 3 older) with every facing and several tunings,
+  hitboxes of side-by-side crates, the animation copying the live display, and the wiring
+  (admin permission, exact location, one row updated, one location redrawn, no key/reward
+  path, entities non-persistent and hidden by default).
 - `python3 -m unittest discover -s art/tests -t .` (from `resourcepack/`) covers chest
   cover, inside-the-block, floor, glow-on-accents, built files, and that the config points
   at built models.
