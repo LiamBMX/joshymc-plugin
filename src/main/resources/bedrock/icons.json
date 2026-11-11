@@ -2,6 +2,11 @@
   "format_version": 1,
   "icon_size": 64,
   "items": {
+    "joshymc:april_chest": {
+      "bedrock_name": "april_chest",
+      "icon": "joshymc/april_chest.png",
+      "sha1": "d86a6a89f1009ef03d4954c33778e0f8cb727b8f"
+    },
     "joshymc:april_key": {
       "bedrock_name": "april_key",
       "icon": "joshymc/april_key.png",
