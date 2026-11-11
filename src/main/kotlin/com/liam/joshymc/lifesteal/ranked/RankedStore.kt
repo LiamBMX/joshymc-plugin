@@ -83,7 +83,9 @@ class RankedStore(private val db: SqliteDatabase) {
         // Issue #1363: how the match came about (TEST / PUBLIC / CHALLENGE) and the queue proposal that
         // made it. Older databases get the columns here (SQLite throws when they already exist);
         // older rows have no kind and are read by their test flag (they were all staff test matches).
-        for (column in listOf("kind TEXT", "queue_ref TEXT")) {
+        // Issue #1498: the sides that had a player in a restricted state (`A`, `B`, `A,B`), written
+        // with the winner; a win by such a side is never rated (RankedIntegrity.ratingBlocked).
+        for (column in listOf("kind TEXT", "queue_ref TEXT", "ineligible_sides TEXT")) {
             try { db.execute("ALTER TABLE lifesteal_ranked_matches ADD COLUMN $column") } catch (_: Exception) { }
         }
         db.createTable("CREATE UNIQUE INDEX IF NOT EXISTS idx_lifesteal_ranked_matches_open_arena ON lifesteal_ranked_matches(arena_id) WHERE state NOT IN ('COMPLETED', 'CANCELLED')")
@@ -351,14 +353,15 @@ class RankedStore(private val db: SqliteDatabase) {
     }
 
     /** ACTIVE → FINISHING with the winner recorded, once. */
-    fun finish(matchId: String, winner: Side, winnerTeamId: String, now: Long): Boolean {
+    fun finish(matchId: String, winner: Side, winnerTeamId: String, now: Long, ineligibleSides: Set<Side> = emptySet()): Boolean {
         var moved = false
+        val sides = RankedIntegrity.encodeSides(ineligibleSides)
         db.transaction {
             moved = db.executeUpdate(
-                "UPDATE lifesteal_ranked_matches SET state = 'FINISHING', winner_side = ?, winner_team_id = ?, version = version + 1 WHERE match_id = ? AND state = 'ACTIVE'",
-                winner.name, winnerTeamId, matchId,
+                "UPDATE lifesteal_ranked_matches SET state = 'FINISHING', winner_side = ?, winner_team_id = ?, ineligible_sides = ?, version = version + 1 WHERE match_id = ? AND state = 'ACTIVE'",
+                winner.name, winnerTeamId, sides, matchId,
             ) == 1
-            if (moved) insertEvent(matchId, now, "STATE", null, "ACTIVE -> FINISHING, winner ${winner.name} ($winnerTeamId)")
+            if (moved) insertEvent(matchId, now, "STATE", null, "ACTIVE -> FINISHING, winner ${winner.name} ($winnerTeamId)" + (sides?.let { ", ineligible sides $it" } ?: ""))
         }
         return moved
     }
@@ -533,6 +536,8 @@ class RankedStore(private val db: SqliteDatabase) {
         val restoration: String,
         val kind: MatchKind,
         val queueRef: String?,
+        /** Issue #1498: sides that had a player in a restricted state during the match. */
+        val ineligibleSides: Set<Side> = emptySet(),
     )
 
     data class ParticipantRecord(val uuid: UUID, val side: Side, val teamId: String, val status: ParticipantStatus, val defeatReason: DefeatReason?, val open: Boolean)
@@ -585,6 +590,7 @@ class RankedStore(private val db: SqliteDatabase) {
         restoration = rs.getString("restoration"),
         kind = MatchKind.parse(rs.getString("kind")) ?: if (rs.getInt("test") == 1) MatchKind.TEST else MatchKind.PUBLIC,
         queueRef = rs.getString("queue_ref"),
+        ineligibleSides = RankedIntegrity.decodeSides(rs.getString("ineligible_sides")),
     )
 
     /** Appends one event row (callers queue this through `databaseManager.async` where it isn't part of a transition). */

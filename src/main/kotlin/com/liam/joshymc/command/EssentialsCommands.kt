@@ -129,6 +129,8 @@ class GamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComplet
             return true
         }
 
+        // Issue #1498 (F-4): ranked participants stay in Survival.
+        if (plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.GAMEMODE)) return true
         target.gameMode = mode
         val modeName = mode.name.lowercase().replaceFirstChar { it.uppercase() }
 
@@ -197,6 +199,9 @@ class FlyCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             Msg.noPermission(sender)
             return true
         }
+
+        // Issue #1498 (F-4): no flight for (or by) ranked participants.
+        if (plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.FLY)) return true
 
         // Block combat-tagged players or players in a PvP arena from flying.
         val blockedReason = when {
@@ -285,6 +290,9 @@ class HealCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val target = resolveTarget(sender, args) ?: return true
 
+        // Issue #1498 (F-4): ranked participants can't be healed (not even out of combat).
+        if (plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.HEAL)) return true
+
         // Block /heal on combat-tagged players to remove the heal-mid-fight
         // exploit. Staff still need to wait until the combat tag clears.
         if (plugin.combatManager.isTagged(target)) {
@@ -366,6 +374,9 @@ class FeedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val target = resolveTarget(sender, args) ?: return true
 
+        // Issue #1498 (F-4): ranked participants can't be fed.
+        if (plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.FEED)) return true
+
         if (sender is Player && sender == target && !sender.hasPermission("joshymc.feed.bypass")) {
             val now = System.currentTimeMillis()
             val last = cooldowns[sender.uniqueId] ?: 0L
@@ -418,6 +429,9 @@ class GodCommand(private val plugin: Joshymc) : CommandExecutor, Listener, TabCo
             Msg.noPermission(sender)
             return true
         }
+
+        // Issue #1498 (F-4): God Mode can't be switched on for (or by) a ranked participant.
+        if (!godPlayers.contains(target.uniqueId) && plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.GOD)) return true
 
         val toggled = if (godPlayers.contains(target.uniqueId)) {
             godPlayers.remove(target.uniqueId)
@@ -532,6 +546,8 @@ class TpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     Msg.playerNotFound(sender)
                     return true
                 }
+                // Issue #1498 (F-4): into a ranked arena only as a spectator (/lifesteal admin ranked spectate).
+                if (plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.TELEPORT)) return true
                 BackCommand.lastLocations[sender.uniqueId] = sender.location
                 PvpTeleportGuard.forced { sender.teleport(target) }
                 plugin.commsManager.send(sender, Component.text("Teleported to ${target.name}.", NamedTextColor.GREEN))
@@ -548,6 +564,9 @@ class TpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                     Msg.playerNotFound(sender)
                     return true
                 }
+                // Issue #1498 (F-4): neither end may be a ranked participant.
+                if (plugin.lifestealRankedManager.refusesStaffAction(sender, p1, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.TELEPORT)) return true
+                if (plugin.lifestealRankedManager.refusesStaffAction(sender, p2, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.TELEPORT)) return true
                 BackCommand.lastLocations[p1.uniqueId] = p1.location
                 PvpTeleportGuard.forced { p1.teleport(p2) }
                 plugin.commsManager.send(sender, Component.text("Teleported ${p1.name} to ${p2.name}.", NamedTextColor.GREEN))
@@ -599,6 +618,8 @@ class TpHereCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
             Msg.playerNotFound(sender)
             return true
         }
+        // Issue #1498 (F-4): a ranked participant can't be pulled out of their match.
+        if (plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.TELEPORT_HERE)) return true
         BackCommand.lastLocations[target.uniqueId] = target.location
         PvpTeleportGuard.forced { target.teleport(sender) }
         plugin.commsManager.send(sender, Component.text("Teleported ${target.name} to you.", NamedTextColor.GREEN))
@@ -920,6 +941,8 @@ class SmiteCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             Msg.playerNotFound(sender)
             return true
         }
+        // Issue #1498 (F-4): staff damage can't decide a ranked match.
+        if (plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.SMITE)) return true
         target.world.strikeLightning(target.location)
         if (sender is Player) plugin.commsManager.send(sender, Component.text("Struck ${target.name} with lightning.", NamedTextColor.GREEN))
         return true
@@ -981,6 +1004,13 @@ class SudoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 Msg.error(sender, it)
                 return true
             }
+        }
+        // Issue #1498 (F-5): performCommand skips the ranked command listener, so the ranked
+        // allowlist is checked here for every sender (console too), and pending restores wait.
+        if (!plugin.lifestealRankedManager.holds(target) && plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.SUDO)) return true
+        com.liam.joshymc.staff.DelegatedCommands.rankedProblem(plugin, target, cmd, "sudo by ${sender.name}")?.let {
+            Msg.error(sender, it)
+            return true
         }
         // The whole command line, not just the label (issue #1353): amounts and recipients matter.
         com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "SUDO", target.uniqueId, target.name, "command=/${cmd.take(240)}")

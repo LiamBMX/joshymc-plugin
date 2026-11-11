@@ -82,6 +82,10 @@ object RatingRules {
         if (a.size != match.size || b.size != match.size) return Verdict.Invalid("expected ${match.size} participants per side, found ${a.size} and ${b.size}")
         if (a.any { it.teamId != match.teamAId } || b.any { it.teamId != match.teamBId }) return Verdict.Invalid("a participant is recorded for the wrong team")
         if ((a + b).map { it.uuid }.toSet().size != a.size + b.size) return Verdict.Invalid("a player is recorded twice")
+        // Issue #1498: a win by a side that used a restricted ability is kept as the result, never rated.
+        if (com.liam.joshymc.lifesteal.ranked.RankedIntegrity.ratingBlocked(winner, match.ineligibleSides, participants.filter { it.side == winner }.map { it.defeatReason })) {
+            return Verdict.Unrated(com.liam.joshymc.lifesteal.ranked.RankedIntegrity.UNRATED_REASON)
+        }
         if (sameOpponentLimit > 0 && ratedBetweenPair >= sameOpponentLimit) {
             return Verdict.Unrated("these two teams already played $ratedBetweenPair rated match(es) recently (same-opponent limit $sameOpponentLimit)")
         }
