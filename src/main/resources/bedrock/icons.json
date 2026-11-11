@@ -12,6 +12,11 @@
       "icon": "joshymc/april_key.png",
       "sha1": "3e15c6adbf0fa8e7f851c450a1799edbc35f6f52"
     },
+    "joshymc:august_chest": {
+      "bedrock_name": "august_chest",
+      "icon": "joshymc/august_chest.png",
+      "sha1": "0b97ebcd438993ad5bd0acf94a381dd223d86778"
+    },
     "joshymc:august_key": {
       "bedrock_name": "august_key",
       "icon": "joshymc/august_key.png",
