@@ -742,6 +742,11 @@
       "icon": "joshymc/march_key.png",
       "sha1": "af997657620c3bf440145d634e96f740dd55c2a8"
     },
+    "joshymc:may_chest": {
+      "bedrock_name": "may_chest",
+      "icon": "joshymc/may_chest.png",
+      "sha1": "667f08a080004bc996ca8bf3a4d6e7fefda1e1ad"
+    },
     "joshymc:may_key": {
       "bedrock_name": "may_key",
       "icon": "joshymc/may_key.png",
