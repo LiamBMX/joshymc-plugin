@@ -629,7 +629,10 @@ class InvseeCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         }
         val online = Bukkit.getPlayer(args[0])
         if (online != null) {
-            sender.openInventory(online.inventory)
+            // Read-only unless joshymc.invsee.edit; never live for ranked-held players or
+            // protected staff; audited (issue #1353).
+            com.liam.joshymc.staff.InvseeAccess.open(plugin, sender, online,
+                canEdit = sender.hasPermission(com.liam.joshymc.staff.InvseeRules.EDIT_PERMISSION), auditAction = "INVSEE")
             return true
         }
         val offline = plugin.playerResolver.resolve(args[0])

@@ -338,6 +338,8 @@ class ListenerManager(private val plugin: Joshymc) {
 
         // Creative mode can't create or copy JoshyMC items (issue #1383). Protection: unscoped.
         pm.registerEvents(com.liam.joshymc.listener.CreativeValuablesListener(plugin), plugin)
+        // No edits through a live /invsee of a ranked-held player (issue #1353). Protection: unscoped.
+        pm.registerEvents(com.liam.joshymc.staff.InvseeGuardListener(plugin), plugin)
 
         // Trainee Mode was removed (issue #987) — this only restores any leftover
         // legacy backup inventory, see TraineeModeBackupRestoreListener.
