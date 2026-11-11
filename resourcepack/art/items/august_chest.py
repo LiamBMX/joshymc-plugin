@@ -2,27 +2,29 @@
 golden-hour summer sunset chest in golden yellow, warm amber, sunset orange, sandy beige
 and muted coral.
 
-A body of sandy beige boards laid across, framed in warm amber metal: a plinth, a seam
-band, upright straps either side of the lock and stepped corner plates with round sun
-rivets. The lid is a rounded vault running front to back, its boards banded like the
-evening sky: muted coral at the eaves, then sunset orange, warm amber and golden yellow
-along the crown, held by two amber straps.
+A body of pale sandy beige boards laid across, banded at the base by a sunset gradient
+(coral up through orange to gold) and framed in deep warm amber metal: a plinth, a seam
+band, upright straps either side of the lock and stepped corner plates with round golden
+sun rivets. The lid is a rounded vault running front to back, its boards banded like the
+evening sky: muted coral at the eaves, then sunset orange, warm amber and gold along the
+crown.
 
-The emblem is the sunset itself, set into the vault's front arch: a glowing golden half
-sun sitting on the horizon (the lid's front edge) in front of a sky that fades from gold
-through amber and orange to coral, with layered rays (long amber ones behind, short gold
-ones in front) fanning out to the arch's amber rim; the three middle rays break through
-the rim. Below it a round amber sun lock across the seam, ringed with short rays, with a
-glowing sunset orange keyhole. Tied wheat sheaves with coral ribbons and little coral
-flowers lean on both side walls, and two amber ray-fan hinges hold the lid at the back.
+The emblem is the sunset itself, set into the vault's front arch: a large glowing golden
+half sun sitting on the horizon (the lid's front edge) in front of a sky that fades from
+gold through amber and orange to coral and dusk, with layered rays (long gold ones behind,
+short pale gold ones in front) that break out past the arch's amber rim. Raised gold ribs
+carry each long ray on over the vault to the back. Below it a round sun lock across the
+seam, a golden face on an amber disc ringed with bold rays, with a glowing ember keyhole.
+Sprays of orange and golden summer flowers with coral hearts grow up both side walls, and
+two amber ray-fan hinges hold the lid at the back.
 
 Animation (one loop): the half sun breathes warm light, the rays shimmer, and the
 keyhole glows like an ember.
 
 Block space, front (lock) = +Z. Built on art/items/_crate_chest.py, so it hides a vanilla
 chest and stays inside its block. Unlike the other crate chests: a low rounded vault with
-the sunset in its arch, the lowest of the monthly chests (no crown, spire or standing
-ornament).
+the sunset in its arch and sunbeam ribs, the lowest of the monthly chests (no crown,
+spire or standing ornament).
 """
 from __future__ import annotations
 
@@ -37,14 +39,14 @@ from art.kit import animate, arc, bar, box, canvas, copy, display, model, prism,
 ID = "august_chest"
 NAME = "August Chest"
 
-SANDY = ["#6a4a26", "#8e6a3c", "#b08a52", "#c9a468", "#dcbb80", "#e8cd98", "#f1dcb2", "#f9eed4"]
+SANDY = ["#6a4a26", "#8e6a3c", "#b6884c", "#d0a464", "#e2bb7c", "#ecca92", "#f4d9ac", "#fbecd0"]
 AMBER = ["#3c1d06", "#5e2f0a", "#834510", "#a95e17", "#c97a22", "#e19a36", "#f0b955", "#fbd885"]
 GOLDEN = ["#7a4d06", "#a8700c", "#d09514", "#ebb424", "#f8cc3c", "#ffdf6a", "#fff0a6", "#fffbe2"]
 ORANGE = ["#6a2406", "#94360a", "#bd4c10", "#dd6618", "#f08228", "#f8a048", "#fcc07a"]
 CORAL = ["#5e2426", "#833638", "#a84c4a", "#c4655c", "#d8806f", "#e69e88", "#f0bea7"]
-WHEAT = ["#5c3e10", "#86601a", "#ad8526", "#cba536", "#e2c252", "#f0d97e", "#f9ecb4"]
 DUSK = ["#6e3a54", "#8a4658"]
 PALE = ["#c98e1c", "#f2c544", "#ffe58a", "#fff3c0", "#fffbe8"]
+LEAF = ["#2c3a12", "#3f5318", "#566e20", "#70892c", "#8ea43e"]
 GLOW = ["#2a0c02", "#5a1c04", "#93330a", "#d05814", "#f48a2a", "#ffc163", "#fff1c4"]
 
 ARCH_H = 3.7                                     # how far the vault rises over the lid
@@ -53,7 +55,7 @@ R = (_CHORD ** 2 + ARCH_H ** 2) / (2 * ARCH_H)  # vault radius
 CY = LID_TOP + ARCH_H - R                        # vault centre height
 SPAN = math.degrees(math.asin(_CHORD / R))       # half the vault's angle
 SUN = (8.0, LID_TOP)                             # the sun sits on the horizon line
-SUN_R = 2.6
+SUN_R = 2.95
 
 
 # ======================================================================================
@@ -62,14 +64,14 @@ SUN_R = 2.6
 
 def boards(size: int = 32) -> object:
     """Sandy beige boards laid across, with a muted coral pinstripe on every other board."""
-    img = planks(SANDY, size=size, rows=4, seed=101, vertical=False, knots=1, seam_dark=1)
+    img = planks(SANDY[2:], size=size, rows=4, seed=101, vertical=False, knots=0, seam_dark=0)
     for x in range(size):
-        put(img, x, 12, CORAL[4])
+        put(img, x, 12, CORAL[5])
     return img
 
 
 def lid_boards(size: int = 32) -> object:
-    img = planks(SANDY, size=size, rows=3, seed=103, vertical=False, knots=1, seam_dark=1)
+    img = planks(SANDY[2:], size=size, rows=3, seed=103, vertical=False, knots=0, seam_dark=0)
     for x in range(size):
         put(img, x, 4, AMBER[5])
     return img
@@ -161,12 +163,21 @@ def amber(size: int = 16) -> object:
     rng = random.Random(109)
     for y in range(size):
         for x in range(size):
-            tone = 7 if y == 0 else 6 if y < 3 else 5 if y < 9 else 4
+            tone = 6 if y == 0 else 5 if y < 3 else 4 if y < 9 else 3
             if y >= size - 2:
-                tone = 2
+                tone = 1
             if rng.random() < 0.1:
-                tone = max(2, tone - 1)
+                tone = max(1, tone - 1)
             put(img, x, y, AMBER[tone])
+    return img
+
+
+def rib(size: int = 16) -> object:
+    """A gold rib: bright crown, warm amber flanks."""
+    img = canvas(size)
+    for y in range(size):
+        for x in range(size):
+            put(img, x, y, GOLDEN[6] if x < 4 else GOLDEN[4] if x < 11 else AMBER[5])
     return img
 
 
@@ -180,42 +191,59 @@ def rivet(t: float) -> object:
     return shine(img, t, colour="#ffffff", width=3.0, strength=0.6, pause=0.55)
 
 
-def wheat_stalk(size: int = 16) -> object:
+def sunband(size: int = 16) -> object:
+    """The band round the base: a sunset gradient, coral at the bottom up to orange and gold."""
     img = canvas(size)
+    bands = [GOLDEN[4], AMBER[6], ORANGE[5], ORANGE[4], CORAL[4], CORAL[3]]
     for y in range(size):
         for x in range(size):
-            put(img, x, y, WHEAT[4] if x < 6 else WHEAT[3] if x < 12 else WHEAT[2])
+            k = y / size * len(bands)
+            i = min(len(bands) - 1, int(k))
+            if k - i > 0.7 and (x + y) % 2 == 0 and i + 1 < len(bands):
+                i += 1
+            put(img, x, y, bands[i])
     return img
 
 
-def wheat_head(size: int = 16) -> object:
-    """A wheat ear: plump kernels in staggered pairs, lit on one side."""
-    img = canvas(size)
-    for y in range(size):
-        for x in range(size):
-            kernel = (y + (x // 8) * 2) % 4
-            tone = 6 if kernel == 0 else 5 if kernel == 1 else 4 if kernel == 2 else 2
-            if x >= 8:
+def marigold(layer: str) -> object:
+    """A summer flower head seen face on: ten rounded petals cut out round the edge, lit
+    toward the top, warm orange (outer) or golden (inner) shading in to the heart."""
+    img = canvas(16)
+    pal = ORANGE if layer == "outer" else GOLDEN
+    for y in range(16):
+        for x in range(16):
+            dx, dy = x + 0.5 - 8, y + 0.5 - 8
+            d = math.hypot(dx, dy)
+            a = math.atan2(dy, dx)
+            edge = 6.4 + 1.5 * math.cos(10 * a)
+            if d > edge:
+                continue
+            tone = 5 if dy < 0 else 4
+            if d > edge - 1.2:
+                tone -= 2
+            if abs(math.cos(10 * a)) < 0.25 and d > 3:
                 tone -= 1
-            put(img, x, y, WHEAT[max(0, tone)])
+            put(img, x, y, pal[max(0, tone)])
     return img
 
 
-def ribbon(size: int = 16) -> object:
-    img = canvas(size)
-    for y in range(size):
-        for x in range(size):
-            tone = 5 if y < 3 else 3 if y < 12 else 2
-            put(img, x, y, CORAL[tone])
-    return img
-
-
-def petal(size: int = 16) -> object:
+def flower_heart(size: int = 16) -> object:
     img = canvas(size)
     for y in range(size):
         for x in range(size):
             d = math.hypot(x + 0.5 - 8, y + 0.5 - 8)
-            put(img, x, y, CORAL[6] if d < 4 else CORAL[5] if d < 7 else CORAL[4])
+            put(img, x, y, CORAL[1] if d > 6 else CORAL[2] if (x + y) % 3 else AMBER[2])
+    return img
+
+
+def leaf_tex(size: int = 16) -> object:
+    img = canvas(size)
+    for y in range(size):
+        for x in range(size):
+            tone = 3 if x < 8 else 2
+            if x == 8:
+                tone = 1
+            put(img, x, y, LEAF[tone])
     return img
 
 
@@ -229,13 +257,15 @@ def textures() -> None:
     save(roof(CORAL, 111)(), "roof_coral")
     save(roof(ORANGE, 113)(), "roof_orange")
     save(roof(AMBER, 117)(), "roof_amber")
-    save(roof(GOLDEN, 119)(), "roof_gold")
+    save(roof(GOLDEN[:-2], 119)(), "roof_gold")
     save(sky(), "sky")
     save(amber(), "amber")
-    save(wheat_stalk(), "stalk")
-    save(wheat_head(), "wheat")
-    save(ribbon(), "ribbon")
-    save(petal(), "petal")
+    save(rib(), "rib")
+    save(sunband(), "sunband")
+    save(marigold("outer"), "flower_a")
+    save(marigold("inner"), "flower_b")
+    save(flower_heart(), "flower_heart")
+    save(leaf_tex(), "leaf")
     save_animation(animate(sun_face, 10), "sun", frametime=3, interpolate=True)
     save_animation(animate(ray_tex(GOLDEN, 0.0), 12), "ray_long", frametime=3)
     save_animation(animate(ray_tex(PALE, 0.5), 12), "ray_short", frametime=3)
@@ -275,9 +305,37 @@ def vault() -> list[dict]:
     # amber rims round both arch ends and two straps over the crown
     for z in (L1 - 0.1, L0 - 0.15):
         parts += arc((8.0, CY, z + 0.12), R - 0.05, 90 - SPAN, 90 + SPAN, 10, 0.5, 0.26, "amber", plane="xy")
-    for z in (4.2, 11.8):
-        parts += arc((8.0, CY, z), R - 0.05, 90 - SPAN, 90 + SPAN, 8, 0.36, 0.9, "amber", plane="xy")
+    # gold ribs run back over the vault from where each long ray of the sun meets the rim,
+    # so the sunbeams carry on over the lid
+    for a in ray_angles():
+        theta = math.radians(rim_angle(a))
+        px, py = 8.0 + (R - 0.02) * math.cos(theta), CY + (R - 0.02) * math.sin(theta)
+        rib = box((px - 0.24, py - 0.2, L0 + 0.1), (px + 0.24, py + 0.2, L1 - 0.1), "rib")
+        parts.append(turn(rib, math.degrees(theta) - 90, "z", (px, py, 8.0)))
     return parts
+
+
+def ray_angles() -> list[float]:
+    """Directions of the seven long sun rays, degrees from +X round the sun's centre."""
+    return [18 + 24 * k for k in range(7)]
+
+
+def ray_reach(a: float) -> float:
+    """How far a ray from the sun's centre at angle a runs before it meets the vault rim."""
+    rad = math.radians(a)
+    cx, cy = SUN
+    reach = 0.0
+    while math.hypot(cx + (reach + 0.05) * math.cos(rad) - 8.0, cy + (reach + 0.05) * math.sin(rad) - CY) < R:
+        reach += 0.05
+    return reach
+
+
+def rim_angle(a: float) -> float:
+    """The vault angle (round its own centre) where the ray at a meets the rim."""
+    rad = math.radians(a)
+    cx, cy = SUN
+    d = ray_reach(a)
+    return math.degrees(math.atan2(cy + d * math.sin(rad) - CY, cx + d * math.cos(rad) - 8.0))
 
 
 def sunset() -> list[dict]:
@@ -286,20 +344,13 @@ def sunset() -> list[dict]:
     z = L1 - 0.06
     parts = []
     # long amber rays behind, short gold rays in front, fanning over the horizon
-    for k in range(7):
-        a = 18 + 24 * k
-        rad = math.radians(a)
-        # end where the ray meets the arch rim (the three middle rays break through it)
-        reach = 0.0
-        while math.hypot(cx + (reach + 0.1) * math.cos(rad) - 8.0, cy + (reach + 0.1) * math.sin(rad) - CY) < R - 0.35:
-            reach += 0.1
-        if 2 <= k <= 4:
-            reach += 0.55
-        r = box((cx - 0.26, cy + SUN_R - 0.2, z), (cx + 0.26, cy + reach, z + 0.1), "ray_long", uv="full")
+    for k, a in enumerate(ray_angles()):
+        reach = ray_reach(a) + (0.45 if 2 <= k <= 4 else 0.25)
+        r = box((cx - 0.3, cy + SUN_R - 0.2, z), (cx + 0.3, cy + reach, z + 0.12), "ray_long", uv="full")
         parts.append(turn(r, a - 90, "z", (cx, cy, z)))
     for k in range(6):
         a = 30 + 24 * k
-        r = box((cx - 0.2, cy + SUN_R - 0.2, z + 0.08), (cx + 0.2, cy + SUN_R + 0.95, z + 0.16), "ray_short",
+        r = box((cx - 0.2, cy + SUN_R - 0.2, z + 0.08), (cx + 0.2, cy + SUN_R + 0.85, z + 0.16), "ray_short",
                 uv="full", glow=6)
         parts.append(turn(r, a - 90, "z", (cx, cy, z)))
     # the half sun: horizontal slices of a disc, each showing its part of the sun texture
@@ -351,13 +402,14 @@ def frame() -> list[dict]:
 
 
 def sun_lock() -> list[dict]:
-    """A round amber sun lock across the seam, ringed with short rays, a glowing keyhole."""
+    """A round sun lock across the seam: an amber disc with a golden face, ringed by bold
+    rays, and a glowing keyhole."""
     cx, cy, zf = 8.0, 8.9, 16.02
-    parts = prism((cx, cy, (B1 + zf) / 2), 2.35, zf - B1, "amber", axis="z", sides=16, cap="rivet", uv="full")
+    parts = prism((cx, cy, (B1 + zf) / 2), 2.2, zf - B1, "amber", axis="z", sides=16, cap="amber", uv="full")
     for k in range(12):
-        r = box((cx - 0.3, cy + 2.2, B1 + 0.05), (cx + 0.3, cy + 3.05, B1 + 0.4), "amber")
+        r = box((cx - 0.2, cy + 2.0, B1 + 0.05), (cx + 0.2, cy + 3.3, B1 + 0.42), "rib")
         parts.append(turn(r, k * 30 + 15, "z", (cx, cy, B1)))
-    parts += prism((cx, cy, zf + 0.04), 1.55, 0.12, "amber", axis="z", sides=16, cap="amber", uv="full")
+    parts += prism((cx, cy, zf + 0.04), 1.65, 0.12, "rivet", axis="z", sides=16, cap="rivet", uv="full")
     parts += prism((cx, cy + 0.35, zf + 0.1), 0.5, 0.08, "keyhole", axis="z", sides=8, cap="keyhole", glow=11,
                    uv="full", shade=False)
     parts.append(box((cx - 0.2, cy - 0.85, zf + 0.06), (cx + 0.2, cy + 0.3, zf + 0.14), "keyhole", glow=11,
@@ -365,37 +417,43 @@ def sun_lock() -> list[dict]:
     return parts
 
 
-def sheaf(base, h: float = 7.0, lean: float = 8.0) -> list[dict]:
-    """A tied wheat sheaf standing on base against a wall facing +Z: fanned stalks with
-    ears on top, a coral ribbon and a little coral flower at the tie."""
-    x, y, z = base
+def flower(c, s: float, spin: float = 0.0) -> list[dict]:
+    """A summer flower facing +Z: an orange petal ring, a golden inner ring turned between
+    its petals, and a coral heart, each layer standing a little further out."""
+    x, y, z = c
+    parts = [box((x - s, y - s, z), (x + s, y + s, z + 0.04), "flower_a", uv="full",
+                 skip=("north", "east", "west", "up", "down")),
+             box((x - s * 0.66, y - s * 0.66, z + 0.12), (x + s * 0.66, y + s * 0.66, z + 0.16), "flower_b",
+                 uv="full", skip=("north", "east", "west", "up", "down"))]
+    turn(parts[0], spin, "z", c)
+    turn(parts[1], spin + 18, "z", c)
+    parts += prism((x, y, z + 0.18), s * 0.3, 0.2, "flower_heart", axis="z", sides=8, cap="flower_heart",
+                   uv="full")
+    return parts
+
+
+def flower_spray() -> list[dict]:
+    """Three flowers on stems with leaves, growing up a wall from the sunset band (built
+    on the front)."""
+    zf = B1 + 0.04
+    heads = ((5.0, 6.0, 1.15, 0), (8.0, 7.3, 1.35, 12), (11.0, 5.8, 1.1, 30))
     parts = []
-    tie = (x, y + h * 0.42, z)
-    for k, (dx, ear) in enumerate(((-0.95, 1.7), (-0.6, 1.9), (-0.25, 2.1), (0.1, 2.2), (0.45, 2.0), (0.8, 1.8))):
-        top = (x + dx * 1.9, y + h - (0.6 if k in (0, 5) else 0.0), z + 0.05 * k)
-        foot = (x + dx * 0.9, y, z + 0.05 * k)
-        parts.append(bar(foot, tie, 0.24, 0.22, "stalk"))
-        parts.append(bar(tie, top, 0.24, 0.22, "stalk"))
-        d = [top[i] - tie[i] for i in range(3)]
-        ln = math.sqrt(sum(v * v for v in d))
-        u = [v / ln for v in d]
-        tip = tuple(top[i] + u[i] * ear for i in range(3))
-        parts.append(bar(top, tip, 0.56, 0.44, "wheat", uv="full"))
-    parts.append(box((x - 0.75, tie[1] - 0.25, z - 0.2), (x + 0.75, tie[1] + 0.25, z + 0.45), "ribbon"))
-    # a little five-petal flower on the tie
-    fc = (x + 0.15, tie[1] + 0.05, z + 0.48)
-    for k in range(5):
-        p = box((fc[0] - 0.17, fc[1], fc[2]), (fc[0] + 0.17, fc[1] + 0.5, fc[2] + 0.08), "petal", uv="full")
-        parts.append(turn(p, k * 72, "z", fc))
-    parts.append(box((fc[0] - 0.15, fc[1] - 0.15, fc[2] + 0.04), (fc[0] + 0.15, fc[1] + 0.15, fc[2] + 0.14),
-                     "rivet", uv="full"))
-    return turn(parts, lean, "z", base)
+    for (x, y, s, spin) in heads:
+        parts.append(bar((8.0 + (x - 8.0) * 0.35, 2.3, zf + 0.05), (x, y, zf + 0.05), 0.22, 0.12, "leaf"))
+        parts += flower((x, y, zf + 0.14), s, spin)
+    for (x, y, a) in ((6.6, 3.6, 40), (9.6, 3.9, -40), (7.5, 4.8, 65), (8.7, 5.2, -60)):
+        lf = box((x - 0.32, y, zf + 0.06), (x + 0.32, y + 1.25, zf + 0.12), "leaf")
+        parts.append(turn(lf, a, "z", (x, y, zf + 0.09)))
+    return parts
 
 
-def side_sheaves() -> list[dict]:
-    """Two sheaves leaning on each side wall, built on the front then turned to the sides."""
-    wall = sheaf((4.6, 1.0, B1 + 0.2), lean=7) + sheaf((11.4, 1.0, B1 + 0.2), lean=-7)
-    return turn(copy(wall), 90, "y", (8.0, 0.0, 8.0)) + turn(copy(wall), -90, "y", (8.0, 0.0, 8.0))
+def side_flowers() -> list[dict]:
+    """A flower spray on each side wall, and the sunset band round the base."""
+    wall = flower_spray()
+    parts = turn(copy(wall), 90, "y", (8.0, 0.0, 8.0)) + turn(copy(wall), -90, "y", (8.0, 0.0, 8.0))
+    parts.append(box((B0 - 0.1, 1.0, B0 - 0.1), (B1 + 0.1, 2.3, B1 + 0.1), "sunband", uv="full",
+                     skip=("up", "down")))
+    return parts
 
 
 def back_hinges() -> list[dict]:
@@ -416,6 +474,6 @@ def models() -> dict:
     p += vault()
     p += sunset()
     p += sun_lock()
-    p += side_sheaves()
+    p += side_flowers()
     p += back_hinges()
     return {"main": model(p, display(KIND, p, size=1.0, gui_rotation=(28, 25, 0), gui_span=15.0))}

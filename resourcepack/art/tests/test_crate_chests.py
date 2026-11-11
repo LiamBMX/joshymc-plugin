@@ -24,8 +24,9 @@ REPO = PACK.parent
 ITEMS = PACK / "assets" / kit.NAMESPACE / "items"
 CONFIG = REPO / "src" / "main" / "resources" / "config.yml"
 
-# issue #1464: the first monthly models (January-March); issue #1482: April-June
-MONTHLY = ("january_chest", "february_chest", "march_chest", "april_chest", "may_chest", "june_chest")
+# issue #1464: the first monthly models (January-March); issue #1482: April-June; issue #1495: July-September
+MONTHLY = ("january_chest", "february_chest", "march_chest", "april_chest", "may_chest", "june_chest",
+           "july_chest", "august_chest", "september_chest")
 CRATES = ("cabin_crate", "homestead_crate", "campfire_crate", "harvest_chest", "stockpile_chest",
           "homestead_chest", "campfire_chest", "cabin_chest") + MONTHLY
 # the crates redesign (issues #1447, #1454): models that must look different from one another
@@ -101,7 +102,7 @@ class CrateChestModelsTest(unittest.TestCase):
     def test_monthly_models_are_distinct(self):
         """The monthly chests share no texture with each other or with the permanent chests,
         and each has its own silhouette height (crystal spire, bow, standing clover, umbrella,
-        sunflowers, straw hat and palm)."""
+        sunflowers, straw hat and palm, rockets, sunset vault, wheat bundle)."""
         textures = PACK / "assets" / kit.NAMESPACE / "textures" / "item"
         painted = {i: {p.read_bytes() for p in (textures / i).glob("*.png")} for i in MONTHLY + REDESIGN}
         tops = {i: kit.bounds(self._main(i))[1][1] for i in MONTHLY}
@@ -113,7 +114,7 @@ class CrateChestModelsTest(unittest.TestCase):
                 self.assertGreater(abs(tops[a] - tops[b]), 0.5, f"{a} and {b} are the same height")
 
     def test_bundled_config_maps_built_monthly_models(self):
-        """config.yml maps january..june to the models this pack now has."""
+        """config.yml maps january..september to the models this pack now has."""
         text = CONFIG.read_text()
         section = text[text.index("    monthly:"):]
         for item_id in MONTHLY:

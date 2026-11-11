@@ -5,9 +5,10 @@ A body of deep navy boards sprinkled with tiny painted stars, standing on a gold
 with red corner posts wrapped in gold bands and capped with gold star studs. A red and
 warm white striped bunting band runs round the lid. The lid is layered: the navy lid, a
 gold-trimmed red middle tier and a small navy star-spangled top tier that carries a
-little launch rack with three firework rockets (red, warm white and navy, striped, with
-gold and red nose cones) standing ready, the tallest crowned by a small glowing starburst.
-Two more rockets are strapped to each side wall with gold clamps, their fuses glowing.
+little launch rack with three firework rockets (red, cyan and navy, striped, with gold
+and red nose cones) standing ready, the tallest crowned by a small glowing starburst.
+Two more finned rockets are strapped to each side wall with gold clamps, their fuses
+glowing.
 
 The emblem is a firework burst on the lid's front: a glowing gold heart with long and
 short rays in red, warm white, gold and cyan, each ending in a glowing spark. Below it a
@@ -56,25 +57,25 @@ def stars_over(img, seed: int, count: int, colours=(CREAM[6], GOLD[6], CYAN[5]))
     """Scatter tiny painted stars (a bright pixel, sometimes with a dim cross) over img."""
     rng = random.Random(seed)
     w, h = img.size
-    for _ in range(count):
-        x, y = rng.randrange(1, w - 1), rng.randrange(1, h - 1)
-        c = rng.choice(colours)
+    for i in range(count):
+        x, y = rng.randrange(2, w - 2), rng.randrange(2, h - 2)
+        c = colours[2] if i % 6 == 5 else colours[i % 2]
         put(img, x, y, c)
-        if rng.random() < 0.4:
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                put(img, x + dx, y + dy, NAVY[6])
+        arm = NAVY[6] if c != colours[2] else CYAN[2]
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            put(img, x + dx, y + dy, arm)
     return img
 
 
 def boards(size: int = 32) -> object:
     """Deep navy boards, upright, with a few painted stars."""
     img = planks(NAVY[1:], size=size, rows=4, seed=71, vertical=True, knots=1, seam_dark=0)
-    return stars_over(img, 3, 9)
+    return stars_over(img, 3, 6)
 
 
 def lid_boards(size: int = 32) -> object:
     img = planks(NAVY[1:], size=size, rows=3, seed=73, vertical=False, knots=0, seam_dark=0)
-    return stars_over(img, 5, 6)
+    return stars_over(img, 5, 4)
 
 
 def spangled(size: int = 16) -> object:
@@ -84,7 +85,7 @@ def spangled(size: int = 16) -> object:
     for y in range(size):
         for x in range(size):
             put(img, x, y, NAVY[3] if rng.random() > 0.2 else NAVY[2])
-    return stars_over(img, 7, 9)
+    return stars_over(img, 7, 4)
 
 
 def bunting(size: int = 32) -> object:
@@ -244,11 +245,11 @@ def plate(size: int = 16) -> object:
     for y in range(size):
         for x in range(size):
             if x <= 1 or y <= 1:
-                c = RED[6] if (x == 0 or y == 0) else RED[5]
+                c = RED[5] if (x == 0 or y == 0) else RED[4]
             elif x >= size - 2 or y >= size - 2:
-                c = RED[1] if (x == size - 1 or y == size - 1) else RED[2]
+                c = RED[0] if (x == size - 1 or y == size - 1) else RED[1]
             else:
-                c = RED[3] if (x + y) % 7 else RED[4]
+                c = RED[2] if (x + y) % 7 else RED[3]
             put(img, x, y, c)
     for rx, ry in ((3, 3), (11, 3), (3, 11), (11, 11)):
         put(img, rx, ry, GOLD[6])
@@ -271,6 +272,7 @@ def textures() -> None:
     save(rocket(RED, CREAM)(), "rocket_red")
     save(rocket(CREAM, RED)(), "rocket_white")
     save(rocket(NAVY, CYAN)(), "rocket_navy")
+    save(rocket(CYAN, CREAM)(), "rocket_cyan")
     save(stick(), "stick")
     save(ray(RED)(), "ray_red")
     save(ray(CREAM)(), "ray_white")
@@ -385,7 +387,7 @@ def launch_rack() -> list[dict]:
         parts.append(box((4.9, RACK - 0.2, z - 0.12), (11.1, RACK + 0.1, z + 0.12), "gold"))
     # the middle rocket stands straight, the side ones lean out a little
     tall = 5.75
-    rockets = ((8.0, 7.6, tall, "rocket_red", "redwood", 0.64, 0), (6.1, 8.9, 3.7, "rocket_white", "redwood", 0.52, 10),
+    rockets = ((8.0, 7.6, tall, "rocket_red", "redwood", 0.64, 0), (6.1, 8.9, 3.7, "rocket_cyan", "redwood", 0.52, 10),
                (9.9, 8.7, 4.4, "rocket_navy", "gold", 0.56, -9))
     for (x, z, h, tex, cone, r, lean) in rockets:
         parts += turn(rocket_model((x, RACK, z), h, tex, radius=r, cone=cone, stick_len=0.5), lean, "z",
@@ -410,9 +412,13 @@ def side_rockets() -> list[dict]:
     turned to the east and west walls."""
     wall = []
     for (x, h, tex, cone) in ((5.0, 4.4, "rocket_red", "gold"), (11.0, 4.4, "rocket_white", "redwood")):
-        wall += rocket_model((x, 2.0, B1 + 0.36), h, tex, radius=0.42, cone=cone)
+        wall += rocket_model((x, 2.0, B1 + 0.2), h, tex, radius=0.52, cone=cone)
         for y in (3.0, 5.4):
-            wall.append(box((x - 0.62, y, B1 - 0.02), (x + 0.62, y + 0.36, B1 + 0.8), "gold", skip=("north",)))
+            wall.append(box((x - 0.72, y, B1 - 0.02), (x + 0.72, y + 0.36, B1 + 0.8), "gold", skip=("north",)))
+        # a pair of red fins at the base
+        for sx in (-1, 1):
+            fin = box((x, 1.7, B1 + 0.12), (x + 1.05 * sx, 2.75, B1 + 0.28), "redwood")
+            wall.append(turn(fin, 22 * sx, "z", (x, 2.75, B1 + 0.2)))
     out = []
     out += turn(copy(wall), 90, "y", (8.0, 0.0, 8.0))
     out += turn(copy(wall), -90, "y", (8.0, 0.0, 8.0))
@@ -438,14 +444,14 @@ def corners() -> list[dict]:
 def burst_emblem() -> list[dict]:
     """The firework burst on the lid's front: a glowing heart, long and short rays in four
     colours, a spark on every long ray's tip."""
-    cx, cy, z = 8.0, 12.0, L1 + 0.1
+    cx, cy, z = 8.0, 12.35, L1 + 0.1
     parts = prism((cx, cy, z + 0.12), 0.72, 0.16, "heart", axis="z", sides=8, cap="heart", glow=14, uv="full",
                   shade=False)
     cols = ("ray_red", "ray_gold", "ray_white", "ray_cyan")
     for k in range(16):
         a = k * 22.5
         long_ = k % 2 == 0
-        ln = 2.55 if long_ else 1.7
+        ln = 2.55 if long_ else 1.4
         w = 0.4 if long_ else 0.28
         r = box((cx - w / 2, cy + 0.65, z), (cx + w / 2, cy + ln, z + 0.14), cols[(k // 2 + k % 2) % 4], uv="full")
         turn(r, a, "z", (cx, cy, z))

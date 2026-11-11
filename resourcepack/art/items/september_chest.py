@@ -2,26 +2,27 @@
 an early autumn chest in burnt orange, maple red, golden brown, dark oak and muted olive.
 
 A body of dark oak boards (upright) reinforced with burnished copper: a plinth, a seam
-band, the lid's edge and L brackets on every corner run, with copper rivets. The lid is
-heaped with fallen leaves: a leaf litter top under a drift of loose 3D maple leaves in
-maple red, burnt orange, golden brown and olive, lying at every angle and spilling over
-the eaves on all four sides. Two pumpkins sit nested in the leaves (a big one and a small
-one, ribbed, with curled stems and a vine), a few acorns lie between them, and a tied
-bundle of golden wheat stands at the back corner, tied with an olive ribbon.
+band, the lid's edge and L brackets on every corner run, with copper rivets. The lid is a
+stepped mound of fallen leaves: three tiers of calm leaf litter, with 3D maple leaves in
+maple red, burnt orange, golden brown and olive shingled over every step's edge like roof
+tiles and a few loose ones on the crown. Two golden orange pumpkins sit on the crown (a
+big one and a small one, ribbed, with curled stems and a vine leaf), a few acorns lie in
+the leaves, and a full sheaf of golden wheat, tied with an olive band, stands at the back
+corner.
 
-The emblem is a maple leaf on the lid's front: a layered red leaf over a burnt orange one
-in a copper ring. Below it the lock is an acorn: a golden brown nut under a scaled olive
-cap, in relief on a copper plate across the seam, with a glowing amber keyhole in the nut.
-A small spray of leaves and acorns sits on each side wall, and two copper leaf-shaped
-hinges hold the lid at the back.
+The emblem is a maple leaf on the lid's front: a red leaf over a burnt orange one on a
+golden brown disc in a copper ring. Below it the lock is an acorn: a warm brown nut under
+a crosshatched cap, standing out in relief from a dark copper plate across the seam, with
+a glowing amber keyhole in the nut. Sprays of leaves and acorns sit on each side wall and
+on the front's upper corners, and two copper maple-leaf hinges hold the lid at the back.
 
 Animation (one loop): a warm glint passes over the copper, the keyhole glows like a
 lantern, and the wheat ears catch the light in turn.
 
 Block space, front (lock) = +Z. Built on art/items/_crate_chest.py, so it hides a vanilla
 chest and stays inside its block. Unlike the other crate chests (and the Harvest Chest's
-silver barrel vault): a flat lid buried in fallen leaves with pumpkins and a standing wheat
-bundle, an early fall look with no Halloween faces.
+silver barrel vault): a stepped mound of fallen leaves with pumpkins and a standing wheat
+sheaf, an early fall look with no Halloween faces.
 """
 from __future__ import annotations
 
@@ -36,16 +37,19 @@ from art.kit import animate, arc, bar, box, canvas, copy, display, lathe, model,
 ID = "september_chest"
 NAME = "September Chest"
 
-OAK = ["#1c120b", "#2a1b10", "#3a2615", "#4a321c", "#5b3f24", "#6d4e2e", "#80603a", "#957449"]
+OAK = ["#2a1b0f", "#3d2a16", "#52391f", "#664829", "#795833", "#8c693e", "#a07e4e", "#b99862"]
 COPPER = ["#2e1209", "#4d2010", "#723016", "#94401c", "#b05424", "#c86c32", "#de8c4a", "#f0b478"]
 MAPLE = ["#3e0b08", "#64140d", "#8c1f12", "#b02e17", "#cc4220", "#e05f2c", "#f08a4a"]
 BURNT = ["#4d1f06", "#7a320a", "#a3470f", "#c55f16", "#dd7a22", "#ee9a3c", "#f8bd66"]
 GOLDB = ["#4a300c", "#6e4813", "#93641c", "#b38027", "#cc9c38", "#e0b858", "#efd388"]
 OLIVE = ["#24260e", "#373a16", "#4b4f1f", "#60652a", "#777c38", "#8f944c", "#aaae68"]
-PUMPKIN = ["#4a1c04", "#7a3006", "#a8460a", "#cc5e10", "#e57a1c", "#f49a34", "#fbbd5e"]
+PUMPKIN = ["#5a2c06", "#8a460c", "#b06212", "#cf7c1c", "#e2962a", "#efb04a", "#f8cc78"]
+NUT = ["#4e2a12", "#6b3c1a", "#8a4e24", "#a8652e", "#c07e40", "#d69a58", "#e8b878"]
 GLOW = ["#2a1002", "#552104", "#8c3a08", "#c95f12", "#ef8c26", "#ffbd5a", "#fff0c0"]
 
 PILE = LID_TOP + 0.35      # top of the leaf litter
+TIER2 = PILE + 0.9         # the mound's middle step
+TIER3 = TIER2 + 0.9        # its crown
 
 # a maple leaf, left half (column 7 is the midrib); mirrored to the right
 _LEAF = [
@@ -89,16 +93,20 @@ def lid_boards(size: int = 32) -> object:
 
 def litter(size: int = 32) -> object:
     """Leaf litter: small overlapping leaves in every autumn colour over dark earth."""
-    img = canvas(size, fill=OAK[2])
+    img = canvas(size, fill=OAK[3])
     rng = random.Random(139)
+    for y in range(size):
+        for x in range(size):
+            if rng.random() < 0.15:
+                put(img, x, y, OAK[2])
     pals = (MAPLE, BURNT, GOLDB, OLIVE, BURNT, MAPLE)
-    for _ in range(70):
+    for _ in range(24):
         pal = rng.choice(pals)
         cx, cy = rng.randrange(size), rng.randrange(size)
-        r = rng.choice((1.6, 2.2, 2.8))
+        r = rng.choice((2.6, 3.2, 3.8))
         a = rng.random() * math.pi
-        for dy in range(-3, 4):
-            for dx in range(-3, 4):
+        for dy in range(-4, 5):
+            for dx in range(-4, 5):
                 u = dx * math.cos(a) + dy * math.sin(a)
                 v = -dx * math.sin(a) + dy * math.cos(a)
                 if (u / r) ** 2 + (v / (r * 0.6)) ** 2 <= 1:
@@ -115,7 +123,7 @@ def dark_field(size: int = 16) -> object:
     for y in range(size):
         for x in range(size):
             d = math.hypot(x + 0.5 - 8, y + 0.5 - 8)
-            put(img, x, y, OAK[2] if d < 6 else OAK[3])
+            put(img, x, y, GOLDB[3] if d < 5 else GOLDB[2] if d < 7 else GOLDB[1])
     return img
 
 
@@ -215,12 +223,12 @@ def nut(size: int = 16) -> object:
     img = canvas(size)
     for y in range(size):
         for x in range(size):
-            tone = 3 if x < 4 else 2 if x < 11 else 1
+            tone = 4 if x < 4 else 3 if x < 11 else 2
             if y > 13:
-                tone = 4
-            if x == 2 and 3 < y < 11:
                 tone = 5
-            put(img, x, y, GOLDB[tone])
+            if x == 2 and 3 < y < 11:
+                tone = 6
+            put(img, x, y, NUT[tone])
     return img
 
 
@@ -229,11 +237,9 @@ def cap(size: int = 16) -> object:
     img = canvas(size)
     for y in range(size):
         for x in range(size):
-            k = (x + (y // 3) * 2) % 4
-            tone = 4 if k == 0 else 3 if k < 3 else 1
-            if y % 3 == 2:
-                tone = 1
-            put(img, x, y, OAK[tone + 3] if k == 3 else OLIVE[tone])
+            # crosshatched scales: two diagonal grooves
+            groove = (x + y) % 4 == 0 or (x - y) % 4 == 0
+            put(img, x, y, "#3a2010" if groove else "#8e5c30" if (x + y) % 4 == 1 and y % 2 == 0 else "#6b4423")
     return img
 
 
@@ -272,7 +278,7 @@ def plate(size: int = 16) -> object:
     for y in range(size):
         for x in range(size):
             if x <= 1 or y <= 1:
-                c = COPPER[7] if (x == 0 or y == 0) else COPPER[6]
+                c = COPPER[6] if (x == 0 or y == 0) else COPPER[5]
             elif x >= size - 2 or y >= size - 2:
                 c = COPPER[1] if (x == size - 1 or y == size - 1) else COPPER[2]
             else:
@@ -357,14 +363,22 @@ def leaf_pile() -> list[dict]:
     parts = [box((L0 - 0.05, LID_TOP - 0.01, L0 - 0.05), (L1 + 0.05, PILE, L1 + 0.05), "litter",
                  skip=("down",), faces={"north": "lidboards", "south": "lidboards", "east": "lidboards",
                                         "west": "lidboards"}, uv="full")]
+    for (lo, hi, y0, y1) in ((2.0, 14.0, PILE - 0.02, TIER2), (4.0, 12.0, TIER2 - 0.02, TIER3)):
+        parts.append(box((lo, y0, lo), (hi, y1, hi), "litter", uv="full", skip=("down",)))
     rng = random.Random(157)
-    spots = ((2.2, 2.4), (5.0, 1.8), (12.6, 2.6), (2.0, 7.2), (6.4, 12.2), (13.8, 8.6), (10.4, 13.6), (2.8, 13.2),
-             (13.4, 13.0), (7.8, 6.6), (4.8, 9.6), (11.6, 5.0))
-    for i, (x, z) in enumerate(spots):
-        tex = LEAVES[i % 4]
-        s = 2.2 + rng.random() * 0.9
-        parts.append(leaf_card((x, PILE + 0.04 + 0.05 * (i % 3), z), s, tex, yaw=rng.random() * 360,
-                               tilt=rng.uniform(-14, 14), roll=rng.uniform(-14, 14)))
+    # leaves shingled over each step's edge, tipped outward like roof tiles
+    edge = []
+    for i, (x, s) in enumerate(((3.6, 2.4), (6.8, 2.2), (9.8, 2.5), (12.6, 2.1))):
+        e = leaf_card((x, TIER2 + 0.03, 14.0), s, LEAVES[i % 4], yaw=rng.uniform(-30, 30), tilt=24)
+        edge.append(e)
+    for i, (x, s) in enumerate(((5.6, 2.3), (9.6, 2.2))):
+        edge.append(leaf_card((x, TIER3 + 0.03, 11.8), s, LEAVES[(i + 2) % 4], yaw=rng.uniform(-30, 30), tilt=20))
+    for yaw in (0, 90, 180, 270):
+        parts += turn(copy(edge), yaw, "y", (8.0, 0.0, 8.0))
+    # a few loose leaves on the crown
+    for i, (x, z) in enumerate(((5.0, 5.0), (11.0, 6.5), (7.8, 11.0))):
+        parts.append(leaf_card((x, TIER3 + 0.05, z), 2.3, LEAVES[(i + 1) % 4], yaw=rng.random() * 360,
+                               tilt=rng.uniform(-8, 8), roll=rng.uniform(-8, 8)))
     # leaves hanging over the eaves: built on the front edge, turned to each side
     eave = []
     for i, (x, droop, s) in enumerate(((2.6, 74, 2.3), (6.2, 80, 2.0), (11.0, 76, 2.4), (13.6, 82, 1.9))):
@@ -410,30 +424,36 @@ def acorn_flat(c, s: float, normal: str = "y", yaw: float = 0.0) -> list[dict]:
 
 def lid_harvest() -> list[dict]:
     """Pumpkins, acorns and a wheat bundle in the leaves."""
-    parts = pumpkin_model((5.4, PILE - 0.1, 8.6), 2.05, 2.5, lean=-4)
-    parts += pumpkin_model((9.2, PILE - 0.1, 10.8), 1.35, 1.7, lean=6)
-    for (x, z, yaw) in ((8.6, 6.4, 30), (10.8, 8.2, 120), (3.4, 12.0, 75)):
-        parts += acorn_flat((x, PILE + 0.36, z), 0.9, yaw=yaw)
+    parts = pumpkin_model((6.0, TIER3 - 0.1, 8.2), 1.8, 2.2, lean=-4)
+    parts += pumpkin_model((9.4, TIER3 - 0.1, 10.2), 1.25, 1.6, lean=6)
+    for (x, z, yaw) in ((8.8, 6.4, 30), (13.0, 9.0, 120), (3.0, 12.6, 75)):
+        parts += acorn_flat((x, mound(x, z) + 0.36, z), 0.9, yaw=yaw)
     # the wheat bundle standing at the back right corner
     bx, bz = 11.9, 4.4
-    base = PILE - 0.1
-    tie = (bx, base + 2.2, bz)
-    stalks = ((-0.55, 0.0, 0.0), (0.0, -0.5, 0.3), (0.5, 0.1, 0.2), (-0.25, 0.45, 0.45), (0.3, 0.5, 0.55),
-              (0.0, 0.0, 0.7), (-0.6, -0.35, 0.15))
+    base = TIER2 - 0.1
+    tie = (bx, base + 2.0, bz)
+    stalks = ((-0.6, 0.0, 0.0), (0.0, -0.6, 0.3), (0.6, 0.1, 0.2), (-0.3, 0.5, 0.45), (0.35, 0.55, 0.55),
+              (0.0, 0.0, 0.75), (-0.65, -0.4, 0.15), (0.5, -0.45, 0.35), (-0.15, -0.25, 0.6))
     for (dx, dz, extra) in stalks:
-        foot = (bx + dx * 0.5, base, bz + dz * 0.5)
-        top = (bx + dx * 1.7, base + 5.8 + extra, bz + dz * 1.7)
-        parts.append(bar(foot, tie, 0.2, 0.2, "stalk"))
-        parts.append(bar(tie, top, 0.2, 0.2, "stalk"))
+        foot = (bx + dx * 0.55, base, bz + dz * 0.55)
+        top = (bx + dx * 2.2, base + 4.85 + extra, bz + dz * 2.2)
+        parts.append(bar(foot, tie, 0.26, 0.26, "stalk"))
+        parts.append(bar(tie, top, 0.26, 0.26, "stalk"))
         d = [top[i] - tie[i] for i in range(3)]
         ln = math.sqrt(sum(v * v for v in d))
-        tip = tuple(top[i] + d[i] / ln * 1.75 for i in range(3))
-        parts.append(bar(top, tip, 0.5, 0.42, "wheat", uv="full"))
-    parts += prism(tie, 0.62, 0.55, "ribbon", sides=8, cap="ribbon")
-    for sx in (-1, 1):
-        lp = box((bx, tie[1] - 0.2, bz + 0.6), (bx + 0.9 * sx, tie[1] + 0.25, bz + 0.75), "ribbon")
-        parts.append(turn(lp, -30 * sx, "z", (bx, tie[1], bz + 0.68)))
+        tip = tuple(top[i] + d[i] / ln * 1.7 for i in range(3))
+        parts.append(bar(top, tip, 0.56, 0.46, "wheat", uv="full"))
+    parts += prism(tie, 0.7, 0.6, "ribbon", sides=8, cap="ribbon")
     return parts
+
+
+def mound(x: float, z: float) -> float:
+    """Height of the leaf mound's top at (x, z)."""
+    if 4.0 < x < 12.0 and 4.0 < z < 12.0:
+        return TIER3
+    if 2.0 < x < 14.0 and 2.0 < z < 14.0:
+        return TIER2
+    return PILE
 
 
 def copper_frame() -> list[dict]:
@@ -456,36 +476,37 @@ def maple_emblem() -> list[dict]:
     cx, cy, z = 8.0, 12.15, L1
     parts = arc((cx, cy, z + 0.12), 2.15, 0, 360, 12, 0.34, 0.24, "copper", plane="xy")
     parts += prism((cx, cy, z + 0.05), 2.0, 0.1, "lidboards", axis="z", sides=16, cap="litter_dark", uv="full")
-    parts.append(standing_leaf((cx + 0.25, cy + 0.05, z + 0.12), 4.2, "leaf_orange", spin=-16))
-    parts.append(standing_leaf((cx - 0.05, cy + 0.15, z + 0.2), 3.9, "leaf_red", spin=6))
+    parts.append(standing_leaf((cx + 0.35, cy + 0.05, z + 0.12), 4.3, "leaf_orange", spin=-20))
+    parts.append(standing_leaf((cx - 0.05, cy + 0.15, z + 0.2), 4.6, "leaf_red", spin=2))
     return parts
 
 
 def acorn_lock() -> list[dict]:
     """An acorn in relief on a copper plate across the seam, a glowing keyhole in the nut."""
     zf = 16.02
-    parts = [box((6.3, 5.0, B1 - 0.05), (9.7, 11.0, zf), "plate",
+    zp = 15.84                  # the plate stands back so the acorn can stand out
+    parts = [box((6.2, 5.9, B1 - 0.05), (9.8, 11.2, zp), "plate",
                  uv={"north": [0, 0, 4, 4], "east": [0, 0, 1, 4], "west": [0, 0, 1, 4], "up": [0, 0, 4, 1],
                      "down": [0, 0, 4, 1], "south": [0, 0, 16, 16]})]
     # nut: horizontal slices from the pointed tip up to the cap
-    nut_prof = ((5.3, 0.2), (5.6, 0.6), (6.0, 0.95), (6.5, 1.2), (7.1, 1.35), (8.0, 1.4), (9.0, 1.3))
+    nut_prof = ((4.7, 0.15), (5.1, 0.55), (5.6, 0.95), (6.3, 1.25), (7.1, 1.38), (8.0, 1.4), (9.0, 1.3))
     for i, ((y0, w0), (y1, w1)) in enumerate(zip(nut_prof, nut_prof[1:])):
         w = (w0 + w1) / 2
-        v0, v1 = 16 - (y1 - 5.3) / 3.7 * 16, 16 - (y0 - 5.3) / 3.7 * 16
-        parts.append(box((8.0 - w, y0, zf - 0.02), (8.0 + w, y1, zf + 0.12 + 0.02 * min(i, 6 - i)), "nut",
+        v0, v1 = 16 - (y1 - 4.7) / 4.3 * 16, 16 - (y0 - 4.7) / 4.3 * 16
+        parts.append(box((8.0 - w, y0, zp - 0.02), (8.0 + w, y1, zf + 0.1 + 0.025 * min(i, 6 - i)), "nut",
                          uv={"south": [8 - 8 * w / 1.4, v0, 8 + 8 * w / 1.4, v1], "north": [0, 0, 16, 16],
                              "east": [0, v0, 2, v1], "west": [0, v0, 2, v1], "up": [0, 0, 16, 1],
                              "down": [0, 15, 16, 16]}))
     # cap: wider, scaled, with a nub
-    cap_prof = ((8.9, 1.55), (9.6, 1.6), (10.2, 1.3), (10.6, 0.7))
+    cap_prof = ((8.9, 1.5), (9.6, 1.5), (10.2, 1.2), (10.6, 0.6))
     for (y0, w0), (y1, w1) in zip(cap_prof, cap_prof[1:]):
         w = (w0 + w1) / 2
-        parts.append(box((8.0 - w, y0, zf - 0.02), (8.0 + w, y1, zf + 0.22), "cap", uv="full"))
+        parts.append(box((8.0 - w, y0, zp - 0.02), (8.0 + w, y1, zf + 0.22), "cap", uv="full"))
     parts.append(bar((8.0, 10.5, zf + 0.08), (8.45, 11.5, zf + 0.08), 0.28, 0.24, "stem"))
     # keyhole in the nut
-    parts += prism((8.0, 7.75, zf + 0.19), 0.42, 0.06, "keyhole", axis="z", sides=8, cap="keyhole", glow=11,
+    parts += prism((8.0, 7.75, zf + 0.2), 0.42, 0.04, "keyhole", axis="z", sides=8, cap="keyhole", glow=11,
                    uv="full", shade=False)
-    parts.append(box((7.8, 6.7, zf + 0.16), (8.2, 7.7, zf + 0.22), "keyhole", glow=11, shade=False, uv="full"))
+    parts.append(box((7.8, 6.7, zf + 0.18), (8.2, 7.7, zf + 0.22), "keyhole", glow=11, shade=False, uv="full"))
     # copper hasp from the lid over the cap
     parts.append(box((7.3, SEAM + 1.0, zf - 0.06), (8.7, SEAM + 1.9, zf + 0.06), "copper"))
     return parts
