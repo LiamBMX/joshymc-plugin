@@ -647,6 +647,11 @@
       "icon": "joshymc/joshees_bar.png",
       "sha1": "9dde6c80ce2bb6dd192f8ccbadc7b497e16666db"
     },
+    "joshymc:july_chest": {
+      "bedrock_name": "july_chest",
+      "icon": "joshymc/july_chest.png",
+      "sha1": "4809b3a5a7b87c7198fa02094567751413e0b071"
+    },
     "joshymc:july_key": {
       "bedrock_name": "july_key",
       "icon": "joshymc/july_key.png",
