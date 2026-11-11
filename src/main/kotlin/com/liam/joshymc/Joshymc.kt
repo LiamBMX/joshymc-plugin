@@ -106,7 +106,10 @@ class Joshymc : JavaPlugin() {
             "orders.limits.",
             "rank-perks.",
             // Issue #1192: Mob Waves wave list. Backfilled only as a whole, when the section is missing.
-            "$MOB_WAVES_KEY."
+            "$MOB_WAVES_KEY.",
+            // Issue #1514: crate rarity tiers are admin-owned (a deleted tier stays deleted); with
+            // no section at all CrateRarity uses its bundled defaults.
+            "crates.rarities."
         )
 
         private const val MOB_WAVES_KEY = "hosted-events.mobs.waves"

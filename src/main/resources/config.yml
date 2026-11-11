@@ -730,6 +730,18 @@ crates:
         october: "joshymc:october_chest"
         november: "joshymc:november_chest"
         december: "joshymc:december_chest"
+  # Reward rarity labels for the crate GUIs (issue #1514). Presentation only: a reward shows a
+  # rarity when crates.yml gives it "rarity: <id>"; weights, chances and draws never change, and
+  # nothing is computed from a reward's chance. Rewards without a rarity show no rarity line.
+  # color is #RRGGBB, label is what players see (max 32 characters).
+  rarities-enabled: true
+  rarities:
+    common: {label: "Common", color: "#AAAAAA"}
+    uncommon: {label: "Uncommon", color: "#55FF55"}
+    rare: {label: "Rare", color: "#5599FF"}
+    epic: {label: "Epic", color: "#AA55FF"}
+    legendary: {label: "Legendary", color: "#FFAA00"}
+    mythic: {label: "Mythic", color: "#FF5555"}
   # Physical crate opening animation (issue #1503), played before the usual reward GUI (Spin,
   # Pulse, Instant, Select, Select 3). Cosmetic only: keys, rewards, odds, Select 3 picks and
   # pending-reward recovery are unchanged. Only the opener sees it: their own temporary copy of

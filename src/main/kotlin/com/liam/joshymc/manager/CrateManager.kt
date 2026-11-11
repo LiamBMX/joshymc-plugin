@@ -1,7 +1,10 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.crate.CrateRewardText
+import com.liam.joshymc.crate.CrateSelection
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.util.MinecraftColors
 import com.liam.joshymc.util.depositItemSafely
 import com.liam.joshymc.util.giveItemSafely
@@ -41,6 +44,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         private val CRATE_GUI_TITLE_PREFIX = "Crate: "
         private val PREVIEW_GUI_TITLE_PREFIX = "Preview: "
         private const val ACTIVATION_DEBOUNCE_MS = 500L
+        /** How long a finished Spin / Pulse stays on its result screen before closing (issue #1514). */
+        private const val RESULT_SCREEN_TICKS = 60L
     }
 
     /**
@@ -138,7 +143,17 @@ class CrateManager(private val plugin: Joshymc) : Listener {
          * (`custom-enchantments:`) without a snapshot. Snapshot rewards already carry theirs in
          * the item's PDC, so this stays empty for them (issue #1300).
          */
-        val customEnchantments: Map<String, Int> = emptyMap()
+        val customEnchantments: Map<String, Int> = emptyMap(),
+        /**
+         * Issue #1514: crates.yml `rarity: <id>`, a presentation-only label from
+         * `config.yml > crates.rarities`. Never changes the weight or the draw.
+         */
+        val rarity: String? = null,
+        /**
+         * Issue #1514: crates.yml `hidden: true`. The Preview and Spin/Pulse reels show it as a
+         * mystery (its real chance is still shown); it is revealed when won or picked.
+         */
+        val hidden: Boolean = false
     )
 
     enum class CrateMode { RANDOM, SELECT, SELECT_3 }
@@ -167,7 +182,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
          * Null means "no color configured" — colorable particles fall back to a
          * default color and non-colorable particles are unaffected either way.
          */
-        val particleColor: Color? = null
+        val particleColor: Color? = null,
+        /** Issue #1514: crates.yml `listed: false` keeps the crate out of the `/crate` browser. */
+        val listed: Boolean = true
     )
 
     data class CrateLocation(
@@ -229,6 +246,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      */
     val opening = com.liam.joshymc.crate.CrateOpeningAnimator(plugin, models)
 
+    /** The player-facing `/crate` browser (issue #1514). Only shows and previews; never opens a crate. */
+    val browser = com.liam.joshymc.crate.CrateBrowserMenu(plugin, this)
+
     /**
      * One crate action per player, click kind and tick, shared by the block and the model hitbox
      * (issue #1451), so one click can never run the crate flow twice.
@@ -261,6 +281,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             plugin.saveResource("crates.yml", false)
         }
         cratesConfig = YamlConfiguration.loadConfiguration(cratesFile)
+        loadRarities()
 
         // A RANDOM crate's animated reward is written here the moment its key is consumed and
         // removed when it is delivered, so an interrupted animation (quit, reload, shutdown,
@@ -340,6 +361,21 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     }
 
     // --- Config loading ---
+
+    /** Issue #1514: presentation-only rarity tiers from `config.yml > crates.rarities`. */
+    var rarities: com.liam.joshymc.crate.CrateRarity.Settings = com.liam.joshymc.crate.CrateRarity.DEFAULT_SETTINGS
+        private set
+
+    private fun loadRarities() {
+        val enabled = plugin.config.getBoolean("crates.rarities-enabled", true)
+        val section = plugin.config.getConfigurationSection("crates.rarities")
+        val raw = section?.getKeys(false)?.map { id ->
+            val entry = section.getConfigurationSection(id)
+            com.liam.joshymc.crate.CrateRarity.Raw(id, entry?.getString("label"), entry?.getString("color"))
+        }
+        rarities = com.liam.joshymc.crate.CrateRarity.parse(enabled, raw)
+        for (problem in rarities.problems) plugin.logger.warning("[Crates] crates.$problem")
+    }
 
     private fun loadCrates() {
         crates.clear()
@@ -429,7 +465,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                         for (enchId in section.getKeys(false)) customEnchantments[enchId.lowercase()] = section.getInt(enchId)
                     }
 
-                    rewards.add(CrateReward(mat, amount, weight, rewardDisplayName, enchantments, itemBase64, customEnchantments))
+                    val rarity = rewardSection.getString("rarity")?.trim()?.takeIf { it.isNotEmpty() }
+                    if (rarities.unknown(rarity)) {
+                        // Presentation only: the crate still opens, the reward just shows no rarity.
+                        plugin.logger.warning("[Crates] Crate '$id' reward '$rewardKey' has unknown rarity '$rarity' (not in config.yml crates.rarities); it shows no rarity.")
+                    }
+                    val hidden = rewardSection.getBoolean("hidden", false)
+                    rewards.add(CrateReward(mat, amount, weight, rewardDisplayName, enchantments, itemBase64, customEnchantments, rarity, hidden))
                 }
             }
 
@@ -440,7 +482,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
             crates[id] = CrateDef(
                 id, displayName, keyMaterial, keyName, keyItemModel, animationGlass, rewards,
-                mode, animationType, idleParticle, winParticle, particleColor
+                mode, animationType, idleParticle, winParticle, particleColor,
+                listed = crateSection.getBoolean("listed", true)
             )
         }
         loadAliases()
@@ -635,6 +678,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             cratesConfig.set("$path.win-particle", crate.winParticle.name)
             val colorId = MinecraftColors.ALL.firstOrNull { it.color == crate.particleColor }?.id
             cratesConfig.set("$path.particle-color", colorId)
+            cratesConfig.set("$path.listed", if (crate.listed) null else false)
 
             for ((idx, reward) in crate.rewards.withIndex()) {
                 val rewardPath = "$path.rewards.reward_$idx"
@@ -653,6 +697,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 if (reward.itemBase64 != null) {
                     cratesConfig.set("$rewardPath.item-base64", reward.itemBase64)
                 }
+                if (reward.rarity != null) cratesConfig.set("$rewardPath.rarity", reward.rarity)
+                if (reward.hidden) cratesConfig.set("$rewardPath.hidden", true)
             }
         }
         cratesConfig.save(cratesFile)
@@ -1176,7 +1222,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }
         when (crate.animationType) {
             AnimationType.INSTANT -> {
-                if (finishInFlight(player, pendingId)) {
+                if (finishInFlight(player, pendingId, winMessage(crate, listOf(winner)))) {
                     spawnWinParticles(player, crate)
                     player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
                 }
@@ -1191,7 +1237,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
     private fun openSelectGui(player: Player, crate: CrateDef, page: Int = 0) {
         val title = Component.text("Pick a Reward: ")
-            .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
+            .append(Component.text(crate.displayName, crateNameColor))
             .decoration(TextDecoration.ITALIC, false)
 
         val totalPages = CrateLayout.pageCount(crate.rewards.size)
@@ -1201,129 +1247,177 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         val size = 45
         val gui = CustomGui(title, size)
-
-        // Fill everything with glass so the formation's empty gaps look intentional.
-        val filler = ItemStack(crate.animationGlass)
-        filler.editMeta { it.displayName(Component.empty()) }
-        for (i in 0 until size) gui.inventory.setItem(i, filler.clone())
+        pickFrame(gui, crate)
+        gui.setItem(4, pickHeader(crate, "Pick 1 Reward", listOf(
+            "Choose the reward you want.",
+            "You confirm it on the next screen;",
+            "your key is only used then."
+        )))
 
         val positions = CrateLayout.positions(pageRewards.size)
-        gui.border(filler)
-
-        // Place rewards centered inside the inner 7-wide content area, balanced across rows.
-        val startRow = 1
-        val endRow = (size / 9) - 2
-        val contentRows = (startRow..endRow).map { row -> (1..7).map { col -> row * 9 + col } }
-
-        val rewardCount = crate.rewards.size
-        val rowsNeeded = if (rewardCount == 0) 0 else (rewardCount + 6) / 7
-        val verticalOffset = (contentRows.size - rowsNeeded).coerceAtLeast(0) / 2
-        val rowSizes = getBalancedRowSizes(rewardCount, rowsNeeded)
-
-        val slots = mutableListOf<Int>()
-        for (i in 0 until rowsNeeded) {
-            val rowIndex = verticalOffset + i
-            if (rowIndex >= contentRows.size) break
-            slots.addAll(getCenteredRewardSlots(contentRows[rowIndex], rowSizes[i]))
-        }
-
         for ((idx, reward) in pageRewards.withIndex()) {
             if (idx >= positions.size) break
             val (row, col) = positions[idx]
             val slot = (row + 1) * 9 + (col + 1)
-
-            // Use the actual stored item (preserves trims, custom items)
-            val item = rewardTemplate(reward)
-                ?: ItemStack(reward.material, reward.amount.coerceIn(1, 64))
-            item.amount = reward.amount.coerceIn(1, 64)
-            val existingLore = item.itemMeta?.lore() ?: emptyList()
-            item.editMeta { meta ->
-                meta.displayName(
-                    Component.text(reward.displayName, TextColor.color(0xFFAA00))
-                        .decoration(TextDecoration.ITALIC, false)
-                        .decoration(TextDecoration.BOLD, true)
-                )
-                val lore = mutableListOf<Component>()
-                lore.add(Component.empty())
-                lore.add(
-                    Component.text("  Amount: ", NamedTextColor.GRAY)
-                        .append(Component.text("${reward.amount}", NamedTextColor.WHITE))
-                        .decoration(TextDecoration.ITALIC, false)
-                )
-                if (existingLore.isNotEmpty()) {
-                    lore.add(Component.empty())
-                    lore.addAll(existingLore)
-                } else if (reward.enchantments.isNotEmpty()) {
-                    lore.add(Component.empty())
-                    lore.add(Component.text("  Enchantments:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
-                    for ((ench, level) in reward.enchantments) {
-                        lore.add(
-                            Component.text("  - ${ench.key.key.replace("_", " ")} $level", NamedTextColor.DARK_GRAY)
-                                .decoration(TextDecoration.ITALIC, false)
-                        )
-                    }
-                }
-                lore.add(Component.empty())
-                lore.add(Component.text("  Click to select!", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
-                lore.add(Component.empty())
-                meta.lore(lore)
-            }
-
-            val rewardRef = reward
-            val crateId = crate.id
+            val globalIndex = pageStart + idx
+            val item = rewardDisplay(
+                crate, reward, CrateRewardText.Context.PICK, player,
+                action = listOf(plain("  Click to choose this reward", NamedTextColor.GREEN))
+            )
             gui.setItem(slot, item) { p, _ ->
-                // Re-validate and consume key at click time (anti-dupe + anti-refund abuse)
-                val keyInHand = p.inventory.itemInMainHand
-                if (!isKey(keyInHand, crateId)) {
-                    p.closeInventory()
-                    plugin.commsManager.send(
-                        p,
-                        Component.text("You no longer have a ", NamedTextColor.RED)
-                            .append(Component.text(crate.keyName, TextColor.color(0xFFAA00)))
-                            .append(Component.text(".", NamedTextColor.RED))
-                    )
-                    return@setItem
-                }
-                // Re-check inventory space — the player may have filled it while the GUI was open.
-                // Main-hand slot frees up only when the key stack is size 1.
-                val hasFreeSlot = p.inventory.firstEmpty() != -1 || keyInHand.amount == 1
-                if (!hasFreeSlot) {
-                    p.closeInventory()
-                    plugin.commsManager.send(
-                        p,
-                        Component.text("Your inventory is full — clear some space and try again.", NamedTextColor.RED)
-                    )
-                    p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
-                    return@setItem
-                }
-                val rewardItem = buildRewardItem(rewardRef)
-                consumeOneKey(p)
-                p.closeInventory()
-                plugin.giveItemSafely(p, rewardItem)
-                spawnWinParticles(p, crate)
-                p.playSound(p.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
-                plugin.commsManager.send(
-                    p,
-                    Component.text("You selected ", NamedTextColor.GREEN)
-                        .append(Component.text(rewardRef.displayName, TextColor.color(0xFFAA00)))
-                        .append(Component.text(" x${rewardRef.amount}", NamedTextColor.GREEN))
-                        .append(Component.text("!", NamedTextColor.GREEN))
-                )
+                // The GUI is only a view: the crate must still be the one it was built from.
+                if (pickStale(p, crate)) return@setItem
+                GuiStyle.clickSound(p)
+                openSelectConfirm(p, crate, globalIndex, safePage)
             }
         }
 
-        if (totalPages > 1) {
-            if (safePage > 0) {
-                gui.setItem(39, navButton("« Previous Page")) { p, _ -> openSelectGui(p, crate, safePage - 1) }
-            }
-            gui.setItem(40, pageIndicator(safePage + 1, totalPages))
-            if (safePage < totalPages - 1) {
-                gui.setItem(41, navButton("Next Page »")) { p, _ -> openSelectGui(p, crate, safePage + 1) }
-            }
-        }
+        addPickNavigation(gui, safePage, totalPages) { p, target -> if (!pickStale(p, crate)) openSelectGui(p, crate, target) }
 
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    /**
+     * Issue #1514: Select mode's confirmation step, so one stray click never spends a key. The
+     * chosen reward is highlighted; Confirm re-checks the crate, the key in hand and the space
+     * on the server, then takes exactly one key and pays exactly once ([CrateSelection.OneShot]).
+     */
+    private fun openSelectConfirm(player: Player, crate: CrateDef, rewardIndex: Int, page: Int) {
+        val reward = crate.rewards.getOrNull(rewardIndex)
+        if (reward == null) {
+            player.closeInventory()
+            plugin.commsManager.send(player, Component.text("This crate's rewards changed — please reopen and try again.", NamedTextColor.RED))
+            return
+        }
+        val title = Component.text("Confirm Reward: ")
+            .append(Component.text(crate.displayName, crateNameColor))
+            .decoration(TextDecoration.ITALIC, false)
+        val gui = CustomGui(title, 27)
+        pickFrame(gui, crate)
+        highlightFrame(gui)
+        gui.setItem(4, pickHeader(crate, "Your Choice", listOf("Confirm to use 1 key", "and claim this reward.")))
+        gui.setItem(13, rewardDisplay(
+            crate, reward, CrateRewardText.Context.PICK, player,
+            action = listOf(plain("  ✔ Selected", NamedTextColor.GREEN)),
+            highlight = true
+        ))
+
+        val claim = CrateSelection.OneShot()
+        gui.setItem(20, confirmButton("Use 1 key and claim this reward.")) { p, _ ->
+            if (!claim.take()) return@setItem
+            if (pickStale(p, crate)) return@setItem
+            val keyInHand = p.inventory.itemInMainHand
+            if (!isKey(keyInHand, crate.id)) {
+                p.closeInventory()
+                sendKeyMissing(p, crate)
+                return@setItem
+            }
+            // Re-check inventory space — the player may have filled it while the GUI was open.
+            // Main-hand slot frees up only when the key stack is size 1.
+            val hasFreeSlot = p.inventory.firstEmpty() != -1 || keyInHand.amount == 1
+            if (!hasFreeSlot) {
+                p.closeInventory()
+                plugin.commsManager.send(p, Component.text("Your inventory is full — clear some space and try again. No key was used.", NamedTextColor.RED))
+                p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                return@setItem
+            }
+            val rewardItem = buildRewardItem(reward)
+            consumeOneKey(p)
+            plugin.giveItemSafely(p, rewardItem)
+            spawnWinParticles(p, crate)
+            p.playSound(p.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
+            plugin.commsManager.send(p, winMessage(crate, listOf(reward), "You selected "))
+            openPickResult(p, crate, listOf(reward))
+        }
+        gui.setItem(22, GuiStyle.back("Choose Another")) { p, _ ->
+            if (claim.used || pickStale(p, crate)) return@setItem
+            GuiStyle.pageSound(p)
+            openSelectGui(p, crate, page)
+        }
+        gui.setItem(24, cancelButton()) { p, _ ->
+            p.closeInventory()
+            plugin.commsManager.send(p, Component.text("Selection cancelled — no key was used.", NamedTextColor.YELLOW))
+        }
+
+        plugin.guiManager.open(player, gui)
+    }
+
+    // --- Shared pick-GUI pieces (issue #1514) ---
+
+    /** Crate-coloured background for the pick and confirmation screens. */
+    private fun pickFrame(gui: CustomGui, crate: CrateDef) {
+        val filler = pane(crate.animationGlass)
+        for (i in 0 until gui.size) gui.inventory.setItem(i, filler.clone())
+    }
+
+    /** Lime panes around the center slot (13) of a 27-slot confirmation / result screen. */
+    private fun highlightFrame(gui: CustomGui) {
+        val lime = pane(Material.LIME_STAINED_GLASS_PANE)
+        for (slot in listOf(3, 5, 12, 14, 21, 23)) gui.inventory.setItem(slot, lime.clone())
+    }
+
+    private fun pickHeader(crate: CrateDef, heading: String, lines: List<String>): ItemStack {
+        val item = ItemStack(Material.NAME_TAG)
+        item.editMeta { meta ->
+            meta.displayName(Component.text(heading, NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, true))
+            val lore = mutableListOf<Component>(Component.empty())
+            lore.add(plain("  ", NamedTextColor.GRAY).append(Component.text(crate.displayName, crateNameColor)))
+            for (line in lines) lore.add(plain("  $line", NamedTextColor.GRAY))
+            lore.add(Component.empty())
+            meta.lore(lore)
+        }
+        return item
+    }
+
+    private fun confirmButton(detail: String): ItemStack = GuiStyle.item(
+        Material.EMERALD_BLOCK,
+        Component.text("Confirm", NamedTextColor.GREEN).decoration(TextDecoration.BOLD, true),
+        listOf(Component.empty(), plain("  $detail", NamedTextColor.GRAY), Component.empty())
+    )
+
+    private fun cancelButton(): ItemStack = GuiStyle.item(
+        Material.BARRIER,
+        Component.text("Cancel", NamedTextColor.RED).decoration(TextDecoration.BOLD, true),
+        listOf(Component.empty(), plain("  Discard this selection — no key used.", NamedTextColor.GRAY), Component.empty())
+    )
+
+    private fun addPickNavigation(gui: CustomGui, page: Int, totalPages: Int, open: (Player, Int) -> Unit) {
+        if (totalPages <= 1) return
+        if (page > 0) gui.setItem(39, navButton("« Previous Page")) { p, _ -> GuiStyle.pageSound(p); open(p, page - 1) }
+        gui.setItem(40, pageIndicator(page + 1, totalPages))
+        if (page < totalPages - 1) gui.setItem(41, navButton("Next Page »")) { p, _ -> GuiStyle.pageSound(p); open(p, page + 1) }
+    }
+
+    private fun sendKeyMissing(player: Player, crate: CrateDef) {
+        plugin.commsManager.send(
+            player,
+            Component.text("You no longer have a ", NamedTextColor.RED)
+                .append(Component.text(crate.keyName, defaultRewardColor))
+                .append(Component.text(" in your hand. No key was used.", NamedTextColor.RED))
+        )
+    }
+
+    /**
+     * True (and the GUI closed, the player told) when a pick screen no longer matches the server:
+     * the crate was edited or reloaded since the GUI opened (a new definition), or it can't be
+     * opened here any more. A stale screen never pays, whatever it shows.
+     */
+    private fun pickStale(player: Player, crate: CrateDef): Boolean {
+        if (crates[crate.id] !== crate) {
+            select3Sessions.remove(player.uniqueId)
+            player.closeInventory()
+            plugin.commsManager.send(player, Component.text("This crate changed while you were choosing — please open it again. No key was used.", NamedTextColor.RED))
+            return true
+        }
+        val problem = crateProblem(crate, randomDraw = false) ?: gamemodeProblem(player, crate) ?: return false
+        select3Sessions.remove(player.uniqueId)
+        player.closeInventory()
+        plugin.commsManager.send(player, Component.text("This crate is unavailable right now. No key was used.", NamedTextColor.RED))
+        if (player.hasPermission("joshymc.crate.admin")) {
+            plugin.commsManager.send(player, Component.text("Admin: crate '${crate.id}' — $problem", NamedTextColor.GRAY))
+        }
+        return true
     }
 
     // --- SELECT_3 mode GUI ---
@@ -1343,7 +1437,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }
 
         val title = Component.text("Select 3: ")
-            .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
+            .append(Component.text(crate.displayName, crateNameColor))
             .decoration(TextDecoration.ITALIC, false)
 
         val totalPages = CrateLayout.pageCount(crate.rewards.size)
@@ -1354,24 +1448,27 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         val size = 45
         val gui = CustomGui(title, size)
         gui.onClose = { p -> select3Sessions.remove(p.uniqueId) }
+        pickFrame(gui, crate)
 
-        val filler = ItemStack(crate.animationGlass)
-        filler.editMeta { it.displayName(Component.empty()) }
-        for (i in 0 until size) gui.inventory.setItem(i, filler.clone())
-        gui.border(filler)
-
+        val picked = session.selectedIndices.sorted().mapNotNull { crate.rewards.getOrNull(it) }
         val progress = ItemStack(Material.NAME_TAG)
         progress.editMeta { meta ->
             meta.displayName(
-                Component.text("Selected: ${session.selectedIndices.size}/3", NamedTextColor.YELLOW)
+                Component.text("Selected: ${session.selectedIndices.size}/${CrateSelection.SELECT_3_PICKS}", NamedTextColor.YELLOW)
                     .decoration(TextDecoration.ITALIC, false)
+                    .decoration(TextDecoration.BOLD, true)
             )
-            meta.lore(listOf(
-                Component.empty(),
-                Component.text("  Pick 3 different rewards.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.text("  Click a selected reward again to deselect.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.empty()
-            ))
+            val lore = mutableListOf<Component>(Component.empty())
+            for (reward in picked) {
+                lore.add(plain("  ✔ ", NamedTextColor.GREEN).append(Component.text("${reward.displayName} x${reward.amount}", rewardColor(reward))))
+            }
+            repeat(CrateSelection.SELECT_3_PICKS - picked.size) { lore.add(plain("  ○ (empty)", NamedTextColor.DARK_GRAY)) }
+            lore.add(Component.empty())
+            lore.add(plain("  Pick 3 different rewards.", NamedTextColor.GRAY))
+            lore.add(plain("  Click a selected reward again to deselect.", NamedTextColor.GRAY))
+            lore.add(plain("  Your key is only used when you confirm.", NamedTextColor.GRAY))
+            lore.add(Component.empty())
+            meta.lore(lore)
         }
         gui.setItem(4, progress)
 
@@ -1383,48 +1480,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val (row, col) = positions[idxOnPage]
             val slot = (row + 1) * 9 + (col + 1)
             val isSelected = session.selectedIndices.contains(globalIndex)
-
-            val item = rewardTemplate(reward)
-                ?: ItemStack(reward.material, reward.amount.coerceIn(1, 64))
-            item.amount = reward.amount.coerceIn(1, 64)
-            val existingLore = item.itemMeta?.lore() ?: emptyList()
-            item.editMeta { meta ->
-                meta.displayName(
-                    Component.text(reward.displayName, TextColor.color(0xFFAA00))
-                        .decoration(TextDecoration.ITALIC, false)
-                        .decoration(TextDecoration.BOLD, true)
-                )
-                val lore = mutableListOf<Component>()
-                lore.add(Component.empty())
-                lore.add(
-                    Component.text("  Amount: ", NamedTextColor.GRAY)
-                        .append(Component.text("${reward.amount}", NamedTextColor.WHITE))
-                        .decoration(TextDecoration.ITALIC, false)
-                )
-                if (existingLore.isNotEmpty()) {
-                    lore.add(Component.empty())
-                    lore.addAll(existingLore)
-                } else if (reward.enchantments.isNotEmpty()) {
-                    lore.add(Component.empty())
-                    lore.add(Component.text("  Enchantments:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
-                    for ((ench, level) in reward.enchantments) {
-                        lore.add(
-                            Component.text("  - ${ench.key.key.replace("_", " ")} $level", NamedTextColor.DARK_GRAY)
-                                .decoration(TextDecoration.ITALIC, false)
-                        )
-                    }
-                }
-                lore.add(Component.empty())
-                if (isSelected) {
-                    lore.add(Component.text("  Selected", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
-                    lore.add(Component.text("  Click to deselect", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
-                } else {
-                    lore.add(Component.text("  Click to select!", NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false))
-                }
-                lore.add(Component.empty())
-                meta.lore(lore)
-                if (isSelected) meta.setEnchantmentGlintOverride(true)
+            val action = if (isSelected) {
+                listOf(plain("  ✔ Selected", NamedTextColor.GREEN), plain("  Click to deselect", NamedTextColor.GRAY))
+            } else if (session.selectedIndices.size >= CrateSelection.SELECT_3_PICKS) {
+                listOf(plain("  Deselect a reward to pick this one", NamedTextColor.GRAY))
+            } else {
+                listOf(plain("  Click to select!", NamedTextColor.GREEN))
             }
+            val item = rewardDisplay(crate, reward, CrateRewardText.Context.PICK, player, action, highlight = isSelected)
 
             gui.setItem(slot, item) { p, _ ->
                 val sess = select3Sessions[p.uniqueId]
@@ -1433,16 +1496,20 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     plugin.commsManager.send(p, Component.text("Your selection session expired — try opening the crate again.", NamedTextColor.RED))
                     return@setItem
                 }
-                if (sess.selectedIndices.contains(globalIndex)) {
-                    sess.selectedIndices.remove(globalIndex)
-                    p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.6f, 1.0f)
-                    openSelect3Gui(p, crate, safePage)
-                    return@setItem
+                if (pickStale(p, crate)) return@setItem
+                when (val result = CrateSelection.toggle(sess.selectedIndices, globalIndex, crate.rewards.size)) {
+                    CrateSelection.Toggle.Full, CrateSelection.Toggle.Invalid -> {
+                        GuiStyle.errorSound(p)
+                        return@setItem
+                    }
+                    is CrateSelection.Toggle.Changed -> {
+                        val added = result.selected.size > sess.selectedIndices.size
+                        sess.selectedIndices.clear()
+                        sess.selectedIndices.addAll(result.selected)
+                        p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.6f, if (added) 1.3f else 1.0f)
+                    }
                 }
-                if (sess.selectedIndices.size >= 3) return@setItem
-                sess.selectedIndices.add(globalIndex)
-                p.playSound(p.location, Sound.UI_BUTTON_CLICK, 0.6f, 1.3f)
-                if (sess.selectedIndices.size >= 3) {
+                if (CrateSelection.complete(sess.selectedIndices, crate.rewards.size)) {
                     openSelect3Confirm(p, crate)
                 } else {
                     openSelect3Gui(p, crate, safePage)
@@ -1450,15 +1517,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             }
         }
 
-        if (totalPages > 1) {
-            if (safePage > 0) {
-                gui.setItem(39, navButton("« Previous Page")) { p, _ -> openSelect3Gui(p, crate, safePage - 1) }
-            }
-            gui.setItem(40, pageIndicator(safePage + 1, totalPages))
-            if (safePage < totalPages - 1) {
-                gui.setItem(41, navButton("Next Page »")) { p, _ -> openSelect3Gui(p, crate, safePage + 1) }
-            }
-        }
+        addPickNavigation(gui, safePage, totalPages) { p, target -> if (!pickStale(p, crate)) openSelect3Gui(p, crate, target) }
 
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
@@ -1467,74 +1526,52 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     /** Final review step for Select 3 — shows the 3 chosen rewards and requires Confirm before payout. */
     private fun openSelect3Confirm(player: Player, crate: CrateDef) {
         val session = select3Sessions[player.uniqueId]
-        if (session == null || session.crateId != crate.id || session.selectedIndices.size != 3) {
+        if (session == null || session.crateId != crate.id || !CrateSelection.complete(session.selectedIndices, crate.rewards.size)) {
             select3Sessions.remove(player.uniqueId)
             player.closeInventory()
             plugin.commsManager.send(player, Component.text("Your selection session expired — try opening the crate again.", NamedTextColor.RED))
             return
         }
-        val chosen = session.selectedIndices.mapNotNull { crate.rewards.getOrNull(it) }
-        if (chosen.size != 3) {
-            select3Sessions.remove(player.uniqueId)
-            player.closeInventory()
-            plugin.commsManager.send(player, Component.text("This crate's rewards changed — please reopen and try again.", NamedTextColor.RED))
-            return
-        }
+        val chosen = session.selectedIndices.sorted().mapNotNull { crate.rewards.getOrNull(it) }
 
         val title = Component.text("Confirm Selection: ")
-            .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
+            .append(Component.text(crate.displayName, crateNameColor))
             .decoration(TextDecoration.ITALIC, false)
         val gui = CustomGui(title, 27)
         gui.onClose = { p -> select3Sessions.remove(p.uniqueId) }
-
-        val filler = ItemStack(Material.BLACK_STAINED_GLASS_PANE)
-        filler.editMeta { it.displayName(Component.empty()) }
-        for (i in 0 until 27) gui.inventory.setItem(i, filler.clone())
+        pickFrame(gui, crate)
+        val lime = pane(Material.LIME_STAINED_GLASS_PANE)
+        for (slot in listOf(10, 12, 14, 16)) gui.inventory.setItem(slot, lime.clone())
+        gui.setItem(4, pickHeader(crate, "Your 3 Rewards", listOf("Confirm to use 1 key", "and claim all three.")))
 
         val displaySlots = listOf(11, 13, 15)
         for ((i, reward) in chosen.withIndex()) {
-            gui.inventory.setItem(displaySlots[i], buildRewardDisplay(reward))
-        }
-
-        val confirmItem = ItemStack(Material.EMERALD_BLOCK)
-        confirmItem.editMeta { meta ->
-            meta.displayName(
-                Component.text("Confirm", NamedTextColor.GREEN)
-                    .decoration(TextDecoration.ITALIC, false)
-                    .decoration(TextDecoration.BOLD, true)
-            )
-            meta.lore(listOf(
-                Component.empty(),
-                Component.text("  Consume 1 key and claim these 3 rewards.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.empty()
+            gui.inventory.setItem(displaySlots[i], rewardDisplay(
+                crate, reward, CrateRewardText.Context.PICK, player,
+                action = listOf(plain("  ✔ Selected", NamedTextColor.GREEN)),
+                highlight = true
             ))
         }
-        gui.setItem(20, confirmItem) { p, _ ->
+
+        val claim = CrateSelection.OneShot()
+        gui.setItem(20, confirmButton("Consume 1 key and claim these 3 rewards.")) { p, _ ->
+            if (!claim.take()) return@setItem
             val currentSession = select3Sessions[p.uniqueId]
-            if (currentSession == null || currentSession.crateId != crate.id || currentSession.selectedIndices.size != 3) {
+            if (currentSession == null || currentSession.crateId != crate.id ||
+                !CrateSelection.complete(currentSession.selectedIndices, crate.rewards.size)) {
                 select3Sessions.remove(p.uniqueId)
                 p.closeInventory()
                 plugin.commsManager.send(p, Component.text("Your selection session expired — try opening the crate again.", NamedTextColor.RED))
                 return@setItem
             }
-            val rewardsToGrant = currentSession.selectedIndices.mapNotNull { crate.rewards.getOrNull(it) }
-            if (rewardsToGrant.size != 3) {
-                select3Sessions.remove(p.uniqueId)
-                p.closeInventory()
-                plugin.commsManager.send(p, Component.text("This crate's rewards changed — please reopen and try again.", NamedTextColor.RED))
-                return@setItem
-            }
+            if (pickStale(p, crate)) return@setItem
+            val rewardsToGrant = currentSession.selectedIndices.sorted().mapNotNull { crate.rewards.getOrNull(it) }
 
             val keyInHand = p.inventory.itemInMainHand
             if (!isKey(keyInHand, crate.id)) {
                 select3Sessions.remove(p.uniqueId)
                 p.closeInventory()
-                plugin.commsManager.send(
-                    p,
-                    Component.text("You no longer have a ", NamedTextColor.RED)
-                        .append(Component.text(crate.keyName, TextColor.color(0xFFAA00)))
-                        .append(Component.text(".", NamedTextColor.RED))
-                )
+                sendKeyMissing(p, crate)
                 return@setItem
             }
             // Build the exact stacks that will be granted, then make sure all 3 fit before
@@ -1553,38 +1590,23 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
             consumeOneKey(p)
             select3Sessions.remove(p.uniqueId)
-            p.closeInventory()
 
             for (rewardItem in rewardItems) {
                 plugin.giveItemSafely(p, rewardItem)
             }
             spawnWinParticles(p, crate)
             p.playSound(p.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
-            plugin.commsManager.send(p, Component.text("You selected:", NamedTextColor.GREEN))
-            for (reward in rewardsToGrant) {
-                plugin.commsManager.send(
-                    p,
-                    Component.text("  - ", NamedTextColor.DARK_GRAY)
-                        .append(Component.text(reward.displayName, TextColor.color(0xFFAA00)))
-                        .append(Component.text(" x${reward.amount}", NamedTextColor.GREEN))
-                )
-            }
+            plugin.commsManager.send(p, winMessage(crate, rewardsToGrant, "You selected "))
+            openPickResult(p, crate, rewardsToGrant)
         }
 
-        val cancelItem = ItemStack(Material.BARRIER)
-        cancelItem.editMeta { meta ->
-            meta.displayName(
-                Component.text("Cancel", NamedTextColor.RED)
-                    .decoration(TextDecoration.ITALIC, false)
-                    .decoration(TextDecoration.BOLD, true)
-            )
-            meta.lore(listOf(
-                Component.empty(),
-                Component.text("  Discard this selection — no key used.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-                Component.empty()
-            ))
+        gui.setItem(22, GuiStyle.back("Change Picks")) { p, _ ->
+            if (claim.used || pickStale(p, crate)) return@setItem
+            GuiStyle.pageSound(p)
+            openSelect3Gui(p, crate)
         }
-        gui.setItem(24, cancelItem) { p, _ ->
+
+        gui.setItem(24, cancelButton()) { p, _ ->
             select3Sessions.remove(p.uniqueId)
             p.closeInventory()
             plugin.commsManager.send(p, Component.text("Selection cancelled — no key was used.", NamedTextColor.YELLOW))
@@ -1602,13 +1624,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         plugin.giveItemSafely(player, rewardItem)
         spawnWinParticles(player, crate)
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
-        plugin.commsManager.send(
-            player,
-            Component.text("You won ", NamedTextColor.GREEN)
-                .append(Component.text(reward.displayName, TextColor.color(0xFFAA00)))
-                .append(Component.text(" x${reward.amount}", NamedTextColor.GREEN))
-                .append(Component.text("!", NamedTextColor.GREEN))
-        )
+        plugin.commsManager.send(player, winMessage(crate, listOf(reward)))
         activeAnimations.remove(player.uniqueId)
     }
 
@@ -1629,7 +1645,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // Pick 7 random rewards to show in the middle row
         val displayRewards = (0 until 7).map { selectWeightedReward(crate) }
         for ((i, reward) in displayRewards.withIndex()) {
-            gui.inventory.setItem(10 + i, buildRewardDisplay(reward))
+            gui.inventory.setItem(10 + i, buildRewardDisplay(crate, reward))
         }
 
         plugin.guiManager.open(player, gui)
@@ -1671,18 +1687,20 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
             if (step >= maxSteps || activeSlots.size <= 1) {
                 // Final reveal — show the winner in center
-                inv.setItem(centerSlot, buildRewardDisplay(winner))
+                inv.setItem(centerSlot, buildRewardDisplay(crate, winner))
                 player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_BELL, 1.0f, 2.0f)
 
                 Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
-                    if (!finishInFlight(player, pendingId)) return@scheduleSyncDelayedTask
+                    if (!finishInFlight(player, pendingId, winMessage(crate, listOf(winner)))) return@scheduleSyncDelayedTask
+                    // Issue #1514: paid first, then the GUI turns into the result screen.
+                    showReelResult(inv, crate, winner)
                     spawnWinParticles(player, crate)
                     player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
 
                     Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
                         activeAnimations.remove(player.uniqueId)
-                        if (player.isOnline) player.closeInventory()
-                    }, 40L)
+                        if (player.isOnline && player.openInventory.topInventory == inv) player.closeInventory()
+                    }, RESULT_SCREEN_TICKS)
                 }, 10L)
                 return@scheduleSyncDelayedTask
             }
@@ -1725,7 +1743,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // lands in slot 13, never one reconstructed from the GUI item.
         val reel = MutableList(7) { selectWeightedReward(crate) }
         for ((i, reward) in reel.withIndex()) {
-            gui.inventory.setItem(10 + i, buildRewardDisplay(reward))
+            gui.inventory.setItem(10 + i, buildRewardDisplay(crate, reward))
         }
 
         // Point arrows at the winning slot (13) from top-middle (4) and bottom-middle (22)
@@ -1766,7 +1784,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             val incoming = if (step == maxSteps - 4) winner else selectWeightedReward(crate)
             reel.removeAt(0)
             reel.add(incoming)
-            inv.setItem(16, buildRewardDisplay(incoming))
+            inv.setItem(16, buildRewardDisplay(crate, incoming))
 
             player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f, 1.0f + (step.toFloat() / maxSteps))
 
@@ -1775,16 +1793,17 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             if (nextStep >= maxSteps) {
                 // Animation complete - center slot 13 (reel index 3) shows the stored winner
                 Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
-                    if (!finishInFlight(player, pendingId)) return@scheduleSyncDelayedTask
-
+                    if (!finishInFlight(player, pendingId, winMessage(crate, listOf(winner)))) return@scheduleSyncDelayedTask
+                    // Issue #1514: paid first, then the GUI turns into the result screen.
+                    showReelResult(inv, crate, winner)
                     spawnWinParticles(player, crate)
                     player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
 
-                    // Close after short delay
+                    // Close after a short look at the result (only if it's still this GUI).
                     Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, {
                         activeAnimations.remove(player.uniqueId)
-                        if (player.isOnline) player.closeInventory()
-                    }, 40L)
+                        if (player.isOnline && player.openInventory.topInventory == inv) player.closeInventory()
+                    }, RESULT_SCREEN_TICKS)
                 }, 10L)
             } else {
                 // Calculate next delay - speed decreases (delay increases) as we go
@@ -1821,10 +1840,10 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * Pays out the animation that owns [pendingId]. Returns false (and pays nothing) if the
      * animation was interrupted in the meantime; that reward is delivered by another path.
      */
-    private fun finishInFlight(player: Player, pendingId: String): Boolean {
+    private fun finishInFlight(player: Player, pendingId: String, wonMessage: Component? = null): Boolean {
         if (!player.isOnline || inFlightRewards[player.uniqueId] != pendingId) return false
         inFlightRewards.remove(player.uniqueId)
-        claimPendingReward(player, pendingId)
+        claimPendingReward(player, pendingId, wonMessage)
         return true
     }
 
@@ -1833,7 +1852,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * caller whose DELETE removed it hands the item over. Whatever doesn't fit is written back
      * under the same id and retried later, never dropped on the ground.
      */
-    private fun claimPendingReward(player: Player, pendingId: String): Boolean {
+    private fun claimPendingReward(player: Player, pendingId: String, wonMessage: Component? = null): Boolean {
         val row = plugin.databaseManager.queryFirst(
             "SELECT item, label, created_at FROM crate_pending_rewards WHERE id = ? AND owner_uuid = ?",
             pendingId, player.uniqueId.toString()
@@ -1868,7 +1887,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         plugin.commsManager.send(
             player,
-            Component.text("You won ", NamedTextColor.GREEN)
+            wonMessage ?: Component.text("You won ", NamedTextColor.GREEN)
                 .append(Component.text(label, TextColor.color(0xFFAA00)))
                 .append(Component.text("!", NamedTextColor.GREEN))
         )
@@ -1965,31 +1984,202 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return arrow
     }
 
-    private fun buildRewardDisplay(reward: CrateReward): ItemStack {
-        // If we have a serialized item (custom items, trims), use it as the base
-        // and overwrite the display name/lore for clarity in the GUI.
-        val base = rewardTemplate(reward) ?: ItemStack(reward.material, reward.amount)
-        if (base.amount != reward.amount) base.amount = reward.amount
+    // --- Reward presentation (issue #1514) ---
+    // Every crate GUI decorates rewards through rewardDisplay, so names, quantities, rarities,
+    // chances and hidden rewards read the same everywhere. Display stacks are never delivered:
+    // payouts always come from buildRewardItem / crate_pending_rewards.
 
-        val existingLore = base.itemMeta?.lore() ?: emptyList()
+    private val defaultRewardColor = TextColor.color(0xFFAA00)
+    private val crateNameColor = TextColor.color(0x55FFFF)
 
+    private fun plain(text: String, color: TextColor): Component =
+        Component.text(text, color).decoration(TextDecoration.ITALIC, false)
+
+    /** The reward's colour: its rarity's, else the gold every crate GUI used before. */
+    fun rewardColor(reward: CrateReward): TextColor =
+        rarities.tier(reward.rarity)?.let { TextColor.color(it.color) } ?: defaultRewardColor
+
+    /** [withStatus]: only the Preview shows availability, so other screens skip those checks. */
+    private fun rewardInfo(crate: CrateDef, reward: CrateReward, player: Player?, withStatus: Boolean): CrateRewardText.Info =
+        CrateRewardText.Info(
+            name = reward.displayName,
+            amount = reward.amount,
+            weight = reward.weight,
+            totalWeight = crate.rewards.sumOf { it.weight },
+            rarity = rarities.tier(reward.rarity),
+            hidden = reward.hidden,
+            unavailableReason = if (withStatus) rewardUnavailableReason(player, crate, reward) else null,
+            pickCrate = isManualPickMode(crate.mode),
+        )
+
+    /**
+     * Why [reward] can't be won right now, in player-facing words, or null. Uses the same checks
+     * every open path runs ([crateProblem], [gamemodeProblem]); the GUI only reports them.
+     */
+    private fun rewardUnavailableReason(player: Player?, crate: CrateDef, reward: CrateReward): String? {
+        val fixing = "this crate is being fixed by staff"
+        if (configProblems[crate.id] != null) return fixing
+        if (crate.mode == CrateMode.SELECT_3 && crate.rewards.size < 3) return fixing
+        if (reward.amount < 1) return fixing
+        if (reward.itemBase64 != null && deserializeItem(reward.itemBase64) == null) return fixing
+        if (rewardEnchantProblem(reward) != null) return fixing
+        if (player != null) {
+            val item = rewardTemplate(reward)
+            val scope = item?.let { plugin.itemManager.getCustomItemId(it) }?.let { plugin.itemManager.getItem(it) }?.gamemodeScope
+            if (scope != null && !plugin.gamemodeLockManager.isAllowed(scope, player.world)) {
+                return "only on ${scope.gamemode?.displayName ?: scope.id}"
+            }
+        }
+        return null
+    }
+
+    /**
+     * A display stack for [reward] in [context]: its real item (custom name, model, enchants and
+     * own lore kept) with the shared detail lines, or a mystery icon when the context conceals a
+     * hidden reward. [action] lines go at the bottom (e.g. "Click to select").
+     */
+    private fun rewardDisplay(
+        crate: CrateDef,
+        reward: CrateReward,
+        context: CrateRewardText.Context,
+        player: Player? = null,
+        action: List<Component> = emptyList(),
+        highlight: Boolean = false,
+    ): ItemStack {
+        val info = rewardInfo(crate, reward, player, withStatus = context == CrateRewardText.Context.PREVIEW)
+        val concealed = CrateRewardText.conceals(info, context)
+        val color = rewardColor(reward)
+        val base = if (concealed) {
+            ItemStack(Material.ENDER_EYE)
+        } else {
+            (rewardTemplate(reward) ?: ItemStack(reward.material)).also { it.amount = reward.amount.coerceIn(1, 99) }
+        }
+        val ownLore = if (concealed) emptyList() else base.itemMeta?.lore() ?: emptyList()
         base.editMeta { meta ->
             meta.displayName(
-                Component.text(reward.displayName, TextColor.color(0xFFAA00))
+                Component.text(CrateRewardText.name(info, context), color)
                     .decoration(TextDecoration.ITALIC, false)
                     .decoration(TextDecoration.BOLD, true)
             )
             val lore = mutableListOf<Component>()
-            lore.add(Component.empty())
-            lore.add(Component.text("  x${reward.amount}", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
-            if (existingLore.isNotEmpty()) {
+            if (concealed) {
                 lore.add(Component.empty())
-                lore.addAll(existingLore)
+                lore.add(plain("  A secret reward. Win it to find out!", NamedTextColor.GRAY))
+            } else if (ownLore.isNotEmpty()) {
+                lore.add(Component.empty())
+                lore.addAll(ownLore)
+            } else if (reward.enchantments.isNotEmpty()) {
+                lore.add(Component.empty())
+                lore.add(plain("  Enchantments:", NamedTextColor.GRAY))
+                for ((ench, level) in reward.enchantments) {
+                    lore.add(plain("  - ${ench.key.key.replace("_", " ")} $level", NamedTextColor.DARK_GRAY))
+                }
+            }
+            lore.add(Component.empty())
+            for (line in CrateRewardText.lines(info, context)) {
+                val valueColor: TextColor = when (line.kind) {
+                    CrateRewardText.Kind.RARITY -> color
+                    CrateRewardText.Kind.QUANTITY -> NamedTextColor.WHITE
+                    CrateRewardText.Kind.CHANCE -> NamedTextColor.YELLOW
+                    CrateRewardText.Kind.STATUS -> if (line.good) NamedTextColor.GREEN else NamedTextColor.RED
+                }
+                lore.add(plain("  ${line.label}: ", NamedTextColor.GRAY).append(Component.text(line.value, valueColor)))
+            }
+            if (action.isNotEmpty()) {
+                lore.add(Component.empty())
+                lore.addAll(action)
             }
             lore.add(Component.empty())
             meta.lore(lore)
+            if (highlight) meta.setEnchantmentGlintOverride(true)
         }
         return base
+    }
+
+    /** Spin / Pulse reel entry: hidden rewards stay a mystery until the reveal. */
+    private fun buildRewardDisplay(crate: CrateDef, reward: CrateReward): ItemStack =
+        rewardDisplay(crate, reward, CrateRewardText.Context.REEL)
+
+    /** The revealed reward, highlighted. */
+    private fun resultDisplay(crate: CrateDef, reward: CrateReward): ItemStack =
+        rewardDisplay(crate, reward, CrateRewardText.Context.RESULT, highlight = true)
+
+    private fun pane(material: Material): ItemStack =
+        ItemStack(material).also { stack -> stack.editMeta { it.displayName(Component.empty()) } }
+
+    /** "You won!" banner for result screens: the reward(s), their rarity and the crate. */
+    private fun resultBanner(crate: CrateDef, rewards: List<CrateReward>, title: String): ItemStack {
+        val item = ItemStack(Material.NETHER_STAR)
+        item.editMeta { meta ->
+            meta.displayName(
+                Component.text(title, NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false).decoration(TextDecoration.BOLD, true)
+            )
+            val lore = mutableListOf<Component>(Component.empty())
+            for (reward in rewards) {
+                var line = plain("  ${reward.displayName}", rewardColor(reward))
+                    .append(Component.text(" x${reward.amount}", NamedTextColor.WHITE))
+                rarities.tier(reward.rarity)?.let { line = line.append(Component.text(" (${it.label})", TextColor.color(it.color))) }
+                lore.add(line)
+            }
+            lore.add(Component.empty())
+            lore.add(plain("  From: ", NamedTextColor.GRAY).append(Component.text(crate.displayName, crateNameColor)))
+            lore.add(Component.empty())
+            meta.lore(lore)
+            meta.setEnchantmentGlintOverride(true)
+        }
+        return item
+    }
+
+    /** Chat line for a finished open: "You won Diamond x3 (Legendary) from Rare Crate!" */
+    private fun winMessage(crate: CrateDef, rewards: List<CrateReward>, verb: String = "You won "): Component {
+        var msg: Component = Component.text(verb, NamedTextColor.GREEN)
+        for ((i, reward) in rewards.withIndex()) {
+            if (i > 0) msg = msg.append(Component.text(if (i == rewards.lastIndex) " and " else ", ", NamedTextColor.GREEN))
+            msg = msg.append(Component.text(reward.displayName, rewardColor(reward)))
+                .append(Component.text(" x${reward.amount}", NamedTextColor.GREEN))
+            rarities.tier(reward.rarity)?.let { msg = msg.append(Component.text(" (${it.label})", TextColor.color(it.color))) }
+        }
+        return msg.append(Component.text(" from ", NamedTextColor.GREEN))
+            .append(Component.text(crate.displayName, crateNameColor))
+            .append(Component.text("!", NamedTextColor.GREEN))
+    }
+
+    /**
+     * Turns a Spin / Pulse GUI into its result screen once the stored winner was paid: the winner
+     * in the center slot (revealed, highlighted), the other reel slots dimmed, lime panes framing
+     * the winner and the "You won!" banner on top. Only changes what the player sees.
+     */
+    private fun showReelResult(inv: Inventory, crate: CrateDef, winner: CrateReward) {
+        val dim = pane(Material.GRAY_STAINED_GLASS_PANE)
+        for (slot in 10..16) if (slot != 13) inv.setItem(slot, dim.clone())
+        inv.setItem(13, resultDisplay(crate, winner))
+        val lime = pane(Material.LIME_STAINED_GLASS_PANE)
+        for (slot in listOf(3, 5, 12, 14, 21, 23)) inv.setItem(slot, lime.clone())
+        inv.setItem(4, resultBanner(crate, listOf(winner), "You won!"))
+    }
+
+    /**
+     * The result screen after a Select / Select 3 claim: display only, opened after the payout
+     * is done, so nothing on it can pay again. Close is its only button.
+     */
+    private fun openPickResult(player: Player, crate: CrateDef, rewards: List<CrateReward>) {
+        val title = Component.text("Reward Claimed: ")
+            .append(Component.text(crate.displayName, crateNameColor))
+            .decoration(TextDecoration.ITALIC, false)
+        val gui = CustomGui(title, 27)
+        val border = pane(crate.animationGlass)
+        for (i in 0 until 27) gui.inventory.setItem(i, border.clone())
+        val slots = when (rewards.size) {
+            1 -> listOf(13)
+            2 -> listOf(12, 14)
+            else -> listOf(11, 13, 15)
+        }
+        for ((i, reward) in rewards.take(slots.size).withIndex()) {
+            gui.inventory.setItem(slots[i], resultDisplay(crate, reward))
+        }
+        gui.inventory.setItem(4, resultBanner(crate, rewards, if (rewards.size == 1) "Reward claimed!" else "Rewards claimed!"))
+        gui.setItem(22, GuiStyle.close()) { p, _ -> p.closeInventory() }
+        plugin.guiManager.open(player, gui)
     }
 
     /**
@@ -2120,84 +2310,52 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    fun openPreview(player: Player, crateType: String, page: Int = 0) {
+    /**
+     * The reward Preview. From a crate block (left-click / sneak) it keeps the #1414 look: sized
+     * to the rewards, no glass. From the `/crate` browser ([back] set, issue #1514) it gets a
+     * bottom row with Back, page buttons, a crate info item and Close. Every reward shows its
+     * name, quantity, rarity (when configured), the exact chance from its weight and whether it
+     * can be won right now; hidden rewards show as a mystery with their real chance.
+     */
+    fun openPreview(player: Player, crateType: String, page: Int = 0, back: ((Player) -> Unit)? = null) {
         val crate = crates[crateType] ?: return
 
         val title = Component.text(PREVIEW_GUI_TITLE_PREFIX)
-            .append(Component.text(crate.displayName, TextColor.color(0x55FFFF)))
+            .append(Component.text(crate.displayName, crateNameColor))
             .decoration(TextDecoration.ITALIC, false)
 
-        // Sized to the rewards, no glass rows (issue #1414): see CratePreviewLayout.
         val total = crate.rewards.size
-        val totalPages = CratePreviewLayout.pageCount(total)
+        val withMenu = back != null
+        val totalPages = if (withMenu) com.liam.joshymc.crate.CrateMenuLayout.previewPageCount(total) else CratePreviewLayout.pageCount(total)
         val safePage = page.coerceIn(0, totalPages - 1)
-        val pageStart = CratePreviewLayout.pageStart(total, safePage)
-        val pageRewards = crate.rewards.drop(pageStart).take(CratePreviewLayout.pageSize(total, safePage))
+        val pageStart = if (withMenu) com.liam.joshymc.crate.CrateMenuLayout.previewPageStart(total, safePage) else CratePreviewLayout.pageStart(total, safePage)
+        val pageSize = if (withMenu) com.liam.joshymc.crate.CrateMenuLayout.previewPageSize(total, safePage) else CratePreviewLayout.pageSize(total, safePage)
+        val pageRewards = crate.rewards.drop(pageStart).take(pageSize)
 
-        val size = CratePreviewLayout.size(total)
+        val size = if (withMenu) com.liam.joshymc.crate.CrateMenuLayout.previewSize(total) else CratePreviewLayout.size(total)
         val gui = CustomGui(title, size)
-
-        val totalWeight = crate.rewards.sumOf { it.weight }
-        val slots = CratePreviewLayout.slots(pageRewards.size)
+        val slots = if (withMenu) com.liam.joshymc.crate.CrateMenuLayout.previewSlots(pageRewards.size) else CratePreviewLayout.slots(pageRewards.size)
 
         for ((idx, reward) in pageRewards.withIndex()) {
             if (idx >= slots.size) break
-            val slot = slots[idx]
-            val percentage = (reward.weight.toDouble() / totalWeight * 100).let { "%.1f".format(it) }
-
-            // Use serialized item if present (preserves trims, custom items)
-            val item = rewardTemplate(reward) ?: ItemStack(reward.material, reward.amount)
-            item.amount = reward.amount.coerceIn(1, 64)
-            val existingLore = item.itemMeta?.lore() ?: emptyList()
-            item.editMeta { meta ->
-                meta.displayName(
-                    Component.text(reward.displayName, TextColor.color(0xFFAA00))
-                        .decoration(TextDecoration.ITALIC, false)
-                        .decoration(TextDecoration.BOLD, true)
-                )
-
-                val lore = mutableListOf<Component>()
-                lore.add(Component.empty())
-                lore.add(
-                    Component.text("  Amount: ", NamedTextColor.GRAY)
-                        .append(Component.text("${reward.amount}", NamedTextColor.WHITE))
-                        .decoration(TextDecoration.ITALIC, false)
-                )
-                lore.add(
-                    Component.text("  Chance: ", NamedTextColor.GRAY)
-                        .append(Component.text("$percentage%", NamedTextColor.YELLOW))
-                        .decoration(TextDecoration.ITALIC, false)
-                )
-
-                if (existingLore.isNotEmpty()) {
-                    lore.add(Component.empty())
-                    lore.addAll(existingLore)
-                } else if (reward.enchantments.isNotEmpty()) {
-                    lore.add(Component.empty())
-                    lore.add(Component.text("  Enchantments:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false))
-                    for ((ench, level) in reward.enchantments) {
-                        val enchName = ench.key.key.replace("_", " ")
-                        lore.add(
-                            Component.text("  - $enchName $level", NamedTextColor.DARK_GRAY)
-                                .decoration(TextDecoration.ITALIC, false)
-                        )
-                    }
-                }
-
-                lore.add(Component.empty())
-                meta.lore(lore)
-            }
-
-            gui.inventory.setItem(slot, item)
+            gui.inventory.setItem(slots[idx], rewardDisplay(crate, reward, CrateRewardText.Context.PREVIEW, player))
         }
 
-        if (totalPages > 1) {
+        val reopen: (Player, Int) -> Unit = { p, target -> GuiStyle.pageSound(p); openPreview(p, crateType, target, back) }
+        if (back != null) {
+            val L = com.liam.joshymc.crate.CrateMenuLayout
+            gui.setItem(L.previewBack(size), GuiStyle.back("Back to Crates")) { p, _ -> GuiStyle.pageSound(p); back(p) }
+            if (safePage > 0) gui.setItem(L.previewPrevious(size), GuiStyle.previousPage(safePage - 1, totalPages)) { p, _ -> reopen(p, safePage - 1) }
+            gui.setItem(L.previewInfo(size), crateInfoItem(player, crate, safePage, totalPages))
+            if (safePage < totalPages - 1) gui.setItem(L.previewNext(size), GuiStyle.nextPage(safePage + 1, totalPages)) { p, _ -> reopen(p, safePage + 1) }
+            gui.setItem(L.previewClose(size), GuiStyle.close()) { p, _ -> p.closeInventory() }
+        } else if (totalPages > 1) {
             if (safePage > 0) {
-                gui.setItem(CratePreviewLayout.PREVIOUS_SLOT, navButton("« Previous Page")) { p, _ -> openPreview(p, crateType, safePage - 1) }
+                gui.setItem(CratePreviewLayout.PREVIOUS_SLOT, navButton("« Previous Page")) { p, _ -> reopen(p, safePage - 1) }
             }
             gui.setItem(CratePreviewLayout.INDICATOR_SLOT, pageIndicator(safePage + 1, totalPages))
             if (safePage < totalPages - 1) {
-                gui.setItem(CratePreviewLayout.NEXT_SLOT, navButton("Next Page »")) { p, _ -> openPreview(p, crateType, safePage + 1) }
+                gui.setItem(CratePreviewLayout.NEXT_SLOT, navButton("Next Page »")) { p, _ -> reopen(p, safePage + 1) }
             }
         }
 
@@ -2205,36 +2363,60 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
     }
 
-    /**
-     * Maps [count] rewards onto [rowSlots] (the 7 inner, non-glass slots of one content row,
-     * left to right) so the row reads as visually centered/symmetrical.
-     */
-    private fun getCenteredRewardSlots(rowSlots: List<Int>, count: Int): List<Int> {
-        if (count <= 0) return emptyList()
-        if (count >= 7) return rowSlots.take(7)
-        val a = rowSlots[0]; val b = rowSlots[1]; val c = rowSlots[2]; val d = rowSlots[3]
-        val e = rowSlots[4]; val f = rowSlots[5]; val g = rowSlots[6]
-        return when (count) {
-            1 -> listOf(d)
-            2 -> listOf(c, e)
-            3 -> listOf(c, d, e)
-            4 -> listOf(b, c, e, f)
-            5 -> listOf(b, c, d, e, f)
-            6 -> listOf(a, b, c, e, f, g)
-            else -> rowSlots.take(count)
+    // --- Crate browser support (issue #1514) ---
+
+    /** How a crate opens, in player words. */
+    fun modeDescription(crate: CrateDef): String = when (crate.mode) {
+        CrateMode.RANDOM -> when (crate.animationType) {
+            AnimationType.SPIN -> "Random reward (spin)"
+            AnimationType.PULSE -> "Random reward (pulse)"
+            AnimationType.INSTANT -> "Random reward (instant)"
         }
+        CrateMode.SELECT -> "Choose 1 reward"
+        CrateMode.SELECT_3 -> "Choose 3 rewards"
     }
 
-    /**
-     * Splits [count] items across [rows] rows as evenly as possible, front-loading the
-     * remainder onto the earlier rows (e.g. 9 across 2 rows -> [5, 4]) instead of always
-     * filling each row to its 7-item max before spilling into the next.
-     */
-    private fun getBalancedRowSizes(count: Int, rows: Int): List<Int> {
-        if (rows <= 0) return emptyList()
-        val base = count / rows
-        val extra = count % rows
-        return (0 until rows).map { i -> if (i < extra) base + 1 else base }
+    /** Crates shown in the `/crate` browser, in crates.yml order. */
+    fun menuCrates(): List<CrateDef> = crates.values.filter { it.listed }
+
+    /** Keys for [crateId] the player carries (inventory, armor and off-hand slots). */
+    fun keyCount(player: Player, crateId: String): Int =
+        player.inventory.contents.filterNotNull().filter { isKey(it, crateId) }.sumOf { it.amount }
+
+    /** Registered crate blocks of this type. */
+    fun locationCount(crateId: String): Int = crateLocations.count { it.crateType == crateId }
+
+    /** Player-facing reason [crate] can't be opened by [player] right now, or null. Same rules as every open path. */
+    fun availabilityProblem(player: Player, crate: CrateDef): String? {
+        if (crateProblem(crate, randomDraw = crate.mode == CrateMode.RANDOM) != null) return "Temporarily unavailable"
+        if (gamemodeProblem(player, crate) != null) return "Not available in this gamemode"
+        if (locationCount(crate.id) == 0) return "No crate of this type is placed yet"
+        return null
+    }
+
+    /** A plain display icon for [crate]: its key's look (material + key model), never a usable key. */
+    fun crateIcon(crate: CrateDef): ItemStack {
+        val icon = ItemStack(crate.keyMaterial)
+        icon.editMeta { meta -> if (crate.keyItemModel != null) meta.setItemModel(crate.keyItemModel) }
+        return icon
+    }
+
+    /** The info item: how the crate opens, the player's keys and how to open it. */
+    private fun crateInfoItem(player: Player, crate: CrateDef, page: Int, totalPages: Int): ItemStack {
+        val keys = keyCount(player, crate.id)
+        val lore = mutableListOf<Component>(Component.empty())
+        lore.add(plain("  ${modeDescription(crate)}", NamedTextColor.GRAY))
+        lore.add(plain("  Rewards: ", NamedTextColor.GRAY).append(Component.text("${crate.rewards.size}", NamedTextColor.WHITE)))
+        lore.add(plain("  Your ${crate.keyName}s: ", NamedTextColor.GRAY)
+            .append(Component.text("$keys", if (keys > 0) NamedTextColor.GREEN else NamedTextColor.RED)))
+        if (isManualPickMode(crate.mode)) {
+            lore.add(plain("  Chances apply when mass-opening", NamedTextColor.DARK_GRAY))
+            lore.add(plain("  (sneak + right-click with keys).", NamedTextColor.DARK_GRAY))
+        }
+        availabilityProblem(player, crate)?.let { lore.add(plain("  $it", NamedTextColor.RED)) }
+        if (totalPages > 1) lore.add(plain("  ", NamedTextColor.GRAY).append(GuiStyle.pageLine(page, totalPages)))
+        lore.add(Component.empty())
+        return GuiStyle.item(Material.BOOK, Component.text(crate.displayName, crateNameColor).decoration(TextDecoration.BOLD, true), lore)
     }
 
     // --- Mass open ---

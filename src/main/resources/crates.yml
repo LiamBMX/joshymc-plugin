@@ -14,6 +14,11 @@
 # enchantments: vanilla enchants (e.g. sharpness: 5). custom-enchantments: JoshyMC custom enchants
 #   by id (e.g. lifesteal: 3), checked like /ce add (registered, level 1-max, fits the item).
 #   Rewards added from your hand in the crate editor keep every enchant (vanilla and custom) as is.
+# rarity: optional presentation-only label for a reward (common, uncommon, rare, epic, legendary,
+#   mythic, or any id from config.yml crates.rarities). Never changes the weight or the chance.
+# hidden: true shows the reward as a "Mystery Reward" in the Preview and Spin/Pulse reels (its real
+#   chance is still shown); it is revealed when won. Select / Select 3 crates always show it.
+# listed: false (crate level) keeps a crate out of the player /crate browser.
 #
 ## Renamed crates:
 # Keys remember the crate ID they were made for. If you rename or replace a crate ID, map the old

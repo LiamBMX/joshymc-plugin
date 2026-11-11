@@ -25,11 +25,19 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isEmpty()) {
-            sendUsage(sender)
+            // Issue #1514: players get the crate browser; console (and players without
+            // joshymc.crate.use) the usage. Admins see the usage with /crate help.
+            if (sender is Player && sender.hasPermission("joshymc.crate.use")) plugin.crateManager.browser.open(sender)
+            else sendUsage(sender)
             return true
         }
 
         when (args[0].lowercase()) {
+            "menu", "browse" -> {
+                val player = sender as? Player ?: run { Msg.playersOnly(sender); return true }
+                plugin.crateManager.browser.open(player)
+            }
+            "help" -> sendUsage(sender)
             "setlocation" -> handleSetLocation(sender, args)
             "removelocation" -> handleRemoveLocation(sender)
             "givekey" -> handleGiveKey(sender, args)
@@ -577,6 +585,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             sender.sendMessage(Component.text("Crate Commands:", NamedTextColor.GREEN))
         }
         val usages = listOf(
+            "/crate  (browse crates and preview their rewards)",
             "/crate setlocation <type>",
             "/crate removelocation",
             "/crate givekey <type> [player] [amount]",
@@ -607,7 +616,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     ): List<String> {
         return when (args.size) {
             1 -> {
-                val subs = mutableListOf("list", "preview")
+                val subs = mutableListOf("menu", "list", "preview", "help")
                 if (sender.hasPermission("joshymc.crate.admin")) {
                     subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force", "models", "rotate"))
                 }
