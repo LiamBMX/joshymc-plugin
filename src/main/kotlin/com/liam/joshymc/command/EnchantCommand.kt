@@ -1,6 +1,8 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
+import com.liam.joshymc.staff.AdminAudit
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -40,18 +42,44 @@ class EnchantCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             return true
         }
 
-        val level = args.getOrNull(1)?.toIntOrNull() ?: 1
-        if (level < 1 || level > 255) {
-            plugin.commsManager.send(sender, Component.text("Level must be 1-255.", NamedTextColor.RED))
-            return true
+        val rawLevel = args.getOrNull(1)
+        val level = if (rawLevel == null) 1 else rawLevel.toIntOrNull() ?: 0
+        val displayName = enchant.key.key.replace("_", " ").replaceFirstChar { it.uppercase() }
+
+        // Issue #1487: vanilla limits (max level, item, conflicts) unless `joshymc.enchant.unsafe`.
+        // Re-applying an enchantment the item already has replaces it, so it isn't a conflict.
+        val conflict = item.enchantments.keys.firstOrNull { it != enchant && it.conflictsWith(enchant) }
+            ?.let { it.key.key.replace("_", " ").replaceFirstChar { c -> c.uppercase() } }
+        val decision = CompetitiveEligibility.enchantRequest(
+            name = displayName,
+            level = level,
+            maxLevel = enchant.maxLevel,
+            applies = enchant.canEnchantItem(item),
+            conflict = conflict,
+            unsafePermitted = sender.hasPermission(UNSAFE_PERMISSION),
+        )
+        val unsafe = when (decision) {
+            is CompetitiveEligibility.EnchantRequest.Refused -> {
+                plugin.commsManager.send(sender, Component.text(decision.message, NamedTextColor.RED))
+                return true
+            }
+            is CompetitiveEligibility.EnchantRequest.Allowed -> decision.unsafe
         }
 
-        // Force add enchantment bypassing restrictions
         val meta = item.itemMeta ?: return true
-        meta.addEnchant(enchant, level, true) // true = ignore level restrictions
+        meta.addEnchant(enchant, level, unsafe)
         item.itemMeta = meta
+        if (unsafe) {
+            AdminAudit.log(
+                plugin, sender, "ENCHANT_UNSAFE", sender.uniqueId, sender.name,
+                "enchant=${enchant.key} level=$level max=${enchant.maxLevel} item=${item.type.key}",
+            )
+            plugin.commsManager.send(
+                sender,
+                Component.text("Unsafe enchantment: items above vanilla limits earn no Lifesteal hearts, bounties or coins.", NamedTextColor.GRAY),
+            )
+        }
 
-        val displayName = enchant.key.key.replace("_", " ").replaceFirstChar { it.uppercase() }
         plugin.commsManager.send(sender,
             Component.text("Applied ", NamedTextColor.GREEN)
                 .append(Component.text("$displayName $level", NamedTextColor.AQUA))
@@ -122,8 +150,18 @@ class EnchantCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
                 }
                 enchants.filter { it.startsWith(args[0].lowercase()) }.take(30)
             }
-            2 -> listOf("1", "5", "10", "50", "100", "255").filter { it.startsWith(args[1]) }
+            2 -> {
+                val max = findEnchantment(args[0].lowercase())?.maxLevel ?: 5
+                val levels = (1..max).map { it.toString() } +
+                    if (sender.hasPermission(UNSAFE_PERMISSION)) listOf("10", "50", "100", "255") else emptyList()
+                levels.distinct().filter { it.startsWith(args[1]) }
+            }
             else -> emptyList()
         }
+    }
+
+    companion object {
+        /** Issue #1487: past vanilla limits (level, item, conflicts). Default false: grant it explicitly. */
+        const val UNSAFE_PERMISSION = "joshymc.enchant.unsafe"
     }
 }

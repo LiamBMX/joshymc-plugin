@@ -1,5 +1,6 @@
 package com.liam.joshymc.lifesteal.ranked
 
+import com.liam.joshymc.lifesteal.combat.npc.CombatNpcRules
 import com.liam.joshymc.manager.SqliteDatabase
 import java.sql.ResultSet
 import java.util.UUID
@@ -19,7 +20,9 @@ import java.util.UUID
  * - `lifesteal_ranked_snapshots`: the pre-match inventory, equipment and return location of each
  *   participant, written in the same transaction as the match. UNIQUE (match, player) means a
  *   snapshot is never overwritten, a partial UNIQUE index allows one PENDING snapshot per player,
- *   and PENDING → RESTORED is a conditional UPDATE, so it is restored once.
+ *   and PENDING → RESTORED is a conditional UPDATE, so it is restored once. Since issue #1490 it
+ *   also holds the pre-match XP (`xp_level`, `xp_progress`, `xp_total`) and potion effects
+ *   (`effects`, "" = none); NULL in a row made before that = leave XP/effects untouched.
  * - `lifesteal_ranked_events`: what happened (state changes, deaths, disconnects, restorations).
  *
  * Only UUIDs, team ids/names and coordinates are stored: no player names, IPs or chat.
@@ -116,10 +119,20 @@ class RankedStore(private val db: SqliteDatabase) {
                 created_at INTEGER NOT NULL,
                 restored_at INTEGER,
                 restore_reason TEXT,
+                xp_level INTEGER,
+                xp_progress REAL,
+                xp_total INTEGER,
+                effects TEXT,
                 UNIQUE (match_id, uuid)
             )
             """.trimIndent()
         )
+        // Issue #1490: the pre-match experience and potion effects. Older databases get the columns
+        // here (SQLite throws when they already exist); older rows keep NULL, which means "restore
+        // the inventory only": their XP and effects are never reset to an invented value.
+        for (column in listOf("xp_level INTEGER", "xp_progress REAL", "xp_total INTEGER", "effects TEXT")) {
+            try { db.execute("ALTER TABLE lifesteal_ranked_snapshots ADD COLUMN $column") } catch (_: Exception) { }
+        }
         db.createTable("CREATE UNIQUE INDEX IF NOT EXISTS idx_lifesteal_ranked_snapshots_pending ON lifesteal_ranked_snapshots(uuid) WHERE status = 'PENDING'")
         db.createTable(
             """
@@ -263,6 +276,10 @@ class RankedStore(private val db: SqliteDatabase) {
         val heldSlot: Int,
         val returnWorld: String?,
         val returnPoint: Point?,
+        /** Issue #1490: pre-match experience (null only for callers that don't capture it). */
+        val xp: RankedPlayerState.Xp? = null,
+        /** Issue #1490: pre-match potion effects (null only for callers that don't capture them). */
+        val effects: List<CombatNpcRules.Effect>? = null,
     )
 
     data class Snapshot(
@@ -275,6 +292,12 @@ class RankedStore(private val db: SqliteDatabase) {
         val returnPoint: Point?,
         val status: String,
         val createdAt: Long,
+        /** Issue #1490: stored as read (validated by [RankedPlayerState.plan] when restoring); all null in older rows. */
+        val xpLevel: Int? = null,
+        val xpProgress: Double? = null,
+        val xpTotal: Int? = null,
+        /** Encoded effects, "" = none, null = an older snapshot (effects left untouched). */
+        val effects: String? = null,
     )
 
     /**
@@ -299,11 +322,11 @@ class RankedStore(private val db: SqliteDatabase) {
             }
             for (s in snapshots) {
                 db.execute(
-                    """INSERT INTO lifesteal_ranked_snapshots (snapshot_id, match_id, uuid, contents, slot_count, held_slot, return_world, return_x, return_y, return_z, return_yaw, return_pitch, status, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)""",
+                    """INSERT INTO lifesteal_ranked_snapshots (snapshot_id, match_id, uuid, contents, slot_count, held_slot, return_world, return_x, return_y, return_z, return_yaw, return_pitch, status, created_at, xp_level, xp_progress, xp_total, effects)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?)""",
                     snapshotId(match.id, s.uuid), match.id, s.uuid.toString(), encodeSlots(s.slots), s.slots.size, s.heldSlot,
                     s.returnWorld, s.returnPoint?.x, s.returnPoint?.y, s.returnPoint?.z, s.returnPoint?.yaw?.toDouble(), s.returnPoint?.pitch?.toDouble(),
-                    match.createdAt,
+                    match.createdAt, s.xp?.level, s.xp?.progress?.toDouble(), s.xp?.total, s.effects?.let { RankedPlayerState.encodeEffects(it) },
                 )
             }
             insertEvent(match.id, match.createdAt, "CREATED", null, "${match.teamAName} vs ${match.teamBName}, ${match.size}v${match.size}, arena ${match.arenaId}, ${match.kind.label}${match.queueRef?.let { ", from $it" } ?: ""}")
@@ -479,6 +502,10 @@ class RankedStore(private val db: SqliteDatabase) {
             returnPoint = point,
             status = rs.getString("status"),
             createdAt = rs.getLong("created_at"),
+            xpLevel = (rs.getObject("xp_level") as? Number)?.toInt(),
+            xpProgress = (rs.getObject("xp_progress") as? Number)?.toDouble(),
+            xpTotal = (rs.getObject("xp_total") as? Number)?.toInt(),
+            effects = rs.getString("effects"),
         )
     }
 

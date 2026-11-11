@@ -1,6 +1,7 @@
 package com.liam.joshymc.lifesteal.hearts
 
 import com.liam.joshymc.lifesteal.LifestealSettings
+import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
 import com.liam.joshymc.lifesteal.progression.ProgressionRules
 import com.liam.joshymc.lifesteal.teams.TeamCombatRules
 import java.util.UUID
@@ -172,12 +173,19 @@ object HeartRules {
         data object GracePeriod : Decision
         /** The launch progression state is unknown (issue #1352): no heart moves. */
         data object ProgressionUnknown : Decision
+        /**
+         * Issue #1487 (D-H4): the killer used Creative, Spectator, God Mode, Vanish, Mod Mode or
+         * over-limit enchantments in this fight ([CompetitiveEligibility]); [reasons] is the
+         * verdict's code. Nothing moves, no cooldown starts, the victim keeps their heart.
+         */
+        data class IneligibleAttacker(val reasons: String) : Decision
     }
 
     val Decision.changesHearts: Boolean get() = this is Decision.Transfer || this is Decision.VictimLosesOnly
 
     /**
-     * Fixed order: the launch progression first ([window], issue #1352: before launch, during the
+     * Fixed order: the attacker's eligibility first ([attacker], issue #1487: a kill made with staff
+     * abilities or over-limit enchantments never moves a heart, whatever else applies), then the launch progression ([window], issue #1352: before launch, during the
      * grace period and while the state is unknown no heart moves), then the team check ([team], issue #1348: teammates never move hearts unless
      * the team policy allows it, and unknown membership never does), then the victim's last heart
      * (it is never at risk), then the anti-farming cooldown, then the killer's maximum. [victimHearts] and [killerHearts] are the stored values;
@@ -191,7 +199,9 @@ object HeartRules {
         policy: KillerAtMaximumPolicy = KILLER_AT_MAXIMUM,
         team: TeamCombatRules.HeartCheck = TeamCombatRules.HeartCheck.ELIGIBLE,
         window: ProgressionRules.HeartWindow = ProgressionRules.HeartWindow.OPEN,
+        attacker: CompetitiveEligibility.Verdict = CompetitiveEligibility.Verdict.Eligible,
     ): Decision {
+        if (attacker is CompetitiveEligibility.Verdict.Ineligible) return Decision.IneligibleAttacker(attacker.code)
         when (window) {
             ProgressionRules.HeartWindow.NOT_LAUNCHED -> return Decision.NotLaunched
             ProgressionRules.HeartWindow.GRACE_PERIOD -> return Decision.GracePeriod

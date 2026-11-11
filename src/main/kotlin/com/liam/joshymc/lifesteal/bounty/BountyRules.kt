@@ -1,5 +1,6 @@
 package com.liam.joshymc.lifesteal.bounty
 
+import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
 import java.util.UUID
 
 /**
@@ -52,6 +53,11 @@ object BountyRules {
         /** The death or the killer is inside a Ranked Team Wars arena boundary (even without a match). */
         val inRankedArena: Boolean = false,
         val team: Team = Team.NOT_TEAMMATES,
+        /**
+         * Issue #1487 (D-H4): the killer's competitive eligibility (Creative, Spectator, God Mode,
+         * Vanish, Mod Mode, over-limit enchantments, now or in earlier hits on this victim).
+         */
+        val attacker: CompetitiveEligibility.Verdict = CompetitiveEligibility.Verdict.Eligible,
     )
 
     enum class Refusal(val player: String?) {
@@ -65,6 +71,8 @@ object BountyRules {
         RANKED("Bounties can't be claimed in Ranked Team Wars."),
         TEAMMATE("You can't claim a bounty on a teammate."),
         TEAM_UNKNOWN("The bounty couldn't be claimed right now (team data unavailable). It stays active."),
+        /** Issue #1487: the tracker tells the killer (throttled), so no second message here. */
+        INELIGIBLE_ATTACKER(null),
     }
 
     sealed interface Eligibility {
@@ -82,6 +90,7 @@ object BountyRules {
         if (d.killerIsNpc) return Eligibility.Refused(Refusal.NPC, killer)
         if (!d.killerOnline) return Eligibility.Refused(Refusal.NOT_PLAYER_KILL, killer)
         if (!d.victimInLifesteal || !d.killerInLifesteal) return Eligibility.Refused(Refusal.NOT_LIFESTEAL, killer)
+        if (d.attacker is CompetitiveEligibility.Verdict.Ineligible) return Eligibility.Refused(Refusal.INELIGIBLE_ATTACKER, killer)
         if (d.inRankedMatch || d.inRankedArena) return Eligibility.Refused(Refusal.RANKED, killer)
         if (d.inEvent) return Eligibility.Refused(Refusal.EVENT, killer)
         if (d.inArena) return Eligibility.Refused(Refusal.ARENA, killer)

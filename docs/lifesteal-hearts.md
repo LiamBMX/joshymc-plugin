@@ -318,6 +318,77 @@ registered custom items, and the Heart item deliberately isn't one. Right-click 
 arrives as the same `PlayerInteractEvent`, with the same one-hand/one-tick guards. No packets,
 no Geyser/NetherNet changes. **Not tested with real Bedrock clients yet.**
 
+## Competitive eligibility (issue #1487, audit D-H4)
+
+Staff abilities stay available for moderation, but a kill made with them earns **no competitive
+Lifesteal reward**: no heart, no bounty payout, no stolen coins, no Team XP, no PvP quest progress
+and no profile PvP kill. The rule is the Bukkit-free `lifesteal/eligibility/CompetitiveEligibility`
+and judges the attacker's **gameplay state, never their rank or permissions** (an Owner is judged
+like everyone else):
+
+| Reason | Detected from |
+|---|---|
+| Creative / Spectator | `player.gameMode` |
+| God Mode | `/god` (`GodCommand.godPlayers`) |
+| Vanish | `/vanish` (`VanishCommand.isVanished`) |
+| Mod Mode | `ModModeManager.isModMode` |
+| Over-limit enchantments | a vanilla enchantment above its vanilla maximum on the equipment used: worn armor, the main hand for melee, both hands when a projectile is launched. Items in the inventory or storage never count. A registered JoshyMC custom item may carry the levels it is built with (e.g. the Token's decorative Mending 10). |
+
+**When it is checked.** At settlement, by `CompetitiveEligibilityTracker.verdict(attacker, victim)`,
+which combines the attacker's state at that moment with every hit they made on that victim while
+ineligible inside the window (the combat tag duration, at least 30 s; memory only, bounded, per
+attacker + victim, survives a reconnect). `CompetitiveEligibilityListener` records hits at MONITOR
+by `damageSource.causingEntity` (melee, projectiles, potions, clouds, TNT), counts hits on a Combat
+NPC as hits on its owner, and stamps projectiles at launch with the shooter's state, so switching
+game mode, toggling God Mode or vanishing between hits, or while an arrow flies, changes nothing.
+
+**Where.**
+- Hearts: `HeartStore.PvpRequest.attacker` → `HeartRules.decide` checks it first and returns
+  `Decision.IneligibleAttacker` (`INELIGIBLE_ATTACKER` transaction, `PVP_REJECTED` audit row with the
+  reasons). Same dedupe key as any death (one transaction), no cooldown starts, the victim keeps
+  their heart, no Heart item is made. Normal kills, combat-tag credit (#1461), ranked kills and
+  environmental credit (#1478), ranked disconnect forfeits (#1465) and Combat NPC kills all pass it.
+  Combat-tag and ranked environmental credit skip an ineligible attacker like any invalid one (an
+  older eligible attacker of the same tag can still be credited; nobody = no heart).
+- Combat NPCs: `playerHit` also refuses hits from players in Creative, God Mode, Vanish or Mod Mode
+  (Spectator was already refused), so staff abilities can't kill a combat logger's NPC at all.
+- Bounties: `BountyRules.Refusal.INELIGIBLE_ATTACKER`, decided before the claim transaction, so the
+  bounty stays ACTIVE for a later eligible claim and nobody else is credited. Bounties have no Combat
+  NPC claim path.
+- Coins: `BankRules.StealRefusal.INELIGIBLE_ATTACKER` for player and Combat NPC deaths.
+- Ranked Team Wars: the match result, Elo and inventory restoration are unchanged (the heart is the
+  only thing refused, shown as "no heart, staff abilities or over-limit gear used" in the summary).
+  No existing match-integrity rule voids or forfeits a match for staff abilities, so none is added;
+  held participants can't run commands during a match anyway.
+
+**Logging.** Every blocked reward writes a `LIFESTEAL_REWARD_BLOCKED` row to `admin_logs` (attacker,
+victim, reward, reasons, dedupe/transaction/bounty reference) plus a console line, at most once per
+attacker + reward kind per minute; the attacker gets one chat line per minute.
+
+**Commands.** `/god <player>` needs `joshymc.god.others` (op; console keeps it); every toggle is
+audited (`GOD_MODE`, `GOD_MODE_OTHER`). `/enchant` enforces the vanilla maximum level, item and
+conflicts unless `joshymc.enchant.unsafe` (default false, explicit grant only), which is audited
+(`ENCHANT_UNSAFE`); such items still earn no Lifesteal rewards.
+
+Checks: `./gradlew -I scripts/competitive-eligibility-check.init.gradle.kts competitiveEligibilityCheck`.
+
+### Live server checklist
+
+1. Two Survival-mode players, no staff abilities: a kill moves one heart; a bounty on the victim pays.
+2. Repeat with the killer in `/gmc`, `/gmsp`, `/god`, `/vanish`, and holding a `/enchant sharpness 10`
+   sword (needs `joshymc.enchant.unsafe`): no heart moves, the victim keeps theirs, the bounty stays
+   on `/bounty`, no coins move, `admin_logs` has one `LIFESTEAL_REWARD_BLOCKED` row per kind.
+3. Hit the victim in Creative, switch to Survival (`/gms`), finish them: still no heart.
+4. Shoot an arrow in Creative and switch to Survival before it lands for the kill: no heart.
+5. Hit in God Mode, knock the victim into lava, `/god` off: the death isn't credited to you.
+6. Combat-log a tagged player, then try to hit their NPC in Creative / God / Vanish: refused. Kill it
+   in Survival with vanilla gear: the heart moves once.
+7. Ranked test match (`/lifesteal admin ranked testmatch`): a normal kill still moves a heart, the
+   inventory is restored afterwards, Elo/results unchanged.
+8. `/god <other>` without `joshymc.god.others`: "No permission"; with it: toggles and is audited.
+9. `/enchant sharpness 6`, `/enchant sharpness 1` on a stick, `/enchant smite 1` on a Sharpness
+   sword: all refused without `joshymc.enchant.unsafe`; `/enchant sharpness 5` works.
+
 ## Survival isolation
 
 - `/withdrawheart` refuses on servers and worlds without Lifesteal, and redemption only runs

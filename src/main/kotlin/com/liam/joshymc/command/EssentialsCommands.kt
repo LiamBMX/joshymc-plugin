@@ -412,6 +412,13 @@ class GodCommand(private val plugin: Joshymc) : CommandExecutor, Listener, TabCo
 
         val target = resolveTarget(sender, args) ?: return true
 
+        // Issue #1487: toggling someone else needs its own node (console keeps it, like every `.others`).
+        val others = target != sender
+        if (others && !sender.hasPermission(OTHERS_PERMISSION)) {
+            Msg.noPermission(sender)
+            return true
+        }
+
         val toggled = if (godPlayers.contains(target.uniqueId)) {
             godPlayers.remove(target.uniqueId)
             false
@@ -423,10 +430,20 @@ class GodCommand(private val plugin: Joshymc) : CommandExecutor, Listener, TabCo
         val state = if (toggled) "enabled" else "disabled"
         val color = if (toggled) NamedTextColor.GREEN else NamedTextColor.RED
         plugin.commsManager.send(target, Component.text("God mode $state.", color))
-        if (target != sender && sender is Player) {
-            plugin.commsManager.send(sender, Component.text("God mode $state for ${target.name}.", color))
+        if (toggled && plugin.gamemodeLockManager.gamemodeOf(target.world) == com.liam.joshymc.gamemode.ServerGamemode.LIFESTEAL) {
+            plugin.commsManager.send(target, Component.text("Kills made in God Mode don't earn hearts, bounties or coins.", NamedTextColor.GRAY))
         }
+        if (others) {
+            Msg.reply(sender, Component.text("God mode $state for ${target.name}.", color))
+        }
+        com.liam.joshymc.staff.AdminAudit.log(
+            plugin, sender, if (others) "GOD_MODE_OTHER" else "GOD_MODE", target.uniqueId, target.name, "state=$state",
+        )
         return true
+    }
+
+    companion object {
+        const val OTHERS_PERMISSION = "joshymc.god.others"
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -438,8 +455,9 @@ class GodCommand(private val plugin: Joshymc) : CommandExecutor, Listener, TabCo
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
-        if (args.size == 1) return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
-        return emptyList()
+        if (args.size != 1 || !sender.hasPermission("joshymc.god")) return emptyList()
+        if (!sender.hasPermission(OTHERS_PERMISSION)) return listOfNotNull((sender as? Player)?.name).filter { it.startsWith(args[0], ignoreCase = true) }
+        return Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[0], ignoreCase = true) }
     }
 }
 
@@ -958,12 +976,14 @@ class SudoCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             if (target.uniqueId != sender.uniqueId) {
                 plugin.staffRankManager.protectionProblem(sender, target.uniqueId)?.let { Msg.error(sender, it); return true }
             }
-            if (com.liam.joshymc.staff.SudoRules.blocked(cmd)) {
-                Msg.error(sender, "/${com.liam.joshymc.staff.SudoRules.label(cmd)} can't be run through /sudo.")
+            // One policy for every run-as-someone-else path (issue #1353).
+            com.liam.joshymc.staff.DelegatedCommands.problem(cmd, com.liam.joshymc.staff.DelegatedCommandRules.Context.SUDO)?.let {
+                Msg.error(sender, it)
                 return true
             }
         }
-        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "SUDO", target.uniqueId, target.name, "command=/${com.liam.joshymc.staff.SudoRules.label(cmd)}")
+        // The whole command line, not just the label (issue #1353): amounts and recipients matter.
+        com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "SUDO", target.uniqueId, target.name, "command=/${cmd.take(240)}")
         target.performCommand(cmd)
         if (sender is Player) plugin.commsManager.send(sender, Component.text("Forced ${target.name} to run: /$cmd", NamedTextColor.GREEN))
         return true

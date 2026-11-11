@@ -42,6 +42,7 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent
 import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.event.player.PlayerItemConsumeEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerKickEvent
 import org.bukkit.event.player.PlayerMoveEvent
@@ -70,7 +71,9 @@ import java.util.concurrent.ConcurrentHashMap
  *   participants and isn't hurt by them.
  * - **Spectators** (staff) take and deal no damage to the match and can't pick items up.
  * - **Deaths** of participants drop nothing (their gear comes back from the snapshot) and no XP;
- *   the heart service still runs at MONITOR as for any Lifesteal kill.
+ *   the heart service still runs at MONITOR as for any Lifesteal kill. XP and potion effects come
+ *   back from the snapshot too (issue #1490), so nothing gained in the match is kept.
+ * - **Ominous Bottles** can't be drunk while held (issue #1490).
  */
 class LifestealRankedListener(private val plugin: Joshymc) : Listener {
 
@@ -329,6 +332,15 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
                 arrow.remove()
             }
         }
+    }
+
+    /** Issue #1490: Ominous Bottles can't be drunk in a match (see [RankedPlayerState.REFUSED_CONSUMABLES]). */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onConsume(event: PlayerItemConsumeEvent) {
+        if (!ranked.holds(event.player)) return
+        if (!RankedPlayerState.consumeRefused(event.item.type.key.toString())) return
+        event.isCancelled = true
+        hint(event.player, "Ominous Bottles can't be used during a ranked match.")
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)

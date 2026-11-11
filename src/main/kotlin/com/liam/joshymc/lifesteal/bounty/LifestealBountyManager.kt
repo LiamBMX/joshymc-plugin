@@ -3,6 +3,7 @@ package com.liam.joshymc.lifesteal.bounty
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.communityevent.EventState
 import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
 import com.liam.joshymc.lifesteal.teams.TeamCombatRules
 import com.liam.joshymc.tutorial.TutorialRules
 import org.bukkit.Bukkit
@@ -278,6 +279,8 @@ class LifestealBountyManager(private val plugin: Joshymc) {
             inRankedMatch = inRankedMatch(victim.uniqueId) || (killer != null && inRankedMatch(killer.uniqueId)),
             inRankedArena = inRankedArena(victim.location) || (killer != null && inRankedArena(killer.location)),
             team = if (killer == null) BountyRules.Team.NOT_TEAMMATES else teamRelation(killer.uniqueId, victim.uniqueId),
+            // Issue #1487: also gates the Lifesteal quests' PvP progress, which reuse these facts.
+            attacker = killer?.let { plugin.competitiveEligibility.verdict(it, victim.uniqueId) } ?: CompetitiveEligibility.Verdict.Eligible,
         )
     }
 
@@ -297,6 +300,9 @@ class LifestealBountyManager(private val plugin: Joshymc) {
                     val killerUuid = killer.uniqueId
                     val now = System.currentTimeMillis()
                     db("claim refusal") { store.audit(now, "CLAIM_REFUSED", killerUuid.toString(), null, victimUuid.toString(), null, eligibility.reason.name) }
+                    (death.attacker as? CompetitiveEligibility.Verdict.Ineligible)?.let {
+                        plugin.competitiveEligibility.reportBlocked(killer, victimUuid, victim.name, "BOUNTY", it, activeFor(victimUuid)?.id?.let { id -> "bounty=" + id })
+                    }
                 }
                 return
             }

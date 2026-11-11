@@ -278,6 +278,8 @@ class ListenerManager(private val plugin: Joshymc) {
         // Issue #1341: Lifesteal hearts. Never registered on a server that doesn't run Lifesteal.
         if (plugin.lifestealHeartManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.hearts.LifestealHeartListener(plugin.lifestealHeartManager), plugin)
+            // Issue #1487: remembers hits made in Creative/Spectator/God/Vanish/with over-limit enchants.
+            pm.registerEvents(com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibilityListener(plugin), plugin)
         }
         // Issue #1346: Lifesteal team session bookkeeping. Never registered on a server that doesn't run Lifesteal.
         if (plugin.lifestealTeamManager.hosted) {
