@@ -296,6 +296,8 @@ class ListenerManager(private val plugin: Joshymc) {
         // Issue #1361: Ranked Team Wars match rules (arenas, inventory protection, deaths, quits). Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealRankedManager.hosted) {
             pm.registerEvents(com.liam.joshymc.lifesteal.ranked.LifestealRankedListener(plugin), plugin)
+            // Issue #1507: arenas in use can't be changed from outside (blocks, fluids, pistons, fire, dispensers).
+            pm.registerEvents(com.liam.joshymc.lifesteal.ranked.RankedArenaGuardListener(plugin), plugin)
         }
         // Issue #1426: Team XP from mining (read-only at MONITOR). Never registered where Lifesteal isn't hosted.
         if (plugin.lifestealTeamProgressionManager.hosted) {
