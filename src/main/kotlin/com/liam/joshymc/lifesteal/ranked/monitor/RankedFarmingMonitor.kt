@@ -68,6 +68,29 @@ class RankedFarmingMonitor(private val plugin: Joshymc) {
         }
     }
 
+    /**
+     * Issue #1499: [result] was made unrated by a same-opponent rating limit. Logs it for staff
+     * review (deduplicated per roster and window). Logging only: the rating decision is already
+     * committed, and nothing here blocks, punishes or changes anything.
+     */
+    fun onRatingLimited(result: com.liam.joshymc.lifesteal.ranked.rating.RatingStore.Finalized.Unrated) {
+        val s = settings ?: return
+        val limit = result.limit ?: return
+        if (!ready || !s.enabled) return
+        val sideA = result.sides.filterValues { it == com.liam.joshymc.lifesteal.ranked.Side.A }.keys.toList()
+        val sideB = result.sides.filterValues { it == com.liam.joshymc.lifesteal.ranked.Side.B }.keys.toList()
+        val finding = RankedMonitorRules.ratingLimitFinding(limit.name, sideA, sideB, result.teamIds, result.earlierCount, result.earlierOtherTeams, s) ?: return
+        val names = result.participants.associateWith { plugin.lifestealTeamManager.nameOf(it) }
+        val now = System.currentTimeMillis()
+        plugin.databaseManager.async("ranked rating-limit review ${result.matchId}") {
+            try {
+                if (store.record(finding, result.matchId, now, s.windowMillis)) report(finding, result.matchId, names)
+            } catch (e: Exception) {
+                plugin.logger.warning("[RankedMonitor] Couldn't log the rating limit of match ${result.matchId}: ${e.message} (nothing about the match changed).")
+            }
+        }
+    }
+
     private fun report(f: RankedMonitorRules.Finding, matchId: String, names: Map<UUID, String>) {
         val who = f.players.joinToString(", ") { "${names[it] ?: "?"} ($it)" }
         plugin.logger.warning(

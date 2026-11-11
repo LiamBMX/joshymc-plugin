@@ -353,6 +353,11 @@ object RankedMatchRules {
         val teamsAvailable: Boolean,
         val heartsAvailable: Boolean,
         val arenaProblem: String?,
+        /**
+         * Issue #1499 (A-1): ids of teams already in a match that isn't over. A team plays one ranked
+         * match at a time, whichever members it would send.
+         */
+        val busyTeams: Set<String> = emptySet(),
     )
 
     /**
@@ -369,6 +374,9 @@ object RankedMatchRules {
         if (!r.teamA.exists) problems += "Team '${r.teamA.name}' doesn't exist."
         if (!r.teamB.exists) problems += "Team '${r.teamB.name}' doesn't exist."
         if (r.teamA.exists && r.teamB.exists && r.teamA.id == r.teamB.id) problems += "A team can't play against itself."
+        for (team in listOf(r.teamA, r.teamB).distinctBy { it.id }) {
+            if (team.exists && team.id in r.busyTeams) problems += teamBusyProblem(team.name)
+        }
         r.arenaProblem?.let { problems += it }
         if (problems.isNotEmpty()) return problems
 
@@ -384,6 +392,9 @@ object RankedMatchRules {
         }
         return problems
     }
+
+    /** Issue #1499 (A-1): the refusal for a team that is already in a ranked match. */
+    fun teamBusyProblem(teamName: String): String = "$teamName is already playing a ranked match (a team plays one match at a time)."
 
     /** Why one participant can't play (null = can), the same rule a match start uses. Also used by the ranked queue. */
     fun participantProblem(p: ParticipantFacts, limits: IntRange?): String? = when {

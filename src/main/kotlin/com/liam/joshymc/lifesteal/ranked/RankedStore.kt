@@ -88,6 +88,22 @@ class RankedStore(private val db: SqliteDatabase) {
         }
         db.createTable("CREATE UNIQUE INDEX IF NOT EXISTS idx_lifesteal_ranked_matches_open_arena ON lifesteal_ranked_matches(arena_id) WHERE state NOT IN ('COMPLETED', 'CANCELLED')")
         db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_ranked_matches_created ON lifesteal_ranked_matches(created_at)")
+        // Issue #1499 (A-1): a team is in at most one match that isn't over, on either side, whichever
+        // members it sends. Checked against the match rows' own state (no lock table), so completing,
+        // cancelling or the startup recovery releases the team and nothing can stay stuck after a crash.
+        db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_ranked_matches_open_team_a ON lifesteal_ranked_matches(team_a_id) WHERE state NOT IN ('COMPLETED', 'CANCELLED')")
+        db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_ranked_matches_open_team_b ON lifesteal_ranked_matches(team_b_id) WHERE state NOT IN ('COMPLETED', 'CANCELLED')")
+        db.createTable(
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_lifesteal_ranked_matches_one_per_team
+            BEFORE INSERT ON lifesteal_ranked_matches
+            WHEN NEW.state NOT IN ('COMPLETED', 'CANCELLED') AND EXISTS (
+                SELECT 1 FROM lifesteal_ranked_matches m WHERE m.state NOT IN ('COMPLETED', 'CANCELLED')
+                  AND (m.team_a_id IN (NEW.team_a_id, NEW.team_b_id) OR m.team_b_id IN (NEW.team_a_id, NEW.team_b_id))
+            )
+            BEGIN SELECT RAISE(ABORT, 'a team can only be in one open ranked match'); END
+            """.trimIndent()
+        )
         db.createTable(
             """
             CREATE TABLE IF NOT EXISTS lifesteal_ranked_participants (

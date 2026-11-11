@@ -213,6 +213,8 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
         val team = teams.teamOf(player.uniqueId) ?: return "Join a Lifesteal team first (/team)."
         if (team.leader != player.uniqueId) return "Only your team leader can queue the team or send challenges."
         book.entryOfTeam(team.id)?.let { return "Your team is already in a ranked ${if (it.kind == EntryKind.CHALLENGE) "challenge" else "queue"} (/ranked status)." }
+        // Issue #1499 (A-1): one match per team at a time, whichever members are free.
+        if (ranked.teamMatch(team.id) != null) return "Your team is already playing a ranked match. A team plays one match at a time; try again when it ends."
         seconds(teamCooldown.remaining(team.id, now)).takeIf { it > 0 }?.let { return "Your team can queue again in ${it}s." }
         if (team.size < size) return "Your team needs at least $size members for ${size}v$size (it has ${team.size})."
         if (!ranked.hostsSize(size)) return "No arena hosts ${size}v$size right now."
@@ -248,6 +250,7 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
     /** Why [e] can't be matched this moment (combat tag, death, ...), or null. */
     private fun softProblem(e: QueueEntry): String? {
         val team = teams.team(e.teamId) ?: return "${e.teamName} no longer exists"
+        if (ranked.teamMatch(team.id) != null) return "${team.name} is already playing a ranked match"
         for (uuid in e.participants) {
             val player = Bukkit.getPlayer(uuid)?.takeIf { it.isOnline } ?: return "${teams.nameOf(uuid)} is offline"
             if (teams.teamOf(uuid)?.id != team.id) return "${player.name} left the team"
@@ -380,6 +383,7 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
                 val team = teams.team(entry.teamId)
                 val problem = when {
                     team == null || teams.teamOf(player.uniqueId)?.id != team.id -> "you're no longer in ${entry.teamName}"
+                    ranked.teamMatch(team.id) != null -> "${team.name} is already playing a ranked match"
                     else -> playerProblem(player, now) ?: ranked.participantProblem(player, team)
                 }
                 if (problem != null) return Msg.error(player, "You can't agree right now: $problem. The request stays open until it times out.")
@@ -400,6 +404,8 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
         val team = teams.team(entry.teamId)
         val problem = when {
             team == null || teams.teamOf(player.uniqueId)?.id != team.id -> "you're no longer in ${entry.teamName}"
+            // Issue #1499 (A-1): another match of the team started meanwhile (e.g. a staff TEST match).
+            ranked.teamMatch(team.id) != null -> "${team.name} is already playing a ranked match"
             else -> ranked.participantProblem(player, team)
         }
         if (problem != null) return Msg.error(player, "You can't accept right now: $problem.")
@@ -622,6 +628,7 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
         seconds(challengeCooldown.remaining(own.id, now)).takeIf { it > 0 }?.let { return "Your team can send another challenge in ${it}s." }
         if (book.pendingChallenge(own.id, target.id) != null) return "You already challenged ${target.name}."
         if (book.entryOfTeam(target.id) != null) return "${target.name} is already in a ranked queue or challenge."
+        if (ranked.teamMatch(target.id) != null) return "${target.name} is playing a ranked match right now; challenge them when it ends."
         val online = target.members.count { m -> Bukkit.getPlayer(m.uuid)?.let { it.isOnline && isLifesteal(it) } == true }
         if (online < size) return "${target.name} doesn't have $size players online in Lifesteal."
         return null
@@ -667,6 +674,9 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
         val c = book.pendingChallenge(fromTeamId, own.id) ?: return null to "There's no open challenge from that team."
         if (now >= c.expiresAt) return null to "That challenge expired."
         book.entryOfTeam(own.id)?.let { return null to "Your team is already in a ranked queue or challenge; leave it first (/ranked leave)." }
+        // Issue #1499 (A-1): neither team may be in a match already.
+        if (ranked.teamMatch(own.id) != null) return null to "Your team is already playing a ranked match; answer when it ends."
+        if (ranked.teamMatch(c.fromTeamId) != null) return null to "${c.fromTeamName} is playing a ranked match right now."
         if (own.size < c.size) return null to "Your team needs at least ${c.size} members."
         if (!ranked.hostsSize(c.size)) return null to "No arena hosts ${c.size}v${c.size} right now."
         return c to null
