@@ -198,6 +198,22 @@ from participants, take and deal no damage, can't pick up items, open containers
 can't walk into the arena, and can never be part of a heart transfer. `unspectate` stops; it also ends
 with the match. There's no public spectator mode or GUI yet.
 
+**Issue #1511 (audit D-L7):** spectating is a player-initiated teleport, so it goes through the same
+`CombatTeleportGuard` as every other teleport (via `CombatTeleportGuard.problem`, no second combat
+system). The Bukkit-free `RankedSpectateRules` refuses, in order: match participants, players with a
+ranked inventory waiting to be restored, combat-tagged players, dead players, unknown / cancelled /
+completed / finishing matches, arenas without a spectator point and unloaded arena worlds. The
+spectator point's chunk is then loaded (`getChunkAtAsync`, no generation), everything is checked again
+with fresh state plus `SafeSpots.problem(point)` (floor, hazards, world border), and only after the
+teleport succeeded does the player become a spectator. A refusal never moves the player, never changes
+their spectator state and never touches their combat tag. One request per player at a time; quitting
+or shutdown drops it. Checks: `./gradlew -I scripts/ranked-spectate-check.init.gradle.kts rankedSpectateCheck`.
+
+Live check (Paper): tag yourself (hit another player), run `/lifesteal admin ranked spectate <match>`:
+refused with "You cannot teleport while in combat!", position unchanged, tag still running. Wait for
+the tag to expire and run it again: teleported to the spectator point. Put lava under the spectator
+point: refused as unsafe. `unspectate`, quitting and the match ending all clear the spectator.
+
 ## Records
 
 `lifesteal_ranked_matches` is the match record: id, season id, arena id, both team ids and names, size,
