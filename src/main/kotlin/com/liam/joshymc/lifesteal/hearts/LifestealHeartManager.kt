@@ -6,6 +6,8 @@ import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
 import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.eligible
 import com.liam.joshymc.lifesteal.LifestealSettings
 import com.liam.joshymc.lifesteal.hearts.HeartRules.changesHearts
+import com.liam.joshymc.lifesteal.hearts.monitor.HeartMonitorRules
+import com.liam.joshymc.lifesteal.hearts.monitor.HeartTransferMonitor
 import com.liam.joshymc.lifesteal.ranked.RankedHeartSummary
 import com.liam.joshymc.lifesteal.ranked.RankedMatchRules
 import com.liam.joshymc.manager.AntiDupeManager
@@ -65,6 +67,9 @@ class LifestealHeartManager(private val plugin: Joshymc) {
 
     /** Builds and reads physical Heart items. */
     val items = HeartItem(plugin)
+
+    /** Issue #1508: logging-only review of committed transfers (shared connections, repeats). */
+    val monitor = HeartTransferMonitor(plugin)
 
     // Heart item safeguards (issue #1344), all main-thread state cleared on quit.
     /** Players inside a withdrawal or redemption right now (re-entry is refused). */
@@ -129,6 +134,12 @@ class LifestealHeartManager(private val plugin: Joshymc) {
             limits = null
             plugin.logger.severe("[Hearts] Could not create the heart tables, so hearts are paused: ${e.message}")
             return
+        }
+        // Issue #1508: logging only; a failure here never pauses hearts.
+        try {
+            monitor.refresh()
+        } catch (e: Exception) {
+            plugin.logger.warning("[Hearts] Heart transfer monitoring couldn't start (hearts are unaffected): ${e.message}")
         }
         limits = HeartRules.Limits.of(settings.hearts)
         cooldownMinutes = settings.pvp.sameVictimCooldownMinutes
@@ -463,6 +474,13 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 notify(result, killer, victim.name, victim, limits, victim.uniqueId, request)
                 // Issue #1426: Team XP only for kills the heart service accepted as legitimate.
                 plugin.teamProgression()?.onPvpKill(killer.uniqueId, victim.uniqueId, result.decision, request.dedupeKey)
+                val source = when {
+                    rankedMatch != null && rankedSource == RankedHeartSummary.Source.ENVIRONMENT -> HeartMonitorRules.Source.RANKED_ENVIRONMENT
+                    rankedMatch != null -> HeartMonitorRules.Source.RANKED_KILL
+                    note != null -> HeartMonitorRules.Source.COMBAT_TAG
+                    else -> HeartMonitorRules.Source.KILL
+                }
+                monitorTransfer(result, request, source, killer.name, victim.name, rankedMatch)
             }
         }
     }
@@ -552,6 +570,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 }
                 notify(result, killer, victimName, Bukkit.getPlayer(victim)?.takeIf { it.isOnline }, limits, victim, request)
                 plugin.teamProgression()?.onPvpKill(killer.uniqueId, victim, result.decision, request.dedupeKey)
+                monitorTransfer(result, request, HeartMonitorRules.Source.COMBAT_NPC, killer.name, victimName)
             }
         }
     }
@@ -609,9 +628,33 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 }
                 // The victim is disconnecting: the ranked manager tells them when they're back.
                 notify(result, killer, victim.name, null, limits, victim.uniqueId, request)
+                monitorTransfer(result, request, HeartMonitorRules.Source.RANKED_FORFEIT, killer.name, victim.name, HeartMonitorRules.forfeitMatchId(dedupeKey))
             }
         }
         return result
+    }
+
+    /**
+     * Issue #1508: hands a committed heart transfer (only [HeartRules.Decision.Transfer]: the killer
+     * gained the victim's heart) to the logging-only monitor, after it was applied and the players
+     * were told. Never throws and never touches the transfer: the monitor only queues async work.
+     */
+    private fun monitorTransfer(
+        result: HeartStore.PvpResult.Done, request: HeartStore.PvpRequest, source: HeartMonitorRules.Source,
+        killerName: String, victimName: String, matchId: String? = null,
+    ) {
+        if (result.decision !is HeartRules.Decision.Transfer) return
+        try {
+            monitor.onTransfer(
+                HeartMonitorRules.Transfer(
+                    result.transactionId, request.dedupeKey, source, request.killer, request.victim, request.now,
+                    result.killerBefore, result.killerAfter, result.victimBefore, result.victimAfter, matchId,
+                ),
+                killerName, victimName,
+            )
+        } catch (e: Exception) {
+            plugin.logger.warning("[Hearts] Couldn't hand heart transaction ${result.transactionId} to the monitor (the transfer is unaffected): ${e.message}")
+        }
     }
 
     private fun notify(

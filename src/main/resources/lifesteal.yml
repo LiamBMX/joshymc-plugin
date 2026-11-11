@@ -327,6 +327,36 @@ heart-items:
     enabled: true
     policy: review
 
+# Heart transfer monitoring (docs/lifesteal-hearts.md, "Heart transfer monitoring", issue #1508).
+# LOGGING ONLY: it never blocks, delays or reverses a transfer, takes hearts, bans, kicks or changes
+# Elo. After every committed heart transfer (PvP kills, combat-tag credits, Combat NPC kills, ranked
+# kills and ranked disconnect forfeits) it looks back window-hours (1-720) and records a staff review
+# flag (/lifesteal hearts monitor) when a signal fires. Players are told nothing. A shared connection
+# (family, college, shared housing, public Wi-Fi, VPN) is NOT proof that two accounts have one owner.
+# A mistake here only turns monitoring off; hearts are unaffected.
+heart-transfer-monitoring:
+  enabled: true
+  window-hours: 24
+  # Signal A: AltManager saw the killer and the victim on one connection (only salted hashes are
+  # compared; no address is stored or shown). Also needed for signal D.
+  shared-connection: true
+  # Signal B: hearts moved between the same two players, either direction, this one included
+  # (0-1000, 0 = off). The 30-minute same-victim cooldown still applies to every transfer.
+  repeated-transfers: 4
+  # Signal C: hearts one victim lost to one killer with none going back (0-1000, 0 = off). Only
+  # reported together with another signal: on its own it is ordinary PvP.
+  one-way-transfers: 3
+  # Signal D: accounts with shared-connection evidence (with each other or the recipient) that
+  # gave the same player hearts (0-100, 0 = off).
+  associated-accounts: 3
+  # Chat notice to online staff with joshymc.lifesteal.hearts.monitor. At most one per pair of
+  # players every notify-cooldown-minutes (0-10080); every flag is still recorded.
+  notify-staff: true
+  notify-cooldown-minutes: 60
+  # Reviewed/dismissed flags older than this are deleted at startup and reload; open flags are
+  # always kept (0-3650, 0 = keep everything).
+  retention-days: 180
+
 # Combat logging (docs/lifesteal-combat.md). The combat-tag duration is the existing
 # config.yml > combat.tag-duration-seconds (the blueprint defines none). Blueprint v1.1 defines no
 # combat-log penalty, so logging out itself costs no heart: incidents are recorded for staff

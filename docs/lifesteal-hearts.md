@@ -389,6 +389,95 @@ Checks: `./gradlew -I scripts/competitive-eligibility-check.init.gradle.kts comp
 9. `/enchant sharpness 6`, `/enchant sharpness 1` on a stick, `/enchant smite 1` on a Sharpness
    sword: all refused without `joshymc.enchant.unsafe`; `/enchant sharpness 5` works.
 
+## Heart transfer monitoring (issue #1508, audit C-2)
+
+Heart item redemptions already had a shared-connection review (issue #1457), but ordinary PvP and
+ranked heart transfers had none. Now every **committed** heart transfer is checked for signs of
+alternate-account heart farming. It is **logging only**: it never cancels, delays or reverses a
+transfer, never takes hearts, bans, kicks, rolls back, changes Elo, restricts an account or
+deletes a team. Repeated flags are for staff to review, not to escalate automatically.
+
+**What is checked.** All three heart paths call the one `HeartStore.transferPvp`, so
+`LifestealHeartManager.monitorTransfer` hands every result whose decision is `Transfer` (the
+killer really gained the victim's heart) to `HeartTransferMonitor`, after the transfer was applied
+and the players were told: open-world kills, combat-tag credits (#1461), Combat NPC kills (#1402),
+ranked kills, ranked environmental credits (#1478) and ranked disconnect forfeits (#1465).
+Rejected outcomes (cooldown, final heart, killer at maximum, teammates, allies, grace period,
+ineligible attacker, ...), duplicates, failures and `VICTIM_LOST_ONLY` are never logged as
+transfers; the store also re-reads the heart transaction and only flags it if it is stored as
+`TRANSFERRED` between those two players.
+
+**Signals** (`lifesteal.yml > heart-transfer-monitoring`, window `window-hours`, default 24h,
+ending at the transfer, this transfer included):
+
+| Signal | Fires when | Default |
+|---|---|---|
+| A Shared connection | AltManager saw killer and victim on one connection | on |
+| B Repeated transfers | the pair moved this many hearts between them, either direction | 4 |
+| C One-way transfers | the victim lost this many hearts to the killer and got none back; **only reported with another signal** | 3 |
+| D Associated accounts | this many accounts that gave the killer hearts share a connection with the killer or with each other | 3 |
+
+The 30-minute same-victim cooldown, the 1..20 limits, final-heart protection, attribution, dedupe
+keys and ranked hearts-at-risk are untouched: the monitor only reads.
+
+**Evidence and privacy.** The only connection evidence is AltManager's `player_connections`
+(salted HMACs of the address, compared inside SQL). The monitor never reads out, stores or shows a
+hash or an address; it stores UUIDs, heart counts, the signal codes and counts. **A shared
+connection is not proof of one owner**: family members, college networks, shared housing, public
+Wi-Fi and VPNs all share one. No new tracking was added.
+
+**Records.** `lifesteal_heart_monitor_flags` (same `data.db`, survives restarts): heart transaction
+id (UNIQUE, so a transfer is flagged at most once however often it is evaluated) and dedupe key,
+source, ranked match id, killer/victim UUIDs and hearts before/after, signals, the pair's counts in
+each direction, associated accounts, window, `notified`, review status (OPEN, REVIEWED, DISMISSED,
+who, when, note) and times. Reviewed/dismissed flags older than `retention-days` (180) are deleted
+at startup/reload; open flags are always kept.
+
+**Staff.** `joshymc.lifesteal.hearts.monitor` (default op):
+
+```
+/lifesteal hearts monitor                     # open flags, newest first
+/lifesteal hearts monitor all|<player>        # every flag / flags involving a player
+/lifesteal hearts monitor <id>                # details
+/lifesteal hearts monitor <id> reviewed|dismissed|open [note]
+```
+
+Online holders of the permission get a chat notice (at most one per pair per
+`notify-cooldown-minutes`, persisted, so restarts don't repeat it):
+
+```
+[Lifesteal Monitor] Possible heart farming (flag #12):
+ Victim → Killer (PvP kill)
+ Reason: Shared connection + Repeated transfers
+ Action: Review recommended [Details]
+```
+
+Each flag also writes a console warning and one `HEART_MONITOR_FLAG` row in `/admin` logs; that
+row names no connection signal (the `/admin` log is readable without the monitor permission).
+Reviews are logged as `HEART_MONITOR_REVIEWED|DISMISSED|OPEN`. The players involved are never told.
+Compare accounts with `/alts` (its own permission and audit).
+
+**Performance and failures.** The check runs on the database worker (`databaseManager.async`),
+never on the main thread during PvP. Each check is a handful of indexed queries:
+`lifesteal_heart_transactions (killer, victim, created_at)`, a new `player_connections
+(connection_hash)` index, and at most 50 donor accounts for signal D. Any error is logged and
+dropped; the transfer is already committed and nothing is retried that could touch hearts. A
+broken `heart-transfer-monitoring` section only turns monitoring off.
+
+**Limitations.** Evidence is only as good as AltManager's history (no record = no signal A/D).
+Players behind one VPN or campus network will be flagged together; players on different networks
+won't be. Throttled notifications still record every flag. Ranked matches also have their own
+per-match review (`docs/lifesteal-ranked-beta.md` section H).
+
+Checks: `./gradlew -I scripts/heart-transfer-monitor-check.init.gradle.kts heartTransferMonitorCheck`.
+
+**Live server checklist.** On a Lifesteal test server with two accounts on one connection (both
+joined once so AltManager recorded them), after launch/grace: kill A with B: a flag and a staff
+notice appear, both players only see the normal heart messages; a third account on another
+connection killing A 4 times (30 minutes apart) raises Repeated transfers; `/lifesteal hearts
+monitor <id> reviewed` changes no heart; restart and the flag is still there; a player without the
+permission gets no notice and can't run the command.
+
 ## Survival isolation
 
 - `/withdrawheart` refuses on servers and worlds without Lifesteal, and redemption only runs
