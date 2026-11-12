@@ -221,10 +221,30 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
                 Msg.success(sender, "${target.name} was taken out of their ranked match.")
             }
             "restore" -> {
-                val name = a.getOrNull(0) ?: return Msg.usage(sender, "/lifesteal admin ranked restore <player>")
+                val name = a.getOrNull(0) ?: return Msg.usage(sender, "/lifesteal admin ranked restore <player> [apply|resolve confirm]")
                 val target = Bukkit.getPlayerExact(name) ?: return Msg.playerNotFound(sender, name)
-                ranked.adminRestore(target)?.let { return Msg.error(sender, it) }
-                Msg.success(sender, "Restored ${target.name}'s pre-match inventory.")
+                // Issue #1506: a snapshot waiting for review is applied or resolved only on an explicit choice.
+                val mode = a.getOrNull(1)?.lowercase()?.takeIf { it == "apply" || it == "resolve" }
+                if (a.size > 1 && mode == null) return Msg.usage(sender, "/lifesteal admin ranked restore <player> [apply|resolve confirm]")
+                if (mode != null && !confirmed(a, 2)) {
+                    val what = if (mode == "apply") "This replaces ${target.name}'s current inventory, XP and effects with their reviewed ranked snapshot." else "This records that ${target.name}'s reviewed snapshot already came back; nothing is applied."
+                    return confirm(sender, what, "/lifesteal admin ranked restore ${target.name} $mode confirm")
+                }
+                val result = ranked.adminRestore(sender, target, mode)
+                if (mode != null || result.ok) {
+                    com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "RANKED_RESTORE_${(mode ?: "staff").uppercase()}", target.uniqueId, target.name,
+                        "ok=${result.ok} result=${result.message.take(200)}")
+                }
+                if (result.ok) Msg.success(sender, result.message) else Msg.error(sender, result.message)
+            }
+            "restores" -> {
+                val rows = try { ranked.reviewSnapshots() } catch (e: Exception) { return Msg.error(sender, "Couldn't read the snapshots: ${e.message}") }
+                if (rows.isEmpty()) return Msg.reply(sender, Component.text("No ranked inventory snapshot is waiting for review.", NamedTextColor.GRAY))
+                sender.sendMessage(Component.text("Ranked snapshots waiting for review (${rows.size}):", NamedTextColor.GOLD))
+                for (r in rows) {
+                    val who = Bukkit.getOfflinePlayer(r.uuid).name ?: r.uuid.toString()
+                    sender.sendMessage(Component.text("${r.id} $who: ${r.reviewReason ?: "restore not confirmed"} (restore started ${r.restoreStartedAt?.let { time(it) } ?: "unknown"})", NamedTextColor.GRAY))
+                }
             }
             "spectate" -> {
                 val player = sender as? Player ?: return Msg.playersOnly(sender)
@@ -423,6 +443,7 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
                 else -> emptyList()
             }
             4 -> when {
+                group == "ranked" && admin && args[1].equals("restore", true) -> filter(listOf("apply", "resolve"), args[3])
                 group == "arena" && args[1].lowercase() in setOf("setspawn") -> filter(listOf("a", "b"), args[3])
                 group == "arena" && args[1].lowercase() == "clearspawns" -> filter(listOf("a", "b", "spectator"), args[3])
                 group == "arena" && args[1].lowercase() == "setcorner" -> filter(listOf("1", "2"), args[3])
@@ -441,9 +462,9 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
     companion object {
         const val TESTMATCH_USAGE = "/lifesteal admin ranked testmatch <teamA> <teamB> <size> [arena] | testmatch confirm <token>"
         const val ARENA_USAGE = "/lifesteal admin arena <create|delete|list|info|setname|setcorner|setspawn|setspectator|clearspawns|sizes|enable|disable> ..."
-        const val RANKED_USAGE = "/lifesteal admin ranked <testmatch <teamA> <teamB> <size> [arena]|list|info|cancel|remove|restore|spectate|unspectate|queue|cancelqueue|cancelproposal|queuelog|rating|stats|reviews> ..."
+        const val RANKED_USAGE = "/lifesteal admin ranked <testmatch <teamA> <teamB> <size> [arena]|list|info|cancel|remove|restore|restores|spectate|unspectate|queue|cancelqueue|cancelproposal|queuelog|rating|stats|reviews> ..."
         private val ARENA_SUBS = listOf("create", "delete", "list", "info", "setname", "setcorner", "setspawn", "setspectator", "clearspawns", "sizes", "enable", "disable")
-        private val RANKED_SUBS = listOf("testmatch", "list", "info", "cancel", "remove", "restore", "spectate", "unspectate", "queue", "cancelqueue", "cancelproposal", "queuelog", "rating", "stats", "reviews")
+        private val RANKED_SUBS = listOf("testmatch", "list", "info", "cancel", "remove", "restore", "restores", "spectate", "unspectate", "queue", "cancelqueue", "cancelproposal", "queuelog", "rating", "stats", "reviews")
         /** A queue entry this long in a state other than WAITING is shown as possibly stuck. */
         private const val STUCK_SECONDS = 180L
         private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss'Z'").withZone(ZoneOffset.UTC)

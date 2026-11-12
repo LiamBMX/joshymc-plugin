@@ -20,7 +20,10 @@ import java.util.UUID
  * - `lifesteal_ranked_snapshots`: the pre-match inventory, equipment and return location of each
  *   participant, written in the same transaction as the match. UNIQUE (match, player) means a
  *   snapshot is never overwritten, a partial UNIQUE index allows one PENDING snapshot per player,
- *   and PENDING → RESTORED is a conditional UPDATE, so it is restored once. Since issue #1490 it
+ *   and PENDING → RESTORED is a conditional UPDATE, so it is restored once. Since issue #1506 a
+ *   restore goes PENDING → RESTORING → RESTORED (a RESTORING row left by an earlier boot becomes
+ *   REVIEW for staff), with at most one unsettled snapshot per player and the moves enforced by a
+ *   trigger ([RankedInventorySafety]). Since issue #1490 it
  *   also holds the pre-match XP (`xp_level`, `xp_progress`, `xp_total`) and potion effects
  *   (`effects`, "" = none); NULL in a row made before that = leave XP/effects untouched.
  * - `lifesteal_ranked_events`: what happened (state changes, deaths, disconnects, restorations).
@@ -152,6 +155,29 @@ class RankedStore(private val db: SqliteDatabase) {
             try { db.execute("ALTER TABLE lifesteal_ranked_snapshots ADD COLUMN $column") } catch (_: Exception) { }
         }
         db.createTable("CREATE UNIQUE INDEX IF NOT EXISTS idx_lifesteal_ranked_snapshots_pending ON lifesteal_ranked_snapshots(uuid) WHERE status = 'PENDING'")
+        // Issue #1506 (B-3/E-2): the durable restore protocol (RankedInventorySafety). When the restore
+        // started, by which boot (a RESTORING row from another boot is ambiguous -> REVIEW), and why
+        // staff must look at it. Older rows keep NULL; their PENDING/RESTORED statuses are unchanged.
+        for (column in listOf("restore_started_at INTEGER", "restore_boot TEXT", "review_reason TEXT", "reviewed_at INTEGER")) {
+            try { db.execute("ALTER TABLE lifesteal_ranked_snapshots ADD COLUMN $column") } catch (_: Exception) { }
+        }
+        // One unsettled snapshot per player (PENDING, RESTORING or REVIEW): a new match can't be
+        // recorded for a player whose last restore isn't finished, so an old snapshot can never be
+        // applied over a newer match's inventory.
+        db.createTable("CREATE UNIQUE INDEX IF NOT EXISTS idx_lifesteal_ranked_snapshots_unsettled ON lifesteal_ranked_snapshots(uuid) WHERE status IN ('PENDING', 'RESTORING', 'REVIEW')")
+        // RESTORED is final and only the protocol's moves are allowed (RankedInventorySafety.canMove).
+        db.createTable(
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_lifesteal_ranked_snapshots_status
+            BEFORE UPDATE OF status ON lifesteal_ranked_snapshots
+            WHEN NEW.status <> OLD.status AND NOT (
+                (OLD.status = 'PENDING' AND NEW.status IN ('RESTORING', 'RESTORED')) OR
+                (OLD.status = 'RESTORING' AND NEW.status IN ('RESTORED', 'REVIEW')) OR
+                (OLD.status = 'REVIEW' AND NEW.status IN ('RESTORING', 'RESTORED'))
+            )
+            BEGIN SELECT RAISE(ABORT, 'invalid ranked snapshot status change'); END
+            """.trimIndent()
+        )
         db.createTable(
             """
             CREATE TABLE IF NOT EXISTS lifesteal_ranked_events (
@@ -316,6 +342,10 @@ class RankedStore(private val db: SqliteDatabase) {
         val xpTotal: Int? = null,
         /** Encoded effects, "" = none, null = an older snapshot (effects left untouched). */
         val effects: String? = null,
+        /** Issue #1506: when the last restore of it started (null = never). */
+        val restoreStartedAt: Long? = null,
+        /** Issue #1506: why it waits for staff (REVIEW only). */
+        val reviewReason: String? = null,
     )
 
     /**
@@ -480,9 +510,40 @@ class RankedStore(private val db: SqliteDatabase) {
     fun snapshotsOf(matchId: String): List<Snapshot> =
         db.query("SELECT * FROM lifesteal_ranked_snapshots WHERE match_id = ? ORDER BY uuid", matchId) { readSnapshot(it) }
 
+    /** Issue #1506: [uuid]'s RESTORING or REVIEW snapshot (a restore that isn't confirmed), if any. */
+    fun unsettledSnapshot(uuid: UUID): Snapshot? =
+        db.queryFirst("SELECT * FROM lifesteal_ranked_snapshots WHERE uuid = ? AND status IN ('RESTORING', 'REVIEW')", uuid.toString()) { readSnapshot(it) }
+
+    /** Issue #1506: owners of RESTORING or REVIEW snapshots (they can't enter a new match). */
+    fun unsettledSnapshotOwners(): Set<UUID> =
+        db.query("SELECT uuid FROM lifesteal_ranked_snapshots WHERE status IN ('RESTORING', 'REVIEW')") { UUID.fromString(it.getString("uuid")) }.toSet()
+
+    /** Issue #1506: every snapshot waiting for a staff decision, oldest first. */
+    fun reviewSnapshots(limit: Int): List<Snapshot> =
+        db.query("SELECT * FROM lifesteal_ranked_snapshots WHERE status = 'REVIEW' ORDER BY created_at, snapshot_id LIMIT ?", limit) { readSnapshot(it) }
+
     /**
-     * PENDING → RESTORED once (false if it was already restored). Marks the match's restoration
-     * COMPLETE when it was the last pending snapshot.
+     * Issue #1506 step 1: [from] (PENDING, or REVIEW when staff apply it) -> RESTORING, recorded with
+     * [boot] *before* the player is touched. False = the row isn't [from] any more (another restore
+     * took it, or it went to review): the caller must not apply it.
+     */
+    fun beginRestore(snapshotId: String, from: String, boot: String, reason: String, now: Long): Boolean {
+        require(from == RankedInventorySafety.PENDING || from == RankedInventorySafety.REVIEW) { "a restore starts from PENDING or REVIEW" }
+        var changed = false
+        db.transaction {
+            val row = db.queryFirst("SELECT match_id, uuid FROM lifesteal_ranked_snapshots WHERE snapshot_id = ?", snapshotId) { it.getString("match_id") to it.getString("uuid") } ?: return@transaction
+            changed = db.executeUpdate(
+                "UPDATE lifesteal_ranked_snapshots SET status = 'RESTORING', restore_started_at = ?, restore_boot = ?, restore_reason = ? WHERE snapshot_id = ? AND status = ?",
+                now, boot, reason.take(100), snapshotId, from,
+            ) == 1
+            if (changed) insertEvent(row.first, now, "RESTORING", UUID.fromString(row.second), "from $from: ${reason.take(100)}")
+        }
+        return changed
+    }
+
+    /**
+     * PENDING or RESTORING -> RESTORED once (false if it was already restored or is waiting for
+     * review). Marks the match's restoration COMPLETE when no snapshot of it is unsettled.
      */
     fun markRestored(snapshotId: String, reason: String, now: Long): Boolean {
         var changed = false
@@ -490,17 +551,62 @@ class RankedStore(private val db: SqliteDatabase) {
             val matchId = db.queryFirst("SELECT match_id FROM lifesteal_ranked_snapshots WHERE snapshot_id = ?", snapshotId) { it.getString("match_id") } ?: return@transaction
             val uuid = db.queryFirst("SELECT uuid FROM lifesteal_ranked_snapshots WHERE snapshot_id = ?", snapshotId) { it.getString("uuid") }
             changed = db.executeUpdate(
-                "UPDATE lifesteal_ranked_snapshots SET status = 'RESTORED', restored_at = ?, restore_reason = ? WHERE snapshot_id = ? AND status = 'PENDING'",
+                "UPDATE lifesteal_ranked_snapshots SET status = 'RESTORED', restored_at = ?, restore_reason = ? WHERE snapshot_id = ? AND status IN ('PENDING', 'RESTORING')",
                 now, reason.take(100), snapshotId,
             ) == 1
             if (!changed) return@transaction
             insertEvent(matchId, now, "RESTORED", uuid?.let(UUID::fromString), reason.take(100))
-            db.executeUpdate(
-                "UPDATE lifesteal_ranked_matches SET restoration = 'COMPLETE' WHERE match_id = ? AND NOT EXISTS (SELECT 1 FROM lifesteal_ranked_snapshots WHERE match_id = ? AND status = 'PENDING')",
-                matchId, matchId,
-            )
+            settleMatchRestoration(matchId)
         }
         return changed
+    }
+
+    /**
+     * Issue #1506: startup. Every RESTORING row a different boot than [boot] started is ambiguous
+     * (the server stopped between applying and confirming) -> REVIEW, never applied automatically.
+     * Returns the rows it moved.
+     */
+    fun flagInterruptedRestores(boot: String, now: Long): List<Snapshot> {
+        val flagged = mutableListOf<Snapshot>()
+        db.transaction {
+            val rows = db.query("SELECT * FROM lifesteal_ranked_snapshots WHERE status = 'RESTORING'") { readSnapshot(it) to it.getString("restore_boot") }
+            for ((snapshot, rowBoot) in rows) {
+                if (RankedInventorySafety.interruptedRestoreTarget(rowBoot, boot) == null) continue
+                val moved = db.executeUpdate(
+                    "UPDATE lifesteal_ranked_snapshots SET status = 'REVIEW', review_reason = ? WHERE snapshot_id = ? AND status = 'RESTORING'",
+                    RankedInventorySafety.INTERRUPTED_REASON, snapshot.id,
+                ) == 1
+                if (!moved) continue
+                insertEvent(snapshot.matchId, now, "RESTORE_REVIEW", snapshot.uuid, RankedInventorySafety.INTERRUPTED_REASON)
+                db.executeUpdate("UPDATE lifesteal_ranked_matches SET restoration = 'REVIEW' WHERE match_id = ?", snapshot.matchId)
+                flagged += snapshot.copy(status = RankedInventorySafety.REVIEW, reviewReason = RankedInventorySafety.INTERRUPTED_REASON)
+            }
+        }
+        return flagged
+    }
+
+    /** Issue #1506: staff decided a REVIEW snapshot already came back: REVIEW -> RESTORED without applying it. */
+    fun resolveReview(snapshotId: String, reason: String, now: Long): Boolean {
+        var changed = false
+        db.transaction {
+            val matchId = db.queryFirst("SELECT match_id FROM lifesteal_ranked_snapshots WHERE snapshot_id = ?", snapshotId) { it.getString("match_id") } ?: return@transaction
+            val uuid = db.queryFirst("SELECT uuid FROM lifesteal_ranked_snapshots WHERE snapshot_id = ?", snapshotId) { it.getString("uuid") }
+            changed = db.executeUpdate(
+                "UPDATE lifesteal_ranked_snapshots SET status = 'RESTORED', restored_at = ?, reviewed_at = ?, restore_reason = ? WHERE snapshot_id = ? AND status = 'REVIEW'",
+                now, now, reason.take(100), snapshotId,
+            ) == 1
+            if (!changed) return@transaction
+            insertEvent(matchId, now, "RESTORE_RESOLVED", uuid?.let(UUID::fromString), reason.take(100))
+            settleMatchRestoration(matchId)
+        }
+        return changed
+    }
+
+    private fun settleMatchRestoration(matchId: String) {
+        db.executeUpdate(
+            "UPDATE lifesteal_ranked_matches SET restoration = 'COMPLETE' WHERE match_id = ? AND NOT EXISTS (SELECT 1 FROM lifesteal_ranked_snapshots WHERE match_id = ? AND status <> 'RESTORED')",
+            matchId, matchId,
+        )
     }
 
     private fun readSnapshot(rs: ResultSet): Snapshot {
@@ -525,6 +631,8 @@ class RankedStore(private val db: SqliteDatabase) {
             xpProgress = (rs.getObject("xp_progress") as? Number)?.toDouble(),
             xpTotal = (rs.getObject("xp_total") as? Number)?.toInt(),
             effects = rs.getString("effects"),
+            restoreStartedAt = (rs.getObject("restore_started_at") as? Number)?.toLong(),
+            reviewReason = rs.getString("review_reason"),
         )
     }
 
