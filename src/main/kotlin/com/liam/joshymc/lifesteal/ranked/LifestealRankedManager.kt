@@ -1643,17 +1643,6 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     /** Issue #1506: snapshots waiting for a staff decision (read-only). */
     fun reviewSnapshots(limit: Int = 20): List<RankedStore.Snapshot> = store.reviewSnapshots(limit)
 
-    fun spectate(staff: Player, matchId: String): String? {
-        val match = matches[matchId] ?: return "No running match '$matchId'."
-        if (holds(staff)) return "You're playing in a match."
-        if (match.state == MatchState.FINISHING) return "That match is finishing."
-        val point = match.arena.spectators.firstOrNull() ?: return "Arena '${match.arena.id}' has no spectator point (setspectator)."
-        val world = Bukkit.getWorld(match.arena.world) ?: return "The arena world isn't loaded."
-        spectating.remove(staff.uniqueId)?.let { matches[it]?.spectators?.remove(staff.uniqueId) }
-        spectating[staff.uniqueId] = match.id
-        match.spectators += staff.uniqueId
-        teleport(staff, Location(world, point.x, point.y, point.z, point.yaw, point.pitch))
-        return null
     /** Issue #1511: players whose spectate request is loading its destination (one at a time each). */
     private val spectateRequests = HashSet<UUID>()
 
