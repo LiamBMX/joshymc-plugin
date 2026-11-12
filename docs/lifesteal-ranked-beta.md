@@ -851,3 +851,87 @@ and closed to simulate failed writes, old-schema rows, and the wiring). The exis
 - A failed RESTORED mark is retried only while the server runs (memory); if it still fails at shutdown
   the snapshot becomes REVIEW after the restart.
 - Only crafting grids are placed automatically; other open menus with items refuse the match.
+## L. Arena interference from outside (issue #1507, finding F-6)
+
+### Root cause
+
+The match listener only restricted the match's own participants and spectators (no building,
+buckets, containers) and kept outsiders from walking or teleporting into an arena. Nothing stopped
+someone standing just outside the boundary from reaching in: placing or breaking blocks, emptying
+buckets, letting water or lava flow in, pushing blocks in with pistons or slime/honey contraptions,
+spreading fire, firing dispensers, dropping sand/anvils or sending TNT in. Explosions already never
+broke arena blocks, but unattributed TNT still hurt participants.
+
+### Behavior
+
+`RankedArenaGuardListener` (registered next to `LifestealRankedListener`, only where Lifesteal is
+hosted) applies the Bukkit-free `RankedArenaGuard` rules. **Protected area** = the stored arena
+boundary of every arena in use:
+
+- held by a match (from PREPARING through COUNTDOWN, ACTIVE and FINISHING until the cleanup
+  releases it), or
+- reserved by a queue proposal waiting for its players to accept.
+
+The list is rebuilt from that in-memory state at most once per tick, so a cancelled or completed
+match, a restart or an expired proposal never leaves an arena protected. Idle arenas aren't
+protected by JoshyMC; put a WorldGuard region on them for that (staff can maintain them between
+matches).
+
+While an arena is in use:
+
+| Path | Rule |
+|---|---|
+| Block place (incl. beds/doors, every block of a multi-place), break, sign edit | refused for everyone inside the boundary |
+| Buckets | refused when the fluid block or the clicked block is inside |
+| Using arena blocks from outside (doors, levers, buttons, note blocks, dragon egg) | refused for anyone not in that match |
+| Item frames, paintings, armor stands | not placed, broken, popped, rotated or manipulated |
+| Boats, minecarts, armor stands, End Crystals placed inside | refused unless the placer is in that match |
+| Water / lava / dragon egg (`BlockFromToEvent`) | refused when flowing from outside into the arena; inside it fluids behave normally |
+| Fire, vines, sculk, grass spreading (`BlockSpreadEvent`) | refused from outside into the arena |
+| Ignition | allowed from fire/lava already inside, from the match's participants (combat unchanged) and from End Crystals; refused from outsiders and unattributed sources outside (lightning, dispensed fire) |
+| Burning | arena blocks never burn |
+| Pistons (normal, sticky, extend, retract, slime, honey) | refused unless the piston, its head, every moved block and every destination are all in the same arena (or none is in any arena) |
+| Dispensers / droppers | refused when the block in front is inside the arena and the dispenser isn't |
+| Trees, bone meal, sponges | blocks inside the arena are dropped from the change when it starts outside |
+| `EntityChangeBlockEvent` (falling blocks landing, Endermen, Withers, Ravagers, axes/hoes/shovels, projectiles breaking pots) | refused inside the arena |
+| Explosions | arena blocks are removed from the block list (also for reserved arenas) |
+| Damage to participants of an ACTIVE match with no player behind it | explosions other than End Crystals, dispenser projectiles from outside the arena and falling blocks from outside the arena are cancelled; everything with a player behind it stays with the match listener's rules |
+
+Every handler only cancels (or removes blocks from a list) with `ignoreCancelled`, so WorldGuard
+and claims still decide first and anything they refused stays refused. Hearts, Elo, results,
+snapshots, restoration and queue eligibility are untouched.
+
+### Checks
+
+`./gradlew -I scripts/ranked-arena-guard-check.init.gradle.kts rankedArenaGuardCheck`: zone
+lifecycle (reservation, match, release, restart, several matches), player changes, fluids, buckets,
+dispensers, pistons (push, pull, slime, honey, head, inside-only, unrelated), fire, hazards, and the
+listener wiring (every event handled, `ignoreCancelled`, never un-cancels, once-per-tick cache).
+
+### Live Paper verification
+
+With a running 2v2 TEST match in an arena, from a second account outside the boundary:
+
+1. Place and break blocks on the boundary face; empty a water and a lava bucket onto it; pick up
+   arena water with a bucket.
+2. Pour water and lava one block outside so they flow toward the boundary; they stop at it.
+3. Build a piston, a sticky piston, a slime-block and a honey-block contraption pushing into and
+   pulling out of the arena; none moves.
+4. Fire a dispenser (water, lava, flint and steel, TNT, arrows) at the boundary and from two blocks
+   away; light fire next to flammable arena blocks; drop sand/an anvil from above the boundary.
+5. Run a TNT cannon into the arena: no blocks break and participants take no damage.
+6. Confirm participants' own End Crystals, flint and steel and hits still work, and that after the
+   match ends (win and `/lifesteal admin ranked cancel`) all of the above work normally again.
+7. With a WorldGuard region on the arena, confirm its denials still apply (nothing JoshyMC allows).
+
+### Limitations
+
+- Idle arenas (no match, no proposal) are not protected by JoshyMC; that needs a WorldGuard region.
+- Redstone signals crossing the boundary aren't blocked (`BlockRedstoneEvent` can't be cancelled);
+  pistons, the usual way a signal changes the arena, are.
+- A TEST proposal still waiting for acceptance doesn't reserve its arena; it is protected once the
+  match starts (PREPARING).
+- Projectiles and wind charges from outside still fly in; damage from a player behind them is
+  refused by the match listener's damage rule, and their explosions break no arena blocks.
+- Paper's exact event coverage (e.g. which tools fire `EntityChangeBlockEvent`) needs the live
+  checklist above.

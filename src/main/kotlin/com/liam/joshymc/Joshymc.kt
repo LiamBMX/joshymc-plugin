@@ -106,7 +106,10 @@ class Joshymc : JavaPlugin() {
             "orders.limits.",
             "rank-perks.",
             // Issue #1192: Mob Waves wave list. Backfilled only as a whole, when the section is missing.
-            "$MOB_WAVES_KEY."
+            "$MOB_WAVES_KEY.",
+            // Issue #1514: crate rarity tiers are admin-owned (a deleted tier stays deleted); with
+            // no section at all CrateRarity uses its bundled defaults.
+            "crates.rarities."
         )
 
         private const val MOB_WAVES_KEY = "hosted-events.mobs.waves"
@@ -261,6 +264,9 @@ class Joshymc : JavaPlugin() {
     lateinit var npcManager: NPCManager
         private set
     lateinit var crateManager: CrateManager
+        private set
+    /** Issue #1516: large 3D back cosmetics (Eagle Wings) drawn while a BackCosmeticItem is worn. */
+    lateinit var backCosmeticManager: com.liam.joshymc.cosmetic.BackCosmeticManager
         private set
     lateinit var auctionManager: AuctionManager
         private set
@@ -723,6 +729,8 @@ class Joshymc : JavaPlugin() {
         leaderboardManager.start()
         if (isFeatureEnabled("npcs")) npcManager.start()
         crateManager.start()
+        backCosmeticManager = com.liam.joshymc.cosmetic.BackCosmeticManager(this)
+        backCosmeticManager.start()
         if (isFeatureEnabled("coinflip")) coinflipManager.start()
         if (isFeatureEnabled("coinflip")) creditsCoinflipManager.start()
         if (isFeatureEnabled("casino")) {
@@ -945,6 +953,7 @@ class Joshymc : JavaPlugin() {
         shutdown.step("thrownTridentVisualListener.stop", { ::listenerManager.isInitialized }) { listenerManager.thrownTridentVisualListener?.stop() }
         shutdown.step("greatPumpkinPieListener.stop", { ::listenerManager.isInitialized }) { listenerManager.greatPumpkinPieListener?.stop() }
         shutdown.step("furnitureListener.stop", { ::listenerManager.isInitialized }) { listenerManager.furnitureListener?.stop() }
+        shutdown.step("backCosmeticManager.stop", { ::backCosmeticManager.isInitialized }) { backCosmeticManager.stop() }
         // Before discordManager.shutdown(), so the last mining summaries still go out.
         shutdown.step("ancientDebrisMonitor.stop", { ::listenerManager.isInitialized }) { listenerManager.ancientDebrisMonitorListener?.stop() }
         shutdown.step("claimManager.stop", { ::claimManager.isInitialized }) { claimManager.stop() }
@@ -1035,6 +1044,7 @@ class Joshymc : JavaPlugin() {
         safe("hologramManager.stop") { hologramManager.stop() }
         safe("npcManager.stop") { npcManager.stop() }
         safe("crateManager.stop") { crateManager.stop() }
+        safe("backCosmeticManager.stop") { backCosmeticManager.stop() }
         safe("auctionManager.stop") { auctionManager.stop() }
         safe("giveawayManager.stop") { giveawayManager.stop() }
         safe("giftManager.stop") { giftManager.stop() }
@@ -1105,6 +1115,8 @@ class Joshymc : JavaPlugin() {
         if (isFeatureEnabled("quests")) safe("questCycleManager.start") { questCycleManager.start() }
         if (isFeatureEnabled("event-quests")) safe("eventQuestManager.start") { eventQuestManager.start() }
         safe("crateManager.start") { crateManager.start() }
+        // Re-reads back-cosmetics settings, re-registers its listener and follow task.
+        safe("backCosmeticManager.start") { backCosmeticManager.start() }
         safe("auctionManager.start") { auctionManager.start() }
         if (isFeatureEnabled("giveaways")) safe("giveawayManager.start") { giveawayManager.start() }
         if (isFeatureEnabled("gift")) safe("giftManager.start") { giftManager.start() }

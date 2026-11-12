@@ -249,8 +249,11 @@ class LifestealRankedCommand(private val plugin: Joshymc) {
             "spectate" -> {
                 val player = sender as? Player ?: return Msg.playersOnly(sender)
                 val id = a.getOrNull(0) ?: return Msg.usage(sender, "/lifesteal admin ranked spectate <match>")
-                ranked.spectate(player, id)?.let { return Msg.error(sender, it) }
-                Msg.success(sender, "Spectating $id. You can't be hurt or pick anything up. /lifesteal admin ranked unspectate to stop.")
+                // Issue #1511: the result arrives once the spectator point has loaded and been checked.
+                ranked.spectate(player, id) { problem ->
+                    if (problem != null) Msg.error(sender, problem)
+                    else Msg.success(sender, "Spectating $id. You can't be hurt or pick anything up. /lifesteal admin ranked unspectate to stop.")
+                }
             }
             "unspectate" -> {
                 val player = sender as? Player ?: return Msg.playersOnly(sender)

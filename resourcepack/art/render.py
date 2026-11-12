@@ -451,6 +451,19 @@ def placed(model, textures, block=(0, 0, 0), yaw: float = 0.0):
     centre = T(block[0] + 0.5, block[1] + 0.5, block[2] + 0.5)
     return model_quads(model, textures, centre @ R("y", -yaw) @ item_transform(None))
 
+# Where the plugin's BackCosmeticManager draws a back cosmetic (keep in sync with
+# BackCosmeticRules.STANDING): an ItemDisplay that follows the player's feet, turned with
+# their body; its transformation moves model (8, 8, 8) to the mount point between the
+# shoulder blades (blocks from the feet, -Z = behind). ItemDisplays render items turned 180.
+BACK_ANCHOR = (0.0, 1.35, -0.22)
+
+
+def on_back(model, textures, scale: float, yaw: float = 0.0):
+    """A back cosmetic (module constant BACK_SCALE) as the plugin draws it on the player."""
+    m = R("y", -yaw) @ T(*BACK_ANCHOR) @ S(scale) @ R("y", 180) @ item_transform(None)
+    return model_quads(model, textures, m)
+
+
 def gui(model, textures, scale=4, background=(0.545, 0.545, 0.545)):
     size = 16 * scale
     cam = Camera(size, size, np.eye(4), ortho_scale=16 * scale)
@@ -659,6 +672,22 @@ def sheet(module, models: dict, textures: dict, layers: dict) -> list[Path]:
             views.append(label(scene(idle + wear, (1.3, 1.0, 1.6), (0, 0.7, 0), (300, 300)), "close up"))
             views.append(label(scene(idle + wear, (1.8, 1.6, 2.6), (0, 1.1, 0), (300, 340), night=True), "night"))
         extra.append(row(views))
+    back_scale = getattr(module, "BACK_SCALE", None)
+    if back_scale:
+        # Worn on the back through the plugin's ItemDisplay (see on_back()).
+        idle = player({})
+        wear = armour(layers, WEAR_SLOTS.get(kind, ["chest"])) + on_back(main, textures, back_scale)
+        target = (0, 1.3, 0)
+        extra.append(row([
+            label(scene(idle + wear, (-3.2, 2.2, -5.4), target, (380, 380)), "on the back, from behind"),
+            label(scene(idle + wear, (3.0, 1.9, 5.6), target, (380, 380)), "on the back, front"),
+            label(scene(idle + wear, (-6.0, 1.6, 0.4), target, (380, 380)), "on the back, side"),
+        ]))
+        extra.append(row([
+            label(scene(idle + wear, (-4.2, 3.6, -3.6), target, (380, 380)), "from above, behind"),
+            label(scene(idle + wear, (0.0, 1.4, -6.4), target, (380, 380)), "straight behind"),
+            label(scene(idle + wear, (-3.2, 2.2, -5.4), target, (380, 380), night=True), "night"),
+        ]))
     if extra:
         second = column(extra)
         out2 = Path(tempfile.gettempdir()) / f"art_render_{module.ID}_more.png"

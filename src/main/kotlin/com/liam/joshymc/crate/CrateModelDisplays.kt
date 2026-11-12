@@ -210,6 +210,8 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
         out += "  Spawned displays: $liveDisplays; interaction hitboxes: $liveHitboxes"
         val faced = locations.count { it.facing != null }
         out += "  Locations with their own facing (/crate rotate): $faced; automatic: ${locations.size - faced}"
+        val tuned = locations.count { !it.tuning.isDefault }
+        out += "  Locations with their own rotation/offset/scale (/crate display): $tuned"
         val strays = (taggedDisplays - liveDisplays).coerceAtLeast(0) + (taggedHitboxes - liveHitboxes).coerceAtLeast(0)
         out += "  Crate model entities in loaded chunks: $taggedDisplays display(s), $taggedHitboxes hitbox(es)" +
             if (strays > 0) " — $strays untracked, run /crate models refresh" else ""
@@ -391,6 +393,12 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
 
     private fun rotates(crateId: String): Boolean = CrateModels.rotates(settings, crateId, crates::resolveCrateId)
 
+    /** Issue #1514: true when [crateId] is one of the monthly (rotating) crates, for the `/crate` browser. */
+    fun isMonthlyCrate(crateId: String): Boolean = rotates(crateId)
+
+    /** Issue #1514: the calendar month right now in the rotation's timezone (read from [clock], never stored). */
+    fun currentMonth(): Month = CrateModels.monthAt(clock.instant(), settings.monthly.zone)
+
     /** The model this location should show, ignoring whether its chunks are loaded. */
     private fun expectedModel(loc: CrateManager.CrateLocation): CrateModels.Model? {
         val model = resolve(loc.crateType).model ?: return null
@@ -410,11 +418,7 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
         // A crate whose block is gone gets no model: a floating chest nobody can click.
         if (block.type.isAir) return
 
-        val facing = (block.blockData as? Directional)?.facing?.takeIf { it in BlockFace.entries.take(4) }?.name
-        val bounds = modelBounds[model.model] ?: CrateModels.ModelBounds.FULL_BLOCK
-        // Issue #1472: a location's own facing wins over the crate type's rotation (and the
-        // block's facing); scale, offset and hitbox rules are the model's, unchanged.
-        val placement = CrateModels.placement(model.copy(rotation = CrateFacing.effectiveRotation(model.rotation, loc.facing)), bounds, facing)
+        val (drawn, placement) = placementFor(loc, model, block)
         if (placement.problem != null) {
             remove(key)
             placementProblems[key] = placement.problem
@@ -435,7 +439,7 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
                 NamespacedKey.fromString(model.model)?.let { meta.setItemModel(it) }
             }
         }
-        val scale = model.scale.toFloat()
+        val scale = drawn.scale.toFloat()
         val display = world.spawn(at, ItemDisplay::class.java) { d ->
             d.isPersistent = false
             d.isVisibleByDefault = false
@@ -473,6 +477,73 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
             player.showEntity(plugin, display)
             hitbox?.let { player.showEntity(plugin, it) }
         }
+    }
+
+    /** The crate block's horizontal facing (NORTH/SOUTH/EAST/WEST) or null. */
+    private fun blockFacingOf(block: org.bukkit.block.Block): String? =
+        (block.blockData as? Directional)?.facing?.takeIf { it in BlockFace.entries.take(4) }?.name
+
+    /**
+     * The model as this location draws it and where it goes. Issue #1472: a location's own facing
+     * wins over the crate type's rotation (and the block's facing). Issue #1517: then its own fine
+     * rotation, offsets and scale ([CrateDisplayTuning]); hitbox rules stay the model's.
+     */
+    private fun placementFor(
+        loc: CrateManager.CrateLocation,
+        model: CrateModels.Model,
+        block: org.bukkit.block.Block,
+        tuning: CrateDisplayTuning.Tuning = loc.tuning,
+    ): Pair<CrateModels.Model, CrateModels.Placement> {
+        val facing = blockFacingOf(block)
+        val bounds = modelBounds[model.model] ?: CrateModels.ModelBounds.FULL_BLOCK
+        val faced = model.copy(rotation = CrateFacing.effectiveRotation(model.rotation, loc.facing))
+        val drawn = CrateDisplayTuning.apply(faced, null, tuning, facing)
+        return drawn to CrateModels.placement(drawn, bounds, facing)
+    }
+
+    /**
+     * Issue #1517: why [loc] with [tuning] would not be drawn on its block (offset/scale pushing
+     * it beside the block), or null when it would. Never spawns anything; null as well when no
+     * model applies there (nothing to misplace).
+     */
+    fun tuningProblem(loc: CrateManager.CrateLocation, tuning: CrateDisplayTuning.Tuning): String? {
+        val model = expectedModel(loc) ?: return null
+        val world = Bukkit.getWorld(loc.world) ?: return null
+        if (!world.isChunkLoaded(loc.x shr 4, loc.z shr 4)) return null
+        return placementFor(loc, model, world.getBlockAt(loc.x, loc.y, loc.z), tuning).second.problem
+    }
+
+    /** Issue #1517: `/crate display` lines for one location (model, settings, what is drawn). */
+    fun describeLocation(loc: CrateManager.CrateLocation): List<String> {
+        val out = mutableListOf<String>()
+        val key = CrateModels.locationKey(loc.world, loc.x, loc.y, loc.z)
+        val crateId = crates.resolveCrateId(loc.crateType)
+        val resolved = resolve(crateId)
+        val model = expectedModel(loc)
+        out += "Crate: $crateId at ${loc.world} ${loc.x}, ${loc.y}, ${loc.z}"
+        out += "Model: " + when {
+            model != null -> "${model.model} (${resolved.source.name.lowercase().replace('_', ' ')})"
+            resolved.model != null -> "${resolved.model.model}, not shown in this world's gamemode (vanilla block)"
+            else -> "none, vanilla block (${resolved.note ?: "no model"})"
+        }
+        out += "Facing: ${loc.facing?.id ?: "auto"}"
+        out += CrateDisplayTuning.describe(loc.tuning, resolved.model)
+        val world = Bukkit.getWorld(loc.world)
+        if (model != null && world != null && world.isChunkLoaded(loc.x shr 4, loc.z shr 4)) {
+            val (drawn, p) = placementFor(loc, model, world.getBlockAt(loc.x, loc.y, loc.z))
+            out += "Drawn: front yaw ${fmt(((p.yaw - 180f + 360f) % 360f).toDouble())}°, scale ${fmt(drawn.scale)}, " +
+                "centre ${fmt(p.displayX)}, ${fmt(p.displayY)}, ${fmt(p.displayZ)} from the block corner"
+            out += "Hitbox: " + (p.hitbox?.let { "${fmt(it.width)} wide, ${fmt(it.height)} tall (${model.hitbox.name.lowercase()})" }
+                ?: "none, the crate block takes clicks (${model.hitbox.name.lowercase()})")
+        }
+        val parts = spawned[key]
+        out += "Status: " + when {
+            placementProblems[key] != null -> "not drawn: ${placementProblems[key]}"
+            parts != null && Bukkit.getEntity(parts.display)?.isValid == true -> "drawn" + if (parts.hitbox != null) " with a hitbox" else ""
+            model == null -> "vanilla block"
+            else -> "waiting for its chunks to load"
+        }
+        return out
     }
 
     private fun remove(key: String) {

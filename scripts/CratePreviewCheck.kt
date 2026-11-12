@@ -84,7 +84,7 @@ fun main() {
 
     // ── Preview GUI wiring ──────────────────────────────
     val manager = File("src/main/kotlin/com/liam/joshymc/manager/CrateManager.kt").readText()
-    val preview = manager.substringAfter("fun openPreview(").substringBefore("private fun getCenteredRewardSlots(")
+    val preview = manager.substringAfter("fun openPreview(").substringBefore("// --- Crate browser support")
     check("preview title kept", "PREVIEW_GUI_TITLE_PREFIX = \"Preview: \"" in manager &&
         "Component.text(PREVIEW_GUI_TITLE_PREFIX)" in preview)
     check("preview has no glass filler", "GLASS" !in preview && "filler" !in preview && ".fill(" !in preview)

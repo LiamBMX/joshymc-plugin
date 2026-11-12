@@ -1331,7 +1331,7 @@ private fun wiring() {
     check("ranked fights never combat-tag (no combat-log NPC dropping real gear)", combatListener.contains("if (plugin.lifestealRankedManager.isMatchFight(attacker, victim)) return"))
     check("ranked fighters pass the PvP toggle", combatManager.contains("if (plugin.lifestealRankedManager.inActiveFight(player)) return true"))
     check("validation refuses combat-tagged players", manager.contains("combatTagged = plugin.combatManager.isTagged(player)"))
-    check("shared teleport guard blocks held players (team home, GUIs, warmups)", guard.contains("if (plugin.lifestealRankedManager.holds(player)) {"))
+    check("shared teleport guard blocks held players (team home, GUIs, warmups)", guard.contains("if (plugin.lifestealRankedManager.holds(player)) return MSG_RANKED_MATCH"))
     check("every teleport out of the arena is refused (all causes)", listener.contains("fun onTeleport(event: PlayerTeleportEvent)") && listener.contains("if (inside(match.arena, to)) return"))
     check("commands limited while held (alias resolved, issue #1498)", listener.contains("RankedMatchRules.commandAllowed(event.message, com.liam.joshymc.staff.DelegatedCommands.canonicalName(event.message))"))
     check("transfers refused while held or still waiting for a restore", transfer.contains("list += TransferBlocker.RANKED_MATCH") && TransferBlocker.entries.contains(TransferBlocker.RANKED_MATCH))

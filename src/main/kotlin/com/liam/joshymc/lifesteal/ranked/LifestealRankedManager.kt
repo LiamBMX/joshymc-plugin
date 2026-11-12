@@ -465,6 +465,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         matches.clear()
         held.clear()
         spectating.clear()
+        spectateRequests.clear()
         expectedTeleports.clear()
     }
 
@@ -1388,6 +1389,7 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     fun onQuit(player: Player, quitReason: String? = null, kickCause: String? = null) {
         val uuid = player.uniqueId
         spectating.remove(uuid)?.let { matches[it]?.spectators?.remove(uuid) }
+        spectateRequests.remove(uuid)
         val match = matchOf(uuid) ?: return
         val now = System.currentTimeMillis()
         val transferPending = runCatching { plugin.transferManager.isTransferPending(uuid) }.getOrDefault(false)
@@ -1652,6 +1654,68 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         match.spectators += staff.uniqueId
         teleport(staff, Location(world, point.x, point.y, point.z, point.yaw, point.pitch))
         return null
+    /** Issue #1511: players whose spectate request is loading its destination (one at a time each). */
+    private val spectateRequests = HashSet<UUID>()
+
+    /** Fresh [RankedSpectateRules.Facts] for [player] watching [matchId] (main thread). */
+    private fun spectateFacts(player: Player, matchId: String): RankedSpectateRules.Facts {
+        val match = matches[matchId]
+        return RankedSpectateRules.Facts(
+            matchId = matchId,
+            state = match?.state,
+            arenaId = match?.arena?.id,
+            participant = holds(player),
+            pendingRestore = hasPendingRestore(player.uniqueId),
+            dead = player.isDead,
+            // The one combat rule every player-initiated teleport uses (issue #1356).
+            teleportProblem = com.liam.joshymc.teleport.CombatTeleportGuard.problem(plugin, player),
+            hasSpectatorPoint = match?.arena?.spectators?.isNotEmpty() == true,
+            worldLoaded = match != null && Bukkit.getWorld(match.arena.world) != null,
+        )
+    }
+
+    /**
+     * Starts watching [matchId] (issue #1511, D-L7). Checked by [RankedSpectateRules] before the
+     * spectator point's chunk loads and again right before the teleport; the player only becomes a
+     * spectator once the teleport succeeded, so a refusal changes nothing. [onDone] gets null on
+     * success, the reason otherwise (not called when the player left meanwhile).
+     */
+    fun spectate(staff: Player, matchId: String, onDone: (String?) -> Unit) {
+        val uuid = staff.uniqueId
+        RankedSpectateRules.problem(spectateFacts(staff, matchId))?.let { return onDone(it) }
+        if (uuid in spectateRequests) return onDone(RankedSpectateRules.MSG_IN_PROGRESS)
+        val match = matches.getValue(matchId)
+        val point = match.arena.spectators.first()
+        val world = Bukkit.getWorld(match.arena.world) ?: return onDone(RankedSpectateRules.MSG_WORLD)
+        val target = Location(world, point.x, point.y, point.z, point.yaw, point.pitch)
+        spectateRequests += uuid
+        world.getChunkAtAsync(target.blockX shr 4, target.blockZ shr 4, false).whenComplete { chunk, error ->
+            plugin.server.scheduler.runTask(plugin, Runnable {
+                if (!spectateRequests.remove(uuid)) return@Runnable // stop() ran meanwhile
+                val player = Bukkit.getPlayer(uuid)?.takeIf { it.isOnline } ?: return@Runnable
+                val loaded = error == null && chunk != null
+                // The same match object: a match that ended meanwhile is never watched.
+                val facts = spectateFacts(player, matchId).let { if (matches[matchId] === match) it else it.copy(state = null) }
+                val problem = RankedSpectateRules.arrivalProblem(facts, loaded, if (loaded) SafeSpots.problem(target) else null)
+                if (problem != null) return@Runnable onDone(problem)
+                spectateRequests += uuid
+                teleport(player, target).whenComplete { ok, _ ->
+                    val finish = Runnable {
+                        spectateRequests.remove(uuid)
+                        if (Bukkit.getPlayer(uuid)?.isOnline != true) return@Runnable
+                        if (ok != true) return@Runnable onDone(RankedSpectateRules.MSG_TELEPORT_FAILED)
+                        if (matches[matchId] !== match || !RankedSpectateRules.spectatable(match.state)) {
+                            return@Runnable onDone(RankedSpectateRules.noMatch(matchId))
+                        }
+                        spectating.remove(uuid)?.let { matches[it]?.spectators?.remove(uuid) }
+                        spectating[uuid] = match.id
+                        match.spectators += uuid
+                        onDone(null)
+                    }
+                    if (Bukkit.isPrimaryThread()) finish.run() else plugin.server.scheduler.runTask(plugin, finish)
+                }
+            })
+        }
     }
 
     fun unspectate(staff: Player): String? {

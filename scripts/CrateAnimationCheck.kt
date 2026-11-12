@@ -264,7 +264,7 @@ fun main() {
     check("reveal refuses a settled reward", "inFlightRewards[player.uniqueId] != pendingId" in reveal && "activeAnimations.remove(player.uniqueId)" in reveal)
     check("Spin reveals the stored winner", "AnimationType.SPIN -> openSpin(player, crate, winner, pendingId)" in reveal)
     check("Pulse reveals the stored winner", "AnimationType.PULSE -> openPulse(player, crate, winner, pendingId)" in reveal)
-    check("Instant pays the stored row once", "if (finishInFlight(player, pendingId))" in reveal && "giveItemSafely" !in reveal && "selectWeightedReward" !in reveal)
+    check("Instant pays the stored row once", "if (finishInFlight(player, pendingId, winMessage(crate, listOf(winner))))" in reveal && "giveItemSafely" !in reveal && "selectWeightedReward" !in reveal)
     val spin = body(mgr, "private fun openSpin(")
     val pulse = body(mgr, "private fun openPulse(")
     check("Spin uses the pre-drawn winner or draws once as before", "val winner = preDrawn ?: selectWeightedReward(crate)" in spin &&
