@@ -53,6 +53,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "models" -> handleModels(sender, args)
             "rotate" -> handleRotate(sender, args)
             "display" -> handleDisplay(sender, args)
+            "monthly" -> handleMonthly(sender, args)
             else -> sendUsage(sender)
         }
         return true
@@ -497,6 +498,67 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     }
 
     /**
+     * `/crate monthly [status]`, `/crate monthly set <month> [7d|12h|month-end|never]` and
+     * `/crate monthly reset` (issue #1520): the monthly rotation's state, and the admin override
+     * that makes rotating crates use one month until it is reset or expires. Only
+     * `joshymc.crate.admin`; set and reset are written to AdminAudit. The override only picks a
+     * month: keys, rewards and every open check stay the same.
+     */
+    private fun handleMonthly(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.crate.admin")) {
+            Msg.noPermission(sender)
+            return
+        }
+        val models = plugin.crateManager.models
+        val zone = models.settings.monthly.zone
+        when (args.getOrNull(1)?.lowercase() ?: "status") {
+            "status" -> for (line in models.statusLines()) sender.sendMessage(Component.text(line, NamedTextColor.GRAY))
+            "set" -> {
+                val monthArg = args.getOrNull(2)
+                if (monthArg == null) {
+                    Msg.usage(sender, "/crate monthly set <january..december> [7d|12h|month-end|never]")
+                    return
+                }
+                val month = com.liam.joshymc.crate.CrateModels.monthOf(monthArg)
+                if (month == null) {
+                    Msg.error(sender, "'$monthArg' is not a month. Use january .. december.")
+                    return
+                }
+                val expiry = when (val parsed = com.liam.joshymc.crate.CrateMonthlyRotation.parseExpiry(args.getOrNull(3), java.time.Instant.now(models.clock), zone)) {
+                    is com.liam.joshymc.crate.CrateMonthlyRotation.ExpiryParse.Invalid -> { Msg.error(sender, parsed.message); return }
+                    is com.liam.joshymc.crate.CrateMonthlyRotation.ExpiryParse.Ok -> parsed.expiresAt
+                }
+                val previous = models.override
+                models.setOverride(month, expiry, sender.name)?.let {
+                    Msg.error(sender, "Override not set: $it.")
+                    return
+                }
+                val until = expiry?.let { com.liam.joshymc.crate.CrateMonthlyRotation.formatInstant(java.time.Instant.ofEpochMilli(it), zone) }
+                com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "CRATE_MONTHLY_OVERRIDE_SET",
+                    details = "month=${com.liam.joshymc.crate.CrateModels.monthId(month)} expires_at=${expiry ?: "never"}" +
+                        (previous?.let { " previous=${com.liam.joshymc.crate.CrateModels.monthId(it.month)}" } ?: ""))
+                Msg.success(sender, "Monthly crates now use ${com.liam.joshymc.crate.CrateMonthlyRotation.monthName(month)}" +
+                    (until?.let { " until $it" } ?: " until /crate monthly reset") + ".")
+                val opens = models.settings.monthly.crates.mapNotNull { plugin.crateManager.findCrateId(it) }.distinct()
+                    .joinToString { id -> "$id -> ${models.crateFor(id).crateId}" }
+                if (opens.isNotEmpty()) Msg.reply(sender, Component.text("Rotating crates: $opens", NamedTextColor.GRAY))
+            }
+            "reset", "clear" -> {
+                val previous = models.override
+                models.resetOverride()?.let {
+                    Msg.error(sender, "Override not reset: $it.")
+                    return
+                }
+                com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "CRATE_MONTHLY_OVERRIDE_RESET",
+                    details = "previous=${previous?.let { com.liam.joshymc.crate.CrateModels.monthId(it.month) } ?: "none"}")
+                Msg.success(sender, (if (previous == null) "No override was set. " else "Override removed. ") +
+                    "Monthly crates use ${com.liam.joshymc.crate.CrateMonthlyRotation.monthName(models.activeMonth)} (the calendar month).")
+            }
+            else -> Msg.usage(sender, "/crate monthly [status|set <month> [7d|12h|month-end|never]|reset]")
+        }
+    }
+
+    /**
      * `/crate rotate <north|south|east|west|auto|next>` and `/crate rotate mode [on|off]`
      * (issue #1472): sets the facing of the crate the admin is looking at (only that
      * location), or toggles quick rotation (sneak + right-click with an empty hand).
@@ -719,6 +781,9 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "/crate force <type> [player]  (open a crate without clicking — testing only)",
             "/crate models [refresh]  (custom crate model status / redraw)",
             "/crate models monthly  (monthly model rotation status)",
+            "/crate monthly [status]  (active monthly crate, override, next rotation)",
+            "/crate monthly set <month> [7d|12h|month-end|never]  (use one month's crate for now)",
+            "/crate monthly reset  (back to the calendar month)",
             "/crate models set <crate> <model>  (change a crate's custom model)",
             "/crate rotate <north|south|east|west|auto|next>  (turn the crate you look at)",
             "/crate rotate mode [on|off]  (sneak + right-click with an empty hand to turn crates)",
@@ -748,7 +813,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             1 -> {
                 val subs = mutableListOf("menu", "list", "preview", "help")
                 if (sender.hasPermission("joshymc.crate.admin")) {
-                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force", "models", "rotate", "display"))
+                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force", "models", "rotate", "display", "monthly"))
                 }
                 subs.filter { it.startsWith(args[0], ignoreCase = true) }
             }
@@ -766,6 +831,10 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                 "display" ->
                     if (sender.hasPermission("joshymc.crate.admin")) {
                         DISPLAY_SUBCOMMANDS.filter { it.startsWith(args[1], ignoreCase = true) }
+                    } else emptyList()
+                "monthly" ->
+                    if (sender.hasPermission("joshymc.crate.admin")) {
+                        listOf("status", "set", "reset").filter { it.startsWith(args[1], ignoreCase = true) }
                     } else emptyList()
                 else -> emptyList()
             }
@@ -788,6 +857,10 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                             else -> emptyList()
                         }.filter { it.startsWith(args[2], ignoreCase = true) }
                     } else emptyList()
+                "monthly" ->
+                    if (args[1].equals("set", ignoreCase = true) && sender.hasPermission("joshymc.crate.admin")) {
+                        com.liam.joshymc.crate.CrateModels.MONTH_IDS.filter { it.startsWith(args[2], ignoreCase = true) }
+                    } else emptyList()
                 "givekey" -> {
                     val names = plugin.server.onlinePlayers.map { it.name } + listOf("@a", "@r")
                     names.filter { it.startsWith(args[2], ignoreCase = true) }
@@ -796,6 +869,10 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             }
             4 -> when (args[0].lowercase()) {
                 "givekey" -> listOf("1", "5", "10", "32", "64").filter { it.startsWith(args[3], ignoreCase = true) }
+                "monthly" ->
+                    if (args[1].equals("set", ignoreCase = true) && sender.hasPermission("joshymc.crate.admin")) {
+                        listOf("1d", "7d", "12h", "month-end", "never").filter { it.startsWith(args[3], ignoreCase = true) }
+                    } else emptyList()
                 "models" ->
                     if (sender.hasPermission("joshymc.crate.admin") && args[1].equals("set", ignoreCase = true)) {
                         plugin.crateManager.models.chestModelKeys().filter { it.startsWith(args[3], ignoreCase = true) }

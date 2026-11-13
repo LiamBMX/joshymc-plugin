@@ -37,8 +37,14 @@ class CrateBrowserMenu(private val plugin: Joshymc, private val crates: CrateMan
             return
         }
         val listed = crates.menuCrates()
+        // Issue #1520: a rotating crate shows the crate it opens this month (`monthly.crate-ids`,
+        // else itself); crates mapped to other months aren't openable at a rotating location now,
+        // so they are left out instead of being listed as permanent.
+        val mapped = crates.models.mappedMonthlyCrateIds()
         val monthly = listed.filter { crates.models.isMonthlyCrate(it.id) }
-        val permanent = listed.filterNot { crates.models.isMonthlyCrate(it.id) }
+            .map { base -> MonthlyEntry(base.id, crates.getCrate(crates.models.crateFor(base.id).crateId) ?: base) }
+            .distinctBy { it.crate.id }
+        val permanent = listed.filterNot { crates.models.isMonthlyCrate(it.id) || it.id in mapped }
         val layout = CrateMenuLayout.page(monthly.size, permanent.size, page)
         val month = crates.models.currentMonth()
         val monthName = month.name.lowercase().replaceFirstChar { it.uppercase() }
@@ -54,7 +60,7 @@ class CrateBrowserMenu(private val plugin: Joshymc, private val crates: CrateMan
                     Material.CLOCK,
                     Component.text("Monthly Crates", NamedTextColor.LIGHT_PURPLE).decoration(TextDecoration.BOLD, true),
                     listOf(Component.empty(), plain("  This month: $monthName", NamedTextColor.GRAY),
-                        plain("  Their look changes every month.", NamedTextColor.DARK_GRAY), Component.empty())
+                        plain("  They change every month.", NamedTextColor.DARK_GRAY), Component.empty())
                 )
                 CrateMenuLayout.Section.PERMANENT -> GuiStyle.item(
                     Material.CHEST,
@@ -66,9 +72,12 @@ class CrateBrowserMenu(private val plugin: Joshymc, private val crates: CrateMan
         }
 
         for ((slot, cell) in layout.cells) {
-            val crate = (if (cell.section == CrateMenuLayout.Section.MONTHLY) monthly else permanent).getOrNull(cell.index) ?: continue
+            val isMonthly = cell.section == CrateMenuLayout.Section.MONTHLY
+            val entry = if (isMonthly) monthly.getOrNull(cell.index) else permanent.getOrNull(cell.index)?.let { MonthlyEntry(null, it) }
+            val crate = entry?.crate ?: continue
             val crateId = crate.id
-            gui.setItem(slot, crateItem(player, crate, cell.section == CrateMenuLayout.Section.MONTHLY, monthName)) { p, _ ->
+            val baseId = entry.baseId
+            gui.setItem(slot, crateItem(player, crate, isMonthly, monthName)) { p, _ ->
                 // Never trust the open GUI: permission and crate are checked again on the click.
                 if (!p.hasPermission(PERMISSION)) {
                     p.closeInventory()
@@ -76,7 +85,9 @@ class CrateBrowserMenu(private val plugin: Joshymc, private val crates: CrateMan
                     return@setItem
                 }
                 val current = crates.getCrate(crateId)
-                if (current == null || !current.listed) {
+                // Issue #1520: a monthly entry from before a month change shows the new month instead.
+                val rotated = baseId != null && crates.models.crateFor(baseId).crateId != crateId
+                if (current == null || rotated || (baseId == null && !current.listed)) {
                     GuiStyle.errorSound(p)
                     open(p, layout.page)
                     return@setItem
@@ -92,6 +103,37 @@ class CrateBrowserMenu(private val plugin: Joshymc, private val crates: CrateMan
         gui.setItem(layout.close, GuiStyle.close()) { p, _ -> p.closeInventory() }
 
         plugin.guiManager.open(player, gui)
+        viewers[player.uniqueId] = gui to layout.page
+    }
+
+    /** A crate shown in the browser; [baseId] is the rotating crate it stands for (null = permanent). */
+    private data class MonthlyEntry(val baseId: String?, val crate: CrateManager.CrateDef)
+
+    /** Players with a browser page open (the exact GUI, so a later menu is never replaced). */
+    private val viewers = mutableMapOf<java.util.UUID, Pair<CustomGui, Int>>()
+
+    /**
+     * Issue #1520: after the month in effect changed, redraws every browser that is still open
+     * (same page), so nobody keeps looking at last month's crate. Other menus are left alone.
+     */
+    fun refreshOpen() {
+        val iterator = viewers.entries.iterator()
+        val reopen = mutableListOf<Pair<Player, Int>>()
+        while (iterator.hasNext()) {
+            val (uuid, view) = iterator.next()
+            val player = plugin.server.getPlayer(uuid)
+            if (player == null || plugin.guiManager.getOpenGui(player) !== view.first) {
+                iterator.remove()
+                continue
+            }
+            reopen += player to view.second
+        }
+        for ((player, page) in reopen) open(player, page)
+    }
+
+    /** Drops a player's tracked browser (quit). */
+    fun forget(uuid: java.util.UUID) {
+        viewers.remove(uuid)
     }
 
     private fun infoItem(empty: Boolean, hasMonthly: Boolean, monthName: String): ItemStack {
