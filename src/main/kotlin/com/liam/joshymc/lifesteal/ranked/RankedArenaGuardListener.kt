@@ -18,8 +18,6 @@ import org.bukkit.entity.FallingBlock
 import org.bukkit.entity.Hanging
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
-import org.bukkit.entity.TNTPrimed
-import org.bukkit.entity.Tameable
 import org.bukkit.event.Event
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
@@ -39,11 +37,15 @@ import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.block.BlockSpreadEvent
 import org.bukkit.event.block.SignChangeEvent
 import org.bukkit.event.block.SpongeAbsorbEvent
+import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityChangeBlockEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityExplodeEvent
+import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.entity.EntityPlaceEvent
+import org.bukkit.event.entity.EntityPortalEvent
+import org.bukkit.event.entity.EntityTeleportEvent
 import org.bukkit.event.hanging.HangingBreakEvent
 import org.bukkit.event.hanging.HangingPlaceEvent
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent
@@ -181,6 +183,14 @@ class RankedArenaGuardListener(private val plugin: Joshymc) : Listener {
      */
     @EventHandler(priority = EventPriority.LOW)
     fun onInteract(event: PlayerInteractEvent) {
+        // Issue #1524: an outsider standing in the arena (combat-tagged, so not moved out yet)
+        // doesn't trigger its pressure plates or tripwires either.
+        if (event.action == Action.PHYSICAL) {
+            val block = event.clickedBlock ?: return
+            val zone = zoneOf(block) ?: return
+            if (!participantOf(event.player.uniqueId, zone)) event.setUseInteractedBlock(Event.Result.DENY)
+            return
+        }
         if (event.action != Action.RIGHT_CLICK_BLOCK && event.action != Action.LEFT_CLICK_BLOCK) return
         val block = event.clickedBlock ?: return
         val zone = zoneOf(block) ?: return
@@ -215,12 +225,77 @@ class RankedArenaGuardListener(private val plugin: Joshymc) : Listener {
         refuse(player)
     }
 
+    /**
+     * Item frames and armor stands in an arena in use stay as they are for everyone. Issue #1524:
+     * nobody outside the match uses any other entity in it either (mounts, boats, minecarts,
+     * leads, name tags, villagers); participants are refused by the match listener already.
+     */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onInteractEntity(event: PlayerInteractEntityEvent) {
         val entity = event.rightClicked
-        if (entity !is Hanging && entity !is ArmorStand) return
-        if (zoneOf(entity.location) == null) return
-        event.isCancelled = true
+        val zone = zoneOf(entity.location) ?: return
+        if (entity is Hanging || entity is ArmorStand || !participantOf(event.player.uniqueId, zone)) event.isCancelled = true
+    }
+
+    /** Issue #1524: outsiders standing in an arena in use don't pick anything up in it. */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onPickup(event: EntityPickupItemEvent) {
+        val player = event.entity as? Player ?: return
+        val zone = zoneOf(event.item.location) ?: return
+        if (!participantOf(player.uniqueId, zone)) event.isCancelled = true
+    }
+
+    // ── Entities sent into the arena (issue #1524) ──────────
+
+    /** Spawn eggs, thrown eggs, mob buckets, built golems/withers, breeding: no player-made mob appears in an arena in use. */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onCreatureSpawn(event: CreatureSpawnEvent) {
+        val inZone = zoneOf(event.location) != null
+        if (RankedArenaAccess.spawnRefused(event.spawnReason.name, inZone)) event.isCancelled = true
+    }
+
+    private fun arrivalRefused(from: Location, to: Location?): Boolean {
+        to ?: return false
+        val target = zoneOf(to) ?: return false
+        val fromWorld = from.world?.name
+        val fromInZone = fromWorld != null && target.contains(fromWorld, from.blockX, from.blockY, from.blockZ)
+        return RankedArenaAccess.entityArrivalRefused(fromInZone, true)
+    }
+
+    /** Pets following an outsider, endermen and shulkers hopping in, mobs moved by other plugins: nothing arrives from outside. */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onEntityTeleport(event: EntityTeleportEvent) {
+        if (event.entity is Player) return
+        if (arrivalRefused(event.from, event.to)) event.isCancelled = true
+    }
+
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onEntityPortal(event: EntityPortalEvent) {
+        if (event.entity is Player) return
+        if (arrivalRefused(event.from, event.to)) event.isCancelled = true
+    }
+
+    /**
+     * Issue #1524: End Crystals, mounts, mobs and anything else in an arena in use can't be hurt
+     * by anyone outside its match (an outsider shooting a participant's crystal from over the
+     * boundary would aim its explosion at the fight) or by an outsider's pet
+     * ([RankedArenaAccess.entityHarmRefused]). Players are the match listener's.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onEntityHarm(event: EntityDamageEvent) {
+        val victim = event.entity
+        if (victim is Player) return
+        val zone = zoneOf(victim.location) ?: return
+        val resolved = RankedDamageSources.of(event)
+        val attacker = resolved.player
+        val source = RankedDamageSources.sourceFor(resolved, victim) { false }
+        val refused = RankedArenaAccess.entityHarmRefused(
+            source = source,
+            attackerSpectator = attacker != null && ranked.isSpectator(attacker.uniqueId),
+            attackerParticipantOfZone = attacker != null && participantOf(attacker.uniqueId, zone),
+            victimInZone = true,
+        )
+        if (refused) event.isCancelled = true
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -379,17 +454,7 @@ class RankedArenaGuardListener(private val plugin: Joshymc) : Listener {
         if (zoneOf(entity.location) != null) event.isCancelled = true
     }
 
-    private fun playerBehind(event: EntityDamageEvent): Player? {
-        (event.damageSource.causingEntity as? Player)?.let { return it }
-        if (event !is EntityDamageByEntityEvent) return null
-        return when (val source = event.damager) {
-            is Player -> source
-            is Projectile -> source.shooter as? Player
-            is TNTPrimed -> source.source as? Player
-            is Tameable -> source.owner as? Player
-            else -> null
-        }
-    }
+    private fun playerBehind(event: EntityDamageEvent): Player? = RankedDamageSources.of(event).player
 
     /**
      * A participant of an ACTIVE match isn't hurt by hazards nobody in the fight could have made:

@@ -105,7 +105,9 @@ fun main() {
     // 15/16. Spectating never changes rosters, hearts or ratings.
     check("spectate never touches rosters, hearts or Elo", !Regex("roster|heart|rating|transferPvp", RegexOption.IGNORE_CASE).containsMatchIn(spectate))
     check("spectators still take and deal no damage", manager.contains("inOtherMatch = holds(uuid) || isSpectator(uuid)") &&
-        source("lifesteal/ranked/LifestealRankedListener.kt").contains("if (ranked.isSpectator(victim.uniqueId)) return true"))
+        // Issue #1524: the rule moved into the Bukkit-free RankedArenaAccess.harmBlocked.
+        source("lifesteal/ranked/LifestealRankedListener.kt").contains("victimSpectator = ranked.isSpectator(victim.uniqueId)") &&
+        source("lifesteal/ranked/RankedArenaAccess.kt").contains("if (f.victimSpectator) return true"))
 
     // 10. A match that ended while the teleport ran is never watched (same object, still spectatable).
     check("same match object re-checked", spectate.contains("matches[matchId] === match") && spectate.contains("matches[matchId] !== match"))

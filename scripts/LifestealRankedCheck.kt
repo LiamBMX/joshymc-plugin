@@ -1336,12 +1336,14 @@ private fun wiring() {
     check("commands limited while held (alias resolved, issue #1498)", listener.contains("RankedMatchRules.commandAllowed(event.message, com.liam.joshymc.staff.DelegatedCommands.canonicalName(event.message))"))
     check("transfers refused while held or still waiting for a restore", transfer.contains("list += TransferBlocker.RANKED_MATCH") && TransferBlocker.entries.contains(TransferBlocker.RANKED_MATCH))
     check("validation refuses players switching servers", manager.contains("transferring = safe { plugin.transferManager.isTransferPending(uuid) }"))
-    check("boundary: walking out pushed back, walking in refused", listener.contains("if (inside(match.arena, from) && !inside(match.arena, to))") && listener.contains("!inside(it.arena, from) && inside(it.arena, to)"))
+    check("boundary: walking out pushed back, walking in refused", listener.contains("if (inside(match.arena, from) && !inside(match.arena, to))") && listener.contains("val zone = ranked.refusingZoneAt(player.uniqueId, to) ?: return") && listener.contains("if (!zone.contains(from))"))
     check("no block changes in arenas (place, break, buckets, explosions)", listener.contains("fun onPlace(event: BlockPlaceEvent)") && listener.contains("fun onBreak(event: BlockBreakEvent)") && listener.contains("fun onEntityExplode"))
     check("cleanup removes only loose leftovers, never blocks", manager.contains("e is Item || e is AbstractArrow || e is EnderCrystal || e is ExperienceOrb") && !manager.contains("setType(") && !manager.contains(".type = "))
     // Issue #1465: the only heart consequence of a disconnect is the normal transferPvp; never an admin change.
     check("no admin heart changes for disconnects/boundaries", !manager.contains("HeartRules.AdminOp") && !manager.contains("adminChange("))
-    check("spectators can't affect combat", listener.contains("if (ranked.isSpectator(victim.uniqueId)) return true") && listener.contains("ranked.isSpectator(attacker.uniqueId)"))
+    // Issue #1524: the rule is the Bukkit-free RankedArenaAccess.harmBlocked, fed by the listener.
+    check("spectators can't affect combat", listener.contains("victimSpectator = ranked.isSpectator(victim.uniqueId)") && listener.contains("ranked.isSpectator(attacker.uniqueId)") &&
+        java.io.File("src/main/kotlin/com/liam/joshymc/lifesteal/ranked/RankedArenaAccess.kt").readText().contains("if (f.victimSpectator) return true"))
 
     // Scope limits of this issue.
     check("no Elo or rewards", rankedSources.none { Regex("""(fun|val|var|class) (\w*(Elo|Reward)|(elo|reward))""").containsMatchIn(it) })

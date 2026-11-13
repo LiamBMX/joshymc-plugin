@@ -10,8 +10,6 @@ import org.bukkit.NamespacedKey
 import org.bukkit.entity.AbstractArrow
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.Player
-import org.bukkit.entity.Projectile
-import org.bukkit.entity.TNTPrimed
 import org.bukkit.entity.Tameable
 import org.bukkit.event.Event
 import org.bukkit.event.EventHandler
@@ -24,11 +22,11 @@ import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.block.SignChangeEvent
 import org.bukkit.event.entity.AreaEffectCloudApplyEvent
 import org.bukkit.event.entity.EntityCombustByEntityEvent
-import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityExplodeEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.entity.EntityPlaceEvent
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.entity.PotionSplashEvent
 import org.bukkit.event.entity.ProjectileLaunchEvent
@@ -37,6 +35,7 @@ import org.bukkit.event.hanging.HangingPlaceEvent
 import org.bukkit.event.inventory.InventoryOpenEvent
 import org.bukkit.event.inventory.InventoryType
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent
+import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerBucketEmptyEvent
 import org.bukkit.event.player.PlayerBucketFillEvent
 import org.bukkit.event.player.PlayerCommandPreprocessEvent
@@ -54,6 +53,7 @@ import org.bukkit.event.player.PlayerRespawnEvent
 import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.event.player.PlayerToggleFlightEvent
 import org.bukkit.event.vehicle.VehicleEnterEvent
+import org.bukkit.event.vehicle.VehicleMoveEvent
 import org.bukkit.persistence.PersistentDataType
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -110,38 +110,57 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
 
     // ── Damage ──────────────────────────────────────────────
 
-    private fun attackerOf(event: EntityDamageEvent): Player? {
-        (event.damageSource.causingEntity as? Player)?.let { return it }
-        if (event !is EntityDamageByEntityEvent) return null
-        return when (val source = event.damager) {
-            is Player -> source
-            is Projectile -> source.shooter as? Player
-            is TNTPrimed -> source.source as? Player
-            is Tameable -> source.owner as? Player
-            else -> null
-        }
-    }
+    private fun attackerOf(event: EntityDamageEvent): Player? = RankedDamageSources.of(event).player
 
-    /** Whether harm from [attacker] (null = no player behind it) to [victim] is refused. */
-    private fun harmBlocked(attacker: Player?, victim: Player): Boolean {
-        // Spectators (staff watching) are out of the game entirely while they watch.
-        if (ranked.isSpectator(victim.uniqueId)) return true
-        if (attacker != null && attacker.uniqueId != victim.uniqueId && ranked.isSpectator(attacker.uniqueId)) return true
-        val victimMatch = ranked.matchOf(victim.uniqueId)
-        if (victimMatch != null) {
-            if (victimMatch.state != MatchState.ACTIVE) return true
-            if (attacker == null || attacker.uniqueId == victim.uniqueId) return false
-            return !ranked.isMatchFight(attacker, victim)
-        }
-        // A participant can't reach anyone outside their match.
-        return attacker != null && attacker.uniqueId != victim.uniqueId && ranked.holds(attacker)
+    /**
+     * Whether harm from [resolved] (the player behind it, or a tamed mob of an absent owner) to
+     * [victim] is refused: the Bukkit-free [RankedArenaAccess.harmBlocked] (issue #1524).
+     */
+    private fun harmBlocked(resolved: RankedDamageSources.Resolved, victim: Player): Boolean {
+        val attacker = resolved.player
+        val source = RankedDamageSources.sourceFor(resolved, victim) { ranked.isMatchFight(it, victim) }
+        return RankedArenaAccess.harmBlocked(
+            RankedArenaAccess.HarmFacts(
+                source = source,
+                victimSpectator = ranked.isSpectator(victim.uniqueId),
+                attackerSpectator = attacker != null && ranked.isSpectator(attacker.uniqueId),
+                victimMatchState = ranked.matchOf(victim.uniqueId)?.state,
+                attackerHeld = attacker != null && ranked.holds(attacker),
+            ),
+        )
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onDamage(event: EntityDamageEvent) {
         val victim = event.entity as? Player ?: return
         if (!ranked.anyMatch) return
-        if (harmBlocked(attackerOf(event), victim)) event.isCancelled = true
+        if (harmBlocked(RankedDamageSources.of(event), victim)) event.isCancelled = true
+    }
+
+    /**
+     * Issue #1524: spectators can't hurt any entity (End Crystals, mounts, mobs) while they watch.
+     * Entities inside an arena in use are [RankedArenaGuardListener]'s.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onSpectatorHitsEntity(event: EntityDamageEvent) {
+        if (event.entity is Player || !ranked.anyMatch) return
+        val attacker = attackerOf(event) ?: return
+        if (ranked.isSpectator(attacker.uniqueId)) event.isCancelled = true
+    }
+
+    /**
+     * Issue #1524: a tamed mob only goes after a held participant when its owner fights in that
+     * match, and never after a spectator ([RankedArenaAccess.petTargetRefused]).
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPetTarget(event: EntityTargetLivingEntityEvent) {
+        val victim = event.target as? Player ?: return
+        if (!ranked.anyMatch) return
+        val pet = event.entity as? Tameable ?: return
+        if (pet.owner == null) return
+        val owner = RankedDamageSources.of(pet).player
+        val ownerInFight = owner != null && ranked.isMatchFight(owner, victim)
+        if (RankedArenaAccess.petTargetRefused(ranked.holds(victim), ranked.isSpectator(victim.uniqueId), ownerInFight)) event.isCancelled = true
     }
 
     /**
@@ -160,7 +179,7 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onSplash(event: PotionSplashEvent) {
         if (!ranked.anyMatch) return
-        val thrower = event.potion.shooter as? Player
+        val thrower = RankedDamageSources.of(event.potion)
         for (entity in event.affectedEntities) {
             val victim = entity as? Player ?: continue
             if (harmBlocked(thrower, victim)) event.setIntensity(victim, 0.0)
@@ -170,7 +189,7 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onCloud(event: AreaEffectCloudApplyEvent) {
         if (!ranked.anyMatch) return
-        val thrower = event.entity.source as? Player
+        val thrower = RankedDamageSources.of(event.entity)
         event.affectedEntities.removeIf { it is Player && harmBlocked(thrower, it) }
     }
 
@@ -178,12 +197,8 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
     fun onCombust(event: EntityCombustByEntityEvent) {
         val victim = event.entity as? Player ?: return
         if (!ranked.anyMatch) return
-        val attacker = when (val c = event.combuster) {
-            is Player -> c
-            is Projectile -> c.shooter as? Player
-            else -> null
-        }
-        if (attacker != null && harmBlocked(attacker, victim)) event.isCancelled = true
+        val attacker = RankedDamageSources.of(event.combuster)
+        if ((attacker.player != null || attacker.absentOwner) && harmBlocked(attacker, victim)) event.isCancelled = true
     }
 
     // ── Death, respawn, join, quit ──────────────────────────
@@ -228,6 +243,7 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.LOW)
     fun onQuit(event: PlayerQuitEvent) {
         lastHint.remove(event.player.uniqueId)
+        ranked.onAccessQuit(event.player.uniqueId)
         val kickCause = pendingKicks.remove(event.player.uniqueId)
         ranked.onQuit(event.player, event.reason.name, kickCause)
         // Issue #1363: a queued/confirming player's team entry ends (a created match stays the match manager's).
@@ -239,7 +255,7 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onTeleport(event: PlayerTeleportEvent) {
-        if (!ranked.anyMatch) return
+        if (!ranked.anyMatch && !ranked.anyReservation) return
         val player = event.player
         val to = event.to
         if (ranked.isExpectedTeleport(player.uniqueId, to)) return
@@ -251,8 +267,8 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
             hint(player, "You can't leave the arena during a ranked match.")
             return
         }
-        val world = to.world ?: return
-        if (ranked.heldArenasIn(world).any { inside(it.arena, to) }) {
+        // Issue #1524: also arenas a queue proposal reserves (its own players may go in).
+        if (ranked.refusingZoneAt(player.uniqueId, to) != null) {
             event.isCancelled = true
             hint(player, "A ranked match is using that arena.")
         }
@@ -260,7 +276,7 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onMove(event: PlayerMoveEvent) {
-        if (!ranked.anyMatch) return
+        if (!ranked.anyMatch && !ranked.anyReservation) return
         val from = event.from
         val to = event.to
         if (from.x == to.x && from.y == to.y && from.z == to.z) return
@@ -273,11 +289,45 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
             }
             return
         }
-        val world = to.world ?: return
-        if (ranked.heldArenasIn(world).any { !inside(it.arena, from) && inside(it.arena, to) }) {
+        val zone = ranked.refusingZoneAt(player.uniqueId, to) ?: return
+        if (!zone.contains(from)) {
             event.setTo(from.clone().apply { yaw = to.yaw; pitch = to.pitch })
-            hint(player, "A ranked match is using this arena.")
+            hint(player, RankedArenaAccess.MSG_ENTRY)
         }
+    }
+
+    /**
+     * Issue #1524: riders don't fire PlayerMoveEvent, so a horse, boat or minecart carrying an
+     * outsider into a protected arena is stopped at the boundary and the outsider gets off there.
+     * Teleport cause PLUGIN to [VehicleMoveEvent.getFrom], which is outside the arena, so the
+     * teleport rules above let it through and it can't loop.
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    fun onVehicleMove(event: VehicleMoveEvent) {
+        if (!ranked.anyMatch && !ranked.anyReservation) return
+        val vehicle = event.vehicle
+        val riders = vehicle.passengers.filterIsInstance<Player>()
+        if (riders.isEmpty()) return
+        val from = event.from
+        val to = event.to
+        val zones = ranked.accessZones()
+        val refused = riders.filter { r -> ranked.refusingZoneAt(r.uniqueId, to, zones)?.let { !it.contains(from) } == true }
+        if (refused.isEmpty()) return
+        for (rider in refused) {
+            vehicle.removePassenger(rider)
+            rider.teleport(from.clone().apply { yaw = rider.location.yaw; pitch = rider.location.pitch }, PlayerTeleportEvent.TeleportCause.PLUGIN)
+            hint(rider, RankedArenaAccess.MSG_ENTRY)
+        }
+        if (vehicle.passengers.isEmpty()) {
+            vehicle.velocity = org.bukkit.util.Vector()
+            vehicle.teleport(from)
+        }
+    }
+
+    /** Issue #1524: spectating ends when the spectator leaves the arena's world. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onWorldChange(event: PlayerChangedWorldEvent) {
+        ranked.onWorldChange(event.player)
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -381,7 +431,8 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onDrop(event: PlayerDropItemEvent) {
-        if (!ranked.holds(event.player)) return
+        // Issue #1524: spectators can't drop items into the arena either.
+        if (!restricted(event.player)) return
         event.isCancelled = true
         hint(event.player, "You can't drop items during a ranked match.")
     }
@@ -398,7 +449,13 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     fun onInteractEntity(event: PlayerInteractEntityEvent) {
-        if (restricted(event.player)) event.isCancelled = true
+        if (restricted(event.player)) {
+            event.isCancelled = true
+            return
+        }
+        // Issue #1524: nobody outside a match uses a participant (leads, name tags, mounting, trades).
+        val target = event.rightClicked as? Player ?: return
+        if (ranked.holds(target) && ranked.matchOf(target.uniqueId)?.id != ranked.matchOf(event.player.uniqueId)?.id) event.isCancelled = true
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -409,6 +466,11 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
     /** Not ignoreCancelled (right-clicking air arrives cancelled); only denies using the clicked block. */
     @EventHandler(priority = EventPriority.LOW)
     fun onInteract(event: PlayerInteractEvent) {
+        // Issue #1524: spectators don't trigger pressure plates, tripwires or turtle eggs.
+        if (event.action == Action.PHYSICAL) {
+            if (ranked.isSpectator(event.player.uniqueId)) event.setUseInteractedBlock(Event.Result.DENY)
+            return
+        }
         if (event.action != Action.RIGHT_CLICK_BLOCK) return
         if (!restricted(event.player)) return
         val block = event.clickedBlock ?: return
