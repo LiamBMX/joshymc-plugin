@@ -120,7 +120,8 @@ class CrateOpeningAnimator(private val plugin: Joshymc, private val models: Crat
     /** The profile [crateId] opens with right now (this month's theme while its monthly model shows). */
     fun profileFor(crateId: String): CrateOpeningAnimation.Profile {
         val month = try {
-            if (models.resolve(crateId).source == CrateModels.ModelSource.MONTHLY) CrateModels.monthId(models.activeMonth) else null
+            // Issue #1520: the crate `monthly.crate-ids` maps to this month opens with its theme too.
+            if (models.resolve(crateId).source == CrateModels.ModelSource.MONTHLY || models.isActiveMappedCrate(crateId)) CrateModels.monthId(models.activeMonth) else null
         } catch (_: Exception) { null }
         return CrateOpeningAnimation.resolveProfile(settings, crateId, month)
     }

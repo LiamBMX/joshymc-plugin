@@ -359,6 +359,123 @@ and players without the JoshyMC pack always see the vanilla block.
 - Rotation is per crate id, so every location of a listed crate rotates together.
 - `/crate models set` only edits static models; monthly mappings are edited in config.yml.
 
+## E2b. Monthly crates, admin override (issue #1520)
+
+Crates redesign phase 7, built on E2 (no second rotation system). Two additions:
+
+1. **Month → crate mapping** (`monthly.crate-ids`, optional). In a mapped month every rotating
+   crate location (a location whose crate id is in `monthly.crates`) **opens the mapped crate**:
+   its key, rewards, odds, mode and animation, also for the left-click / sneak preview and in the
+   `/crate` browser. Months left out open the location's own crate, so with the bundled empty
+   `crate-ids: {}` nothing changes: rotation stays look-only, exactly as in E2.
+2. **The month in effect** is an admin override while one runs, else the calendar month in
+   `monthly.timezone`. That one month picks both the model (E2) and the mapped crate, and both
+   switch in the same check, so a display never shows one month while the block opens another.
+
+```yaml
+crates:
+  custom-models:
+    monthly:
+      enabled: true
+      timezone: America/New_York
+      crates: [monthly]            # the placeholder crate whose locations rotate
+      models: { january: "joshymc:january_chest", ... }
+      crate-ids:                   # optional; crates.yml ids (aliases and any letter case work)
+        january: winter_2027
+        february: valentine_2027
+```
+
+The plugin ships no live crate ids (the Owner chooses them). Each mapped crate is an ordinary
+crates.yml crate with its own key and rewards; nothing is generated, rebalanced or converted.
+
+### Rotation schedule
+
+- Calendar month = the month at the current instant in `monthly.timezone` (a real
+  `ZoneId`, America/New_York by default, so EST/EDT are both handled; never a fixed offset and
+  never a 30-day timer). The month starts at local midnight on the 1st.
+- One delayed task (no repeating task, nothing per tick) fires 1 s after the earlier of the next
+  month start and the override's expiry, and at most an hour after the previous check. A check
+  that finds the same month does nothing; a changed month redraws only the rotating crates
+  whose model changed (old entity removed first) and refreshes open `/crate` browsers.
+- After downtime the current month is used straight away (missed months are never replayed).
+- The task is cancelled on stop and rescheduled on start, so `/joshymc reload` and restarts
+  can't run two checks.
+
+### Override
+
+| Command (`joshymc.crate.admin`, op) | What it does |
+|---|---|
+| `/crate monthly [status]` | calendar month, month in effect, rotation on/off, override (month, who, when, expiry), next check, display model, and per rotating crate which crate it opens, which model it shows and how many locations it has |
+| `/crate monthly set <january..december> [7d\|12h\|1d12h\|month-end\|never]` | pins that month until reset or the expiry (default: no expiry); `month-end` = next midnight on the 1st, Eastern |
+| `/crate monthly reset` | removes the override; rotating crates go straight back to the calendar month |
+
+- `set` is refused (nothing saved) when rotation is off, no listed crate exists, the month's
+  model is unset or not in the bundled pack, or the month maps a crate that doesn't exist.
+- The override is one row in `crate_monthly_override` (data.db): month by name, `set_at` /
+  `expires_at` as epoch milliseconds (UTC), `set_by`. It is written **before** it is applied
+  (a failed write changes nothing) and read back on every start, so restarts never drop it.
+  An override that expired while the server was down is not applied and is removed on start.
+  A row whose month can't be read is kept, reported in the log and in status, and not applied
+  (`reset` clears it).
+- `set` and `reset` are written to AdminAudit (`CRATE_MONTHLY_OVERRIDE_SET` / `_RESET`); an
+  automatic expiry is logged as `CRATE_MONTHLY_OVERRIDE_EXPIRED` by the console.
+- An override only picks the month. Key checks, `crateProblem`/`gamemodeProblem`, inventory
+  space and every other open rule are exactly the same.
+
+### Keys, rewards and in-progress openings
+
+- The crate a rotating location opens is resolved on every click (`getCrateTypeAt` →
+  `models.crateFor`), and the key in hand must be that crate's key. The key is still taken in
+  the same place as before.
+- **Old keys are never converted, deleted or redeemed.** A key from an earlier month still
+  belongs to its own crate. It opens that crate wherever the crate has its own location
+  (`/crate setlocation <crate>`), never at a rotating location in another month. Whether
+  earlier months' crates get their own locations is the Owner's call: the plugin adds no policy.
+- Random crates (Spin/Pulse/Instant): the key is taken and the winner stored in
+  `crate_pending_rewards` before the animation, so a month change or override during the
+  animation still pays that stored reward from the pool it was drawn from.
+- Select / Select 3: nothing is taken until confirm. If the location the player clicked would
+  open another crate by then, the confirm is refused with "This monthly crate changed while you
+  were choosing… No key was used." (`pickStale`). Stale browser clicks redraw the browser instead.
+- Mass opening is one synchronous step and can't straddle a month change.
+
+### Browser
+
+The "Monthly Crates" row shows, for each rotating crate, the crate it opens this month (name,
+key icon, reward count, preview). Crates mapped to other months are not listed (they can't be
+opened at a rotating location right now); crates with `listed: false` stay hidden as before.
+
+### Verifying
+
+- Automated: `./gradlew -I scripts/crate-monthly-check.init.gradle.kts crateMonthlyCheck`
+  (all 12 months, midnight Eastern, EST↔EDT, leap year, restarts, overrides incl. persistence on a
+  real SQLite file, expiry and reset, fallbacks, config compatibility, wiring and permissions),
+  plus the existing `crateModelCheck`, `crateMenuCheck`, `crateAnimationCheck`,
+  `crateDisplayCheck`, `crateRotationCheck` and `cratePreviewCheck`.
+- Live Paper server:
+  1. Create a placeholder crate `monthly` and two crates (e.g. `test_a`, `test_b`) with
+     different keys and rewards. Set `monthly.crates: [monthly]` and map the current month to
+     `test_a` and next month to `test_b` under `crate-ids`, then `/joshymc reload`.
+  2. `/crate setlocation monthly` on a chest, then turn it with `/crate display facing east` and
+     `/crate display scale 1.25`. `/crate monthly` shows "opens test_a".
+  3. Right-click with a `test_a` key: it opens `test_a`. A `test_b` key is refused, nothing taken.
+  4. `/crate monthly set <next month> 10m`: the model swaps once (facing and scale kept;
+     `/execute if entity @e[type=item_display,tag=joshymc_crate_model]` count unchanged), the
+     open `/crate` browser redraws, and the block now wants a `test_b` key.
+  5. Open a Select crate, run `/crate monthly reset`, then confirm: refused, key kept.
+  6. Restart with an override set: `/crate monthly` still shows it. Set `1m`, wait: it expires
+     on its own and the console logs it.
+  7. Set the server clock (or `timezone`) to just before midnight on the 1st: within a second of
+     midnight Eastern the crate rotates without a restart.
+
+### Limitations
+
+- One month → crate map is shared by every rotating crate (as for models).
+- `crate-ids` is edited in config.yml (then `/joshymc reload`); only the override has commands.
+- The override applies to every rotating crate at once, not per crate.
+- Depends on phases 4-6 (opening animation #1503, GUIs #1514, per-location placement #1517),
+  all already on `main`; no open crate PR overlaps this change.
+
 ## E3. Per-crate facing (issue #1472)
 
 Part of the crates redesign (audit #1446).

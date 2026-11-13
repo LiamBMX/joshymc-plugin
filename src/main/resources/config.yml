@@ -744,6 +744,18 @@ crates:
         october: "joshymc:october_chest"
         november: "joshymc:november_chest"
         december: "joshymc:december_chest"
+      # Issue #1520: optional month -> crate id (from crates.yml). In a mapped month every
+      # rotating crate location opens that crate instead of its own: its key, rewards, odds and
+      # mode, in the browser and previews too. Months left out (or naming a crate that doesn't
+      # exist) open the location's own crate, so with nothing here rotation only changes the
+      # look, as before. Keys are never converted: an older month's key still belongs to its
+      # crate and opens it wherever that crate has its own location. Example:
+      #   crate-ids:
+      #     january: winter_2027
+      #     february: valentine_2027
+      crate-ids: {}
+      # The month in effect can be pinned by an admin: /crate monthly set <month> [7d|month-end]
+      # (stored in data.db, survives restarts, expires on its own), /crate monthly reset.
   # Reward rarity labels for the crate GUIs (issue #1514). Presentation only: a reward shows a
   # rarity when crates.yml gives it "rarity: <id>"; weights, chances and draws never change, and
   # nothing is computed from a reward's chance. Rewards without a rarity show no rarity line.

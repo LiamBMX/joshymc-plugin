@@ -263,7 +263,9 @@ private fun monthlyChecks(config: String, section: String, manager: String, disp
     check("ticks round up", CrateModels.ticksFor(1000) == 20L && CrateModels.ticksFor(1001) == 21L)
     val fixedClock = Clock.fixed(Instant.parse("2027-01-01T05:00:01Z"), ZoneId.of("UTC"))
     check("a server starting just after the boundary uses the new month", CrateModels.monthAt(fixedClock.instant(), NY) == Month.JANUARY)
-    check("start reads the month from the clock", "activeMonth = CrateModels.monthAt(clock.instant(), settings.monthly.zone)" in displays)
+    // Issue #1520: the month in effect is the stored override's while it runs, else read from the clock.
+    check("start reads the month from the clock (or a running override)", "activeMonth = effectiveMonth()" in displays &&
+        "CrateMonthlyRotation.effectiveMonth(clock.instant(), settings.monthly.zone, override)" in displays)
 
     // 7. Rotation disabled: everything is the static behaviour.
     val off = monthlyConfig("monthly.enabled" to false)

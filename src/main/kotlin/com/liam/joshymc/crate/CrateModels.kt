@@ -407,11 +407,19 @@ object CrateModels {
         val crates: Set<String>,
         /** Month -> item model key. A month without an entry falls back like a missing model. */
         val models: Map<Month, String>,
+        /**
+         * Issue #1520, `monthly.crate-ids`: month -> the crate id (as written) a rotating
+         * crate location opens in that month, with that crate's own keys and rewards. A month
+         * without an entry opens the location's own crate (rotation is then look-only, as before).
+         */
+        val crateIds: Map<Month, String> = emptyMap(),
     ) {
         /** True when rotation is on and has at least one crate to rotate. */
         val active: Boolean get() = enabled && crates.isNotEmpty()
 
         fun modelFor(month: Month): String? = models[month]
+
+        fun crateIdFor(month: Month): String? = crateIds[month]
 
         companion object {
             val DISABLED = Monthly(false, ZoneId.of(DEFAULT_TIMEZONE), emptySet(), emptyMap())
@@ -472,8 +480,26 @@ object CrateModels {
             }
             models[month] = key
         }
-        return Monthly(enabled, zone, crates, models)
+        val crateIds = sortedMapOf<Month, String>()
+        for (raw in source.keys("$p.crate-ids")) {
+            val month = monthOf(raw)
+            if (month == null) {
+                problems += "$p.crate-ids.$raw is not a month (use ${MONTH_IDS.first()} .. ${MONTH_IDS.last()}); ignored"
+                continue
+            }
+            val text = source.value("$p.crate-ids.$raw")?.toString()?.trim().orEmpty()
+            if (text.isEmpty()) continue
+            if (!CRATE_ID.matches(text)) {
+                problems += "$p.crate-ids.$raw: '$text' is not a crate id (rotating crates open their own crate that month)"
+                continue
+            }
+            crateIds[month] = text
+        }
+        return Monthly(enabled, zone, crates, models, crateIds)
     }
+
+    /** What a crates.yml crate id may look like (crates.yml keys; matched case-insensitively). */
+    private val CRATE_ID = Regex("^[A-Za-z0-9_-]+$")
 
     /** A month id (`january`, case-insensitive) or null. */
     fun monthOf(id: String): Month? = Month.entries.firstOrNull { it.name.equals(id.trim(), ignoreCase = true) }

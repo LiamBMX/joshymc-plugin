@@ -82,6 +82,13 @@ the month is read from the rotation clock in its timezone. The bundled config li
 crates (the live ids are the Owner's choice), so until then every crate shows as permanent. Crate
 ids, keys, rewards and models are not touched.
 
+Issue #1520: the month shown is the month in effect (an admin override from `/crate monthly set`,
+else the calendar month). When `monthly.crate-ids` maps that month to a crate, the monthly row
+shows that crate (its name, key, rewards and preview) instead of the rotating crate itself, and
+crates mapped to other months are left out. Open browsers are redrawn when the month changes,
+and a click on an entry from before the change redraws the browser instead of previewing it.
+See `docs/crate-models.md` section E2b.
+
 ## Fallbacks
 
 Icons use the key's material with its `key-item-model`; without the resource pack Java shows the

@@ -236,6 +236,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * click) is ignored so one interaction never spends two keys.
      */
     private val lastActivation = mutableMapOf<UUID, Long>()
+    /**
+     * Issue #1520: player -> (crate id their last clicked location is registered as, crate it
+     * opened). A pick screen is refused at confirm when that location would now open another
+     * crate (the month changed), so a stale screen never pays from last month's pool.
+     */
+    private val pickOrigins = mutableMapOf<UUID, Pair<String, String>>()
     private var particleTask: BukkitTask? = null
     private var pendingRetryTask: BukkitTask? = null
 
@@ -523,6 +529,18 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     /** The current crate id for [id]: itself if it's a crate, its configured alias target otherwise. */
     fun resolveCrateId(id: String): String = if (crates.containsKey(id)) id else crateAliases[id] ?: id
 
+    /**
+     * The real crate id for an id written in config (exact, then `crate-aliases`, then a
+     * case-insensitive match), or null when there is no such crate. Issue #1520 (`monthly.crate-ids`).
+     */
+    fun findCrateId(written: String): String? {
+        val direct = resolveCrateId(written)
+        if (crates.containsKey(direct)) return direct
+        val lower = written.lowercase()
+        crates.keys.firstOrNull { it.lowercase() == lower }?.let { return it }
+        return crateAliases.entries.firstOrNull { it.key.lowercase() == lower }?.value?.takeIf { crates.containsKey(it) }
+    }
+
     private fun loadLocations() {
         crateLocations.clear()
         val rows = plugin.databaseManager.query(
@@ -784,7 +802,19 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         return removed
     }
 
+    /**
+     * The crate a click on [block] opens. Issue #1520: a rotating crate location (listed in
+     * `crates.custom-models.monthly.crates`) opens the crate `monthly.crate-ids` maps to the month
+     * in effect, with that crate's own keys, rewards and mode; without a mapping (or when the
+     * mapped crate doesn't exist) it opens its own crate, exactly as before.
+     */
     fun getCrateTypeAt(block: Block): String? {
+        val registered = getLocationCrateTypeAt(block) ?: return null
+        return models.crateFor(registered).crateId
+    }
+
+    /** The crate id [block] is registered as (aliases resolved, double-chest/neighbour fallback), before monthly rotation. */
+    fun getLocationCrateTypeAt(block: Block): String? {
         // Exact match first — this is the common case.
         val exact = crateLocations.firstOrNull {
             it.world == block.world.name && it.x == block.x && it.y == block.y && it.z == block.z
@@ -1183,6 +1213,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             return
         }
         val crate = openableCrate(player, crateType, massOpen = false) ?: return
+        pickOrigins.remove(player.uniqueId)
         beginOpening(player, crate, block)
     }
 
@@ -1448,6 +1479,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * opened here any more. A stale screen never pays, whatever it shows.
      */
     private fun pickStale(player: Player, crate: CrateDef): Boolean {
+        val origin = pickOrigins[player.uniqueId]?.takeIf { it.second == crate.id }
+        if (origin != null && models.crateFor(origin.first).crateId != crate.id) {
+            select3Sessions.remove(player.uniqueId)
+            pickOrigins.remove(player.uniqueId)
+            player.closeInventory()
+            plugin.commsManager.send(player, Component.text("This monthly crate changed while you were choosing — please open it again. No key was used.", NamedTextColor.RED))
+            return true
+        }
         if (crates[crate.id] !== crate) {
             select3Sessions.remove(player.uniqueId)
             player.closeInventory()
@@ -2427,8 +2466,26 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     fun keyCount(player: Player, crateId: String): Int =
         player.inventory.contents.filterNotNull().filter { isKey(it, crateId) }.sumOf { it.amount }
 
-    /** Registered crate blocks of this type. */
-    fun locationCount(crateId: String): Int = crateLocations.count { it.crateType == crateId }
+    /**
+     * Registered crate blocks that open this crate. Issue #1520: a rotating location counts for
+     * the crate it opens this month (its own one when the month maps none).
+     */
+    fun locationCount(crateId: String): Int = crateLocations.count { models.crateFor(it.crateType).crateId == crateId }
+
+    /**
+     * Issue #1520: the month in effect changed (calendar boundary, admin override set/reset or
+     * expired). Rotating locations already open the new month's crate (resolved on every click);
+     * this refreshes open `/crate` browsers. Pick screens opened before the change are refused
+     * at confirm by [pickStale] (no key is taken), and random opens whose key was already used
+     * keep the reward they stored, so a running opening never changes reward pool.
+     */
+    fun onMonthlyRotation(previous: java.time.Month, now: java.time.Month) {
+        val active = models.settings.monthly.crates.mapNotNull { findCrateId(it) }.distinct()
+            .joinToString { id -> "$id -> ${models.crateFor(id, now).crateId}" }
+        plugin.logger.info("[Crates] Monthly crates now use ${now.name.lowercase()} (was ${previous.name.lowercase()})" +
+            if (active.isNotEmpty()) ": $active." else ".")
+        browser.refreshOpen()
+    }
 
     /** Player-facing reason [crate] can't be opened by [player] right now, or null. Same rules as every open path. */
     fun availabilityProblem(player: Player, crate: CrateDef): String? {
@@ -2669,6 +2726,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     private fun handleCrateClick(player: Player, crateType: String, block: Block, leftClick: Boolean) {
         // Issue #1472: only crate admins in rotate mode, sneaking with an empty hand.
         if (!leftClick && tryQuickRotate(player, block)) return
+        // Issue #1520: remember which location this open came from, for the stale-pick check.
+        val registered = getLocationCrateTypeAt(block)
+        if (registered != null) pickOrigins[player.uniqueId] = registered to crateType else pickOrigins.remove(player.uniqueId)
         if (leftClick) {
             openPreview(player, crateType)
             return
@@ -2860,6 +2920,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         opening.cancel(event.player.uniqueId)
         activeAnimations.remove(event.player.uniqueId)
         lastActivation.remove(event.player.uniqueId)
+        pickOrigins.remove(event.player.uniqueId)
+        browser.forget(event.player.uniqueId)
         clickGate.forget(event.player.uniqueId)
         rotateMode.remove(event.player.uniqueId)
     }

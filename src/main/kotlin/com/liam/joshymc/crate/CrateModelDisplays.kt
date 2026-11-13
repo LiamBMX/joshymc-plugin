@@ -70,6 +70,11 @@ import java.util.zip.ZipInputStream
  * - Monthly rotation (issue #1460): crates listed in `monthly.crates` show the current calendar
  *   month's model (read in `monthly.timezone`), else their static model, else the vanilla block
  *   ([CrateModels.resolve]). Only the display's item model changes, never the crate.
+ * - Issue #1520: the month in effect is an admin override while one runs (persisted in
+ *   `crate_monthly_override`, optional expiry), else the calendar month
+ *   ([CrateMonthlyRotation.effectiveMonth]). The same month picks the model and, through
+ *   `monthly.crate-ids`, the crate a rotating location opens ([crateFor]); both switch in the one
+ *   [checkMonth], so they never disagree.
  *
  * No repeating task: everything is driven by chunk, pack-status and crate-location events, plus
  * (only while rotation is active) one delayed month check that reschedules itself at most an
@@ -113,9 +118,18 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
     /** Wall clock the calendar month is read from (replaceable so month changes can be tested). */
     var clock: Clock = Clock.systemUTC()
 
-    /** The month every drawn rotating crate currently uses. */
+    /** The month every drawn rotating crate currently uses (the override's, else the calendar month). */
     var activeMonth: Month = Month.JANUARY
         private set
+
+    /** Issue #1520: the admin's month override as stored (null = none). Applied only while [CrateMonthlyRotation.Override.activeAt]. */
+    var override: CrateMonthlyRotation.Override? = null
+        private set
+
+    /** A stored override row whose month couldn't be read (kept, not applied, shown in status). */
+    private var unreadableOverride: String? = null
+
+    private val overrideStore by lazy { CrateMonthlyOverrideStore(plugin.databaseManager) }
 
     /** The one pending month check while rotation is active (never one per crate). */
     private var rotationTask: BukkitTask? = null
@@ -123,7 +137,8 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
     fun start() {
         settings = CrateModels.parse(sectionSource(plugin.config.getConfigurationSection(CONFIG_PATH)))
         for (problem in settings.problems) plugin.logger.warning("[Crates] $CONFIG_PATH.$problem")
-        activeMonth = CrateModels.monthAt(clock.instant(), settings.monthly.zone)
+        loadOverride()
+        activeMonth = effectiveMonth()
         readBundledPack()
         for (model in settings.models.values) {
             if (!modelAvailable(model)) {
@@ -133,6 +148,7 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
             }
         }
         warnMissingMonthlyModels()
+        warnMissingMonthlyCrates()
         refreshAll()
         if (settings.enabled) {
             plugin.logger.info("[Crates] Custom crate models: ${spawned.size} shown (${spawned.values.count { it.hitbox != null }} with a hitbox), ${settings.models.size} configured (gamemodes: ${settings.gamemodes.joinToString()}).")
@@ -255,7 +271,9 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
             else -> key
         }
         return "Monthly crate models: ${if (m.active) "on" else if (m.enabled) "on, but no crate listed" else "off"}; " +
-            "${CrateModels.monthId(activeMonth)} in ${m.zone.id} -> $state; " +
+            "${CrateModels.monthId(activeMonth)}" +
+            (if (CrateMonthlyRotation.overrideActive(clock.instant(), override)) " (admin override)" else "") +
+            " in ${m.zone.id} -> $state; " +
             "rotating crates: ${m.crates.sorted().joinToString().ifEmpty { "none" }}"
     }
 
@@ -308,12 +326,16 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
         }
     }
 
-    /** Schedules the next month check: one delayed task, only while rotation is active. */
+    /**
+     * Schedules the next month check: one delayed task, only while rotation is active (also with
+     * custom models off, since `monthly.crate-ids` decides which crate opens). It fires just past
+     * the next month start or the override's expiry, whichever is first, at most an hour ahead.
+     */
     private fun scheduleRotation() {
         rotationTask?.cancel()
         rotationTask = null
-        if (!settings.enabled || !settings.monthly.active) return
-        val delay = CrateModels.ticksFor(CrateModels.checkDelayMillis(clock.instant(), settings.monthly.zone))
+        if (!settings.monthly.active) return
+        val delay = CrateModels.ticksFor(CrateMonthlyRotation.checkDelayMillis(clock.instant(), settings.monthly.zone, override))
         rotationTask = Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             rotationTask = null
             try {
@@ -330,11 +352,17 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
      * redraws only the rotating crates whose drawn model differs from the new one.
      */
     fun checkMonth(): Int {
-        val now = CrateModels.monthAt(clock.instant(), settings.monthly.zone)
+        expireOverride()
+        val now = effectiveMonth()
         if (now == activeMonth) return 0
         val previous = activeMonth
         activeMonth = now
         val redrawn = refreshRotating()
+        try {
+            crates.onMonthlyRotation(previous, now)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Crates] Refreshing crate menus after the month change failed: ${e.message}")
+        }
         val key = settings.monthly.modelFor(now)
         plugin.logger.info("[Crates] Month changed (${CrateModels.monthId(previous)} -> ${CrateModels.monthId(now)}): " +
             "${key ?: "no monthly model set"}${if (key != null && !available(key)) " is not in the pack, rotating crates use their fallback" else ""}; " +
@@ -396,8 +424,172 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
     /** Issue #1514: true when [crateId] is one of the monthly (rotating) crates, for the `/crate` browser. */
     fun isMonthlyCrate(crateId: String): Boolean = rotates(crateId)
 
-    /** Issue #1514: the calendar month right now in the rotation's timezone (read from [clock], never stored). */
-    fun currentMonth(): Month = CrateModels.monthAt(clock.instant(), settings.monthly.zone)
+    /**
+     * Issue #1514: the month the `/crate` browser shows. Issue #1520: the month in effect
+     * ([activeMonth], the override's while one runs), so menus, models and the crate a rotating
+     * location opens always agree.
+     */
+    fun currentMonth(): Month = activeMonth
+
+    /** The calendar month right now in the rotation's timezone (read from [clock], never stored). */
+    fun calendarMonth(): Month = CrateModels.monthAt(clock.instant(), settings.monthly.zone)
+
+    /** The month in effect right now: a running override's, else the calendar month. */
+    fun effectiveMonth(): Month = CrateMonthlyRotation.effectiveMonth(clock.instant(), settings.monthly.zone, override)
+
+    // ── Which crate a rotating location opens, and the override (issue #1520) ──
+
+    /**
+     * The crate a location registered as [locationCrateId] opens now: the crate `monthly.crate-ids`
+     * maps to [activeMonth] when the location rotates and that crate exists, else its own crate.
+     */
+    fun crateFor(locationCrateId: String, month: Month = activeMonth): CrateMonthlyRotation.CrateChoice =
+        CrateMonthlyRotation.crateFor(settings, crates.resolveCrateId(locationCrateId), month, crates::findCrateId, crates::resolveCrateId)
+
+    /** Every crate some month maps to (`monthly.crate-ids`), whether or not it is this month's. */
+    fun mappedMonthlyCrateIds(): Set<String> = CrateMonthlyRotation.mappedCrateIds(settings, crates::findCrateId)
+
+    /** True when [crateId] is the crate `monthly.crate-ids` maps to the month in effect. */
+    fun isActiveMappedCrate(crateId: String): Boolean =
+        settings.monthly.active && settings.monthly.crateIdFor(activeMonth)?.let(crates::findCrateId) == crateId
+
+    private fun loadOverride() {
+        override = null
+        unreadableOverride = null
+        try {
+            overrideStore.createTables()
+            when (val loaded = overrideStore.read()) {
+                CrateMonthlyOverrideStore.Loaded.None -> {}
+                is CrateMonthlyOverrideStore.Loaded.Found -> override = loaded.override
+                is CrateMonthlyOverrideStore.Loaded.Unreadable -> {
+                    unreadableOverride = loaded.raw
+                    plugin.logger.warning("[Crates] The stored monthly crate override names '${loaded.raw}', which is not a month; it is not applied. Use /crate monthly reset to clear it.")
+                }
+            }
+        } catch (e: Exception) {
+            plugin.logger.severe("[Crates] Could not read the monthly crate override (${e.message}); using the calendar month until it can be read.")
+        }
+        val o = override ?: return
+        if (CrateMonthlyRotation.overrideExpired(clock.instant(), o)) {
+            expireOverride()
+        } else {
+            plugin.logger.info("[Crates] Monthly crate override active: ${CrateModels.monthId(o.month)} (set by ${o.setBy}" +
+                (o.expiresAt?.let { ", until ${CrateMonthlyRotation.formatInstant(java.time.Instant.ofEpochMilli(it), settings.monthly.zone)}" } ?: ", no expiry") + ").")
+        }
+    }
+
+    /** Clears an override that ran out (stored row first, only if it's still that override). */
+    private fun expireOverride() {
+        val o = override ?: return
+        if (!CrateMonthlyRotation.overrideExpired(clock.instant(), o)) return
+        try {
+            overrideStore.clearIf(o)
+        } catch (e: Exception) {
+            // Not applied either way: an expired override is never used, so the next start retries the cleanup.
+            plugin.logger.warning("[Crates] Could not remove the expired monthly crate override: ${e.message}")
+        }
+        override = null
+        plugin.logger.info("[Crates] The monthly crate override (${CrateModels.monthId(o.month)}, set by ${o.setBy}) expired; rotating crates follow the calendar month again.")
+        try {
+            com.liam.joshymc.staff.AdminAudit.log(plugin, Bukkit.getConsoleSender(), "CRATE_MONTHLY_OVERRIDE_EXPIRED",
+                details = "month=${CrateModels.monthId(o.month)} set_by=${o.setBy} expires_at=${o.expiresAt}")
+        } catch (_: Exception) {}
+    }
+
+    /** Outcome of [setOverride] / [resetOverride]: null = done, else why nothing changed. */
+    fun setOverride(month: Month, expiresAt: Long?, setBy: String): String? {
+        CrateMonthlyRotation.overrideProblem(settings, month, ::available, crates::findCrateId)?.let { return it }
+        val o = CrateMonthlyRotation.Override(month, clock.instant().toEpochMilli(), expiresAt, setBy)
+        if (!o.activeAt(clock.instant())) return "that expiry is already in the past"
+        // Saved first: if the write fails nothing is applied, so the state never differs from the stored one.
+        try {
+            overrideStore.save(o)
+        } catch (e: Exception) {
+            return "the override could not be saved (${e.message})"
+        }
+        override = o
+        unreadableOverride = null
+        checkMonth()
+        scheduleRotation()
+        return null
+    }
+
+    /** Removes the override and goes straight back to the calendar month. Null = done (also when there was none). */
+    fun resetOverride(): String? {
+        try {
+            overrideStore.clear()
+        } catch (e: Exception) {
+            return "the override could not be removed (${e.message})"
+        }
+        override = null
+        unreadableOverride = null
+        checkMonth()
+        scheduleRotation()
+        return null
+    }
+
+    /** One warning listing `monthly.crate-ids` entries that name no crate (those months open the location's own crate). */
+    private fun warnMissingMonthlyCrates() {
+        val m = settings.monthly
+        if (!m.active) return
+        val missing = m.crateIds.filterValues { crates.findCrateId(it) == null }
+        if (missing.isEmpty()) return
+        plugin.logger.warning("[Crates] crates.custom-models.monthly.crate-ids names crates that don't exist: " +
+            missing.entries.joinToString { "${CrateModels.monthId(it.key)} -> ${it.value}" } +
+            ". In those months rotating crate locations open their own crate.")
+    }
+
+    /** `/crate monthly status` (issue #1520). */
+    fun statusLines(): List<String> {
+        val m = settings.monthly
+        val now = clock.instant()
+        val zone = m.zone
+        val out = mutableListOf<String>()
+        out += "Monthly crate rotation: ${if (m.active) "on" else if (m.enabled) "on, but no crate listed" else "off"} (timezone ${zone.id})"
+        out += "  Calendar month: ${CrateMonthlyRotation.monthName(calendarMonth())} (${CrateMonthlyRotation.formatInstant(now, zone)})"
+        out += "  Active month: ${CrateMonthlyRotation.monthName(activeMonth)}"
+        val o = override
+        out += when {
+            unreadableOverride != null -> "  Override: stored month '$unreadableOverride' can't be read, not applied (/crate monthly reset clears it)"
+            o == null -> "  Override: none (automatic)"
+            !o.activeAt(now) -> "  Override: ${CrateMonthlyRotation.monthName(o.month)} expired, clearing at the next check"
+            else -> "  Override: ${CrateMonthlyRotation.monthName(o.month)}, set by ${o.setBy} at " +
+                CrateMonthlyRotation.formatInstant(java.time.Instant.ofEpochMilli(o.setAt), zone) + ", " +
+                (o.expiresAt?.let { "expires ${CrateMonthlyRotation.formatInstant(java.time.Instant.ofEpochMilli(it), zone)}" } ?: "no expiry")
+        }
+        if (m.active) {
+            out += "  Next check: ${CrateMonthlyRotation.formatInstant(CrateMonthlyRotation.nextChange(now, zone, o), zone)} " +
+                "(next month starts ${CrateMonthlyRotation.formatInstant(CrateModels.nextMonthStart(now, zone), zone)})"
+        }
+        val key = m.modelFor(activeMonth)
+        out += "  Display model: " + when {
+            !settings.enabled -> "custom crate models are off (vanilla blocks)"
+            key == null -> "no ${CrateModels.monthId(activeMonth)} model set, using fallbacks"
+            !available(key) -> "$key is not in the pack, using fallbacks"
+            else -> key
+        }
+        for (id in m.crates.sorted()) {
+            val real = crates.findCrateId(id)
+            if (real == null) {
+                out += "  crate $id: no crate with this id"
+                continue
+            }
+            val choice = crateFor(real)
+            val opens = when (choice.source) {
+                CrateMonthlyRotation.CrateSource.MONTHLY -> "opens ${choice.crateId} (this month's crate)"
+                CrateMonthlyRotation.CrateSource.OWN -> "opens itself" + (choice.note?.let { " ($it)" } ?: "")
+                CrateMonthlyRotation.CrateSource.FALLBACK -> "opens itself (fallback: ${choice.note})"
+            }
+            val shown = resolve(real).let { r -> r.model?.model ?: "vanilla block (${r.note})" }
+            out += "  crate $real: $opens, shows $shown, ${crates.getAllLocations().count { crates.resolveCrateId(it.crateType) == real }} location(s)"
+        }
+        if (m.crateIds.isNotEmpty()) {
+            out += "  Month crates: " + Month.entries.joinToString { month ->
+                CrateModels.monthId(month).take(3) + "=" + (m.crateIdFor(month)?.let { id -> crates.findCrateId(id) ?: "$id(missing)" } ?: "-")
+            }
+        }
+        return out
+    }
 
     /** The model this location should show, ignoring whether its chunks are loaded. */
     private fun expectedModel(loc: CrateManager.CrateLocation): CrateModels.Model? {
