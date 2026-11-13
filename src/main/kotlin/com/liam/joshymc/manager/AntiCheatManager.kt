@@ -576,14 +576,16 @@ class AntiCheatManager(private val plugin: Joshymc) : Listener {
 
     // ── Flight ──────────────────────────────────────────
     private fun checkFlight(player: Player, data: PlayerData, to: Location, dy: Double) {
-        // Players with allowFlight (e.g. /fly) or elytra gliding bypass the flight check
-        if (player.allowFlight || player.isFlying || player.isGliding) {
-            data.airTicks = 0
-            return
-        }
-
-        // Players with the fly permission also bypass
-        if (player.hasPermission("joshymc.fly") || player.hasPermission("joshymc.anticheat.fly.bypass")) {
+        // Server-side flight state (/fly, Fly Voucher flight, Creative/Spectator, elytra) or the
+        // explicit staff bypass skip the check. Holding joshymc.fly alone does not (issue #1521):
+        // it only lets a player turn /fly on, which then sets allowFlight.
+        if (FlightCheckRules.exempt(FlightCheckRules.State(
+                allowFlight = player.allowFlight,
+                flying = player.isFlying,
+                gliding = player.isGliding,
+                explicitBypass = player.hasPermission(FlightCheckRules.BYPASS_PERMISSION),
+            ))
+        ) {
             data.airTicks = 0
             return
         }

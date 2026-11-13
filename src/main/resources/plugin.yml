@@ -1823,7 +1823,7 @@ permissions:
     description: Receive anticheat violation alerts
     default: op
   joshymc.anticheat.fly.bypass:
-    description: Bypass the anticheat fly check (also granted implicitly by joshymc.fly)
+    description: Bypass the anticheat fly check (staff only; joshymc.fly does not imply it)
     default: op
   joshymc.violation.bridge:
     description: Allow forwarding external AC violations into the admin panel (intended for console only)
