@@ -935,3 +935,91 @@ With a running 2v2 TEST match in an arena, from a second account outside the bou
   refused by the match listener's damage rule, and their explosions break no arena blocks.
 - Paper's exact event coverage (e.g. which tools fire `EntityChangeBlockEvent`) needs the live
   checklist above.
+
+## M. Arena entry, spectator integrity and outsider interference (issue #1524)
+
+### Review: what already existed
+
+Before this issue the match listener already refused outsiders walking or teleporting into an
+arena a match holds, refused damage between a match and anyone outside it (melee, projectiles,
+potions, clouds, combustion resolved to a player), kept spectators out of damage, building,
+buckets, containers, entity use and item pickup, and the F-6 guard (section L) kept the arena's
+blocks from changing. `outsidersIn` refuses to start a match while someone stands in the arena, and
+`/lifesteal admin ranked spectate` (D-L7, #1511) teleports spectators to the spectator point only
+after `CombatTeleportGuard` allows it.
+
+### Gaps closed
+
+| Gap | Fix |
+|---|---|
+| An outsider already inside a protected arena (logged in there, respawned at a bed/anchor there, ridden in, or standing there while a queue proposal reserved it) was never moved | A 1-second sweep in `LifestealRankedManager` moves them to the arena's spectator point, else the Lifesteal spawn |
+| Riders (horses, boats, minecarts) don't fire `PlayerMoveEvent`, so they could ride in | `onVehicleMove` stops the vehicle at the boundary and puts the outsider back outside |
+| Arenas reserved by a queue proposal could be walked into (and an outsider standing there blocked the match from starting) | entry rules and the sweep cover reserved arenas; the proposal's own players may go in |
+| A tamed mob whose owner is offline counted as environmental damage | resolved as `ABSENT_OWNER` and refused like an outsider |
+| A tamed llama's spit, Evoker Fangs and clouds weren't followed back to a player | shared `RankedDamageSources` resolver (projectile → shooter → pet → owner, TNT → igniter, cloud → thrower) |
+| Outsiders' pets could still target participants | `EntityTargetLivingEntityEvent` refused unless the owner fights in that match |
+| Spectators could drop items, step on pressure plates/tripwires and hit non-player entities (End Crystals, mounts) | refused |
+| Outsiders could detonate a participant's End Crystal from over the boundary, or hit mounts/mobs in the arena | non-player entities in an arena in use can only be hurt by that match's participants |
+| Spawn eggs, thrown eggs, mob buckets, golem/wither builds and breeding in an arena in use | refused (natural and spawner spawns stay) |
+| Pets following an outsider, endermen/shulkers hopping in, mobs sent through portals | non-player entities can't teleport or portal into an arena in use from outside |
+| Outsiders could use a participant (leads, name tags) or any entity inside the arena | refused |
+| A spectator who left the arena's world stayed registered (restricted everywhere) | spectating ends on world change |
+
+### Relocation rules (`RankedArenaAccess.relocation`)
+
+1. Participants of the match (and, for a reservation, the proposal's players) are never moved.
+2. Dead players and players this system is already moving (an expected teleport, a restore, a
+   spectate request) are left alone.
+3. **Combat-tagged outsiders are never moved** (the answer comes from `CombatTeleportGuard`, so
+   moving them can't end their fight early). They stay where they are and every interference rule
+   keeps refusing them: they can't hurt participants or be hurt by them, can't change blocks, use
+   blocks, entities or pressure plates, and can't pick anything up. They're told once every few
+   seconds and moved once their tag ends.
+4. One attempt per player every 5 seconds, so a failed or refused teleport can't loop.
+5. The destination must be loaded, `SafeSpots`-safe and outside every protected arena; an unloaded
+   spectator point is loaded asynchronously for the next sweep. No destination = deny only.
+
+Protection follows the authoritative state only: a match from PREPARING to FINISHING, and an open
+queue proposal. Nothing is stored, so a completed or cancelled match, an expired proposal or a
+restart releases the arena at once, and spectator registrations end with the match (release), on
+quit and on a world change.
+
+Unchanged: team sizes, Elo, bring-your-own gear, snapshots and restoration, heart limits and
+cooldown, the heart transfer itself, disconnect forfeits, matchmaking and the time limit.
+
+### Checks
+
+`./gradlew -I scripts/ranked-arena-access-check.init.gradle.kts rankedArenaAccessCheck`: entry
+for participants, reserved players and outsiders across simultaneous matches; relocation (combat
+tag, no destination, dead, retries); harm from outsiders (melee, projectiles, potions, clouds,
+TNT, online and offline owners' pets), participant combat, spectators both ways; pet targeting;
+entity harm; spawn reasons; entity arrival; and the manager/listener wiring (reserved arenas,
+memory-only zones, sweep start/stop, CombatTeleportGuard, async chunk loads, cleanup on quit and
+world change, no un-cancelling, no hearts/Elo/snapshot code).
+
+### Live Paper verification
+
+With a running 2v2 TEST match and a third account:
+
+1. Log out inside the arena before the match is reserved, then log in during the countdown: you're
+   moved to the spectator point within a second. Repeat with a bed set inside the arena and `/kill`.
+2. Ride a horse and a boat toward the boundary: you're stopped and put back outside.
+3. Get combat-tagged by a fourth account, then enter the arena by logging in inside it: you are not
+   moved while tagged, can't hurt or be hurt by participants, can't use blocks or plates, and are
+   moved once the tag ends.
+4. Send a tamed wolf at a participant, then log out with the wolf still sitting there: it neither
+   targets nor hurts them.
+5. From outside the boundary, shoot a participant's End Crystal; throw a spawn egg and a chicken egg
+   onto the arena floor: nothing happens.
+6. As a spectator, drop an item, step on a pressure plate, hit an End Crystal: all refused. Leave the
+   arena world: you stop spectating.
+7. During a queue proposal (before everyone accepts), walk into the reserved arena: refused.
+8. After a win and after `/lifesteal admin ranked cancel`, everything above works normally again.
+
+### Limitations
+
+- Wild (untamed) mobs that walk into the arena are left alone: they are part of normal Minecraft
+  and their damage is environmental, as before.
+- A TEST proposal waiting for acceptance still doesn't reserve its arena (section L).
+- The sweep runs once a second, so an outsider who logs in inside an arena can stand there for up
+  to a second; nothing they do in that time reaches the match.

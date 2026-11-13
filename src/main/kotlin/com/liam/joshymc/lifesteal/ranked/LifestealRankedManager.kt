@@ -400,6 +400,8 @@ class LifestealRankedManager(private val plugin: Joshymc) {
             recover()
             flagInterruptedRestores()
         }
+        // Issue #1524: restarted after a reload cancelled it; does nothing while no arena is protected.
+        startAccessSweep()
         monitor.refresh()
         try {
             val loaded = store.arenas()
@@ -467,6 +469,10 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         spectating.clear()
         spectateRequests.clear()
         expectedTeleports.clear()
+        accessTask?.cancel()
+        accessTask = null
+        relocationAttempts.clear()
+        accessHints.clear()
     }
 
     // ── Match creation ──────────────────────────────────────
@@ -1713,6 +1719,180 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         return null
     }
 
+    /** Issue #1524: a spectator who leaves the arena's world stops spectating (no stale restrictions elsewhere). */
+    fun onWorldChange(player: Player) {
+        val id = spectating[player.uniqueId] ?: return
+        val match = matches[id]
+        if (match != null && player.world.name == match.arena.world) return
+        spectating.remove(player.uniqueId)
+        match?.spectators?.remove(player.uniqueId)
+        tell(player, "You left the arena's world, so you stopped spectating.", NamedTextColor.GRAY)
+    }
+
+    // ── Arena access (issue #1524) ──────────────────────────
+
+    /** A protected arena with its rules zone (who may be inside). */
+    class AccessZone(val zone: RankedArenaAccess.Zone, val arena: RankedArena) {
+        fun contains(loc: Location): Boolean =
+            loc.world?.name == arena.world && arena.bounds?.contains(loc.x, loc.y, loc.z) == true
+    }
+
+    /**
+     * Arenas outsiders may not be in right now: every match holding players (PREPARING through
+     * FINISHING) and every arena a queue proposal reserves. Built from memory only (no database,
+     * no world access), so nothing outlives the match or proposal that protects it.
+     */
+    fun accessZones(): List<AccessZone> {
+        val tick = Bukkit.getCurrentTick()
+        if (tick == zonesTick) return zonesCache
+        zonesTick = tick
+        zonesCache = buildAccessZones()
+        return zonesCache
+    }
+
+    private var zonesTick = Int.MIN_VALUE
+    private var zonesCache: List<AccessZone> = emptyList()
+
+    /** A queue proposal reserves an arena right now (the listener's cheap early return). */
+    val anyReservation: Boolean
+        get() = try { plugin.lifestealRankedQueueManager.reservedArenas().isNotEmpty() } catch (_: Exception) { false }
+
+    private fun buildAccessZones(): List<AccessZone> {
+        val proposals = try {
+            plugin.lifestealRankedQueueManager.proposals().filter { !it.state.terminal }
+        } catch (_: Exception) {
+            emptyList()
+        }
+        if (matches.isEmpty() && proposals.isEmpty()) return emptyList()
+        val out = ArrayList<AccessZone>()
+        val seen = HashSet<String>()
+        for (m in matches.values) {
+            if (!m.state.holdsPlayers || m.arena.bounds == null) continue
+            if (seen.add(m.arena.id)) out += AccessZone(RankedArenaAccess.Zone(m.arena.id, m.id), m.arena)
+        }
+        for (p in proposals) {
+            val arena = arenas[p.arenaId]?.arena ?: continue
+            if (arena.bounds == null) continue
+            if (seen.add(arena.id)) out += AccessZone(RankedArenaAccess.Zone(arena.id, null, p.participants.toSet()), arena)
+        }
+        return out
+    }
+
+    fun occupantOf(zone: AccessZone, uuid: UUID): RankedArenaAccess.Occupant =
+        RankedArenaAccess.occupant(zone.zone, uuid, held[uuid])
+
+    /** The protected arena at [loc] that refuses [uuid], or null. */
+    fun refusingZoneAt(uuid: UUID, loc: Location, zones: List<AccessZone> = accessZones()): AccessZone? =
+        zones.firstOrNull { it.contains(loc) && RankedArenaAccess.entryRefused(occupantOf(it, uuid)) }
+
+    /** When each outsider's last relocation was tried (bounded: cleared on quit and when no arena is protected). */
+    private val relocationAttempts = HashMap<UUID, Long>()
+    private val accessHints = HashMap<UUID, Long>()
+    private var accessTask: BukkitTask? = null
+
+    private fun startAccessSweep() {
+        if (accessTask?.isCancelled == false) return
+        accessTask = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
+            try {
+                sweepArenaAccess()
+            } catch (e: Exception) {
+                plugin.logger.warning("[Ranked] Arena access sweep failed: ${e.message}")
+            }
+        }, ACCESS_SWEEP_TICKS, ACCESS_SWEEP_TICKS)
+    }
+
+    private fun accessHint(player: Player, text: String, color: NamedTextColor) {
+        val now = System.currentTimeMillis()
+        val last = accessHints[player.uniqueId]
+        if (last != null && now - last < ACCESS_HINT_MILLIS) return
+        accessHints[player.uniqueId] = now
+        tell(player, text, color)
+    }
+
+    /**
+     * Once a second: anyone who is inside a protected arena without belonging there (logged in or
+     * respawned inside it, ridden in, or standing there when the arena was reserved) is moved to
+     * the arena's spectator point, else the Lifesteal spawn, never into another protected arena
+     * and never more than once per [RankedArenaAccess.RETRY_MILLIS]. Combat-tagged outsiders
+     * aren't moved (that would end their fight); they stay and every interference rule refuses
+     * them ([RankedArenaAccess.relocation]).
+     */
+    private fun sweepArenaAccess() {
+        if (!active) return
+        val zones = accessZones()
+        if (zones.isEmpty()) {
+            relocationAttempts.clear()
+            return
+        }
+        val now = System.currentTimeMillis()
+        for (zone in zones) {
+            val world = Bukkit.getWorld(zone.arena.world) ?: continue
+            val b = zone.arena.bounds ?: continue
+            for (player in world.players) {
+                if (!b.contains(player.location.x, player.location.y, player.location.z)) continue
+                val uuid = player.uniqueId
+                val occupant = occupantOf(zone, uuid)
+                if (!RankedArenaAccess.entryRefused(occupant)) continue
+                val destination = relocationTarget(zone, zones)
+                val decision = RankedArenaAccess.relocation(
+                    RankedArenaAccess.RelocationFacts(
+                        occupant = occupant,
+                        dead = player.isDead,
+                        beingMoved = expectedTeleports.containsKey(uuid) || uuid in restoring || uuid in spectateRequests,
+                        teleportProblem = com.liam.joshymc.teleport.CombatTeleportGuard.problem(plugin, player),
+                        hasDestination = destination != null,
+                        lastAttemptAt = relocationAttempts[uuid],
+                        now = now,
+                    ),
+                )
+                when (decision) {
+                    RankedArenaAccess.Relocation.STAY, RankedArenaAccess.Relocation.WAIT -> Unit
+                    RankedArenaAccess.Relocation.DENY_ONLY -> accessHint(player, RankedArenaAccess.MSG_HELD, NamedTextColor.RED)
+                    RankedArenaAccess.Relocation.MOVE -> {
+                        relocationAttempts[uuid] = now
+                        val target = destination ?: continue
+                        teleport(player, target).thenAccept { ok ->
+                            plugin.server.scheduler.runTask(plugin, Runnable {
+                                if (ok == true) {
+                                    tell(player, RankedArenaAccess.MSG_MOVED, NamedTextColor.YELLOW)
+                                    plugin.logger.info("[Ranked] Moved ${player.name} out of arena ${zone.arena.id} (${zone.zone.matchId ?: "reserved"}).")
+                                }
+                            })
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Where an outsider found in [zone] goes: the arena's first spectator point (validated to be
+     * outside the boundary), else the Lifesteal spawn; null when neither is loaded, safe and
+     * outside every protected arena right now (an unloaded spectator point is loaded for the next
+     * sweep, never synchronously).
+     */
+    private fun relocationTarget(zone: AccessZone, zones: List<AccessZone>): Location? {
+        val world = Bukkit.getWorld(zone.arena.world)
+        val candidates = ArrayList<Location>(2)
+        val point = zone.arena.spectators.firstOrNull()
+        if (world != null && point != null) candidates += Location(world, point.x, point.y, point.z, point.yaw, point.pitch)
+        fallbackLocation()?.let { candidates += it }
+        for (loc in candidates) {
+            val w = loc.world ?: continue
+            if (!w.isChunkLoaded(loc.blockX shr 4, loc.blockZ shr 4)) {
+                w.getChunkAtAsync(loc.blockX shr 4, loc.blockZ shr 4, false)
+                continue
+            }
+            if (RankedArenaAccess.destinationUsable(zones.any { it.contains(loc) }, SafeSpots.problem(loc))) return loc
+        }
+        return null
+    }
+
+    fun onAccessQuit(uuid: UUID) {
+        relocationAttempts.remove(uuid)
+        accessHints.remove(uuid)
+    }
+
     // ── Records ─────────────────────────────────────────────
 
     fun recentMatches(limit: Int) = store.recentMatches(limit)
@@ -1735,5 +1915,8 @@ class LifestealRankedManager(private val plugin: Joshymc) {
         const val PREPARATION_TIMEOUT_TICKS = 20L * 20L
         /** Issue #1498: how often the fight re-checks its participants for restricted states (1s). */
         const val INTEGRITY_CHECK_TICKS = 20L
+        /** Issue #1524: how often outsiders inside a protected arena are looked for (1s). */
+        const val ACCESS_SWEEP_TICKS = 20L
+        private const val ACCESS_HINT_MILLIS = 5_000L
     }
 }
