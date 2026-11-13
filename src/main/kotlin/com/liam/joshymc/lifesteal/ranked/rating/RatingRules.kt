@@ -25,6 +25,12 @@ import java.util.UUID
  * - [Limit.REPEATED_ROSTER]: rated matches, under any team ids, whose rosters are the same
  *   opponents by [sameOpponents]. Disbanding, recreating or renaming a team changes nothing here,
  *   because it is computed from the participants' UUIDs in the stored match history.
+ * - [Limit.PLAYER_PAIR] (issue #1527): rated matches, under any team ids and with any teammates, in
+ *   which one player of this match stood against one opposing player of this match. It closes the
+ *   gap [sameOpponents] leaves on purpose (it ignores a single incidental opponent pair): two players
+ *   who keep meeting by rotating their teammates. Without a team change two players only meet as
+ *   their two teams, which [Limit.TEAM_PAIR] already caps, so in practice this only adds a limit
+ *   when a player moved teams.
  */
 object RatingRules {
 
@@ -54,7 +60,7 @@ object RatingRules {
     }
 
     /** Which same-opponent limit made a match unrated (issue #1499). */
-    enum class Limit { TEAM_PAIR, REPEATED_ROSTER }
+    enum class Limit { TEAM_PAIR, REPEATED_ROSTER, PLAYER_PAIR }
 
     /**
      * Issue #1499: the roster-overlap rule. An earlier match ([prevA] vs [prevB]) counts as **the
@@ -88,6 +94,8 @@ object RatingRules {
      * [ratedBetweenPair] = rated matches between these two teams inside the same-opponent window,
      * not counting this one. [repeatedRosters] = rated matches inside the same window, under any
      * team ids, whose rosters are the same opponents by [sameOpponents] (issue #1499), not counting this one.
+     * [repeatedPair] = the most rated matches inside the same window, under any team ids, in which one
+     * opposing player pair of this match already stood on opposite sides (issue #1527), not counting this one.
      */
     fun decide(
         match: RankedStore.MatchRecord,
@@ -96,6 +104,7 @@ object RatingRules {
         sameOpponentLimit: Int,
         ratedBetweenPair: Int,
         repeatedRosters: Int = 0,
+        repeatedPair: Int = 0,
     ): Verdict {
         when (match.state) {
             MatchState.COMPLETED -> Unit
@@ -130,6 +139,9 @@ object RatingRules {
         }
         if (sameOpponentLimit > 0 && repeatedRosters >= sameOpponentLimit) {
             return Verdict.Unrated("most of these players already played $repeatedRosters rated match(es) against each other recently, under any team (repeated-opponent limit $sameOpponentLimit)", Limit.REPEATED_ROSTER)
+        }
+        if (sameOpponentLimit > 0 && repeatedPair >= sameOpponentLimit) {
+            return Verdict.Unrated("two of these players already faced each other in $repeatedPair rated match(es) recently, whatever their teams or teammates (repeated-opponent limit $sameOpponentLimit)", Limit.PLAYER_PAIR)
         }
         return Verdict.Rated(winner, a.map { it.uuid }, b.map { it.uuid })
     }

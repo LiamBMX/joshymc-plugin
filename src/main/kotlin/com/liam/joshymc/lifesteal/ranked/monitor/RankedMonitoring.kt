@@ -106,7 +106,11 @@ object RankedMonitorRules {
     ): Finding? {
         if (settings == null || !settings.enabled || sideA.isEmpty() || sideB.isEmpty()) return null
         val subject = pairKey(sideA.map { it.toString() }.sorted().joinToString(","), sideB.map { it.toString() }.sorted().joinToString(","))
-        val what = if (limit == "REPEATED_ROSTER") "mostly the same players" else "the same two teams"
+        val what = when (limit) {
+            "REPEATED_ROSTER" -> "mostly the same players"
+            "PLAYER_PAIR" -> "two players who already faced each other (with other teammates)"
+            else -> "the same two teams"
+        }
         val recreated = if (earlierOtherTeams.isEmpty()) "" else "; the earlier matches were played under ${earlierOtherTeams.size} other team id(s) (possible team recreation)"
         return Finding(
             Kind.RATING_LIMIT_REACHED, subject, sideA + sideB, teams,

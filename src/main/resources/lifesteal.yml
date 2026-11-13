@@ -149,7 +149,8 @@ ranked-team-wars:
     # (/ranked queue) is rated, so two friendly teams can't farm each other. Staff test matches are
     # never rated.
     rate-challenges: false
-    # Anti-farming: at most this many rated matches between the same two teams in
+    # Anti-farming: at most this many rated matches between the same two teams (or, by player UUID,
+    # mostly the same rosters or the same two opposing players, under any team) in
     # same-opponent-window-hours (0 = no limit). Matches past the limit still count as played but
     # are recorded as unrated.
     same-opponent-limit: 3

@@ -210,10 +210,13 @@ class RatingStore(private val db: SqliteDatabase) {
             // Issue #1499: the same limit by player UUIDs, so recreated/renamed teams don't reset it.
             // Read inside this transaction, like the team count, so matches finishing together are
             // counted one after the other.
-            val repeats = if (policy.sameOpponentLimit > 0) repeatedRosterMatches(match.seasonId, participants, since, matchId) else emptyList()
-            when (val verdict = RatingRules.decide(match, participants, policy.rateChallenges, policy.sameOpponentLimit, pairCount, repeats.size)) {
+            val rosterRepeats = if (policy.sameOpponentLimit > 0) repeatedRosterMatches(match.seasonId, participants, since, matchId) else emptyList()
+            // Issue #1527: the same limit per opposing player pair, so rotating teammates doesn't reset it either.
+            val pairRepeat = if (policy.sameOpponentLimit > 0) mostRepeatedOpponentPair(match.seasonId, participants, since, matchId) else null
+            when (val verdict = RatingRules.decide(match, participants, policy.rateChallenges, policy.sameOpponentLimit, pairCount, rosterRepeats.size, pairRepeat?.matches?.size ?: 0)) {
                 is RatingRules.Verdict.NotReady -> result = Finalized.NotReady(matchId, verdict.reason)
                 is RatingRules.Verdict.Unrated -> {
+                    val repeats = if (verdict.limit == RatingRules.Limit.PLAYER_PAIR) pairRepeat?.matches.orEmpty() else rosterRepeats
                     writeResult(match, ResultStatus.UNRATED, verdict.reason, now)
                     result = Finalized.Unrated(
                         matchId, verdict.reason, participants.map { it.uuid }, match.test || match.kind == com.liam.joshymc.lifesteal.ranked.MatchKind.TEST,
@@ -338,6 +341,41 @@ class RatingStore(private val db: SqliteDatabase) {
             val rec = matches.match(id)
             EarlierMatch(id, rec?.teamAId ?: earlier.firstOrNull { it.side == Side.A }?.teamId ?: "", rec?.teamBId ?: earlier.firstOrNull { it.side == Side.B }?.teamId ?: "")
         }
+    }
+
+    /** Issue #1527: one opposing player pair of a match and the earlier rated matches they already met in. */
+    data class OpponentPairRepeat(val a: UUID, val b: UUID, val matches: List<EarlierMatch>)
+
+    /**
+     * Issue #1527: the opposing player pair of [participants] (one from each side) that stood on
+     * opposite sides in the most RATED matches of [season] that ended at or after [since] (not
+     * [except]), whatever team ids or teammates those matches had; null when no pair met before.
+     * Read from the stored participant history like [repeatedRosterMatches], so it survives team
+     * changes, disbanding, recreating, renaming and restarts. Ties are broken by UUID (deterministic).
+     */
+    fun mostRepeatedOpponentPair(season: String, participants: List<RankedStore.ParticipantRecord>, since: Long, except: String): OpponentPairRepeat? {
+        val curA = participants.filter { it.side == Side.A }.map { it.uuid.toString() }.distinct()
+        val curB = participants.filter { it.side == Side.B }.map { it.uuid.toString() }.distinct()
+        if (curA.isEmpty() || curB.isEmpty()) return null
+        val marksA = curA.joinToString(",") { "?" }
+        val marksB = curB.joinToString(",") { "?" }
+        val rows = db.query(
+            "SELECT pa.uuid AS a, pb.uuid AS b, r.match_id AS id FROM lifesteal_ranked_rating_results r " +
+                "JOIN lifesteal_ranked_participants pa ON pa.match_id = r.match_id " +
+                "JOIN lifesteal_ranked_participants pb ON pb.match_id = r.match_id AND pb.side <> pa.side " +
+                "WHERE r.status = 'RATED' AND r.season_id = ? AND r.match_ended_at >= ? AND r.match_id <> ? " +
+                "AND pa.uuid IN ($marksA) AND pb.uuid IN ($marksB) ORDER BY pa.uuid, pb.uuid, r.match_id",
+            season, since, except, *curA.toTypedArray(), *curB.toTypedArray(),
+        ) { Triple(it.getString("a"), it.getString("b"), it.getString("id")) }
+        val best = rows.groupBy { it.first to it.second }
+            .map { (pair, hits) -> pair to hits.map { it.third }.distinct() }
+            .sortedWith(compareByDescending<Pair<Pair<String, String>, List<String>>> { it.second.size }.thenBy { it.first.first }.thenBy { it.first.second })
+            .firstOrNull() ?: return null
+        val earlier = best.second.map { id ->
+            val rec = matches.match(id)
+            EarlierMatch(id, rec?.teamAId ?: "", rec?.teamBId ?: "")
+        }
+        return OpponentPairRepeat(UUID.fromString(best.first.first), UUID.fromString(best.first.second), earlier)
     }
 
     /** A failed attempt (nothing of it was written): FAILED with the error, retried later. Never touches a final row. */
