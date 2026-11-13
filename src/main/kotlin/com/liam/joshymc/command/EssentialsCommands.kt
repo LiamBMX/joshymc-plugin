@@ -1,6 +1,7 @@
 package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gamemode.SurvivalSelfPerks
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.util.Msg
 import com.liam.joshymc.teleport.CombatTeleportGuard
@@ -290,6 +291,10 @@ class HealCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         val target = resolveTarget(sender, args) ?: return true
 
+        // Issue #1521: /heal on yourself is a Survival perk. Refused outside Survival whatever
+        // the permissions (shared/global LuckPerms groups, wildcards), before any cooldown is used.
+        if (refusesOutsideSurvival(plugin, sender, target)) return true
+
         // Issue #1498 (F-4): ranked participants can't be healed (not even out of combat).
         if (plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.HEAL)) return true
 
@@ -373,6 +378,10 @@ class FeedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         }
 
         val target = resolveTarget(sender, args) ?: return true
+
+        // Issue #1521: /feed on yourself is a Survival perk. Refused outside Survival whatever
+        // the permissions (shared/global LuckPerms groups, wildcards), before any cooldown is used.
+        if (refusesOutsideSurvival(plugin, sender, target)) return true
 
         // Issue #1498 (F-4): ranked participants can't be fed.
         if (plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.FEED)) return true
@@ -1275,6 +1284,18 @@ private fun formatRemaining(ms: Long): String {
 }
 
 /** True when [name] is [sender]'s own name, so `/heal <own name>` stays a self-heal. */
+/**
+ * Self-use `/heal` and `/feed` only work in Survival (issue #1521, [SurvivalSelfPerks]); healing
+ * or feeding another player stays a staff action (`.others`). True when refused (message sent).
+ */
+private fun refusesOutsideSurvival(plugin: Joshymc, sender: CommandSender, target: Player): Boolean {
+    val selfUse = sender is Player && sender == target
+    val decision = SurvivalSelfPerks.decide(plugin.gamemodeLockManager.gamemodeOf(target), selfUse)
+    if (decision == SurvivalSelfPerks.Decision.ALLOWED) return false
+    Msg.error(sender, SurvivalSelfPerks.SURVIVAL_ONLY_MESSAGE)
+    return true
+}
+
 private fun isSelf(sender: CommandSender, name: String): Boolean = sender is Player && sender.name.equals(name, ignoreCase = true)
 
 private fun resolveTarget(sender: CommandSender, args: Array<out String>): Player? {

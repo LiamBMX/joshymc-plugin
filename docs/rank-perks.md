@@ -150,3 +150,61 @@ resolved exactly like Java players. `grantDonorTier` addresses LuckPerms by UUID
   (op). `/heal <own name>` stays a self-heal. Tab completion only suggests players to holders.
   **Staff who heal/feed others through an explicit `joshymc.heal`/`joshymc.feed` LuckPerms node
   (not op, not a wildcard) need the new `.others` node added.**
+
+## F. Audit #1505 P1 fixes (issue #1521)
+
+### P1-1: `joshymc.fly` no longer exempts players from the anticheat fly check
+
+`AntiCheatManager.checkFlight` used to skip the check for anyone holding `joshymc.fly`, whether
+or not they had actually turned flight on, so a donor rank or a timed Fly Voucher node was also a
+fly-hack exemption. The check now goes through the Bukkit-free `manager/FlightCheckRules`, which
+only looks at **server-side flight state** (`allowFlight`, `isFlying`, elytra gliding) and the
+explicit staff node `joshymc.anticheat.fly.bypass` (op, never a donor node, no longer described as
+implied by `joshymc.fly`).
+
+- `/fly` (permanent `joshymc.fly` or Fly Voucher time) sets `allowFlight`, so legitimate flight is
+  still exempt while it's on. Creative/Spectator, ModMode, spawn flight and claim-flight talismans
+  set it too.
+- When timed flight runs out, `FlightTimeManager` clears `allowFlight` after the landing grace, so
+  an expired voucher can't keep an exemption. Restores on join/world change/gamemode switch only
+  happen through `FlightRestore` with `restoreBlock(player) == null` (needs `joshymc.fly` or timed
+  flight, Survival not locked away, not combat-tagged/arena/event/ranked).
+- Survival flight is stripped on arriving in a non-Survival world (`stripOutsideSurvival`).
+- Limitation: a *permanent* `joshymc.fly` node removed in LuckPerms while the player is online and
+  flying leaves `allowFlight` on until they toggle `/fly`, reconnect or change gamemode (vanilla
+  resets it and the restore refuses). JoshyMC can't strip it on its own because other systems
+  (talismans, ModMode, spawn flight, other plugins) also set `allowFlight`. Use `/fly <player>`.
+
+### P1-2: self `/heal` and `/feed` are Survival only, enforced in the plugin
+
+`/heal` and `/feed` stay NETWORK commands (staff use them on every server), but using them **on
+yourself** is a Survival donor perk. The executors now ask the Bukkit-free
+`gamemode/SurvivalSelfPerks` with the target's gamemode (`gamemodeLockManager.gamemodeOf`):
+self-use outside Survival is refused with "This command is only available on Survival.", before
+the cooldown is used. No permission is an input, so global LuckPerms groups, a shared LuckPerms
+database, `joshymc.heal.bypass` and wildcards (`*`, op) can't override it. Aliases, `joshymc:heal`,
+`/sudo`, NPC and portal commands all run the same executor.
+
+- Survival self-use, its 3-minute cooldowns and `.bypass` are unchanged.
+- Healing/feeding **another** player still needs `joshymc.heal.others` / `joshymc.feed.others`
+  (staff), and still refuses combat-tagged targets (`/heal`) and ranked participants.
+- The `/admin` panel's Heal button is an audited Admin-tier staff tool and is unchanged.
+- Ordinary food and natural regeneration are untouched (only the two commands changed).
+
+Checks: `./gradlew -I scripts/rank-security-check.init.gradle.kts rankSecurityCheck`.
+
+### LuckPerms contexts (recommended, not applied by the plugin)
+
+The plugin doesn't know whether production LuckPerms storage is shared, and it never changes
+groups or parents. Donor grants (`grantDonorTier`) and the Discord verification group add global
+parent nodes. The code-level gates above work even when donor permissions are global. To also keep
+other Survival perks off Lifesteal when storage is shared:
+
+1. Give each server a distinct `server:` in its LuckPerms `config.yml` (e.g. `survival`,
+   `lifesteal`).
+2. Put Survival-only perk nodes on the tier groups with that context, e.g.
+   `/lp group scout permission set joshymc.heal true server=survival`, then unset the global one
+   with `/lp group scout permission unset joshymc.heal`. Don't move players' parents.
+3. Keep player parents (tier, Media, Discord) as they are; only the groups' own nodes get the
+   context. Verify with `/lp user <name> permission check joshymc.heal` on each server.
+4. Never give donor groups `joshymc.anticheat.*`, `joshymc.*` or `*`.
