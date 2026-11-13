@@ -143,6 +143,21 @@ Only created where Lifesteal is hosted.
   anyone). Only RATED matches count, so the first three stay rated and unrated rematches never
   extend the block. Heart rules and inventory restoration are untouched: hearts still move in an
   unrated match, and the players are told so.
+- **Repeated opposing players (issue #1527)**: the roster rule above deliberately ignores a single
+  repeated opponent pair, which left one bypass: two players who keep meeting by rotating their
+  teammates (and teams) every match. So the same limit also applies per **opposing player pair**:
+  `RatingRules.Limit.PLAYER_PAIR`, counted inside the finalize transaction by
+  `RatingStore.mostRepeatedOpponentPair` from the same stored participant history (RATED matches
+  of the season inside the window in which one player of each side of this match stood on opposite
+  sides, whatever their team ids, teammates or match size). Reaching `same-opponent-limit` makes
+  the match UNRATED for everyone, like the other two limits. Players who were only teammates never
+  count, and without a team change two players only meet as their two teams, which the team-pair
+  limit already caps, so in practice this only adds a limit after somebody changed teams. It never
+  blocks queueing or a match; hearts still move.
+- **The window**: an earlier match counts when it ended at or after this match's end minus
+  `same-opponent-window-hours` (wall-clock epoch milliseconds stored in the database, so it is the
+  same after a restart). Matches that ended later count too: a match whose rating is retried after
+  newer ones were rated is judged against them, never rated past the limit.
 - **Disbanding / recreating / renaming**: Team Elo is keyed by the team id; a new team (even with
   a reused name) gets a new id and the initial rating. A disbanded team's rows and history stay for
   audits (`/lifesteal admin ranked rating team <id>`); it is no longer an active team. Its players'

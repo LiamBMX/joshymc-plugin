@@ -193,6 +193,7 @@ class LifestealRatingManager(private val plugin: Joshymc) {
         val why = when (result.limit) {
             RatingRules.Limit.TEAM_PAIR -> "same-opponent rating limit reached: these two teams already played ${result.earlierCount} rated match(es) against each other recently"
             RatingRules.Limit.REPEATED_ROSTER -> "repeated opponent roster limit reached: mostly the same players already played ${result.earlierCount} rated match(es) against each other recently, whatever their teams"
+            RatingRules.Limit.PLAYER_PAIR -> "repeated opponent limit reached: two of these players already faced each other in ${result.earlierCount} rated match(es) recently, whatever their teams or teammates"
             null -> result.reason
         }
         return Component.text("This match didn't change Elo ($why). ", NamedTextColor.GRAY)
