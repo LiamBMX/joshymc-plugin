@@ -906,7 +906,22 @@ permissions:
     description: Allows managing NPCs
     default: op
   joshymc.crate.admin:
-    description: Allows managing crate locations and giving keys
+    description: Deprecated, grants nothing (see joshymc.crate.*)
+    default: false
+  joshymc.crate.givekey:
+    description: /crate givekey
+    default: op
+  joshymc.crate.force:
+    description: /crate force
+    default: op
+  joshymc.crate.monthly:
+    description: /crate monthly
+    default: op
+  joshymc.crate.display:
+    description: /crate display, rotate, models
+    default: op
+  joshymc.crate.location:
+    description: /crate setlocation, removelocation, locations
     default: op
   joshymc.crate.rewards.recover:
     description: Resolve crash-interrupted crate rewards

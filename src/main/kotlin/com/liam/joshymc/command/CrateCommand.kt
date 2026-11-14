@@ -3,6 +3,7 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.crate.CrateDisplayTuning
 import com.liam.joshymc.crate.CrateFacing
+import com.liam.joshymc.crate.CratePermissions
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
@@ -66,7 +67,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
      * click handler, the registration, or the crate itself.
      */
     private fun handleForceOpen(sender: CommandSender, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.crate.admin")) {
+        if (!sender.hasPermission("joshymc.crate.force")) {
             Msg.noPermission(sender)
             return
         }
@@ -105,7 +106,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
      * crates so admins can spot off-by-one registrations.
      */
     private fun handleDiagnose(sender: CommandSender) {
-        if (!sender.hasPermission("joshymc.crate.admin")) {
+        if (!CratePermissions.diagnose { sender.hasPermission(it) }) {
             Msg.noPermission(sender)
             return
         }
@@ -180,7 +181,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
      * setlocation commands actually persisted.
      */
     private fun handleLocations(sender: CommandSender) {
-        if (!sender.hasPermission("joshymc.crate.admin")) {
+        if (!sender.hasPermission("joshymc.crate.location")) {
             Msg.noPermission(sender)
             return
         }
@@ -199,7 +200,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     }
 
     private fun handleSetLocation(sender: CommandSender, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.crate.admin")) {
+        if (!sender.hasPermission("joshymc.crate.location")) {
             Msg.noPermission(sender)
             return
         }
@@ -229,6 +230,8 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
         }
 
         if (plugin.crateManager.setCrateLocation(block, crateType)) {
+            com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "CRATE_LOCATION_SET",
+                details = "crate=$crateType at=${block.world.name},${block.x},${block.y},${block.z}")
             plugin.commsManager.send(
                 player,
                 Component.text("Crate location set for ", NamedTextColor.GREEN)
@@ -275,7 +278,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     }
 
     private fun handleRemoveLocation(sender: CommandSender) {
-        if (!sender.hasPermission("joshymc.crate.admin")) {
+        if (!sender.hasPermission("joshymc.crate.location")) {
             Msg.noPermission(sender)
             return
         }
@@ -291,7 +294,10 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             return
         }
 
+        val removedType = plugin.crateManager.getLocationAt(block)?.crateType
         if (plugin.crateManager.removeCrateLocation(block)) {
+            com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "CRATE_LOCATION_REMOVE",
+                details = "crate=${removedType ?: "?"} at=${block.world.name},${block.x},${block.y},${block.z}")
             plugin.commsManager.send(
                 player,
                 Component.text("Crate location removed at ${block.x}, ${block.y}, ${block.z}.", NamedTextColor.GREEN)
@@ -302,7 +308,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     }
 
     private fun handleGiveKey(sender: CommandSender, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.crate.admin")) {
+        if (!sender.hasPermission("joshymc.crate.givekey")) {
             Msg.noPermission(sender)
             return
         }
@@ -420,7 +426,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
      * removes every crate model display and redraws them from the current crate locations.
      */
     private fun handleModels(sender: CommandSender, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.crate.admin")) {
+        if (!sender.hasPermission("joshymc.crate.display")) {
             Msg.noPermission(sender)
             return
         }
@@ -502,11 +508,11 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
      * `/crate monthly [status]`, `/crate monthly set <month> [7d|12h|month-end|never]` and
      * `/crate monthly reset` (issue #1520): the monthly rotation's state, and the admin override
      * that makes rotating crates use one month until it is reset or expires. Only
-     * `joshymc.crate.admin`; set and reset are written to AdminAudit. The override only picks a
+     * `joshymc.crate.monthly` (issue #1541); set and reset are written to AdminAudit. The override only picks a
      * month: keys, rewards and every open check stay the same.
      */
     private fun handleMonthly(sender: CommandSender, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.crate.admin")) {
+        if (!sender.hasPermission("joshymc.crate.monthly")) {
             Msg.noPermission(sender)
             return
         }
@@ -633,7 +639,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
      * location), or toggles quick rotation (sneak + right-click with an empty hand).
      */
     private fun handleRotate(sender: CommandSender, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.crate.admin")) {
+        if (!sender.hasPermission("joshymc.crate.display")) {
             Msg.noPermission(sender)
             return
         }
@@ -721,7 +727,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
      * keys, rewards and every other location are untouched.
      */
     private fun handleDisplay(sender: CommandSender, args: Array<out String>) {
-        if (!sender.hasPermission("joshymc.crate.admin")) {
+        if (!sender.hasPermission("joshymc.crate.display")) {
             Msg.noPermission(sender)
             return
         }
@@ -881,30 +887,29 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     ): List<String> {
         return when (args.size) {
             1 -> {
-                val subs = mutableListOf("menu", "list", "preview", "help")
-                if (sender.hasPermission("joshymc.crate.admin")) {
-                    subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force", "models", "rotate", "display", "monthly"))
-                }
-                if (sender.hasPermission("joshymc.crate.rewards.recover")) subs.add("rewards")
+                // Issue #1541: only the admin subcommands this sender's own nodes allow.
+                val subs = listOf("menu", "list", "preview", "help") + CratePermissions.adminSubcommands { sender.hasPermission(it) }
                 subs.filter { it.startsWith(args[0], ignoreCase = true) }
             }
             2 -> when (args[0].lowercase()) {
                 "setlocation", "givekey", "preview", "force" ->
-                    plugin.crateManager.getCrateTypes().filter { it.startsWith(args[1], ignoreCase = true) }
+                    if (CratePermissions.allows(args[0]) { sender.hasPermission(it) }) {
+                        plugin.crateManager.getCrateTypes().filter { it.startsWith(args[1], ignoreCase = true) }
+                    } else emptyList()
                 "models" ->
-                    if (sender.hasPermission("joshymc.crate.admin")) {
+                    if (sender.hasPermission("joshymc.crate.display")) {
                         listOf("refresh", "monthly", "set").filter { it.startsWith(args[1], ignoreCase = true) }
                     } else emptyList()
                 "rotate" ->
-                    if (sender.hasPermission("joshymc.crate.admin")) {
+                    if (sender.hasPermission("joshymc.crate.display")) {
                         (CrateFacing.CHOICES + "mode").filter { it.startsWith(args[1], ignoreCase = true) }
                     } else emptyList()
                 "display" ->
-                    if (sender.hasPermission("joshymc.crate.admin")) {
+                    if (sender.hasPermission("joshymc.crate.display")) {
                         DISPLAY_SUBCOMMANDS.filter { it.startsWith(args[1], ignoreCase = true) }
                     } else emptyList()
                 "monthly" ->
-                    if (sender.hasPermission("joshymc.crate.admin")) {
+                    if (sender.hasPermission("joshymc.crate.monthly")) {
                         listOf("status", "set", "reset").filter { it.startsWith(args[1], ignoreCase = true) }
                     } else emptyList()
                 "rewards" ->
@@ -915,15 +920,15 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             }
             3 -> when (args[0].lowercase()) {
                 "rotate" ->
-                    if (sender.hasPermission("joshymc.crate.admin") && args[1].equals("mode", ignoreCase = true)) {
+                    if (sender.hasPermission("joshymc.crate.display") && args[1].equals("mode", ignoreCase = true)) {
                         listOf("on", "off").filter { it.startsWith(args[2], ignoreCase = true) }
                     } else emptyList()
                 "models" ->
-                    if (sender.hasPermission("joshymc.crate.admin") && args[1].equals("set", ignoreCase = true)) {
+                    if (sender.hasPermission("joshymc.crate.display") && args[1].equals("set", ignoreCase = true)) {
                         plugin.crateManager.getCrateTypes().filter { it.startsWith(args[2], ignoreCase = true) }
                     } else emptyList()
                 "display" ->
-                    if (sender.hasPermission("joshymc.crate.admin")) {
+                    if (sender.hasPermission("joshymc.crate.display")) {
                         when (args[1].lowercase()) {
                             "facing" -> CrateFacing.CHOICES
                             "rotate" -> listOf("-45", "-15", "15", "45", "default")
@@ -933,23 +938,24 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                         }.filter { it.startsWith(args[2], ignoreCase = true) }
                     } else emptyList()
                 "monthly" ->
-                    if (args[1].equals("set", ignoreCase = true) && sender.hasPermission("joshymc.crate.admin")) {
+                    if (args[1].equals("set", ignoreCase = true) && sender.hasPermission("joshymc.crate.monthly")) {
                         com.liam.joshymc.crate.CrateModels.MONTH_IDS.filter { it.startsWith(args[2], ignoreCase = true) }
                     } else emptyList()
-                "givekey" -> {
+                "givekey" -> if (!sender.hasPermission("joshymc.crate.givekey")) emptyList() else {
                     val names = plugin.server.onlinePlayers.map { it.name } + listOf("@a", "@r")
                     names.filter { it.startsWith(args[2], ignoreCase = true) }
                 }
                 else -> emptyList()
             }
             4 -> when (args[0].lowercase()) {
-                "givekey" -> listOf("1", "5", "10", "32", "64").filter { it.startsWith(args[3], ignoreCase = true) }
+                "givekey" -> if (!sender.hasPermission("joshymc.crate.givekey")) emptyList()
+                    else listOf("1", "5", "10", "32", "64").filter { it.startsWith(args[3], ignoreCase = true) }
                 "monthly" ->
-                    if (args[1].equals("set", ignoreCase = true) && sender.hasPermission("joshymc.crate.admin")) {
+                    if (args[1].equals("set", ignoreCase = true) && sender.hasPermission("joshymc.crate.monthly")) {
                         listOf("1d", "7d", "12h", "month-end", "never").filter { it.startsWith(args[3], ignoreCase = true) }
                     } else emptyList()
                 "models" ->
-                    if (sender.hasPermission("joshymc.crate.admin") && args[1].equals("set", ignoreCase = true)) {
+                    if (sender.hasPermission("joshymc.crate.display") && args[1].equals("set", ignoreCase = true)) {
                         plugin.crateManager.models.chestModelKeys().filter { it.startsWith(args[3], ignoreCase = true) }
                     } else emptyList()
                 else -> emptyList()

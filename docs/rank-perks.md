@@ -112,7 +112,7 @@ Bonuses from `rank-perks` never stack: only the single highest eligible tier cou
 
 Every rank: never `*`, `joshymc.*`, `joshymc.kit.*`, `joshymc.admin*`, `joshymc.staff.*`,
 `joshymc.punish.<level>`, `joshymc.eco`, `joshymc.give`, `joshymc.vouchers`,
-`joshymc.rankvoucher.admin`, `joshymc.crate.admin`, `joshymc.rank*`, `joshymc.jgm.*`,
+`joshymc.rankvoucher.admin`, `joshymc.crate.givekey|force|monthly|display|location`, `joshymc.crateeditor`, `joshymc.rank*`, `joshymc.jgm.*`,
 `joshymc.*.others`, `joshymc.*.bypass`, `luckperms.*`.
 
 ## Security (CURRENT, from plugin.yml)

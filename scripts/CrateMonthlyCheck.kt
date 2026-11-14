@@ -339,10 +339,10 @@ private fun wiring() {
 
     // 40. Commands: admin only, audited.
     val monthlyCmd = body(command, "    private fun handleMonthly(")
-    check("40. /crate monthly checks joshymc.crate.admin first", monthlyCmd.indexOf("hasPermission(\"joshymc.crate.admin\")") in 0 until monthlyCmd.indexOf("\"set\" ->"))
+    check("40. /crate monthly checks joshymc.crate.monthly first", monthlyCmd.indexOf("hasPermission(\"joshymc.crate.monthly\")") in 0 until monthlyCmd.indexOf("\"set\" ->"))
     check("40. set and reset are audited", "CRATE_MONTHLY_OVERRIDE_SET" in monthlyCmd && "CRATE_MONTHLY_OVERRIDE_RESET" in monthlyCmd)
     check("expiry is audited", "CRATE_MONTHLY_OVERRIDE_EXPIRED" in displays)
     check("40. tab completion is admin only", command.substringAfter("override fun onTabComplete(").split("\"monthly\" ->").drop(1).all {
-        it.substringBefore("else emptyList()").contains("hasPermission(\"joshymc.crate.admin\")") })
-    check("no new permission node", "joshymc.crate.monthly" !in command)
+        it.substringBefore("else emptyList()").contains("hasPermission(\"joshymc.crate.monthly\")") })
+    check("monthly has its own node, never the old broad one (issue #1541)", "joshymc.crate.admin" !in command)
 }

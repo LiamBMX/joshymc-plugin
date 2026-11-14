@@ -247,7 +247,13 @@ only, L = Lifesteal only (`gamemode/GamemodeAssignments.kt`).
 | `joshymc.enchant` (op) | `/enchant` within vanilla limits (max level, item, conflicts) | permission | MEDIUM | Admin; deny on Lifesteal | **N** |
 | `joshymc.enchant.unsafe` (false) | `/enchant` past vanilla limits, up to 255 (issue #1487) | audited (`ENCHANT_UNSAFE`); such gear earns no Lifesteal rewards | HIGH | explicit grant only | **N** |
 | `joshymc.god` (op) / `joshymc.god.others` (op) | `/god` self / another player (issue #1487) | audited (`GOD_MODE`, `GOD_MODE_OTHER`); God Mode kills earn no Lifesteal rewards | MEDIUM | Admin | **N** |
-| `joshymc.crate.admin`, `joshymc.crateeditor` (op) | `/crate givekey|force`, editor | audited | HIGH | Lead Admin | S |
+| `joshymc.crate.givekey` (op) | `/crate givekey` (mints keys) | audited `CRATE_KEY_GIVE` | HIGH | Head Manager, Owner | S |
+| `joshymc.crate.force` (op) | `/crate force` (pays a reward without a key) | audited `CRATE_FORCE_OPEN` | HIGH | Head Manager, Owner | S |
+| `joshymc.crateeditor` (op) | `/crateeditor` (rewards, odds, keys, deletion; re-checked on every click) | audited `CRATE_EDITOR_*` | HIGH | Head Manager, Owner | S |
+| `joshymc.crate.monthly` (op) | `/crate monthly status|set|reset` | audited `CRATE_MONTHLY_OVERRIDE_*` | MODERATE | Lead Admin and above | S |
+| `joshymc.crate.location` (op) | `/crate setlocation|removelocation|locations`, `diagnose` | audited `CRATE_LOCATION_*` | LOW | Jr Admin and above | S |
+| `joshymc.crate.display` (op) | `/crate display|rotate|models`, quick rotate, `diagnose` | logged | LOW | Jr Admin and above (+ named builders) | S |
+| `joshymc.crate.admin` (**false**, deprecated) | nothing since issue #1541 | – | – | remove from every group | S |
 | `joshymc.sellwand.give`, `joshymc.booster` (op) | sell wands, boosters (no multiplier cap) | sell wands audited | HIGH | Head Manager (approval) | S |
 | `joshymc.spawners.admin` (op) | `/spawner give` | permission | HIGH | Lead Admin | S |
 | `joshymc.createkit`, `.editkit`, `.deletekit` (op) | kits | permission | HIGH | Admin | N |
@@ -287,12 +293,12 @@ unknown (not in the repo): verify them live.
 | Jr Mod | helper | `joshymc.punish.jrmod`, `joshymc.staff.jrmod` | helper tier | – | none | none | none |
 | Mod | jr_mod | `joshymc.punish.mod`, `joshymc.staff.mod`, `joshymc.kick`, `joshymc.admin.moderate`, `joshymc.modmode`, `joshymc.vanish`, `joshymc.alts` | moderate tier | – | none | none | `joshymc.lifesteal.combat.admin` (L) |
 | Lead Mod | mod | `joshymc.punish.leadmod`, `joshymc.staff.leadmod`, `joshymc.modmode.edit`, `joshymc.invsee`, `joshymc.enderchest.others` | moderate tier | supervises mods | none | none | – |
-| Jr Admin | lead_mod | `joshymc.punish.jradmin` | **A:** `joshymc.admin` (full panel) | – | none | none | – |
+| Jr Admin | lead_mod | `joshymc.punish.jradmin` | **A:** `joshymc.admin` (full panel) | – | `joshymc.crate.display`, `joshymc.crate.location` (no keys, no rewards) | none | – |
 | Admin | jr_admin | `joshymc.punish.admin`, `joshymc.playerdata.reset` | `joshymc.admin` | – | `joshymc.createkit`/`editkit`/`deletekit`, `joshymc.enchant` (deny on Lifesteal) | `joshymc.rank` + `.add`/`.remove` (C: only below Admin) | `joshymc.claim.admin`, `joshymc.lifesteal.team.admin` (L) |
-| Lead Admin | admin | `joshymc.punish.sradmin` (**A**) | `joshymc.admin` | supervises admins | `joshymc.give`, `joshymc.crate.admin`, `joshymc.crateeditor`, `joshymc.spawners.admin`, `joshymc.vouchers` | as Admin | `joshymc.portal`, `joshymc.reload`, `joshymc.lifesteal.hearts.admin` (L), `joshymc.lifesteal.ranked.admin` (L) |
+| Lead Admin | admin | `joshymc.punish.sradmin` (**A**) | `joshymc.admin` | supervises admins | `joshymc.give`, `joshymc.crate.monthly`, `joshymc.spawners.admin`, `joshymc.vouchers` (crate display/location inherited from Jr Admin) | as Admin | `joshymc.portal`, `joshymc.reload`, `joshymc.lifesteal.hearts.admin` (L), `joshymc.lifesteal.ranked.admin` (L) |
 | Community Manager | lead_mod | `joshymc.punish.leadmod` | moderate tier | `joshymc.event.host`, `joshymc.event.rewards`, `joshymc.event.result.override`, `joshymc.announce`, `joshymc.chat.admin` | **none** (no eco/credits/vouchers/give) | none | **no Creative, no reload, no config, no LuckPerms** |
 | Staff Manager | lead_mod | `joshymc.punish.leadmod`; **A:** `joshymc.punish.admin` for staff bans | moderate tier; **A:** `joshymc.admin` for snapshots/history | `joshymc.rank` + `joshymc.rank.staff` + `joshymc.rank.check` (promote/demote the moderation ladder; C: only below Staff Manager), `joshymc.punishment.notify` | **none** | ladder only | none |
-| Head Manager | staff_manager + community_manager | `joshymc.punish.sradmin`, `joshymc.punish.network` | `joshymc.admin` | everything above | **A:** `joshymc.tokens.give`, `joshymc.gamemode.creative` (Survival) | `joshymc.rank.add`/`.remove` (below Head Manager) | **A:** Lead Admin technical nodes |
+| Head Manager | staff_manager + community_manager | `joshymc.punish.sradmin`, `joshymc.punish.network` | `joshymc.admin` | everything above | `joshymc.crate.givekey`, `joshymc.crate.force`, `joshymc.crateeditor`, crate display/location/monthly (Survival); **A:** `joshymc.tokens.give`, `joshymc.gamemode.creative` (Survival) | `joshymc.rank.add`/`.remove` (below Head Manager) | **A:** Lead Admin technical nodes |
 | Owner | head_manager (+ **A:** `*`) | all | all | all | all, incl. `joshymc.eco`, `joshymc.credits`, voucher admin, `joshymc.vouchers.pricing`, `joshymc.creative.bypass` | console for Owner | `joshymc.jgm.lock/unlock`, `joshymc.lifesteal.progression.admin`, `joshymc.sudo` |
 
 **Restricted for everyone below Owner (R):** `joshymc.eco`, `joshymc.credits`,
@@ -411,8 +417,9 @@ lp group lead_admin permission set joshymc.give true
 lp group lead_admin permission set joshymc.reload true
 lp group lead_admin permission set joshymc.portal true
 lp group lead_admin permission set joshymc.vouchers true server=survival
-lp group lead_admin permission set joshymc.crate.admin true server=survival
-lp group lead_admin permission set joshymc.crateeditor true server=survival
+lp group jr_admin permission set joshymc.crate.display true server=survival
+lp group jr_admin permission set joshymc.crate.location true server=survival
+lp group lead_admin permission set joshymc.crate.monthly true server=survival
 lp group lead_admin permission set joshymc.spawners.admin true server=survival
 lp group lead_admin permission set joshymc.lifesteal.hearts.admin true server=lifesteal
 lp group lead_admin permission set joshymc.lifesteal.ranked.admin true server=lifesteal
@@ -432,6 +439,12 @@ lp group staff_manager permission set joshymc.punishment.notify true
 lp group head_manager permission set joshymc.rank.add true
 lp group head_manager permission set joshymc.rank.remove true
 lp group head_manager permission set joshymc.admin true
+lp group head_manager permission set joshymc.crate.givekey true server=survival
+lp group head_manager permission set joshymc.crate.force true server=survival
+lp group head_manager permission set joshymc.crateeditor true server=survival
+lp group head_manager permission set joshymc.crate.monthly true server=survival
+lp group head_manager permission set joshymc.crate.display true server=survival
+lp group head_manager permission set joshymc.crate.location true server=survival
 # Requires Owner approval:
 # lp group head_manager permission set joshymc.tokens.give true server=survival
 # lp group head_manager permission set joshymc.gamemode.creative true server=survival
@@ -465,6 +478,76 @@ Removing a risky grant later uses `lp group <group> permission unset <node>`. Ch
 with `lp user <name> permission check <node>` on each server.
 
 ---
+
+### Crate permission migration (issue #1541)
+
+`joshymc.crate.admin` used to gate every `/crate` admin subcommand, so staff trusted to
+nudge a crate model could also mint keys and force rewards (audit CR-P2-07). It now grants
+**nothing** (plugin.yml: `default: false`, no children) and every action has its own node
+(`crate/CratePermissions`). No node implies another and there is no fallback to the old node.
+
+| Node | Commands | Recommended |
+|---|---|---|
+| `joshymc.crate.givekey` | `/crate givekey` | Head Manager, Owner |
+| `joshymc.crate.force` | `/crate force` | Head Manager, Owner |
+| `joshymc.crateeditor` (unchanged) | `/crateeditor` | Head Manager, Owner |
+| `joshymc.crate.monthly` | `/crate monthly status|set|reset` | Lead Admin and above |
+| `joshymc.crate.location` | `/crate setlocation|removelocation|locations` | Jr Admin and above |
+| `joshymc.crate.display` | `/crate display|rotate|models`, rotate mode | Jr Admin and above, named builders |
+| `joshymc.crate.rewards.recover` (unchanged) | `/crate rewards` | Admin (op) |
+
+`/crate diagnose` (read-only) works with either `display` or `location`. "And above" follows
+the inheritance in §7: `jr_admin` → `admin` → `lead_admin`, plus explicit grants on
+`head_manager` (it doesn't inherit the administration track) and through it `owner`. Staff and
+Community Managers get no technical crate nodes (§7 "no technical nodes"); give one only with
+Owner approval.
+
+**Ops pass every check** through Bukkit's op default (all new nodes are `default: op`), so on
+production keep the op list restricted to the Owner and the console.
+
+Delegation: NPC commands, portal `command` actions and `/sudo` may only run `/crate`,
+`/crate menu|browse|help|list|preview` (`DelegatedCommandRules.PLAYER_SUBCOMMANDS_ONLY`).
+Every other `/crate` subcommand, and `/crateeditor`, is refused when set and when run, also
+through `/crates`, `/joshymc:crate` and other aliases.
+
+Editor audit (CR-P2-06): every attempted change in `/crateeditor` writes one `admin_logs` row
+(`/admin logs`): `CRATE_EDITOR_REWARD_ADD|REWARD_REMOVE|REWARD_WEIGHT|DELETE|CREATE|RENAME|KEY_ITEM|MODE|ANIMATION|ANIMATION_GLASS|IDLE_PARTICLE|WIN_PARTICLE|PARTICLE_COLOR`
+with `crate=`, `result=SUCCESS|REJECTED|FAILED`, `reason=` for refusals, the reward
+(`reward_index`, material, amount, weight, cleaned name, `custom_item`, `voucher=true` for
+premium vouchers, a 16-hex `fingerprint` of the stored snapshot, never the snapshot itself)
+and `previous=`/`new=`. Actor UUID/name and the time are `admin_logs` columns. The editor
+re-checks `joshymc.crateeditor` on every click and chat step, and a reward click whose list
+changed since the menu opened is refused (`reason=reward_changed`) instead of acting on the
+wrong reward. `/crate setlocation|removelocation` are audited as `CRATE_LOCATION_SET|REMOVE`.
+
+Migration checklist (Owner approval; nothing here changes LuckPerms by itself):
+1. Find who holds the old node: `lp search joshymc.crate.admin` and `lp search joshymc.crateeditor`.
+2. Grant the new nodes per the table (the §7 commands), on `server=survival`.
+3. Move `joshymc.crateeditor` from `lead_admin` to `head_manager` if it was granted there.
+4. Remove the old node everywhere: `lp group <group> permission unset joshymc.crate.admin`
+   (and `server=survival` variants). It is harmless but misleading.
+5. Check each role: `lp user <name> permission check joshymc.crate.givekey` (and the others).
+6. Confirm only the Owner is op (`ops.json`).
+7. Run the live checklist below.
+
+Live-server checks (test server with LuckPerms):
+1. A player without crate nodes: `/crate givekey`, `/crate force`, `/crate display` and
+   `/crateeditor` say no permission; `/crate` and `/crate preview <type>` work.
+2. A Jr Admin (display + location only): `/crate display scale 1.25` and `/crate setlocation`
+   work; `/crate givekey`, `/crate force`, `/crate monthly set` and `/crateeditor` are refused;
+   tab completion shows only their subcommands.
+3. A Lead Admin: `/crate monthly set december 1d` works; givekey/force/editor refused.
+4. A Head Manager: givekey, force and the editor work; each writes an `/admin logs` row.
+5. A user holding only `joshymc.crate.admin`: every crate admin subcommand is refused.
+6. An NPC with command `crate display reset` / `crate givekey vote` is refused when set.
+7. In `/crateeditor`, add, reweight and remove a reward and delete a test crate: `/admin logs`
+   shows one SUCCESS row each. Typing `abc` as a weight shows a REJECTED row.
+8. Open `/crateeditor`, remove `joshymc.crateeditor` with LuckPerms, click a reward: the menu
+   closes with no permission and a `reason=no_permission` row is written.
+9. Open the same crate in two editors, remove a reward in one, then click a reward in the other:
+   "This crate changed" and a `reason=reward_changed` row; nothing else changes.
+
+Checks: `./gradlew -I scripts/crate-admin-permission-check.init.gradle.kts crateAdminPermissionCheck`.
 
 ## 8. Survival and Lifesteal (Deliverable D, isolation)
 

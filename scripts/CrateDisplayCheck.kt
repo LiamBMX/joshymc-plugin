@@ -200,14 +200,14 @@ fun main() {
     val command = File("src/main/kotlin/com/liam/joshymc/command/CrateCommand.kt").readText()
     val display = command.substringAfter("private fun handleDisplay(").substringBefore("private fun sendUsage(")
     check("/crate display is wired", "\"display\" -> handleDisplay(sender, args)" in command)
-    check("/crate display needs joshymc.crate.admin first", display.trimStart().lines().drop(1).first().contains("if (!sender.hasPermission(\"joshymc.crate.admin\"))"))
+    check("/crate display needs joshymc.crate.display first", display.trimStart().lines().drop(1).first().contains("if (!sender.hasPermission(\"joshymc.crate.display\"))"))
     check("/crate display targets an exact registered location", "getTargetBlockExact(ROTATE_RANGE)" in display && "crateManager.getLocationAt(block)" in display)
     check("facing goes through the existing /crate rotate", "handleRotate(sender, arrayOf(\"rotate\", dir))" in display)
     check("a placement beside the block is refused before saving",
         display.indexOf("tuningProblem(loc, next)") in 0 until display.indexOf("setCrateTuning(block, next)"))
     check("/crate display never touches keys or rewards", listOf("consumeOneKey", "giveKey", "openCrate", "beginOpening").none { it in display })
-    check("display tab completion offered to admins only", command.contains("\"display\" ->\n                    if (sender.hasPermission(\"joshymc.crate.admin\"))"))
-    check("joshymc.crate.admin is op-only", Regex("joshymc\\.crate\\.admin:\\s*\\n(\\s+\\w+:.*\\n)*?\\s+default: op").containsMatchIn(File("src/main/resources/plugin.yml").readText()))
+    check("display tab completion offered to admins only", command.contains("\"display\" ->\n                    if (sender.hasPermission(\"joshymc.crate.display\"))"))
+    check("joshymc.crate.display is op-only", Regex("joshymc\\.crate\\.display:\\s*\\n(\\s+\\w+:.*\\n)*?\\s+default: op").containsMatchIn(File("src/main/resources/plugin.yml").readText()))
 
     val docs = File("docs/crate-models.md").readText()
     check("docs cover /crate display", "/crate display" in docs && "display offset" in docs && "display reset" in docs)
