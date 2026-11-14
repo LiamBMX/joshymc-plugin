@@ -664,8 +664,11 @@ class CrateModelDisplays(private val plugin: Joshymc, private val crates: CrateM
             }
         }
         spawned[key] = Spawned(display.uniqueId, hitbox?.uniqueId, chunks, model.model)
-        for (player in world.players) {
-            if (!eligible(player)) continue
+        // Issue #1540: every eligible online player, in any world. Paper keeps the show for the
+        // session, so players in another world see it when they arrive (teleport, portal,
+        // respawn), with no world-change handler or repeated showEntity calls.
+        val viewers = CrateModels.spawnViewers(Bukkit.getOnlinePlayers(), BedrockUtil::isBedrockPlayer) { it.uniqueId in packLoaded }
+        for (player in viewers) {
             player.showEntity(plugin, display)
             hitbox?.let { player.showEntity(plugin, it) }
         }

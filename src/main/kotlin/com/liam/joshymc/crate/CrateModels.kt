@@ -224,6 +224,16 @@ object CrateModels {
      */
     fun canSee(bedrock: Boolean, packLoaded: Boolean): Boolean = !bedrock && packLoaded
 
+    /**
+     * Issue #1540: who a freshly spawned (hidden-by-default) display/hitbox is shown to. Paper
+     * remembers `showEntity` per player for the whole session, whatever world the player is in,
+     * so every eligible **online** player is shown it, not only those in the crate's world (who
+     * used to be the only ones, leaving everyone arriving later with the vanilla chest). The
+     * world never matters here; [canSee] alone decides.
+     */
+    fun <T> spawnViewers(online: Iterable<T>, bedrock: (T) -> Boolean, packLoaded: (T) -> Boolean): List<T> =
+        online.filter { canSee(bedrock(it), packLoaded(it)) }
+
     // ── Placement and hitboxes (issue #1451) ───────────────────────────
 
     /** How far (blocks) a model may reach past its block before `hitbox: auto` adds a hitbox; lips and latches don't count. */
