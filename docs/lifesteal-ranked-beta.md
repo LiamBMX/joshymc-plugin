@@ -1023,3 +1023,69 @@ With a running 2v2 TEST match and a third account:
 - A TEST proposal waiting for acceptance still doesn't reserve its arena (section L).
 - The sweep runs once a second, so an outsider who logs in inside an arena can stand there for up
   to a second; nothing they do in that time reaches the match.
+
+## N. Team ownership and roster integrity during ranked play (issue #1530)
+
+### Review: what already existed
+
+- Match records, Elo, heart and history attribution already come from the match's own roster
+  snapshot (team ids and participant UUIDs written when the match is created, `MatchParticipant.teamId`),
+  never from live membership. `RatingStore.finalize` re-reads that record and never reads
+  `lifesteal_teams` or `lifesteal_team_members`. Inside a match, combat relation and heart
+  checks ask `matchSides` (roster sides) first (#1371).
+- Accept/leave/kick/disband were refused while an involved player was **held** by a match (#1371),
+  and `/team admin disband` refused while a member was held.
+- If a picked player leaves the team while it's queued or confirming, the queue's once-a-second
+  revalidation (`hardProblem`) cancels the entry, so a queue never runs with a changed roster.
+
+### Confirmed gaps (closed)
+
+1. **`/team transfer`, the team menu's "Make leader" and `/team admin transfer` had no ranked check
+   at all**: a team's leadership could change while it was queued, confirming, in countdown,
+   fighting or finishing.
+2. Kick and leave only looked at *held* players, so a participant already **defeated** in a running
+   match (no longer held) could be kicked or leave the team before the match ended.
+3. Player and admin disband only looked at held members: a team could be disbanded while its match
+   was still open with no held member left, or while its match was being created.
+4. A player could join a team while that team's match was running or being created.
+
+### Rules (`lifesteal/teams/RankedTeamLock`, Bukkit-free)
+
+| Change | Refused while |
+|---|---|
+| Transfer (player, GUI, admin) | the team has an open match (CREATED..FINISHING), a match being created, a ready check (queue proposal or staff test proposal), or a queue/challenge entry |
+| Disband (player, admin), join (accept) | the team has an open match or one being created |
+| Leave, kick | the involved player is on an open match roster (also after being defeated) or picked for a match being created |
+
+Members who aren't playing can still leave or be kicked. While a team is only queued or
+confirming, leaving, kicking and disbanding still just cancel the entry, as before. Nothing about
+the lock is stored: the stage is read from memory (open matches, the queue book, the test book). A
+match that completes or is cancelled, an entry that ends, or a restart releases it, so a team can
+never stay locked. A match stays open through FINISHING. Ratings are finalized afterwards from the
+immutable record, so a team change after COMPLETED can't change them. No permission bypasses the
+lock: staff end the match or entry first (`/lifesteal admin ranked cancel <match> confirm`,
+`cancelqueue`, `cancelproposal`). A refused staff transfer or disband is written to `admin_logs`
+(`LIFESTEAL_TEAM_ADMIN_TRANSFER_REFUSED_RANKED` / `LIFESTEAL_TEAM_ADMIN_DISBAND_REFUSED_RANKED`) and
+changes nothing, because it is refused before anything is handed to the team worker.
+
+### Checks
+
+`./gradlew -I scripts/ranked-team-lock-check.init.gradle.kts rankedTeamLockCheck`
+
+### Live Paper verification
+
+1. Queue a 2v2 with team A. `/team transfer <member>` is refused ("... ranked queue ..."). After `/ranked leave` it works.
+2. Start a staff TEST match A vs B. Before anyone accepts, `/team admin transfer A <member> confirm` is refused, an `admin_logs` row is written and the leader is unchanged.
+3. During the countdown and the fight, these are all refused: transfer, admin transfer, disband, admin disband, kicking a participant, and `/team leave` by a participant. The team menu's "Make leader" and "Remove" buttons give the same refusal.
+4. After one participant dies, kicking them is still refused until the match ends.
+5. Kicking a team member who isn't playing works.
+6. Invite a player to team A during its match. `/team accept A` is refused.
+7. Finish or cancel the match. Every change above works again right away. Team B (or an unrelated team C) was never affected.
+
+### Limitations
+
+- The checks run on the main thread right before the change is handed to the team worker, which
+  commits within milliseconds. A match created in that window still runs from its own roster
+  snapshot, so attribution is unaffected.
+- Lifesteal teams have no rename, officer promotion/demotion or team-switch command, so there is
+  nothing else to lock (switching teams = leave + accept, and both are covered).
