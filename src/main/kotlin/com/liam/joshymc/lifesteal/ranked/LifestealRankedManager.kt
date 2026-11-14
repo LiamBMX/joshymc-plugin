@@ -241,6 +241,13 @@ class LifestealRankedManager(private val plugin: Joshymc) {
     fun teamMatch(teamId: String): Match? =
         matches.values.firstOrNull { !it.state.terminal && (it.teamA.id == teamId || it.teamB.id == teamId) }
 
+    /**
+     * Issue #1530: the match that isn't over whose roster lists [uuid] (also after they were
+     * defeated in it), or null. Read from the open matches' own roster snapshots, like [teamMatch].
+     */
+    fun rosterMatchOf(uuid: UUID): Match? =
+        matchOf(uuid)?.takeIf { !it.state.terminal } ?: matches.values.firstOrNull { !it.state.terminal && it.roster.of(uuid) != null }
+
     /** Matches whose arena is in [world] and that hold players. */
     fun heldArenasIn(world: World): List<Match> = matches.values.filter { it.state.holdsPlayers && it.arena.world == world.name }
 

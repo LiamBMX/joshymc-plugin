@@ -14,6 +14,7 @@ import com.liam.joshymc.lifesteal.teams.LifestealTeamStore.KickResult
 import com.liam.joshymc.lifesteal.teams.LifestealTeamStore.LeaveResult
 import com.liam.joshymc.lifesteal.teams.LifestealTeamStore.Team
 import com.liam.joshymc.lifesteal.teams.LifestealTeamStore.TransferResult
+import com.liam.joshymc.staff.AdminAudit
 import com.liam.joshymc.util.Msg
 import com.liam.joshymc.util.ProfanityFilter
 import net.kyori.adventure.text.Component
@@ -280,6 +281,30 @@ class LifestealTeamManager(private val plugin: Joshymc) {
     private fun inRankedMatch(uuid: UUID): Boolean =
         try { plugin.lifestealRankedManager.holds(uuid) } catch (_: UninitializedPropertyAccessException) { false }
 
+    /**
+     * Issue #1530: the ranked facts for a change to [teamId] involving [involved], from memory only
+     * (open matches, queue entries, test proposals). Nothing is stored, so nothing can stay locked.
+     */
+    private fun rankedLockFacts(teamId: String?, involved: Iterable<UUID>): RankedTeamLock.Facts {
+        val ranked = try { plugin.lifestealRankedManager } catch (_: UninitializedPropertyAccessException) { null }
+        val queue = try { plugin.lifestealRankedQueueManager } catch (_: UninitializedPropertyAccessException) { null }
+        val match = teamId?.let { ranked?.teamMatch(it) }
+        val stage = RankedTeamLock.strongest(match?.let { RankedTeamLock.Stage.MATCH }, teamId?.let { queue?.teamLockStage(it) })
+        val rosterMatches = involved.associateWith { ranked?.rosterMatchOf(it) }
+        val roster = rosterMatches.filter { (uuid, m) -> m != null || queue?.preparing(uuid) == true }.keys
+        return RankedTeamLock.Facts(stage, match?.id ?: rosterMatches.values.firstNotNullOfOrNull { it?.id }, roster)
+    }
+
+    /** Issue #1530: why ranked play refuses [change] right now, or null (see [RankedTeamLock]). */
+    internal fun rankedLockRefusal(change: RankedTeamLock.Change, teamId: String?, involved: Iterable<UUID>, admin: Boolean = false): String? =
+        RankedTeamLock.refusal(change, rankedLockFacts(teamId, involved), admin)
+
+    /** A staff team change refused by [RankedTeamLock]: told, and written to `admin_logs`. */
+    private fun refuseAdmin(sender: CommandSender, action: String, team: Team, message: String) {
+        AdminAudit.log(plugin, sender, "LIFESTEAL_TEAM_ADMIN_${action}_REFUSED_RANKED", details = "team=${team.name} team_id=${team.id} reason=$message")
+        refuse(sender, message)
+    }
+
     // ── Checks shared by every action ───────────────────────
 
     /** Why the team system can't serve anyone right now, or null. */
@@ -394,6 +419,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         }
         teamOf(player.uniqueId)?.let { return refuse(player, "You're already in ${it.name}. Leave it first.") }
         combatRefusal(TeamCombatRules.TeamChange.ACCEPT, listOf(player.uniqueId))?.let { return refuse(player, it) }
+        teamByName(name)?.let { joined -> rankedLockRefusal(RankedTeamLock.Change.ACCEPT, joined.id, emptyList())?.let { return refuse(player, it) } }
         val uuid = player.uniqueId
         val playerName = player.name
         submit(player, uuid, { store.accept(uuid, playerName, name, maxSize, System.currentTimeMillis()) }) { result ->
@@ -444,6 +470,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         val team = teamOf(player.uniqueId) ?: return refuse(player, "You're not in a team.")
         if (team.leader == player.uniqueId) return refuse(player, leaderLeaveMessage(team))
         combatRefusal(TeamCombatRules.TeamChange.LEAVE, listOf(player.uniqueId))?.let { return refuse(player, it) }
+        rankedLockRefusal(RankedTeamLock.Change.LEAVE, team.id, listOf(player.uniqueId))?.let { return refuse(player, it) }
         val uuid = player.uniqueId
         val playerName = player.name
         submit(player, uuid, { store.leave(uuid, playerName, System.currentTimeMillis()) }) { result ->
@@ -472,6 +499,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         val target = memberByName(team, targetName) ?: return refuse(player, "$targetName isn't in your team.")
         if (target == player.uniqueId) return refuse(player, "You can't remove yourself. Use /team leave or /team disband.")
         combatRefusal(TeamCombatRules.TeamChange.KICK, listOf(player.uniqueId, target))?.let { return refuse(player, it) }
+        rankedLockRefusal(RankedTeamLock.Change.KICK, team.id, listOf(target))?.let { return refuse(player, it) }
         val actor = Actor(player.uniqueId, player.name)
         submit(player, player.uniqueId, { store.kick(actor, target, System.currentTimeMillis()) }) { result ->
             val name = nameOf(target)
@@ -498,6 +526,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         if (team.leader != player.uniqueId) return refuse(player, "Only the team leader can transfer leadership.")
         val target = memberByName(team, targetName) ?: return refuse(player, "$targetName isn't in your team.")
         if (target == player.uniqueId) return refuse(player, "You're already the leader.")
+        rankedLockRefusal(RankedTeamLock.Change.TRANSFER, team.id, emptyList())?.let { return refuse(player, it) }
         val name = nameOf(target)
         if (!confirmed) {
             return send(player, text("Make ", NamedTextColor.YELLOW).append(text(name, NamedTextColor.WHITE))
@@ -518,6 +547,7 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         if (team.leader != player.uniqueId) return refuse(player, "Only the team leader can disband the team.")
         if (settings?.allowDisbanding != true) return refuse(player, "Disbanding teams is turned off right now.")
         combatRefusal(TeamCombatRules.TeamChange.DISBAND, team.members.map { it.uuid })?.let { return refuse(player, it) }
+        rankedLockRefusal(RankedTeamLock.Change.DISBAND, team.id, emptyList())?.let { return refuse(player, it) }
         if (!confirmed) {
             return send(player, text("Disband ", NamedTextColor.RED).append(teamName(team))
                 .append(text("? All ${team.size} member(s) lose their membership. This can't be undone. ", NamedTextColor.RED))
@@ -546,6 +576,8 @@ class LifestealTeamManager(private val plugin: Joshymc) {
             val matchId = team.members.firstNotNullOfOrNull { plugin.lifestealRankedManager.matchOf(it.uuid)?.id }
             return refuse(sender, "${team.name} is playing a ranked match. Cancel it first: /lifesteal admin ranked cancel ${matchId ?: "<match>"} confirm")
         }
+        // Issue #1530: also while the team's match has no held player left, or is being created.
+        rankedLockRefusal(RankedTeamLock.Change.DISBAND, team.id, emptyList(), admin = true)?.let { return refuseAdmin(sender, "DISBAND", team, it) }
         if (!confirmed) {
             return Msg.reply(sender, text("Admin: disband ", NamedTextColor.RED).append(teamName(team))
                 .append(text(" (${team.size} member(s))? Only its team data changes; hearts, inventories and balances are untouched. ", NamedTextColor.RED))
@@ -563,6 +595,8 @@ class LifestealTeamManager(private val plugin: Joshymc) {
         val team = teamByName(teamName) ?: return refuse(sender, "There's no team called $teamName.")
         val target = memberByName(team, targetName) ?: return refuse(sender, "$targetName isn't a member of ${team.name}.")
         if (target == team.leader) return refuse(sender, "${nameOf(target)} already leads ${team.name}.")
+        // Issue #1530: never under a registered match or queue entry; staff end it first (no bypass).
+        rankedLockRefusal(RankedTeamLock.Change.TRANSFER, team.id, emptyList(), admin = true)?.let { return refuseAdmin(sender, "TRANSFER", team, it) }
         val name = nameOf(target)
         if (!confirmed) {
             return Msg.reply(sender, text("Admin: make ", NamedTextColor.YELLOW).append(text(name, NamedTextColor.WHITE))

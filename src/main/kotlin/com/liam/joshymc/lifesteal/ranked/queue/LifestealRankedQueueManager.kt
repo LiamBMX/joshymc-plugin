@@ -8,6 +8,7 @@ import com.liam.joshymc.lifesteal.ranked.ArenaAvailability
 import com.liam.joshymc.lifesteal.ranked.LifestealRankedManager
 import com.liam.joshymc.lifesteal.ranked.MatchKind
 import com.liam.joshymc.lifesteal.teams.LifestealTeamStore.Team
+import com.liam.joshymc.lifesteal.teams.RankedTeamLock
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
@@ -102,6 +103,28 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
     fun waitingCount(size: Int): Int = book.waiting(size).size
     fun cooldownCounts(): String = "teams ${teamCooldown.size}, players ${playerCooldown.size}, challenges ${challengeCooldown.size}"
     fun recentAudit(limit: Int): List<RankedQueueStore.Row> = store.recent(limit)
+
+    /**
+     * Issue #1530: how far [teamId] is into the queue, a challenge or a staff test proposal (memory
+     * only; gone with the entry/proposal), for [com.liam.joshymc.lifesteal.teams.RankedTeamLock].
+     */
+    fun teamLockStage(teamId: String): RankedTeamLock.Stage? {
+        val entry = book.entryOfTeam(teamId)?.takeIf { !it.state.terminal }?.let { stageOf(it.state) }
+        val test = tests.proposals().filter { !it.state.terminal && (it.plan.teamAId == teamId || it.plan.teamBId == teamId) }
+            .map { if (it.state == TestProposalState.STARTING) RankedTeamLock.Stage.PREPARING else RankedTeamLock.Stage.CONFIRMING }
+        return RankedTeamLock.strongest(entry, *test.toTypedArray())
+    }
+
+    /** Issue #1530: [uuid] was picked for a match that is being created right now (queue entry or test proposal). */
+    fun preparing(uuid: UUID): Boolean =
+        book.entryOf(uuid)?.state == QueueState.PREPARING || tests.proposalOf(uuid)?.state == TestProposalState.STARTING
+
+    private fun stageOf(state: QueueState): RankedTeamLock.Stage? = when (state) {
+        QueueState.FORMING, QueueState.WAITING, QueueState.MATCH_FOUND -> RankedTeamLock.Stage.QUEUED
+        QueueState.CONFIRMING -> RankedTeamLock.Stage.CONFIRMING
+        QueueState.PREPARING -> RankedTeamLock.Stage.PREPARING
+        QueueState.MATCHED, QueueState.CANCELLED, QueueState.EXPIRED -> null
+    }
 
     /** Seconds before [uuid] may queue again after declining/ignoring/leaving a found match (0 = may). */
     fun playerCooldownSeconds(uuid: UUID): Long = seconds(playerCooldown.remaining(uuid, System.currentTimeMillis()))
