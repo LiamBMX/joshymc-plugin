@@ -2,6 +2,7 @@ package com.liam.joshymc.lifesteal.profile
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.lifesteal.hearts.HeartRules
 import com.liam.joshymc.lifesteal.ranked.rating.RatingType
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.manager.PurchaseFulfillmentManager
@@ -12,6 +13,7 @@ import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
 import org.bukkit.Sound
 import org.bukkit.World
+import org.bukkit.command.CommandSender
 import org.bukkit.configuration.ConfigurationSection
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
@@ -240,9 +242,10 @@ class LifestealProfileManager(private val plugin: Joshymc) {
         val s = settings ?: ProfileSettings.DEFAULTS
         val table = plugin.lifestealRankedStatsManager.divisions
         return ProfileCalculator(
-            store, s.pairCooldownMillis,
+            store, s.pvpRules,
             { team, rating -> table?.let { t -> t.indexOf(t.of(if (team) RatingType.TEAM_ELO else RatingType.PLAYER_ELO, rating)) + 1 } },
             lifestealOnly,
+            s.teamDivisionRule,
         )
     }
 
@@ -273,6 +276,8 @@ class LifestealProfileManager(private val plugin: Joshymc) {
         val rows: List<ProfileStore.AchievementRow>,
         val settings: ProfileStore.Settings,
         val playtimeSeconds: Long?,
+        /** Active Lifesteal playtime (AFK excluded, issue #1538); null where playtime isn't shown. */
+        val activePlaytimeMillis: Long?,
         val playerRating: Int?,
         val teamName: String?,
         val teamRating: Int?,
@@ -301,6 +306,7 @@ class LifestealProfileManager(private val plugin: Joshymc) {
             Profile(
                 uuid, name, store.hearts(uuid), periods, rows, store.settings(uuid),
                 if (showPlaytime) session ?: store.playtimeSeconds(uuid)[uuid] ?: 0L else null,
+                if (showPlaytime) store.activePlaytimeMillis(uuid)[uuid] ?: 0L else null,
                 season?.let { store.currentRating(it.id, RatingType.PLAYER_ELO.name, uuid.toString()) } ?: initialPlayer.takeIf { season != null },
                 team?.name,
                 team?.let { t -> season?.let { store.currentRating(it.id, RatingType.TEAM_ELO.name, t.id) } ?: initialTeam },
@@ -388,12 +394,33 @@ class LifestealProfileManager(private val plugin: Joshymc) {
         if (!claiming.add(lock)) return done(ClaimOutcome.Refused("That claim is already being processed."))
         val uuid = player.uniqueId
         val snapshot = ProfileStore.encodeRewards(tier.rewards)
+        // Issue #1538 (P2-05): a tier that pays coins can only be claimed once the account is
+        // eligible. The whole claim waits (the row stays COMPLETED, nothing is snapshotted or
+        // queued), so titles and borders of the same tier come with it later; no partial payout.
+        val requirements = if (CoinEligibility.paysCoins(tier.rewards, lifestealOnly)) settings?.coinEligibility else null
         plugin.databaseManager.async("profiles: claim") {
-            val start = try { store.beginClaim(uuid, key, snapshot, System.currentTimeMillis()) } catch (e: Exception) {
+            val now = System.currentTimeMillis()
+            var checkFailed = false
+            val ineligible = requirements?.let { req ->
+                try {
+                    val (active, firstJoin) = store.coinEligibilityFacts(uuid)
+                    CoinEligibility.check(active, firstJoin, now, req).takeUnless { it.eligible }
+                } catch (e: Exception) {
+                    // Fails closed: nothing is claimed, the row stays COMPLETED.
+                    plugin.logger.warning("[Profiles] Couldn't check coin eligibility of $uuid: ${e.message}")
+                    checkFailed = true
+                    null
+                }
+            }
+            val start = if (ineligible != null || checkFailed) null else try { store.beginClaim(uuid, key, snapshot, now) } catch (e: Exception) {
                 plugin.logger.warning("[Profiles] Claim of ${AchievementRules.keyText(key)} by $uuid failed: ${e.message}")
                 null
             }
             onMain {
+                if (ineligible != null || checkFailed) {
+                    claiming.remove(lock)
+                    return@onMain done(ClaimOutcome.Refused(ineligible?.let { coinWaitReason(it) } ?: "Couldn't check your coin reward eligibility right now; please try again."))
+                }
                 when (start) {
                     is ProfileStore.ClaimStart.Started -> deliver(uuid, player.name, key, start.rewards) { ok ->
                         claiming.remove(lock)
@@ -413,6 +440,36 @@ class LifestealProfileManager(private val plugin: Joshymc) {
                         )
                     }
                 }
+            }
+        }
+    }
+
+    /** What a player still needs before this tier's coins can be claimed (the achievement stays completed). */
+    fun coinWaitReason(e: HeartRules.Eligibility): String {
+        val missing = listOfNotNull(
+            e.playtimeMissingMillis.takeIf { it > 0 }?.let { "${HeartRules.formatWait(it)} more active Lifesteal playtime" },
+            e.accountAgeMissingMillis.takeIf { it > 0 }?.let { "${HeartRules.formatWait(it)} until your account is old enough" },
+        )
+        return "Coin rewards can be claimed once you're eligible. You still need ${missing.joinToString(" and ")}. Your achievement stays completed."
+    }
+
+    /**
+     * Issue #1538: whether [viewer] may see [target]'s detailed statistics (profile, ranked stats,
+     * ranked match history). Self, console, `joshymc.lifesteal.profile.private.bypass` and servers
+     * with `profiles.allow-private: false` always may; otherwise the stored privacy flag decides
+     * (the existing `lifesteal_profile_settings.private`, no second privacy store). Public
+     * leaderboards are never filtered by it. Runs [then] on the main thread when allowed; tells the
+     * viewer when it isn't (also when the flag couldn't be read: fails closed).
+     */
+    fun ifVisible(viewer: CommandSender, target: UUID, name: String, then: () -> Unit) {
+        if (viewer !is Player || viewer.uniqueId == target || viewer.hasPermission(PERMISSION_PRIVATE_BYPASS)) return then()
+        if (!hosted || !tablesReady || settings?.allowPrivate != true) return then()
+        read("the privacy setting of $name", { store.settings(target).private }) { private, problem ->
+            if (!viewer.isOnline) return@read
+            when (private) {
+                false -> then()
+                true -> plugin.commsManager.send(viewer, Component.text("$name's profile is private.", NamedTextColor.RED))
+                null -> plugin.commsManager.send(viewer, Component.text(problem ?: "Couldn't load that right now; please try again.", NamedTextColor.RED))
             }
         }
     }
@@ -519,8 +576,12 @@ class LifestealProfileManager(private val plugin: Joshymc) {
         val minimumFights = s.kdMinimumFights
         read("the leaderboards", {
             storedSeason = readStoredSeason()
+            // Issue #1538 (P2-04): the history in short chunks, the alt links in one linear read.
             val rows = store.pvpRows()
-            val linked = store.linkedPairs()
+            val linked = store.connectionHashes()
+            // Issue #1538: actively banned players aren't listed (their data is untouched; they
+            // come back at the next rebuild after the ban ends). One batched read, not one per row.
+            val banned = bannedPlayers()
             val lists = HashMap<Pair<BoardCategory, BoardPeriod>, List<Leaderboards.Ranked>>()
             for (period in BoardPeriod.entries) {
                 val window = if (period == BoardPeriod.SEASON) season ?: continue else null
@@ -533,7 +594,7 @@ class LifestealProfileManager(private val plugin: Joshymc) {
                         BoardCategory.ACHIEVEMENTS -> store.completedCounts(window)
                         else -> calc.all(category.stat ?: continue, window, pvp)
                     }
-                    lists[category to period] = Leaderboards.rank(values, minimumValue = if (category == BoardCategory.KD) 0 else 1)
+                    lists[category to period] = Leaderboards.rank(values.filterKeys { it !in banned }, minimumValue = if (category == BoardCategory.KD) 0 else 1)
                 }
             }
             Boards(System.currentTimeMillis(), season?.id, lists)
@@ -542,6 +603,14 @@ class LifestealProfileManager(private val plugin: Joshymc) {
             if (built != null) boards = built
             done?.invoke()
         }
+    }
+
+    /** Players with an active ban that applies in Lifesteal (PunishmentManager's own rules, cached there). Empty if it can't be read. */
+    private fun bannedPlayers(): Set<UUID> = try {
+        plugin.punishmentManager.activelyBannedIn(ServerGamemode.LIFESTEAL)
+    } catch (e: Exception) {
+        plugin.logger.warning("[Profiles] Couldn't read active bans for the leaderboards: ${e.message}")
+        emptySet()
     }
 
     // ── Admin (read-only) ───────────────────────────────────

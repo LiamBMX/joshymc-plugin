@@ -66,7 +66,7 @@ class ProfileCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
         manager.read("profile settings", { manager.store.settings(player.uniqueId) }) { current, problem ->
             if (current == null) return@read reply(plugin, player, Component.text(problem ?: "Couldn't load your settings.", NamedTextColor.RED))
             manager.saveSettings(player, current.copy(private = on)) { ok ->
-                reply(plugin, player, if (ok) Component.text("Your profile is now ${if (on) "private" else "public"}.", NamedTextColor.GREEN) else Component.text("Couldn't change that right now.", NamedTextColor.RED))
+                reply(plugin, player, if (ok) Component.text("Your profile is now ${if (on) "private" else "public"}." + if (on) " Other players can't see your profile, Ranked stats or match history; public leaderboard rankings stay visible." else "", NamedTextColor.GREEN) else Component.text("Couldn't change that right now.", NamedTextColor.RED))
             }
         }
     }
@@ -134,11 +134,21 @@ class AchievementsCommand(private val plugin: Joshymc) : CommandExecutor, TabCom
             "player" -> {
                 val name = args.getOrNull(1) ?: return Msg.usage(sender, "/achievements admin player <name>")
                 val (uuid, resolved) = resolve(plugin, name) ?: return Msg.playerNotFound(sender, name)
-                manager.read("achievement audit", { manager.store.achievements(uuid) to manager.store.recentAudit(uuid, 15) }) { data, problem ->
+                val calc = manager.calculator()
+                val coinRule = manager.settings?.coinEligibility
+                manager.read("achievement audit", {
+                    val periods = calc.player(uuid, includePrevious = false)
+                    val (active, firstJoin) = manager.store.coinEligibilityFacts(uuid)
+                    AdminView(manager.store.achievements(uuid), manager.store.recentAudit(uuid, 15), periods, CoinEligibility.check(active, firstJoin, System.currentTimeMillis(), coinRule), active)
+                }) { data, problem ->
                     if (data == null) return@read reply(plugin, sender, Component.text(problem ?: "Unavailable.", NamedTextColor.RED))
-                    reply(plugin, sender, Component.text("$resolved: ${data.first.size} achievement row(s) " +
-                        data.first.groupingBy { it.status }.eachCount().toString(), NamedTextColor.GOLD))
-                    data.second.forEach { reply(plugin, sender, Component.text(it, NamedTextColor.GRAY)) }
+                    reply(plugin, sender, Component.text("$resolved: ${data.rows.size} achievement row(s) " +
+                        data.rows.groupingBy { it.status }.eachCount().toString(), NamedTextColor.GOLD))
+                    // Issue #1538: evidence for staff review only; nothing is punished automatically.
+                    reply(plugin, sender, Component.text("Counted PvP kills ${data.periods.lifetime[ProfileStat.PVP_KILLS]}, no-loss kills not counted (farming limits) ${data.periods.suppressedNoLossKills}", NamedTextColor.GRAY))
+                    reply(plugin, sender, Component.text("Active Lifesteal playtime ${plugin.playtimeManager.formatPlaytime(data.activeMillis / 1000)}; coin claims " +
+                        (if (data.coins.eligible) "eligible" else "waiting (${data.coins.auditReason})"), NamedTextColor.GRAY))
+                    data.audit.forEach { reply(plugin, sender, Component.text(it, NamedTextColor.GRAY)) }
                 }
             }
             "recover" -> {
@@ -148,6 +158,14 @@ class AchievementsCommand(private val plugin: Joshymc) : CommandExecutor, TabCom
             else -> Msg.usage(sender, "/achievements admin <status|player <name>|recover>")
         }
     }
+
+    private data class AdminView(
+        val rows: List<ProfileStore.AchievementRow>,
+        val audit: List<String>,
+        val periods: ProfileCalculator.Periods,
+        val coins: com.liam.joshymc.lifesteal.hearts.HeartRules.Eligibility,
+        val activeMillis: Long,
+    )
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         val admin = sender.hasPermission(LifestealProfileManager.PERMISSION_ADMIN)

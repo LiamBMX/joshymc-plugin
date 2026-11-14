@@ -31,7 +31,7 @@ class LifestealRankedStatsManager(private val plugin: Joshymc) {
     private val generation = AtomicLong()
 
     private data class CacheKey(val season: String, val type: RatingType, val page: Int, val perPage: Int, val minimum: Int)
-    private data class Cached(val page: RankedStatsStore.Page, val at: Long)
+    private data class Cached(val page: RankedStatsStore.Page, val at: Long, val excluded: Set<String>)
 
     /** Main thread only; bounded. */
     private val pages = object : LinkedHashMap<CacheKey, Cached>(32, 0.75f, true) {
@@ -109,14 +109,33 @@ class LifestealRankedStatsManager(private val plugin: Joshymc) {
         val now = System.currentTimeMillis()
         val cached = pages[key]?.takeIf { settings.cacheSeconds > 0 && now - it.at < settings.cacheSeconds * 1000L }
         val gen = generation.get()
+        var excludedUsed: Set<String> = emptySet()
         read({ s ->
-            val p = cached?.page ?: s.page(season, type, minimum, page, perPage)
-            val position = subject?.let { s.position(season, type, it, minimum) }
+            val excluded = excludedFor(type)
+            excludedUsed = excluded
+            // A cached page is only reused while the same players are excluded (a ban or unban since shows at once).
+            val p = cached?.takeIf { it.excluded == excluded }?.page ?: s.page(season, type, minimum, page, perPage, excluded)
+            val position = subject?.let { s.position(season, type, it, minimum, excluded) }
             val matches = subject?.let { s.entry(season, type, it)?.matches } ?: 0
             Board(p, minimum, position, subject, matches)
         }) { board, problem ->
-            if (board != null && cached == null && settings.cacheSeconds > 0 && gen == generation.get()) pages[key] = Cached(board.page, now)
+            if (board != null && settings.cacheSeconds > 0 && gen == generation.get() && board.page !== cached?.page) pages[key] = Cached(board.page, now, excludedUsed)
             done(board, problem)
+        }
+    }
+
+    /**
+     * Issue #1538: players left off the public Player Elo board, by UUID: those with an active ban
+     * that applies in Lifesteal (PunishmentManager's batched, cached read). Team boards list teams,
+     * so nothing is excluded there. Their ratings and history are untouched. Off the main thread.
+     */
+    private fun excludedFor(type: RatingType): Set<String> {
+        if (type != RatingType.PLAYER_ELO) return emptySet()
+        return try {
+            plugin.punishmentManager.activelyBannedIn(com.liam.joshymc.gamemode.ServerGamemode.LIFESTEAL).mapTo(HashSet()) { it.toString() }
+        } catch (e: Exception) {
+            plugin.logger.warning("[RankedStats] Couldn't read active bans for the leaderboard: ${e.message}")
+            emptySet()
         }
     }
 
@@ -145,7 +164,7 @@ class LifestealRankedStatsManager(private val plugin: Joshymc) {
             PlayerStats(
                 uuid, season,
                 RankedStatistics.summarize(s.points(RatingType.PLAYER_ELO, uuid.toString(), season), initialPlayer),
-                minimum?.let { s.position(season, RatingType.PLAYER_ELO, uuid.toString(), it) }, minimum,
+                minimum?.let { s.position(season, RatingType.PLAYER_ELO, uuid.toString(), it, excludedFor(RatingType.PLAYER_ELO)) }, minimum,
                 teamId, teamName, teamId?.let { s.entry(season, RatingType.TEAM_ELO, it)?.rating ?: initialTeam },
                 if (recent > 0) s.playerHistory(uuid, 0, recent).lines else emptyList(),
             )

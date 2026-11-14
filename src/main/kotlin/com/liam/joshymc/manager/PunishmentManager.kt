@@ -139,6 +139,31 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
     /** The longest active ban that applies in [gamemode]: unscoped bans plus ones limited to it. */
     fun isBannedIn(targetUuid: UUID, gamemode: ServerGamemode): ActivePunishment? = activeOf(targetUuid, BAN_TYPES, gamemode)
 
+    private data class BannedCache(val gamemode: ServerGamemode, val at: Long, val players: Set<UUID>)
+    @Volatile private var bannedCache: BannedCache? = null
+
+    /**
+     * Every player with an active ban that applies in [gamemode], by the same rules as
+     * [isBannedIn] (active, not expired, unscoped or scoped to it), in one query instead of one per
+     * player (issue #1538, Lifesteal leaderboards). Cached for [BANNED_CACHE_MILLIS] and dropped at
+     * once when a punishment is inserted or lifted here, so a ban or unban shows on the next read;
+     * an expiry shows within the cache time. Safe off the main thread.
+     */
+    fun activelyBannedIn(gamemode: ServerGamemode): Set<UUID> {
+        val now = System.currentTimeMillis()
+        bannedCache?.let { if (it.gamemode == gamemode && now - it.at in 0 until BANNED_CACHE_MILLIS) return it.players }
+        val players = plugin.databaseManager.query(
+            "SELECT DISTINCT target_uuid FROM punishments WHERE type IN ($BAN_TYPES) AND active = 1 AND (expires_at IS NULL OR expires_at > ?) AND (scope IS NULL OR scope = ?)",
+            now, gamemode.id
+        ) { rs -> runCatching { UUID.fromString(rs.getString("target_uuid")) }.getOrNull() }.filterNotNull().toSet()
+        bannedCache = BannedCache(gamemode, now, players)
+        return players
+    }
+
+    private fun invalidateBanned() {
+        bannedCache = null
+    }
+
     /**
      * The longest still-running punishment of [types] (permanent first, then latest expiry), so a
      * shorter punishment issued later never hides a longer one. [gamemode] limits it to rows that
@@ -201,6 +226,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
 
     private fun revokeLegacy(action: String, types: String, targetUuid: UUID, revokerName: String?, revokerUuid: UUID?, revokeReason: String?): LegacyRevocation {
         var result = LegacyRevocation(0, 0)
+        invalidateBanned()
         // One transaction, so the revocation and its Discord log are stored together (issue #1157).
         plugin.databaseManager.transaction {
             val revoked = plugin.databaseManager.query(
@@ -221,6 +247,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
             if (revoked.isNotEmpty()) logRevocation(action, targetUuid, revoked, revokerName, revokeReason)
             result = LegacyRevocation(revoked.size, left)
         }
+        invalidateBanned()
         return result
     }
 
@@ -325,6 +352,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
      */
     fun revokeById(punishmentId: Int, revokerName: String, revokerUuid: UUID?, revokeReason: String): Boolean {
         var revoked = false
+        invalidateBanned()
         plugin.databaseManager.transaction {
             val row = plugin.databaseManager.queryFirst(
                 "SELECT id, type, reason, punisher_name, created_at, expires_at, active, target_uuid FROM punishments WHERE id = ? AND active = 1",
@@ -342,6 +370,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
             }
             if (revoked && action != null) logRevocation(action, row.second, listOf(row.first), revokerName, revokeReason)
         }
+        invalidateBanned()
         return revoked
     }
 
@@ -438,6 +467,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         offense: Int? = null,
         expiresAtOverride: Long? = null
     ): InsertedPunishment {
+        invalidateBanned()
         val now = System.currentTimeMillis()
         val expiresAt = expiresAtOverride ?: if (durationMs != null) now + durationMs else null
         var id = -1
@@ -479,6 +509,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
             }
         }
 
+        invalidateBanned()
         return InsertedPunishment(id, expiresAt)
     }
 
@@ -615,6 +646,7 @@ class PunishmentManager(private val plugin: Joshymc) : Listener {
         const val AUTOMOD_NAME = "AutoMod"
 
         private const val BAN_TYPES = "'BAN', 'TEMPBAN'"
+        private const val BANNED_CACHE_MILLIS = 30_000L
         private const val MUTE_TYPES = "'MUTE', 'TEMPMUTE'"
 
         /** Ban-screen placeholders only rule punishments fill in. */
