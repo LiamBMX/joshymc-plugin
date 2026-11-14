@@ -114,6 +114,31 @@ class FlyVoucherManager(private val plugin: Joshymc) {
         repeat(quantity) { plugin.giveItemSafely(player, createVoucherStack(seconds)) }
     }
 
+    /** Why [template] (a crate reward / kit copy source) can't be handed out, or null (issue #1529). */
+    fun templateProblem(template: ItemStack): String? =
+        if (verify(template) == null) "is a Fly Voucher that is malformed or not signed by this server" else null
+
+    /**
+     * Issue #1529: a copy of [template] with its own fresh voucher uuid and the signature for that
+     * uuid, amount 1, same duration. Before this, crate-won Fly Vouchers kept the template's uuid,
+     * so only the first winner could redeem one (`fly_voucher_redemptions` is keyed by it). Null
+     * when the template doesn't verify: an invalid voucher is never signed into a valid one.
+     */
+    fun reissue(template: ItemStack): ItemStack? {
+        if (!isFlyVoucher(template)) return null
+        val verified = verify(template) ?: return null
+        val voucherUuid = UUID.randomUUID().toString()
+        val copy = template.clone()
+        copy.amount = 1
+        copy.editMeta { meta ->
+            val pdc = meta.persistentDataContainer
+            pdc.set(voucherUuidKey, PersistentDataType.STRING, voucherUuid)
+            pdc.set(voucherSignatureKey, PersistentDataType.STRING,
+                SurvivalFlight.sign(secret, SurvivalFlight.signedPayload(VOUCHER_VERSION, voucherUuid, verified.seconds)))
+        }
+        return copy
+    }
+
     private data class Verified(val voucherUuid: String, val seconds: Long)
 
     /** The voucher's uuid and duration, or null unless every field is present, in range and signed by this server. */

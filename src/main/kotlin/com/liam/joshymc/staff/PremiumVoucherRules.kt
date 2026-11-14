@@ -29,4 +29,21 @@ object PremiumVoucherRules {
     }
 
     fun redeemable(verdict: Verdict): Boolean = verdict == Verdict.SIGNED || verdict == Verdict.LEGACY_ACCEPTED
+
+    /**
+     * Issue #1529: what a copy of a voucher *template* (a crate reward snapshot, a kit item) gets
+     * when it is handed out with a fresh voucher uuid. The signature covers the uuid, so a copy of
+     * a signed template must be signed again for its new uuid ([Reissue.RESIGN]); keeping the old
+     * signature made every crate-won voucher read as forged. An unsigned legacy template stays
+     * unsigned ([Reissue.UNSIGNED], redeemable exactly as long as legacy vouchers are). A forged
+     * template, or an unsigned one while legacy vouchers are refused, is never copied
+     * ([Reissue.REFUSE]): signing it would launder a forgery, and the copy couldn't be redeemed.
+     */
+    enum class Reissue { RESIGN, UNSIGNED, REFUSE }
+
+    fun reissue(verdict: Verdict): Reissue = when (verdict) {
+        Verdict.SIGNED -> Reissue.RESIGN
+        Verdict.LEGACY_ACCEPTED -> Reissue.UNSIGNED
+        Verdict.FORGED, Verdict.LEGACY_REFUSED -> Reissue.REFUSE
+    }
 }
