@@ -1567,17 +1567,24 @@ class LifestealRankedManager(private val plugin: Joshymc) {
      * (or the sender themselves) runs before it acts. True = refused: [sender] is told why and the
      * attempt is logged (AdminAudit, throttled per sender + target + action).
      */
-    fun refusesStaffAction(sender: CommandSender, target: Player, action: RankedIntegrity.StaffAction): Boolean {
-        val isHeld = holds(target)
-        val pending = hasPendingRestore(target.uniqueId)
+    fun refusesStaffAction(sender: CommandSender, target: Player, action: RankedIntegrity.StaffAction): Boolean =
+        refusesStaffAction(sender, target.uniqueId, target.name, action)
+
+    /**
+     * Issue #1537: the same check by UUID, for staff commands that also work on offline players
+     * (`/lifesteal hearts`). A held player is online; a pending restore is known for offline ones too.
+     */
+    fun refusesStaffAction(sender: CommandSender, targetUuid: UUID, targetName: String, action: RankedIntegrity.StaffAction): Boolean {
+        val isHeld = holds(targetUuid)
+        val pending = hasPendingRestore(targetUuid)
         if (!isHeld && !pending) return false
-        val self = sender is Player && sender.uniqueId == target.uniqueId
-        val refusal = RankedIntegrity.staffActionRefusal(action, target.name, isHeld, pending, self) ?: return false
+        val self = sender is Player && sender.uniqueId == targetUuid
+        val refusal = RankedIntegrity.staffActionRefusal(action, targetName, isHeld, pending, self) ?: return false
         com.liam.joshymc.util.Msg.error(sender, refusal)
         val actor = (sender as? Player)?.uniqueId?.toString() ?: sender.name
-        if (integrityThrottle.allow(RankedIntegrity.throttleKey(actor, target.uniqueId.toString(), action.id), System.currentTimeMillis())) {
-            com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "RANKED_STAFF_ACTION_BLOCKED", target.uniqueId, target.name,
-                "action=${action.id} match=${held[target.uniqueId] ?: "none"} held=$isHeld pending_restore=$pending")
+        if (integrityThrottle.allow(RankedIntegrity.throttleKey(actor, targetUuid.toString(), action.id), System.currentTimeMillis())) {
+            com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "RANKED_STAFF_ACTION_BLOCKED", targetUuid, targetName,
+                "action=${action.id} match=${held[targetUuid] ?: "none"} held=$isHeld pending_restore=$pending")
         }
         return true
     }

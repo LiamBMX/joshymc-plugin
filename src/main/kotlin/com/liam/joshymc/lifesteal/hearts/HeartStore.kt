@@ -166,6 +166,8 @@ class HeartStore(private val db: SqliteDatabase) {
             """.trimIndent()
         )
         db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_heart_items_owner ON lifesteal_heart_items (issued_to, status)")
+        // Issue #1537: `/lifesteal hearts recent` pages by issue time (index only).
+        db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_heart_items_issued ON lifesteal_heart_items (status, issued_at)")
         // Issue #1457: new tables only; no existing row (hearts, items, audit) is touched.
         db.createTable(
             """
@@ -219,6 +221,22 @@ class HeartStore(private val db: SqliteDatabase) {
             "SELECT * FROM lifesteal_heart_items WHERE issued_to = ? AND status = 'ISSUED' ORDER BY issued_at DESC, serial LIMIT ?",
             uuid.toString(), limit
         ) { itemRow(it) }
+
+    /**
+     * Issue #1537: the newest Heart items across every player (with [status], only that status),
+     * for investigating a crash right after withdrawals. Read-only and bounded: at most
+     * [MAX_RECENT_PAGE] rows per page, [page] counted from 0.
+     */
+    fun recentItems(status: ItemStatus? = ItemStatus.ISSUED, page: Int = 0, pageSize: Int = MAX_RECENT_PAGE): List<ItemRow> {
+        val size = pageSize.coerceIn(1, MAX_RECENT_PAGE)
+        val offset = page.coerceIn(0, MAX_RECENT_PAGES) * size
+        return if (status == null) db.query(
+            "SELECT * FROM lifesteal_heart_items ORDER BY issued_at DESC, serial LIMIT ? OFFSET ?", size, offset
+        ) { itemRow(it) }
+        else db.query(
+            "SELECT * FROM lifesteal_heart_items WHERE status = ? ORDER BY issued_at DESC, serial LIMIT ? OFFSET ?", status.name, size, offset
+        ) { itemRow(it) }
+    }
 
     fun itemCount(status: ItemStatus? = null): Int =
         if (status == null) db.queryFirst("SELECT COUNT(*) AS n FROM lifesteal_heart_items") { it.getInt("n") } ?: 0
@@ -380,8 +398,9 @@ class HeartStore(private val db: SqliteDatabase) {
     /**
      * One PvP death as one transaction: dedupe check, fresh read of both records and the pair's
      * cooldown, [HeartRules.decide], then (only for a transfer) both conditional updates, the
-     * cooldown, the transaction row and both audit rows. Rejections (teammates or unknown team
-     * membership, last heart, cooldown, killer at maximum) are recorded too, without touching hearts or the cooldown. Any database error
+     * cooldown, the transaction row and both audit rows; a victim-only loss (killer at the maximum,
+     * issue #1537) writes only the victim's row, the cooldown and one PVP_LOSS audit row. Rejections
+     * (teammates or unknown team membership, last heart, cooldown, ...) are recorded too, without touching hearts or the cooldown. Any database error
      * rolls everything back and is rethrown: hearts are then exactly as before.
      */
     fun transferPvp(request: PvpRequest, transactionId: String = UUID.randomUUID().toString()): PvpResult {
@@ -427,13 +446,16 @@ class HeartStore(private val db: SqliteDatabase) {
             insertTransaction(transactionId, request.dedupeKey, "PVP", outcome(decision), request.killer, request.victim, null, request.now)
             if (decision.changesHearts) {
                 if (victimAfter != victimHearts) writeHearts(victim, victimAfter, transactionId, request.now)
-                if (killerAfter != killerHearts) writeHearts(killer, killerAfter, transactionId, request.now)
+                // Issue #1537: a victim-only loss never writes the killer's record (their stored value stays exactly as it was).
+                if (decision is HeartRules.Decision.Transfer && killerAfter != killerHearts) writeHearts(killer, killerAfter, transactionId, request.now)
                 db.executeUpdate(
                     "INSERT INTO lifesteal_heart_cooldowns (killer, victim, last_transfer_at) VALUES (?, ?, ?) " +
                         "ON CONFLICT (killer, victim) DO UPDATE SET last_transfer_at = excluded.last_transfer_at",
                     request.killer.toString(), request.victim.toString(), request.now
                 )
-                insertAudit(transactionId, request.victim, "PVP_LOSS", victimHearts, victimAfter, request.killer.toString(), noted("killed by ${request.killer}", request.note), request.now)
+                // Issue #1537: a heart lost to a killer at the maximum is destroyed, and the audit says so.
+                val lossReason = if (decision is HeartRules.Decision.VictimLosesOnly) "killed by ${request.killer}, $VICTIM_ONLY_NOTE" else "killed by ${request.killer}"
+                insertAudit(transactionId, request.victim, "PVP_LOSS", victimHearts, victimAfter, request.killer.toString(), noted(lossReason, request.note), request.now)
                 if (decision is HeartRules.Decision.Transfer) {
                     insertAudit(transactionId, request.killer, "PVP_GAIN", killerHearts, killerAfter, request.victim.toString(), noted("killed ${request.victim}", request.note), request.now)
                 }
@@ -851,6 +873,13 @@ class HeartStore(private val db: SqliteDatabase) {
     companion object {
         /** The only alt evidence there is: AltManager saw both accounts on one (hashed) connection. */
         const val EVIDENCE_SHARED_CONNECTION = "SHARED_CONNECTION"
+
+        /** Issue #1537: audit note on a VICTIM_LOST_ONLY loss (killer at the maximum, the heart destroyed). */
+        const val VICTIM_ONLY_NOTE = "killer at maximum, heart destroyed"
+
+        /** Issue #1537: rows per `/lifesteal hearts recent` page, and the last page that can be asked for. */
+        const val MAX_RECENT_PAGE = 15
+        const val MAX_RECENT_PAGES = 100
 
         /** A stored hearts value as a whole number, or null when it isn't one (malformed row). */
         fun wholeHearts(raw: Any?): Int? = when (raw) {

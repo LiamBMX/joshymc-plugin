@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.lifesteal.hearts.monitor.HeartMonitorRules
 import com.liam.joshymc.lifesteal.hearts.monitor.HeartTransferMonitor
 import com.liam.joshymc.lifesteal.hearts.monitor.HeartTransferMonitorStore
+import com.liam.joshymc.staff.AdminAudit
 import com.liam.joshymc.util.BedrockUtil
 import com.liam.joshymc.util.Msg
 import net.kyori.adventure.text.Component
@@ -43,6 +44,8 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         }
         when (args.firstOrNull()?.lowercase()) {
             "items" -> return items(sender, args)
+            "item" -> return itemDetails(sender, args)
+            "recent" -> return recent(sender, args)
             "void" -> return void(sender, args)
             "reviews" -> return reviews(sender, args)
         }
@@ -111,11 +114,14 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
             Msg.error(sender, "'${args[2]}' is not a whole number of hearts.")
             return
         }
+        val operation = HeartAdminRules.Operation.of(op!!)
+        // Issue #1537 (G-1): staff protection and the ranked hold, before anything is written.
+        if (!guard(sender, operation, uuid, name)) return
         val actor = (sender as? Player)?.uniqueId?.toString() ?: "console"
         val result = try {
-            hearts.adminChange(uuid, op!!, amount, actor, sender.name)
+            hearts.adminChange(uuid, op, amount, actor, sender.name)
         } catch (e: Exception) {
-            plugin.logger.severe("[Hearts] ${sender.name}: ${op!!.id} $amount for $name failed and was rolled back: ${e.message}")
+            plugin.logger.severe("[Hearts] ${sender.name}: ${op.id} $amount for $name failed and was rolled back: ${e.message}")
             Msg.error(sender, "The change couldn't be saved, so nothing changed.")
             return
         }
@@ -124,11 +130,33 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
             is HeartStore.AdminResult.Invalid -> Msg.error(sender, result.reason)
             is HeartStore.AdminResult.Unchanged -> Msg.reply(sender, Component.text("$name already has ${result.hearts} hearts; nothing changed.", NamedTextColor.GRAY))
             is HeartStore.AdminResult.Changed -> {
+                // Issue #1537 (G-2): one admin_logs row per committed change, next to lifesteal_heart_audit.
+                AdminAudit.log(plugin, sender, operation.auditAction, uuid, name,
+                    HeartAdminRules.details(operation, result.transactionId, amount = amount, before = result.before, after = result.after, clamped = result.clamped))
                 val limits = hearts.limits
                 val note = if (result.clamped && limits != null) " (stopped at the ${limits.minimum}-${limits.maximum} limit)" else ""
                 Msg.success(sender, "$name now has ${result.after} hearts (was ${result.before ?: "unreadable"})$note.")
             }
         }
+    }
+
+    /**
+     * Issue #1537 (G-1): may [sender] run [operation] on [uuid]? The existing staff protection
+     * first (`StaffRankManager.protectionProblem`: never yourself, never equal or higher staff;
+     * console always may), then the ranked hold (a participant, or one waiting for their match
+     * inventory, can't be changed in place: cancel the match or remove them instead). Runs before
+     * any write, so a refusal changes nothing. True = go on.
+     */
+    private fun guard(sender: CommandSender, operation: HeartAdminRules.Operation, uuid: UUID, name: String): Boolean {
+        val problem = plugin.staffRankManager.protectionProblem(sender, uuid)
+        if (problem != null) {
+            Msg.error(sender, problem)
+            AdminAudit.log(plugin, sender, HeartAdminRules.REFUSED_ACTION, uuid, name, HeartAdminRules.refusedDetails(operation, problem))
+            return false
+        }
+        // Logs RANKED_STAFF_ACTION_BLOCKED (throttled) itself.
+        if (plugin.lifestealRankedManager.refusesStaffAction(sender, uuid, name, operation.rankedAction)) return false
+        return true
     }
 
     /** Shared refusals for the Heart item subcommands; true = go on. */
@@ -166,6 +194,8 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
             Msg.error(sender, "The amount must be a whole number from 1 to ${HeartRules.MAX_ADMIN_ITEM_GRANT}.")
             return
         }
+        // Issue #1537 (G-1): no self-grants, no grants to equal/higher staff, none during ranked.
+        if (!guard(sender, HeartAdminRules.Operation.GIVE, target.uniqueId, target.name)) return
         val actor = (sender as? Player)?.uniqueId?.toString() ?: "console"
         val result = try {
             plugin.lifestealHeartManager.grantItems(target, amount, actor, sender.name)
@@ -175,7 +205,11 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
             return
         }
         when (result) {
-            is HeartStore.GrantResult.Granted -> Msg.success(sender, "Gave ${target.name} $amount Heart item(s).")
+            is HeartStore.GrantResult.Granted -> {
+                AdminAudit.log(plugin, sender, HeartAdminRules.Operation.GIVE.auditAction, target.uniqueId, target.name,
+                    HeartAdminRules.details(HeartAdminRules.Operation.GIVE, result.transactionId, serial = result.serials.first(), itemCount = result.serials.size))
+                Msg.success(sender, "Gave ${target.name} $amount Heart item(s).")
+            }
             is HeartStore.GrantResult.Invalid -> Msg.error(sender, result.reason)
             HeartStore.GrantResult.NoRecord -> Msg.error(sender, "${target.name} has no hearts yet (they haven't played Lifesteal here).")
         }
@@ -382,22 +416,119 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
             Msg.usage(sender, "/lifesteal hearts void <serial> [refund]")
             return
         }
+        // Issue #1537 (G-1): the item's owner is the target (a refund changes their hearts).
+        val item = try {
+            HeartRules.parseSerial(args[1].trim().lowercase())?.let { plugin.lifestealHeartManager.item(it) }
+        } catch (e: Exception) {
+            Msg.error(sender, "Couldn't read the Heart item: ${e.message}")
+            return
+        }
+        if (item == null) {
+            Msg.error(sender, "No Heart item with serial ${args[1]} was ever issued here.")
+            return
+        }
+        val ownerName = name(item.issuedTo)
+        if (!guard(sender, if (refund) HeartAdminRules.Operation.REFUND else HeartAdminRules.Operation.VOID, item.issuedTo, ownerName)) return
         val actor = (sender as? Player)?.uniqueId?.toString() ?: "console"
         val result = try {
-            plugin.lifestealHeartManager.voidItem(args[1], refund, actor, sender.name)
+            plugin.lifestealHeartManager.voidItem(item.serial, refund, actor, sender.name)
         } catch (e: Exception) {
-            plugin.logger.severe("[Hearts] ${sender.name}: voiding Heart item ${args[1]} failed and was rolled back: ${e.message}")
+            plugin.logger.severe("[Hearts] ${sender.name}: voiding Heart item ${item.serial} failed and was rolled back: ${e.message}")
             Msg.error(sender, "The change couldn't be saved, so nothing changed.")
             return
         }
         when (result) {
             HeartStore.VoidResult.UnknownItem -> Msg.error(sender, "No Heart item with serial ${args[1]} was ever issued here.")
-            is HeartStore.VoidResult.NotOutstanding -> Msg.error(sender, "That Heart item is already ${result.status?.name?.lowercase() ?: "closed"}.")
+            // A second void/refund of the same serial lands here: the conditional ISSUED -> VOIDED update allows one.
+            is HeartStore.VoidResult.NotOutstanding -> Msg.error(sender, "That Heart item is already ${result.status?.name?.lowercase() ?: "closed"}; nothing changed.")
             is HeartStore.VoidResult.Refused -> Msg.error(sender, result.reason)
-            is HeartStore.VoidResult.Voided -> Msg.success(
-                sender,
-                if (result.refunded) "Voided it and refunded the heart (${result.before} -> ${result.after})." else "Voided it; it can no longer be redeemed."
-            )
+            is HeartStore.VoidResult.Voided -> {
+                AdminAudit.log(plugin, sender, HeartAdminRules.Operation.VOID.auditAction, result.owner, ownerName,
+                    HeartAdminRules.details(HeartAdminRules.Operation.VOID, result.transactionId, serial = item.serial))
+                if (result.refunded) {
+                    AdminAudit.log(plugin, sender, HeartAdminRules.Operation.REFUND.auditAction, result.owner, ownerName,
+                        HeartAdminRules.details(HeartAdminRules.Operation.REFUND, result.transactionId, before = result.before, after = result.after, serial = item.serial))
+                }
+                Msg.success(
+                    sender,
+                    if (result.refunded) "Voided it and refunded the heart (${result.before} -> ${result.after})." else "Voided it; it can no longer be redeemed."
+                )
+            }
+        }
+    }
+
+    /**
+     * `recent [issued|redeemed|voided|all] [page]` (issue #1537, F-1): the newest Heart items across
+     * every player, for checking withdrawals after a crash. Read-only and paged
+     * ([HeartStore.MAX_RECENT_PAGE] per page). An ISSUED row only means the item was made and not
+     * used yet; it is never proof that it was lost (see docs/lifesteal-hearts.md, "Recovering a lost Heart item").
+     */
+    private fun recent(sender: CommandSender, args: List<String>) {
+        if (!ready(sender)) return
+        if (args.size > 3) return Msg.usage(sender, RECENT_USAGE)
+        var status: HeartStore.ItemStatus? = HeartStore.ItemStatus.ISSUED
+        var page = 1
+        for (arg in args.drop(1)) {
+            when (arg.lowercase()) {
+                "all" -> status = null
+                "issued", "redeemed", "voided" -> status = HeartStore.ItemStatus.valueOf(arg.uppercase())
+                else -> page = arg.toIntOrNull()?.takeIf { it in 1..HeartStore.MAX_RECENT_PAGES + 1 } ?: return Msg.usage(sender, RECENT_USAGE)
+            }
+        }
+        val rows = try {
+            plugin.lifestealHeartManager.recentItems(status, page - 1)
+        } catch (e: Exception) {
+            Msg.error(sender, "Couldn't read the Heart items: ${e.message}")
+            return
+        }
+        val label = status?.name?.lowercase() ?: "all"
+        if (rows.isEmpty()) {
+            Msg.reply(sender, Component.text("No $label Heart items on page $page.", NamedTextColor.GRAY))
+            return
+        }
+        Msg.reply(sender, Component.text("Recent Heart items ($label, newest first, page $page). Click one for details:", NamedTextColor.GRAY))
+        for (row in rows) sender.sendMessage(itemLine(row))
+        if (rows.size == HeartStore.MAX_RECENT_PAGE && page <= HeartStore.MAX_RECENT_PAGES) {
+            sender.sendMessage(Component.text(" Next: /lifesteal hearts recent $label ${page + 1}", NamedTextColor.DARK_GRAY))
+        }
+    }
+
+    private fun itemLine(row: HeartStore.ItemRow): Component {
+        val source = if (row.source == HeartStore.ItemSource.ADMIN) "staff grant" else "withdrawn"
+        return Component.text(" ${time(row.issuedAt)} ", NamedTextColor.GRAY)
+            .append(Component.text(name(row.issuedTo), NamedTextColor.WHITE))
+            .append(Component.text(" $source ", NamedTextColor.GRAY))
+            .append(Component.text(row.status?.name?.lowercase() ?: "?", if (row.status == HeartStore.ItemStatus.ISSUED) NamedTextColor.YELLOW else NamedTextColor.DARK_GRAY))
+            .append(Component.text(" ${row.serial}", NamedTextColor.DARK_GRAY))
+            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/lifesteal hearts item ${row.serial}"))
+    }
+
+    /** `item <serial>` (issue #1537): one Heart item's full record. Read-only. */
+    private fun itemDetails(sender: CommandSender, args: List<String>) {
+        if (!ready(sender)) return
+        if (args.size != 2) return Msg.usage(sender, "/lifesteal hearts item <serial>")
+        val row = try {
+            HeartRules.parseSerial(args[1].trim().lowercase())?.let { plugin.lifestealHeartManager.item(it) }
+        } catch (e: Exception) {
+            Msg.error(sender, "Couldn't read the Heart item: ${e.message}")
+            return
+        } ?: return Msg.error(sender, "No Heart item with serial ${args[1]} was ever issued here.")
+        fun line(label: String, value: String) = sender.sendMessage(
+            Component.text(" $label: ", NamedTextColor.GRAY).append(Component.text(value, NamedTextColor.WHITE))
+        )
+        fun actor(raw: String?) = raw?.let { runCatching { name(UUID.fromString(it)) }.getOrDefault(it) } ?: "?"
+        Msg.reply(sender, Component.text("Heart item ${row.serial}:", NamedTextColor.GRAY))
+        line("Status", row.status?.name?.lowercase() ?: "unreadable")
+        line("Owner", "${name(row.issuedTo)} (${row.issuedTo})")
+        line("Source", if (row.source == HeartStore.ItemSource.ADMIN) "staff grant by ${actor(row.issuedBy)}" else "withdrawn by the owner")
+        line("Issued", "${time(row.issuedAt)} (transaction ${row.issueTransaction})")
+        if (row.closedAt != null) line("Closed", "${time(row.closedAt)} by ${actor(row.closedBy)} (transaction ${row.closeTransaction ?: "?"})")
+        if (row.status == HeartStore.ItemStatus.ISSUED) {
+            sender.sendMessage(Component.text(
+                " Still redeemable. Only if it is certainly gone (checked with the player): /lifesteal hearts void ${row.serial}" +
+                    if (row.source == HeartStore.ItemSource.WITHDRAW) " refund" else "",
+                NamedTextColor.DARK_GRAY
+            ))
         }
     }
 
@@ -406,14 +537,16 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         val admin = sender.hasPermission(PERMISSION)
         return when (args.size) {
             1 -> buildList {
-                if (admin) addAll(listOf("get", "set", "add", "remove", "items", "void", "reviews"))
+                if (admin) addAll(listOf("get", "set", "add", "remove", "items", "item", "recent", "void", "reviews"))
                 if (sender.hasPermission(GIVE_PERMISSION)) add("give")
                 if (sender.hasPermission(MONITOR_PERMISSION)) add("monitor")
             }.filter { it.startsWith(args[0].lowercase()) }
             2 -> if (args[0].equals("monitor", ignoreCase = true)) {
                 if (sender.hasPermission(MONITOR_PERMISSION)) (listOf("open", "all") + plugin.server.onlinePlayers.map { it.name }).filter { it.startsWith(args[1], ignoreCase = true) }
                 else emptyList()
-            } else if (args[0].equals("void", ignoreCase = true)) emptyList()
+            } else if (args[0].equals("recent", ignoreCase = true)) {
+                if (admin) listOf("issued", "redeemed", "voided", "all").filter { it.startsWith(args[1].lowercase()) } else emptyList()
+            } else if (args[0].equals("void", ignoreCase = true) || args[0].equals("item", ignoreCase = true)) emptyList()
                 else plugin.server.onlinePlayers.map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) }
             3 -> if (args[0].equals("monitor", ignoreCase = true) && sender.hasPermission(MONITOR_PERMISSION) && args[1].removePrefix("#").toLongOrNull() != null)
                 listOf("reviewed", "dismissed", "open").filter { it.startsWith(args[2].lowercase()) }
@@ -426,7 +559,8 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         const val PERMISSION = "joshymc.lifesteal.hearts.admin"
         /** Making Heart items (issue #1344) is its own permission, not part of [PERMISSION]. */
         const val GIVE_PERMISSION = "joshymc.lifesteal.hearts.give"
-        const val USAGE = "/lifesteal hearts <get|set|add|remove> <player> [amount] | items <player> | void <serial> [refund] | reviews [player]"
+        const val USAGE = "/lifesteal hearts <get|set|add|remove> <player> [amount] | items <player> | item <serial> | recent [status] [page] | void <serial> [refund] | reviews [player]"
+        const val RECENT_USAGE = "/lifesteal hearts recent [issued|redeemed|voided|all] [page]"
         const val GIVE_USAGE = "/lifesteal hearts give <player> <amount>"
         /** Heart transfer monitoring (issue #1508): flags, details, review status and staff notifications. */
         const val MONITOR_PERMISSION = HeartTransferMonitor.PERMISSION

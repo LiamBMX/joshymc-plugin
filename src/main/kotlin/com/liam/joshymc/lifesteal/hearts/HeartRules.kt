@@ -22,12 +22,14 @@ object HeartRules {
     const val HEARTS_PER_KILL = 1
 
     /**
-     * What happens when the killer already has the maximum. The approved blueprint v1.1 doesn't
-     * say (issue #1341, section 6, an open gameplay decision), so the conservative choice is
-     * fixed here in code, not in lifesteal.yml: [KillerAtMaximumPolicy.NO_TRANSFER], nobody's
-     * hearts change. It never drops a heart item or gives any other reward.
+     * What happens when the killer already has the maximum. Issue #1341 left it open and shipped
+     * [KillerAtMaximumPolicy.NO_TRANSFER]; the Owner decided in issue #1537 that the eligible
+     * victim still loses one heart, which is destroyed: [KillerAtMaximumPolicy.VICTIM_LOSES_ONLY].
+     * The killer stays at the maximum, no Heart item drops, the victim never goes below the minimum
+     * (that check runs first), and the same directional cooldown starts as for a transfer. Fixed
+     * here in code, not in lifesteal.yml.
      */
-    val KILLER_AT_MAXIMUM: KillerAtMaximumPolicy = KillerAtMaximumPolicy.NO_TRANSFER
+    val KILLER_AT_MAXIMUM: KillerAtMaximumPolicy = KillerAtMaximumPolicy.VICTIM_LOSES_ONLY
 
     fun healthFor(hearts: Int): Double = hearts * HEALTH_PER_HEART
 
@@ -141,11 +143,11 @@ object HeartRules {
     // ── Transfers ───────────────────────────────────────────
 
     enum class KillerAtMaximumPolicy {
-        /** Nobody's hearts change and no cooldown starts (the fixed choice, see [KILLER_AT_MAXIMUM]). */
+        /** Nobody's hearts change and no cooldown starts (the pre-#1537 rule; kept for tests, not used). */
         NO_TRANSFER,
         /**
-         * Kept only as the documented alternative for when the blueprint decides it: the victim
-         * still loses a heart, the killer stays at the maximum. Not used.
+         * The fixed choice since issue #1537 (see [KILLER_AT_MAXIMUM]): the victim loses one heart,
+         * which is destroyed, the killer stays at the maximum, and the pair's cooldown starts.
          */
         VICTIM_LOSES_ONLY,
     }
@@ -153,7 +155,13 @@ object HeartRules {
     sealed interface Decision {
         /** Victim loses a heart, killer gains it. */
         data class Transfer(val victimAfter: Int, val killerAfter: Int) : Decision
-        /** Killer at the maximum with [KillerAtMaximumPolicy.VICTIM_LOSES_ONLY]. */
+        /**
+         * Killer at the maximum with [KillerAtMaximumPolicy.VICTIM_LOSES_ONLY] (the rule since issue
+         * #1537): the victim lost one heart that nobody gained. Stored outcome `VICTIM_LOST_ONLY`.
+         * Integration contract: it is a real, accepted PvP kill (count it like `TRANSFERRED` for
+         * kills/deaths), the victim's hearts went down by exactly one, the killer's didn't change,
+         * the directional cooldown started, and no Heart item exists for it.
+         */
         data class VictimLosesOnly(val victimAfter: Int) : Decision
         /** The victim is at the minimum (their last heart): nothing changes, nothing drops. */
         data object VictimAtMinimum : Decision

@@ -106,10 +106,17 @@ object RankedIntegrity {
         FREEZE("freeze", "freeze"),
         SMITE("smite", "/smite"),
         SUDO("sudo", "/sudo"),
+        /** Issue #1537: `/lifesteal hearts set|add|remove` and `void` (with or without refund) on the item's owner. */
+        HEARTS("hearts", "/lifesteal hearts"),
+        /** Issue #1537: `/lifesteal hearts give` (new Heart items in the participant's inventory). */
+        HEART_ITEMS("heartitems", "/lifesteal hearts give"),
         ;
 
-        /** Teleports and delegated commands also wait for a pending inventory restore (the restore moves them back). */
-        val coversPendingRestore: Boolean get() = this == TELEPORT || this == TELEPORT_HERE || this == SUDO
+        /**
+         * Teleports and delegated commands also wait for a pending inventory restore (the restore
+         * moves them back); so do Heart item grants, since the restore replaces the inventory.
+         */
+        val coversPendingRestore: Boolean get() = this == TELEPORT || this == TELEPORT_HERE || this == SUDO || this == HEART_ITEMS
     }
 
     /**
