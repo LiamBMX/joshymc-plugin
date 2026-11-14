@@ -17,6 +17,8 @@ object HeartMessages {
 
     const val KILLER_AT_MAXIMUM = "&7You're at the maximum of {maximum} hearts, so no heart was stolen."
     const val VICTIM_KILLER_AT_MAXIMUM = "&7{killer} is at the maximum hearts, so you kept your heart."
+    // Issue #1537: a killer at the maximum still takes the victim's heart; it is destroyed.
+    const val KILLER_AT_MAXIMUM_DESTROYED = "&7You're at the maximum of {maximum} hearts, so {victim}'s heart was destroyed instead."
 
     // Team PvP (issue #1348).
     const val KILLER_TEAMMATE = "&7{victim} is your teammate, so no heart was stolen."

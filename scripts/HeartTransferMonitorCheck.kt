@@ -360,11 +360,11 @@ private fun rejectedAndFailures() = withTemp { dir ->
         val atMin = hearts.transferPvp(request(main, last, T0))
         check("rejected: final-heart protection unchanged", atMin is PvpResult.Done && atMin.decision == Decision.VictimAtMinimum && hearts.load(last)!!.hearts == 1)
         check("rejected: final-heart rejection is not a transfer", monitor.evaluate(transferOf(atMin, request(main, last, T0)).copy(), S, T0) == Outcome.NotATransfer)
-        // 15. Maximum: a killer on 20 takes nothing.
+        // 15. Maximum: a killer on 20 gains nothing (#1537: the victim's heart is destroyed, not transferred).
         val maxed = players(hearts, 1, start = 20)[0]
         val maxReq = request(maxed, alt, T0 + 20 * MIN)
         val atMax = hearts.transferPvp(maxReq)
-        check("rejected: maximum unchanged", atMax is PvpResult.Done && atMax.decision == Decision.KillerAtMaximum && hearts.load(maxed)!!.hearts == 20)
+        check("rejected: maximum unchanged", atMax is PvpResult.Done && atMax.decision is Decision.VictimLosesOnly && hearts.load(maxed)!!.hearts == 20)
         check("rejected: killer-at-maximum is not a transfer", monitor.evaluate(transferOf(atMax, maxReq), S, T0) == Outcome.NotATransfer)
 
         // 16. A monitoring failure neither duplicates nor reverses hearts.

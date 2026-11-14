@@ -211,7 +211,7 @@ private fun hearts() {
     check("unknown decision", HeartRules.decide(10, 10, 0, LIMITS, team = HeartCheck.UNKNOWN) == Decision.TeamUnknown)
     check("eligible = the old rules", HeartRules.decide(10, 10, 0, LIMITS, team = HeartCheck.ELIGIBLE) == Decision.Transfer(9, 11))
     check("victim with exactly 1 heart keeps it", HeartRules.decide(1, 10, 0, LIMITS) == Decision.VictimAtMinimum)
-    check("killer with 20 hearts gains nothing", HeartRules.decide(10, 20, 0, LIMITS) == Decision.KillerAtMaximum)
+    check("killer with 20 hearts gains nothing (#1537: victim-only loss)", HeartRules.decide(10, 20, 0, LIMITS) == Decision.VictimLosesOnly(9))
     check("cooldown still enforced", HeartRules.decide(10, 10, 1_000, LIMITS) is Decision.Cooldown)
     with(HeartRules) {
         check("team refusals move no heart", !Decision.Teammates.changesHearts && !Decision.TeamUnknown.changesHearts)
@@ -304,8 +304,9 @@ private fun store() {
         check("victim at exactly 1 heart keeps it", last is PvpResult.Done && last.decision == Decision.VictimAtMinimum && store.load(oneHeart)!!.hearts == 1)
         val full = UUID.randomUUID()
         store.ensure(full, 20, T0)
-        val max = store.transferPvp(pvp(full, BEDROCK, T0, HeartCheck.ELIGIBLE))
-        check("killer at 20 hearts gains nothing", max is PvpResult.Done && max.decision == Decision.KillerAtMaximum && store.load(full)!!.hearts == 20 && store.load(BEDROCK)!!.hearts == 10)
+        val maxVictim = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+        val max = store.transferPvp(pvp(full, maxVictim, T0, HeartCheck.ELIGIBLE))
+        check("killer at 20 hearts gains nothing, victim loses one (#1537)", max is PvpResult.Done && max.decision == Decision.VictimLosesOnly(9) && store.load(full)!!.hearts == 20 && store.load(maxVictim)!!.hearts == 9)
 
         // Database failure: a closed database refuses the transfer instead of half-applying it.
         val closed = DatabaseManager(dir, quietLogger()).also { it.start(); it.shutdown() }

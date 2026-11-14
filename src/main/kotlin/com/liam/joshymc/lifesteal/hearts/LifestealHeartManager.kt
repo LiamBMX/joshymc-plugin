@@ -14,6 +14,7 @@ import com.liam.joshymc.manager.AntiDupeManager
 import org.bukkit.inventory.EquipmentSlot
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.TextReplacementConfig
+import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
 import org.bukkit.NamespacedKey
 import org.bukkit.World
@@ -674,6 +675,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 send(victim, HeartMessages.VICTIM_LOST, names + ("{hearts}" to result.victimAfter.toString()))
             }
             is HeartRules.Decision.VictimLosesOnly -> {
+                send(killer, HeartMessages.KILLER_AT_MAXIMUM_DESTROYED, names)
                 send(victim, HeartMessages.VICTIM_LOST, names + ("{hearts}" to result.victimAfter.toString()))
             }
             HeartRules.Decision.VictimAtMinimum -> {
@@ -780,7 +782,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 is HeartStore.WithdrawResult.Withdrawn -> {
                     loaded[uuid] = result.after
                     apply(player, result.after)
-                    deliver(player, listOf(result.serial), settings, "withdrawal ${result.transactionId}")
+                    deliver(player, listOf(result.serial), settings, "withdrawal ${result.transactionId}", result.transactionId, HeartStore.ItemSource.WITHDRAW)
                     send(player, settings.messages.withdrawn, mapOf("{hearts}" to result.after.toString(), "{maximum}" to limits.maximum.toString()))
                 }
             }
@@ -814,13 +816,21 @@ class LifestealHeartManager(private val plugin: Joshymc) {
      * saves the player's data. If a slot is somehow gone, the item drops at their feet rather than
      * vanishing. Building an item can't fail for a valid serial; if it ever did, the serial stays
      * ISSUED and is logged so staff can void and refund it.
+     *
+     * Issue #1537 (F-1): the database commit and the player-data save are two separate writes, so a
+     * hard crash in between can still lose the item (the heart is then gone and the serial stays
+     * ISSUED). A save that visibly failed is reported to staff ([saveFailed]) with the player, the
+     * serials and the transaction; nothing is refunded or re-issued automatically.
      */
-    private fun deliver(player: Player, serials: List<String>, settings: LifestealSettings.HeartItems, context: String) {
+    private fun deliver(
+        player: Player, serials: List<String>, settings: LifestealSettings.HeartItems, context: String,
+        transactionId: String, source: HeartStore.ItemSource,
+    ) {
         for (serial in serials) {
             val stack = try {
                 items.create(serial, settings)
             } catch (e: Exception) {
-                plugin.logger.severe("[Hearts] Couldn't build Heart item $serial for ${player.name} ($context): ${e.message}. Use /lifesteal hearts void $serial refund.")
+                plugin.logger.severe("[Hearts] Couldn't build Heart item $serial for ${player.name} (${player.uniqueId}, $context): ${e.message}. Use /lifesteal hearts void $serial refund.")
                 continue
             }
             val slot = player.inventory.firstEmpty()
@@ -830,15 +840,59 @@ class LifestealHeartManager(private val plugin: Joshymc) {
                 plugin.logger.warning("[Hearts] ${player.name}'s inventory was full, so Heart item $serial was dropped at their feet ($context).")
             }
         }
-        savePlayer(player)
+        if (savePlayer(player) == HeartAdminRules.SaveOutcome.FAILED) saveFailed(player, serials, transactionId, source)
     }
 
-    /** Writes the player's data file now, so a crash right after a heart-item change can't roll their inventory back. */
-    private fun savePlayer(player: Player) {
-        try {
-            player.saveData()
-        } catch (e: Exception) {
-            plugin.logger.warning("[Hearts] Couldn't save ${player.name}'s player data right after a Heart item change: ${e.message}")
+    /**
+     * Writes the player's data file now, so a crash right after a heart-item change can't roll their
+     * inventory back. One retry when it throws. Paper may log a failed write itself without
+     * throwing, so the data file's modification time is checked too ([HeartAdminRules.saveOutcome]).
+     */
+    private fun savePlayer(player: Player): HeartAdminRules.SaveOutcome {
+        val startedAt = System.currentTimeMillis()
+        var threw = false
+        for (attempt in 1..2) {
+            try {
+                player.saveData()
+                threw = false
+                break
+            } catch (e: Exception) {
+                threw = true
+                plugin.logger.warning("[Hearts] Couldn't save ${player.name}'s player data right after a Heart item change (attempt $attempt): ${e.message}")
+            }
+        }
+        val modified = if (threw) null else runCatching { playerDataFile(player)?.takeIf { it.isFile }?.lastModified() }.getOrNull()
+        return HeartAdminRules.saveOutcome(threw, modified, startedAt)
+    }
+
+    /** The main world's `playerdata/<uuid>.dat`, or null without a world (then the save is only unconfirmed). */
+    private fun playerDataFile(player: Player): java.io.File? {
+        val world = Bukkit.getWorlds().firstOrNull() ?: return null
+        return java.io.File(java.io.File(world.worldFolder, "playerdata"), "${player.uniqueId}.dat")
+    }
+
+    /**
+     * Issue #1537 (F-1): a Heart item was committed as ISSUED but the player's data couldn't be
+     * saved. Logged (console + admin_logs, system actor) and shown to online heart admins. Recovery
+     * stays manual (`/lifesteal hearts item|items|recent|void`): the item may well still be in the
+     * inventory and be saved by the next autosave, so an ISSUED serial is never refunded by itself.
+     */
+    private fun saveFailed(player: Player, serials: List<String>, transactionId: String, source: HeartStore.ItemSource) {
+        val details = HeartAdminRules.saveFailedDetails(player.uniqueId, serials, transactionId, source)
+        plugin.logger.severe(
+            "[Hearts] ${player.name}'s player data couldn't be saved right after Heart item(s) were issued ($details). " +
+                "If the server crashes before the next save the item(s) may be lost; check with /lifesteal hearts items ${player.name} " +
+                "and only void (with refund for a withdrawal) once the item is certainly gone."
+        )
+        staffLog(HeartAdminRules.SAVE_FAILED_ACTION, player.uniqueId, player.name, details)
+        val notice = Component.text("[Hearts] ", NamedTextColor.RED).append(
+            Component.text(
+                "${player.name}'s data couldn't be saved after ${serials.size} Heart item(s) were issued (tx $transactionId). See /lifesteal hearts items ${player.name}.",
+                NamedTextColor.GRAY
+            )
+        )
+        for (staff in Bukkit.getOnlinePlayers()) {
+            if (staff.hasPermission(LifestealHeartsCommand.PERMISSION)) plugin.commsManager.send(staff, notice)
         }
     }
 
@@ -950,13 +1004,19 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         val serials = List(amount) { UUID.randomUUID().toString() }
         val result = store.grantItems(target.uniqueId, serials, actor, actorName, System.currentTimeMillis())
         if (result is HeartStore.GrantResult.Granted) {
-            deliver(target, result.serials, itemSettings, "staff grant ${result.transactionId}")
+            deliver(target, result.serials, itemSettings, "staff grant ${result.transactionId}", result.transactionId, HeartStore.ItemSource.ADMIN)
             plugin.logger.info("[Hearts] $actorName gave ${target.name} $amount Heart item(s) (transaction ${result.transactionId}).")
         }
         return result
     }
 
     fun outstandingItems(uuid: UUID): List<HeartStore.ItemRow> = store.outstandingItems(uuid)
+
+    /** Issue #1537: one Heart item's record by canonical serial (read-only). */
+    fun item(serial: String): HeartStore.ItemRow? = store.loadItem(serial)
+
+    /** Issue #1537: the newest Heart items across all players, paged (read-only). */
+    fun recentItems(status: HeartStore.ItemStatus?, page: Int): List<HeartStore.ItemRow> = store.recentItems(status, page)
 
     /** `/lifesteal hearts void <serial> [refund]`: staff recovery for a lost Heart item. */
     fun voidItem(serial: String, refund: Boolean, actor: String, actorName: String): HeartStore.VoidResult {

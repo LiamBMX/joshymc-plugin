@@ -20,7 +20,17 @@ import com.liam.joshymc.lifesteal.hearts.HeartRules.KillerAtMaximumPolicy
 import com.liam.joshymc.lifesteal.hearts.HeartStore
 import com.liam.joshymc.lifesteal.hearts.HeartStore.AdminResult
 import com.liam.joshymc.lifesteal.hearts.HeartStore.PvpResult
+import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
+import com.liam.joshymc.lifesteal.hearts.HeartAdminRules
+import com.liam.joshymc.lifesteal.progression.ProgressionRules
+import com.liam.joshymc.lifesteal.ranked.RankedIntegrity
+import com.liam.joshymc.lifesteal.teams.TeamCombatRules
 import com.liam.joshymc.manager.DatabaseManager
+import com.liam.joshymc.staff.DelegatedCommandRules
+import com.liam.joshymc.staff.StaffActor
+import com.liam.joshymc.staff.StaffProtection
+import com.liam.joshymc.staff.StaffRank
+import com.liam.joshymc.staff.StaffTarget
 import com.liam.joshymc.manager.SqliteDatabase
 import org.yaml.snakeyaml.Yaml
 import java.io.File
@@ -94,6 +104,7 @@ fun main() {
     environmentalRules()
     environmentalStore()
     environmentalWiring()
+    remediation1537()
     println("OK: $checks Lifesteal heart checks passed.")
 }
 
@@ -544,13 +555,17 @@ private fun rules() {
     check("victim reaches 1", HeartRules.decide(2, 10, 0, LIMITS) == Decision.Transfer(1, 11))
     check("victim at 1 keeps it", HeartRules.decide(1, 10, 0, LIMITS) == Decision.VictimAtMinimum)
     check("killer reaches 20", HeartRules.decide(10, 19, 0, LIMITS) == Decision.Transfer(9, 20))
-    check("killer at 20: no transfer", HeartRules.decide(10, 20, 0, LIMITS) == Decision.KillerAtMaximum)
-    check("fixed policy is NO_TRANSFER", HeartRules.KILLER_AT_MAXIMUM == KillerAtMaximumPolicy.NO_TRANSFER)
-    check("alternative policy (unused): victim only", HeartRules.decide(10, 20, 0, LIMITS, KillerAtMaximumPolicy.VICTIM_LOSES_ONLY) == Decision.VictimLosesOnly(9))
+    // Issue #1537: a killer at the maximum still costs the victim one heart (destroyed).
+    check("19. killer at 20, victim at 10: victim loses one, killer unchanged", HeartRules.decide(10, 20, 0, LIMITS) == Decision.VictimLosesOnly(9))
+    check("20. killer at 20, victim at 2: victim goes to 1", HeartRules.decide(2, 20, 0, LIMITS) == Decision.VictimLosesOnly(1))
+    check("21. killer at 20, victim at 1: nothing", HeartRules.decide(1, 20, 0, LIMITS) == Decision.VictimAtMinimum)
+    check("fixed policy is VICTIM_LOSES_ONLY (#1537)", HeartRules.KILLER_AT_MAXIMUM == KillerAtMaximumPolicy.VICTIM_LOSES_ONLY)
+    check("old policy still means no transfer", HeartRules.decide(10, 20, 0, LIMITS, KillerAtMaximumPolicy.NO_TRANSFER) == Decision.KillerAtMaximum)
+    check("victim-only loss changes hearts", with(HeartRules) { Decision.VictimLosesOnly(9).changesHearts })
     check("cooldown blocks", HeartRules.decide(10, 10, 5_000, LIMITS) == Decision.Cooldown(5_000))
     check("last heart wins over cooldown", HeartRules.decide(1, 10, 5_000, LIMITS) == Decision.VictimAtMinimum)
     check("cooldown wins over killer maximum", HeartRules.decide(10, 20, 5_000, LIMITS) is Decision.Cooldown)
-    check("stored above maximum counts as maximum", HeartRules.decide(10, 25, 0, LIMITS) == Decision.KillerAtMaximum)
+    check("stored above maximum counts as maximum", HeartRules.decide(10, 25, 0, LIMITS) == Decision.VictimLosesOnly(9))
     check("stored below minimum counts as minimum", HeartRules.decide(0, 10, 0, LIMITS) == Decision.VictimAtMinimum)
     for (v in -3..30) for (k in -3..30) {
         when (val d = HeartRules.decide(v, k, 0, LIMITS)) {
@@ -673,15 +688,17 @@ private fun store() {
             val maxed = UUID.randomUUID().also { store.ensure(it, 20, T0) }
             val target = UUID.randomUUID().also { store.ensure(it, 10, T0) }
             val atMax = store.transferPvp(pvp(maxed, target, T0))
-            check("killer at 20: no transfer", atMax is PvpResult.Done && atMax.decision == Decision.KillerAtMaximum)
-            check("killer at 20 stays 20, victim keeps hearts", store.load(maxed)!!.hearts == 20 && store.load(target)!!.hearts == 10)
-            check("no cooldown when killer at max", store.lastTransferAt(maxed, target) == null)
+            check("killer at 20: victim-only loss (#1537)", atMax is PvpResult.Done && atMax.decision == Decision.VictimLosesOnly(9))
+            check("killer at 20 stays 20, victim loses exactly one", store.load(maxed)!!.hearts == 20 && store.load(target)!!.hearts == 9)
+            check("23. cooldown starts after a victim-only loss", store.lastTransferAt(maxed, target) == T0)
+            // The killer's own record isn't written (version unchanged); the victim's is, once.
+            check("killer record untouched by a victim-only loss", store.load(maxed)!!.version == 0L && store.load(target)!!.version == 1L)
 
             // A lowered maximum: stored 25 counts as 20 and the stored value is only replaced by a change.
             val over = UUID.randomUUID().also { store.ensure(it, 25, T0) }
             check("out-of-range row isn't rewritten by ensure", store.ensure(over, 10, T0).hearts == 25)
             val overKill = store.transferPvp(pvp(over, target, T0))
-            check("out-of-range killer counts as maximum", overKill is PvpResult.Done && overKill.decision == Decision.KillerAtMaximum && store.load(over)!!.hearts == 25)
+            check("out-of-range killer counts as maximum", overKill is PvpResult.Done && overKill.decision == Decision.VictimLosesOnly(8) && store.load(over)!!.hearts == 25)
 
             // Malformed record: never reset, never used, repaired by set.
             val broken = UUID.randomUUID().also { store.ensure(it, 10, T0) }
@@ -1388,10 +1405,11 @@ private fun environmentalStore() {
             check("env store: victim at 1 heart stays protected", atOne is PvpResult.Done && atOne.decision == Decision.VictimAtMinimum && store.load(last)!!.hearts == 1)
 
             val maxed = UUID.randomUUID().also { store.ensure(it, 20, T0) }
+            val maxTarget = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+            val atMax = store.transferPvp(credited(maxed, maxTarget, T0))
+            check("env store: killer at 20 gains nothing, victim loses one (#1537)", atMax is PvpResult.Done && atMax.decision == Decision.VictimLosesOnly(9) &&
+                store.load(maxed)!!.hearts == 20 && store.load(maxTarget)!!.hearts == 9)
             val target = UUID.randomUUID().also { store.ensure(it, 10, T0) }
-            val atMax = store.transferPvp(credited(maxed, target, T0))
-            check("env store: killer at 20 gets nothing (NO_TRANSFER)", atMax is PvpResult.Done && atMax.decision == Decision.KillerAtMaximum &&
-                store.load(maxed)!!.hearts == 20 && store.load(target)!!.hearts == 10)
 
             val mate = UUID.randomUUID().also { store.ensure(it, 10, T0) }
             val team = store.transferPvp(credited(mate, target, T0, team = com.liam.joshymc.lifesteal.teams.TeamCombatRules.HeartCheck.TEAMMATES))
@@ -1438,4 +1456,289 @@ private fun environmentalWiring() {
     check("env wiring: one transferPvp call per heart path (onDeath + Combat NPC + ranked forfeit)", Regex("store\\.transferPvp\\(").findAll(manager).count() == 3)
     val npcDeath = manager.substringAfter("fun onCombatNpcDeath(").substringBefore("private fun notify(")
     check("env wiring: Combat NPC deaths unchanged (direct attribution only)", "combatTagKiller" !in npcDeath && "\"combatnpc:\$sessionId\"" in npcDeath)
+}
+
+// ── Issue #1537: heart administration, withdrawal recovery, killer-at-maximum ──
+
+private fun remediation1537() {
+    staffSecurityRules()
+    staffSecurityWiring()
+    withdrawalRecovery()
+    maximumKillerStore()
+    combatNpcEnvironment()
+    monitoringInformational()
+}
+
+private fun staffSecurityRules() {
+    fun decide(actor: StaffActor, target: StaffRank?, self: Boolean = false) = StaffProtection.decide(actor, StaffTarget(target, self))
+    val admin = StaffActor.Staff(StaffRank.ADMIN)
+    check("1. staff -> lower-ranked staff allowed", decide(admin, StaffRank.MOD).allowed)
+    check("1. staff -> ordinary player allowed", decide(admin, null).allowed)
+    check("2. staff -> higher-ranked staff refused", decide(admin, StaffRank.LEAD_ADMIN) == StaffProtection.Decision.HIGHER_RANK)
+    check("3. staff -> equal-ranked staff refused", decide(admin, StaffRank.ADMIN) == StaffProtection.Decision.EQUAL_RANK)
+    check("4. staff -> themselves refused (even the Owner)", decide(StaffActor.Staff(StaffRank.OWNER), StaffRank.OWNER, self = true) == StaffProtection.Decision.SELF &&
+        decide(admin, null, self = true) == StaffProtection.Decision.SELF)
+    check("5. console allowed", decide(StaffActor.Console, StaffRank.OWNER).allowed)
+    check("non-staff holder of the node can't touch staff", decide(StaffActor.Staff(null), StaffRank.HELPER) == StaffProtection.Decision.NOT_STAFF)
+
+    // Every heart operation maps to an audit action and a ranked guard.
+    val ops = HeartAdminRules.Operation.entries
+    check("audit actions are the issue's six", ops.map { it.auditAction }.toSet() == setOf("HEART_SET", "HEART_ADD", "HEART_REMOVE", "HEART_GIVE", "HEART_VOID", "HEART_REFUND"))
+    check("admin ops map to their operation", AdminOp.entries.all { HeartAdminRules.Operation.of(it).id == it.id })
+    check("grants use the Heart item ranked action, the rest the hearts one",
+        HeartAdminRules.Operation.GIVE.rankedAction == RankedIntegrity.StaffAction.HEART_ITEMS &&
+            ops.filter { it != HeartAdminRules.Operation.GIVE }.all { it.rankedAction == RankedIntegrity.StaffAction.HEARTS })
+    for (op in ops) {
+        val held = RankedIntegrity.staffActionRefusal(op.rankedAction, "Target", held = true, pendingRestore = false, self = false)
+        check("6-8. ${op.id}: refused on a held ranked participant", held != null && held.contains("/lifesteal admin ranked cancel|remove"))
+        check("${op.id}: allowed outside ranked", RankedIntegrity.staffActionRefusal(op.rankedAction, "Target", held = false, pendingRestore = false, self = false) == null)
+    }
+    check("6. grants also wait for a pending ranked restore (it replaces the inventory)",
+        RankedIntegrity.staffActionRefusal(RankedIntegrity.StaffAction.HEART_ITEMS, "T", held = false, pendingRestore = true, self = false) != null)
+    check("heart counts aren't in the snapshot: a pending restore doesn't block set/add/remove",
+        RankedIntegrity.staffActionRefusal(RankedIntegrity.StaffAction.HEARTS, "T", held = false, pendingRestore = true, self = false) == null)
+
+    // Delegated execution: /sudo, NPCs and portals can never run the heart admin branch.
+    for (cmd in listOf("/lifesteal hearts give Bob 5", "lifesteal hearts set Bob 20", "/joshymc:lifesteal hearts void x refund"))
+        check("delegated '$cmd' refused", DelegatedCommandRules.decide(cmd) == DelegatedCommandRules.Decision.STAFF_SUBCOMMAND)
+    check("delegated /withdrawheart refused (asset transfer)", !DelegatedCommandRules.decide("/withdrawheart").allowed)
+
+    // AdminAudit details: bounded numbers, serial, transaction; nothing about connections.
+    val serial = serial()
+    val details = HeartAdminRules.details(HeartAdminRules.Operation.SET, "tx-1", amount = 5, before = 10, after = 5)
+    check("11. set details", details == "op=set amount=5 before=10 after=5 result=OK tx=tx-1")
+    val give = HeartAdminRules.details(HeartAdminRules.Operation.GIVE, "tx-2", serial = serial, itemCount = 3)
+    check("give details carry count, serial and tx", give.contains("items=3") && give.contains("serial=$serial") && give.contains("tx=tx-2"))
+    check("amounts are bounded", HeartAdminRules.details(HeartAdminRules.Operation.ADD, null, amount = 9_999_999).contains("amount=${HeartRules.MAX_ADMIN_AMOUNT}"))
+    check("a forged serial is never echoed", !HeartAdminRules.details(HeartAdminRules.Operation.VOID, "t", serial = "x; DROP TABLE").contains("serial="))
+    check("no connection data in details", listOf(details, give).none { it.contains("hash", ignoreCase = true) || it.contains("ip", ignoreCase = true) })
+    check("refusal codes", HeartAdminRules.reasonCode(StaffProtection.Decision.SELF.message!!) == "SELF" &&
+        HeartAdminRules.reasonCode(StaffProtection.Decision.HIGHER_RANK.message!!) == "HIGHER_RANK" &&
+        HeartAdminRules.reasonCode(StaffProtection.Decision.EQUAL_RANK.message!!) == "EQUAL_RANK" &&
+        HeartAdminRules.reasonCode(StaffProtection.Decision.NOT_STAFF.message!!) == "STAFF_TARGET")
+    check("refused details", HeartAdminRules.refusedDetails(HeartAdminRules.Operation.GIVE, StaffProtection.Decision.SELF.message!!) == "op=give result=REFUSED reason=SELF")
+}
+
+private fun staffSecurityWiring() {
+    val cmd = source("lifesteal/hearts/LifestealHeartsCommand.kt")
+    fun body(name: String): String {
+        val start = cmd.indexOf("private fun $name(")
+        check("command has $name", start >= 0)
+        val next = cmd.indexOf("\n    private fun ", start + 1).let { if (it < 0) cmd.length else it }
+        return cmd.substring(start, next)
+    }
+    val guard = body("guard")
+    check("guard: staff protection first, then the ranked hold",
+        guard.indexOf("staffRankManager.protectionProblem(sender, uuid)") in 0 until guard.indexOf("refusesStaffAction(sender, uuid, name, operation.rankedAction)"))
+    check("guard: refusals are audited", guard.contains("AdminAudit.log(plugin, sender, HeartAdminRules.REFUSED_ACTION"))
+
+    // 10. Every mutating branch guards before it writes, and audits only after a commit.
+    val execute = cmd.substring(cmd.indexOf("fun execute("), cmd.indexOf("private fun guard("))
+    check("10. set/add/remove: guard before adminChange", execute.indexOf("if (!guard(sender, operation, uuid, name)) return") in 0 until execute.indexOf("hearts.adminChange("))
+    check("11. set/add/remove: AdminAudit after Changed", Regex("""is HeartStore\.AdminResult\.Changed -> \{\s*\n\s*//[^\n]*\n\s*AdminAudit\.log\(plugin, sender, operation\.auditAction""").containsMatchIn(execute))
+    check("9. set/add/remove: permission checked before anything", execute.indexOf("if (!sender.hasPermission(PERMISSION))") in 0 until execute.indexOf("guard("))
+    val give = body("give")
+    check("9. give: its own permission first", give.indexOf("hasPermission(GIVE_PERMISSION)") in 0 until give.indexOf("guard("))
+    check("give: quantity validated, then guard, then grant",
+        give.indexOf("MAX_ADMIN_ITEM_GRANT") in 0 until give.indexOf("guard(sender, HeartAdminRules.Operation.GIVE") &&
+            give.indexOf("guard(sender, HeartAdminRules.Operation.GIVE") < give.indexOf("lifestealHeartManager.grantItems("))
+    check("give: HEART_GIVE audited after Granted", give.indexOf("is HeartStore.GrantResult.Granted") in 0 until give.indexOf("Operation.GIVE.auditAction"))
+    val void = body("void")
+    check("void: owner resolved and guarded before voiding", void.indexOf("lifestealHeartManager.item(") in 0 until void.indexOf("guard(sender, if (refund)") &&
+        void.indexOf("guard(sender, if (refund)") < void.indexOf("lifestealHeartManager.voidItem("))
+    check("void/refund: both audited after Voided", void.indexOf("is HeartStore.VoidResult.Voided") in 0 until void.indexOf("Operation.VOID.auditAction") &&
+        void.indexOf("Operation.VOID.auditAction") < void.indexOf("Operation.REFUND.auditAction"))
+    check("one generic guard: no second hierarchy", !cmd.contains("StaffRank.") && !cmd.contains("StaffProtection.decide"))
+
+    val ranked = source("lifesteal/ranked/LifestealRankedManager.kt")
+    check("ranked guard by UUID (offline targets)", ranked.contains("fun refusesStaffAction(sender: CommandSender, targetUuid: UUID, targetName: String, action: RankedIntegrity.StaffAction): Boolean"))
+    check("the Player overload delegates to it", ranked.contains("refusesStaffAction(sender, target.uniqueId, target.name, action)"))
+}
+
+private fun withdrawalRecovery() {
+    // Save outcome after a Heart item was issued.
+    val start = T0
+    check("13. saveData threw: failed", HeartAdminRules.saveOutcome(threw = true, fileModifiedAt = null, startedAt = start) == HeartAdminRules.SaveOutcome.FAILED)
+    check("12. file written: saved", HeartAdminRules.saveOutcome(false, start + 5, start) == HeartAdminRules.SaveOutcome.SAVED)
+    check("coarse timestamps tolerated", HeartAdminRules.saveOutcome(false, start - 1_000, start) == HeartAdminRules.SaveOutcome.SAVED)
+    check("13. file visibly older: failed", HeartAdminRules.saveOutcome(false, start - 60_000, start) == HeartAdminRules.SaveOutcome.FAILED)
+    check("file not found: unconfirmed (no alert)", HeartAdminRules.saveOutcome(false, null, start) == HeartAdminRules.SaveOutcome.UNCONFIRMED &&
+        HeartAdminRules.saveOutcome(false, 0, start) == HeartAdminRules.SaveOutcome.UNCONFIRMED)
+    val p = UUID.randomUUID()
+    val s1 = serial()
+    val line = HeartAdminRules.saveFailedDetails(p, listOf(s1, "forged"), "tx-9", HeartStore.ItemSource.WITHDRAW)
+    check("13. failure details: player, serial, transaction, manual recovery",
+        line == "player_uuid=$p source=WITHDRAW serials=$s1 tx=tx-9 recovery=manual")
+
+    val manager = source("lifesteal/hearts/LifestealHeartManager.kt")
+    check("database first: withdraw commits before the item is delivered",
+        manager.indexOf("store.withdraw(uuid, serial, limits, now, requirements = requirements)") in 0 until
+            manager.indexOf("deliver(player, listOf(result.serial), settings, \"withdrawal"))
+    check("a failed save is reported, never refunded automatically",
+        manager.contains("if (savePlayer(player) == HeartAdminRules.SaveOutcome.FAILED) saveFailed(player, serials, transactionId, source)"))
+    val saveFailed = manager.substring(manager.indexOf("private fun saveFailed("), manager.indexOf("/**", manager.indexOf("private fun saveFailed(")))
+    check("18. saveFailed never voids, refunds or re-issues", listOf("voidItem", "store.", "grantItems", "deliver(").none { saveFailed.contains(it) })
+    check("saveFailed notifies heart admins only", saveFailed.contains("hasPermission(LifestealHeartsCommand.PERMISSION)"))
+    check("voidItem is only called from the staff command", Regex("""\bvoidItem\(""").findAll(manager).count() == 2)
+
+    val dir = Files.createTempDirectory("joshymc-hearts-1537-recovery").toFile()
+    try {
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            val owner = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+            val serials = (0 until 20).map { i ->
+                val s = serial()
+                val r = store.withdraw(owner, s, LIMITS, T0 + i)
+                check("12. withdrawal $i", r is HeartStore.WithdrawResult.Withdrawn || r is HeartStore.WithdrawResult.AtMinimum)
+                s
+            }
+            val issued = serials.filter { store.loadItem(it)?.status == HeartStore.ItemStatus.ISSUED }
+            check("withdrew down to the minimum", issued.size == 9 && store.load(owner)!!.hearts == 1)
+
+            // 14. Recent ISSUED items: newest first, bounded pages, owner/serial/time/status/transaction.
+            val page0 = store.recentItems(HeartStore.ItemStatus.ISSUED, 0, pageSize = 5)
+            check("14. recent page is newest first", page0.map { it.serial } == issued.reversed().take(5))
+            check("14. recent rows carry owner, time and transaction", page0.all { it.issuedTo == owner && it.issuedAt >= T0 && it.issueTransaction.isNotBlank() })
+            check("14. second page", store.recentItems(HeartStore.ItemStatus.ISSUED, 1, pageSize = 5).map { it.serial } == issued.reversed().drop(5))
+            check("pages are bounded", store.recentItems(null, 0, pageSize = 10_000).size <= HeartStore.MAX_RECENT_PAGE &&
+                store.recentItems(null, Int.MAX_VALUE).isEmpty())
+
+            val redeemer = UUID.randomUUID().also { store.ensure(it, 10, T0) }
+            check("redeem one", store.redeem(redeemer, issued[0], LIMITS, T0 + 100) is HeartStore.RedeemResult.Redeemed)
+            check("voiding one (no refund)", store.voidItem(issued[1], false, LIMITS, "console", "Console", T0 + 101) is HeartStore.VoidResult.Voided)
+            check("status filters", store.recentItems(HeartStore.ItemStatus.REDEEMED, 0).map { it.serial } == listOf(issued[0]) &&
+                store.recentItems(HeartStore.ItemStatus.VOIDED, 0).map { it.serial } == listOf(issued[1]))
+            check("14. reading changes nothing", store.loadItem(issued[2])!!.status == HeartStore.ItemStatus.ISSUED && store.load(owner)!!.hearts == 1)
+
+            // 15/16. A redeemed or voided serial can't be voided or refunded.
+            val before = store.load(owner)!!.hearts!!
+            check("15. redeemed serial: no refund", store.voidItem(issued[0], true, LIMITS, "console", "Console", T0 + 102) == HeartStore.VoidResult.NotOutstanding(HeartStore.ItemStatus.REDEEMED))
+            check("16. voided serial: no refund", store.voidItem(issued[1], true, LIMITS, "console", "Console", T0 + 103) == HeartStore.VoidResult.NotOutstanding(HeartStore.ItemStatus.VOIDED))
+            check("15/16. owner's hearts unchanged", store.load(owner)!!.hearts == before)
+
+            // 17. Refund once only.
+            val first = store.voidItem(issued[2], true, LIMITS, "console", "Console", T0 + 104)
+            check("17. first refund", first is HeartStore.VoidResult.Voided && first.refunded && store.load(owner)!!.hearts == before + 1)
+            val again = store.voidItem(issued[2], true, LIMITS, "console", "Console", T0 + 105)
+            check("17. duplicate refund rejected", again == HeartStore.VoidResult.NotOutstanding(HeartStore.ItemStatus.VOIDED) && store.load(owner)!!.hearts == before + 1)
+            check("17. one refund audit row", store.audit(owner).count { it.operation == "ITEM_REFUND" && it.itemSerial == issued[2] } == 1)
+            check("the voided copy can't be redeemed either", store.redeem(redeemer, issued[2], LIMITS, T0 + 106) == HeartStore.RedeemResult.Voided)
+
+            // 18. Ambiguous crash: the item row alone decides nothing; it stays ISSUED until staff act.
+            check("18. outstanding items stay ISSUED (no automatic invalidation)", store.outstandingItems(owner).size == 6 &&
+                store.outstandingItems(owner).all { it.status == HeartStore.ItemStatus.ISSUED })
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+}
+
+private fun maximumKillerStore() {
+    val dir = Files.createTempDirectory("joshymc-hearts-1537-max").toFile()
+    try {
+        withDb(dir) { real ->
+            val db = FailingDb(real)
+            val store = HeartStore(db)
+            store.createTables()
+            fun player(hearts: Int) = UUID.randomUUID().also { store.ensure(it, hearts, T0) }
+
+            // 19-21.
+            val k = player(20)
+            val v10 = player(10)
+            val r19 = store.transferPvp(pvp(k, v10, T0, key = "death-19"))
+            check("19. 20 vs 10: victim 9, killer 20", r19 is PvpResult.Done && r19.decision == Decision.VictimLosesOnly(9) &&
+                r19.killerBefore == 20 && r19.killerAfter == 20 && store.load(v10)!!.hearts == 9 && store.load(k)!!.hearts == 20)
+            val v2 = player(2)
+            check("20. 20 vs 2: victim 1", (store.transferPvp(pvp(k, v2, T0)) as PvpResult.Done).decision == Decision.VictimLosesOnly(1) && store.load(v2)!!.hearts == 1)
+            val v1 = player(1)
+            check("21. 20 vs 1: nothing", (store.transferPvp(pvp(k, v1, T0)) as PvpResult.Done).decision == Decision.VictimAtMinimum && store.load(v1)!!.hearts == 1)
+            check("21. no cooldown for an unsuccessful attempt", store.lastTransferAt(k, v1) == null)
+
+            // 31. Transaction + audit records.
+            val tx = (r19 as PvpResult.Done).transactionId
+            check("31. transaction outcome VICTIM_LOST_ONLY", db.queryFirst("SELECT outcome FROM lifesteal_heart_transactions WHERE id = ?", tx) { it.getString("outcome") } == "VICTIM_LOST_ONLY")
+            val loss = store.audit(v10).filter { it.transactionId == tx }
+            check("31. one PVP_LOSS row noting the destroyed heart", loss.size == 1 && loss[0].operation == "PVP_LOSS" && loss[0].previous == 10 && loss[0].next == 9 &&
+                loss[0].reason!!.contains(HeartStore.VICTIM_ONLY_NOTE))
+            check("31. no PVP_GAIN for the killer", store.audit(k).none { it.operation == "PVP_GAIN" })
+            check("no Heart item is created", store.itemCount() == 0)
+
+            // 22-24. Cooldown and dedupe.
+            check("23. directional cooldown started", store.lastTransferAt(k, v10) == T0 && store.lastTransferAt(v10, k) == null)
+            val cd = store.transferPvp(pvp(k, v10, T0 + 60_000))
+            check("22. existing cooldown: no loss", cd is PvpResult.Done && cd.decision is Decision.Cooldown && store.load(v10)!!.hearts == 9)
+            check("22. a refused kill doesn't move the cooldown", store.lastTransferAt(k, v10) == T0)
+            check("24. duplicate death event", store.transferPvp(pvp(k, v10, T0 + COOLDOWN, key = "death-19")) == PvpResult.Duplicate && store.load(v10)!!.hearts == 9)
+            check("after the cooldown it applies again", (store.transferPvp(pvp(k, v10, T0 + COOLDOWN)) as PvpResult.Done).decision == Decision.VictimLosesOnly(8))
+
+            // 25-27. Protections keep their order.
+            fun refused(team: TeamCombatRules.HeartCheck = TeamCombatRules.HeartCheck.ELIGIBLE, attacker: CompetitiveEligibility.Verdict = CompetitiveEligibility.Verdict.Eligible): Decision {
+                val v = player(10)
+                val r = store.transferPvp(pvp(k, v, T0).copy(team = team, attacker = attacker)) as PvpResult.Done
+                check("refused kill leaves victim and cooldown alone", store.load(v)!!.hearts == 10 && store.lastTransferAt(k, v) == null)
+                return r.decision
+            }
+            check("25. teammate protection", refused(team = TeamCombatRules.HeartCheck.TEAMMATES) == Decision.Teammates)
+            check("26. ally protection", refused(team = TeamCombatRules.HeartCheck.ALLIES) == Decision.Allies)
+            check("27. ineligible attacker", refused(attacker = CompetitiveEligibility.Verdict.Ineligible(setOf(CompetitiveEligibility.Reason.GOD_MODE), true)) is Decision.IneligibleAttacker)
+            check("launch/grace protection", HeartRules.decide(10, 20, 0, LIMITS, window = ProgressionRules.HeartWindow.GRACE_PERIOD) == Decision.GracePeriod &&
+                HeartRules.decide(10, 20, 0, LIMITS, window = ProgressionRules.HeartWindow.NOT_LAUNCHED) == Decision.NotLaunched)
+
+            // 28/29. Ranked kills and Combat NPC kills use the same transferPvp (only the dedupe key differs).
+            val rv = player(10)
+            check("28. ranked kill by a killer at 20", (store.transferPvp(pvp(k, rv, T0, key = "rankedforfeit:m1:$rv")) as PvpResult.Done).decision == Decision.VictimLosesOnly(9))
+            val npcOwner = player(10)
+            val npc = store.transferPvp(pvp(k, npcOwner, T0, key = "combatnpc:session-1"))
+            check("29. Combat NPC direct kill by a killer at 20", npc is PvpResult.Done && npc.decision == Decision.VictimLosesOnly(9) && store.load(npcOwner)!!.hearts == 9)
+            check("29. the NPC death settles once", store.transferPvp(pvp(k, npcOwner, T0 + COOLDOWN, key = "combatnpc:session-1")) == PvpResult.Duplicate)
+
+            // 30. A failure mid-transaction rolls the victim-only loss back entirely.
+            val fv = player(10)
+            db.failOn = "PVP_LOSS"
+            check("30. failure surfaces", runCatching { store.transferPvp(pvp(k, fv, T0, key = "fail-max")) }.isFailure)
+            db.failOn = null
+            check("30. victim unchanged, no cooldown, no transaction", store.load(fv)!!.hearts == 10 && store.load(fv)!!.version == 0L &&
+                store.lastTransferAt(k, fv) == null &&
+                db.queryFirst("SELECT COUNT(*) AS n FROM lifesteal_heart_transactions WHERE dedupe_key = 'fail-max'") { it.getInt("n") } == 0)
+            check("30. retry after rollback applies once", (store.transferPvp(pvp(k, fv, T0, key = "fail-max")) as PvpResult.Done).decision == Decision.VictimLosesOnly(9))
+
+            // A stale victim row makes it roll back too (exactly one decrement or none).
+            val sv = player(10)
+            db.beforeHeartUpdate = { real.executeUpdate("UPDATE lifesteal_hearts SET version = version + 1 WHERE uuid = ?", sv.toString()) }
+            check("stale victim write refused", runCatching { store.transferPvp(pvp(k, sv, T0)) }.exceptionOrNull() is HeartStore.StaleWriteException)
+            check("stale: victim not decremented", store.load(sv)!!.hearts == 10 && store.lastTransferAt(k, sv) == null)
+            check("killer at 20 was never written", store.load(k)!!.version == 0L && store.load(k)!!.hearts == 20)
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+    // Consumers of the outcome already treat it as a real kill.
+    check("ranked summary: victim lost", com.liam.joshymc.lifesteal.ranked.RankedHeartSummary.Outcome.of(Decision.VictimLosesOnly(9)) ==
+        com.liam.joshymc.lifesteal.ranked.RankedHeartSummary.Outcome.VICTIM_LOST)
+    check("killer is told the heart was destroyed", source("lifesteal/hearts/LifestealHeartManager.kt")
+        .contains("is HeartRules.Decision.VictimLosesOnly -> {\n                send(killer, HeartMessages.KILLER_AT_MAXIMUM_DESTROYED, names)"))
+    check("message placeholders", HeartMessages.KILLER_AT_MAXIMUM_DESTROYED.contains("{victim}") && HeartMessages.KILLER_AT_MAXIMUM_DESTROYED.contains("{maximum}"))
+}
+
+private fun combatNpcEnvironment() {
+    val owner = UUID.randomUUID()
+    fun npcDeath(causing: UUID?) = HeartRules.attribute(HeartRules.Death(owner, true, true, causing, causing != null, causing != null, causing != null, false))
+    check("Combat NPC killed by lava/fire/fall/void (no causing player): environment, no transfer", npcDeath(null) == Attribution.ENVIRONMENT)
+    check("29. Combat NPC killed directly by a player: a PvP kill", npcDeath(UUID.randomUUID()) == Attribution.PVP_KILL)
+    val manager = source("lifesteal/hearts/LifestealHeartManager.kt")
+    val npc = manager.substring(manager.indexOf("fun onCombatNpcDeath("), manager.indexOf("fun onRankedForfeit("))
+    check("Combat NPC deaths are never credited through the combat tag (D-1 not implemented)",
+        !npc.contains("combatTagKiller") && !npc.contains("environmentalKiller") && npc.contains("if (attribution != HeartRules.Attribution.PVP_KILL || killer == null) return"))
+    check("Combat NPC killer is only the final damage's causing player",
+        source("lifesteal/combat/npc/LifestealCombatNpcManager.kt").contains("val killer = (event.damageSource.causingEntity as? Player)?.takeIf { it.uniqueId != live.owner }"))
+}
+
+private fun monitoringInformational() {
+    val manager = source("lifesteal/hearts/LifestealHeartManager.kt")
+    check("36. monitor only sees committed transfers (logging only)", manager.contains("if (result.decision !is HeartRules.Decision.Transfer) return"))
+    val monitor = source("lifesteal/hearts/monitor/HeartTransferMonitor.kt")
+    check("36. monitor never changes hearts or punishes", listOf(".transferPvp(", ".adminChange(", "punishmentManager", ".voidItem(", "setBalance").none { monitor.contains(it) })
+    val store = source("lifesteal/hearts/HeartStore.kt")
+    check("shared-connection reviews never block the redemption", store.contains("A failed lookup is \"no evidence\", never a reason to refuse or roll back the redemption."))
 }

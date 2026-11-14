@@ -506,7 +506,7 @@ private fun hearts() {
     // Ranked kills go through the normal rules; nothing ranked-specific exists.
     check("ranked kill: normal transfer", HeartRules.decide(10, 10, 0, LIMITS) == HeartRules.Decision.Transfer(9, 11))
     check("victim at 1 heart keeps it (no elimination)", HeartRules.decide(1, 10, 0, LIMITS) == HeartRules.Decision.VictimAtMinimum)
-    check("killer at 20 hearts: approved max rule", HeartRules.decide(10, 20, 0, LIMITS) == HeartRules.Decision.KillerAtMaximum)
+    check("killer at 20 hearts: approved max rule (#1537: the victim still loses one)", HeartRules.decide(10, 20, 0, LIMITS) == HeartRules.Decision.VictimLosesOnly(9))
     check("anti-farming cooldown applies in ranked too", HeartRules.decide(10, 10, 60_000, LIMITS) is HeartRules.Decision.Cooldown)
     check("teammates never transfer", HeartRules.decide(10, 10, 0, LIMITS, team = TeamCombatRules.HeartCheck.TEAMMATES) == HeartRules.Decision.Teammates)
     check("grace window never transfers", HeartRules.decide(10, 10, 0, LIMITS, window = ProgressionRules.HeartWindow.GRACE_PERIOD) == HeartRules.Decision.GracePeriod)
@@ -658,7 +658,7 @@ private fun forfeits() {
             val v5 = player(5, 10)
             val full = player(6, 20)
             val atMax = forfeit("rtw-00000000000d", v5, full, 1_000)
-            check("#1465 an opponent at 20 hearts gains nothing (approved maximum rule)", atMax is HeartStore.PvpResult.Done && atMax.decision == HeartRules.Decision.KillerAtMaximum && hs.load(full)?.hearts == 20 && hs.load(v5)?.hearts == 10)
+            check("#1465 an opponent at 20 hearts gains nothing, the leaver still loses one (#1537)", atMax is HeartStore.PvpResult.Done && atMax.decision == HeartRules.Decision.VictimLosesOnly(9) && hs.load(full)?.hearts == 20 && hs.load(v5)?.hearts == 9)
             val v7 = player(7, 10)
             val k8 = player(8, 10)
             val mates = forfeit("rtw-00000000000e", v7, k8, 1_000, TeamCombatRules.HeartCheck.TEAMMATES)
@@ -666,7 +666,8 @@ private fun forfeits() {
             val audit = db.query("SELECT reason FROM lifesteal_heart_audit WHERE uuid = ? AND operation = 'PVP_LOSS'", v1.toString()) { it.getString("reason") }
             check("#1465 the forfeit is audited as one, with its match", audit.size == 1 && audit[0].contains("ranked disconnect forfeit, match rtw-00000000000a"))
             val total = db.queryFirst("SELECT SUM(hearts) AS s FROM lifesteal_hearts") { it.getInt("s") }
-            check("#1465 forfeits never create or destroy hearts", total == 9 + 11 + 1 + 10 + 10 + 20 + 10 + 10)
+            // Issue #1537: only the leaver against a 20-heart opponent loses a heart nobody gains (destroyed).
+            check("#1465 forfeits never create hearts; only a victim-only loss destroys one", total == 9 + 11 + 1 + 10 + 10 + 20 + 9 + 10)
         } finally {
             db.shutdown()
         }
@@ -833,17 +834,19 @@ private fun heartFeedback() {
             check("#1474 a successful transfer shows as stolen", RankedHeartSummary.line(entry(k1, v1, first)).let { it.moved && it.text == "K1 killed V2: heart stolen" })
             check("#1474 a cooldown refusal shows as the cooldown", RankedHeartSummary.Outcome.of(again.decision) == RankedHeartSummary.Outcome.COOLDOWN && !RankedHeartSummary.line(entry(k1, v1, again)).moved)
             check("#1474 a 1-heart victim shows as last heart", RankedHeartSummary.Outcome.of(lastHeart.decision) == RankedHeartSummary.Outcome.LAST_HEART && hs.load(low)?.hearts == 1)
-            check("#1474 a killer at 20 shows as at the maximum", RankedHeartSummary.Outcome.of(atMax.decision) == RankedHeartSummary.Outcome.KILLER_AT_MAXIMUM && hs.load(full)?.hearts == 20)
+            check("#1474/#1537 a killer at 20 shows as a lost heart", RankedHeartSummary.Outcome.of(atMax.decision) == RankedHeartSummary.Outcome.VICTIM_LOST && hs.load(full)?.hearts == 20)
             // 10-12.
             var entries = emptyList<RankedHeartSummary.Entry>()
             for ((k, v, d) in listOf(Triple(k1, v1, first), Triple(k1, low, lastHeart), Triple(full, v4, atMax))) entries = RankedHeartSummary.add(entries, entry(k, v, d))
             val transactionsBefore = hs.transactionCount()
             val heartsBefore = db.queryFirst("SELECT SUM(hearts) AS s FROM lifesteal_hearts") { it.getInt("s") }
             val lines = RankedHeartSummary.lines(entries)
-            check("#1474 refused transfers never appear as successful", lines.drop(1).count { it.moved } == 1 && lines.drop(1).filter { it.text.contains("heart stolen") }.size == 1)
+            // Issue #1537: the 20-heart killer's kill is a real (victim-only) loss, shown as "a heart was lost", never as stolen.
+            check("#1474 refused transfers never appear as successful", lines.drop(1).count { it.moved } == 2 && lines.drop(1).filter { it.text.contains("heart stolen") }.size == 1 &&
+                lines.drop(1).count { it.text.contains("a heart was lost") } == 1)
             check(
                 "#1474 several kills are summarized in order with a correct total",
-                lines.size == 4 && lines[0].text == "Hearts this match: 1 of 3 moved a heart." &&
+                lines.size == 4 && lines[0].text == "Hearts this match: 2 of 3 moved a heart." &&
                     lines[1].text.startsWith("K1 killed V2") && lines[2].text.startsWith("K1 killed V3") && lines[3].text.startsWith("K4 killed V5")
             )
             check(
@@ -1055,13 +1058,14 @@ private fun environmentalDeaths() {
             val v5 = player(5, 10)
             val full = player(6, 20)
             check(
-                "#1478 a killer at 20 gains nothing",
-                (env(full, v5, 1_000_000, 5) as HeartStore.PvpResult.Done).decision == HeartRules.Decision.KillerAtMaximum && hs.load(full)?.hearts == 20 && hs.load(v5)?.hearts == 10
+                "#1478/#1537 a killer at 20 gains nothing, the victim loses one",
+                (env(full, v5, 1_000_000, 5) as HeartStore.PvpResult.Done).decision == HeartRules.Decision.VictimLosesOnly(9) && hs.load(full)?.hearts == 20 && hs.load(v5)?.hearts == 9
             )
             val audit = db.query("SELECT reason FROM lifesteal_heart_audit WHERE uuid = ? AND operation = 'PVP_LOSS'", v1.toString()) { it.getString("reason") }
             check("#1478 the transfer is audited once, with its match and cause", audit.size == 1 && audit[0].contains("ranked environmental credit, match $m, died to lava"))
             val total = db.queryFirst("SELECT SUM(hearts) AS s FROM lifesteal_hearts") { it.getInt("s") }
-            check("#1478 hearts are never created or destroyed", total == 9 + 11 + 1 + 10 + 10 + 20)
+            // Issue #1537: the 20-heart killer's victim loses one heart nobody gains (destroyed).
+            check("#1478 hearts are never created; only the victim-only loss destroys one", total == 9 + 11 + 1 + 10 + 9 + 20)
         } finally {
             db.shutdown()
         }

@@ -148,7 +148,7 @@ private fun heartDecisions() {
     check("ineligible decision never changes hearts", with(HeartRules) { !HeartRules.decide(10, 10, 0, LIMITS, attacker = creative).changesHearts })
     // 24. limits untouched.
     check("24. last heart still kept", HeartRules.decide(1, 10, 0, LIMITS) == Decision.VictimAtMinimum)
-    check("24. maximum still enforced", HeartRules.decide(10, 20, 0, LIMITS) == Decision.KillerAtMaximum)
+    check("24. maximum still enforced (#1537: victim-only loss)", HeartRules.decide(10, 20, 0, LIMITS) == Decision.VictimLosesOnly(9))
     check("24. defaults are 10 / 1 / 20", LIMITS.starting == 10 && LIMITS.minimum == 1 && LIMITS.maximum == 20)
     check("24. withdrawing the last heart still refused", HeartRules.withdraw(1, LIMITS) == HeartRules.WithdrawDecision.AtMinimum)
     check("ranked summary shows it as no heart", RankedHeartSummary.Outcome.of(Decision.IneligibleAttacker("creative")) == RankedHeartSummary.Outcome.INELIGIBLE_ATTACKER && !RankedHeartSummary.Outcome.INELIGIBLE_ATTACKER.moved)
