@@ -908,6 +908,9 @@ permissions:
   joshymc.crate.admin:
     description: Allows managing crate locations and giving keys
     default: op
+  joshymc.crate.rewards.recover:
+    description: Resolve crash-interrupted crate rewards
+    default: op
   joshymc.crate.use:
     description: Allows opening and previewing crates
     default: true

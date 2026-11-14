@@ -50,6 +50,32 @@ class PremiumVoucherSigner(private val plugin: Joshymc) {
         )
     }
 
+    /**
+     * Issue #1529: the verdict for a voucher *template* (no player; nothing logged or alerted).
+     * Used before a template is copied with a fresh uuid, see [PremiumVoucherRules.reissue].
+     */
+    fun templateVerdict(meta: ItemMeta, kind: PremiumVoucherRules.Kind, version: Int, voucherUuid: String, value: String): PremiumVoucherRules.Verdict {
+        val signature = meta.persistentDataContainer.get(signatureKey, PersistentDataType.STRING)
+        val valid = signature != null &&
+            SurvivalFlight.verify(secret(), PremiumVoucherRules.payload(kind, version, voucherUuid, value), signature)
+        return PremiumVoucherRules.verdict(signature, valid, acceptUnsigned)
+    }
+
+    /**
+     * Issue #1529: gives [meta] (a copy of a voucher template) the fresh [voucherUuid] and the
+     * signature [reissue] calls for: signed again for RESIGN, no signature for UNSIGNED. A
+     * REFUSE template is never handed out, so it is rejected here too.
+     */
+    fun applyReissue(
+        meta: ItemMeta, reissue: PremiumVoucherRules.Reissue, uuidKey: NamespacedKey,
+        kind: PremiumVoucherRules.Kind, version: Int, voucherUuid: String, value: String
+    ) {
+        require(reissue != PremiumVoucherRules.Reissue.REFUSE) { "a refused voucher template is never reissued" }
+        meta.persistentDataContainer.set(uuidKey, PersistentDataType.STRING, voucherUuid)
+        if (reissue == PremiumVoucherRules.Reissue.RESIGN) sign(meta, kind, version, voucherUuid, value)
+        else meta.persistentDataContainer.remove(signatureKey)
+    }
+
     private val acceptUnsigned: Boolean get() = plugin.config.getBoolean("vouchers.accept-unsigned-legacy", true)
 
     /**

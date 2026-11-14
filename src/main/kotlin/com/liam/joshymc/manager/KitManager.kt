@@ -7,6 +7,7 @@ import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.lifesteal.ranks.LifestealRankConfig
 import com.liam.joshymc.lifesteal.ranks.LifestealRankRules
 import com.liam.joshymc.util.giveItemSafely
+import com.liam.joshymc.util.freshVoucherCopy
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -401,18 +402,17 @@ class KitManager(private val plugin: Joshymc) {
 
         // Give items
         for ((slot, item) in kit.items) {
-            val clone = item.clone()
-            if (plugin.creditVoucherManager.isCreditVoucher(clone)) {
-                // kit.items is a shared in-memory template reused for every claimer — handing
-                // out item.clone() verbatim would give every claimer an identical voucher_uuid,
-                // so only the first person to redeem it would succeed. Mint a fresh id per
-                // delivery, same fix as CrateManager.buildRewardItem (issue #833).
-                clone.editMeta { meta ->
-                    meta.persistentDataContainer.set(
-                        plugin.creditVoucherManager.voucherUuidKey,
-                        PersistentDataType.STRING,
-                        UUID.randomUUID().toString()
-                    )
+            // kit.items is a shared in-memory template reused for every claimer — handing
+            // out item.clone() verbatim would give every claimer an identical voucher_uuid,
+            // so only the first person to redeem it would succeed. Each delivery gets a fresh
+            // id (issue #833) and, for signed vouchers, the signature for that id (issue #1529:
+            // keeping the template's signature made the copy read as forged).
+            val clone = when (val copy = plugin.freshVoucherCopy(item)) {
+                com.liam.joshymc.util.VoucherCopy.NotVoucher -> item.clone()
+                is com.liam.joshymc.util.VoucherCopy.Fresh -> copy.item
+                is com.liam.joshymc.util.VoucherCopy.Refused -> {
+                    plugin.logger.warning("[Kits] Kit '$name' slot $slot ${copy.reason}; not handed out.")
+                    continue
                 }
             }
             val staffMode = plugin.modModeManager.isModMode(player)

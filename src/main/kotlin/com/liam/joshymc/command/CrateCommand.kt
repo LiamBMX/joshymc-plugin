@@ -54,6 +54,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "rotate" -> handleRotate(sender, args)
             "display" -> handleDisplay(sender, args)
             "monthly" -> handleMonthly(sender, args)
+            "rewards" -> handleRewards(sender, args)
             else -> sendUsage(sender)
         }
         return true
@@ -559,6 +560,74 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
     }
 
     /**
+     * `/crate rewards review|grant <id> [confirm]|void <id> [confirm]` (issue #1529): crate
+     * rewards a crash left ambiguous (REVIEW). Grant makes the stored reward deliverable once
+     * (normal delivery path), void keeps it as evidence without delivering. Both need
+     * `joshymc.crate.rewards.recover`, show the row first and act only with a literal `confirm`;
+     * the state change is a conditional UPDATE, so repeating it does nothing.
+     */
+    private fun handleRewards(sender: CommandSender, args: Array<out String>) {
+        if (!sender.hasPermission("joshymc.crate.rewards.recover")) {
+            Msg.noPermission(sender)
+            return
+        }
+        val crates = plugin.crateManager
+        val action = args.getOrNull(1)?.lowercase() ?: "review"
+        if (action == "review" || action == "list") {
+            val rows = crates.reviewRows()
+            if (rows.isEmpty()) {
+                Msg.reply(sender, Component.text("No crate rewards are waiting for review.", NamedTextColor.GREEN))
+                return
+            }
+            Msg.reply(sender, Component.text("Crate rewards waiting for review (${rows.size}):", NamedTextColor.GOLD))
+            for (row in rows) sender.sendMessage(Component.text(describe(row), NamedTextColor.GRAY))
+            return
+        }
+        if (action != "grant" && action != "void") {
+            Msg.usage(sender, "/crate rewards [review|grant <id> confirm|void <id> confirm]")
+            return
+        }
+        val id = args.getOrNull(2)
+        if (id == null) {
+            Msg.usage(sender, "/crate rewards $action <id> confirm")
+            return
+        }
+        val row = crates.pendingStore.row(id)
+        if (row == null || row.status != com.liam.joshymc.crate.CratePendingStore.Status.REVIEW) {
+            Msg.error(sender, "No crate reward '$id' is waiting for review" + (row?.let { " (it is ${it.status.name})" } ?: "") + ".")
+            return
+        }
+        if (!args.getOrNull(3).equals("confirm", ignoreCase = false)) {
+            sender.sendMessage(Component.text(describe(row), NamedTextColor.GRAY))
+            Msg.reply(sender, Component.text(
+                if (action == "grant") "This makes the reward deliverable to its owner once. Check their inventory/history first. Run /crate rewards grant $id confirm"
+                else "This marks the reward as not owed (kept as evidence). Run /crate rewards void $id confirm",
+                NamedTextColor.YELLOW
+            ))
+            return
+        }
+        val done = if (action == "grant") crates.grantReview(id, sender.name) else crates.voidReview(id, sender.name)
+        if (!done) {
+            Msg.error(sender, "Crate reward '$id' is no longer waiting for review; nothing changed.")
+            return
+        }
+        val owner = runCatching { java.util.UUID.fromString(row.owner) }.getOrNull()
+        com.liam.joshymc.staff.AdminAudit.log(
+            plugin, sender, if (action == "grant") "CRATE_REWARD_REVIEW_GRANT" else "CRATE_REWARD_REVIEW_VOID",
+            targetUuid = owner, targetName = owner?.let { plugin.playerResolver.lastKnownName(it) },
+            details = "id=$id label=${row.label} note=${row.note ?: "-"}"
+        )
+        Msg.success(sender, if (action == "grant") "Crate reward $id granted; it is delivered to its owner once." else "Crate reward $id voided.")
+    }
+
+    private fun describe(row: com.liam.joshymc.crate.CratePendingStore.Row): String {
+        val owner = runCatching { java.util.UUID.fromString(row.owner) }.getOrNull()
+        val name = owner?.let { plugin.playerResolver.lastKnownName(it) } ?: row.owner
+        val at = java.time.Instant.ofEpochMilli(row.createdAt)
+        return "${row.id} | $name | ${row.label} | ${row.status.name} since ${row.updatedAt?.let { java.time.Instant.ofEpochMilli(it) } ?: at} | ${row.note ?: "-"}"
+    }
+
+    /**
      * `/crate rotate <north|south|east|west|auto|next>` and `/crate rotate mode [on|off]`
      * (issue #1472): sets the facing of the crate the admin is looking at (only that
      * location), or toggles quick rotation (sneak + right-click with an empty hand).
@@ -793,7 +862,8 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
             "/crate display offset <x> <y> <z>  (blocks, -1..1, 'default' per axis)",
             "/crate display scale <0.5..2|default>",
             "/crate display reset  (back to the crate type's rotation, offset and scale)",
-            "/crate display refresh  (redraw this crate's model)"
+            "/crate display refresh  (redraw this crate's model)",
+            "/crate rewards [review|grant <id> confirm|void <id> confirm]  (crash-interrupted rewards)"
         )
         for (usage in usages) {
             sender.sendMessage(
@@ -815,6 +885,7 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                 if (sender.hasPermission("joshymc.crate.admin")) {
                     subs.addAll(listOf("setlocation", "removelocation", "givekey", "diagnose", "locations", "force", "models", "rotate", "display", "monthly"))
                 }
+                if (sender.hasPermission("joshymc.crate.rewards.recover")) subs.add("rewards")
                 subs.filter { it.startsWith(args[0], ignoreCase = true) }
             }
             2 -> when (args[0].lowercase()) {
@@ -835,6 +906,10 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
                 "monthly" ->
                     if (sender.hasPermission("joshymc.crate.admin")) {
                         listOf("status", "set", "reset").filter { it.startsWith(args[1], ignoreCase = true) }
+                    } else emptyList()
+                "rewards" ->
+                    if (sender.hasPermission("joshymc.crate.rewards.recover")) {
+                        listOf("review", "grant", "void").filter { it.startsWith(args[1], ignoreCase = true) }
                     } else emptyList()
                 else -> emptyList()
             }

@@ -79,6 +79,45 @@ class CreditVoucherManager(private val plugin: Joshymc) {
         return meta.persistentDataContainer.get(voucherTypeKey, PersistentDataType.STRING) == "credit"
     }
 
+    /** Why [template] (a crate reward / kit copy source) can't be handed out, or null (issue #1529). */
+    fun templateProblem(template: ItemStack): String? {
+        val pdc = template.itemMeta?.persistentDataContainer ?: return "has no item data"
+        val version = pdc.get(voucherVersionKey, PersistentDataType.INTEGER)
+        val amount = pdc.get(voucherAmountKey, PersistentDataType.INTEGER)
+        val voucherUuid = pdc.get(voucherUuidKey, PersistentDataType.STRING)
+        if (version != VOUCHER_VERSION || amount == null || amount <= 0 || voucherUuid == null) return "is a malformed Credit Voucher"
+        val verdict = plugin.premiumVoucherSigner.templateVerdict(template.itemMeta, PremiumVoucherRules.Kind.CREDIT, VOUCHER_VERSION, voucherUuid, amount.toString())
+        return when (PremiumVoucherRules.reissue(verdict)) {
+            PremiumVoucherRules.Reissue.REFUSE ->
+                if (verdict == PremiumVoucherRules.Verdict.FORGED) "is a Credit Voucher with an invalid signature"
+                else "is an unsigned legacy Credit Voucher (vouchers.accept-unsigned-legacy is off)"
+            else -> null
+        }
+    }
+
+    /**
+     * Issue #1529: a copy of [template] with its own fresh voucher uuid and the signature for
+     * that uuid, amount 1, every other field (Credits, name, lore, model) unchanged. Null when
+     * [templateProblem] refuses it. Never mints from anything but an existing valid voucher.
+     */
+    fun reissue(template: ItemStack): ItemStack? {
+        if (!isCreditVoucher(template) || templateProblem(template) != null) return null
+        val pdc = template.itemMeta.persistentDataContainer
+        val amount = pdc.get(voucherAmountKey, PersistentDataType.INTEGER)!!
+        val verdict = plugin.premiumVoucherSigner.templateVerdict(
+            template.itemMeta, PremiumVoucherRules.Kind.CREDIT, VOUCHER_VERSION, pdc.get(voucherUuidKey, PersistentDataType.STRING)!!, amount.toString()
+        )
+        val copy = template.clone()
+        copy.amount = 1
+        copy.editMeta { meta ->
+            plugin.premiumVoucherSigner.applyReissue(
+                meta, PremiumVoucherRules.reissue(verdict), voucherUuidKey,
+                PremiumVoucherRules.Kind.CREDIT, VOUCHER_VERSION, UUID.randomUUID().toString(), amount.toString()
+            )
+        }
+        return copy
+    }
+
     /** Gives [quantity] separate 1-count voucher items (never a stack) worth [amount] Credits each. */
     fun give(player: Player, amount: Int, quantity: Int) {
         repeat(quantity) {

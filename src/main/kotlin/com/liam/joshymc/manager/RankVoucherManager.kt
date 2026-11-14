@@ -102,6 +102,49 @@ class RankVoucherManager(private val plugin: Joshymc) : Listener {
         return meta.persistentDataContainer.get(voucherTypeKey, PersistentDataType.STRING) == "rank"
     }
 
+    /** Why [template] (a crate reward / kit copy source) can't be handed out, or null (issue #1529). */
+    fun templateProblem(template: ItemStack): String? {
+        val pdc = template.itemMeta?.persistentDataContainer ?: return "has no item data"
+        val version = pdc.get(voucherVersionKey, PersistentDataType.INTEGER)
+        val rawRank = pdc.get(voucherRankKey, PersistentDataType.STRING)
+        val voucherUuid = pdc.get(voucherUuidKey, PersistentDataType.STRING)
+        if (version != VOUCHER_VERSION || rawRank == null || DonorTiers.normalize(rawRank) == null || voucherUuid == null) {
+            return "is a malformed Rank Voucher"
+        }
+        val verdict = plugin.premiumVoucherSigner.templateVerdict(template.itemMeta, PremiumVoucherRules.Kind.RANK, VOUCHER_VERSION, voucherUuid, rawRank)
+        return when (PremiumVoucherRules.reissue(verdict)) {
+            PremiumVoucherRules.Reissue.REFUSE ->
+                if (verdict == PremiumVoucherRules.Verdict.FORGED) "is a Rank Voucher with an invalid signature"
+                else "is an unsigned legacy Rank Voucher (vouchers.accept-unsigned-legacy is off)"
+            else -> null
+        }
+    }
+
+    /**
+     * Issue #1529: a copy of [template] with its own fresh voucher uuid and the signature for
+     * that uuid, amount 1, the rank (exactly as stored, which is what the signature covers) and
+     * every other field unchanged. Null when [templateProblem] refuses it. Redemption still runs
+     * every normal check (signature, tier order, LuckPerms, single-use id), so this grants nothing
+     * a voucher couldn't already.
+     */
+    fun reissue(template: ItemStack): ItemStack? {
+        if (!isRankVoucher(template) || templateProblem(template) != null) return null
+        val pdc = template.itemMeta.persistentDataContainer
+        val rawRank = pdc.get(voucherRankKey, PersistentDataType.STRING)!!
+        val verdict = plugin.premiumVoucherSigner.templateVerdict(
+            template.itemMeta, PremiumVoucherRules.Kind.RANK, VOUCHER_VERSION, pdc.get(voucherUuidKey, PersistentDataType.STRING)!!, rawRank
+        )
+        val copy = template.clone()
+        copy.amount = 1
+        copy.editMeta { meta ->
+            plugin.premiumVoucherSigner.applyReissue(
+                meta, PremiumVoucherRules.reissue(verdict), voucherUuidKey,
+                PremiumVoucherRules.Kind.RANK, VOUCHER_VERSION, UUID.randomUUID().toString(), rawRank
+            )
+        }
+        return copy
+    }
+
     /** Gives [quantity] separate 1-count voucher items (never a stack) for [rankId]. Returns false for an unsupported rank. */
     fun give(player: Player, rankId: String, quantity: Int): Boolean {
         if (!isSupportedRank(rankId)) return false

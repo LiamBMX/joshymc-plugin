@@ -238,8 +238,13 @@ fun main() {
     for (forbidden in listOf("rarity", "hidden", "CrateOdds", "CrateRarity")) {
         check("draw never reads $forbidden", forbidden !in draw && forbidden !in body(mgr, "private fun selectDistinctWeightedRewards("))
     }
-    check("claim still deletes the pending row before giving", body(mgr, "private fun claimPendingReward(").let {
-        it.indexOf("DELETE FROM crate_pending_rewards") in 0 until it.indexOf("depositItemSafely(player, item)")
+    // Issue #1529: the row is claimed once (conditional PENDING -> DELIVERING) before anything is
+    // given, and only deleted after the player was saved (CrateDeliveryProtocol.deliver, covered
+    // by crateRewardIntegrityCheck).
+    check("claim still takes the pending row before giving", body(mgr, "private fun claimPendingReward(").let {
+        val backup = it.indexOf("pendingStore.beginDelivery(pendingId")
+        backup in 0 until it.indexOf("plugin.depositItemSafely(player, item.clone())") &&
+            "CrateDeliveryProtocol.deliver(" in it
     })
     check("join recovery unchanged", "deliverPendingRewards(player)" in body(mgr, "fun onPlayerJoin("))
 

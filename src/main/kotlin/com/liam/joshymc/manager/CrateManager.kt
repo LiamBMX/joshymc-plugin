@@ -8,6 +8,12 @@ import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.util.MinecraftColors
 import com.liam.joshymc.util.depositItemSafely
 import com.liam.joshymc.util.giveItemSafely
+import com.liam.joshymc.util.VoucherCopy
+import com.liam.joshymc.util.freshVoucherCopy
+import com.liam.joshymc.util.voucherTemplateProblem
+import com.liam.joshymc.crate.CratePendingStore
+import com.liam.joshymc.crate.CrateDeliveryProtocol
+import com.liam.joshymc.crate.CrateDeliveryRules
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -245,6 +251,16 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     private var particleTask: BukkitTask? = null
     private var pendingRetryTask: BukkitTask? = null
 
+    /** `crate_pending_rewards` with its #1529 transaction states (see [CratePendingStore]). */
+    val pendingStore by lazy { CratePendingStore(plugin.databaseManager) }
+
+    /**
+     * PDC on a delivered reward stack: the token of the delivery attempt that put it there
+     * (issue #1529). Lets the next join count exactly what a crash-interrupted attempt saved;
+     * stripped as soon as the attempt is acknowledged.
+     */
+    private val deliveryMarkerKey = NamespacedKey(plugin, "crate_delivery")
+
     /** Custom crate chest models drawn over the crate blocks (issue #1389). Purely visual. */
     val models = com.liam.joshymc.crate.CrateModelDisplays(plugin, this)
 
@@ -298,15 +314,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         // A RANDOM crate's animated reward is written here the moment its key is consumed and
         // removed when it is delivered, so an interrupted animation (quit, reload, shutdown,
         // crash) never eats it. Rewards that didn't fit in the inventory wait here too.
-        plugin.databaseManager.createTable("""
-            CREATE TABLE IF NOT EXISTS crate_pending_rewards (
-                id TEXT PRIMARY KEY,
-                owner_uuid TEXT NOT NULL,
-                item TEXT NOT NULL,
-                label TEXT NOT NULL,
-                created_at INTEGER NOT NULL
-            )
-        """.trimIndent())
+        // Issue #1529: rows carry a transaction state; older rows migrate as PENDING.
+        pendingStore.createTables()
+        recoverPendingTransactions()
 
         loadCrates()
         loadLocations()
@@ -1111,13 +1121,12 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * Delivers a mass-open reward without ever dropping it: anything that unexpectedly doesn't
      * fit is held in crate_pending_rewards and retried, like an interrupted animation reward.
      */
-    private fun deliverMassOpenReward(player: Player, item: ItemStack, label: String) {
+    private fun deliverMassOpenReward(player: Player, item: ItemStack, label: String, held: MutableList<CrateDeliveryProtocol.PendingInsert>) {
         val leftover = plugin.depositItemSafely(player, item) ?: return
         if (leftover.amount <= 0) return
-        plugin.databaseManager.execute(
-            "INSERT INTO crate_pending_rewards (id, owner_uuid, item, label, created_at) VALUES (?, ?, ?, ?, ?)",
-            UUID.randomUUID().toString(), player.uniqueId.toString(), serializeItem(leftover), label, System.currentTimeMillis()
-        )
+        // Issue #1529: collected and written RESERVED, then promoted once the keys' removal
+        // was saved (end of massOpen), so a crash can't return the keys and keep this too.
+        held += CrateDeliveryProtocol.PendingInsert(UUID.randomUUID().toString(), player.uniqueId.toString(), serializeItem(leftover), label)
         plugin.commsManager.send(
             player,
             Component.text("Your crate reward ", NamedTextColor.YELLOW)
@@ -1142,6 +1151,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }
         for ((index, reward) in crate.rewards.withIndex()) {
             rewardEnchantProblem(reward)?.let { return "reward #$index (${reward.displayName}) $it" }
+            // Issue #1529: a voucher template that can't be re-signed (forged, malformed, or an
+            // unsigned legacy one while those are refused) would hand out a dead voucher.
+            rewardTemplate(reward)?.let { plugin.voucherTemplateProblem(it) }?.let { return "reward #$index (${reward.displayName}) $it" }
         }
         if (crate.mode == CrateMode.SELECT_3 && crate.rewards.size < 3) {
             return "Select 3 mode needs at least 3 rewards (has ${crate.rewards.size})"
@@ -1177,6 +1189,13 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * is untouched), logs the reason for staff, and returns null. Call before consuming a key.
      */
     private fun openableCrate(player: Player, crateType: String, massOpen: Boolean): CrateDef? {
+        // Issue #1529: the event world's inventory is temporary (wiped on exit), so no crate
+        // opens there and no reward is ever paid into it.
+        if (plugin.eventManager.isInEventWorld(player)) {
+            plugin.commsManager.send(player, Component.text("Crates can't be opened in the event world. Your key was not used.", NamedTextColor.RED))
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+            return null
+        }
         val crate = crates[crateType]
         val problem = if (crate == null) {
             "crate type '$crateType' is not defined in crates.yml"
@@ -1902,21 +1921,35 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         }, delay)
     }
 
-    // --- Pending rewards (SPIN / PULSE) ---
+    // --- Pending rewards (SPIN / PULSE, held rewards; issue #1529 transaction states) ---
 
     /**
      * Stores [reward] for [player] before its animation starts. The item is built once here,
-     * so a voucher id minted for it is the one the player ends up holding.
+     * so a voucher id minted for it is the one the player ends up holding. The key was already
+     * taken from the live inventory this tick, so the row is RESERVED, the player is saved and
+     * only then is the row deliverable ([commitReserved]).
      */
     private fun registerPendingReward(player: Player, reward: CrateReward): String {
         val id = UUID.randomUUID().toString()
-        plugin.databaseManager.execute(
-            "INSERT INTO crate_pending_rewards (id, owner_uuid, item, label, created_at) VALUES (?, ?, ?, ?, ?)",
-            id, player.uniqueId.toString(), serializeItem(buildRewardItem(reward)),
-            "${reward.displayName} x${reward.amount}", System.currentTimeMillis()
-        )
         inFlightRewards[player.uniqueId] = id
+        commitReserved(player, listOf(CrateDeliveryProtocol.PendingInsert(
+            id, player.uniqueId.toString(), serializeItem(buildRewardItem(reward)), "${reward.displayName} x${reward.amount}"
+        )))
         return id
+    }
+
+    /**
+     * Writes [rows] RESERVED, saves [player] (so the key removal that paid for them is on disk)
+     * and promotes them to PENDING. If the save fails the rows go to staff review instead.
+     */
+    private fun commitReserved(player: Player, rows: List<CrateDeliveryProtocol.PendingInsert>) {
+        val ok = CrateDeliveryProtocol.reserveThenCommit(
+            pendingStore, rows, save = { player.saveData() }, now = System::currentTimeMillis,
+            onSaveFailed = { e -> plugin.logger.severe("[Crates] Could not save ${player.name} after taking a crate key (${e.message}); ${rows.size} reward(s) held for staff review: ${rows.joinToString { it.id }}") }
+        )
+        if (!ok) {
+            plugin.commsManager.send(player, Component.text("Your crate reward is safely recorded and is waiting for a staff check.", NamedTextColor.YELLOW))
+        }
     }
 
     /**
@@ -1926,89 +1959,157 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     private fun finishInFlight(player: Player, pendingId: String, wonMessage: Component? = null): Boolean {
         if (!player.isOnline || inFlightRewards[player.uniqueId] != pendingId) return false
         inFlightRewards.remove(player.uniqueId)
-        claimPendingReward(player, pendingId, wonMessage)
+        claimPendingReward(player, pendingId, wonMessage, notifyHeld = true)
         return true
     }
 
+    private enum class Claim { DELIVERED, PARTIAL, HELD, NONE }
+
+    /** Every stack in [player]'s inventory marked with [token] (any token when null). */
+    private fun markedSlots(player: Player, token: String?): List<Pair<Int, ItemStack>> {
+        val inv = player.inventory
+        return (0 until inv.size).mapNotNull { slot ->
+            val item = inv.getItem(slot) ?: return@mapNotNull null
+            val mark = item.itemMeta?.persistentDataContainer?.get(deliveryMarkerKey, PersistentDataType.STRING) ?: return@mapNotNull null
+            if (token == null || mark == token) slot to item else null
+        }
+    }
+
+    /** Removes the delivery mark from [player]'s stacks (only [token]'s, or every one when null). */
+    private fun stripMarks(player: Player, token: String?) {
+        for ((slot, item) in markedSlots(player, token)) {
+            val clean = item.clone()
+            clean.editMeta { it.persistentDataContainer.remove(deliveryMarkerKey) }
+            player.inventory.setItem(slot, clean)
+        }
+    }
+
     /**
-     * Delivers one pending reward row exactly once: the row is deleted first, and only the
-     * caller whose DELETE removed it hands the item over. Whatever doesn't fit is written back
-     * under the same id and retried later, never dropped on the ground.
+     * Delivers one PENDING row exactly once (issue #1529 protocol, see [CrateDeliveryProtocol]):
+     * never into the event world's temporary inventory ([CrateDeliveryRules]), in one database
+     * transaction for a Mod Mode backup, and otherwise PENDING -> DELIVERING, token-marked
+     * stacks into the inventory, `saveData()`, then the acknowledgement. Whatever doesn't fit
+     * stays in the row (PENDING) and is retried later, never dropped on the ground.
      */
-    private fun claimPendingReward(player: Player, pendingId: String, wonMessage: Component? = null): Boolean {
-        val row = plugin.databaseManager.queryFirst(
-            "SELECT item, label, created_at FROM crate_pending_rewards WHERE id = ? AND owner_uuid = ?",
-            pendingId, player.uniqueId.toString()
-        ) { rs -> Triple(rs.getString("item"), rs.getString("label"), rs.getLong("created_at")) } ?: return false
-        val (itemBase64, label, createdAt) = row
-        val item = deserializeItem(itemBase64)
+    private fun claimPendingReward(player: Player, pendingId: String, wonMessage: Component? = null, notifyHeld: Boolean = false): Claim {
+        val owner = player.uniqueId.toString()
+        val row = pendingStore.row(pendingId)
+            ?.takeIf { it.owner == owner && it.status == CratePendingStore.Status.PENDING } ?: return Claim.NONE
+        val item = deserializeItem(row.item)
         if (item == null) {
             plugin.logger.warning("[Crates] Pending reward $pendingId for ${player.name} could not be read; left in crate_pending_rewards.")
-            return false
+            return Claim.NONE
+        }
+        val originalAmount = item.amount
+        var remaining = 0
+
+        when (CrateDeliveryRules.route(plugin.eventManager.isInEventWorld(player), plugin.modModeManager.isModMode(player))) {
+            CrateDeliveryRules.Route.HOLD -> {
+                if (notifyHeld) {
+                    plugin.commsManager.send(
+                        player,
+                        Component.text("Your crate reward ", NamedTextColor.YELLOW)
+                            .append(Component.text(row.label, TextColor.color(0xFFAA00)))
+                            .append(Component.text(" is safely held and will be delivered when you leave the event world.", NamedTextColor.YELLOW))
+                    )
+                }
+                return Claim.HELD
+            }
+            CrateDeliveryRules.Route.BACKUP -> {
+                // The real inventory is a modmode_backups row: claim, deposit and acknowledge
+                // commit together or not at all.
+                var claimed = false
+                plugin.databaseManager.transaction {
+                    val token = UUID.randomUUID().toString()
+                    if (!pendingStore.beginDelivery(pendingId, owner, token, System.currentTimeMillis())) return@transaction
+                    claimed = true
+                    val leftover = plugin.depositItemSafely(player, item.clone())
+                    if (leftover != null && leftover.amount > 0) {
+                        remaining = leftover.amount
+                        pendingStore.returnRemainder(pendingId, token, serializeItem(leftover), System.currentTimeMillis())
+                    } else {
+                        pendingStore.completeDelivery(pendingId, token)
+                    }
+                }
+                if (!claimed) return Claim.NONE
+            }
+            CrateDeliveryRules.Route.INVENTORY -> {
+                val token = UUID.randomUUID().toString()
+                val result = CrateDeliveryProtocol.deliver(
+                    pendingStore, pendingId, owner, token, originalAmount,
+                    deposit = { t ->
+                        val marked = item.clone()
+                        marked.editMeta { it.persistentDataContainer.set(deliveryMarkerKey, PersistentDataType.STRING, t) }
+                        plugin.depositItemSafely(player, marked)?.takeIf { it.amount > 0 }?.let { left ->
+                            val clean = left.clone()
+                            clean.editMeta { it.persistentDataContainer.remove(deliveryMarkerKey) }
+                            left.amount to serializeItem(clean)
+                        }
+                    },
+                    save = { player.saveData() },
+                    stripToken = { t -> stripMarks(player, t) },
+                    now = System::currentTimeMillis,
+                    onFailure = { what, e ->
+                        plugin.logger.severe("[Crates] Crate reward $pendingId for ${player.name}: $what (${e.message}); kept DELIVERING with token $token, reconciled on their next join.")
+                    }
+                )
+                when (result) {
+                    CrateDeliveryProtocol.Result.NotClaimed -> return Claim.NONE
+                    CrateDeliveryProtocol.Result.NothingFit -> remaining = originalAmount
+                    is CrateDeliveryProtocol.Result.Partial -> remaining = result.remaining
+                    CrateDeliveryProtocol.Result.Delivered, CrateDeliveryProtocol.Result.Unconfirmed -> {}
+                }
+            }
         }
 
-        val claimed = plugin.databaseManager.executeUpdate(
-            "DELETE FROM crate_pending_rewards WHERE id = ?", pendingId
-        )
-        if (claimed == 0) return false
-
-        val originalAmount = item.amount
-        val leftover = plugin.depositItemSafely(player, item)
-        if (leftover != null && leftover.amount > 0) {
-            plugin.databaseManager.execute(
-                "INSERT INTO crate_pending_rewards (id, owner_uuid, item, label, created_at) VALUES (?, ?, ?, ?, ?)",
-                pendingId, player.uniqueId.toString(), serializeItem(leftover), label, createdAt
-            )
+        if (remaining > 0) {
             plugin.commsManager.send(
                 player,
                 Component.text("Your inventory is full. Your crate reward ", NamedTextColor.YELLOW)
-                    .append(Component.text(label, TextColor.color(0xFFAA00)))
+                    .append(Component.text(row.label, TextColor.color(0xFFAA00)))
                     .append(Component.text(" is safely held and will be delivered once you have space.", NamedTextColor.YELLOW))
             )
-            if (leftover.amount >= originalAmount) return true
+            if (remaining >= originalAmount) return Claim.HELD
         }
 
         plugin.commsManager.send(
             player,
             wonMessage ?: Component.text("You won ", NamedTextColor.GREEN)
-                .append(Component.text(label, TextColor.color(0xFFAA00)))
+                .append(Component.text(row.label, TextColor.color(0xFFAA00)))
                 .append(Component.text("!", NamedTextColor.GREEN))
         )
-        return true
+        return if (remaining > 0) Claim.PARTIAL else Claim.DELIVERED
     }
 
     /**
      * Holds [item] in crate_pending_rewards for [player], to be retried by the pending-reward
      * loop. Used for Event World crate keys that couldn't be stored in /overflow (issue #1178).
+     * No key was taken for it, so it is deliverable (PENDING) right away.
      */
     fun holdPendingReward(player: Player, item: ItemStack) {
         val label = getKeyType(item)?.let { crates[it]?.keyName }?.let { "$it x${item.amount}" }
             ?: "${item.type.name.lowercase().replace('_', ' ')} x${item.amount}"
-        plugin.databaseManager.execute(
-            "INSERT INTO crate_pending_rewards (id, owner_uuid, item, label, created_at) VALUES (?, ?, ?, ?, ?)",
-            UUID.randomUUID().toString(), player.uniqueId.toString(), serializeItem(item.clone()), label, System.currentTimeMillis()
+        pendingStore.insert(
+            UUID.randomUUID().toString(), player.uniqueId.toString(), serializeItem(item.clone()), label,
+            System.currentTimeMillis(), CratePendingStore.Status.PENDING
         )
         plugin.logger.warning("[Crates] ${player.name}'s crate key couldn't be stored in /overflow; held $label as a pending crate reward.")
     }
 
     /** Delivers every held crate reward of [player] that isn't owned by a running animation. */
     fun deliverPendingRewards(player: Player) {
+        // Held until they leave the event: its inventory is wiped on exit (issue #1529).
+        if (plugin.eventManager.isInEventWorld(player)) return
         val inFlight = inFlightRewards[player.uniqueId]
-        val ids = plugin.databaseManager.query(
-            "SELECT id FROM crate_pending_rewards WHERE owner_uuid = ? ORDER BY created_at ASC",
-            player.uniqueId.toString()
-        ) { rs -> rs.getString("id") }
-        for (id in ids) {
-            if (id == inFlight) continue
-            claimPendingReward(player, id)
+        val rows = pendingStore.rowsOf(player.uniqueId.toString(), CratePendingStore.Status.PENDING)
+        for (row in rows) {
+            if (row.id == inFlight) continue
+            if (claimPendingReward(player, row.id) == Claim.HELD) break
         }
     }
 
     private fun retryPendingRewards() {
-        val owners = plugin.databaseManager.query(
-            "SELECT DISTINCT owner_uuid FROM crate_pending_rewards"
-        ) { rs -> rs.getString("owner_uuid") }
-        for (owner in owners) {
+        for (owner in pendingStore.ownersWithPending()) {
             val uuid = try { UUID.fromString(owner) } catch (_: Exception) { continue }
             val player = Bukkit.getPlayer(uuid) ?: continue
             // Held rewards wait until the player leaves the event: the event inventory is
@@ -2019,6 +2120,65 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             deliverPendingRewards(player)
         }
     }
+
+    // --- Crash recovery and staff reconciliation (issue #1529) ---
+
+    /**
+     * Startup: a row still RESERVED was interrupted between taking a key and saving the player,
+     * so nobody can tell whether the key's removal reached the player file. It is never granted
+     * or deleted automatically: it goes to REVIEW with its evidence. Online players (a reload)
+     * also get their DELIVERING rows reconciled.
+     */
+    private fun recoverPendingTransactions() {
+        val quarantined = pendingStore.quarantineReserved(
+            "interrupted after a key was taken, before the player save was confirmed", System.currentTimeMillis()
+        )
+        for (row in quarantined) {
+            plugin.logger.warning("[Crates] Crate reward ${row.id} (owner ${row.owner}, ${row.label}) was interrupted mid-transaction; held for staff review (/crate rewards review).")
+        }
+        for (player in Bukkit.getOnlinePlayers()) {
+            try {
+                reconcileDelivering(player)
+            } catch (e: Exception) {
+                plugin.logger.warning("[Crates] Could not reconcile crate rewards for ${player.name}: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Settles [player]'s rows left DELIVERING by a crash, from the token-marked stacks in the
+     * inventory as it was loaded (see [CrateDeliveryRecovery]), then strips every stale mark.
+     * Must run before anything else changes the inventory on join (event world, Mod Mode).
+     */
+    private fun reconcileDelivering(player: Player) {
+        val owner = player.uniqueId.toString()
+        val now = System.currentTimeMillis()
+        for (row in pendingStore.rowsOf(owner, CratePendingStore.Status.DELIVERING)) {
+            val token = row.deliveryToken
+            val item = deserializeItem(row.item)
+            val marked = if (token == null) 0 else markedSlots(player, token).sumOf { it.second.amount }
+            val outcome = CrateDeliveryProtocol.reconcile(
+                pendingStore, row, item?.amount, marked,
+                remainderItem = { n -> serializeItem(item!!.clone().apply { amount = n }) }, now = now
+            )
+            plugin.logger.warning("[Crates] Reconciled interrupted crate reward ${row.id} for ${player.name} (${row.label}): marked=$marked -> $outcome.")
+        }
+        stripMarks(player, null)
+    }
+
+    /** Staff: rows waiting for review, oldest first. */
+    fun reviewRows(limit: Int = 20): List<CratePendingStore.Row> = pendingStore.rowsWith(CratePendingStore.Status.REVIEW, limit)
+
+    /** Staff: REVIEW -> PENDING (delivered once, by the normal path). False when it isn't in review. */
+    fun grantReview(id: String, actor: String): Boolean {
+        if (!pendingStore.grant(id, actor, System.currentTimeMillis())) return false
+        val owner = pendingStore.row(id)?.owner?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        owner?.let { Bukkit.getPlayer(it) }?.let { if (it.inventory.firstEmpty() != -1 || plugin.modModeManager.isModMode(it)) deliverPendingRewards(it) }
+        return true
+    }
+
+    /** Staff: REVIEW -> VOIDED (kept as evidence). False when it isn't in review. */
+    fun voidReview(id: String, actor: String): Boolean = pendingStore.void(id, actor, System.currentTimeMillis())
 
     /** How many rewards one key yields — the number of picks the crate's manual selection allows. */
     private fun rewardsPerOpen(crate: CrateDef): Int = if (crate.mode == CrateMode.SELECT_3) 3 else 1
@@ -2327,35 +2487,22 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             // Handing out the same snapshot verbatim would give every winner an item with an
             // IDENTICAL voucher_uuid, so only the first person to redeem it would succeed;
             // everyone else would hit the "already redeemed" duplicate-id check. Credit,
-            // chat-tag and rank vouchers each burn that id in their own redemptions table.
-            when {
-                plugin.creditVoucherManager.isCreditVoucher(serialized) ->
-                    mintFreshVoucherId(serialized, plugin.creditVoucherManager.voucherUuidKey)
-                plugin.chatTagVoucherManager.isChatTagVoucher(serialized) ->
-                    mintFreshVoucherId(serialized, plugin.chatTagVoucherManager.voucherUuidKey)
-                plugin.rankVoucherManager.isRankVoucher(serialized) ->
-                    mintFreshVoucherId(serialized, plugin.rankVoucherManager.voucherUuidKey)
+            // chat-tag, rank and fly vouchers each burn that id in their own redemptions table.
+            // Issue #1529: Credit, Rank and Fly Vouchers also sign that id, so the copy is signed
+            // again for its new id by the voucher's own manager (it used to keep the template's
+            // signature and read as forged). A template that doesn't verify is refused by
+            // crateProblem before any key is taken; this is the last guard.
+            return when (val copy = plugin.freshVoucherCopy(serialized)) {
+                VoucherCopy.NotVoucher -> serialized
+                is VoucherCopy.Fresh -> copy.item
+                is VoucherCopy.Refused -> error("crate reward '${reward.displayName}' ${copy.reason}")
             }
-            return serialized
         }
         // A stored snapshot that won't decode must never turn into the plain base material.
         // crateProblem refuses such crates before any key is taken, so this is a last guard.
         check(reward.itemBase64 == null) { "crate reward '${reward.displayName}' has an item-base64 snapshot that can't be decoded" }
 
         return checkNotNull(rewardTemplate(reward))
-    }
-
-    /**
-     * Gives a voucher copied from a reward template its own redemption id, so every delivered
-     * voucher redeems independently. Only the id changes (rank, display, lore, model and the
-     * rest of the PDC stay as configured), and the amount goes back to 1 since a legitimate
-     * voucher never stacks.
-     */
-    private fun mintFreshVoucherId(voucher: ItemStack, voucherUuidKey: NamespacedKey) {
-        voucher.amount = 1
-        voucher.editMeta { meta ->
-            meta.persistentDataContainer.set(voucherUuidKey, PersistentDataType.STRING, UUID.randomUUID().toString())
-        }
     }
 
     /** Serialize an ItemStack to a Base64 string (preserves all NBT/PDC/trims). */
@@ -2555,6 +2702,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
 
         val rewardSummary = mutableMapOf<String, Int>()
         var keysUsed = 0
+        val held = mutableListOf<CrateDeliveryProtocol.PendingInsert>()
         for (i in 0 until keyCount) {
             if (player.inventory.heldItemSlot != heldSlot || !isKey(player.inventory.itemInMainHand, crateType)) break
             if (!massOpenNextFits(player, candidates, perOpen)) break
@@ -2562,11 +2710,14 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             consumeOneKey(player)
             // One key = one open: a Select 3 crate grants 3 distinct rewards, like its manual pick.
             for (reward in selectDistinctWeightedRewards(crate, perOpen)) {
-                deliverMassOpenReward(player, buildRewardItem(reward), "${reward.displayName} x${reward.amount}")
+                deliverMassOpenReward(player, buildRewardItem(reward), "${reward.displayName} x${reward.amount}", held)
                 rewardSummary[reward.displayName] = (rewardSummary[reward.displayName] ?: 0) + reward.amount
             }
             keysUsed++
         }
+        // Keys and the rewards that fit live in the same player file, so they're saved together.
+        // Only rewards held in the database need the RESERVED -> save -> PENDING ordering.
+        if (held.isNotEmpty()) commitReserved(player, held)
 
         if (keysUsed == 0) {
             plugin.commsManager.send(
@@ -2926,12 +3077,50 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         rotateMode.remove(event.player.uniqueId)
     }
 
+    /**
+     * Issue #1529: reconciles crash-interrupted deliveries from the inventory exactly as it was
+     * loaded from the player file, so LOWEST and synchronous: the event world (2 ticks later)
+     * and Mod Mode swap the inventory afterwards. Never delivers anything itself.
+     */
+    @EventHandler(priority = org.bukkit.event.EventPriority.LOWEST)
+    fun onPlayerJoinReconcile(event: PlayerJoinEvent) {
+        try {
+            reconcileDelivering(event.player)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Crates] Could not reconcile crate rewards for ${event.player.name} (rows kept): ${e.message}")
+        }
+    }
+
     @EventHandler
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val player = event.player
         // Short delay so other join handlers (Mod Mode restore, etc.) settle the inventory first.
+        // deliverPendingRewards holds everything while they're in the event world (issue #1529).
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            if (player.isOnline) deliverPendingRewards(player)
+            if (!player.isOnline) return@Runnable
+            deliverPendingRewards(player)
+            val inReview = pendingStore.countOf(player.uniqueId.toString(), CratePendingStore.Status.REVIEW)
+            if (inReview > 0) {
+                plugin.commsManager.send(
+                    player,
+                    Component.text("$inReview crate reward${if (inReview == 1) " is" else "s are"} safely recorded and waiting for a staff check.", NamedTextColor.YELLOW)
+                )
+            }
         }, 40L)
+    }
+
+    /**
+     * Issue #1529: leaving the event world restores the real inventory (EventManager, MONITOR on
+     * this event); held rewards are delivered a second later instead of waiting for the retry.
+     */
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    fun onWorldChange(event: org.bukkit.event.player.PlayerChangedWorldEvent) {
+        val player = event.player
+        if (inFlightRewards.containsKey(player.uniqueId)) return
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            if (!player.isOnline || plugin.eventManager.isInEventWorld(player)) return@Runnable
+            if (!plugin.modModeManager.isModMode(player) && player.inventory.firstEmpty() == -1) return@Runnable
+            if (pendingStore.countOf(player.uniqueId.toString(), CratePendingStore.Status.PENDING) > 0) deliverPendingRewards(player)
+        }, 20L)
     }
 }
