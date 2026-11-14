@@ -145,19 +145,57 @@ class ProfileStore(private val db: SqliteDatabase) {
     fun seasons(): List<SeasonRow> = if (!tableExists("lifesteal_seasons")) emptyList() else
         db.query("SELECT season_id, launch_at, status FROM lifesteal_seasons") { SeasonRow(it.getString("season_id"), it.getLong("launch_at"), it.getString("status")) }
 
-    /** Every evaluated Lifesteal PvP death ([player] null = everyone; else deaths they were part of), oldest first. */
-    fun pvpRows(player: UUID? = null): List<PvpRow> {
+    /**
+     * Every evaluated Lifesteal PvP death ([player] null = everyone; else deaths they were part of),
+     * oldest first, with its recorded source ([PvpSource], from the `dedupe_key` prefix).
+     *
+     * The everyone read (leaderboards) goes in rowid-ordered chunks of [chunk] rows, one query each,
+     * so the shared database lock is released between chunks instead of being held for the whole
+     * history (issue #1538); the rows are sorted afterwards exactly as the single query sorted them.
+     */
+    fun pvpRows(player: UUID? = null, chunk: Int = PVP_CHUNK): List<PvpRow> {
         if (!tableExists("lifesteal_heart_transactions")) return emptyList()
-        val where = if (player == null) "" else " AND (killer = ? OR victim = ?)"
-        val params: Array<Any?> = if (player == null) emptyArray() else arrayOf(player.toString(), player.toString())
-        return db.query(
-            "SELECT killer, victim, outcome, created_at FROM lifesteal_heart_transactions WHERE type = 'PVP' AND killer IS NOT NULL AND victim IS NOT NULL$where ORDER BY created_at, id",
-            *params
-        ) { rs ->
+        val base = "SELECT rowid AS rid, id, killer, victim, outcome, created_at, dedupe_key FROM lifesteal_heart_transactions " +
+            "WHERE type = 'PVP' AND killer IS NOT NULL AND victim IS NOT NULL"
+        fun read(rs: java.sql.ResultSet): Pair<Long, Pair<String, PvpRow?>> {
             val killer = runCatching { UUID.fromString(rs.getString("killer")) }.getOrNull()
             val victim = runCatching { UUID.fromString(rs.getString("victim")) }.getOrNull()
-            if (killer == null || victim == null) null else PvpRow(killer, victim, rs.getString("outcome"), rs.getLong("created_at"))
-        }.filterNotNull()
+            val row = if (killer == null || victim == null) null
+                else PvpRow(killer, victim, rs.getString("outcome"), rs.getLong("created_at"), PvpSource.of(rs.getString("dedupe_key")))
+            return rs.getLong("rid") to (rs.getString("id") to row)
+        }
+        if (player != null) {
+            return db.query("$base AND (killer = ? OR victim = ?) ORDER BY created_at, id", player.toString(), player.toString()) { read(it).second.second }.filterNotNull()
+        }
+        val out = ArrayList<Pair<String, PvpRow>>()
+        var after = Long.MIN_VALUE
+        val size = chunk.coerceIn(1, 100_000)
+        while (true) {
+            val page = db.query("$base AND rowid > ? ORDER BY rowid LIMIT ?", after, size) { read(it) }
+            if (page.isEmpty()) break
+            for ((_, entry) in page) entry.second?.let { out += entry.first to it }
+            after = page.last().first
+            if (page.size < size) break
+        }
+        return out.sortedWith(compareBy<Pair<String, PvpRow>> { it.second.at }.thenBy { it.first }).map { it.second }
+    }
+
+    /**
+     * Connection hashes per account (AltManager), for [LinkedAccounts]. [player] given = only the
+     * accounts that share a hash with them; null = every account (one linear read, no self-join).
+     */
+    fun connectionHashes(player: UUID? = null): LinkedAccounts {
+        if (!tableExists("player_connections")) return LinkedAccounts.NONE
+        val out = HashMap<UUID, MutableSet<String>>()
+        val sql = if (player == null) "SELECT uuid, connection_hash FROM player_connections"
+            else "SELECT uuid, connection_hash FROM player_connections WHERE connection_hash IN (SELECT connection_hash FROM player_connections WHERE uuid = ?)"
+        val params: Array<Any?> = if (player == null) emptyArray() else arrayOf(player.toString())
+        db.query(sql, *params) { rs ->
+            val uuid = runCatching { UUID.fromString(rs.getString("uuid")) }.getOrNull() ?: return@query
+            val hash = rs.getString("connection_hash") ?: return@query
+            out.getOrPut(uuid) { HashSet() } += hash
+        }
+        return LinkedAccounts(out)
     }
 
     /** Account pairs that shared a connection hash (AltManager), limited to pairs including [player] when given. */
@@ -211,19 +249,36 @@ class ProfileStore(private val db: SqliteDatabase) {
         }.filterNotNull().toMap()
     }
 
-    /** The peak Team Elo of the teams each player played rated matches for ([seasonId] null = every season). */
-    fun peakTeamRatings(player: UUID?, seasonId: String?): Map<UUID, Int> {
+    /**
+     * The peak Team Elo of the teams each player played rated matches for ([seasonId] null = every
+     * season), counting only a team the player meaningfully played for (issue #1538, [rule]: enough
+     * rated matches and wins **with that team**, from the player's own committed PLAYER_ELO history
+     * rows). The peak is the team's rating after one of those matches. Teams are grouped by id, so
+     * switching teams never adds up matches across teams.
+     */
+    fun peakTeamRatings(player: UUID?, seasonId: String?, rule: TeamDivisionRule = TeamDivisionRule.DEFAULT): Map<UUID, Int> {
         if (!tableExists("lifesteal_ranked_rating_history")) return emptyMap()
         val conditions = mutableListOf("p.rating_type = 'PLAYER_ELO'")
         val params = mutableListOf<Any?>()
         if (player != null) { conditions += "p.subject_id = ?"; params += player.toString() }
         if (seasonId != null) { conditions += "p.season_id = ?"; params += seasonId }
-        return db.query(
-            "SELECT p.subject_id AS uuid, MAX(t.new) AS peak FROM lifesteal_ranked_rating_history p " +
-                "JOIN lifesteal_ranked_rating_history t ON t.match_id = p.match_id AND t.rating_type = 'TEAM_ELO' AND t.subject_id = p.team_id " +
-                "WHERE ${conditions.joinToString(" AND ")} GROUP BY p.subject_id",
+        params += rule.minimumMatches
+        params += rule.minimumWins
+        val out = HashMap<UUID, Int>()
+        db.query(
+            "SELECT p.subject_id AS uuid, p.team_id AS team, COUNT(DISTINCT p.match_id) AS matches, " +
+                "COUNT(DISTINCT CASE WHEN p.outcome = 'WIN' THEN p.match_id END) AS wins, MAX(t.new) AS peak " +
+                "FROM lifesteal_ranked_rating_history p " +
+                "LEFT JOIN lifesteal_ranked_rating_history t ON t.match_id = p.match_id AND t.rating_type = 'TEAM_ELO' AND t.subject_id = p.team_id " +
+                "WHERE ${conditions.joinToString(" AND ")} GROUP BY p.subject_id, p.team_id " +
+                "HAVING COUNT(DISTINCT p.match_id) >= ? AND COUNT(DISTINCT CASE WHEN p.outcome = 'WIN' THEN p.match_id END) >= ? AND MAX(t.new) IS NOT NULL",
             *params.toTypedArray()
-        ) { rs -> runCatching { UUID.fromString(rs.getString("uuid")) }.getOrNull()?.let { it to rs.getInt("peak") } }.filterNotNull().toMap()
+        ) { rs ->
+            val uuid = runCatching { UUID.fromString(rs.getString("uuid")) }.getOrNull() ?: return@query
+            val peak = rs.getInt("peak")
+            out.merge(uuid, peak) { a, b -> maxOf(a, b) }
+        }
+        return out
     }
 
     /** The current-season rating of [subject] (a UUID or a team id), or null before its first rated match. */
@@ -251,6 +306,27 @@ class ProfileStore(private val db: SqliteDatabase) {
         val params: Array<Any?> = if (player == null) emptyArray() else arrayOf(player.toString())
         return db.query(sql, *params) { rs -> runCatching { UUID.fromString(rs.getString("uuid")) }.getOrNull()?.let { it to rs.getLong("total_seconds") } }
             .filterNotNull().toMap()
+    }
+
+    /**
+     * Active Lifesteal playtime in milliseconds ([player] null = everyone), read from the heart
+     * system's `lifesteal_heart_playtime` (#1457: online, alive, loaded in a Lifesteal world, not
+     * AFK). Read only; the heart system is the one writer, so there is one playtime tracker.
+     */
+    fun activePlaytimeMillis(player: UUID?): Map<UUID, Long> {
+        if (!tableExists("lifesteal_heart_playtime")) return emptyMap()
+        val sql = if (player == null) "SELECT uuid, active_millis FROM lifesteal_heart_playtime" else "SELECT uuid, active_millis FROM lifesteal_heart_playtime WHERE uuid = ?"
+        val params: Array<Any?> = if (player == null) emptyArray() else arrayOf(player.toString())
+        return db.query(sql, *params) { rs -> runCatching { UUID.fromString(rs.getString("uuid")) }.getOrNull()?.let { it to rs.getLong("active_millis") } }
+            .filterNotNull().toMap()
+    }
+
+    /** The facts [CoinEligibility] reads: active Lifesteal playtime and the heart record's `created_at` (first Lifesteal join), null without one. */
+    fun coinEligibilityFacts(uuid: UUID): Pair<Long, Long?> {
+        val active = activePlaytimeMillis(uuid)[uuid] ?: 0L
+        val firstJoin = if (!tableExists("lifesteal_hearts")) null
+            else db.queryFirst("SELECT created_at FROM lifesteal_hearts WHERE uuid = ?", uuid.toString()) { it.getLong("created_at") }
+        return active to firstJoin
     }
 
     // ── Activity counters ───────────────────────────────────
@@ -488,6 +564,9 @@ class ProfileStore(private val db: SqliteDatabase) {
     )
 
     companion object {
+        /** Rows per leaderboard read of the PvP history (each chunk is one short hold of the database lock). */
+        const val PVP_CHUNK = 5_000
+
         /** Reward snapshot: one `kind|param|quantity` line per store reward, `title|<text>`, `border|<colour>`. */
         fun encodeRewards(rewards: List<AchievementReward>): String = rewards.joinToString("\n") { r ->
             when (r) {

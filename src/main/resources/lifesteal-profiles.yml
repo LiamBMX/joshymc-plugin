@@ -11,8 +11,15 @@ pvp:
   # A kill of the same player counts at most once per this many minutes for profiles, achievements
   # and leaderboards (0 to 10080). Only legitimate Lifesteal kills count at all (see the docs):
   # teammates, allies, the grace period, alt accounts that shared a connection and kills the heart
-  # system refused never count.
+  # system refused never count. Ranked disconnect forfeits are never anyone's kill.
   same-victim-cooldown-minutes: 60
+  # Kills of a victim who lost no heart (they were at the minimum, or the heart system recorded
+  # KILLER_AT_MAXIMUM) are easy to farm with a friend, so they count less often (issue #1538):
+  # at most one per this many minutes for the same victim (0 to 43200; proposed default 1440 = 24h)
+  no-loss-same-victim-cooldown-minutes: 1440
+  # and at most this many per killer in any 24 hours (1 to 1000; proposed default 10). Kills left
+  # out show as evidence in /achievements admin player <name>; nobody is punished automatically.
+  no-loss-kills-per-day: 10
 
 achievements-settings:
   # false = no achievement progress or claims (already earned rows are kept and shown on profiles).
@@ -20,6 +27,20 @@ achievements-settings:
   # How often online Lifesteal players' achievements are checked (30 to 3600 seconds). Opening
   # /achievements and joining also check.
   evaluate-interval-seconds: 120
+  # Owner decision (issue #1538): coin rewards can only be claimed once the account has this much
+  # active Lifesteal playtime (AFK excluded) and is this old (since its first Lifesteal join), the
+  # same facts as the heart withdrawal eligibility. Achievements still complete; a tier that pays
+  # coins just waits until then (its title/border come with it). enabled: false = no requirement.
+  coin-eligibility:
+    enabled: true
+    minimum-active-playtime-minutes: 120
+    minimum-hours-since-first-join: 24
+  # Team Climber (team-division): a team's division only counts for a player who played at least
+  # this many rated matches for that team and won at least this many of them (proposed defaults,
+  # issue #1538). Cancelled, unrated and staff TEST matches never count.
+  team-division:
+    minimum-matches: 5
+    minimum-wins: 1
 
 activity:
   # Buffered activity (ores, crops, fish, mobs) is written this often (5 to 600 seconds), on quit
@@ -55,10 +76,12 @@ activity:
   fish-min-interval-seconds: 3
 
 profiles:
-  # Players may hide their profile from other players (/profile private on). Staff with
-  # joshymc.lifesteal.profile.private.bypass still see it; leaderboards still list everyone.
+  # Players may hide their profile, Ranked stats and Ranked match history from other players
+  # (/profile private on). Staff with joshymc.lifesteal.profile.private.bypass still see them;
+  # public leaderboards still list everyone (actively banned players are left off them).
   allow-private: true
-  # Show playtime on profiles (only ever on a Lifesteal-only server, whose playtime is Lifesteal's).
+  # Show playtime on profiles (only ever on a Lifesteal-only server, whose playtime is Lifesteal's):
+  # total time played and active Lifesteal time (AFK excluded).
   show-playtime: true
   # The border every profile has: a stained glass colour (gray, white, red, lime, ...).
   default-border: gray
@@ -71,7 +94,8 @@ leaderboards:
   # K/D board: players need at least this many kills + deaths in the period (1 to 100000).
   kd-minimum-fights: 20
   # The boards are rebuilt from history this often (30 to 86400 seconds). Elo boards are the live
-  # Ranked Team Wars leaderboards (/ranked top).
+  # Ranked Team Wars leaderboards (/ranked top). The playtime board ranks active Lifesteal
+  # playtime (AFK excluded).
   refresh-seconds: 300
 
 announcements:
@@ -299,7 +323,7 @@ achievements:
   # ── Progression ────────────────────────────────────────
   veteran:
     name: "Veteran"
-    description: "Play on the Lifesteal server."
+    description: "Play actively on the Lifesteal server (AFK time doesn't count)."
     category: progression
     stat: playtime-hours
     icon: CLOCK
@@ -363,7 +387,7 @@ achievements:
     broadcast: true
   team-climber:
     name: "Team Climber"
-    description: "Reach a Team Elo division with your team."
+    description: "Reach a Team Elo division with a team you played and won rated matches for."
     category: competitive
     stat: team-division
     icon: AMETHYST_SHARD

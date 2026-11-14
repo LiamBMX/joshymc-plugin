@@ -89,8 +89,9 @@ class ProfileMenus(private val plugin: Joshymc, private val manager: LifestealPr
             line("Current streak", "${p.periods.currentStreak}"),
         )))
         gui.setItem(L.BOUNTIES, GuiStyle.item(Material.GOLD_INGOT, bold("Bounties", NamedTextColor.GOLD), both(ProfileStat.BOUNTY_CLAIMS)))
-        gui.setItem(L.PLAYTIME, GuiStyle.item(Material.CLOCK, bold("Playtime", NamedTextColor.AQUA), listOf(
+        gui.setItem(L.PLAYTIME, GuiStyle.item(Material.CLOCK, bold("Playtime", NamedTextColor.AQUA), listOfNotNull(
             if (p.playtimeSeconds != null) line("Played", plugin.playtimeManager.formatPlaytime(p.playtimeSeconds)) else text("Not shown on this server.", NamedTextColor.DARK_GRAY),
+            p.activePlaytimeMillis?.let { line("Active (no AFK)", plugin.playtimeManager.formatPlaytime(it / 1000)) },
         )))
         val ranked = plugin.lifestealRankedStatsManager
         gui.setItem(L.RANKED, GuiStyle.item(Material.DIAMOND_SWORD, bold("Ranked Team Wars", NamedTextColor.AQUA), listOfNotNull(
@@ -404,7 +405,7 @@ class ProfileMenus(private val plugin: Joshymc, private val manager: LifestealPr
             pick(pl, "Feature Achievements", options) { openProfile(it, p.uuid, p.name) }
         }
         if (s.allowPrivate) {
-            gui.setItem(L.CUSTOM_PRIVACY, GuiStyle.toggle("Private Profile", p.settings.private, listOf(text("Private: other players can't open your profile."), text("You still appear on leaderboards.")))) { pl, _ ->
+            gui.setItem(L.CUSTOM_PRIVACY, GuiStyle.toggle("Private Profile", p.settings.private, listOf(text("Private: other players can't open your"), text("profile, Ranked stats or match history."), text("Public leaderboard rankings stay visible.")))) { pl, _ ->
                 save(pl, p, p.settings.copy(private = !p.settings.private))
             }
         }

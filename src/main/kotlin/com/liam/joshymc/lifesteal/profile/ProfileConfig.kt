@@ -9,7 +9,7 @@ enum class BoardCategory(val id: String, val label: String, val icon: String, va
     KD("kd", "K/D Ratio", "SKELETON_SKULL", null, true, true),
     BOUNTIES("bounties", "Bounties Claimed", "GOLD_INGOT", ProfileStat.BOUNTY_CLAIMS, true, true),
     ACHIEVEMENTS("achievements", "Achievements Completed", "BOOK", null, true, true),
-    PLAYTIME("playtime", "Playtime", "CLOCK", ProfileStat.PLAYTIME_HOURS, false, true),
+    PLAYTIME("playtime", "Active Playtime", "CLOCK", ProfileStat.PLAYTIME_HOURS, false, true),
     PLAYER_ELO("player-elo", "Player Elo", "DIAMOND_SWORD", null, true, false),
     TEAM_ELO("team-elo", "Team Elo", "SHIELD", null, true, false);
 
@@ -56,8 +56,22 @@ data class ProfileSettings(
     val profileTitle: String,
     val achievementsTitle: String,
     val leaderboardsTitle: String,
+    /** Issue #1538: one counted no-loss kill (victim kept every heart) of the same victim per this long. */
+    val noLossPairCooldownMillis: Long = 24 * 60 * 60_000L,
+    /** Issue #1538: at most this many counted no-loss kills per killer in any 24 hours. */
+    val noLossKillsPerDay: Int = 10,
+    /** Issue #1538: Team Climber needs this much participation with the team. */
+    val teamDivisionRule: TeamDivisionRule = TeamDivisionRule.DEFAULT,
+    /** Issue #1538: what an account needs before it may claim achievement coins; null = off. */
+    val coinEligibility: com.liam.joshymc.lifesteal.hearts.HeartRules.WithdrawRequirements? = DEFAULT_COIN_ELIGIBILITY,
 ) {
+    /** The PvP counting limits for [PvpCounting.derive]. */
+    val pvpRules: PvpCounting.Rules get() = PvpCounting.Rules(pairCooldownMillis, noLossPairCooldownMillis, noLossKillsPerDay)
+
     companion object {
+        /** Owner decision (issue #1538): 2 hours of active Lifesteal playtime and 24 hours since the first Lifesteal join. */
+        val DEFAULT_COIN_ELIGIBILITY = com.liam.joshymc.lifesteal.hearts.HeartRules.WithdrawRequirements(120 * 60_000L, 24 * 3_600_000L)
+
         val DEFAULT_ORES = setOf(
             "COAL_ORE", "DEEPSLATE_COAL_ORE", "COPPER_ORE", "DEEPSLATE_COPPER_ORE", "IRON_ORE", "DEEPSLATE_IRON_ORE",
             "GOLD_ORE", "DEEPSLATE_GOLD_ORE", "REDSTONE_ORE", "DEEPSLATE_REDSTONE_ORE", "LAPIS_ORE", "DEEPSLATE_LAPIS_ORE",
@@ -114,12 +128,27 @@ object ProfileConfig {
         val enabled = bool(root, "enabled", d.enabled, "enabled")
         val pvp = section("pvp")
         val cooldown = int(pvp, "same-victim-cooldown-minutes", (d.pairCooldownMillis / 60_000L).toInt(), 0..10_080, "pvp.same-victim-cooldown-minutes")
+        val noLossCooldown = int(pvp, "no-loss-same-victim-cooldown-minutes", (d.noLossPairCooldownMillis / 60_000L).toInt(), 0..43_200, "pvp.no-loss-same-victim-cooldown-minutes")
+        val noLossPerDay = int(pvp, "no-loss-kills-per-day", d.noLossKillsPerDay, 1..1_000, "pvp.no-loss-kills-per-day")
         val ach = section("achievements-settings")
         val activity = section("activity")
         val profiles = section("profiles")
         val boards = section("leaderboards")
         val announce = section("announcements")
         val gui = section("gui")
+        val teamDivision = (ach["team-division"] as? Map<*, *>)?.entries?.associate { (k, v) -> k.toString() to v } ?: emptyMap()
+        val coins = (ach["coin-eligibility"] as? Map<*, *>)?.entries?.associate { (k, v) -> k.toString() to v } ?: emptyMap()
+        val coinDefault = ProfileSettings.DEFAULT_COIN_ELIGIBILITY
+        val coinEligibility = if (!bool(coins, "enabled", true, "achievements-settings.coin-eligibility.enabled")) null
+            else com.liam.joshymc.lifesteal.hearts.HeartRules.WithdrawRequirements(
+                int(coins, "minimum-active-playtime-minutes", (coinDefault.playtimeMillis / 60_000L).toInt(), 0..525_600, "achievements-settings.coin-eligibility.minimum-active-playtime-minutes") * 60_000L,
+                int(coins, "minimum-hours-since-first-join", (coinDefault.accountAgeMillis / 3_600_000L).toInt(), 0..8_760, "achievements-settings.coin-eligibility.minimum-hours-since-first-join") * 3_600_000L,
+            )
+        val teamRule = TeamDivisionRule(
+            int(teamDivision, "minimum-matches", TeamDivisionRule.DEFAULT.minimumMatches, 1..10_000, "achievements-settings.team-division.minimum-matches"),
+            int(teamDivision, "minimum-wins", TeamDivisionRule.DEFAULT.minimumWins, 0..10_000, "achievements-settings.team-division.minimum-wins"),
+        )
+        if (teamRule.minimumWins > teamRule.minimumMatches) problems += "achievements-settings.team-division.minimum-wins can't be above minimum-matches"
 
         val categories: List<BoardCategory> = when (val v = boards["categories"]) {
             null -> d.categories
@@ -156,6 +185,10 @@ object ProfileConfig {
             profileTitle = string(gui, "profile-title", d.profileTitle, "gui.profile-title", 28),
             achievementsTitle = string(gui, "achievements-title", d.achievementsTitle, "gui.achievements-title", 28),
             leaderboardsTitle = string(gui, "leaderboards-title", d.leaderboardsTitle, "gui.leaderboards-title", 28),
+            noLossPairCooldownMillis = noLossCooldown * 60_000L,
+            noLossKillsPerDay = noLossPerDay,
+            teamDivisionRule = if (teamRule.minimumWins > teamRule.minimumMatches) TeamDivisionRule.DEFAULT else teamRule,
+            coinEligibility = coinEligibility,
         )
         return Result(settings, problems)
     }

@@ -17,7 +17,7 @@ statistics are untouched.
 | `/achievements admin status\|player <name>\|recover` | Read-only diagnostics; re-send interrupted claims | `joshymc.lifesteal.profile.admin` (op) |
 | `/lstop [category] [season\|alltime] [page]` (`/lifestealtop`) | Leaderboards GUI (chat from the console) | `joshymc.lifesteal.leaderboards.use` (true) |
 
-Private profiles are opened anyway with `joshymc.lifesteal.profile.private.bypass` (op). All four
+Private profiles (also their Ranked stats and match history, issue #1538) are opened anyway with `joshymc.lifesteal.profile.private.bypass` (op). All four
 commands are `LIFESTEAL` scoped in `GamemodeAssignments` and refuse outside Lifesteal worlds.
 There is **no** command that edits statistics or achievements.
 
@@ -35,7 +35,7 @@ Nothing is counted twice and no existing table is written to.
 | Team, team history | `LifestealTeamManager` cache, `lifesteal_team_members` / `lifesteal_team_membership_history` (#1346) |
 | Bounties claimed | `lifesteal_bounty_payouts` (#1401) |
 | Alt accounts | AltManager's `player_connections` (shared connection hashes) |
-| Playtime | `PlaytimeManager` (`playtime`), **only on a Lifesteal-only server** |
+| Playtime | Veteran and the playtime board: **active** Lifesteal playtime, the heart system's `lifesteal_heart_playtime` (#1457, AFK excluded; issue #1538). The profile also shows `PlaytimeManager`'s total (`playtime`). Both **only on a Lifesteal-only server** |
 | Rank | `RankManager.getPlayerRankById` |
 | Reward delivery | `PurchaseFulfillmentManager.enqueue` (#1175/#1199): Coins/Credits offline, items when there is room, never dropped, FAILED/INTERRUPTED recovery |
 | Chat tags, crate keys | existing chat tag vouchers and crates, as reward kinds of the delivery queue |
@@ -67,6 +67,72 @@ and missing records never count (`PvpCounting`). On top of that:
   recorded by the heart system, so environmental deaths don't end a streak.
 - Achievements never reward deaths (`pvp-deaths` can't be an achievement stat) and never touch
   hearts.
+
+## Progression remediation (issue #1538, audit #1533)
+
+Every rule below only changes how history is *counted*; no stored row is rewritten, no
+achievement is reset, and the heart, ranked and Elo systems are untouched.
+
+**Kills are actual kills (P2-06).** `pvpRows` reads each PvP row's recorded `dedupe_key`
+(`PvpSource`): `pvp:` = an ordinary death (also ranked match and staff TEST match kills),
+`combatnpc:` = a player killed a Combat NPC, `rankedforfeit:` = a ranked disconnect forfeit.
+A forfeit never gives the recipient a kill, a streak step or a unique victim (so no Slayer,
+Executioner, Unstoppable, Season Contender or kill board progress), but still counts as the
+disconnecting player's PvP death. A key with any other prefix is never a kill. The forfeit's win,
+Elo and heart outcome are unchanged.
+
+**No-loss kills (P2-03).** A kill whose recorded outcome is `VICTIM_AT_MINIMUM` or
+`KILLER_AT_MAXIMUM` (the victim kept every heart) counts at most once per
+`pvp.no-loss-same-victim-cooldown-minutes` (1440) for the same victim and at most
+`pvp.no-loss-kills-per-day` (10) per killer in any 24 hours, on top of the 60-minute same-victim
+cooldown. `VICTIM_LOST_ONLY` is a normal kill (a heart was lost); outcomes are read as recorded,
+never guessed from heart counts, so the Heart Remediation's new 20-heart behaviour is counted
+correctly. Deaths always count. Kills left out are only evidence:
+`/achievements admin player <name>` shows "no-loss kills not counted"; nobody is punished.
+
+**Veteran = active playtime (P2-01).** `playtime-hours` is whole hours of
+`lifesteal_heart_playtime.active_millis` (online, alive, loaded in a Lifesteal world, not AFK,
+sampled each minute by the heart system), the same tracker the heart withdrawal uses: no second
+playtime tracker. **Compatibility:** that table only exists since #1457 and never had AFK time, so
+Veteran progress and the playtime board (now "Active Playtime") can be lower than the old
+wall-clock numbers. Tiers already completed stay completed and claimable (rows are permanent;
+completion is never re-checked). The profile shows both "Played" (total) and "Active (no AFK)".
+
+**Team Climber participation (P2-02).** A team's division only counts for a player who played at
+least `achievements-settings.team-division.minimum-matches` (5) rated matches **for that team**
+and won at least `minimum-wins` (1) of them (proposed defaults, configurable). Matches are counted
+per team id from the player's own committed PLAYER_ELO history rows, so joining a team, playing
+once, spectating, cancelled/unrated/TEST matches and staff proposals never count, and matches for
+different teams never add up. The value is the team's peak Team Elo after one of those matches.
+Elo, membership, matchmaking and rosters are unchanged. Already earned tiers are kept.
+
+**Coin eligibility (P2-05).** Claiming a tier that pays coins needs
+`achievements-settings.coin-eligibility` (2 hours of active Lifesteal playtime and 24 hours since
+the first Lifesteal join: `lifesteal_heart_playtime` and `lifesteal_hearts.created_at`, the same
+facts and arithmetic as `/withdrawheart`, read only). Achievements still complete. A tier that
+isn't claimable yet stays COMPLETED: nothing is snapshotted or queued, and the player is told
+what is missing. **Mixed tiers** (coins + title/border) wait as a whole: titles and borders are
+owned by the CLAIMED row, so delivering them early would need a second payout path. Tiers
+without coins (or a server where coins are left out) are never gated. Claims already CLAIMING are
+finished by the recovery as before. Each account must qualify itself, so alts can't skip it.
+
+**Privacy.** A private profile also hides the player's `/ranked stats <player>`,
+`/ranked history <player>` and the matching Ranked menus (including leaderboard clicks) from other
+players (`LifestealProfileManager.ifVisible`, the existing `private` flag; self, console and
+`joshymc.lifesteal.profile.private.bypass` always see). Public leaderboards and team histories
+stay visible.
+
+**Banned players.** Players with an active ban that applies in Lifesteal
+(`PunishmentManager.activelyBannedIn`, same rules as `isBannedIn`, one batched query cached 30s
+and dropped on every ban/unban) are left off `/lstop` and the Player Elo board; places and pages
+close up around them. Nothing is deleted: they reappear when the ban ends (profile boards at the
+next rebuild, the Elo board on the next read). Staff diagnostics are unfiltered.
+
+**Leaderboard rebuilds (P2-04).** The PvP history is read in 5,000-row chunks (the shared DB lock
+is released between them), alt links come from one linear read of `player_connections`
+(`LinkedAccounts`, no quadratic self-join), and per-season ranked totals are read once per
+rebuild instead of once per board. Not done (needs a redesign): incremental aggregation, so the
+rebuild still reads the whole PvP history every `refresh-seconds`.
 
 ## Seasons
 

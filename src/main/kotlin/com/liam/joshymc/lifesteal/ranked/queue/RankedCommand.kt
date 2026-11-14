@@ -104,7 +104,8 @@ class RankedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
 
     private fun stats(player: Player, name: String?, full: Boolean) {
         val (uuid, shown) = target(player, name) ?: return
-        statsView.stats(player, uuid, shown, full)
+        // Issue #1538: other players' detailed ranked stats honor private profiles (leaderboards stay public).
+        plugin.lifestealProfileManager.ifVisible(player, uuid, shown) { statsView.stats(player, uuid, shown, full) }
     }
 
     /** `/ranked history [player] [page]`: match results with their Elo changes (issue #1367). */
@@ -112,7 +113,7 @@ class RankedCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter
         val page = args.lastOrNull()?.toIntOrNull()
         val name = (if (page != null) args.dropLast(1) else args).firstOrNull()
         val (uuid, shown) = target(player, name) ?: return
-        statsView.history(player, uuid, shown, ((page ?: 1) - 1).coerceAtLeast(0))
+        plugin.lifestealProfileManager.ifVisible(player, uuid, shown) { statsView.history(player, uuid, shown, ((page ?: 1) - 1).coerceAtLeast(0)) }
     }
 
     /** `/ranked top [players|teams] [page]`. */

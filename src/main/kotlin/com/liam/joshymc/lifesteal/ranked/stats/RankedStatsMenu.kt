@@ -69,10 +69,13 @@ class RankedStatsMenu(private val plugin: Joshymc) {
     fun openPlayerStats(viewer: Player, target: UUID) {
         if (!guard(viewer)) return
         if (target != viewer.uniqueId && !viewer.hasPermission(LifestealRatingManager.PERMISSION_STATS_OTHERS)) return Msg.noPermission(viewer)
-        stats.loadPlayerStats(target, RECENT) { s, problem ->
-            if (!guard(viewer)) return@loadPlayerStats
-            if (s == null) return@loadPlayerStats fail(viewer, problem)
-            renderPlayerStats(viewer, s)
+        // Issue #1538: a private profile hides its detailed ranked stats from other players (leaderboard clicks included).
+        plugin.lifestealProfileManager.ifVisible(viewer, target, teams.nameOf(target)) {
+            stats.loadPlayerStats(target, RECENT) { s, problem ->
+                if (!guard(viewer)) return@loadPlayerStats
+                if (s == null) return@loadPlayerStats fail(viewer, problem)
+                renderPlayerStats(viewer, s)
+            }
         }
     }
 
@@ -223,11 +226,13 @@ class RankedStatsMenu(private val plugin: Joshymc) {
     fun openPlayerHistory(viewer: Player, target: UUID, page: Int) {
         if (!guard(viewer)) return
         if (target != viewer.uniqueId && !viewer.hasPermission(LifestealRatingManager.PERMISSION_STATS_OTHERS)) return Msg.noPermission(viewer)
-        stats.loadPlayerHistory(target, page, RankedMenuLayout.PER_PAGE) { h, problem ->
-            if (!guard(viewer)) return@loadPlayerHistory
-            if (h == null) return@loadPlayerHistory fail(viewer, problem)
-            val whose = if (target == viewer.uniqueId) "Your" else "${teams.nameOf(target)}'s"
-            renderHistory(viewer, "$whose Matches", h, player = true, back = { p -> openPlayerStats(p, target) }) { p, n -> openPlayerHistory(p, target, n) }
+        plugin.lifestealProfileManager.ifVisible(viewer, target, teams.nameOf(target)) {
+            stats.loadPlayerHistory(target, page, RankedMenuLayout.PER_PAGE) { h, problem ->
+                if (!guard(viewer)) return@loadPlayerHistory
+                if (h == null) return@loadPlayerHistory fail(viewer, problem)
+                val whose = if (target == viewer.uniqueId) "Your" else "${teams.nameOf(target)}'s"
+                renderHistory(viewer, "$whose Matches", h, player = true, back = { p -> openPlayerStats(p, target) }) { p, n -> openPlayerHistory(p, target, n) }
+            }
         }
     }
 
