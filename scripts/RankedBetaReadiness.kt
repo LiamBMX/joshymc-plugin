@@ -51,10 +51,16 @@ private val REQUIRED_DOCS = listOf(
     "docs/lifesteal-hearts.md",
     "docs/lifesteal-teams.md",
     "docs/staff-permissions.md",
+    // Lifesteal beta release process (issue #1558).
+    "docs/lifesteal-beta-release.md",
+    "docs/lifesteal-beta-templates.md",
 )
 
 /** Documents whose backticked references are verified. */
-private val VERIFIED_DOCS = REQUIRED_DOCS.take(4)
+private val VERIFIED_DOCS = REQUIRED_DOCS.take(4) + listOf(
+    "docs/lifesteal-beta-release.md",
+    "docs/lifesteal-beta-templates.md",
+)
 
 /** The ranked keys a test server must have (missing = the parser falls back to a default). */
 private val REQUIRED_KEYS = listOf(
