@@ -1,4 +1,4 @@
-# Lifesteal hearts (issues #1341, #1344, #1457, #1461)
+# Lifesteal hearts (issues #1341, #1344, #1457, #1461, #1537)
 
 The core Lifesteal heart system: permanent hearts per player, shown as their maximum health, and
 PvP heart stealing (issue #1341), plus physical Heart items: `/withdrawheart` and right-click
@@ -36,7 +36,9 @@ From `lifesteal.yml` (defaults = blueprint v1.1): `hearts.starting` 10, `hearts.
      no cooldown starts; recorded as `TEAMMATES` / `TEAM_UNKNOWN`.
   2. Victim at the minimum (1): nothing happens, nothing drops, no cooldown starts.
   3. Same killer took a heart from this victim within the cooldown: nothing happens.
-  4. Killer at the maximum: nothing happens (see "Open decisions").
+  4. Killer at the maximum (issue #1537, Owner decision): the victim still loses 1 heart, which is
+     **destroyed** (nobody gains it, no Heart item drops), the killer stays at the maximum, and the
+     same directional cooldown starts as for a transfer. Recorded as `VICTIM_LOST_ONLY`.
   5. Otherwise victim −1, killer +1.
 - Nobody is ever eliminated, banned or revived. Hearts never go below 1 or above the maximum.
 - Deaths with no causing player (fall, lava, drowning, suffocation, void, mobs, fire) are vanilla
@@ -85,7 +87,7 @@ counted. Now:
 - **Same transfer**: the credited death goes through the unchanged `HeartStore.transferPvp` with
   the same dedupe key as any other death (`pvp:<boot>:<victim>:<tick>`), so the launch window,
   teammates/allies (`heartCheck(killer, victim)`), the 1-heart minimum, the 20-heart maximum
-  (`NO_TRANSFER`) and the 30-minute same-victim cooldown all apply exactly as for a sword kill, and
+  (`VICTIM_LOSES_ONLY` since issue #1537) and the 30-minute same-victim cooldown all apply exactly as for a sword kill, and
   a repeated death event moves at most one heart. Players see the normal heart messages naming the
   credited attacker; nothing about the combat tracking is shown.
 - **Audit**: the transaction stays type `PVP` (so profile and rank statistics count it as a kill),
@@ -270,6 +272,8 @@ is created and the player is told.
 ```
 /lifesteal hearts give <player> <amount>     # joshymc.lifesteal.hearts.give (op), online Lifesteal player, 1-36
 /lifesteal hearts items <player>             # outstanding (unredeemed) items issued to a player
+/lifesteal hearts recent [issued|redeemed|voided|all] [page]   # newest items of everyone (issue #1537), 15 per page
+/lifesteal hearts item <serial>              # one item: owner, source, status, issue/close time and transactions
 /lifesteal hearts void <serial> [refund]     # recovery, see below
 /lifesteal hearts reviews [player]           # shared-connection transfers (issue #1457)
 ```
@@ -286,11 +290,39 @@ thread. What remains:
 
 - **Crash after a withdrawal's commit, before the player's data file is saved:** the heart is
   gone but the item isn't in the saved inventory. The player data is saved right after every
-  Heart item change (`player.saveData()`), which makes this window very small but not zero.
+  Heart item change (`player.saveData()`), which makes this window very small but **not zero**:
+  a SQLite transaction and a Minecraft player-data save are two separate writes and can't be one
+  atomic operation. The database-first order is kept on purpose: the other order could duplicate
+  hearts, this one can at worst lose one item, which staff can restore.
   Recovery: `/lifesteal hearts items <player>` lists the serial, and
   `/lifesteal hearts void <serial> refund` voids it (so the item can never be redeemed, should it
   turn up) and gives the heart back in one transaction (only for withdrawn items, never past the
   maximum).
+
+#### Recovering a lost Heart item (issue #1537, audit F-1)
+
+- **Detection.** After issuing Heart items (withdrawal or staff grant) the heart system saves the
+  player and checks the save: `saveData()` throwing (retried once), or the main world's
+  `playerdata/<uuid>.dat` visibly older than the save (`HeartAdminRules.saveOutcome`, 2s slack for
+  coarse file timestamps). A failed save is logged as SEVERE with the player UUID, the serial(s)
+  and the withdrawal/grant transaction id, written to `admin_logs` as `HEART_ITEM_SAVE_FAILED`
+  (system actor), and shown to online players with `joshymc.lifesteal.hearts.admin`. A data file
+  that can't be found only counts as "unconfirmed" (no alert). Paper may also swallow a write error
+  without throwing, so detection is best effort.
+- **Investigation.** After a crash, `/lifesteal hearts recent` lists the newest ISSUED items of
+  every player (owner, serial, issue time, status; click for `item <serial>`, which adds the source
+  and the issue/close transactions). It is read-only and paged (15 per page, at most 100 pages).
+  Serials are never shown to ordinary players.
+- **Never automatic.** An ISSUED row only means the item was made and not used yet: the item may
+  still be in the inventory, an ender chest, a chest or on the ground, and the next autosave may
+  well have kept it. Nothing is refunded, voided or re-issued by itself, and no replacement item is
+  ever made when ownership or delivery is unclear.
+- **Safe reconciliation.** Ask the player and check their inventory/ender chest (and `items`
+  for their other outstanding serials). Only when the item is certainly gone, run
+  `/lifesteal hearts void <serial> refund` (withdrawn items) or `void <serial>` (staff grants,
+  which took no heart). The void is a conditional ISSUED → VOIDED update with the UNIQUE dedupe key
+  `void:<serial>`, so a second void or refund of the same serial is refused ("already voided") and
+  can never pay twice; a redeemed serial can't be voided or refunded at all.
 - **Crash after a redemption's commit:** the heart is saved; if the inventory rolls back, the
   item comes back but its serial is already REDEEMED, so it can't be redeemed again. No dupe.
 - **Inventory rollbacks by staff tools** behave the same: rolled-back hearts can't be redeemed twice.
@@ -509,7 +541,35 @@ subcommand. Plain `/lifesteal` still transfers.
 /lifesteal hearts remove <player> <amount>   # stops at the minimum (1) and says so
 ```
 
-Heart item staff commands (`give`, `items`, `void`) are described under "Heart items".
+Heart item staff commands (`give`, `items`, `recent`, `item`, `void`) are described under "Heart items".
+
+### Staff protection and audit (issue #1537, audit G-1/G-2)
+
+Every command that changes hearts or makes Heart items (`set`, `add`, `remove`, `give`, `void`,
+`void … refund`) checks, after its own permission and before anything is written:
+
+1. **Staff protection**: the existing `StaffRankManager.protectionProblem` (no second hierarchy).
+   A player can never target themselves (no self-set, no self-grant, no refund of their own item,
+   even as an op/Owner in game), and can only target staff strictly below their own rank (equal
+   rank only with `staff-ranks.allow-equal-rank-actions`). The console may always act. For
+   `void`, the target is the item's owner.
+2. **Ranked hold**: `lifestealRankedManager.refusesStaffAction(sender, uuid, name, action)` with
+   `StaffAction.HEARTS` (set/add/remove/void/refund) or `StaffAction.HEART_ITEMS` (give, which also
+   waits for a pending ranked inventory restore, since the restore replaces the inventory). This
+   applies to the console too; the emergency path stays cancelling the match or removing the
+   player (`/lifesteal admin ranked cancel|remove`).
+
+A refusal changes nothing and is logged (`HEART_ADMIN_REFUSED`, or `RANKED_STAFF_ACTION_BLOCKED`
+throttled). Delegated execution can't reach these commands: `hearts` is a staff first argument in
+`DelegatedCommandRules`, so `/sudo`, NPC and portal commands refuse `/lifesteal hearts …`.
+
+`lifesteal_heart_audit` stays the detailed record. Each **committed** change is mirrored once to
+`admin_logs` through `AdminAudit` (staff UUID or console, target UUID and name, timestamp):
+`HEART_SET`, `HEART_ADD`, `HEART_REMOVE` (`op amount before after [clamped] tx`), `HEART_GIVE`
+(`items`, first serial, `tx`; the transaction links every serial in `lifesteal_heart_items`),
+`HEART_VOID` and `HEART_REFUND` (serial, before/after for a refund, `tx`). A command that is
+refused, unchanged or rolled back writes no success row, so retries never duplicate it. No
+connection data is ever written there.
 
 These need `joshymc.lifesteal.hearts.admin` (default op) and only work on a server that runs
 Lifesteal. Offline players are found through the PlayerResolver (no Mojang lookups). A player
@@ -521,10 +581,22 @@ target, if online, is told their new heart count, but not who changed it.
 
 These are left for a later decision rather than invented:
 
-1. **Killer at the maximum.** Implemented: nothing happens to either player, and no cooldown
-   starts. This is fixed in code (`HeartRules.KILLER_AT_MAXIMUM`), not configurable. The
-   alternative "victim still loses, killer stays at max" is implemented but unused
-   (`VICTIM_LOSES_ONLY`). No Heart item drops and there's no other overflow reward.
+1. **Killer at the maximum.** Decided by the Owner in issue #1537: an eligible victim still loses
+   one heart, which is destroyed; the killer stays at the maximum (`HeartRules.KILLER_AT_MAXIMUM =
+   VICTIM_LOSES_ONLY`, fixed in code, not configurable). No Heart item drops and there's no other
+   overflow reward. The victim never goes below 1 (checked first), and every earlier protection
+   (competitive eligibility, launch/grace, teammates/allies, the cooldown) still refuses first. A
+   successful victim-only loss starts the same 30-minute directional killer → victim cooldown as a
+   transfer; a refused one starts none. The killer's record isn't written at all.
+
+   **Integration contract for `VICTIM_LOST_ONLY`** (stored `lifesteal_heart_transactions.outcome`,
+   `HeartRules.Decision.VictimLosesOnly`): a real, accepted PvP kill. The victim's hearts went down
+   by exactly one (one `PVP_LOSS` audit row noting "killer at maximum, heart destroyed"), the
+   killer's didn't change (no `PVP_GAIN` row), the cooldown started, and no Heart item exists for
+   it. Kill/death statistics should count it like `TRANSFERRED` (ProfileStats already lists it as
+   legitimate; Team XP, the ranked heart summary ("a heart was lost") and the ranked farming
+   monitor already handle it). It is never a transfer to the killer, so the heart transfer monitor
+   (issue #1508), which only reviews hearts a killer gained, ignores it.
 2. **Environmental deaths after PvP** (knocked into lava or the void, fall damage from a hit).
    Decided in issue #1461: credited to the most recent valid attacker while the victim's combat
    tag runs (see "Environmental deaths during PvP").
@@ -536,7 +608,10 @@ These are left for a later decision rather than invented:
    a normal kill (dedupe key `combatnpc:<session>`), so the killer can gain a heart and the owner
    lose one, with every normal rule: kill attribution, the 1-heart minimum, the 20-heart maximum,
    the same-victim cooldown, teammates/allies, and the grace period/launch checks. An NPC that
-   survives its lifetime moves no heart.
+   survives its lifetime moves no heart. **An NPC that dies only to the environment** (lava, fire
+   with no player behind it, fall, void, …) moves no heart either (Owner decision, issue #1537):
+   only the final damage's causing player counts, and the combat-tag credit of issue #1461 is never
+   applied to Combat NPC deaths.
 4. **Pets and indirect kills.** A tamed wolf's kill isn't credited to its owner (the wolf is the
    causing entity). Kills by crystals, beds or anchors count only when Paper reports a causing
    player.

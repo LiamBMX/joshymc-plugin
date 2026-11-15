@@ -238,7 +238,7 @@ private fun hearts() {
     check("after grace: normal transfer", decide(at(24 * H).heartWindow) == HeartRules.Decision.Transfer(9, 11))
     check("default window stays OPEN (existing callers unchanged)", HeartRules.decide(10, 10, 0, LIMITS) == HeartRules.Decision.Transfer(9, 11))
     check("after grace: 1-heart minimum kept", decide(HeartWindow.OPEN, victim = 1) == HeartRules.Decision.VictimAtMinimum)
-    check("after grace: 20-heart maximum kept", decide(HeartWindow.OPEN, killer = 20) == HeartRules.Decision.KillerAtMaximum)
+    check("after grace: 20-heart maximum kept (#1537: victim-only loss)", decide(HeartWindow.OPEN, killer = 20) == HeartRules.Decision.VictimLosesOnly(9))
     check("after grace: 30-minute cooldown kept", decide(HeartWindow.OPEN, cooldown = 1_000) is HeartRules.Decision.Cooldown)
     check("grace wins over the team check", decide(HeartWindow.GRACE_PERIOD, team = TeamCombatRules.HeartCheck.TEAMMATES) == HeartRules.Decision.GracePeriod)
     check("after grace: teammates still blocked", decide(HeartWindow.OPEN, team = TeamCombatRules.HeartCheck.TEAMMATES) == HeartRules.Decision.Teammates)

@@ -59,23 +59,36 @@ class RankedStatsStore(private val db: SqliteDatabase) {
 
     private fun columns(type: RatingType): String = if (type == RatingType.TEAM_ELO) "r.*, t.name AS team_name, t.leader AS team_leader" else "r.*, NULL AS team_name, NULL AS team_leader"
 
+    /**
+     * Issue #1538: subjects left off the public board (actively banned players). Their rows are
+     * untouched; they are only not listed, and the places of everyone else close up. One JSON
+     * parameter (`json_each`), so the size of the set never hits SQLite's parameter limit.
+     */
+    private fun exclusion(excluded: Set<String>): Pair<String, Array<Any?>> =
+        if (excluded.isEmpty()) "" to emptyArray()
+        else " AND r.subject_id NOT IN (SELECT value FROM json_each(?))" to arrayOf<Any?>(excluded.sorted().joinToString(",", "[", "]") { "\"" + it.replace("\\", "").replace("\"", "") + "\"" })
+
     /** Eligible entries of [season] (at least [minimumMatches] rated matches), counted for paging. */
-    fun count(season: String, type: RatingType, minimumMatches: Int): Int = db.queryFirst(
-        "SELECT COUNT(*) AS n FROM ${from(type)} WHERE r.season_id = ? AND r.rating_type = ? AND r.matches >= ?",
-        season, type.name, minimumMatches,
-    ) { it.getInt("n") } ?: 0
+    fun count(season: String, type: RatingType, minimumMatches: Int, excluded: Set<String> = emptySet()): Int {
+        val (clause, extra) = exclusion(excluded)
+        return db.queryFirst(
+            "SELECT COUNT(*) AS n FROM ${from(type)} WHERE r.season_id = ? AND r.rating_type = ? AND r.matches >= ?$clause",
+            season, type.name, minimumMatches, *extra,
+        ) { it.getInt("n") } ?: 0
+    }
 
     /** One page (0-based [page]) of the board; reads only that page's rows. */
-    fun page(season: String, type: RatingType, minimumMatches: Int, page: Int, perPage: Int): Page {
+    fun page(season: String, type: RatingType, minimumMatches: Int, page: Int, perPage: Int, excluded: Set<String> = emptySet()): Page {
         require(perPage in 1..100) { "page size must be 1..100" }
-        val total = count(season, type, minimumMatches)
+        val total = count(season, type, minimumMatches, excluded)
         val p = RankedStatistics.clampPage(page, total, perPage)
         val offset = p * perPage
         var position = offset
+        val (clause, extra) = exclusion(excluded)
         val entries = db.query(
-            """SELECT ${columns(type)} FROM ${from(type)} WHERE r.season_id = ? AND r.rating_type = ? AND r.matches >= ?
+            """SELECT ${columns(type)} FROM ${from(type)} WHERE r.season_id = ? AND r.rating_type = ? AND r.matches >= ?$clause
                ORDER BY r.rating DESC, r.wins DESC, r.updated_at ASC, r.subject_id ASC LIMIT ? OFFSET ?""",
-            season, type.name, minimumMatches, perPage, offset,
+            season, type.name, minimumMatches, *extra, perPage, offset,
         ) { rs -> readEntry(rs, type, ++position) }
         return Page(type, season, p, perPage, total, entries)
     }
@@ -85,15 +98,17 @@ class RankedStatsStore(private val db: SqliteDatabase) {
      * yet, fewer than [minimumMatches], or a team that isn't active). Counted with the board's own
      * order, so it always matches the page they appear on.
      */
-    fun position(season: String, type: RatingType, subject: String, minimumMatches: Int): Int? {
+    fun position(season: String, type: RatingType, subject: String, minimumMatches: Int, excluded: Set<String> = emptySet()): Int? {
+        if (subject in excluded) return null
+        val (clause, extra) = exclusion(excluded)
         val own = db.queryFirst(
             "SELECT ${columns(type)} FROM ${from(type)} WHERE r.season_id = ? AND r.rating_type = ? AND r.subject_id = ? AND r.matches >= ?",
             season, type.name, subject, minimumMatches,
         ) { readEntry(it, type, 0) } ?: return null
         val ahead = db.queryFirst(
-            """SELECT COUNT(*) AS n FROM ${from(type)} WHERE r.season_id = ? AND r.rating_type = ? AND r.matches >= ? AND (
+            """SELECT COUNT(*) AS n FROM ${from(type)} WHERE r.season_id = ? AND r.rating_type = ? AND r.matches >= ?$clause AND (
                  r.rating > ? OR (r.rating = ? AND (r.wins > ? OR (r.wins = ? AND (r.updated_at < ? OR (r.updated_at = ? AND r.subject_id < ?))))))""",
-            season, type.name, minimumMatches, own.rating, own.rating, own.wins, own.wins, own.updatedAt, own.updatedAt, own.subjectId,
+            season, type.name, minimumMatches, *extra, own.rating, own.rating, own.wins, own.wins, own.updatedAt, own.updatedAt, own.subjectId,
         ) { it.getInt("n") } ?: return null
         return ahead + 1
     }
