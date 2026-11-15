@@ -31,7 +31,7 @@ and, for Credit/Rank (issue #1383) and Fly (issue #1304) Vouchers, a signature o
 
 ## 2. Event world (CR-P1-03)
 
-The event world swaps in a temporary inventory (`EventManager.saveInventory/restoreInventory`)
+The event world swaps in a temporary inventory (`communityevent/inventory/EventInventoryKeeper`, issue #1550)
 that is wiped on exit. Before, `onPlayerJoin` (and an animation finishing after a teleport) could
 put a pending reward straight into it.
 
@@ -112,7 +112,7 @@ startup they become REVIEW (logged with id, owner, label), the owner is told a r
 for a staff check. A `saveData()` that throws without a crash sends the rows to REVIEW at once.
 
 Reconciliation of DELIVERING rows runs at `PlayerJoinEvent` LOWEST, synchronously, against the
-inventory as loaded from the file, before the event world (2 ticks) or Mod Mode swap it. Each
+inventory as loaded from the file, before the event world (EventManager's join handler, also LOWEST but registered later) or Mod Mode swap it. Each
 attempt has its own token, so tags left from an earlier partial attempt never count for a newer
 one. A DELIVERING row whose stored item can't be decoded goes to REVIEW.
 

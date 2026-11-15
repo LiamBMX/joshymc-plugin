@@ -16,6 +16,8 @@ import com.liam.joshymc.communityevent.arena.EventArenas
 import com.liam.joshymc.communityevent.arena.RegionSelections
 import com.liam.joshymc.communityevent.game.GameMenu
 import com.liam.joshymc.communityevent.game.HostedGames
+import com.liam.joshymc.communityevent.inventory.EventInventoryCommands
+import com.liam.joshymc.communityevent.inventory.EventInventoryKeeper
 import com.liam.joshymc.communityevent.result.EventResults
 import com.liam.joshymc.communityevent.result.ResultCommands
 import com.liam.joshymc.communityevent.result.ResultsMenu
@@ -86,8 +88,6 @@ class EventManager(private val plugin: Joshymc) : Listener {
 
     // ── Player state ──────────────────────────────────────
 
-    private lateinit var savedInventoryFile: File
-    private lateinit var savedInventoryConfig: YamlConfiguration
     val playersInEventWorld: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
 
     /**
@@ -126,6 +126,9 @@ class EventManager(private val plugin: Joshymc) : Listener {
     val resultCommands = ResultCommands(plugin, results, resultsMenu)
 
     /** One-command hosting (issue #1248): `/event start <type>` creates, picks the arena, opens and auto-starts. */
+    /** Staff recovery for event inventory snapshots (issue #1550): `/event inventory`. */
+    val inventoryCommands by lazy { EventInventoryCommands(plugin, inventories) }
+
     val autoStart = EventAutoStart(plugin, sessions, arenas, games, { eventWorldName }, { eventWorldProblem })
 
     init {
@@ -155,12 +158,9 @@ class EventManager(private val plugin: Joshymc) : Listener {
         }
         cfg = YamlConfiguration.loadConfiguration(configFile)
 
-        savedInventoryFile = File(plugin.dataFolder, "event_inventories.yml")
-        savedInventoryConfig = if (savedInventoryFile.exists())
-            YamlConfiguration.loadConfiguration(savedInventoryFile)
-        else YamlConfiguration()
-
         loadConfig()
+        // Issue #1550: snapshots live in data.db; the old event_inventories.yml is imported once.
+        inventories.start()
         arenas.load()
         results.start()
         games.start()
@@ -178,6 +178,9 @@ class EventManager(private val plugin: Joshymc) : Listener {
         selections.shutdown()
         currentGame?.cleanup()
         currentGame = null
+        // Issue #1550: last, after the games handed back their gear, while data.db is still open.
+        // Quit events don't reach plugins at shutdown, so this gives players their items back.
+        inventories.restoreForShutdown(playersInEventWorld.toList())
     }
 
     // ── Config persistence ────────────────────────────────
@@ -245,78 +248,32 @@ class EventManager(private val plugin: Joshymc) : Listener {
         }
     }
 
-    // ── Inventory save/restore ────────────────────────────
+    // ── Event inventory (issue #1550) ─────────────────────
 
-    private fun saveInventory(player: Player) {
-        val uuid = player.uniqueId.toString()
-        savedInventoryConfig.set("$uuid.gamemode", player.gameMode.name)
-        val inv = player.inventory
-        for (i in 0 until inv.size) {
-            val item = inv.getItem(i)
-            if (item != null && item.type != Material.AIR) savedInventoryConfig.set("$uuid.inv.$i", item)
-            else savedInventoryConfig.set("$uuid.inv.$i", null)
-        }
-        savedInventoryConfig.set("$uuid.armor.helmet", inv.helmet)
-        savedInventoryConfig.set("$uuid.armor.chestplate", inv.chestplate)
-        savedInventoryConfig.set("$uuid.armor.leggings", inv.leggings)
-        savedInventoryConfig.set("$uuid.armor.boots", inv.boots)
-        val offhand = inv.itemInOffHand
-        if (offhand.type != Material.AIR) savedInventoryConfig.set("$uuid.armor.offhand", offhand)
-        try { savedInventoryConfig.save(savedInventoryFile) } catch (_: Exception) {}
+    /**
+     * The separate event inventory: SQLite snapshots + a player-file marker, so a crash at any point
+     * can never lose or duplicate the player's own items (see the communityevent.inventory package).
+     */
+    val inventories = EventInventoryKeeper(
+        plugin,
+        eventWorldName = { eventWorldName },
+        isEventItem = { item -> games.gear.isGear(item) || item.persistentDataContainer.has(wandKey, PersistentDataType.INTEGER) },
+        track = { playersInEventWorld.add(it) },
+        untrack = { playersInEventWorld.remove(it) },
+    )
+
+    private fun onEnterEventWorld(player: Player, cause: String) {
+        // Already using the event inventory (a duplicate callback): nothing to do.
+        if (player.uniqueId in playersInEventWorld) return
+        inventories.reconcile(player, inEventWorld = true, cause = cause)
     }
 
-    private fun restoreInventory(player: Player) {
-        val uuid = player.uniqueId.toString()
-        val section = savedInventoryConfig.getConfigurationSection(uuid) ?: return
-
-        player.inventory.clear()
-        player.inventory.setArmorContents(arrayOfNulls(4))
-        player.inventory.setItemInOffHand(ItemStack(Material.AIR))
-
-        val invSection = section.getConfigurationSection("inv")
-        if (invSection != null) {
-            for (key in invSection.getKeys(false)) {
-                val slot = key.toIntOrNull() ?: continue
-                val item = invSection.getItemStack(key) ?: continue
-                player.inventory.setItem(slot, item)
-            }
-        }
-        player.inventory.setHelmet(section.getItemStack("armor.helmet"))
-        player.inventory.setChestplate(section.getItemStack("armor.chestplate"))
-        player.inventory.setLeggings(section.getItemStack("armor.leggings"))
-        player.inventory.setBoots(section.getItemStack("armor.boots"))
-        val offhand = section.getItemStack("armor.offhand")
-        if (offhand != null) player.inventory.setItemInOffHand(offhand)
-
-        val gm = section.getString("gamemode") ?: "SURVIVAL"
-        runCatching { player.gameMode = GameMode.valueOf(gm) }
-
-        savedInventoryConfig.set(uuid, null)
-        try { savedInventoryConfig.save(savedInventoryFile) } catch (_: Exception) {}
-    }
-
-    // ── Event world entry/exit ────────────────────────────
-
-    private fun onEnterEventWorld(player: Player) {
-        if (!playersInEventWorld.add(player.uniqueId)) return
-        val uuid = player.uniqueId.toString()
-        // Don't overwrite a saved inventory that wasn't restored yet (handles restart mid-event)
-        if (!savedInventoryConfig.contains(uuid)) {
-            saveInventory(player)
-        }
-        player.inventory.clear()
-        player.inventory.setArmorContents(arrayOfNulls(4))
-        player.inventory.setItemInOffHand(ItemStack(Material.AIR))
-        player.gameMode = GameMode.ADVENTURE
-        comms.send(player, Component.text("Welcome to the event world! Use /spawn to leave.", NamedTextColor.YELLOW))
-    }
-
-    private fun onLeaveEventWorld(player: Player) {
-        if (!playersInEventWorld.remove(player.uniqueId)) return
+    private fun onLeaveEventWorld(player: Player, cause: String) {
+        playersInEventWorld.remove(player.uniqueId)
         currentGame?.removePlayer(player)
         if (player.gameMode == GameMode.SPECTATOR) player.gameMode = GameMode.SURVIVAL
-        restoreInventory(player)
-        comms.send(player, Component.text("Your inventory has been restored.", NamedTextColor.GREEN))
+        // Also runs for untracked players: a leftover snapshot (marker in their file) is settled too.
+        inventories.reconcile(player, inEventWorld = false, cause = cause)
     }
 
     // ── Listeners ─────────────────────────────────────────
@@ -325,22 +282,26 @@ class EventManager(private val plugin: Joshymc) : Listener {
     fun onChangedWorld(event: PlayerChangedWorldEvent) {
         val from = event.from.name
         val to = event.player.world.name
-        if (from == eventWorldName && to != eventWorldName) onLeaveEventWorld(event.player)
-        else if (to == eventWorldName && from != eventWorldName) onEnterEventWorld(event.player)
+        if (from == eventWorldName && to != eventWorldName) onLeaveEventWorld(event.player, "leave")
+        else if (to == eventWorldName && from != eventWorldName) onEnterEventWorld(event.player, "enter")
     }
 
-    @EventHandler
+    /**
+     * LOWEST and synchronous (issue #1550): the player's inventory is settled before any other join
+     * handler (deliveries, rewards) adds to it, so a restore can never overwrite items given on join.
+     */
+    @EventHandler(priority = EventPriority.LOWEST)
     fun onJoin(event: PlayerJoinEvent) {
         val player = event.player
-        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            if (player.isOnline && player.world.name == eventWorldName) onEnterEventWorld(player)
-        }, 2L)
+        playersInEventWorld.remove(player.uniqueId)
+        inventories.reconcile(player, inEventWorld = player.world.name == eventWorldName, cause = "join")
     }
 
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
         val player = event.player
-        if (player.world.name == eventWorldName) onLeaveEventWorld(player)
+        // In the event world (tracked or not): their own items go back before Paper saves them.
+        if (player.world.name == eventWorldName || player.uniqueId in playersInEventWorld) onLeaveEventWorld(player, "quit")
         sessions.onQuit(player.uniqueId)
         selections.clear(player.uniqueId)
         arenas.forget(player.uniqueId)
@@ -466,6 +427,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
 
     private fun tickCycle() {
         cycleTick++
+        if (cycleTick % 30 == 0) inventories.retryFailed()
         currentGame?.tick()
         if (cycleTick >= 3600) {
             cycleTick = 0
@@ -1116,6 +1078,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
                 }
                 "status" -> if (host(sender)) sendStatus(sender)
                 "arena", "arenas" -> arenaCommands.handleArena(sender, args)
+                "inventory", "inv" -> inventoryCommands.handle(sender, args)
                 in resultCommands.handled -> resultCommands.handle(sender, args)
                 in EventType.ids -> {
                     val type = EventType.fromId(sub)!!
@@ -1267,6 +1230,7 @@ class EventManager(private val plugin: Joshymc) : Listener {
             }
             lines += arenaCommands.usageLines(sender)
             lines += resultCommands.usageLines(sender)
+            lines += inventoryCommands.usageLines(sender)
             if (sender.hasPermission(EventPermissions.ADMIN)) {
                 lines += "&e/event wand &7- Get event zone wand"
                 lines += "&e/event save &7- Save selected zone"
@@ -1290,10 +1254,12 @@ class EventManager(private val plugin: Joshymc) : Listener {
                     // Every type has game subcommands for hosts (and arena setup for arena staff).
                     if (host || EventPermissions.canSetupArenas(sender)) addAll(EventType.ids)
                     if (admin) addAll(adminSubs)
+                    if (inventoryCommands.canUse(sender)) add("inventory")
                 }.filter { it.startsWith(args[0].lowercase()) }
                 else -> when {
                     args[0].equals("arena", true) || args[0].equals("arenas", true) -> arenaCommands.tabArena(sender, args)
                     args[0].lowercase() in resultCommands.handled -> resultCommands.tab(sender, args)
+                    args[0].equals("inventory", true) || args[0].equals("inv", true) -> inventoryCommands.tab(sender, args)
                     EventType.fromId(args[0]) != null -> {
                         val type = EventType.fromId(args[0])!!
                         when {

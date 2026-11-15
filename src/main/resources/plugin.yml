@@ -1438,6 +1438,10 @@ permissions:
       joshymc.event.result.override: true
       joshymc.event.rewards.recover: true
       joshymc.event.stats.others: true
+      joshymc.event.inventory.recover: true
+  joshymc.event.inventory.recover:
+    description: Inspect and settle event inventory snapshots (/event inventory)
+    default: op
   joshymc.event.host:
     description: Host community events (Event Manager GUI, /event create/open/start/stop/reset/status, select arenas, confirm results, history, own hosting stats) - for Community Managers
     default: op
