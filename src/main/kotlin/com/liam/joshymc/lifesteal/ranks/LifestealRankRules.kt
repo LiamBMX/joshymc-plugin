@@ -138,6 +138,39 @@ object LifestealRankRules {
         return if (reaches(settings, owned, rank)) KitAccess.ALLOWED else KitAccess.LOCKED
     }
 
+    /**
+     * Issue #1551 (ISO-04): the one Lifesteal kit decision. [PERMISSION] = the kit isn't a rank kit,
+     * so only its kits.yml permission decides (Starter, Special kits). Every other value refuses,
+     * and **no permission node or wildcard can turn a refusal into a claim**.
+     * [UNVERIFIED] = `lifesteal-ranks.yml` is invalid, missing or unloaded and the kit may be a rank
+     * kit, so it can't be checked against the hierarchy: refused (fail closed) until the file is fixed.
+     */
+    enum class KitDecision { PERMISSION, ALLOWED, LOCKED, RANK_DISABLED, SYSTEM_DISABLED, UNVERIFIED }
+
+    /**
+     * [settings] null = no valid rank configuration. [possibleRankKit] is only read then: whether the
+     * kit could belong to a rank (a kit a rank listed in the last valid or readable file, a rank's
+     * own id, or a kit `/kit` shows under Rank Kits). With valid [settings] the file alone decides.
+     */
+    fun kitDecision(settings: Settings?, owned: Collection<String>, kit: String, possibleRankKit: Boolean): KitDecision {
+        if (settings == null) return if (possibleRankKit) KitDecision.UNVERIFIED else KitDecision.PERMISSION
+        return when (kitAccess(settings, owned, kit)) {
+            KitAccess.NOT_A_RANK_KIT -> KitDecision.PERMISSION
+            KitAccess.ALLOWED -> KitDecision.ALLOWED
+            KitAccess.LOCKED -> KitDecision.LOCKED
+            KitAccess.RANK_DISABLED -> KitDecision.RANK_DISABLED
+            KitAccess.SYSTEM_DISABLED -> KitDecision.SYSTEM_DISABLED
+        }
+    }
+
+    /**
+     * Issue #1551: names that may be rank kits, read from a `ranks:` section even when the file as a
+     * whole is invalid: every rank id and every `ranks.<id>.kits` entry, lower case. [rankIds] and
+     * [kitLists] come straight from the YAML (anything unreadable is simply absent).
+     */
+    fun declaredRankKits(rankIds: Collection<String>, kitLists: Collection<Collection<String>>): Set<String> =
+        (rankIds + kitLists.flatten()).map { it.trim().lowercase(java.util.Locale.ROOT) }.filter { it.isNotEmpty() }.toSet()
+
     /** The rank kits in hierarchy order (the `/kit` Rank Kits order when `kits.rank-order.lifesteal` is empty). */
     fun kitOrder(settings: Settings): List<String> = settings.ranks.flatMap { it.kits }
 

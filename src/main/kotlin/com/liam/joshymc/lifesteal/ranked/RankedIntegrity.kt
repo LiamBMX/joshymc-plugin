@@ -46,6 +46,11 @@ object RankedIntegrity {
             CompetitiveEligibility.Reason.VANISHED -> "is vanished (turn off /vanish to play ranked)"
             CompetitiveEligibility.Reason.MOD_MODE -> "is in Mod Mode"
             CompetitiveEligibility.Reason.UNSAFE_ENCHANT -> "is wearing gear with enchantments above vanilla limits"
+            // Issue #1551: flight is also taken at preparation and on every integrity check, so in a
+            // match only a speed someone changed (console, another plugin) is ever found here.
+            CompetitiveEligibility.Reason.FLYING -> "is flying (land to play ranked)"
+            CompetitiveEligibility.Reason.WALK_SPEED -> "has a modified walk speed (reset it with /speed 2 walk to play ranked)"
+            CompetitiveEligibility.Reason.FLY_SPEED -> "has a modified fly speed (reset it with /speed 1 fly to play ranked)"
         }
     }
 

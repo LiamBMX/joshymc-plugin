@@ -521,7 +521,10 @@ class LifestealCombatNpcManager(private val plugin: Joshymc) {
         // Issue #1487 (D-H4): Creative, God Mode and Vanish (the staff abilities, not gear) can't
         // kill a combat logger's NPC. Over-limit gear may still hit; the kill just earns nothing
         // (the heart/coin settlement checks the same tracker, including the hits made before).
-        val staffState = plugin.competitiveEligibility.currentReasons(attacker) - CompetitiveEligibility.Reason.UNSAFE_ENCHANT
+        // Issue #1551: flight/modified speed don't refuse the hit either; like gear, they only make
+        // the kill earn nothing.
+        val staffState = plugin.competitiveEligibility.currentReasons(attacker) - CompetitiveEligibility.Reason.UNSAFE_ENCHANT -
+            CompetitiveEligibility.MOVEMENT_REASONS
         if (staffState.isNotEmpty()) return HitDecision.DENY
         // Lifesteal friendly fire applies to the owner's NPC as it would to the owner.
         val policy = plugin.lifestealTeamManager.combatPolicy()

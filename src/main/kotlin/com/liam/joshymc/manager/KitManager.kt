@@ -49,6 +49,9 @@ class KitManager(private val plugin: Joshymc) {
         const val EDIT_SAVE_SLOT = 42
         const val EDIT_CANCEL_SLOT = 44
 
+        /** Issue #1551: at most one console line per this interval about closed Lifesteal rank kits. */
+        const val UNVERIFIED_KIT_LOG_INTERVAL_MS = 10 * 60_000L
+
         /** Capitalizes each word of a kit's internal id for display only (e.g. "trail_blazer" -> "Trail Blazer"). */
         fun displayName(kitName: String): String =
             kitName.split('_', ' ').filter { it.isNotEmpty() }
@@ -270,18 +273,45 @@ class KitManager(private val plugin: Joshymc) {
      * Whether [player] may claim [kit]. Survival kits (and Lifesteal kits no rank lists): the kit's
      * permission, as before. A Lifesteal rank kit: only the Lifesteal rank hierarchy decides (its rank
      * or any higher one, both enabled), never a permission node, so a shared or inherited LuckPerms
-     * node can't unlock it.
+     * node can't unlock it. Issue #1551 (ISO-04): when `lifesteal-ranks.yml` can't be used, a kit
+     * that may be a rank kit is refused instead of falling back to its permission ([lifestealKitDecision]).
      */
     fun canUse(player: Player, kit: KitDef): Boolean {
         if (!kit.isLifesteal) return player.hasPermission(kit.permission)
-        val ranks = plugin.lifestealRanksOrNull()
-        val settings = lifestealRanks()
-        if (ranks == null || settings == null) return player.hasPermission(kit.permission)
-        return when (LifestealRankRules.kitAccess(settings, ranks.ownedRanks(player.uniqueId), kit.name)) {
-            LifestealRankRules.KitAccess.NOT_A_RANK_KIT -> player.hasPermission(kit.permission)
-            LifestealRankRules.KitAccess.ALLOWED -> true
+        return when (lifestealKitDecision(player, kit)) {
+            LifestealRankRules.KitDecision.PERMISSION -> player.hasPermission(kit.permission)
+            LifestealRankRules.KitDecision.ALLOWED -> true
             else -> false
         }
+    }
+
+    /**
+     * Issue #1551: the Lifesteal rank side of [canUse] for a Lifesteal [kit]. Without a valid rank
+     * file (invalid, missing, not loaded) the kit counts as a possible rank kit when any rank id or
+     * rank `kits:` entry seen since startup names it, or when `/kit` lists it under Rank Kits (an
+     * explicit `category: rank`, a name in `kits.rank-order.lifesteal`, or any kit that isn't the
+     * Starter or a Special kit).
+     */
+    fun lifestealKitDecision(player: Player, kit: KitDef): LifestealRankRules.KitDecision {
+        val ranks = plugin.lifestealRanksOrNull()
+        val settings = lifestealRanks()
+        val possibleRankKit = settings == null && (
+            kit.name.lowercase() in (ranks?.knownRankKits ?: emptySet()) ||
+                KitCatalog.categoryOf(kit.entry, rankOrder(ServerGamemode.LIFESTEAL)) == KitCatalog.Category.RANK
+            )
+        val owned = if (ranks != null && settings != null) ranks.ownedRanks(player.uniqueId) else emptySet()
+        return LifestealRankRules.kitDecision(settings, owned, kit.name, possibleRankKit)
+    }
+
+    /** Issue #1551: when the console was last told that rank kits are closed (one line per 10 minutes). */
+    @Volatile private var unverifiedKitLoggedAt = 0L
+
+    private fun logUnverifiedKit(player: Player, kit: KitDef) {
+        val now = System.currentTimeMillis()
+        if (now - unverifiedKitLoggedAt in 0 until UNVERIFIED_KIT_LOG_INTERVAL_MS) return
+        unverifiedKitLoggedAt = now
+        val status = plugin.lifestealRanksOrNull()?.status?.name ?: "NOT_STARTED"
+        plugin.logger.warning("[KitManager] Refused Lifesteal kit ${kit.name} for ${player.name}: ${LifestealRankConfig.FILE} isn't usable (status $status), so Lifesteal rank kits are closed. Fix it (/lsranks admin problems), then /lsranks admin reload.")
     }
 
     /** The Lifesteal rank a kit belongs to, for its icon. */
@@ -384,7 +414,10 @@ class KitManager(private val plugin: Joshymc) {
 
         if (!canUse(player, kit)) {
             val rank = lifestealRankFor(kit)
-            val message = if (rank != null) "This kit needs the ${rank.displayName} rank or higher (see /lsranks)." else "You don't have permission to use this kit."
+            val unverified = kit.isLifesteal && lifestealKitDecision(player, kit) == LifestealRankRules.KitDecision.UNVERIFIED
+            if (unverified) logUnverifiedKit(player, kit)
+            val message = if (unverified) "Rank kits can't be checked right now. Please try again later."
+            else if (rank != null) "This kit needs the ${rank.displayName} rank or higher (see /lsranks)." else "You don't have permission to use this kit."
             plugin.commsManager.send(player, Component.text(message, NamedTextColor.RED))
             return false
         }

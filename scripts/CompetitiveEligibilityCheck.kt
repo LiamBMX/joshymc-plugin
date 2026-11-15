@@ -6,6 +6,8 @@
 //
 //   ./gradlew -I scripts/competitive-eligibility-check.init.gradle.kts competitiveEligibilityCheck
 //
+// Issue #1551 (STF-01) adds enhanced movement (flight, modified walk/fly speed): see movement().
+//
 // Exits non-zero on the first failed check. Live gameplay is listed in docs/lifesteal-hearts.md
 // ("Competitive eligibility", manual tests).
 
@@ -16,6 +18,7 @@ import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
 import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.EnchantLevel
 import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.EnchantRequest
 import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.Mode
+import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.Movement
 import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.Reason
 import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.State
 import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility.Verdict
@@ -26,6 +29,7 @@ import com.liam.joshymc.lifesteal.hearts.HeartStore
 import com.liam.joshymc.lifesteal.hearts.HeartStore.PvpResult
 import com.liam.joshymc.lifesteal.progression.ProgressionRules
 import com.liam.joshymc.lifesteal.ranked.RankedHeartSummary
+import com.liam.joshymc.lifesteal.ranked.RankedIntegrity
 import com.liam.joshymc.lifesteal.teams.TeamCombatRules
 import com.liam.joshymc.manager.DatabaseManager
 import java.io.File
@@ -51,12 +55,19 @@ private const val T0 = 1_800_000_000_000L
 private const val WINDOW = 15_000L
 
 private val SURVIVAL = State(Mode.SURVIVAL)
+
+// Issue #1551: enhanced-movement states.
+private val FLYING = SURVIVAL.copy(movement = Movement(flying = true, canFly = true))
+private val FAST_WALK = SURVIVAL.copy(movement = Movement(walkSpeed = 0.5f))
+private val FAST_FLY = SURVIVAL.copy(movement = Movement(flySpeed = 0.4f, canFly = true))
+private val MOVEMENT_STATES = listOf("abnormal walk speed" to FAST_WALK, "abnormal fly speed" to FAST_FLY, "active flight" to FLYING)
 private fun verdictOf(state: State, recorded: Set<Reason> = emptySet()) = CompetitiveEligibility.verdict(CompetitiveEligibility.problems(state), recorded)
 
 private fun source(path: String): String = File("src/main/kotlin/com/liam/joshymc/$path").readText()
 
 fun main() {
     rules()
+    movement()
     hitMemory()
     heartDecisions()
     store()
@@ -100,6 +111,52 @@ private fun rules() {
     check("an eligible verdict reports eligible", Verdict.Eligible.eligible && !switched.eligible)
     check("an empty ineligible verdict can't be built", runCatching { Verdict.Ineligible(emptySet(), false) }.isFailure)
     check("memory window is the combat tag, at least 30s", CompetitiveEligibility.memoryMillis(15_000) == 30_000L && CompetitiveEligibility.memoryMillis(60_000) == 60_000L)
+}
+
+// ── Enhanced movement (issue #1551, STF-01) ─────────────────
+
+private fun movement() {
+    // 1-3, 7, 12: ordinary movement stays eligible.
+    check("1. normal Survival movement is eligible", verdictOf(SURVIVAL) == Verdict.Eligible)
+    check("2. normal Lifesteal movement (vanilla speeds, Adventure too) is eligible",
+        verdictOf(State(Mode.ADVENTURE, movement = Movement(CompetitiveEligibility.DEFAULT_WALK_SPEED, CompetitiveEligibility.DEFAULT_FLY_SPEED))) == Verdict.Eligible)
+    // Sprinting, Speed potions and Soul Speed are attribute modifiers: Player.walkSpeed stays 0.2.
+    check("3. sprinting (walkSpeed untouched) is eligible", verdictOf(SURVIVAL.copy(movement = Movement(walkSpeed = 0.2f))) == Verdict.Eligible)
+    check("float noise around the default isn't a modified speed", verdictOf(SURVIVAL.copy(movement = Movement(walkSpeed = 0.2000004f, flySpeed = 0.1000004f, canFly = true))) == Verdict.Eligible)
+    check("slower than vanilla is no advantage", verdictOf(SURVIVAL.copy(movement = Movement(walkSpeed = 0.1f, flySpeed = 0.05f, canFly = true))) == Verdict.Eligible)
+    check("7. flight allowed but not flying, normal speeds: eligible", verdictOf(SURVIVAL.copy(movement = Movement(canFly = true))) == Verdict.Eligible)
+    check("7. a boosted fly speed nobody can use (no flight) is ignored", verdictOf(SURVIVAL.copy(movement = Movement(flySpeed = 1f))) == Verdict.Eligible)
+    check("12. an ordinary player is eligible", verdictOf(State(Mode.SURVIVAL, movement = Movement())) == Verdict.Eligible)
+
+    // 4-6: enhanced movement is ineligible.
+    val walk = verdictOf(FAST_WALK)
+    check("4. abnormal walk speed is ineligible", walk is Verdict.Ineligible && walk.reasons == setOf(Reason.WALK_SPEED) && walk.code == "walk_speed")
+    val fly = verdictOf(FAST_FLY)
+    check("5. abnormal fly speed (can fly) is ineligible", fly is Verdict.Ineligible && fly.reasons == setOf(Reason.FLY_SPEED))
+    val flying = verdictOf(FLYING)
+    check("6. active flight is ineligible", flying is Verdict.Ineligible && flying.reasons == setOf(Reason.FLYING) && flying.labels == "flight")
+    val both = verdictOf(SURVIVAL.copy(movement = Movement(flySpeed = 1f, flying = true, canFly = true)))
+    check("6. fast flight lists both reasons", both is Verdict.Ineligible && both.code == "flying,fly_speed")
+    check("a non-number speed counts as modified", verdictOf(SURVIVAL.copy(movement = Movement(walkSpeed = Float.NaN))) is Verdict.Ineligible)
+    check("creative flight reads as Creative only", (verdictOf(State(Mode.CREATIVE, movement = Movement(flySpeed = 1f, flying = true, canFly = true))) as Verdict.Ineligible).reasons == setOf(Reason.CREATIVE))
+    check("creative with /speed walk still lists the walk speed", (verdictOf(State(Mode.CREATIVE, movement = Movement(walkSpeed = 1f))) as Verdict.Ineligible).reasons == setOf(Reason.CREATIVE, Reason.WALK_SPEED))
+    check("existing exclusions are unchanged", verdictOf(SURVIVAL.copy(godMode = true, movement = Movement(walkSpeed = 0.6f))).let { it is Verdict.Ineligible && it.code == "god_mode,walk_speed" })
+    check("old audit codes keep their order (new reasons appended)", Reason.entries.take(6).map { it.id } == listOf("creative", "spectator", "god_mode", "vanished", "mod_mode", "unsafe_enchant"))
+    check("movement reasons are exactly the three new ones", CompetitiveEligibility.MOVEMENT_REASONS == setOf(Reason.FLYING, Reason.WALK_SPEED, Reason.FLY_SPEED))
+    check("flying before the kill still counts after landing", verdictOf(SURVIVAL, setOf(Reason.FLYING)).let { it is Verdict.Ineligible && it.duringCombat })
+
+    // 11. ranked: the same reasons refuse entry and are forfeits mid-fight (RankedIntegrity).
+    for (reason in CompetitiveEligibility.MOVEMENT_REASONS) {
+        check("11. ranked refuses ${reason.id}", RankedIntegrity.eligibilityProblem(setOf(reason)) != null)
+    }
+    check("11. ranked names /speed for a modified walk speed", RankedIntegrity.eligibilityProblem(setOf(Reason.WALK_SPEED))!!.contains("/speed 2 walk"))
+    check("11. ranked allows normal movement", RankedIntegrity.eligibilityProblem(CompetitiveEligibility.problems(SURVIVAL.copy(movement = Movement(canFly = true)))) == null)
+    check("11. enhanced movement found mid-fight is the existing forfeit", RankedIntegrity.resolve(com.liam.joshymc.lifesteal.ranked.MatchState.ACTIVE, stillFighting = true) == RankedIntegrity.Resolution.FORFEIT)
+    // Flight is taken (not forfeited) before the reasons are read, so a held player is only ever
+    // forfeited for a speed someone changed, never for flight the match itself turns off.
+    val integrity = source("lifesteal/ranked/LifestealRankedManager.kt").substringAfter("fun checkIntegrity(").substringBefore("fun ", )
+    check("11. checkIntegrity removes flight before reading the reasons", integrity.indexOf("player.allowFlight = false") in 0 until integrity.indexOf("competitiveReasons(player)"))
+    check("11. entry uses the same reasons", source("lifesteal/ranked/LifestealRankedManager.kt").contains("else -> RankedIntegrity.eligibilityProblem(competitiveReasons(player))"))
 }
 
 private fun hitMemory() {
@@ -189,7 +246,7 @@ private fun store() {
                 "2. creative" to State(Mode.CREATIVE), "3. spectator" to State(Mode.SPECTATOR),
                 "4. god mode" to SURVIVAL.copy(godMode = true), "5. vanished" to SURVIVAL.copy(vanished = true),
                 "6. illegal enchantment" to SURVIVAL.copy(unsafeEquipment = true),
-            )
+            ) + MOVEMENT_STATES.map { (n, st) -> "#1551 8. $n" to st }
             for ((name, state) in states) {
                 val k = player()
                 val v = player()
@@ -244,7 +301,7 @@ private fun bounties() {
     val killer = UUID.randomUUID()
     val ok = BountyRules.Death(victim = victim, causingPlayer = killer)
     check("12. eligible players can still claim", BountyRules.eligibility(ok) == BountyRules.Eligibility.Eligible(killer))
-    for (state in listOf(State(Mode.CREATIVE), State(Mode.SPECTATOR), SURVIVAL.copy(godMode = true), SURVIVAL.copy(vanished = true), SURVIVAL.copy(unsafeEquipment = true))) {
+    for (state in listOf(State(Mode.CREATIVE), State(Mode.SPECTATOR), SURVIVAL.copy(godMode = true), SURVIVAL.copy(vanished = true), SURVIVAL.copy(unsafeEquipment = true)) + MOVEMENT_STATES.map { it.second }) {
         val r = BountyRules.eligibility(ok.copy(attacker = verdictOf(state)))
         check("10. ${state} gets no bounty", r is BountyRules.Eligibility.Refused && r.reason == BountyRules.Refusal.INELIGIBLE_ATTACKER)
     }
@@ -267,6 +324,11 @@ private fun coins() {
     check("eligible kill can still steal coins", BankRules.eligibility(pvp, CoinStealSettings.DEFAULTS) == BankRules.Eligibility.Eligible)
     val refused = BankRules.eligibility(pvp.copy(attacker = verdictOf(SURVIVAL.copy(godMode = true))), CoinStealSettings.DEFAULTS)
     check("god mode kill steals no coins", refused is BankRules.Eligibility.Refused && refused.reason == BankRules.StealRefusal.INELIGIBLE_ATTACKER)
+    for ((name, state) in MOVEMENT_STATES) {
+        val r = BankRules.eligibility(pvp.copy(attacker = verdictOf(state)), CoinStealSettings.DEFAULTS)
+        check("#1551 10. $name kill steals no coins", r is BankRules.Eligibility.Refused && r.reason == BankRules.StealRefusal.INELIGIBLE_ATTACKER)
+    }
+    check("#1551 flight allowed but unused still steals coins", BankRules.eligibility(pvp.copy(attacker = verdictOf(SURVIVAL.copy(movement = Movement(canFly = true)))), CoinStealSettings.DEFAULTS) == BankRules.Eligibility.Eligible)
 }
 
 // ── Enchantments ────────────────────────────────────────────
@@ -302,7 +364,17 @@ private fun wiring() {
     val npc = source("lifesteal/combat/npc/LifestealCombatNpcManager.kt")
     check("Combat NPC hits refused for staff abilities", npc.substringAfter("fun playerHit(").substringBefore("fun otherDamageAllowed").contains("competitiveEligibility.currentReasons(attacker)"))
     val listener = source("lifesteal/eligibility/CompetitiveEligibilityListener.kt")
-    check("hits are recorded at MONITOR by causing entity", listener.contains("priority = EventPriority.MONITOR, ignoreCancelled = true") && listener.contains("damageSource.causingEntity"))
+    check("hits are recorded at MONITOR by causing entity", listener.contains("@EventHandler(priority = EventPriority.MONITOR)\n    fun onDamage(") && listener.contains("damageSource.causingEntity"))
+    val monitor = listener.substringAfter("fun onDamage(").substringBefore("fun onLaunch(")
+    check("cancelled hits are still never recorded", monitor.indexOf("if (event.isCancelled) return") in 0 until monitor.indexOf("tracker.onHit("))
+    check("#1551 movement is read at LOWEST, before the combat tag takes flight", listener.contains("@EventHandler(priority = EventPriority.LOWEST)\n    fun onDamageStart(") &&
+        listener.contains("tracker.movementReasons(attacker)") && monitor.contains("movementAtHit.remove(event)") && monitor.contains("tracker.onHit(attacker, victim, direct, before)"))
+    val tracker = source("lifesteal/eligibility/CompetitiveEligibilityTracker.kt")
+    check("#1551 live movement comes from walkSpeed/flySpeed/isFlying/allowFlight", tracker.contains("walkSpeed = player.walkSpeed") && tracker.contains("flySpeed = player.flySpeed") &&
+        tracker.contains("flying = player.isFlying") && tracker.contains("canFly = player.allowFlight") && tracker.contains("movement = movementOf(player)"))
+    check("#1551 Combat NPC hits aren't refused for movement (the kill just earns nothing)", npc.contains("CompetitiveEligibility.MOVEMENT_REASONS"))
+    check("#1551 the blocked-reward message explains movement", tracker.contains("Land and reset /speed to fight for rewards."))
+    check("#1551 /speed itself is unchanged for Survival", source("command/EssentialsCommands.kt").substringAfter("class SpeedCommand").substringBefore("override fun onTabComplete").contains("sender.walkSpeed = normalized"))
     check("Combat NPC hits count for the owner", listener.contains("lifestealCombatNpcManager.ownerOf(entity)"))
     check("projectiles are stamped at launch", listener.contains("ProjectileLaunchEvent") && listener.contains("stampProjectile"))
     check("listener registered with the heart listener", File("src/main/kotlin/com/liam/joshymc/manager/ListenerManager.kt").readText().contains("CompetitiveEligibilityListener(plugin)"))

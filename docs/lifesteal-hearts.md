@@ -365,6 +365,21 @@ like everyone else):
 | Vanish | `/vanish` (`VanishCommand.isVanished`) |
 | Mod Mode | `ModModeManager.isModMode` |
 | Over-limit enchantments | a vanilla enchantment above its vanilla maximum on the equipment used: worn armor, the main hand for melee, both hands when a projectile is launched. Items in the inventory or storage never count. A registered JoshyMC custom item may carry the levels it is built with (e.g. the Token's decorative Mending 10). |
+| Flight (issue #1551) | `player.isFlying` (creative-style flight; elytra gliding never counts). Read at LOWEST of the hit, because the first combat tag turns Survival flight off later in the same event |
+| Modified walk speed (issue #1551) | `player.walkSpeed` above vanilla's 0.2 (`/speed 3+ walk`, another plugin). Slower never counts |
+| Modified fly speed (issue #1551) | `player.flySpeed` above vanilla's 0.1 while the player can fly (`allowFlight`) or is flying |
+
+Issue #1551 (STF-01): sprinting, Speed potions, Soul Speed, Swift Sneak, Dolphin's Grace, elytra
+gliding and riptide work through attributes or physics and never change `walkSpeed`/`flySpeed`, so
+they never count. Being allowed to fly (`/fly`, a timed flight node) with vanilla speeds and not
+flying counts for nothing. Creative/Spectator already have their own reason, so their flight isn't
+listed again. In Survival `/speed` and `/fly` are unchanged; the rule only runs where Lifesteal is
+hosted. A Talisman speed bonus sets `walkSpeed` too, so it would count if one ran in a Lifesteal
+world (talismans are Survival-only on a dedicated Lifesteal server). A Combat NPC hit is not refused
+for movement (like over-limit gear, the kill just earns nothing). Ranked: the same reasons refuse
+entry (`RankedIntegrity.eligibilityProblem`, "is flying", "has a modified walk speed (reset it with
+/speed 2 walk ...)"); in a match flight is still only taken away (never a forfeit), and a modified
+speed found by the once-a-second integrity check is the existing `INELIGIBLE` forfeit.
 
 **When it is checked.** At settlement, by `CompetitiveEligibilityTracker.verdict(attacker, victim)`,
 which combines the attacker's state at that moment with every hit they made on that victim while
