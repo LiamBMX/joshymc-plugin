@@ -148,6 +148,33 @@ A refused claim never consumes the bounty. When the target had a bounty, the hun
 
 A victim at 1 heart is judged exactly like anyone else: hearts are never part of the decision.
 
+### Issue #1548 additions
+
+- **Launch progression (LS-ECO-08):** every claim path also checks the heart system's launch
+  window at death time (`lifestealProgressionManager.heartWindow`): before launch, during the
+  grace period and while progression is unknown, no bounty is claimed (it stays active).
+- **Combat-tagged environmental deaths (LS-ECO-07):** a real player who dies to lava, the void, a
+  fall or other environmental/self-inflicted damage while still combat-tagged is credited to the
+  tag's most recent eligible attacker, the heart system's #1461 rule (`HeartRules.combatTagKiller`,
+  reused read-only). Never for combat loggers, ranked match deaths or `/kill`, never without a
+  valid attacker; every check above still applies to the credited attacker. The shared
+  attribution (`lifesteal/economy/EconomyDeathAttribution`, copied at LOWEST of the death) is the
+  same one PvP coin stealing reads, and the dedupe key is victim + tick whoever is credited, so one
+  death claims at most once.
+- **Combat NPCs (LS-ECO-03):** a Lifesteal Combat NPC killed by a player
+  (`LifestealCombatNpcDeathEvent` with a killer) claims its owner's bounty under the same rules
+  (owner = target, killer facts, NPC location for the Ranked arena check, teams, competitive
+  eligibility, launch window, cooldown). Dedupe key `bounty:combatnpc:<session>` (UNIQUE), so
+  repeated callbacks, restarts and retries claim once; payouts recover through the normal sweep.
+  NPC deaths without a player killer (environmental) claim nothing.
+- **Contributors may claim (Owner decision C):** a contributor who legitimately kills the target
+  receives the full funded payout, their own contribution included.
+- **Coin shielding (LS-ECO-02):** contributions are refused while the contributor is dead,
+  combat-tagged, in a Ranked Team Wars match (or spectating / pending restore), in an event or
+  frozen (`BankRules.shieldingBlock`, read live before the request is queued), and the combat tag
+  is re-checked inside the contribution transaction right before the withdrawal (`Refusal.COMBAT`,
+  nothing taken). The same applies to team bank deposits.
+
 ## Anti-abuse
 
 - **Self, teammates, events, Ranked, cooldown:** see Claims.
@@ -165,6 +192,15 @@ A victim at 1 heart is judged exactly like anyone else: hearts are never part of
   carrier NAT), and the issue says not to act on shared IPs alone.
   - Real alt abuse therefore can't be detected automatically or reliably. Staff handle it with
     the usual punishment tools.
+- **Payout monitor (issue #1548, LS-ECO-05):** after every committed claim, `BountyMonitorRules`
+  checks the payout in a fixed number of bounded queries (`BountyStore.payoutLinks`): contributor
+  and hunter sharing a connection hash, contributor and target, hunter and target, the hunter
+  repeatedly claiming bounties funded by the same contributors (`repeat-kill-threshold` inside
+  the repeat window), and one contributor funding at least 80% of the payout (only together with
+  another signal). Each signal is a SUSPICIOUS audit row (bounty id, payout id, amount,
+  contributor UUIDs; never a hash or address), a console line, and a notice to online
+  `joshymc.lifesteal.bounty.admin` staff (once per staff member and hunter per 5 minutes).
+  **Informational only**: nothing is blocked, delayed, frozen, reversed or punished.
 
 ## Statistics and leaderboards
 

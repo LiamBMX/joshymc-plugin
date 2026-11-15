@@ -95,6 +95,21 @@ On a PlayerDeathEvent (MONITOR, ignoreCancelled; read only) or a Lifesteal Comba
    down, capped by `max-per-kill`. The victim's wallet withdrawal, the killer's deposit, the steal
    row, the cooldown and both ledger rows commit together.
 
+Issue #1548: the killer and "ranked" come from the economy's shared death attribution
+(`lifesteal/economy/EconomyDeathAttribution`, also used by bounty claims). It copies the victim's
+combat tag, recent attackers and ranked match at LOWEST of the death, so a ranked death stays
+ranked even after the ranked death handler defeated the victim (also for a killer defeated earlier
+in the same tick); with `ranked-enabled: false` no ranked death ever moves coins (LS-ECO-04). An
+environmental or self-inflicted death of a still combat-tagged real player is credited to the tag's
+most recent eligible attacker (the heart system's #1461 rule, reused read-only; never for combat
+loggers, ranked deaths or `/kill`), source `pvp-combat-tag`, with the same dedupe key as a direct
+kill (LS-ECO-07). Combat NPC deaths still need a direct player killer.
+
+Coin shielding (LS-ECO-02): bounty contributions and team bank deposits use the bank's live access
+checks (`BankRules.shieldingBlock`): dead, combat-tagged, Ranked, event and frozen players are
+always refused (whatever `block-during-combat` / `block-during-ranked` say, since those coins can't
+come back), and the combat tag is re-checked inside their transactions before any coins move.
+
 Coins are decided **independently of hearts**: a victim on their final heart keeps it (the
 permanent 1-heart minimum, `HeartRules.decide` is unchanged: no heart, no Heart item, no
 elimination, normal respawn) and coins still move; a killer at the heart maximum still gets coins.

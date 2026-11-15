@@ -44,6 +44,12 @@ class LifestealBankManager(private val plugin: Joshymc) {
     val store = BankStore(plugin.databaseManager, EconomyWallet())
     val menu = LifestealBankMenu(plugin, this)
 
+    /**
+     * Issue #1548: the economy's shared death attribution (combat-tag credit, ranked match at death
+     * time), used by coin stealing here and by Lifesteal bounty claims.
+     */
+    val deaths = com.liam.joshymc.lifesteal.economy.EconomyDeathAttribution(plugin)
+
     /** Random per boot: a death's dedupe key (victim + server tick) is never reused after a restart. */
     private val bootId = UUID.randomUUID().toString().substring(0, 8)
 
@@ -117,8 +123,30 @@ class LifestealBankManager(private val plugin: Joshymc) {
     }
 
     /** Live state of [player], read now, every time a transfer runs. */
-    fun accessBlock(player: Player): BankRules.Block? {
-        val state = BankRules.AccessState(
+    fun accessBlock(player: Player): BankRules.Block? = BankRules.accessBlock(accessState(player), effectiveBank)
+
+    /**
+     * Issue #1548 (LS-ECO-02): why [player] can't move wallet coins into a bounty or the team bank
+     * right now ([BankRules.shieldingBlock], read live, main thread), or null. Called right before
+     * the operation is queued; the store re-checks the combat tag ([combatTaggedNow]) inside its
+     * transaction.
+     */
+    fun shieldingRefusal(player: Player, action: BankRules.ShieldAction): String? =
+        BankRules.shieldingBlock(accessState(player))?.let { BankRules.shieldingMessage(it, action) }
+
+    /**
+     * Thread-safe (CombatManager's tag map is concurrent): whether [uuid] is combat-tagged right now.
+     * The in-transaction gate of bounty contributions and team bank deposits, which run on the
+     * database thread; a failure counts as tagged, so nothing moves.
+     */
+    fun combatTaggedNow(uuid: UUID): Boolean = try {
+        plugin.combatManager.tagExpiresAt(uuid) != null
+    } catch (_: Exception) {
+        true
+    }
+
+    private fun accessState(player: Player): BankRules.AccessState {
+        return BankRules.AccessState(
             inLifesteal = isLifesteal(player),
             dead = player.isDead,
             combatTagged = safe { plugin.combatManager.isTagged(player) },
@@ -129,7 +157,6 @@ class LifestealBankManager(private val plugin: Joshymc) {
             inEvent = safe { inEvent(player) },
             frozen = safe { plugin.adminManager.isFrozen(player.uniqueId) },
         )
-        return BankRules.accessBlock(state, effectiveBank)
     }
 
     /** A check that throws (manager not started) blocks banking rather than letting it through. */
@@ -287,16 +314,21 @@ class LifestealBankManager(private val plugin: Joshymc) {
     fun onDeath(event: PlayerDeathEvent) {
         if (!stealing) return
         val victim = event.player
-        val causing = event.damageSource.causingEntity as? Player
-        val killer = causing?.takeIf { it.uniqueId != victim.uniqueId }
-        val attribution = attribute(victim.uniqueId, isLifesteal(victim), causing?.uniqueId, killer)
-        if (attribution != HeartRules.Attribution.PVP_KILL || killer == null) return
-        val ranked = rankedHeld(victim.uniqueId) || rankedHeld(killer.uniqueId)
+        // Issue #1548: one attribution for coins and bounties. LS-ECO-07: an environmental or
+        // self-inflicted death while combat-tagged is credited to the tag's last eligible attacker
+        // (the heart system's #1461 rule). LS-ECO-04: "ranked" comes from the LOWEST copy of the
+        // victim's match, so a defeat at HIGHEST can't make a ranked death ordinary PvP.
+        val resolution = deaths.resolve(event)
+        val killer = resolution.killer?.let { Bukkit.getPlayer(it) }
+        if (resolution.attribution != HeartRules.Attribution.PVP_KILL || killer == null) return
+        val ranked = resolution.rankedMatch != null || rankedHeld(victim.uniqueId) || rankedHeld(killer.uniqueId)
         val inEvent = safe { inEvent(victim) } || safe { inEvent(killer) }
         process(
-            dedupeKey = "coins:pvp:$bootId:${victim.uniqueId}:${Bukkit.getCurrentTick()}",
+            // Victim + tick only: a direct kill and a combat-tag credit of the same death share it.
+            dedupeKey = "coins:pvp:$bootId:${victim.uniqueId}:${resolution.tick}",
             killer = killer, victim = victim.uniqueId, victimName = victim.name, onlineVictim = victim,
-            attribution = attribution, ranked = ranked, inEvent = inEvent, source = "pvp",
+            attribution = resolution.attribution, ranked = ranked, inEvent = inEvent,
+            source = if (resolution.viaCombatTag) "pvp-combat-tag" else "pvp",
         )
     }
 
@@ -437,6 +469,7 @@ class LifestealBankManager(private val plugin: Joshymc) {
 
     fun onQuit(player: Player) {
         menu.forget(player.uniqueId)
+        deaths.forget(player.uniqueId)
     }
 
     // ── Administrative adjustments ──────────────────────────

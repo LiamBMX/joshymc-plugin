@@ -20,6 +20,13 @@ class LifestealBankListener(private val plugin: Joshymc) : Listener {
 
     private val manager: LifestealBankManager get() = plugin.lifestealBankManager
 
+    /**
+     * Issue #1548: copy the victim's combat tag and ranked match before CombatListener (NORMAL) and
+     * the ranked death handler (HIGHEST) clear them; read by coin stealing and bounty claims at MONITOR.
+     */
+    @EventHandler(priority = EventPriority.LOWEST)
+    fun onDeathCapture(event: PlayerDeathEvent) = manager.deaths.capture(event)
+
     /** MONITOR + ignoreCancelled: only deaths that really happen. */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onDeath(event: PlayerDeathEvent) = manager.onDeath(event)

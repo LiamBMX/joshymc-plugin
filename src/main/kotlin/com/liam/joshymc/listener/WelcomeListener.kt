@@ -153,13 +153,20 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
             // A silent join isn't announced through the first-join broadcasts
             // or the "welcome" reward either (the join number is still recorded).
             if (!silent) {
+                // Issue #1548 (LS-ECO-01): the reward is Survival's. No window (and no
+                // call-to-action) on the Lifesteal server or for a newcomer in a Lifesteal world.
+                val rewardWindow = WelcomeRewardRules.opensWindow(
+                    plugin.networkIdentityManager.hostedGamemodes, plugin.gamemodeLockManager.gamemodeOf(player.world),
+                )
                 // Open a 30-second window during which other players can type
                 // "welcome" in chat to claim the reward. Reconnecting during (or
                 // after) this window never re-opens it — it's keyed off this join.
-                recentNewPlayers[player.uniqueId] = WelcomeEntry(name, now)
-                plugin.server.scheduler.runTaskLater(plugin, Runnable {
-                    recentNewPlayers.remove(player.uniqueId)
-                }, WELCOME_WINDOW_TICKS)
+                if (rewardWindow) {
+                    recentNewPlayers[player.uniqueId] = WelcomeEntry(name, now)
+                    plugin.server.scheduler.runTaskLater(plugin, Runnable {
+                        recentNewPlayers.remove(player.uniqueId)
+                    }, WELCOME_WINDOW_TICKS)
+                }
 
                 // Broadcast the numbered first-join welcome
                 if (joinNumberBroadcast) {
@@ -171,7 +178,7 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
                 }
 
                 // Broadcast the welcome-reward call-to-action
-                if (firstJoinBroadcast) {
+                if (firstJoinBroadcast && rewardWindow) {
                     val welcomeText = firstJoinMessage.replace("{player}", name)
                     plugin.server.broadcast(plugin.commsManager.parseLegacy(welcomeText))
                 }
@@ -254,6 +261,8 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
 
         val welcomer = event.player
         val now = System.currentTimeMillis()
+        // Issue #1548: never on Lifesteal (fast check here; re-checked on the main thread before paying).
+        if (recentNewPlayers.isEmpty() || !rewardAllowed(welcomer)) return
 
         // Claim every still-active newcomer this welcomer hasn't already
         // welcomed. `welcomers.add` is an atomic check-and-set on the backing
@@ -276,7 +285,14 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         })
     }
 
+    /** Issue #1548 (LS-ECO-01): only a Survival welcomer on a server whose economy is Survival's is paid. */
+    private fun rewardAllowed(welcomer: Player): Boolean =
+        WelcomeRewardRules.pays(plugin.networkIdentityManager.hostedGamemodes, plugin.gamemodeLockManager.gamemodeOf(welcomer.world))
+
     private fun grantWelcomeReward(welcomer: Player, newcomerName: String) {
+        // Re-checked on the main thread, right before the deposit: a welcomer who moved into a
+        // Lifesteal world (or left) since typing "welcome" gets nothing.
+        if (!welcomer.isOnline || !rewardAllowed(welcomer)) return
         val msg = "&6&l★ &e${welcomer.name} &awelcomed &f$newcomerName &ato the server! &6&l★"
         plugin.server.broadcast(plugin.commsManager.parseLegacy(msg))
 
