@@ -373,7 +373,15 @@ private fun wiring() {
     check("self-damage untouched", listener.contains("attacker.uniqueId == victim.uniqueId"))
 
     // Hearts: inside the heart service, at death time.
-    check("heart request carries the progression window", heartStore.contains("request.policy, request.team, request.window)"))
+    // Issue #1552: decide() gained a trailing attacker argument (issue #1487), so read the call's
+    // arguments instead of matching its exact text: the window must be passed in the window slot.
+    val decideArgs = Regex("""HeartRules\.decide\(([^)]*)\)""").findAll(heartStore).map { m -> m.groupValues[1].split(',').map { it.trim() } }.toList()
+    check("heart store decides every PvP death with HeartRules.decide", decideArgs.isNotEmpty())
+    // The seventh positional parameter is the window (compile-checked), and it refuses during grace.
+    check("decide's seventh argument is the progression window",
+        HeartRules.decide(10, 10, 0, LIMITS, HeartRules.KILLER_AT_MAXIMUM, TeamCombatRules.HeartCheck.ELIGIBLE, HeartWindow.GRACE_PERIOD) == HeartRules.Decision.GracePeriod)
+    check("heart request carries the progression window",
+        decideArgs.all { args -> args.getOrNull(6) == "request.window" || "window = request.window" in args })
     check("window taken at death time", heartManager.contains("window = plugin.lifestealProgressionManager.heartWindow(now)"))
 
     // End: actual transitions, not commands.

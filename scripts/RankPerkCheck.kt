@@ -67,6 +67,7 @@ private val STAFF_NODE_PARTS = listOf(".admin", ".reload", ".bypass", ".others",
 /** Player-facing nodes with a staff-looking name part; each is default true on purpose. */
 private val PLAYER_NODES_ALLOWED_TRUE = setOf(
     "joshymc.lifesteal.ranked.stats.others", // read-only ranked statistics of other players (issue #1365)
+    "joshymc.lifesteal.profile.others", // read-only Lifesteal profiles of other players; private ones stay hidden (issue #1429)
 )
 
 private fun isStaffNode(node: String): Boolean =
@@ -188,6 +189,26 @@ fun main() {
             }
         }
     }
+
+    // ── Lifesteal profiles of other players (issue #1552) ───
+    // profile.others is player-facing (default true), so the private-profile protection must stay
+    // behind its own staff node and be checked on every path that shows another player's profile.
+    check("joshymc.lifesteal.profile.others is declared", "joshymc.lifesteal.profile.others" in perms)
+    check("joshymc.lifesteal.profile.others grants no children", perms["joshymc.lifesteal.profile.others"].map()["children"] == null)
+    check("joshymc.lifesteal.profile.private.bypass is declared", "joshymc.lifesteal.profile.private.bypass" in perms)
+    check("joshymc.lifesteal.profile.private.bypass is op only", default("joshymc.lifesteal.profile.private.bypass") == "op")
+    check("joshymc.lifesteal.profile.private.bypass is still a staff node", isStaffNode("joshymc.lifesteal.profile.private.bypass"))
+    val profileManager = source("lifesteal/profile/LifestealProfileManager.kt")
+    val profileCommands = source("lifesteal/profile/ProfileCommands.kt")
+    val profileMenus = source("lifesteal/profile/ProfileMenus.kt")
+    check("profile permission constants unchanged", "const val PERMISSION_OTHERS = \"joshymc.lifesteal.profile.others\"" in profileManager &&
+        "const val PERMISSION_PRIVATE_BYPASS = \"joshymc.lifesteal.profile.private.bypass\"" in profileManager)
+    val privateGate = Regex("""!own && profile\.settings\.private && manager\.settings\?\.allowPrivate == true && !\w+\.hasPermission\(LifestealProfileManager\.PERMISSION_PRIVATE_BYPASS\)""")
+    check("/profile <player> hides private profiles without the bypass", privateGate.containsMatchIn(profileCommands))
+    check("profile menu hides private profiles without the bypass", privateGate.containsMatchIn(profileMenus))
+    check("/profile <player> needs joshymc.lifesteal.profile.others", "!sender.hasPermission(LifestealProfileManager.PERMISSION_OTHERS)" in profileCommands)
+    check("other players' details honor private profiles (ifVisible)",
+        "viewer !is Player || viewer.uniqueId == target || viewer.hasPermission(PERMISSION_PRIVATE_BYPASS)" in profileManager)
 
     // ── /heal and /feed on other players ────────────────────
     val essentials = source("command/EssentialsCommands.kt")
