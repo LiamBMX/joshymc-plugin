@@ -101,7 +101,18 @@ private fun rankedClosedByDefault() {
     check("systemReady requires the master switch", Regex("val systemReady: Boolean get\\(\\) = hosted && playerAccess").containsMatchIn(queue))
     check("queueing refuses while closed", "if (!playerAccess) return CLOSED_MESSAGE" in queue)
     val command = source("lifesteal/ranked/queue/RankedCommand.kt")
-    check("/ranked refuses players while closed", "if (!queue.commandVisibleTo(player))" in command)
+    // Issue #1552: the gate also lets a player answer a staff TEST match they were asked to play
+    // (issue #1491), and nothing else. Everyone else is refused with CLOSED_MESSAGE before any subcommand runs.
+    check("/ranked refuses players while closed",
+        Regex("""if \(!queue\.commandVisibleTo\(player\) && !answeringTest\) \{\s*Msg\.error\(player, LifestealRankedQueueManager\.CLOSED_MESSAGE\)\s*return true\s*\}""").containsMatchIn(command))
+    check("/ranked closed gate runs before any subcommand",
+        command.indexOf("if (!queue.commandVisibleTo(player) && !answeringTest)").let { it >= 0 && it < command.indexOf("when (a.firstOrNull()?.lowercase())") })
+    val answering = Regex("""val answeringTest = (.+)""").find(command)?.groupValues?.get(1)?.trim()
+    check("/ranked closed bypass is only answering a staff test match",
+        answering == "args.firstOrNull()?.lowercase() in setOf(\"accept\", \"decline\", \"deny\") && queue.tests.busy(player.uniqueId)")
+    check("/ranked closed bypass is declared once", Regex("""answeringTest""").findAll(command).count() == 2)
+    check("commandVisibleTo: closed to players without the admin node",
+        Regex("""fun commandVisibleTo\(sender: org\.bukkit\.command\.CommandSender\): Boolean =\s*hosted && \(playerAccess \|\| sender\.hasPermission\(LifestealRankedManager\.ADMIN_PERMISSION\)\)""").containsMatchIn(queue))
     check("/ranked tab completion is empty while closed", "if (!queue.commandVisibleTo(player) ||" in command)
     check("/ranked is hidden from the command list while closed", "commandVisibleTo(event.player)" in source("lifesteal/ranked/LifestealRankedListener.kt"))
 }
