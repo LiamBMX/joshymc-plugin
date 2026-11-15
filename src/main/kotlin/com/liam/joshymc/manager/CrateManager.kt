@@ -963,7 +963,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      */
     private fun tryQuickRotate(player: Player, block: Block): Boolean {
         if (player.uniqueId !in rotateMode) return false
-        val admin = player.hasPermission("joshymc.crate.admin")
+        val admin = player.hasPermission(com.liam.joshymc.crate.CratePermissions.DISPLAY)
         if (!admin) rotateMode -= player.uniqueId
         val quick = CrateFacing.isQuickRotate(
             featureEnabled = quickRotateEnabled(),
@@ -1212,7 +1212,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                 NamedTextColor.RED
             )
         )
-        if (player.hasPermission("joshymc.crate.admin")) {
+        if (com.liam.joshymc.crate.CratePermissions.isCrateStaff { player.hasPermission(it) }) {
             plugin.commsManager.send(player, Component.text("Admin: crate '$crateType' — $problem", NamedTextColor.GRAY))
         }
         player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
@@ -1516,7 +1516,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
         select3Sessions.remove(player.uniqueId)
         player.closeInventory()
         plugin.commsManager.send(player, Component.text("This crate is unavailable right now. No key was used.", NamedTextColor.RED))
-        if (player.hasPermission("joshymc.crate.admin")) {
+        if (com.liam.joshymc.crate.CratePermissions.isCrateStaff { player.hasPermission(it) }) {
             plugin.commsManager.send(player, Component.text("Admin: crate '${crate.id}' — $problem", NamedTextColor.GRAY))
         }
         return true
@@ -2986,7 +2986,7 @@ class CrateManager(private val plugin: Joshymc) : Listener {
                     player,
                     Component.text("This isn't a registered crate.", NamedTextColor.RED)
                 )
-                if (player.hasPermission("joshymc.crate.admin")) {
+                if (player.hasPermission(com.liam.joshymc.crate.CratePermissions.LOCATION)) {
                     plugin.commsManager.send(
                         player,
                         Component.text("Admin tip: use ", NamedTextColor.GRAY)

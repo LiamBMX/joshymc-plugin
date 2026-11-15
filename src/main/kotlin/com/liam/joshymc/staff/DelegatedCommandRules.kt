@@ -102,6 +102,18 @@ object DelegatedCommandRules {
         "grant", "revoke", "addblocks", "setblocks", "void", "override", "hearts", "combat",
     )
 
+    /**
+     * Commands that mix player and staff subcommands where only the listed first arguments are
+     * player-facing (issue #1541): any other first argument is refused as a staff subcommand,
+     * so new admin branches (`/crate display|rotate|monthly|models|...`) can never be reached
+     * through delegation even when their word isn't in [STAFF_SUBCOMMANDS]. Keyed by label and
+     * canonical name (aliases are resolved by [DelegatedCommands]).
+     */
+    val PLAYER_SUBCOMMANDS_ONLY: Map<String, Set<String>> = mapOf(
+        "crate" to com.liam.joshymc.crate.CratePermissions.PLAYER_SUBCOMMANDS,
+        "crates" to com.liam.joshymc.crate.CratePermissions.PLAYER_SUBCOMMANDS,
+    )
+
     /** The command's base label: no slash, no `plugin:` namespace, lower case. */
     fun label(command: String): String =
         command.trim().removePrefix("/").substringBefore(' ').substringAfter(':').lowercase()
@@ -123,6 +135,10 @@ object DelegatedCommandRules {
         if (names.any { it in TRANSFER }) return Decision.TRANSFER
         val args = arguments(command)
         if (args.isNotEmpty() && args[0].lowercase() in STAFF_SUBCOMMANDS) return Decision.STAFF_SUBCOMMAND
+        if (args.isNotEmpty()) {
+            val playerSubs = names.firstNotNullOfOrNull { PLAYER_SUBCOMMANDS_ONLY[it] }
+            if (playerSubs != null && args[0].lowercase() !in playerSubs) return Decision.STAFF_SUBCOMMAND
+        }
         if (args.isNotEmpty() && names.any { it in MENU_ONLY }) return Decision.MENU_ONLY
         return Decision.ALLOWED
     }

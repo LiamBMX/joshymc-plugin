@@ -221,7 +221,7 @@ crates:
   `enabled: false` rather than deleting the entry.
 - Animation is texture-based and always plays. No entity animation runs, so there are no
   tasks.
-- `/crate models` (`joshymc.crate.admin`) shows:
+- `/crate models` (`joshymc.crate.display`, issue #1541) shows:
   - the number of crate locations and expected models, and how many aren't drawn yet
     (chunk or world not loaded, or no block);
   - the number of spawned displays and interaction hitboxes;
@@ -326,7 +326,7 @@ month whose model is missing (not one per month or crate), plus any listed crate
 doesn't exist; a month change logs one line. Visibility rules are unchanged: Bedrock players
 and players without the JoshyMC pack always see the vanilla block.
 
-### Commands (`joshymc.crate.admin`, op)
+### Commands (`joshymc.crate.display`, op)
 
 - `/crate models`: the existing status, now with the monthly summary when rotation is set up.
 - `/crate models monthly`: on/off, timezone, current month and its model, when the next month
@@ -403,7 +403,7 @@ crates.yml crate with its own key and rewards; nothing is generated, rebalanced 
 
 ### Override
 
-| Command (`joshymc.crate.admin`, op) | What it does |
+| Command (`joshymc.crate.monthly`, op) | What it does |
 |---|---|
 | `/crate monthly [status]` | calendar month, month in effect, rotation on/off, override (month, who, when, expiry), next check, display model, and per rotating crate which crate it opens, which model it shows and how many locations it has |
 | `/crate monthly set <january..december> [7d\|12h\|1d12h\|month-end\|never]` | pins that month until reset or the expiry (default: no expiry); `month-end` = next midnight on the 1st, Eastern |
@@ -486,7 +486,7 @@ for every crate of that id, and `auto` follows the crate block's own `facing`, w
 when the chest is placed. So turning one crate meant breaking and re-placing its block (and
 re-registering it), and a fixed `rotation` turned every crate of the type at once.
 
-### Commands (`joshymc.crate.admin`, op)
+### Commands (`joshymc.crate.display`, op)
 
 Look at the crate block (within 5 blocks, like `/crate setlocation`):
 
@@ -508,7 +508,7 @@ crate through the double-chest fallback is refused with a hint, and any other bl
 After `/crate rotate mode on`, **sneak + right-click a crate with an empty hand** turns it
 NORTH → EAST → SOUTH → WEST → NORTH, with an action-bar line and a click sound.
 
-- Only crate admins who turned the mode on. Losing `joshymc.crate.admin` ends it, and it is
+- Only crate admins who turned the mode on. Losing `joshymc.crate.display` ends it, and it is
   cleared on quit (memory only).
 - With a key (or any item) in hand, or without sneaking, the click is the normal crate
   flow: open, mass-open, preview and the key checks are unchanged. No key is used, no
@@ -581,7 +581,7 @@ Facing (E3) picks which way a crate's front points. Each physical crate can also
 fine rotation, offset and scale, so one pedestal can be lined up without changing every crate
 of that type (`crates.custom-models.models.<id>` stays the shared default).
 
-### Commands (`joshymc.crate.admin`, op; look at the registered crate block, within 5 blocks)
+### Commands (`joshymc.crate.display`, op; look at the registered crate block, within 5 blocks)
 
 - `/crate display` (or `/crate display info`): crate, model (and whether it is static,
   monthly or a fallback), facing, fine rotation, offsets and scale (this crate's own value or

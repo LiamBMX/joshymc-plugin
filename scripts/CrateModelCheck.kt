@@ -351,10 +351,10 @@ private fun monthlyChecks(config: String, section: String, manager: String, disp
         check("model rotation never touches $word", word !in displays)
     }
 
-    // 14. Administrative commands: behind joshymc.crate.admin, validated, one entry changed.
+    // 14. Administrative commands: behind joshymc.crate.display (issue #1541), validated, one entry changed.
     val command = File("src/main/kotlin/com/liam/joshymc/command/CrateCommand.kt").readText()
     val models = command.substringAfter("private fun handleModels(").substringBefore("\n    }\n")
-    check("/crate models checks the admin permission first", models.indexOf("hasPermission(\"joshymc.crate.admin\")") in 0 until models.indexOf("\"set\" ->"))
+    check("/crate models checks the display permission first", models.indexOf("hasPermission(\"joshymc.crate.display\")") in 0 until models.indexOf("\"set\" ->"))
     val set = command.substringAfter("private fun handleModelSet(").substringBefore("\n    }\n")
     check("set validates the crate id (aliases resolved)", "resolveCrateId(" in set && "getCrate(crateId) == null" in set)
     check("set validates the model against the pack", "modelProblem(model)" in set)
@@ -363,7 +363,7 @@ private fun monthlyChecks(config: String, section: String, manager: String, disp
     check("set redraws through the existing restart", "restartModels()" in set && "fun restartModels()" in manager)
     check("set never touches locations or keys", "setCrateLocation" !in set && "removeCrateLocation" !in set && "giveKey" !in set)
     check("model problems explain missing pack entries", "fun modelProblem(" in displays)
-    check("set tab completion is admin only", command.split("sender.hasPermission(\"joshymc.crate.admin\") && args[1].equals(\"set\", ignoreCase = true)").size == 3)
+    check("set tab completion is admin only", command.split("sender.hasPermission(\"joshymc.crate.display\") && args[1].equals(\"set\", ignoreCase = true)").size == 3)
 }
 
 private fun near(a: Double, b: Double, eps: Double = 1e-6) = kotlin.math.abs(a - b) < eps
