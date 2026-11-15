@@ -24,6 +24,10 @@ class LifestealBountyListener(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onDeath(event: PlayerDeathEvent) = manager.onDeath(event)
 
+    /** Issue #1548 (LS-ECO-03): a player-killed Combat NPC claims its owner's bounty (fired once per NPC). */
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onCombatNpcDeath(event: com.liam.joshymc.lifesteal.combat.npc.LifestealCombatNpcDeathEvent) = manager.onCombatNpcDeath(event)
+
     @EventHandler(priority = EventPriority.MONITOR)
     fun onJoin(event: PlayerJoinEvent) = manager.onJoin(event.player)
 

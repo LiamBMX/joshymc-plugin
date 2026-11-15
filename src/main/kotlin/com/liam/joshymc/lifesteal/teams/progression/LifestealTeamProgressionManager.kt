@@ -372,11 +372,15 @@ class LifestealTeamProgressionManager(private val plugin: Joshymc) {
         if (!s.bank.depositsEnabled) return Msg.error(player, "Team bank deposits are turned off right now.")
         if (plugin.lifestealTeamManager.teamOf(player.uniqueId) == null) return Msg.error(player, "You're not in a Lifesteal team.")
         if (cents < s.bank.minimumDepositCents) return Msg.error(player, "The smallest deposit is ${BountyMoney.format(s.bank.minimumDepositCents)}.")
+        // Issue #1548 (LS-ECO-02): the bank's live access checks (combat tag, Ranked, events, freeze,
+        // death), read now, never from a menu; the combat tag is re-checked in the transaction.
+        shieldingRefusal(player)?.let { return Msg.error(player, it) }
         if (!busy.add(player.uniqueId)) return Msg.error(player, "Your last team bank action is still being processed.")
         val uuid = player.uniqueId
         val name = player.name
         db("deposit $reference") {
-            val result = try { store.deposit(TeamProgressionStore.DepositRequest(reference, uuid, name, cents, System.currentTimeMillis()), s) } catch (e: Exception) {
+            val request = TeamProgressionStore.DepositRequest(reference, uuid, name, cents, System.currentTimeMillis(), liveBlock = { memberTagged(uuid) })
+            val result = try { store.deposit(request, s) } catch (e: Exception) {
                 plugin.logger.severe("[TeamProgression] Deposit $reference by $name failed and was rolled back; no coins were taken: ${e.message}")
                 null
             }
@@ -402,6 +406,8 @@ class LifestealTeamProgressionManager(private val plugin: Joshymc) {
                     is TeamProgressionStore.DepositResult.OverCapacity -> Msg.error(online,
                         "The team bank holds at most ${BountyMoney.format(result.capacityCents)}; there's room for ${BountyMoney.format(result.roomCents)}. Team Economy upgrades raise the limit.")
                     TeamProgressionStore.DepositResult.InsufficientFunds -> Msg.error(online, "You don't have ${BountyMoney.format(cents)}.")
+                    TeamProgressionStore.DepositResult.Blocked -> Msg.error(online,
+                        com.liam.joshymc.lifesteal.bank.BankRules.shieldingMessage(com.liam.joshymc.lifesteal.bank.BankRules.Block.COMBAT, SHIELD_ACTION))
                 }
                 onDone?.invoke()
             }
@@ -544,6 +550,20 @@ class LifestealTeamProgressionManager(private val plugin: Joshymc) {
         false
     }
 
+    /** Issue #1548: the Lifesteal bank's live access rules for coins leaving the wallet; fails closed. */
+    private fun shieldingRefusal(player: Player): String? = try {
+        plugin.lifestealBankManager.shieldingRefusal(player, SHIELD_ACTION)
+    } catch (_: UninitializedPropertyAccessException) {
+        "The team bank is unavailable right now. Please tell staff."
+    }
+
+    /** Thread-safe in-transaction gate (database thread); fails closed. */
+    private fun memberTagged(uuid: UUID): Boolean = try {
+        plugin.lifestealBankManager.combatTaggedNow(uuid)
+    } catch (_: UninitializedPropertyAccessException) {
+        true
+    }
+
     private fun db(description: String, block: () -> Unit) {
         plugin.databaseManager.async("team progression: $description") {
             try { block() } catch (e: Exception) { plugin.logger.severe("[TeamProgression] $description failed: ${e.message}") }
@@ -574,6 +594,7 @@ class LifestealTeamProgressionManager(private val plugin: Joshymc) {
     companion object {
         const val PERMISSION_USE = "joshymc.lifesteal.team.upgrades"
         const val DEFAULT_SEASON = "season-1"
+        private val SHIELD_ACTION = com.liam.joshymc.lifesteal.bank.BankRules.ShieldAction.TEAM_BANK_DEPOSIT
         private const val SAMPLE_TICKS = 100L
         private const val FLUSH_TICKS = 20L * 60
         const val BLOCKS_PER_STEP = 100L

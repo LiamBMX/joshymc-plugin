@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.communityevent.EventState
 import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
+import com.liam.joshymc.lifesteal.progression.ProgressionRules
 import com.liam.joshymc.lifesteal.teams.TeamCombatRules
 import com.liam.joshymc.tutorial.TutorialRules
 import org.bukkit.Bukkit
@@ -192,6 +193,9 @@ class LifestealBountyManager(private val plugin: Joshymc) {
             onDone(ContributeOutcome.Refused(message))
         }
         unavailableReason(player)?.let { return refuse(it) }
+        // Issue #1548 (LS-ECO-02): the bank's live access checks (combat tag, Ranked, events,
+        // freeze, death), read now, never from a menu; the combat tag is re-checked in the transaction.
+        shieldingRefusal(player)?.let { return refuse(it) }
         val s = settings ?: return
         BountyRules.amountProblem(cents, s.minimumContributionCents)?.let { return refuse(it) }
         if (target == player.uniqueId) return refuse(BountyStore.Refusal.SELF.message)
@@ -199,6 +203,7 @@ class LifestealBountyManager(private val plugin: Joshymc) {
         if (plugin.lifestealTeamManager.sameTeam(player.uniqueId, target)) return refuse(BountyStore.Refusal.TEAMMATE.message)
         if (!busy.add(player.uniqueId)) return refuse("Your previous contribution is still being processed.")
         val now = System.currentTimeMillis()
+        val contributorId = player.uniqueId
         val request = BountyStore.ContributeRequest(
             transactionId = transactionId,
             contributor = player.uniqueId,
@@ -214,6 +219,7 @@ class LifestealBountyManager(private val plugin: Joshymc) {
             targetNotice = { total, expiresAt ->
                 BountyRules.fill(s.messages.targetNotified, mapOf("amount" to BountyMoney.format(total), "expires" to BountyRules.formatRemaining(expiresAt - now)))
             },
+            liveBlock = { contributorTagged(contributorId) },
         )
         val contributorUuid = player.uniqueId
         db("contribution $transactionId") {
@@ -257,9 +263,22 @@ class LifestealBountyManager(private val plugin: Joshymc) {
         }
     }
 
+    /** Issue #1548: the Lifesteal bank's live access rules for coins leaving the wallet; fails closed. */
+    private fun shieldingRefusal(player: Player): String? = try {
+        plugin.lifestealBankManager.shieldingRefusal(player, com.liam.joshymc.lifesteal.bank.BankRules.ShieldAction.BOUNTY_CONTRIBUTION)
+    } catch (_: UninitializedPropertyAccessException) {
+        "Bounties are unavailable right now. Please tell staff."
+    }
+
+    /** Thread-safe in-transaction gate (database thread); fails closed. */
+    private fun contributorTagged(uuid: UUID): Boolean = try {
+        plugin.lifestealBankManager.combatTaggedNow(uuid)
+    } catch (_: UninitializedPropertyAccessException) {
+        true
+    }
+
     // ── Claims ──────────────────────────────────────────────
 
-    /** MONITOR on PlayerDeathEvent (deaths that really happen). Never changes the death, drops or hearts. */
     /**
      * The facts [BountyRules.eligibility] judges, for [victim] hurt or killed by [causing]
      * (`damageSource.causingEntity`). Also used by the Lifesteal quests (issue #1425), so a kill
@@ -287,21 +306,84 @@ class LifestealBountyManager(private val plugin: Joshymc) {
     fun onDeath(event: PlayerDeathEvent) {
         if (!open) return
         val victim = event.player
-        val causing = event.damageSource.causingEntity as? Player
+        val now = System.currentTimeMillis()
+        // Issue #1548: the economy's shared attribution (the same answer coin stealing gets).
+        // LS-ECO-07: an environmental or self-inflicted death while combat-tagged is credited to the
+        // tag's last eligible attacker. LS-ECO-04: "ranked" also comes from the LOWEST copy of the
+        // victim's match. Without the shared attribution, the final damage's causing player only.
+        val resolution = try { plugin.lifestealBankManager.deaths.resolve(event) } catch (e: Exception) {
+            plugin.logger.warning("[Bounties] Death attribution for ${victim.name} failed, using the direct killer only: ${e.message}")
+            null
+        }
+        val causing = resolution?.killer?.let { Bukkit.getPlayer(it) } ?: event.damageSource.causingEntity as? Player
         val killer = causing?.takeIf { it.uniqueId != victim.uniqueId }
-        val death = pvpFacts(victim, causing)
-        val hasBounty = activeFor(victim.uniqueId) != null
+        val facts = pvpFacts(victim, causing)
+        val death = facts.copy(
+            inRankedMatch = facts.inRankedMatch || resolution?.rankedMatch != null,
+            window = progressionWindow(now),
+        )
+        if (resolution?.viaCombatTag == true && killer != null && activeFor(victim.uniqueId) != null) {
+            plugin.logger.info("[Bounties] ${victim.name} died to ${resolution.cause ?: "the environment"} while combat-tagged; ${killer.name} is credited.")
+        }
+        // Victim + tick only: a direct kill and a combat-tag credit of the same death share the key.
+        judgeClaim(death, killer, victim.uniqueId, victim.name, "bounty:$bootId:${victim.uniqueId}:${resolution?.tick ?: Bukkit.getCurrentTick()}", now)
+    }
+
+    /**
+     * Issue #1548 (LS-ECO-03): a Lifesteal Combat NPC killed by a player is its offline owner's
+     * death and claims the owner's bounty under exactly the same rules as a player kill. Only a
+     * direct killer counts (no environmental or combat-tag credit for NPCs). Deduped on the NPC
+     * session, so repeated events, restarts and retries claim at most once.
+     */
+    fun onCombatNpcDeath(event: com.liam.joshymc.lifesteal.combat.npc.LifestealCombatNpcDeathEvent) {
+        if (!open) return
+        val killer = event.killer ?: return
+        val victim = event.victim
+        val now = System.currentTimeMillis()
+        val death = combatNpcFacts(victim, killer, event.location, now)
+        judgeClaim(death, killer.takeIf { it.uniqueId != victim }, victim, event.victimName, combatNpcDedupeKey(event.sessionId), now)
+    }
+
+    /** The facts [BountyRules.eligibility] judges for a Combat NPC of [victim] killed by [killer] at [location]. Main thread. */
+    fun combatNpcFacts(victim: UUID, killer: Player, location: Location, now: Long): BountyRules.Death {
+        val other = killer.uniqueId != victim
+        return BountyRules.Death(
+            victim = victim,
+            causingPlayer = killer.uniqueId,
+            killerIsNpc = killer.hasMetadata("NPC"),
+            killerOnline = killer.isOnline,
+            victimInLifesteal = isLifesteal(location.world),
+            killerInLifesteal = isLifesteal(killer),
+            inEvent = inEvent(killer),
+            inArena = inArena(killer.uniqueId),
+            inRankedMatch = inRankedMatch(killer.uniqueId),
+            inRankedArena = inRankedArena(location) || inRankedArena(killer.location),
+            team = if (other) teamRelation(killer.uniqueId, victim) else BountyRules.Team.NOT_TEAMMATES,
+            // Issue #1487: hits on the NPC count as hits on its owner, like the heart system.
+            attacker = if (other) plugin.competitiveEligibility.verdict(killer, victim) else CompetitiveEligibility.Verdict.Eligible,
+            window = progressionWindow(now),
+        )
+    }
+
+    /** Issue #1548 (LS-ECO-08): the heart system's launch window at death time; unknown when it can't be read. */
+    private fun progressionWindow(now: Long): ProgressionRules.HeartWindow = try {
+        plugin.lifestealProgressionManager.heartWindow(now)
+    } catch (_: Exception) {
+        ProgressionRules.HeartWindow.UNKNOWN
+    }
+
+    /** Decides one death's claim (refusal messages and audit, or the claim on the database thread). Main thread. */
+    private fun judgeClaim(death: BountyRules.Death, killer: Player?, victimUuid: UUID, victimName: String, dedupeKey: String, now: Long) {
+        val hasBounty = activeFor(victimUuid) != null
         when (val eligibility = BountyRules.eligibility(death)) {
             is BountyRules.Eligibility.Refused -> {
                 val text = eligibility.reason.player
                 if (hasBounty && killer != null && text != null) send(killer, "&c$text")
                 if (hasBounty && killer != null) {
-                    val victimUuid = victim.uniqueId
                     val killerUuid = killer.uniqueId
-                    val now = System.currentTimeMillis()
-                    db("claim refusal") { store.audit(now, "CLAIM_REFUSED", killerUuid.toString(), null, victimUuid.toString(), null, eligibility.reason.name) }
+                    db("claim refusal") { store.audit(now, "CLAIM_REFUSED", killerUuid.toString(), null, victimUuid.toString(), null, eligibility.reason.name + " dedupe=" + dedupeKey) }
                     (death.attacker as? CompetitiveEligibility.Verdict.Ineligible)?.let {
-                        plugin.competitiveEligibility.reportBlocked(killer, victimUuid, victim.name, "BOUNTY", it, activeFor(victimUuid)?.id?.let { id -> "bounty=" + id })
+                        plugin.competitiveEligibility.reportBlocked(killer, victimUuid, victimName, "BOUNTY", it, activeFor(victimUuid)?.id?.let { id -> "bounty=" + id })
                     }
                 }
                 return
@@ -310,13 +392,12 @@ class LifestealBountyManager(private val plugin: Joshymc) {
         }
         val k = killer ?: return
         val s = settings ?: return
-        val now = System.currentTimeMillis()
         val request = BountyStore.ClaimRequest(
-            dedupeKey = "bounty:$bootId:${victim.uniqueId}:${Bukkit.getCurrentTick()}",
+            dedupeKey = dedupeKey,
             killer = k.uniqueId,
             killerName = k.name,
-            victim = victim.uniqueId,
-            victimName = victim.name,
+            victim = victimUuid,
+            victimName = victimName,
             deathAt = now,
             cooldownMillis = s.claimCooldownMillis,
         )
@@ -340,6 +421,8 @@ class LifestealBountyManager(private val plugin: Joshymc) {
             pay = store.pay(claim.payoutId, System.currentTimeMillis(), s.retryDelaySeconds * 1000L) { hunterNotice(it, s) }
             if (pay is BountyStore.PayResult.Paid) announced = store.markAnnounced(claim.payoutId)
             reloadActive()
+            // Issue #1548 (LS-ECO-05): informational only, after the claim committed; never changes it.
+            monitorPayout(request, claim, s)
         }
         onMain {
             val killer = Bukkit.getPlayer(request.killer)
@@ -365,6 +448,46 @@ class LifestealBountyManager(private val plugin: Joshymc) {
                 }
                 BountyStore.ClaimResult.Teammates -> killer?.let { send(it, "&c${BountyRules.Refusal.TEAMMATE.player}") }
                 else -> Unit
+            }
+        }
+    }
+
+    /** Staff notices about monitored payouts: once per staff member and hunter per [MONITOR_NOTICE_MILLIS]. */
+    private val monitorThrottle = com.liam.joshymc.lifesteal.social.SocialRules.NotificationThrottle(MONITOR_NOTICE_MILLIS)
+
+    /**
+     * Issue #1548 (LS-ECO-05): checks a claimed payout for alt-account signals between its
+     * contributors, hunter and target ([BountyMonitorRules]). Database thread. Only records
+     * (`/bounty admin suspicious`) and tells online staff; a failure is logged and changes nothing.
+     */
+    private fun monitorPayout(request: BountyStore.ClaimRequest, claim: BountyStore.ClaimResult.Claimed, s: BountySettings) {
+        val flags = try {
+            val links = store.payoutLinks(claim.bountyId, request.killer, request.victim, request.now - s.antiAbuse.repeatWindowMillis)
+            BountyMonitorRules.signals(links, s.antiAbuse.repeatKillThreshold)
+        } catch (e: Exception) {
+            plugin.logger.warning("[Bounties] Payout monitor for ${claim.payoutId} failed (the payout is unaffected): ${e.message}")
+            return
+        }
+        if (flags.isEmpty()) return
+        val now = System.currentTimeMillis()
+        for (flag in flags) {
+            try {
+                store.recordSuspicious(now, request.killer, request.victim, claim.bountyId, BountyMonitorRules.detail(flag, claim.payoutId, claim.amountCents))
+            } catch (e: Exception) {
+                plugin.logger.warning("[Bounties] Could not record a payout monitor signal: ${e.message}")
+            }
+        }
+        val summary = flags.joinToString(", ") { it.signal.name }
+        if (s.antiAbuse.consoleLogging) {
+            plugin.logger.warning("[Bounties] Payout monitor: bounty ${claim.bountyId} payout ${claim.payoutId} (${BountyMoney.format(claim.amountCents)}) " +
+                "hunter ${request.killerName} (${request.killer}) target ${request.victimName} (${request.victim}): $summary. Informational, nothing was blocked.")
+        }
+        onMain {
+            for (staff in Bukkit.getOnlinePlayers()) {
+                if (!staff.hasPermission(LifestealBountyCommand.ADMIN_PERMISSION)) continue
+                if (!monitorThrottle.allow(staff.uniqueId, request.killer, "bounty-monitor", now)) continue
+                send(staff, "&e[Bounty Monitor] &f${request.killerName} &7claimed &6${BountyMoney.format(claim.amountCents)} &7on &f${request.victimName}&7: &e$summary&7. " +
+                    "Informational only. &f/bounty admin suspicious")
             }
         }
     }
@@ -578,5 +701,10 @@ class LifestealBountyManager(private val plugin: Joshymc) {
 
     companion object {
         const val BOARD_CACHE_MILLIS = 30_000L
+        /** Issue #1548: at most one payout-monitor notice per staff member and hunter in this time. */
+        const val MONITOR_NOTICE_MILLIS = 5 * 60_000L
+
+        /** Issue #1548: one claim per Combat NPC session (stable across restarts; UNIQUE on the payout row). */
+        fun combatNpcDedupeKey(sessionId: String): String = "bounty:combatnpc:$sessionId"
     }
 }

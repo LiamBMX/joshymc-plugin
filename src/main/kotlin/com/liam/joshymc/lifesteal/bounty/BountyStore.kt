@@ -228,6 +228,8 @@ class BountyStore(private val db: SqliteDatabase, private val wallet: Wallet) {
             """.trimIndent()
         )
         db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_bounty_payouts_state ON lifesteal_bounty_payouts (state, next_attempt_at)")
+        // Issue #1548: the payout monitor's per-hunter history lookup.
+        db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_bounty_payouts_killer ON lifesteal_bounty_payouts (killer, created_at)")
         db.createTable(
             """
             CREATE TRIGGER IF NOT EXISTS trg_lifesteal_bounty_payouts_paid BEFORE UPDATE OF state, amount_cents, killer ON lifesteal_bounty_payouts
@@ -323,6 +325,12 @@ class BountyStore(private val db: SqliteDatabase, private val wallet: Wallet) {
         val source: String = "command",
         /** Private message to the target, built once the bounty is created: (total, expiresAt) -> text. */
         val targetNotice: ((Long, Long) -> String)? = null,
+        /**
+         * Issue #1548 (LS-ECO-02): re-checked inside the transaction, right before the withdrawal;
+         * true = the contributor is combat-tagged now, so nothing is taken. Must be thread-safe
+         * (it runs on the database thread).
+         */
+        val liveBlock: (() -> Boolean)? = null,
     )
 
     enum class Refusal(val message: String) {
@@ -333,6 +341,8 @@ class BountyStore(private val db: SqliteDatabase, private val wallet: Wallet) {
         INSUFFICIENT_FUNDS("You don't have enough coins for that contribution."),
         TOO_LARGE("That would make the bounty too large to process."),
         STALE("That bounty has ended. Check /bounty for the current list."),
+        /** Issue #1548: the contributor got combat-tagged after the request was made. */
+        COMBAT("You can't add coins to a bounty while in combat."),
     }
 
     sealed interface ContributeResult {
@@ -376,6 +386,7 @@ class BountyStore(private val db: SqliteDatabase, private val wallet: Wallet) {
         if (req.expectedBountyId != null && active?.id != req.expectedBountyId) return ContributeResult.Refused(Refusal.STALE, expired)
         val total = BountyMoney.add(active?.totalCents ?: 0L, req.cents) ?: return ContributeResult.Refused(Refusal.TOO_LARGE, expired)
 
+        if (req.liveBlock?.invoke() == true) return ContributeResult.Refused(Refusal.COMBAT, expired)
         if (!wallet.withdraw(req.contributor, BountyMoney.toCoins(req.cents))) return ContributeResult.Refused(Refusal.INSUFFICIENT_FUNDS, expired)
 
         val bountyId: String
@@ -664,6 +675,56 @@ class BountyStore(private val db: SqliteDatabase, private val wallet: Wallet) {
             db.execute("INSERT INTO lifesteal_bounty_kills (killer, target, at) VALUES (?, ?, ?)", killer.toString(), target.toString(), at)
         }
         return earlier
+    }
+
+    /**
+     * Issue #1548 (LS-ECO-05): the facts [BountyMonitorRules.signals] judges for a claimed payout of
+     * [bountyId]. A fixed number of queries (no per-contributor loop), each bounded by this bounty's
+     * contributions or by the hunter's payouts since [since]. AltManager's `player_connections`
+     * holds only salted hashes; nothing here reads or stores an address. Without that table (a
+     * server that never ran AltManager) there are simply no connection signals.
+     */
+    fun payoutLinks(bountyId: String, hunter: UUID, target: UUID, since: Long): BountyMonitorRules.Links {
+        val shares = db.query(
+            "SELECT contributor, SUM(amount_cents) FROM lifesteal_bounty_contributions WHERE bounty_id = ? GROUP BY contributor",
+            bountyId,
+        ) { rs -> UUID.fromString(rs.getString(1)) to rs.getLong(2) }.toMap()
+        val linkedToHunter = mutableSetOf<UUID>()
+        val linkedToTarget = mutableSetOf<UUID>()
+        var hunterTarget = false
+        try {
+            db.query(
+                """
+                SELECT c.contributor,
+                    EXISTS (SELECT 1 FROM player_connections pa JOIN player_connections pb ON pb.connection_hash = pa.connection_hash
+                            WHERE pa.uuid = c.contributor AND pb.uuid = ?) AS hunter_link,
+                    EXISTS (SELECT 1 FROM player_connections pa JOIN player_connections pb ON pb.connection_hash = pa.connection_hash
+                            WHERE pa.uuid = c.contributor AND pb.uuid = ?) AS target_link
+                FROM (SELECT DISTINCT contributor FROM lifesteal_bounty_contributions WHERE bounty_id = ?) c
+                """.trimIndent(),
+                hunter.toString(), target.toString(), bountyId,
+            ) { rs ->
+                val contributor = UUID.fromString(rs.getString(1))
+                if (contributor != hunter && rs.getInt(2) == 1) linkedToHunter += contributor
+                if (rs.getInt(3) == 1) linkedToTarget += contributor
+            }
+            hunterTarget = db.queryFirst(
+                "SELECT 1 FROM player_connections pa JOIN player_connections pb ON pb.connection_hash = pa.connection_hash WHERE pa.uuid = ? AND pb.uuid = ? LIMIT 1",
+                hunter.toString(), target.toString(),
+            ) { 1 } != null
+        } catch (_: java.sql.SQLException) {
+            // No player_connections table here: no connection evidence to report.
+        }
+        val earlier = db.queryFirst(
+            """
+            SELECT COUNT(DISTINCT p.id) FROM lifesteal_bounty_payouts p
+            JOIN lifesteal_bounty_contributions c ON c.bounty_id = p.bounty_id
+            WHERE p.killer = ? AND p.bounty_id <> ? AND p.created_at >= ?
+              AND c.contributor IN (SELECT contributor FROM lifesteal_bounty_contributions WHERE bounty_id = ?)
+            """.trimIndent(),
+            hunter.toString(), bountyId, since, bountyId,
+        ) { it.getInt(1) } ?: 0
+        return BountyMonitorRules.Links(shares, linkedToHunter, linkedToTarget, hunterTarget, earlier)
     }
 
     fun recordSuspicious(at: Long, killer: UUID, target: UUID, bountyId: String?, detail: String) =

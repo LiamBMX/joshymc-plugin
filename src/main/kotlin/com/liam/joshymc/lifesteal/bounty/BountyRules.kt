@@ -1,6 +1,7 @@
 package com.liam.joshymc.lifesteal.bounty
 
 import com.liam.joshymc.lifesteal.eligibility.CompetitiveEligibility
+import com.liam.joshymc.lifesteal.progression.ProgressionRules
 import java.util.UUID
 
 /**
@@ -58,6 +59,12 @@ object BountyRules {
          * Vanish, Mod Mode, over-limit enchantments, now or in earlier hits on this victim).
          */
         val attacker: CompetitiveEligibility.Verdict = CompetitiveEligibility.Verdict.Eligible,
+        /**
+         * Issue #1548 (LS-ECO-08): the launch progression at death time, the heart system's window
+         * (`lifestealProgressionManager.heartWindow`). Null = not judged here (the Lifesteal quests
+         * reuse these facts for hits); every claim path sets it.
+         */
+        val window: ProgressionRules.HeartWindow? = null,
     )
 
     enum class Refusal(val player: String?) {
@@ -73,6 +80,10 @@ object BountyRules {
         TEAM_UNKNOWN("The bounty couldn't be claimed right now (team data unavailable). It stays active."),
         /** Issue #1487: the tracker tells the killer (throttled), so no second message here. */
         INELIGIBLE_ATTACKER(null),
+        /** Issue #1548 (LS-ECO-08): before launch, during the grace period, or while progression is unknown. */
+        NOT_LAUNCHED("Bounties can't be claimed before the season launches."),
+        GRACE_PERIOD("Bounties can't be claimed during the grace period."),
+        PROGRESSION_UNKNOWN("The bounty couldn't be claimed right now. It stays active."),
     }
 
     sealed interface Eligibility {
@@ -91,6 +102,12 @@ object BountyRules {
         if (!d.killerOnline) return Eligibility.Refused(Refusal.NOT_PLAYER_KILL, killer)
         if (!d.victimInLifesteal || !d.killerInLifesteal) return Eligibility.Refused(Refusal.NOT_LIFESTEAL, killer)
         if (d.attacker is CompetitiveEligibility.Verdict.Ineligible) return Eligibility.Refused(Refusal.INELIGIBLE_ATTACKER, killer)
+        when (d.window) {
+            ProgressionRules.HeartWindow.NOT_LAUNCHED -> return Eligibility.Refused(Refusal.NOT_LAUNCHED, killer)
+            ProgressionRules.HeartWindow.GRACE_PERIOD -> return Eligibility.Refused(Refusal.GRACE_PERIOD, killer)
+            ProgressionRules.HeartWindow.UNKNOWN -> return Eligibility.Refused(Refusal.PROGRESSION_UNKNOWN, killer)
+            ProgressionRules.HeartWindow.OPEN, null -> {}
+        }
         if (d.inRankedMatch || d.inRankedArena) return Eligibility.Refused(Refusal.RANKED, killer)
         if (d.inEvent) return Eligibility.Refused(Refusal.EVENT, killer)
         if (d.inArena) return Eligibility.Refused(Refusal.ARENA, killer)

@@ -183,6 +183,40 @@ object BankRules {
         else -> null
     }
 
+    // ── Coin shielding (issue #1548, LS-ECO-02) ─────────────
+
+    /** Other ways of moving wallet coins out of PvP reach, judged like a bank deposit. */
+    enum class ShieldAction(val verb: String) {
+        BOUNTY_CONTRIBUTION("add coins to a bounty"),
+        TEAM_BANK_DEPOSIT("deposit into the team bank"),
+    }
+
+    /**
+     * Whether a bounty contribution or a team bank deposit is refused for this live [state]. The
+     * same order and inputs as [accessBlock], except that combat and Ranked Team Wars always block:
+     * these coins can never be withdrawn back, so the bank's `block-during-combat` /
+     * `block-during-ranked` switches don't apply. Null = allowed.
+     */
+    fun shieldingBlock(state: AccessState): Block? = when {
+        !state.inLifesteal -> Block.NOT_LIFESTEAL
+        state.dead -> Block.DEAD
+        state.combatTagged -> Block.COMBAT
+        state.inRankedMatch -> Block.RANKED
+        state.inEvent -> Block.EVENT
+        state.frozen -> Block.FROZEN
+        else -> null
+    }
+
+    /** Player text for a [shieldingBlock] refusal. */
+    fun shieldingMessage(block: Block, action: ShieldAction): String = when (block) {
+        Block.NOT_LIFESTEAL -> "You can only ${action.verb} in Lifesteal."
+        Block.DEAD -> "You can't ${action.verb} while dead."
+        Block.COMBAT -> "You can't ${action.verb} while in combat."
+        Block.RANKED -> "You can't ${action.verb} during a Ranked Team Wars match."
+        Block.EVENT -> "You can't ${action.verb} during an event."
+        Block.FROZEN -> "You can't ${action.verb} while frozen."
+    }
+
     // ── PvP coin stealing ───────────────────────────────────
 
     /** Everything about one death that coin stealing looks at, captured at the moment of death. */

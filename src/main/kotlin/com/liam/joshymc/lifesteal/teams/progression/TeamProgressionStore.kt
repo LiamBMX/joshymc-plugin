@@ -535,6 +535,11 @@ class TeamProgressionStore(private val db: SqliteDatabase, private val wallet: W
         val memberName: String,
         val cents: Long,
         val now: Long,
+        /**
+         * Issue #1548 (LS-ECO-02): re-checked inside the transaction, right before the withdrawal;
+         * true = the member is combat-tagged now, so nothing is taken. Must be thread-safe.
+         */
+        val liveBlock: (() -> Boolean)? = null,
     )
 
     sealed interface DepositResult {
@@ -545,6 +550,8 @@ class TeamProgressionStore(private val db: SqliteDatabase, private val wallet: W
         data class BelowMinimum(val minimumCents: Long) : DepositResult
         data class OverCapacity(val roomCents: Long, val capacityCents: Long) : DepositResult
         data object InsufficientFunds : DepositResult
+        /** Issue #1548: the member got combat-tagged after the request was made; nothing was taken. */
+        data object Blocked : DepositResult
     }
 
     /**
@@ -561,6 +568,7 @@ class TeamProgressionStore(private val db: SqliteDatabase, private val wallet: W
         val capacity = TeamPerks.of(tiers(teamId), s).bankCapacityCents
         val after = BountyMoney.add(balance, req.cents)
         if (after == null || after > capacity) return@tx DepositResult.OverCapacity((capacity - balance).coerceAtLeast(0), capacity)
+        if (req.liveBlock?.invoke() == true) return@tx DepositResult.Blocked
         if (!wallet.withdraw(req.member, BountyMoney.toCoins(req.cents))) return@tx DepositResult.InsufficientFunds
         val updated = db.executeUpdate(
             "UPDATE lifesteal_team_bank SET balance_cents = balance_cents + ?, deposited_cents = deposited_cents + ?, version = version + 1 WHERE team_id = ? AND balance_cents = ?",

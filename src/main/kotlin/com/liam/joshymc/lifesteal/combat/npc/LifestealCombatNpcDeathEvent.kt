@@ -8,10 +8,10 @@ import java.util.UUID
 
 /**
  * Fired once per committed Combat NPC death (issue #1402), on the main thread, after the death is
- * recorded, the items have dropped and hearts/statistics ran. It is the integration point for a
- * future Lifesteal bounty system: JoshyMC has no Lifesteal bounty service yet, so nothing listens
- * and no bounty is paid. A listener must do its own eligibility checks (teammates, alts, its
- * cooldowns) and dedupe on [sessionId], which is unique per NPC and never fired twice by JoshyMC.
+ * recorded, the items have dropped and hearts/statistics ran. PvP coin stealing (issue #1427) and
+ * Lifesteal bounty claims (issue #1548, only with a direct [killer]) listen to it. A listener must
+ * do its own eligibility checks (teammates, alts, its cooldowns) and dedupe on [sessionId], which
+ * is unique per NPC and never fired twice by JoshyMC.
  *
  * Not cancellable: the death has already happened.
  */
