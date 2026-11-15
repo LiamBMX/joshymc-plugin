@@ -5,6 +5,10 @@ survive → progress through the season), what issue #1369 fixed, and what still
 by hand. Everything below comes from reading the merged code and running the automated checks.
 **No live multiplayer test has been run.**
 
+How a beta build is chosen, tested on staging, restarted, soak-tested, deployed and rolled back:
+[lifesteal-beta-release.md](lifesteal-beta-release.md) (issue #1558), with templates in
+[lifesteal-beta-templates.md](lifesteal-beta-templates.md).
+
 ## A. Core gameplay status
 
 | Feature | Status | Notes |
