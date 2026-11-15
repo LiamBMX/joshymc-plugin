@@ -69,6 +69,16 @@ errors, `/lsranks admin reload` re-reads it.
 Individual kits are turned off with `enabled: false` in kits.yml (Lifesteal kits only); individual
 ranks with `enabled: false`; individual perks with `disabled-perks`. Nothing deletes player data.
 
+**Fail closed (issue #1551, ISO-04).** While the file is invalid, missing or not loaded, a Lifesteal
+kit that may be a rank kit is refused (`LifestealRankRules.KitDecision.UNVERIFIED`), never handed to
+its kits.yml permission, so no kit node, inherited group or `*` wildcard can open it. "May be a rank
+kit" = any rank id or `ranks.<id>.kits` name seen since startup (remembered from every load, also from
+the readable `ranks:` part of an invalid file; `LifestealRankManager.knownRankKits`), or a kit `/kit`
+lists under Rank Kits (`category: rank`, a name in `kits.rank-order.lifesteal`, or any kit that isn't
+the Starter or a Special kit). The Starter and Special kits keep their permission. Players read "Rank
+kits can't be checked right now."; the console gets one warning per 10 minutes. With a valid file
+nothing changed: the hierarchy alone decides rank kits. Survival kits are untouched.
+
 ## Hierarchy and inheritance
 
 A player's **current rank** is the highest-order enabled rank they own. They get the perks,

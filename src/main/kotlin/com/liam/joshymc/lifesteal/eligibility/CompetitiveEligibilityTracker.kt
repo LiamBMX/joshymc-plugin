@@ -41,12 +41,7 @@ class CompetitiveEligibilityTracker(private val plugin: Joshymc) {
      * inventory or storage never do.
      */
     fun currentReasons(player: Player, weapons: List<ItemStack?> = emptyList()): Set<Reason> {
-        val mode = when (player.gameMode) {
-            GameMode.CREATIVE -> CompetitiveEligibility.Mode.CREATIVE
-            GameMode.SPECTATOR -> CompetitiveEligibility.Mode.SPECTATOR
-            GameMode.ADVENTURE -> CompetitiveEligibility.Mode.ADVENTURE
-            else -> CompetitiveEligibility.Mode.SURVIVAL
-        }
+        val mode = modeOf(player)
         val equipment = weapons + player.inventory.armorContents.toList()
         return CompetitiveEligibility.problems(
             CompetitiveEligibility.State(
@@ -55,9 +50,31 @@ class CompetitiveEligibilityTracker(private val plugin: Joshymc) {
                 vanished = safe { plugin.vanishCommand.isVanished(player) },
                 modMode = safe { plugin.modModeManager.isModMode(player) },
                 unsafeEquipment = equipment.any { unsafe(it) },
+                movement = movementOf(player),
             )
         )
     }
+
+    /**
+     * Issue #1551: only the enhanced-movement part of [currentReasons] (flight, modified walk/fly
+     * speed). The listener reads it before any other plugin handles a hit, because the first combat
+     * tag turns Survival flight off in the same event.
+     */
+    fun movementReasons(player: Player): Set<Reason> = CompetitiveEligibility.movementProblems(modeOf(player), movementOf(player))
+
+    private fun modeOf(player: Player): CompetitiveEligibility.Mode = when (player.gameMode) {
+        GameMode.CREATIVE -> CompetitiveEligibility.Mode.CREATIVE
+        GameMode.SPECTATOR -> CompetitiveEligibility.Mode.SPECTATOR
+        GameMode.ADVENTURE -> CompetitiveEligibility.Mode.ADVENTURE
+        else -> CompetitiveEligibility.Mode.SURVIVAL
+    }
+
+    private fun movementOf(player: Player) = CompetitiveEligibility.Movement(
+        walkSpeed = player.walkSpeed,
+        flySpeed = player.flySpeed,
+        flying = player.isFlying,
+        canFly = player.allowFlight,
+    )
 
     /** Whether [stack] carries a vanilla enchantment above its vanilla maximum (custom items: above their own build). */
     fun unsafe(stack: ItemStack?): Boolean {
@@ -79,10 +96,12 @@ class CompetitiveEligibilityTracker(private val plugin: Joshymc) {
     /**
      * A hit by [attacker] on [victim] (a player, or a Combat NPC's owner) landed. [projectile] is the
      * entity that hit when it isn't the attacker: its launch stamp counts instead of the held item.
+     * [before] = the attacker's reasons read when the hit started (issue #1551: their flight state
+     * before the combat tag took it away).
      */
-    fun onHit(attacker: Player, victim: UUID, projectile: Entity?) {
+    fun onHit(attacker: Player, victim: UUID, projectile: Entity?, before: Set<Reason> = emptySet()) {
         if (attacker.uniqueId == victim) return
-        val reasons = if (projectile != null) {
+        val reasons = before + if (projectile != null) {
             currentReasons(attacker) + stamped(projectile)
         } else {
             currentReasons(attacker, listOf(attacker.inventory.itemInMainHand))
@@ -131,7 +150,8 @@ class CompetitiveEligibilityTracker(private val plugin: Joshymc) {
         if (messageThrottle.allow(attacker.uniqueId.toString(), now)) {
             plugin.commsManager.send(
                 attacker,
-                plugin.commsManager.parseLegacy("&7Kills made with ${verdict.labels} don't earn hearts, bounties or coins."),
+                plugin.commsManager.parseLegacy("&7Kills made with ${verdict.labels} don't earn hearts, bounties or coins." +
+                    if (verdict.reasons.any { it in CompetitiveEligibility.MOVEMENT_REASONS }) " Land and reset /speed to fight for rewards." else ""),
             )
         }
     }

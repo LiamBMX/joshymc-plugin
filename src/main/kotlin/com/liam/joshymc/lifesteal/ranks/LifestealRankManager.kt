@@ -67,6 +67,14 @@ class LifestealRankManager(private val plugin: Joshymc) : Listener {
     @Volatile var problems: List<LifestealRankConfig.Problem> = emptyList()
         private set
 
+    /**
+     * Issue #1551: every kit name that has been a rank kit (or a rank id) since startup, from each
+     * valid load and from the readable `ranks:` part of an invalid file. Only grows until restart,
+     * so a file that breaks later can't make a known rank kit look like an ordinary one.
+     */
+    @Volatile var knownRankKits: Set<String> = emptySet()
+        private set
+
     @Volatile private var tablesReady = false
     private var listenerRegistered = false
     private var sweepTask: BukkitTask? = null
@@ -145,6 +153,7 @@ class LifestealRankManager(private val plugin: Joshymc) : Listener {
                 override fun get(path: String): Any? = yaml.get(path, null)?.let { if (it is ConfigurationSection) null else it }
                 override fun keys(path: String): List<String>? = (yaml.get(path, null) as? ConfigurationSection)?.getKeys(false)?.toList()
             }
+            rememberRankKits(yaml)
             val result = LifestealRankConfig.parse(source, reserved())
             problems = result.problems
             settings = result.settings
@@ -164,6 +173,14 @@ class LifestealRankManager(private val plugin: Joshymc) : Listener {
         } else {
             plugin.logger.info("[LifestealRanks] ${s.ranks.size} rank(s): ${s.ranks.joinToString { it.id + if (it.enabled) "" else " (disabled)" }}${if (s.enabled) "" else "; system turned off"}.")
         }
+    }
+
+    /** Issue #1551: adds the rank ids and `ranks.<id>.kits` names this file declares to [knownRankKits]. */
+    private fun rememberRankKits(yaml: YamlConfiguration) {
+        val ranks = yaml.getConfigurationSection("ranks") ?: return
+        val ids = ranks.getKeys(false)
+        val kits = ids.map { id -> if (ranks.isList("$id.kits")) ranks.getStringList("$id.kits") else emptyList() }
+        knownRankKits = knownRankKits + LifestealRankRules.declaredRankKits(ids, kits)
     }
 
     /** Groups a Lifesteal rank may never grant: staff, Survival donor tiers, JoshyMC display ranks, `default`. */

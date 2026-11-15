@@ -8,6 +8,8 @@
 //
 //   ./gradlew -I scripts/lifesteal-rank-check.init.gradle.kts lifestealRankCheck
 //
+// Issue #1551 (ISO-04): Lifesteal rank kits fail closed when the file can't be used (kitFailClosed()).
+//
 // Exits non-zero on the first failed check.
 
 import com.liam.joshymc.gamemode.GamemodeAssignments
@@ -18,6 +20,8 @@ import com.liam.joshymc.lifesteal.ranks.LifestealRankConfig.RequirementType
 import com.liam.joshymc.lifesteal.ranks.LifestealRankRules
 import com.liam.joshymc.lifesteal.ranks.LifestealRankRules.Decision
 import com.liam.joshymc.lifesteal.ranks.LifestealRankRules.KitAccess
+import com.liam.joshymc.lifesteal.ranks.LifestealRankRules.KitDecision
+import com.liam.joshymc.manager.KitCatalog
 import com.liam.joshymc.lifesteal.ranks.LifestealRankRules.Source
 import com.liam.joshymc.lifesteal.ranks.LifestealRankStore
 import com.liam.joshymc.manager.DatabaseManager
@@ -427,5 +431,77 @@ fun main() {
     check("admin grant/revoke respects staff protection and audits", src("lifesteal/ranks/LifestealRanksCommand.kt").let {
         "protectionProblem(sender, uuid)" in it && "You can't change your own Lifesteal rank." in it && "AdminAudit.log" in it })
 
+    kitFailClosed(b, s)
+
     println("Lifesteal rank checks passed ($checks checks).")
 }
+
+/**
+ * Issue #1551 (ISO-04). [bundled] = the shipped Rogue/Legacy file, [ladder] = the low/mid/top test
+ * ladder. The decision has no permission input at all: a refusal can't be lifted by any node or
+ * wildcard, and only [KitDecision.PERMISSION] lets the kits.yml permission decide.
+ */
+private fun kitFailClosed(bundled: LifestealRankConfig.Settings, ladder: LifestealRankConfig.Settings) {
+    // 13. Valid configuration: the hierarchy decides, as before.
+    check("13. valid config: own rank kit allowed", LifestealRankRules.kitDecision(ladder, setOf("low"), "low_kit", possibleRankKit = false) == KitDecision.ALLOWED)
+    check("13. valid config: higher kit locked", LifestealRankRules.kitDecision(ladder, setOf("low"), "top_kit", possibleRankKit = false) == KitDecision.LOCKED)
+    check("13. valid config: a non-rank kit uses its permission", LifestealRankRules.kitDecision(ladder, emptySet(), "starter", possibleRankKit = true) == KitDecision.PERMISSION)
+    check("13. valid config ignores remembered names (the file alone decides)", LifestealRankRules.kitDecision(ladder, emptySet(), "old_kit", possibleRankKit = true) == KitDecision.PERMISSION)
+
+    // 14 / 15. Invalid or missing configuration (settings == null): possible rank kits are refused.
+    val invalid = parse(rankBlock("    perks: { hearts: 1 }"))
+    check("14. an invalid file yields no settings", invalid.settings == null)
+    check("14. invalid config: a rank kit is unverified", LifestealRankRules.kitDecision(invalid.settings, setOf("low"), "low_kit", possibleRankKit = true) == KitDecision.UNVERIFIED)
+    check("15. missing config: the same refusal", LifestealRankRules.kitDecision(null, emptySet(), "low_kit", possibleRankKit = true) == KitDecision.UNVERIFIED)
+    check("15. missing config: Starter/Special kits still use their permission", LifestealRankRules.kitDecision(null, emptySet(), "starter", possibleRankKit = false) == KitDecision.PERMISSION)
+
+    // 16 / 17. Generic node and wildcard: kitDecision takes no permission or player, and canUse
+    // only reads the permission for PERMISSION, so a kit node or `*` can't open an UNVERIFIED kit.
+    val method = LifestealRankRules::class.java.methods.first { it.name == "kitDecision" }
+    check("16/17. the decision has no permission or player input", method.parameterTypes.none { it.name.contains("Permission", ignoreCase = true) || it.name.contains("Player") })
+    val kit = File("src/main/kotlin/com/liam/joshymc/manager/KitManager.kt").readText()
+    val canUse = kit.substringAfter("fun canUse(player: Player, kit: KitDef): Boolean {").substringBefore("\n    }\n")
+    check("16. canUse has no permission fallback for an unusable rank file", "settings == null) return player.hasPermission" !in canUse &&
+        canUse.contains("LifestealRankRules.KitDecision.PERMISSION -> player.hasPermission(kit.permission)") && canUse.contains("else -> false"))
+    check("17. hasPermission appears only for Survival kits and the PERMISSION branch", Regex("hasPermission").findAll(canUse).count() == 2)
+    val decision = kit.substringAfter("fun lifestealKitDecision(").substringBefore("\n    }\n")
+    check("possible rank kits: remembered names or the Rank Kits category", decision.contains("ranks?.knownRankKits") && decision.contains("KitCatalog.Category.RANK"))
+    val message = "Rank kits can't be checked right now. Please try again later."
+    check("players get a plain message, admins a throttled log", kit.contains(message) &&
+        kit.contains("logUnverifiedKit(player, kit)") && kit.contains("UNVERIFIED_KIT_LOG_INTERVAL_MS = 10 * 60_000L"))
+    check("the player message names no file or status", !message.contains("yml") && !message.contains("INVALID"))
+
+    // Which Lifesteal kits count as possible rank kits without a file (KitCatalog).
+    fun entry(name: String, category: String? = null) = KitCatalog.Entry(name, "lifesteal", category)
+    check("an unlisted Lifesteal kit is listed with Rank Kits (so it fails closed)", KitCatalog.categoryOf(entry("vip"), emptyList()) == KitCatalog.Category.RANK)
+    check("the Starter kit is not", KitCatalog.categoryOf(entry("starter"), emptyList()) == KitCatalog.Category.STARTER)
+    check("Special kits are not", KitCatalog.categoryOf(entry("discord"), emptyList()) == KitCatalog.Category.SPECIAL &&
+        KitCatalog.categoryOf(entry("media"), emptyList()) == KitCatalog.Category.SPECIAL)
+    check("an explicit category: rank is", KitCatalog.categoryOf(entry("special_thing", "rank"), emptyList()) == KitCatalog.Category.RANK)
+
+    // Names remembered from the readable part of a file (even an invalid one).
+    check("declared rank kits: rank ids + kits lists, lower case",
+        LifestealRankRules.declaredRankKits(listOf("Rogue", "legacy"), listOf(listOf(" Rogue_Kit "), emptyList())) == setOf("rogue", "legacy", "rogue_kit"))
+    val manager = File("src/main/kotlin/com/liam/joshymc/lifesteal/ranks/LifestealRankManager.kt").readText()
+    check("rank kits are remembered before validation (also from an invalid file)",
+        manager.indexOf("rememberRankKits(yaml)") in 0 until manager.indexOf("LifestealRankConfig.parse(source, reserved())"))
+    check("remembered names only grow until restart", manager.contains("knownRankKits = knownRankKits + LifestealRankRules.declaredRankKits(ids, kits)"))
+
+    // 18 / 19. Rogue and Legacy (bundled file).
+    check("18. Rogue owner claims the Rogue kit", LifestealRankRules.kitDecision(bundled, setOf("rogue"), "rogue", false) == KitDecision.ALLOWED)
+    check("18. no rank: Rogue kit locked", LifestealRankRules.kitDecision(bundled, emptySet(), "rogue", false) == KitDecision.LOCKED)
+    check("19. Legacy owner claims the Legacy and the Rogue kit", LifestealRankRules.kitDecision(bundled, setOf("legacy"), "legacy", false) == KitDecision.ALLOWED &&
+        LifestealRankRules.kitDecision(bundled, setOf("legacy"), "rogue", false) == KitDecision.ALLOWED)
+    check("19. Rogue can't claim the Legacy kit", LifestealRankRules.kitDecision(bundled, setOf("rogue"), "legacy", false) == KitDecision.LOCKED)
+    check("18/19. both are remembered as rank kits for a later broken file",
+        LifestealRankRules.declaredRankKits(bundled.ranks.map { it.id }, bundled.ranks.map { it.kits }).containsAll(setOf("rogue", "legacy")))
+    check("18/19. a broken file closes Rogue and Legacy kits", LifestealRankRules.kitDecision(null, setOf("legacy"), "rogue", true) == KitDecision.UNVERIFIED &&
+        LifestealRankRules.kitDecision(null, setOf("legacy"), "legacy", true) == KitDecision.UNVERIFIED)
+    check("18/19. the bundled file still ships exactly Rogue and Legacy", bundled.ranks.map { it.id } == listOf("rogue", "legacy"))
+
+    // 20. Survival kits never reach the Lifesteal decision.
+    check("20. Survival kits keep their permission check first", canUse.trimStart().startsWith("if (!kit.isLifesteal) return player.hasPermission(kit.permission)"))
+    check("20. a Survival kit's category is unaffected", KitCatalog.categoryOf(KitCatalog.Entry("scout", null, null), KitCatalog.DEFAULT_SURVIVAL_RANK_ORDER) == KitCatalog.Category.RANK &&
+        KitCatalog.gamemodeOf(null) == com.liam.joshymc.gamemode.ServerGamemode.SURVIVAL)
+}
+

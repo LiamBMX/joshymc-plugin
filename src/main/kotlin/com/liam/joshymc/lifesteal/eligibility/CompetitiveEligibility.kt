@@ -11,6 +11,12 @@ import java.util.UUID
  * its vanilla maximum. Owners and admins are judged exactly like everyone else. The abilities
  * themselves stay available for moderation; using them only means the kill earns nothing.
  *
+ * Issue #1551 (STF-01): enhanced movement counts too ([movementProblems]): active creative-style
+ * flight, a walk speed above vanilla's, and a fly speed above vanilla's while the player can fly.
+ * Only the server-side speed values and flight state are read: sprinting, Speed potions, Soul
+ * Speed, elytra gliding and every other vanilla effect work through attributes or physics and
+ * never change them, and merely being *allowed* to fly (normal speed, not flying) counts for nothing.
+ *
  * Because a player can switch state between hits (Creative for the damage, Survival for the last
  * hit), every hit made while ineligible is remembered per attacker and victim ([HitMemory]) and
  * counts at settlement for one window ([memoryMillis]). `CompetitiveEligibilityTracker` feeds it
@@ -25,7 +31,14 @@ object CompetitiveEligibility {
         VANISHED("vanished", "Vanish"),
         MOD_MODE("mod_mode", "Mod Mode"),
         UNSAFE_ENCHANT("unsafe_enchant", "enchantments above vanilla limits"),
+        // Issue #1551: appended, so existing audit codes and label order stay the same.
+        FLYING("flying", "flight"),
+        WALK_SPEED("walk_speed", "a modified walk speed"),
+        FLY_SPEED("fly_speed", "a modified fly speed"),
     }
+
+    /** The issue #1551 enhanced-movement reasons (as opposed to a game mode, staff toggle or gear). */
+    val MOVEMENT_REASONS: Set<Reason> = setOf(Reason.FLYING, Reason.WALK_SPEED, Reason.FLY_SPEED)
 
     enum class Mode { SURVIVAL, ADVENTURE, CREATIVE, SPECTATOR }
 
@@ -36,7 +49,41 @@ object CompetitiveEligibility {
         val vanished: Boolean = false,
         val modMode: Boolean = false,
         val unsafeEquipment: Boolean = false,
+        val movement: Movement = Movement(),
     )
+
+    // ── Movement (issue #1551) ──────────────────────────────
+
+    /** Vanilla's `Player.walkSpeed` / `Player.flySpeed` (what `/speed 2 walk` and `/speed 1 fly` set). */
+    const val DEFAULT_WALK_SPEED = 0.2f
+    const val DEFAULT_FLY_SPEED = 0.1f
+
+    /** Float slack for values written back by the client/server; anything past it is a modified speed. */
+    const val SPEED_TOLERANCE = 0.001f
+
+    /**
+     * The player's server-side movement values. [flying] = creative-style flight is on right now
+     * (`Player.isFlying`, never elytra gliding); [canFly] = flight is allowed (`allowFlight`).
+     */
+    data class Movement(
+        val walkSpeed: Float = DEFAULT_WALK_SPEED,
+        val flySpeed: Float = DEFAULT_FLY_SPEED,
+        val flying: Boolean = false,
+        val canFly: Boolean = false,
+    )
+
+    /**
+     * What [movement] contributes, judged in [mode]. A slower-than-vanilla speed is never an
+     * advantage, so only faster counts; a value that isn't a number counts as modified. Fly speed
+     * only matters while the player can (or does) fly. Creative and Spectator already have their
+     * own reason, so flight in those modes isn't listed twice.
+     */
+    fun movementProblems(mode: Mode, movement: Movement): Set<Reason> = buildSet {
+        if (!(movement.walkSpeed <= DEFAULT_WALK_SPEED + SPEED_TOLERANCE)) add(Reason.WALK_SPEED)
+        if (mode == Mode.CREATIVE || mode == Mode.SPECTATOR) return@buildSet
+        if (movement.flying) add(Reason.FLYING)
+        if ((movement.flying || movement.canFly) && !(movement.flySpeed <= DEFAULT_FLY_SPEED + SPEED_TOLERANCE)) add(Reason.FLY_SPEED)
+    }
 
     fun problems(state: State): Set<Reason> = buildSet {
         if (state.mode == Mode.CREATIVE) add(Reason.CREATIVE)
@@ -45,6 +92,7 @@ object CompetitiveEligibility {
         if (state.vanished) add(Reason.VANISHED)
         if (state.modMode) add(Reason.MOD_MODE)
         if (state.unsafeEquipment) add(Reason.UNSAFE_ENCHANT)
+        addAll(movementProblems(state.mode, state.movement))
     }
 
     sealed interface Verdict {
