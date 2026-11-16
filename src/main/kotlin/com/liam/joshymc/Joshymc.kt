@@ -1770,7 +1770,23 @@ class Joshymc : JavaPlugin() {
         val discordMoves = com.liam.joshymc.discord.DiscordConfig.migrate(config)
         for (move in discordMoves) logger.info("[ConfigMigrator] Moved deprecated Discord setting $move.")
         var changed = discordMoves.size
+
+        // Issue #1576: the bundled identity is the Survival server's, so copying it into a config
+        // that names this server lifesteal made the Lifesteal server start as Survival. Missing
+        // identity keys are filled from what the file already says instead; set values are never touched.
+        val identityFills = com.liam.joshymc.gamemode.ConfigIdentityBackfill.fills(
+            config.get(com.liam.joshymc.gamemode.ConfigIdentityBackfill.GAMEMODE_KEY, null),
+            config.get(com.liam.joshymc.gamemode.ConfigIdentityBackfill.SERVER_ID_KEY, null),
+            config.get(com.liam.joshymc.gamemode.ConfigIdentityBackfill.PRIMARY_KEY, null)
+        )
+        for (fill in identityFills) {
+            config.set(fill.key, fill.value)
+            logger.warning("[ConfigMigrator] ${fill.key} was missing; set it to ${fill.value} (${fill.reason}). Change it in config.yml if that's wrong.")
+            changed++
+        }
+
         for (key in defaults.getKeys(true)) {
+            if (key in com.liam.joshymc.gamemode.ConfigIdentityBackfill.KEYS) continue
             if (defaults.isConfigurationSection(key)) continue
             if (NO_BACKFILL_SECTION_PREFIXES.any { key.startsWith(it) }) continue
             if (!config.contains(key, true)) {

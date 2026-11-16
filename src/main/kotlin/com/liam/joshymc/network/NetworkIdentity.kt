@@ -67,17 +67,28 @@ object NetworkIdentityConfig {
             }
         }
 
-        val namedGamemode = ServerGamemode.fromId(serverId)
-        if (namedGamemode != null && namedGamemode != gamemode) {
+        val namedGamemode = conflict(serverId, gamemode)
+        if (namedGamemode != null) {
+            // Issue #1576: neither value is overridden (both were set by the administrator), so say what runs.
             problems += Problem(
                 true,
                 "network.server-id '$serverId' is the id of ${namedGamemode.displayName}, but gamemode-lock.server-gamemode is " +
-                    "${gamemode.id}. Was config.yml copied from another server? Fix one of them" +
-                    (if (primary) "; until then this server runs as a secondary instance." else ".")
+                    "${gamemode.id}. Was config.yml copied from another server? This server runs as ${gamemode.displayName}" +
+                    isolationNote(gamemode) + ". If it is the ${namedGamemode.displayName} server, set gamemode-lock.server-gamemode: " +
+                    "${namedGamemode.id} and restart; otherwise fix network.server-id" +
+                    (if (primary) ". Until then it runs as a secondary instance." else ".")
             )
             primary = false
         }
 
         return Result(NetworkIdentity(serverId, primary), problems)
     }
+
+    /** The gamemode [serverId] names when it isn't [gamemode] (a copied config), else null. Ids like `lobby` never conflict. */
+    fun conflict(serverId: String, gamemode: ServerGamemode): ServerGamemode? =
+        ServerGamemode.fromId(serverId)?.takeIf { it != gamemode }
+
+    private fun isolationNote(gamemode: ServerGamemode): String =
+        if (gamemode == ServerGamemode.SURVIVAL) " (Survival commands stay available and the Lifesteal systems don't start)"
+        else ""
 }

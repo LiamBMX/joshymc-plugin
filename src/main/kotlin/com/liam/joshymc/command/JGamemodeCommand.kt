@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gamemode.DedicatedServerFeatures
+import com.liam.joshymc.gamemode.GamemodeLockEffect
 import com.liam.joshymc.gamemode.GamemodeLockManager
 import com.liam.joshymc.lifesteal.LifestealConfigManager
 import com.liam.joshymc.gamemode.GamemodeLockManager.ChangeResult
@@ -64,11 +65,15 @@ class JGamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
         }
 
         val locks = plugin.gamemodeLockManager
+        // Issue #1576: say when the lock/unlock changes nothing on this server instead of implying it does.
+        val lockEffect = locks.lockEffect(gamemode)
+        val note = GamemodeLockEffect.note(gamemode, sub.lock, lockEffect, locks.serverGamemode)
         if (args.getOrNull(2) != "confirm" || args.size > 3) {
-            val effect = if (sub.lock) {
-                "Locking ${gamemode.displayName} restricts ${gamemode.displayName} commands and features to ${gamemode.displayName}."
-            } else {
-                "Unlocking ${gamemode.displayName} lifts that restriction."
+            val effect = when {
+                note != null -> note
+                sub.lock -> "Locking ${gamemode.displayName} restricts ${gamemode.displayName} commands and features to " +
+                    "${gamemode.displayName} worlds; in worlds running another gamemode they are refused."
+                else -> "Unlocking ${gamemode.displayName} lifts that restriction."
             }
             Msg.reply(
                 sender,
@@ -82,19 +87,17 @@ class JGamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
         when (locks.setLocked(gamemode, sub.lock, sender)) {
             ChangeResult.CHANGED -> Msg.success(
                 sender,
-                if (sub.lock) "${gamemode.displayName} is now locked. ${gamemode.displayName} commands and features only work on ${gamemode.displayName}."
-                else "${gamemode.displayName} is now unlocked. Its isolation restriction is lifted."
+                when {
+                    sub.lock && lockEffect == GamemodeLockEffect.Effect.RESTRICTS ->
+                        "${gamemode.displayName} is now locked. ${gamemode.displayName} commands and features only work in ${gamemode.displayName} worlds."
+                    sub.lock -> "${gamemode.displayName} lock saved."
+                    else -> "${gamemode.displayName} is now unlocked."
+                }
             )
             ChangeResult.ALREADY -> Msg.error(sender, "${gamemode.displayName} is already $verb.")
             ChangeResult.FAILED -> Msg.error(sender, "Couldn't save the lock state, so nothing was changed. Check the console.")
         }
-        if (!sub.lock && locks.isImplied(gamemode)) {
-            Msg.error(
-                sender,
-                "${gamemode.displayName} stays isolated anyway: this dedicated ${locks.serverGamemode.displayName} server doesn't run it " +
-                    "(gamemode-lock.server-gamemode / gamemode-lock.worlds in config.yml, restart to change)."
-            )
-        }
+        if (note != null) Msg.reply(sender, Component.text(note, NamedTextColor.YELLOW))
         return true
     }
 
@@ -108,6 +111,9 @@ class JGamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
         for (gamemode in ServerGamemode.entries) {
             var line = GamemodeLockManager.statusLine(gamemode, locks.isLocked(gamemode))
             if (locks.isImplied(gamemode)) line = line.append(Component.text(" (dedicated server, automatic)", NamedTextColor.GRAY))
+            else if (locks.isLocked(gamemode) && locks.lockEffect(gamemode) == GamemodeLockEffect.Effect.NO_EFFECT) {
+                line = line.append(Component.text(" (no effect: every world here runs it)", NamedTextColor.YELLOW))
+            }
             sender.sendMessage(line)
         }
         val network = plugin.networkIdentityManager
@@ -119,6 +125,16 @@ class JGamemodeCommand(private val plugin: Joshymc) : CommandExecutor, TabComple
             )
         }
         sender.sendMessage(infoLine("Server gamemode", gamemodeValue))
+        // Issue #1576: a copied config (server-id lifesteal, server-gamemode survival) is never "fixed" silently.
+        network.identityConflict?.let { named ->
+            sender.sendMessage(
+                Component.text(
+                    "Warning: network.server-id names ${named.displayName}, but this server runs ${locks.serverGamemode.displayName}. " +
+                        "If this is the ${named.displayName} server, set gamemode-lock.server-gamemode: ${named.id} in config.yml and restart.",
+                    NamedTextColor.RED
+                )
+            )
+        }
         sender.sendMessage(
             infoLine(
                 "Primary network instance",
