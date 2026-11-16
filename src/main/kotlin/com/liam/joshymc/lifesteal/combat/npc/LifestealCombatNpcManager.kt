@@ -327,6 +327,12 @@ class LifestealCombatNpcManager(private val plugin: Joshymc) {
 
     fun ownerOf(entity: Entity): UUID? = sessionOf(entity)?.let { bySession[it]?.owner }
 
+    /**
+     * Issue #1584: [owner] logged out in combat and their Combat NPC is still standing, so their
+     * fight goes on through it even though CombatListener cleared the tag on quit. Main thread.
+     */
+    fun isStanding(owner: UUID): Boolean = bySession.values.any { it.owner == owner && !it.ending }
+
     /** The NPC's live state (position, health, absorption, fire, air, effects); inventory as captured. */
     private fun liveSnapshot(entity: Mannequin, live: Live, now: Long): CombatNpcStore.Snapshot = live.last.copy(
         location = point(entity.location),

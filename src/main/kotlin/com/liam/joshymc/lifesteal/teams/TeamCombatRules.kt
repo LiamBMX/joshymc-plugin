@@ -151,6 +151,15 @@ object TeamCombatRules {
      */
     enum class TeamChange { ACCEPT, LEAVE, KICK, DISBAND }
 
+    /**
+     * Issue #1584: who counts as "in combat" for [TeamChange]s and alliance acceptance. A combat
+     * logger's tag is cleared when they quit, but their fight goes on through their standing Combat
+     * NPC; without this a leader could kick or disband them (or ally with their attackers) and let
+     * former teammates kill the NPC once the recent-teammate window ran out, claiming its hearts,
+     * coins and bounty.
+     */
+    fun inCombat(tagged: Boolean, combatNpcStanding: Boolean): Boolean = tagged || combatNpcStanding
+
     /** Player-facing refusal for [change]. */
     fun combatMessage(change: TeamChange): String = when (change) {
         TeamChange.ACCEPT -> "You can't join a team while in combat."

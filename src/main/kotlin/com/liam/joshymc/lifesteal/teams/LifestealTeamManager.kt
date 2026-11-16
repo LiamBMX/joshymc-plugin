@@ -271,7 +271,18 @@ class LifestealTeamManager(private val plugin: Joshymc) {
     /** The combat-tag duration: how long a former teammate still counts as one. */
     private fun graceMillis(): Long = plugin.combatManager.tagDurationMillis
 
-    internal fun inCombat(uuid: UUID): Boolean = Bukkit.getPlayer(uuid)?.let { it.isOnline && plugin.combatManager.isTagged(it) } == true
+    /**
+     * Whether [uuid] counts as in combat for team and alliance changes: combat-tagged now, or
+     * (issue #1584) logged out in combat with their Combat NPC still standing.
+     */
+    internal fun inCombat(uuid: UUID): Boolean = TeamCombatRules.inCombat(
+        tagged = Bukkit.getPlayer(uuid)?.let { it.isOnline && plugin.combatManager.isTagged(it) } == true,
+        combatNpcStanding = combatNpcStanding(uuid),
+    )
+
+    /** False where no Combat NPC system exists (Survival, or before it is created). */
+    private fun combatNpcStanding(uuid: UUID): Boolean =
+        try { plugin.lifestealCombatNpcManager.isStanding(uuid) } catch (_: UninitializedPropertyAccessException) { false }
 
     private fun combatRefusal(change: TeamCombatRules.TeamChange, involved: Iterable<UUID>): String? =
         if (involved.any { inCombat(it) }) TeamCombatRules.combatMessage(change)

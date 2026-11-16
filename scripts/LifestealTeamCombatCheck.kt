@@ -191,6 +191,10 @@ private fun damage() {
     for (change in TeamCombatRules.TeamChange.entries) {
         check("combat refusal for $change", "combat" in TeamCombatRules.combatMessage(change))
     }
+    // Issue #1584: a combat logger whose Combat NPC still stands counts as in combat (their tag was cleared on quit).
+    check("tagged = in combat", TeamCombatRules.inCombat(tagged = true, combatNpcStanding = false))
+    check("standing Combat NPC = in combat", TeamCombatRules.inCombat(tagged = false, combatNpcStanding = true))
+    check("neither = not in combat", !TeamCombatRules.inCombat(tagged = false, combatNpcStanding = false))
 }
 
 // ── Heart eligibility ────────────────────────────────────────
@@ -356,6 +360,14 @@ private fun wiring() {
     check("kick checks both leader and target", "TeamChange.KICK, listOf(player.uniqueId, target)" in manager)
     check("disband checks every member", "TeamChange.DISBAND, team.members.map { it.uuid }" in manager)
     check("combat state comes from CombatManager", "plugin.combatManager.isTagged(it)" in manager)
+    // Issue #1584: kick/disband/alliance accept also see an offline owner's standing Combat NPC.
+    val npcManager = source("lifesteal/combat/npc/LifestealCombatNpcManager.kt")
+    val relations = source("lifesteal/teams/LifestealTeamRelations.kt")
+    val inCombat = manager.substringAfter("internal fun inCombat(").substringBefore("private fun combatRefusal(")
+    check("inCombat uses the shared rule with the Combat NPC state", "TeamCombatRules.inCombat(" in inCombat && "plugin.lifestealCombatNpcManager.isStanding(uuid)" in inCombat)
+    check("combat refusal goes through inCombat", manager.substringAfter("private fun combatRefusal(").substringBefore("private fun inRankedMatch").contains("inCombat(it)"))
+    check("alliance accept goes through inCombat", "involved.any { teams.inCombat(it) }" in relations)
+    check("Combat NPC manager answers by owner, ignoring sessions being ended", "fun isStanding(owner: UUID): Boolean = bySession.values.any { it.owner == owner && !it.ending }" in npcManager)
 
     // Membership bookkeeping.
     check("removed members are remembered", manager.split("combatMemory.record(").size - 1 == 2)
