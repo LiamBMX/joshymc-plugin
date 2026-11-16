@@ -31,6 +31,12 @@ class NetworkIdentityManager(private val plugin: Joshymc) {
         private set
     @Volatile var gamemodeProblems: List<String> = emptyList()
         private set
+    /**
+     * Issue #1576: the gamemode `network.server-id` names when it differs from the server
+     * gamemode (usually a copied config), shown by `/jgamemode info`; null when they agree.
+     */
+    @Volatile var identityConflict: ServerGamemode? = null
+        private set
     /** The server gamemode plus every gamemode `gamemode-lock.worlds` maps a world to. */
     @Volatile var hostedGamemodes: Set<ServerGamemode> = setOf(ServerGamemode.SURVIVAL)
         private set
@@ -66,6 +72,7 @@ class NetworkIdentityManager(private val plugin: Joshymc) {
                 cfg.get("network.server-id", null)
             )
             for (problem in gamemodeResult.problems) plugin.logger.severe("[Network] $problem")
+            for (warning in gamemodeResult.warnings) plugin.logger.warning("[Network] $warning")
             val currentGamemode = gamemodeResult.gamemode
             val worldGamemodes = ServerGamemodeConfig.worldGamemodes(
                 cfg.getConfigurationSection("gamemode-lock.worlds")?.getValues(false)?.values ?: emptyList()
@@ -91,6 +98,7 @@ class NetworkIdentityManager(private val plugin: Joshymc) {
             gamemode = currentGamemode
             gamemodeValid = gamemodeResult.valid
             gamemodeProblems = gamemodeResult.problems
+            identityConflict = NetworkIdentityConfig.conflict(next.serverId, currentGamemode)
             hostedGamemodes = worldGamemodes + currentGamemode
             // Fixed until restart, like the server id: the managers it keeps off were decided at startup.
             val isolated = DedicatedServer.isolatedGamemodes(currentGamemode, worldGamemodes)

@@ -9,7 +9,9 @@
 // Bukkit class: YAML through snakeyaml, the wiring in Joshymc.kt by source text.
 // Exits non-zero on the first failed check.
 
+import com.liam.joshymc.gamemode.ConfigIdentityBackfill
 import com.liam.joshymc.gamemode.DedicatedServer
+import com.liam.joshymc.gamemode.GamemodeLockEffect
 import com.liam.joshymc.gamemode.DedicatedServerFeatures
 import com.liam.joshymc.gamemode.GamemodeAssignments
 import com.liam.joshymc.gamemode.GamemodeFeature
@@ -76,6 +78,8 @@ private val SURVIVAL_ONLY_SCOPE_COMMANDS = GamemodeAssignments.COMMANDS.filterVa
 
 fun main() {
     gamemodeResolution()
+    identityBackfill()
+    lockEffect()
     isolation()
     featureFlags()
     lifestealConfig()
@@ -127,8 +131,19 @@ private fun gamemodeResolution() {
     ServerGamemodeConfig.resolve(config.path("gamemode-lock.server-gamemode"), config.path("network.server-id")).let {
         check("bundled config resolves to survival", it.gamemode == SURVIVAL && it.valid && it.problems.isEmpty())
     }
-    check("missing gamemode = survival (old default)", ServerGamemodeConfig.resolve(null, "lifesteal").let { it.gamemode == SURVIVAL && it.valid })
+    // Issue #1576: a missing key no longer turns an explicitly named Lifesteal server into Survival.
+    ServerGamemodeConfig.resolve(null, "lifesteal").let {
+        check("missing gamemode on the lifesteal server = lifesteal", it.gamemode == LIFESTEAL && it.valid && it.problems.isEmpty())
+        check("... with a warning", it.warnings.single().contains("gamemode-lock.server-gamemode is not set"))
+    }
+    check("blank gamemode on the lifesteal server = lifesteal", ServerGamemodeConfig.resolve("  ", " Lifesteal ").gamemode == LIFESTEAL)
+    ServerGamemodeConfig.resolve(null, "survival").let {
+        check("missing gamemode on the survival server = survival, silently", it.gamemode == SURVIVAL && it.valid && it.warnings.isEmpty())
+    }
+    check("missing gamemode and server id = survival (old default)", ServerGamemodeConfig.resolve(null, null).let { it.gamemode == SURVIVAL && it.warnings.isEmpty() })
+    check("missing gamemode, non-gamemode id = survival", ServerGamemodeConfig.resolve(null, "lobby").gamemode == SURVIVAL)
     check("blank gamemode = survival", ServerGamemodeConfig.resolve("  ", null).gamemode == SURVIVAL)
+    check("explicit survival is never overridden by the id", ServerGamemodeConfig.resolve("survival", "lifesteal").gamemode == SURVIVAL)
 
     // Lifesteal identification.
     ServerGamemodeConfig.resolve("lifesteal", "lifesteal").let {
@@ -150,6 +165,116 @@ private fun gamemodeResolution() {
     }
     check("non-string gamemode is invalid", !ServerGamemodeConfig.resolve(5, null).valid)
     check("world values: unknown ignored", ServerGamemodeConfig.worldGamemodes(listOf("lifesteal", "nope", 3, null)) == setOf(LIFESTEAL))
+}
+
+// ── Config migration of the identity keys (issue #1576) ──────
+
+/** What migrateConfig leaves for the three identity keys, given the on-disk values (null = missing). */
+private fun migrated(gamemode: Any?, serverId: Any?, primary: Any?): Triple<Any?, Any?, Any?> {
+    val values = mutableMapOf(
+        ConfigIdentityBackfill.GAMEMODE_KEY to gamemode,
+        ConfigIdentityBackfill.SERVER_ID_KEY to serverId,
+        ConfigIdentityBackfill.PRIMARY_KEY to primary,
+    )
+    val fills = ConfigIdentityBackfill.fills(gamemode, serverId, primary)
+    for (fill in fills) {
+        check("fill ${fill.key} only when missing", values[fill.key] == null)
+        values[fill.key] = fill.value
+    }
+    return Triple(values[ConfigIdentityBackfill.GAMEMODE_KEY], values[ConfigIdentityBackfill.SERVER_ID_KEY], values[ConfigIdentityBackfill.PRIMARY_KEY])
+}
+
+private fun startsAs(gamemode: Any?, serverId: Any?, primary: Any?, worlds: Set<com.liam.joshymc.gamemode.ServerGamemode> = emptySet()) =
+    ServerGamemodeConfig.resolve(gamemode, serverId).gamemode.let { gm ->
+        Triple(gm, NetworkIdentityConfig.resolve(serverId, primary, gm), DedicatedServer.isolatedGamemodes(gm, worlds))
+    }
+
+private fun identityBackfill() {
+    check("identity keys are the three", ConfigIdentityBackfill.KEYS == setOf("gamemode-lock.server-gamemode", "network.server-id", "network.primary"))
+
+    // Fresh Lifesteal configuration (the expected configuration in the issue).
+    check("fresh lifesteal: nothing filled", ConfigIdentityBackfill.fills("lifesteal", "lifesteal", false).isEmpty())
+    startsAs("lifesteal", "lifesteal", false).let { (gm, id, isolated) ->
+        check("fresh lifesteal starts as lifesteal", gm == LIFESTEAL)
+        check("fresh lifesteal identity is clean", id.identity == NetworkIdentity("lifesteal", false) && id.problems.isEmpty())
+        check("fresh lifesteal isolates survival with no lock", isolated == setOf(SURVIVAL))
+    }
+
+    // Fresh Survival configuration (the bundled file): unchanged.
+    val config = resource("config.yml")
+    val bundled = Triple(config.path("gamemode-lock.server-gamemode"), config.path("network.server-id"), config.path("network.primary"))
+    check("fresh survival: nothing filled", ConfigIdentityBackfill.fills(bundled.first, bundled.second, bundled.third).isEmpty())
+    startsAs(bundled.first, bundled.second, bundled.third).let { (gm, id, isolated) ->
+        check("fresh survival starts as survival, primary", gm == SURVIVAL && id.identity == NetworkIdentity("survival", true) && id.problems.isEmpty())
+        check("fresh survival isolates nothing", isolated.isEmpty())
+    }
+
+    // Legacy config from before #1323/#1289 (no network or gamemode-lock section): the old Survival defaults.
+    check("legacy config gets the old survival defaults", migrated(null, null, null) == Triple("survival", "survival", true))
+    migrated(null, null, null).let { (g, s, p) ->
+        check("legacy config still starts as the primary survival server", startsAs(g, s, p).let { it.first == SURVIVAL && it.second.identity.primary && it.third.isEmpty() })
+    }
+
+    // The reported bug: a Lifesteal config missing server-gamemode was backfilled with survival.
+    migrated(null, "lifesteal", false).let { (g, s, p) ->
+        check("missing server-gamemode on the lifesteal server is filled with lifesteal", g == "lifesteal" && s == "lifesteal" && p == false)
+        check("... and it starts as a dedicated lifesteal server", startsAs(g, s, p).let { it.first == LIFESTEAL && it.third == setOf(SURVIVAL) })
+    }
+    check("missing server-gamemode + primary on lifesteal: never a second primary", migrated(null, "lifesteal", null) == Triple("lifesteal", "lifesteal", false))
+    check("missing server-id on lifesteal: filled with lifesteal, not survival", migrated("lifesteal", null, null) == Triple("lifesteal", "lifesteal", false))
+    check("missing server-id on survival: old default", migrated("survival", null, null) == Triple("survival", "survival", true))
+    check("administrator values are never changed", migrated("lifesteal", "ls-1", true) == Triple("lifesteal", "ls-1", true))
+    check("non-gamemode id, missing gamemode: survival as before", migrated(null, "lobby", true) == Triple("survival", "lobby", true))
+    check("explicit primary false on survival kept", migrated("survival", "survival", false).third == false)
+
+    // Conflicting network identity: reported, primary refused, but neither value rewritten.
+    check("conflict: nothing filled", ConfigIdentityBackfill.fills("survival", "lifesteal", true).isEmpty())
+    startsAs("survival", "lifesteal", true).let { (gm, id, _) ->
+        check("conflict keeps the configured gamemode (never guessed)", gm == SURVIVAL)
+        check("conflict refuses primary", !id.identity.primary)
+        check("conflict is severe and names the fix", id.problems.any { it.severe && "gamemode-lock.server-gamemode: lifesteal" in it.message })
+    }
+    check("conflict detector", NetworkIdentityConfig.conflict("lifesteal", SURVIVAL) == LIFESTEAL && NetworkIdentityConfig.conflict("survival", LIFESTEAL) == SURVIVAL)
+    check("no conflict when they agree or the id is not a gamemode",
+        NetworkIdentityConfig.conflict("lifesteal", LIFESTEAL) == null && NetworkIdentityConfig.conflict("lobby", LIFESTEAL) == null)
+
+    // migrateConfig wiring: identity keys filled from the file first, never from the bundled values.
+    val main = source("Joshymc.kt")
+    val migrate = main.substring(main.indexOf("private fun migrateConfig()"))
+    check("migrateConfig fills identity keys", "ConfigIdentityBackfill.fills(" in migrate)
+    check("migrateConfig skips identity keys in the generic backfill", "if (key in com.liam.joshymc.gamemode.ConfigIdentityBackfill.KEYS) continue" in migrate)
+    check("identity fill runs before the generic backfill", migrate.indexOf("ConfigIdentityBackfill.fills(") < migrate.indexOf("for (key in defaults.getKeys(true))"))
+    check("migrateConfig runs before the network identity loads", main.indexOf("migrateConfig()\n") < main.indexOf("networkIdentityManager.load()"))
+}
+
+// ── /jgamemode lock effect (issue #1576) ─────────────────────
+
+private fun lockEffect() {
+    val dedicated = DedicatedServer.isolatedGamemodes(LIFESTEAL, emptySet())
+    val lifestealOnly = setOf(LIFESTEAL)
+    check("dedicated lifesteal: locking survival is automatic", GamemodeLockEffect.of(SURVIVAL, lifestealOnly, dedicated) == GamemodeLockEffect.Effect.AUTOMATIC)
+    check("dedicated lifesteal: locking lifesteal has no effect", GamemodeLockEffect.of(LIFESTEAL, lifestealOnly, dedicated) == GamemodeLockEffect.Effect.NO_EFFECT)
+    check("survival server: locking survival has no effect", GamemodeLockEffect.of(SURVIVAL, setOf(SURVIVAL), emptySet()) == GamemodeLockEffect.Effect.NO_EFFECT)
+    check("survival server: locking lifesteal restricts", GamemodeLockEffect.of(LIFESTEAL, setOf(SURVIVAL), emptySet()) == GamemodeLockEffect.Effect.RESTRICTS)
+
+    // Valid mixed-world overrides keep working: nothing automatic, both locks restrict.
+    val mixedIsolated = DedicatedServer.isolatedGamemodes(LIFESTEAL, setOf(SURVIVAL))
+    check("mixed lifesteal + survival worlds isolates nothing", mixedIsolated.isEmpty())
+    for (gm in listOf(SURVIVAL, LIFESTEAL)) {
+        check("mixed worlds: locking ${gm.id} restricts", GamemodeLockEffect.of(gm, setOf(LIFESTEAL, SURVIVAL), mixedIsolated) == GamemodeLockEffect.Effect.RESTRICTS)
+    }
+    check("survival server with lifesteal worlds: locking survival restricts",
+        GamemodeLockEffect.of(SURVIVAL, setOf(SURVIVAL, LIFESTEAL), emptySet()) == GamemodeLockEffect.Effect.RESTRICTS)
+
+    // Messages: warnings exactly when the command changes nothing.
+    check("no note for a restricting lock", GamemodeLockEffect.note(LIFESTEAL, true, GamemodeLockEffect.Effect.RESTRICTS, SURVIVAL) == null)
+    check("no note for a lifting unlock", GamemodeLockEffect.note(LIFESTEAL, false, GamemodeLockEffect.Effect.RESTRICTS, SURVIVAL) == null)
+    check("own-gamemode lock warns", GamemodeLockEffect.note(LIFESTEAL, true, GamemodeLockEffect.Effect.NO_EFFECT, LIFESTEAL)!!.startsWith("Locking Lifesteal has no effect here"))
+    check("automatic lock explains", "already isolated automatically" in GamemodeLockEffect.note(SURVIVAL, true, GamemodeLockEffect.Effect.AUTOMATIC, LIFESTEAL)!!)
+    check("automatic unlock explains", "stays isolated anyway" in GamemodeLockEffect.note(SURVIVAL, false, GamemodeLockEffect.Effect.AUTOMATIC, LIFESTEAL)!!)
+    val command = source("command/JGamemodeCommand.kt")
+    check("/jgamemode uses the lock effect", "locks.lockEffect(gamemode)" in command && "GamemodeLockEffect.note(" in command)
+    check("/jgamemode info shows identity conflicts", "network.identityConflict" in command)
 }
 
 // ── Dedicated server isolation ───────────────────────────────

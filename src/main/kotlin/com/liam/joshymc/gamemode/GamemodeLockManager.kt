@@ -63,6 +63,13 @@ class GamemodeLockManager(private val plugin: Joshymc) {
         applyCommandGates()
         refreshCommands()
         plugin.logger.info("[GamemodeLock] This server runs ${serverGamemode.displayName}; locked: ${describeLocks()}.")
+        // Issue #1576: a stored lock on the gamemode every world runs looks like isolation but does nothing.
+        for (gamemode in storedLocks.filter { lockEffect(it) == GamemodeLockEffect.Effect.NO_EFFECT }) {
+            plugin.logger.warning(
+                "[GamemodeLock] The ${gamemode.displayName} lock has no effect: every world on this server runs ${gamemode.displayName}. " +
+                    "If this server should run another gamemode, set gamemode-lock.server-gamemode in config.yml."
+            )
+        }
     }
 
     private fun loadConfig() {
@@ -106,6 +113,13 @@ class GamemodeLockManager(private val plugin: Joshymc) {
 
     /** Locked automatically because this dedicated server doesn't run [gamemode] (issue #1336). */
     fun isImplied(gamemode: ServerGamemode): Boolean = gamemode in implied
+
+    /** The server gamemode plus every gamemode `gamemode-lock.worlds` maps a world to. */
+    val hostedGamemodes: Set<ServerGamemode> get() = worldGamemodes.values.toSet() + serverGamemode
+
+    /** What locking [gamemode] changes here (issue #1576): nothing when every world already runs it. */
+    fun lockEffect(gamemode: ServerGamemode): GamemodeLockEffect.Effect =
+        GamemodeLockEffect.of(gamemode, hostedGamemodes, implied)
 
     fun gamemodeOf(world: World?): ServerGamemode =
         world?.let { worldGamemodes[it.name.lowercase()] } ?: serverGamemode

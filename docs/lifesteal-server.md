@@ -142,6 +142,34 @@ console error, and `/jgamemode info` marks it invalid:
 - Otherwise the server falls back to Survival, the setting's original default. Fix the value and
   restart.
 
+### Missing identity keys (issue #1576)
+
+The startup config migration used to copy the bundled (Survival) values into any config.yml
+missing them, so a Lifesteal config that set `network.server-id: lifesteal` but not
+`gamemode-lock.server-gamemode` was rewritten to `server-gamemode: survival` and the server
+started as Survival with nothing isolated. Now the three identity keys are only filled from what
+the file already says, each with a `[ConfigMigrator]` warning, and set values are never changed:
+
+| Missing key | Filled with |
+|---|---|
+| `gamemode-lock.server-gamemode` | the gamemode `network.server-id` names (`lifesteal`), else `survival` |
+| `network.server-id` | the server gamemode's id |
+| `network.primary` | `true` on a Survival server (old default), `false` anywhere else |
+
+A config with neither section (from before the network settings) still becomes the primary
+Survival server, as before. When both values are set but disagree (`server-id: lifesteal`,
+`server-gamemode: survival`, a copied config), nothing is guessed: the configured gamemode runs,
+the console logs a severe error naming the fix, the server stays secondary and `/jgamemode info`
+shows a red warning.
+
+### `/jgamemode lock` on a dedicated server
+
+A lock only refuses a gamemode's commands in worlds that run another gamemode. On a dedicated
+Lifesteal server Survival is already isolated automatically, and every world runs Lifesteal, so
+`/jgamemode lock survival` and `/jgamemode lock lifesteal` change nothing: both the preview and
+the result now say so, `/jgamemode info` marks a stored lock with no effect, and startup logs a
+warning for it. No lock is needed there.
+
 ### `lifesteal.yml`
 
 Created with the approved Lifesteal Master Blueprint v1.1 defaults on the first start of a
@@ -214,6 +242,8 @@ plugin channel is registered. To join the network follow `docs/network-transfers
 |---|---|
 | `gamemode-lock.server-gamemode '...' is not a gamemode` | Typo. Use `lifesteal`, restart. |
 | `network.server-id 'survival' is the id of Survival, but gamemode-lock.server-gamemode is lifesteal` | config.yml copied from Survival. Set `server-id: lifesteal`. The server runs as secondary until fixed. |
+| `network.server-id 'lifesteal' is the id of Lifesteal, but gamemode-lock.server-gamemode is survival` | The server runs as Survival. Set `server-gamemode: lifesteal`, restart. |
+| `[ConfigMigrator] gamemode-lock.server-gamemode was missing; set it to ...` | Filled from `network.server-id` (issue #1576). Check the value in config.yml. |
 | `network.primary is not set` | Add `primary: false` on Lifesteal. |
 | Survival commands still work on Lifesteal | `server-gamemode` isn't `lifesteal`, or a world is mapped to `survival` under `gamemode-lock.worlds`. Check `/jgamemode info`. |
 | `[Lifesteal] lifesteal.yml is invalid` | Read the errors above it, fix the file, `/joshymc reload`. |

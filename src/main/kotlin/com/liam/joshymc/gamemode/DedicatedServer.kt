@@ -13,13 +13,18 @@ object ServerGamemodeConfig {
         val valid: Boolean,
         /** Severe problems for the console; empty when the value was fine (or left unset). */
         val problems: List<String>,
+        /** Non-severe notes for the console (issue #1576: the value was missing and came from the server id). */
+        val warnings: List<String> = emptyList(),
     )
 
     /**
      * [rawGamemode] is the value set in config.yml (null when missing), [rawServerId] the
      * `network.server-id` value.
      *
-     *  - Missing or blank: Survival, the setting's original default, so old configs are unchanged.
+     *  - Missing or blank: the gamemode `network.server-id` names (`lifesteal`), so an explicitly
+     *    named Lifesteal server never starts as Survival just because this key is missing
+     *    (issue #1576, logged as a warning); otherwise Survival, the setting's original default,
+     *    so old Survival configs are unchanged.
      *  - A gamemode id (any case, trimmed): that gamemode.
      *  - Anything else is an error. When the server id names a gamemode (`lifesteal`) that one
      *    is used, so a Lifesteal server with a typo in this setting never starts as Survival;
@@ -27,6 +32,16 @@ object ServerGamemodeConfig {
      */
     fun resolve(rawGamemode: Any?, rawServerId: Any?): Result {
         if (rawGamemode == null || (rawGamemode is String && rawGamemode.isBlank())) {
+            val fromId = (rawServerId as? String)?.let { ServerGamemode.fromId(it) }
+            if (fromId != null && fromId != ServerGamemode.SURVIVAL) {
+                return Result(
+                    fromId, valid = true, problems = emptyList(),
+                    warnings = listOf(
+                        "gamemode-lock.server-gamemode is not set; using ${fromId.id} because network.server-id is '${fromId.id}'. " +
+                            "Set gamemode-lock.server-gamemode: ${fromId.id} in config.yml."
+                    )
+                )
+            }
             return Result(ServerGamemode.SURVIVAL, valid = true, problems = emptyList())
         }
         val named = (rawGamemode as? String)?.let { ServerGamemode.fromId(it) }
