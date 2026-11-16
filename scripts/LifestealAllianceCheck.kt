@@ -408,7 +408,10 @@ private fun rivalries() = withDb("rivals") { db, _ ->
     check("rivalries give no coins, hearts, Elo or stats",
         listOf("economyManager", ".deposit(", "HeartStore", "lifestealHeartManager", "lifestealRatingManager", "RatingStore", "recordKill", "killStreak").none { it in code })
     check("rivalries never change PvP (no rival relation in the combat rules)", "rival" !in source("lifesteal/teams/TeamCombatRules.kt").lowercase())
-    check("rating code doesn't read rivalries", "rival" !in File("src/main/kotlin/com/liam/joshymc/lifesteal/ranked").walkTopDown().filter { it.isFile }.joinToString { it.readText() }.lowercase())
+    // "rival" as its own word or camelCase part (rival, Rival, RIVAL), not inside "arrival" (#1524's
+    // entityArrivalRefused, #1511's arrivalProblem), which isn't about rivalries.
+    val rivalWord = Regex("Rival|RIVAL|(?<![A-Za-z])rival")
+    check("rating code doesn't read rivalries", !rivalWord.containsMatchIn(File("src/main/kotlin/com/liam/joshymc/lifesteal/ranked").walkTopDown().filter { it.isFile }.joinToString { it.readText() }))
 }
 
 // ── Exclusivity ──────────────────────────────────────────────

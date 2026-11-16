@@ -8,6 +8,7 @@ planned maintenance windows. It changes no gameplay, config default or database 
 |---|---|
 | this file | release candidate checklist, staging plan, restart checklist, soak test, severity, cadence, deployment/rollback, go/no-go |
 | [lifesteal-beta-templates.md](lifesteal-beta-templates.md) | copy-paste templates: release candidate record, bug report, known issues, soak log |
+| [lifesteal-beta-rc1.md](lifesteal-beta-rc1.md) | the first RC record (v1.0.677): checksum, automated results, dedicated-server config, restrictions, live tests |
 | [lifesteal-beta.md](lifesteal-beta.md) | core loop status and the 15-step closed beta checklist (reused in section 2) |
 | [lifesteal-ranked-qa.md](lifesteal-ranked-qa.md) | the Ranked QA Toolkit: test server setup, ranked tests, evidence, resets (reused, not repeated) |
 | [lifesteal-ranked-qa-matrix.md](lifesteal-ranked-qa-matrix.md) | every ranked scenario by ID (IR-, HT-, MM-, EL-, AS-, ST-, DR-, TI-) |
