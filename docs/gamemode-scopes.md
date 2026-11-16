@@ -66,6 +66,11 @@ never restricts its own gamemode, so **nothing changes on the Survival server**,
 | Rank perks and flight | `fly`, `flytime`, `nightvision`, `condense`, `hat`, `craft`, `anvil`, `smithing`, `stonecutter`, `repair`, `trash` |
 | Other | `fakebase`, `spawnstash` (`tutorial` is NETWORK since issue #1387: one walkthrough per gamemode, `docs/tutorial.md`) |
 
+**Shared on a dedicated Lifesteal server (issue #1573)**: `balance`, `baltop`, `worth`, `sell`, `pay`,
+`ah`, `overflow`, `trade`, `home`, `sethome`, `delhome` keep the SURVIVAL scope but also run in Lifesteal
+on a server that hosts only Lifesteal (`LifestealSharedCommands.SHARED`), with a combat/ranked guard for
+the ones that move items, coins or the player. Survival stays locked. See `docs/lifesteal-shared-commands.md`.
+
 ### Deliberately unassigned
 
 `spawn`, `setspawn`, `tpa`, `tpahere`, `tpaccept`, `tpdeny`, `tpacancel`, `afk`, `sit`, `playtime`,

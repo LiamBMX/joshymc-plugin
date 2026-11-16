@@ -439,6 +439,19 @@ class GodCommand(private val plugin: Joshymc) : CommandExecutor, Listener, TabCo
             return true
         }
 
+        // Issue #1573: in Lifesteal, God Mode for yourself is staff-only (an explicit staff rank, never a
+        // donor or Lifesteal rank), whatever permissions or wildcards a purchased rank carries.
+        val godDecision = com.liam.joshymc.gamemode.LifestealSharedCommands.godSelfUse(
+            plugin.gamemodeLockManager.gamemodeOf(target.world),
+            selfUse = !others,
+            enabling = !godPlayers.contains(target.uniqueId),
+            isStaff = (sender as? Player)?.let { p -> try { plugin.staffRankManager.rankOf(p) != null } catch (_: Exception) { false } } ?: true,
+        )
+        if (godDecision == com.liam.joshymc.gamemode.LifestealSharedCommands.GodDecision.STAFF_ONLY) {
+            Msg.error(sender, com.liam.joshymc.gamemode.LifestealSharedCommands.GOD_STAFF_ONLY_MESSAGE)
+            return true
+        }
+
         // Issue #1498 (F-4): God Mode can't be switched on for (or by) a ranked participant.
         if (!godPlayers.contains(target.uniqueId) && plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.GOD)) return true
 
