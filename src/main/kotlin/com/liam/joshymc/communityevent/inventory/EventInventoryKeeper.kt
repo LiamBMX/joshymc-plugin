@@ -77,6 +77,18 @@ class EventInventoryKeeper(
 
     fun marker(player: Player): Long? = player.persistentDataContainer.get(markerKey, PersistentDataType.LONG)
 
+    /**
+     * Issue #1577: whether [player]'s inventory is part of an event-inventory operation that isn't
+     * settled (being reconciled, waiting for a retry, the player file still holds the event inventory,
+     * or an open snapshot row). Read only; a database error counts as unsettled.
+     */
+    fun unsettled(player: Player): Boolean {
+        val uuid = player.uniqueId
+        if (uuid in busy || uuid in retry || marker(player) != null) return true
+        if (!ready) return false
+        return try { store.open(uuid) != null } catch (_: Exception) { true }
+    }
+
     // ── Reconciliation ─────────────────────────────────────
 
     private enum class StepResult { OK, CONFLICT, FAILED }

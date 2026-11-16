@@ -421,7 +421,8 @@ fun main() {
     check("Survival kits keep their permission check", "if (!kit.isLifesteal) return player.hasPermission(kit.permission)" in kit)
     check("Lifesteal kits use the reserved claim", "if (kit.isLifesteal) return claimLifestealKit(player, kit)" in kit)
     check("Lifesteal kit claim: fit check before reserving", kit.indexOf("probe.addItem") in 0 until kit.indexOf("reserveKitClaim(player.uniqueId"))
-    check("Lifesteal kit claim refused in combat / ranked / mod mode", "isTagged(player)" in kit && "lifestealRankedManager.holds(player)" in kit && "isModMode(player)) return refuse" in kit)
+    check("Lifesteal kit claim refused in combat / ranked / mod mode", "isTagged(player)" in kit && "lifestealRankedManager.holds(player)" in kit && "isModMode(player)" in kit &&
+        "LifestealKitRules.refusal(state)?.let { return refuse(it.message) }" in kit) // issue #1577: one rule, LifestealKitRules
     check("/freerank on Lifesteal goes to the Lifesteal ranks", "plugin.lifestealRankManager.claimFree(player)" in src("freerank/FreeRankManager.kt"))
     check("Survival /freerank still Scout", com.liam.joshymc.freerank.FreeRanks.starterRank(com.liam.joshymc.gamemode.ServerGamemode.SURVIVAL) == "scout")
     val purchase = src("manager/PurchaseFulfillmentManager.kt")

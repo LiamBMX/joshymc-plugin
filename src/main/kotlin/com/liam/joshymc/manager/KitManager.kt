@@ -4,6 +4,7 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.gui.GuiStyle
 import com.liam.joshymc.gui.CustomGui
+import com.liam.joshymc.lifesteal.kits.LifestealKitRules
 import com.liam.joshymc.lifesteal.ranks.LifestealRankConfig
 import com.liam.joshymc.lifesteal.ranks.LifestealRankRules
 import com.liam.joshymc.util.giveItemSafely
@@ -70,9 +71,13 @@ class KitManager(private val plugin: Joshymc) {
         val category: String? = null,
         /** kits.yml `enabled` (missing = true). Issue #1428: only Lifesteal kits honor it (hidden and unclaimable while false). */
         val enabled: Boolean = true,
+        /** kits.yml `one-time` (missing = false). Issue #1577: only Lifesteal kits honor it (claimable once per player, ever). */
+        val oneTime: Boolean = false,
     ) {
         val entry: KitCatalog.Entry get() = KitCatalog.Entry(name, gamemode, category)
         val isLifesteal: Boolean get() = ServerGamemode.fromId(gamemode) == ServerGamemode.LIFESTEAL
+        /** A Lifesteal kit claimable once per player; Survival kits are never one-time. */
+        val isOneTime: Boolean get() = isLifesteal && oneTime
         /** False only for a Lifesteal kit turned off in kits.yml; Survival kits are never affected. */
         val available: Boolean get() = !isLifesteal || enabled
     }
@@ -136,6 +141,7 @@ class KitManager(private val plugin: Joshymc) {
             kitsFile = plugin.configFile("kits.yml")
         }
         parseKitsFile()
+        seedBundledLifestealKits()
 
         // Self-heal: if the on-disk file is missing a `kits:` section or contains
         // zero kits (empty file, corrupted edit, legacy install from before we
@@ -152,6 +158,50 @@ class KitManager(private val plugin: Joshymc) {
             } catch (e: Exception) {
                 plugin.logger.warning("[KitManager] Failed to re-extract kits.yml: ${e.message}")
             }
+        }
+    }
+
+    /**
+     * Issue #1577: adds the bundled Lifesteal kits (the Lifesteal Starter Kit) to an existing
+     * kits.yml on a server that hosts Lifesteal. Each bundled name is recorded under
+     * `seeded-defaults`, so it is added at most once and a kit the staff deleted stays gone.
+     * Survival kits and kits already in the file are never touched.
+     */
+    private fun seedBundledLifestealKits() {
+        if (ServerGamemode.LIFESTEAL !in plugin.networkIdentityManager.hostedGamemodes) return
+        val bundled = try {
+            plugin.getResource("kits.yml")?.use { YamlConfiguration.loadConfiguration(it.reader(Charsets.UTF_8)) }
+        } catch (e: Exception) {
+            plugin.logger.warning("[KitManager] Couldn't read the bundled kits.yml: ${e.message}")
+            null
+        } ?: return
+        val bundledKits = bundled.getConfigurationSection("kits") ?: return
+        val lifesteal = bundledKits.getKeys(false).filter {
+            ServerGamemode.fromId(bundledKits.getString("$it.gamemode")) == ServerGamemode.LIFESTEAL
+        }
+        if (lifesteal.isEmpty()) return
+        val seeded = kitsConfig.getStringList(LifestealKitRules.SEEDED_KEY)
+        val existing = kitsConfig.getConfigurationSection("kits")?.getKeys(false).orEmpty()
+        val toAdd = LifestealKitRules.seedable(lifesteal, existing, seeded)
+        val newSeeded = seeded + lifesteal.filter { name -> seeded.none { it.equals(name, ignoreCase = true) } }
+        if (toAdd.isEmpty() && newSeeded.size == seeded.size) return
+        for (name in toAdd) {
+            val section = bundledKits.getConfigurationSection(name) ?: continue
+            for ((key, value) in section.getValues(true)) {
+                if (value is org.bukkit.configuration.ConfigurationSection) continue
+                kitsConfig.set("kits.$name.$key", value)
+            }
+        }
+        kitsConfig.set(LifestealKitRules.SEEDED_KEY, newSeeded)
+        try {
+            kitsConfig.save(kitsFile)
+        } catch (e: Exception) {
+            plugin.logger.warning("[KitManager] Couldn't save the bundled Lifesteal kits to kits.yml: ${e.message}")
+            return
+        }
+        if (toAdd.isNotEmpty()) {
+            plugin.logger.info("[KitManager] Added bundled Lifesteal kit(s) to kits.yml: ${toAdd.joinToString()}.")
+            parseKitsFile()
         }
     }
 
@@ -195,7 +245,7 @@ class KitManager(private val plugin: Joshymc) {
                 plugin.logger.warning("[KitManager] Kit '$name' has unknown category '$category' (starter, rank or special); using its name instead.")
             }
 
-            kits[name] = KitDef(name, icon, cooldownHours, permission, items, gamemode, category, section.getBoolean("enabled", true))
+            kits[name] = KitDef(name, icon, cooldownHours, permission, items, gamemode, category, section.getBoolean("enabled", true), section.getBoolean("one-time", false))
         }
     }
 
@@ -222,7 +272,7 @@ class KitManager(private val plugin: Joshymc) {
         }
 
         kitsConfig.save(kitsFile)
-        kits[name] = KitDef(name, icon, cooldownHours, permission, items, gamemode, category, kitsConfig.getBoolean("$path.enabled", true))
+        kits[name] = KitDef(name, icon, cooldownHours, permission, items, gamemode, category, kitsConfig.getBoolean("$path.enabled", true), kitsConfig.getBoolean("$path.one-time", false))
     }
 
     fun deleteKit(name: String): Boolean {
@@ -329,10 +379,12 @@ class KitManager(private val plugin: Joshymc) {
 
     /**
      * The duplication-safe claim used for every Lifesteal kit: refuses where the items could be
-     * lost or rolled back (Mod Mode, a Ranked match, the event world, combat), refuses unless every
-     * item fits (nothing is ever dropped or discarded), reserves the cooldown in one conditional
-     * statement *before* handing anything out (a second click, alias or reconnect can't claim twice;
-     * a crash can only lose a claim, never duplicate one), then gives and saves the player.
+     * lost, rolled back or duplicated ([LifestealKitRules.refusal]: dead, Mod Mode, a Ranked match
+     * or a pending Ranked restore, the event world or an unsettled event inventory, combat), refuses
+     * unless every item fits (nothing is ever dropped or discarded), reserves the claim in one
+     * conditional statement *before* handing anything out (a second click, alias or reconnect can't
+     * claim twice; a crash can only lose a claim, never duplicate one; a one-time kit's row is never
+     * moved again, issue #1577), then gives and saves the player.
      */
     private fun claimLifestealKit(player: Player, kit: KitDef): Boolean {
         val ranks = plugin.lifestealRanksOrNull()
@@ -342,20 +394,31 @@ class KitManager(private val plugin: Joshymc) {
             return false
         }
         if (ranks == null) return refuse("Kits are unavailable right now.")
-        if (player.isDead) return refuse("You can't claim kits while dead.")
-        if (plugin.modModeManager.isModMode(player)) return refuse("Leave Mod Mode to claim kits.")
-        if (plugin.lifestealRankedManager.holds(player)) return refuse("You can't claim kits during a Ranked match.")
-        if (plugin.eventManager.isInEventWorld(player)) return refuse("You can't claim kits in the event world.")
-        if ((ranks.settings?.refuseKitsWhileCombatTagged ?: true) && plugin.combatManager.isTagged(player)) {
-            return refuse("You can't claim kits while in combat.")
-        }
+        // A check that throws (manager not started) refuses rather than letting the claim through.
+        fun safe(check: () -> Boolean): Boolean = try { check() } catch (_: Exception) { true }
+        val state = LifestealKitRules.State(
+            dead = player.isDead,
+            modMode = safe { plugin.modModeManager.isModMode(player) },
+            rankedHeld = safe { plugin.lifestealRankedManager.holds(player) },
+            rankedSpectating = safe { plugin.lifestealRankedManager.isSpectator(player.uniqueId) },
+            rankedRestorePending = safe { plugin.lifestealRankedManager.hasPendingRestore(player.uniqueId) },
+            inEventWorld = safe { plugin.eventManager.isInEventWorld(player) },
+            eventInventoryUnsettled = safe { plugin.eventManager.inventories.unsettled(player) },
+            combatTagged = safe { plugin.combatManager.isTagged(player) },
+            refuseWhileCombatTagged = ranks.settings?.refuseKitsWhileCombatTagged ?: true,
+        )
+        LifestealKitRules.refusal(state)?.let { return refuse(it.message) }
 
-        val items = kit.items.toSortedMap().values.map { item ->
-            item.clone().also { clone ->
-                if (plugin.creditVoucherManager.isCreditVoucher(clone)) {
-                    clone.editMeta { meta ->
-                        meta.persistentDataContainer.set(plugin.creditVoucherManager.voucherUuidKey, PersistentDataType.STRING, UUID.randomUUID().toString())
-                    }
+        // Every voucher gets a fresh id (and signature for it) like Survival kits (issues #833,
+        // #1529); a template that can't be copied refuses the whole claim, so nothing is half given.
+        val items = mutableListOf<ItemStack>()
+        for ((slot, item) in kit.items.toSortedMap()) {
+            when (val copy = plugin.freshVoucherCopy(item)) {
+                com.liam.joshymc.util.VoucherCopy.NotVoucher -> items += item.clone()
+                is com.liam.joshymc.util.VoucherCopy.Fresh -> items += copy.item
+                is com.liam.joshymc.util.VoucherCopy.Refused -> {
+                    plugin.logger.warning("[KitManager] Lifesteal kit ${kit.name} slot $slot ${copy.reason}; claim refused.")
+                    return refuse("This kit can't be handed out right now. Please tell a staff member.")
                 }
             }
         }
@@ -368,7 +431,7 @@ class KitManager(private val plugin: Joshymc) {
         }
 
         val now = System.currentTimeMillis()
-        val cooldown = if (hasBypass(player, kit.name)) 0L else cooldownMillisFor(player, kit)
+        val cooldown = LifestealKitRules.reservedCooldown(kit.isOneTime, hasBypass(player, kit.name), cooldownMillisFor(player, kit))
         val previous = ranks.store.kitClaimedAt(player.uniqueId, kit.name)
         val reserved = try {
             ranks.store.reserveKitClaim(player.uniqueId, kit.name, now, cooldown)
@@ -376,7 +439,7 @@ class KitManager(private val plugin: Joshymc) {
             plugin.logger.warning("[KitManager] Could not reserve Lifesteal kit ${kit.name} for ${player.name}: ${e.message}")
             return refuse("Kits are unavailable right now. Please try again.")
         }
-        if (!reserved) return refuse("Kit '${kit.name}' is on cooldown: ${formatCooldown(getCooldownRemaining(player, kit.name))} remaining.")
+        if (!reserved) return refuse(cooldownMessage(player, kit))
 
         val failed = player.inventory.addItem(*items.toTypedArray())
         if (failed.isNotEmpty()) {
@@ -391,12 +454,17 @@ class KitManager(private val plugin: Joshymc) {
         try { player.saveData() } catch (e: Exception) {
             plugin.logger.warning("[KitManager] Could not save ${player.name}'s data after kit ${kit.name}: ${e.message}")
         }
-        plugin.logger.info("[KitManager] ${player.name} (${player.uniqueId}) claimed Lifesteal kit ${kit.name} (${items.size} stack(s)).")
+        plugin.logger.info("[KitManager] ${player.name} (${player.uniqueId}) claimed Lifesteal kit ${kit.name} (${items.size} stack(s)${if (kit.isOneTime) ", one-time" else ""}).")
         plugin.commsManager.send(player, Component.text("Kit '${kit.name}' claimed!", NamedTextColor.GREEN))
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.2f)
         if (isStarterKit(player, kit)) plugin.tutorialSignal(player, com.liam.joshymc.tutorial.TutorialSignal.StarterKitClaimed)
         return true
     }
+
+    /** Why [kit] can't be claimed yet: already claimed (one-time kits) or the time left. */
+    private fun cooldownMessage(player: Player, kit: KitDef): String =
+        if (kit.isOneTime) "You have already claimed kit '${kit.name}'. It can only be claimed once."
+        else "Kit '${kit.name}' is on cooldown: ${formatCooldown(getCooldownRemaining(player, kit.name))} remaining."
 
     private fun kitsIn(player: Player, category: KitCatalog.Category): List<KitDef> {
         val current = gamemodeOf(player)
@@ -423,9 +491,7 @@ class KitManager(private val plugin: Joshymc) {
         }
 
         if (!canClaim(player, name)) {
-            val remaining = getCooldownRemaining(player, name)
-            val formatted = formatCooldown(remaining)
-            plugin.commsManager.send(player, Component.text("Kit '$name' is on cooldown: $formatted remaining.", NamedTextColor.RED))
+            plugin.commsManager.send(player, Component.text(cooldownMessage(player, kit), NamedTextColor.RED))
             player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
             return false
         }
@@ -487,14 +553,18 @@ class KitManager(private val plugin: Joshymc) {
         ) { true } ?: false
 
     fun getCooldownRemaining(player: Player, name: String): Long {
-        // Bypass permissions: global or per-kit
-        if (player.hasPermission("joshymc.kit.bypass.*") ||
-            player.hasPermission("joshymc.kit.bypass.$name") ||
-            player.hasPermission("joshymc.kit.cooldown.bypass")) {
-            return 0L
-        }
-
         val kit = kits[name] ?: return 0L
+        // Issue #1577: a one-time Lifesteal kit stays claimed forever; no cooldown bypass reopens it.
+        if (kit.isOneTime) {
+            val claimedAt = plugin.databaseManager.queryFirst(
+                "SELECT claimed_at FROM kit_cooldowns WHERE uuid = ? AND kit = ?",
+                player.uniqueId.toString(), name
+            ) { rs -> rs.getLong("claimed_at") }
+            return LifestealKitRules.remaining(claimedAt, oneTime = true, cooldownMillis = 0L, now = System.currentTimeMillis())
+        }
+        // Bypass permissions: global or per-kit
+        if (hasBypass(player, name)) return 0L
+
         val claimedAt = plugin.databaseManager.queryFirst(
             "SELECT claimed_at FROM kit_cooldowns WHERE uuid = ? AND kit = ?",
             player.uniqueId.toString(), name
@@ -711,6 +781,7 @@ class KitManager(private val plugin: Joshymc) {
 
                 val statusValue = when {
                     locked -> Component.text("Locked", NamedTextColor.RED)
+                    onCooldown && kitDef.isOneTime -> Component.text("Already claimed", NamedTextColor.GOLD)
                     onCooldown -> Component.text("${formatCooldown(getCooldownRemaining(player, kitDef.name))} remaining", NamedTextColor.GOLD)
                     else -> Component.text("Ready", NamedTextColor.GREEN)
                 }
@@ -944,6 +1015,7 @@ class KitManager(private val plugin: Joshymc) {
 
     /** The cooldown shown on a kit icon: whole hours as before, the reduced cooldown for Lifesteal rank kits. */
     private fun cooldownLabel(player: Player, kit: KitDef): String {
+        if (kit.isOneTime) return "One claim per player"
         if (lifestealRankFor(kit) == null) return "${kit.cooldownHours}h"
         val ms = cooldownMillisFor(player, kit)
         return if (ms <= 0L) "none" else formatCooldown(ms)
