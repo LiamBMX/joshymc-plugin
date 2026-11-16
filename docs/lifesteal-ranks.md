@@ -30,8 +30,9 @@ Legacy with no perks, no requirements and not for sale. Adding the approved rank
    reduction). All default to 0.
 4. **Progression requirements** (playtime hours, PvP kills, different players killed) and whether
    they count per season.
-5. **Kit contents** of each rank kit (`/createkit <rank>` on Lifesteal). No kit items ship, because
-   no Lifesteal kit balance review exists and the issue forbids handing out PvP gear unreviewed.
+5. **Kit contents** of each rank kit (`/createkit <rank>` on Lifesteal). No rank kit items ship, because
+   no Lifesteal kit balance review exists and the issue forbids handing out PvP gear unreviewed. The
+   only bundled Lifesteal kit is the one-time Starter Kit (issue #1577, `docs/lifesteal-kits.md`).
 6. **Store packages**: which ranks Tebex sells, with which reference placeholder (see below).
 7. **Which Survival-scoped convenience commands Lifesteal gets.** `/home`, `/sethome`, `/pv`, `/ah`,
    `/orders`, `/sell`, `/chatcolor`, `/tag`, `/cosmetics` are SURVIVAL-scoped (`GamemodeAssignments`),
@@ -132,7 +133,9 @@ node, so a shared or inherited LuckPerms node can't unlock it. Other Lifesteal k
 permission. Every Lifesteal kit claim (`KitManager.claimLifestealKit`):
 
 1. re-checks the kit, eligibility and cooldown at execution (GUI clicks included);
-2. refuses while dead, in Mod Mode, in a Ranked match, in the event world or combat-tagged;
+2. refuses while dead, in Mod Mode, in a Ranked match (also spectating or with a restore still
+   pending), in the event world or with an unsettled event inventory, or combat-tagged
+   (`LifestealKitRules.refusal`, issue #1577; see `docs/lifesteal-kits.md`);
 3. simulates the delivery on a copy of the inventory and refuses unless **everything** fits
    (nothing is dropped or discarded, nothing is used up);
 4. reserves the cooldown in one conditional statement on `kit_cooldowns`
