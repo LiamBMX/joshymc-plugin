@@ -101,6 +101,10 @@ refused: **accepting** an invitation (the joining player), **leaving**, **kickin
 the target) and **disbanding** (any member online and tagged). Inviting and leadership transfers
 don't change who is a teammate and stay allowed; staff `/team admin` actions are allowed too (the
 recent-teammate window still applies). Joining or leaving never clears a combat tag.
+Issue #1584: a member who logged out in combat and whose Lifesteal Combat NPC is still standing
+counts as combat-tagged here too (`TeamCombatRules.inCombat`, `lifestealCombatNpcManager.isStanding`;
+CombatListener clears the tag on quit), so they can't be kicked, their team can't be disbanded and
+no alliance including them can be accepted while the NPC stands.
 
 ### Heart stealing
 
