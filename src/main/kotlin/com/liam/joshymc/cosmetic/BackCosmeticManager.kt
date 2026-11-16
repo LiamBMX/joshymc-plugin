@@ -58,6 +58,7 @@ class BackCosmeticManager(private val plugin: Joshymc) : Listener {
         val display: UUID,
         val itemId: String,
         var sneaking: Boolean,
+        var playerScale: Double,
         var shown: MutableSet<UUID> = mutableSetOf(),
     )
 
@@ -192,7 +193,7 @@ class BackCosmeticManager(private val plugin: Joshymc) : Listener {
             d.addScoreboardTag(BackCosmeticRules.TAG)
             d.persistentDataContainer.set(ownerKey, PersistentDataType.STRING, player.uniqueId.toString())
         }
-        attachments[player.uniqueId] = Attachment(display.uniqueId, item.id, sneaking)
+        attachments[player.uniqueId] = Attachment(display.uniqueId, item.id, sneaking, playerScale(player))
         syncViewers(player, attachments.getValue(player.uniqueId), Bukkit.getOnlinePlayers())
     }
 
@@ -219,8 +220,12 @@ class BackCosmeticManager(private val plugin: Joshymc) : Listener {
         }
         if (at.x != target.x || at.y != target.y || at.z != target.z || at.yaw != target.yaw) display.teleport(target)
         val sneaking = player.isSneaking
-        if (sneaking != attachment.sneaking) {
+        val playerScale = playerScale(player)
+        // Issue #1571: a size change (the `scale` attribute) rebuilds the transformation too,
+        // so the wings never keep the old size and mount point.
+        if (sneaking != attachment.sneaking || playerScale != attachment.playerScale) {
             attachment.sneaking = sneaking
+            attachment.playerScale = playerScale
             val back = plugin.itemManager.getItem(attachment.itemId) as? BackCosmeticItem ?: return
             display.interpolationDelay = 0
             display.interpolationDuration = BackCosmeticRules.POSE_BLEND_TICKS
@@ -234,8 +239,10 @@ class BackCosmeticManager(private val plugin: Joshymc) : Listener {
         return Location(loc.world, loc.x, loc.y, loc.z, player.bodyYaw, 0f)
     }
 
+    private fun playerScale(player: Player): Double = player.getAttribute(Attribute.SCALE)?.value ?: 1.0
+
     private fun transformation(player: Player, item: BackCosmeticItem, sneaking: Boolean): Transformation {
-        val playerScale = player.getAttribute(Attribute.SCALE)?.value ?: 1.0
+        val playerScale = playerScale(player)
         val anchor = BackCosmeticRules.anchor(sneaking, playerScale)
         val scale = BackCosmeticRules.modelScale(item.backScale, playerScale).toFloat()
         val tilt = Math.toRadians(anchor.tiltDegrees).toFloat()

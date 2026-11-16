@@ -1,8 +1,10 @@
 """Eagle Wings: huge feathered eagle wings worn on the back (Survival, issue #1516).
 
 The worn wings are this model, drawn untransformed by a non-persistent ItemDisplay that
-rides the wearer (BackCosmeticManager), scaled by BACK_SCALE: about 3.7 blocks from tip to
-tip, far past any chestplate or elytra. The same model is the item icon, held item and
+follows the wearer (BackCosmeticManager), scaled by BACK_SCALE: about 2 blocks from tip to
+tip (a real eagle's span next to a 1.8-block player), tips just over the head, far past
+any chestplate or elytra. Issue #1571: the first release used 1.25 (3.8 blocks, tips 0.8
+blocks over the head), which read in game as stretched and detached. The same model is the item icon, held item and
 item-frame look through its display transforms. The chest slot item underneath is a plain
 Netherite Chestplate; its worn humanoid layer is a dark leather harness with gold fittings
 and an eagle crest on the chest, so the wings have something to hang from.
@@ -38,7 +40,7 @@ NAME = "Eagle Wings"
 KIND = "chestplate"
 COUNTERPART = "item/netherite_chestplate"
 # Size of the worn wings: the plugin's ItemDisplay scale (EagleWings.kt backScale).
-BACK_SCALE = 1.25
+BACK_SCALE = 0.65
 
 # --------------------------------------------------------------------------------------
 # Palette (darkest -> lightest, hue-shifted: shadows lean violet, lights lean gold)

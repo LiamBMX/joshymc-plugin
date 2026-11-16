@@ -37,11 +37,15 @@ object BackCosmeticRules {
      */
     data class Anchor(val x: Double, val y: Double, val z: Double, val tiltDegrees: Double)
 
-    /** Between the shoulder blades, just behind the chestplate layer. */
-    val STANDING = Anchor(0.0, 1.35, -0.22, 0.0)
+    /**
+     * Between the shoulder blades, with the back plate's front face resting on the chestplate
+     * layer (issue #1571: at -0.22 the plate sat inside the torso, so the wings looked pinned
+     * to the wrong spot).
+     */
+    val STANDING = Anchor(0.0, 1.35, -0.25, 0.0)
 
     /** Sneaking lowers the shoulders and tips the torso forward, so the wings follow. */
-    val SNEAKING = Anchor(0.0, 1.1, -0.34, 24.0)
+    val SNEAKING = Anchor(0.0, 1.1, -0.32, 24.0)
 
     data class Settings(
         val enabled: Boolean = true,

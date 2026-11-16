@@ -455,7 +455,7 @@ def placed(model, textures, block=(0, 0, 0), yaw: float = 0.0):
 # BackCosmeticRules.STANDING): an ItemDisplay that follows the player's feet, turned with
 # their body; its transformation moves model (8, 8, 8) to the mount point between the
 # shoulder blades (blocks from the feet, -Z = behind). ItemDisplays render items turned 180.
-BACK_ANCHOR = (0.0, 1.35, -0.22)
+BACK_ANCHOR = (0.0, 1.35, -0.25)
 
 
 def on_back(model, textures, scale: float, yaw: float = 0.0):

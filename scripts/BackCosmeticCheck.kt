@@ -9,6 +9,7 @@ import com.liam.joshymc.cosmetic.BackCosmeticRules
 import com.liam.joshymc.cosmetic.BackCosmeticRules.Hidden
 import com.liam.joshymc.cosmetic.BackCosmeticRules.Settings
 import com.liam.joshymc.cosmetic.BackCosmeticRules.Wearer
+import com.google.gson.JsonParser
 import java.io.File
 import kotlin.system.exitProcess
 
@@ -28,6 +29,53 @@ private fun sees(
     self: Boolean = false, bedrock: Boolean = false, pack: Boolean = true, canSee: Boolean = true,
     sameWorld: Boolean = true, settings: Settings = on,
 ) = BackCosmeticRules.viewerSees(settings, self, bedrock, pack, canSee, sameWorld)
+
+/**
+ * Model-space bounds (minX, maxX, minY, maxY, minZ, maxZ) of a built item model, with each
+ * element's rotation applied (Minecraft order: X, then Y, then Z, about its origin).
+ */
+private fun modelBounds(file: File, unrotatedOnly: Boolean = false): DoubleArray {
+    val b = doubleArrayOf(1e9, -1e9, 1e9, -1e9, 1e9, -1e9)
+    val root = JsonParser.parseString(file.readText()).asJsonObject
+    for (el in root.getAsJsonArray("elements")) {
+        val e = el.asJsonObject
+        if (unrotatedOnly && e.has("rotation")) continue
+        val from = e.getAsJsonArray("from").map { it.asDouble }
+        val to = e.getAsJsonArray("to").map { it.asDouble }
+        val rot = e.getAsJsonObject("rotation")
+        val origin = rot?.getAsJsonArray("origin")?.map { it.asDouble }
+        fun angle(axis: String): Double = when {
+            rot == null -> 0.0
+            rot.has("axis") -> if (rot.get("axis").asString == axis) rot.get("angle").asDouble else 0.0
+            else -> rot.get(axis)?.asDouble ?: 0.0
+        }
+        for (x in listOf(from[0], to[0])) for (y in listOf(from[1], to[1])) for (z in listOf(from[2], to[2])) {
+            var p = doubleArrayOf(x, y, z)
+            if (origin != null) {
+                p = DoubleArray(3) { p[it] - origin[it] }
+                p = rotate(rotate(rotate(p, 0, angle("x")), 1, angle("y")), 2, angle("z"))
+                p = DoubleArray(3) { p[it] + origin[it] }
+            }
+            for (i in 0..2) {
+                b[2 * i] = minOf(b[2 * i], p[i])
+                b[2 * i + 1] = maxOf(b[2 * i + 1], p[i])
+            }
+        }
+    }
+    return b
+}
+
+private fun rotate(p: DoubleArray, axis: Int, degrees: Double): DoubleArray {
+    if (degrees == 0.0) return p
+    val r = Math.toRadians(degrees)
+    val c = Math.cos(r)
+    val s = Math.sin(r)
+    return when (axis) {
+        0 -> doubleArrayOf(p[0], c * p[1] - s * p[2], s * p[1] + c * p[2])
+        1 -> doubleArrayOf(c * p[0] + s * p[2], p[1], -s * p[0] + c * p[2])
+        else -> doubleArrayOf(c * p[0] - s * p[1], s * p[0] + c * p[1], p[2])
+    }
+}
 
 fun main() {
     // When the wings are drawn at all.
@@ -62,7 +110,11 @@ fun main() {
 
     // Placement.
     val stand = BackCosmeticRules.anchor(false, 1.0)
-    check("standing anchor matches art/render.py BACK_ANCHOR", stand.y == 1.35 && stand.z == -0.22 && stand.tiltDegrees == 0.0)
+    val previewAnchor = Regex("""BACK_ANCHOR = \(([-0-9.]+), ([-0-9.]+), ([-0-9.]+)\)""")
+        .find(File("resourcepack/art/render.py").readText())?.groupValues?.drop(1)?.map { it.toDouble() }
+    check("standing anchor matches art/render.py BACK_ANCHOR",
+        previewAnchor == listOf(stand.x, stand.y, stand.z) && stand.tiltDegrees == 0.0)
+    check("standing anchor is between the shoulder blades", stand.y == 1.35 && stand.z == -0.25)
     check("anchor is behind the wearer", stand.z < 0 && BackCosmeticRules.anchor(true, 1.0).z < 0)
     check("sneaking lowers and tilts forward", BackCosmeticRules.SNEAKING.y < stand.y && BackCosmeticRules.SNEAKING.tiltDegrees > 0)
     check("anchor scales with player size", BackCosmeticRules.anchor(false, 2.0).y == 2.7)
@@ -93,6 +145,25 @@ fun main() {
     val scale = Regex("""BACK_SCALE = ([0-9.]+)""").find(art)?.groupValues?.get(1)?.toDouble()
     check("art BACK_SCALE matches the item backScale", scale != null && wings.contains("backScale = $scale"))
     check("item definition built", File("resourcepack/assets/joshymc/items/eagle_wings.json").isFile)
+
+    // Worn size and placement (issue #1571): at the worn scale the built model must read as
+    // wings on the player's back, not a sheet stretched far past them.
+    val b = modelBounds(File("resourcepack/assets/joshymc/models/item/eagle_wings/main.json"))
+    val k = (scale ?: 1.0) / 16.0
+    val span = (b[1] - b[0]) * k
+    val top = stand.y + (b[3] - 8.0) * k
+    val bottom = stand.y + (b[2] - 8.0) * k
+    val reach = (b[5] - 8.0) * k
+    // The back plate is the unrotated boxes (the straps over the shoulders reach further
+    // forward on purpose); item displays turn the model 180 degrees, so -Z becomes front.
+    val plate = modelBounds(File("resourcepack/assets/joshymc/models/item/eagle_wings/main.json"), unrotatedOnly = true)
+    val plateFront = stand.z + (8.0 - plate[4]) * k
+    check("worn wingspan is natural (1.5..2.25 blocks), got $span", span in 1.5..2.25)
+    check("wing tips stay near the head (<= 2.3 blocks up), got $top", top <= 2.3)
+    check("wings don't hang below the hips (>= 0.6 blocks up), got $bottom", bottom >= 0.6)
+    check("wings stay close behind the back (<= 0.6 blocks), got $reach", reach <= 0.6)
+    check("back plate rests on the chestplate, not inside the torso, got $plateFront",
+        plateFront in -0.21..-0.16)
     check("equipment asset built", File("resourcepack/assets/joshymc/equipment/eagle_wings.json").isFile)
 
     println("Back cosmetic checks passed ($checks).")
