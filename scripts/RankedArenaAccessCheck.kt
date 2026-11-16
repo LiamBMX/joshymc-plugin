@@ -143,6 +143,12 @@ fun main() {
     check("the resolver follows projectiles, TNT, clouds, fangs and pets", listOf("is Projectile", "is TNTPrimed", "is AreaEffectCloud", "is EvokerFangs", "is Tameable").all { it in sources })
     check("an offline owner is reported, never dropped as environment", "Resolved(null, true)" in sources)
     check("entry checks include reserved arenas", Regex("""fun onMove[\s\S]{0,120}anyReservation""").containsMatchIn(listener) && Regex("""fun onTeleport[\s\S]{0,120}anyReservation""").containsMatchIn(listener))
+    // Issue #1566 (audit #1546 RNK-01/02): portal travel has its own handler list.
+    check("portal travel is handled separately from teleports", Regex("""fun onPortal\(event: PlayerPortalEvent\)""").containsMatchIn(listener))
+    check("portal entry checks include reserved arenas", Regex("""fun onPortal\(event: PlayerPortalEvent\)[\s\S]{0,120}anyReservation""").containsMatchIn(listener))
+    check("participants can't leave through a portal", Regex("""fun onPortal\(event: PlayerPortalEvent\)[\s\S]{0,300}matchOf\(player\.uniqueId\)[\s\S]{0,80}event\.isCancelled = true""").containsMatchIn(listener))
+    check("outsiders can't arrive by portal in an arena in use", Regex("""fun onPortal\(event: PlayerPortalEvent\)[\s\S]{0,600}refusingZoneAt\(player\.uniqueId, event\.to\)""").containsMatchIn(listener))
+    check("no portal forms in an arena in use", Regex("""fun onPortalCreate\(event: PortalCreateEvent\)[\s\S]{0,300}RankedArenaGuard\.zoneAt\([\s\S]{0,80}event\.isCancelled = true""").containsMatchIn(guard))
     check("riders are stopped at the boundary", Regex("""fun onVehicleMove\(event: VehicleMoveEvent\)""").containsMatchIn(listener))
     check("18: spectators can't drop items", Regex("""fun onDrop[\s\S]{0,160}restricted\(event\.player\)""").containsMatchIn(listener))
     check("17: spectators can't pick items up", Regex("""fun onPickup\(event: EntityPickupItemEvent\)[\s\S]{0,120}restricted\(player\)""").containsMatchIn(listener))

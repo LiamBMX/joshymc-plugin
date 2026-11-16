@@ -48,6 +48,7 @@ import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerKickEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerPickupArrowEvent
+import org.bukkit.event.player.PlayerPortalEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerRespawnEvent
 import org.bukkit.event.player.PlayerTeleportEvent
@@ -269,6 +270,27 @@ class LifestealRankedListener(private val plugin: Joshymc) : Listener {
         }
         // Issue #1524: also arenas a queue proposal reserves (its own players may go in).
         if (ranked.refusingZoneAt(player.uniqueId, to) != null) {
+            event.isCancelled = true
+            hint(player, "A ranked match is using that arena.")
+        }
+    }
+
+    /**
+     * Issue #1566 (audit #1546 RNK-01/02): nether and End portal travel fires [PlayerPortalEvent],
+     * which has its own handler list, so [onTeleport] never sees it. A participant can't leave the
+     * arena through a portal, and an outsider can't arrive by portal in an arena in use.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPortal(event: PlayerPortalEvent) {
+        if (!ranked.anyMatch && !ranked.anyReservation) return
+        val player = event.player
+        val match = ranked.matchOf(player.uniqueId)
+        if (match != null) {
+            event.isCancelled = true
+            hint(player, "You can't leave the arena during a ranked match.")
+            return
+        }
+        if (ranked.refusingZoneAt(player.uniqueId, event.to) != null) {
             event.isCancelled = true
             hint(player, "A ranked match is using that arena.")
         }
