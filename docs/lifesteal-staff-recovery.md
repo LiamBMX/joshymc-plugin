@@ -66,6 +66,23 @@ All of these are `default: op` in plugin.yml; grant them through LuckPerms. They
 inherited from staff ranks automatically. "Online" means the target must be online for that
 command; everything else works for offline players the server has seen.
 
+### One-page diagnostics (`/lifesteal admin diag`, issue #1564)
+
+Start here when you don't know yet which system a problem belongs to. Both views are read-only:
+they read memory through the systems' existing accessors and the database with small indexed
+lookups on the database thread (the reply comes a moment later), start no repeating task, and
+can't change hearts, inventories, Elo, coins, matches or progression.
+
+| Command | Permission | Changes data? |
+|---|---|---|
+| `/lifesteal admin diag player <player\|uuid>` | `joshymc.lifesteal.diagnostics` | no. Works for offline players (name the server has seen, or a UUID). Shows UUID/edition, online + world, applied hearts, combat tag, ranked hold/spectating, progression phase, and from the database: stored hearts (or UNREADABLE), the last 5 heart changes, outstanding Heart items, an open ranked roster row, PENDING/RESTORING/REVIEW ranked snapshots, open Combat NPC sessions (state, place, deadline; also unreadable ones), unsettled event inventories, bank balance + unreviewed failed transactions, pending bounty payouts/refunds. Staff protection applies (not equal/higher staff; yourself is fine). Each lookup writes a `LIFESTEAL_DIAG_PLAYER` row to `admin_logs`. |
+| `/lifesteal admin diag health` | `joshymc.lifesteal.diagnostics` | no. lifesteal.yml status, hearts/ranked/combat logging/bank/bounties running or not, ranked matches in memory, standing Combat NPCs, progression status/phase/problem, whether the database answers (and how fast), and counts of ranked snapshots waiting, open Combat NPC sessions, unsettled event inventories, pending bounty payouts/refunds and unreviewed bank failures. |
+
+`joshymc.lifesteal.diagnostics` is `default: op` with no children, and nothing else grants it.
+It does not give any of the permissions below. A section that says "not set up on this server"
+means that system's tables don't exist here; "couldn't be read" means that query failed (the
+other sections are still shown). Use the system's own command below for details and fixes.
+
 ### Hearts and Heart items (`/lifesteal hearts`)
 
 | Command | Permission | Changes data? |
@@ -110,7 +127,8 @@ command; everything else works for offline players the server has seen.
 | `/lifesteal combat incident <id>` | `joshymc.lifesteal.combat.admin` | no (classification, NPC left or not, heart transaction) |
 | `/lifesteal combat failures` | `joshymc.lifesteal.combat.admin` | no (write failures since the last restart) |
 
-There is **no** Combat NPC admin command (see gaps).
+There is no Combat NPC admin command that changes anything; open sessions are listed (read-only)
+by `/lifesteal admin diag player <player>` and counted by `/lifesteal admin diag health`.
 
 ### Economy: bank and bounties
 
@@ -309,7 +327,8 @@ correction with a reason.)
 
 - **Symptoms:** a `[Combat Logger]` Mannequin standing long after 30 s; owner rejoins without
   their items; NPC drops twice; player kicked on join.
-- **Initial checks:** `/lifesteal combat status <player>`, `/lifesteal combat logs <player>`,
+- **Initial checks:** `/lifesteal admin diag player <player>` (open session state, place and
+  deadline, even for an unreadable row), `/lifesteal combat status <player>`, `/lifesteal combat logs <player>`,
   `/lifesteal combat incident <id>`, `/lifesteal combat failures`.
 - **Facts:** the NPC lives for an absolute deadline (`combat-logging.npc.lifetime-seconds`), is
   non-persistent, and its session row holds the whole inventory. Expired ACTIVE sessions settle
@@ -321,8 +340,8 @@ correction with a reason.)
 - **Don't:** kill the NPC yourself (that is a real death: items drop, hearts move), `/kill` or
   remove the entity, give the owner their items back by hand, or restart to make it go away.
 - **Escalate to Owner:** the player is kicked on join (unreadable row), the NPC is still there
-  after a chunk reload, or drops appear twice. There is no staff tool to inspect or settle a
-  session (gap).
+  after a chunk reload, or drops appear twice. There is no staff tool to settle a session or
+  view its saved inventory (gap); `diag player` only shows that it exists and its state.
 - **Evidence:** incident id, NPC location, screenshot, `failures` output, console lines.
 
 ### H. Failed event inventory restoration
@@ -367,7 +386,8 @@ correction with a reason.)
 
 - **Symptoms:** many unrelated commands answering "Couldn't read ...", SEVERE `SQLException`s,
   `database disk image is malformed`, every write rolling back.
-- **Initial checks (read-only):** console log; `/bounty admin check`;
+- **Initial checks (read-only):** console log; `/lifesteal admin diag health` (does the database
+  answer, and which systems are running); `/bounty admin check`;
   `/lifesteal admin ranked stats consistency`; `/lifesteal admin launch status`; `/jgamemode info`.
 - **Permission:** none needed to observe; recovery is **Owner only**.
 - **Safe procedure:**
@@ -386,6 +406,7 @@ correction with a reason.)
 
 | Problem | First command (read-only) | Fix (only after checking) | Never |
 |---|---|---|---|
+| Don't know where to start | `/lifesteal admin diag player <p>` / `diag health` | the system's own command | - |
 | Stuck in ranked | `/lifesteal admin ranked list` / `info <match>` | `ranked remove <p> confirm` / `ranked cancel <match> confirm` | `/tp`, `/gamemode`, `/sudo` |
 | Ranked items missing | `/lifesteal admin ranked restores` | `ranked restore <p>` → REVIEW: `apply confirm` **or** `resolve confirm` | apply twice, give items by hand |
 | Wrong heart count | `/lifesteal hearts get <p>` | `hearts add\|remove\|set <p> <n>` once, verified | replacement Heart items |
@@ -407,22 +428,24 @@ unreadable rows, or any "this shouldn't be possible" result.
 
 ## 4. Missing recovery tooling (gaps, not built here)
 
-Documented only; none of these exist today.
+Documented only, unless marked otherwise.
 
-1. **No per-player heart transaction history command.** `lifesteal_heart_transactions` /
-   `lifesteal_heart_audit` record every change, but staff can only see the current count
-   (`hearts get`), Heart items, combat incidents and monitor flags. Verifying a heart dispute
-   needs the Owner to read the database copy.
-2. **No Combat NPC session tool.** No command lists open `lifesteal_combat_npcs` sessions, shows a
-   session's saved inventory, or settles an unreadable one. An unreadable row keeps the player
-   kicked until the Owner intervenes.
-3. **Ranked `restore`/`remove` need the player online** (`getPlayerExact`); there is no way to
-   inspect an offline player's snapshot contents, or a list of PENDING (not REVIEW) snapshots.
+1. **Only a short heart history.** `/lifesteal admin diag player` (issue #1564) shows the last 5
+   `lifesteal_heart_audit` rows; there is no paged history or transaction-by-id view, so a longer
+   dispute still needs the Owner to read the database copy.
+2. **No Combat NPC session tool that settles anything.** Open sessions (also unreadable ones) are
+   now listed by `diag player` / counted by `diag health`, but nothing shows a session's saved
+   inventory or settles an unreadable one. An unreadable row keeps the player kicked until the
+   Owner intervenes.
+3. **Ranked `restore`/`remove` need the player online** (`getPlayerExact`). An offline player's
+   PENDING/RESTORING/REVIEW snapshot (id, match, status, reason) is now visible with `diag player`
+   and the totals with `diag health`, but not the snapshot's contents.
 4. **No snapshot content viewer** for ranked or event inventory snapshots: staff decide
    apply/resolve by asking the player and looking at the live inventory.
 5. **No team restore.** A disband (`/team admin disband`) or wrongful kick can't be undone;
    members must re-invite. Team bank/progression stay with the disbanded team id.
-6. **No database integrity check command** (`PRAGMA integrity_check`); only per-system
-   consistency checks (`/bounty admin check`, `ranked stats consistency`).
+6. **No database integrity check command** (`PRAGMA integrity_check`, deliberately not added: it
+   reads the whole file). `diag health` only shows whether the database answers; per-system
+   consistency checks remain `/bounty admin check` and `ranked stats consistency`.
 7. **Combat log write failures** (`/lifesteal combat failures`) are in memory only and are lost on
    restart: copy them before restarting.

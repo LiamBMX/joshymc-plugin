@@ -222,7 +222,7 @@ commands:
     permission: joshymc.transfer.survival
   lifesteal:
     description: Go to Lifesteal SMP (admins on the Lifesteal server also manage hearts with /lifesteal hearts)
-    usage: /lifesteal [info|pvp|progress|hearts <get|set|add|remove|give|items|void> ...|combat <status|logs|incident|failures> ...|admin launch <status|schedule|activate|audit> ...|admin arena <create|delete|list|info|setname|setcorner|setspawn|setspectator|clearspawns|sizes|enable|disable> ...|admin ranked <testmatch|list|info|cancel|remove|restore|spectate|unspectate|queue|cancelqueue|cancelproposal|queuelog|rating|stats> ...]
+    usage: /lifesteal [info|pvp|progress|hearts <get|set|add|remove|give|items|void> ...|combat <status|logs|incident|failures> ...|admin launch <status|schedule|activate|audit> ...|admin arena <create|delete|list|info|setname|setcorner|setspawn|setspectator|clearspawns|sizes|enable|disable> ...|admin diag <player|health>|admin ranked <testmatch|list|info|cancel|remove|restore|spectate|unspectate|queue|cancelqueue|cancelproposal|queuelog|rating|stats> ...]
     permission: joshymc.transfer.lifesteal
   withdrawheart:
     description: Turn one of your permanent hearts into a Heart item (Lifesteal only)
@@ -1058,6 +1058,9 @@ permissions:
     default: true
   joshymc.lifesteal.combat.admin:
     description: Use /lifesteal combat status|logs|incident|failures on the Lifesteal server (read-only combat-log diagnostics)
+    default: op
+  joshymc.lifesteal.diagnostics:
+    description: Read-only /lifesteal admin diag player|health (grants no changes)
     default: op
   joshymc.lifesteal.progress:
     description: Use /lifesteal progress on the Lifesteal server (launch phase, grace period, Ranked Team Wars and End unlock countdowns)

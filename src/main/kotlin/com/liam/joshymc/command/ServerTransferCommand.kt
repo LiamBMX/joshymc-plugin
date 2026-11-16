@@ -2,6 +2,7 @@ package com.liam.joshymc.command
 
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.lifesteal.combat.LifestealCombatCommand
+import com.liam.joshymc.lifesteal.diagnostics.LifestealDiagnosticsCommand
 import com.liam.joshymc.lifesteal.hearts.LifestealHeartsCommand
 import com.liam.joshymc.lifesteal.progression.LifestealProgressCommand
 import com.liam.joshymc.lifesteal.ranked.LifestealRankedCommand
@@ -20,7 +21,8 @@ import org.bukkit.command.TabCompleter
  * diagnostics, [LifestealCombatCommand]. `/lifesteal progress` and `/lifesteal admin launch ...` (issue
  * #1352) are the launch progression, [LifestealProgressCommand]; `progress` is only taken on a server
  * that hosts Lifesteal. `/lifesteal admin arena|ranked ...` (issue #1361) are the Ranked Team Wars
- * staff tools, [LifestealRankedCommand]. Plain `/lifesteal` (and any other arguments) still transfers.
+ * staff tools, [LifestealRankedCommand]. `/lifesteal admin diag ...` (issue #1564) is the read-only
+ * diagnostics view, [LifestealDiagnosticsCommand]. Plain `/lifesteal` (and any other arguments) still transfers.
  */
 class ServerTransferCommand(
     private val plugin: Joshymc,
@@ -31,6 +33,7 @@ class ServerTransferCommand(
     private val combat = if (destination == TransferDestination.LIFESTEAL) LifestealCombatCommand(plugin) else null
     private val progression = if (destination == TransferDestination.LIFESTEAL) LifestealProgressCommand(plugin) else null
     private val ranked = if (destination == TransferDestination.LIFESTEAL) LifestealRankedCommand(plugin) else null
+    private val diagnostics = if (destination == TransferDestination.LIFESTEAL) LifestealDiagnosticsCommand(plugin) else null
     private val info = if (destination == TransferDestination.LIFESTEAL) com.liam.joshymc.lifesteal.LifestealInfoCommand(plugin) else null
     private val pvpInfo = if (destination == TransferDestination.LIFESTEAL) com.liam.joshymc.lifesteal.LifestealPvpInfoCommand(plugin) else null
 
@@ -45,6 +48,10 @@ class ServerTransferCommand(
         }
         if (progression != null) {
             val first = args.firstOrNull()?.lowercase()
+            if (first == "admin" && diagnostics != null && args.getOrNull(1)?.lowercase() == "diag") {
+                diagnostics.execute(sender, args.drop(2))
+                return true
+            }
             if (first == "admin" && ranked != null && ranked.handles(args.getOrNull(1)?.lowercase())) {
                 ranked.execute(sender, args.drop(1))
                 return true
@@ -81,7 +88,7 @@ class ServerTransferCommand(
             if (progression.progressVisibleTo(sender)) add("progress")
             if (info?.visibleTo(sender) == true) add("info")
             if (pvpInfo?.visibleTo(sender) == true) add("pvp")
-            if (progression.adminVisibleTo(sender) || ranked.visibleTo(sender)) add("admin")
+            if (progression.adminVisibleTo(sender) || ranked.visibleTo(sender) || diagnostics?.visibleTo(sender) == true) add("admin")
         }
         if (args.size == 1) return visible.filter { it.startsWith(args[0].lowercase()) }
         return when (args[0].lowercase()) {
@@ -92,7 +99,9 @@ class ServerTransferCommand(
                 args.size == 2 -> buildList {
                     if (progression.adminVisibleTo(sender)) add("launch")
                     if (ranked.visibleTo(sender)) { add("arena"); add("ranked") }
+                    if (diagnostics?.visibleTo(sender) == true) add("diag")
                 }.filter { it.startsWith(args[1].lowercase()) }
+                args[1].equals("diag", true) -> diagnostics?.complete(sender, args.drop(2)) ?: emptyList()
                 ranked.handles(args[1].lowercase()) -> ranked.complete(sender, args.drop(1))
                 else -> progression.complete(sender, args.drop(1))
             }
