@@ -9,8 +9,14 @@ vanilla **Netherite Chestplate**:
 - normal enchanting and repair
 - no gliding, no abilities, not unbreakable
 
-While it is worn in the chest slot, a huge 3D pair of eagle wings (about 3.7 blocks tip to
-tip, model `joshymc:eagle_wings`) is drawn on the wearer's back.
+While it is worn in the chest slot, a big 3D pair of eagle wings (about 2 blocks tip to
+tip, model `joshymc:eagle_wings`) is drawn on the wearer's back. The tips rise just over the
+head and the secondaries hang to the hips.
+
+Issue #1571: the first release drew the wings at scale 1.25 (about 3.8 blocks across, tips
+0.8 blocks over the head) with the back plate sunk inside the torso, which looked stretched
+and detached in game. The scale is now 0.65 and the plate rests on the back.
+`backCosmeticCheck` measures the built model at the worn scale so this can't creep back.
 
 The worn armor layer (`equipment/eagle_wings.json`) is a leather harness with a gold eagle
 crest, which the wings hang from.
@@ -30,7 +36,7 @@ There is no separate cosmetic slot or command.
 
 Vanilla elytra (`wings` equipment layers) are two fixed 10x20 px boxes, so they can't be any
 bigger. Instead, `cosmetic/BackCosmeticManager` spawns one **non-persistent `ItemDisplay`**
-per wearer. It shows the item model untransformed (`ItemDisplayTransform.NONE`), scaled 1.25.
+per wearer. It shows the item model untransformed (`ItemDisplayTransform.NONE`), scaled 0.65.
 
 **Follows, never rides.** The display is teleported to the wearer every tick:
 

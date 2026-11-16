@@ -18,7 +18,7 @@ import org.bukkit.inventory.meta.ItemMeta
 // Survival-only back cosmetic (issue #1516). A plain vanilla Netherite Chestplate
 // underneath: vanilla armor, toughness, knockback resistance and durability, normal
 // enchants and repair, no gliding and no abilities. While it is worn, BackCosmeticManager
-// draws the huge 3D wings (resourcepack/art/items/eagle_wings.py, about 3.7 blocks across)
+// draws the big 3D wings (resourcepack/art/items/eagle_wings.py, about 2 blocks across)
 // on the wearer's back; the worn humanoid layer is the leather harness they hang from.
 
 class EagleWings : CustomItem(), BackCosmeticItem {
@@ -40,8 +40,12 @@ class EagleWings : CustomItem(), BackCosmeticItem {
 
     override val backModel: NamespacedKey get() = NamespacedKey(Joshymc.instance, id)
 
-    /** Must match BACK_SCALE in the art module. */
-    override val backScale = 1.25
+    /**
+     * Must match BACK_SCALE in the art module. Issue #1571: 1.25 made the wings 3.8 blocks
+     * across with the tips 0.8 blocks over the head, which looked stretched and detached;
+     * 0.65 is about 2 blocks tip to tip with the tips just over the head.
+     */
+    override val backScale = 0.65
 
     override fun applyMeta(meta: ItemMeta) {
         meta.setItemModel(NamespacedKey(Joshymc.instance, id))
