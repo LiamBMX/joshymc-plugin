@@ -197,6 +197,8 @@ object LifestealRankRules {
         "joshymc.tphere", "joshymc.modmode", "joshymc.freeze", "joshymc.createkit", "joshymc.editkit", "joshymc.deletekit",
         "joshymc.jgm.lock", "joshymc.jgm.unlock", "joshymc.playerdata.reset", "joshymc.gamemode", "joshymc.gmc",
         "joshymc.gms", "joshymc.gma", "joshymc.gmsp", "joshymc.reload",
+        // Issue #1573: the rest of the Lifesteal command blacklist (/repair, /fix, /back).
+        "joshymc.repair", "joshymc.back",
     )
 
     private val FORBIDDEN_PREFIXES = listOf(
@@ -207,7 +209,7 @@ object LifestealRankRules {
         "joshymc.rankperk.", "joshymc.internal.", "joshymc.kit.", "joshymc.jgm", "joshymc.ban", "joshymc.tempban",
         "joshymc.unban", "joshymc.mute", "joshymc.tempmute", "joshymc.unmute", "joshymc.warn", "joshymc.unwarn",
         "joshymc.pkick", "joshymc.history", "joshymc.alts", "joshymc.reports", "joshymc.fly.", "joshymc.heal.",
-        "joshymc.feed.", "joshymc.event.",
+        "joshymc.feed.", "joshymc.event.", "joshymc.repair.", "joshymc.god.",
     )
 
     private val FORBIDDEN_WORDS = listOf("admin", "others", "bypass", "staff", "punish", "operator", "override", "recover")

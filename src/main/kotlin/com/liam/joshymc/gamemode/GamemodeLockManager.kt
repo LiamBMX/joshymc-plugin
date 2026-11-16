@@ -146,8 +146,42 @@ class GamemodeLockManager(private val plugin: Joshymc) {
 
     fun canUse(sender: CommandSender, command: Command): Boolean {
         val scope = scopeOf(command) ?: return true
-        return isAllowed(scope, sender)
+        if (isAllowed(scope, sender)) return true
+        return isSharedHere(sender, command)
     }
+
+    /**
+     * Issue #1573: a SURVIVAL command listed in [LifestealSharedCommands.SHARED] also runs for a
+     * sender in Lifesteal on a server that hosts only Lifesteal (its data is Lifesteal's). Survival
+     * stays locked; only JoshyMC's own commands can be shared.
+     */
+    fun isSharedHere(sender: CommandSender, command: Command): Boolean {
+        if (command !is PluginCommand || command.plugin !== plugin) return false
+        if (scopeOf(command) != GamemodeScope.SURVIVAL) return false
+        return LifestealSharedCommands.sharedHere(command.name, gamemodeOf(sender), plugin.networkIdentityManager.hostedGamemodes)
+    }
+
+    /**
+     * Why a [LifestealSharedCommands.Guard.COMPETITIVE] shared command is refused for [sender]
+     * right now (combat tag, ranked match), or null. Only applies where the command runs because it
+     * is shared; on Survival nothing changes.
+     */
+    fun sharedGuardRefusal(sender: CommandSender, command: Command, label: String): String? {
+        val player = sender as? Player ?: return null
+        if (isAllowed(scopeOf(command) ?: return null, sender) || !isSharedHere(sender, command)) return null
+        val guard = LifestealSharedCommands.guardOf(command.name) ?: return null
+        val state = LifestealSharedCommands.CompetitiveState(
+            combatTagged = safe { plugin.combatManager.isTagged(player) },
+            ranked = safe {
+                val ranked = plugin.lifestealRankedManager
+                ranked.holds(player) || ranked.isSpectator(player.uniqueId) || ranked.hasPendingRestore(player.uniqueId)
+            },
+        )
+        return LifestealSharedCommands.competitiveRefusal(guard, state, label.lowercase().substringAfter(':'))
+    }
+
+    /** A check that throws (manager not started) refuses rather than letting the command through. */
+    private inline fun safe(check: () -> Boolean): Boolean = try { check() } catch (_: Exception) { true }
 
     /** Resolves a typed label (alias or `plugin:name` too) to the command it runs. */
     fun resolve(label: String): Command? =
@@ -155,6 +189,11 @@ class GamemodeLockManager(private val plugin: Joshymc) {
 
     fun deny(sender: CommandSender, command: Command) {
         val owner = scopeOf(command)?.gamemode ?: return
+        // Issue #1573: the blacklisted commands say they're disabled here, not "only on Survival".
+        if (gamemodeOf(sender) == ServerGamemode.LIFESTEAL && command.name.lowercase() in LifestealSharedCommands.BLACKLIST) {
+            Msg.error(sender, LifestealSharedCommands.blacklistMessage(command.name))
+            return
+        }
         Msg.error(sender, "That command is only available on ${owner.displayName}.")
     }
 
@@ -231,6 +270,10 @@ class GamemodeLockManager(private val plugin: Joshymc) {
         override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
             if (!manager.canUse(sender, command)) {
                 manager.deny(sender, command)
+                return true
+            }
+            manager.sharedGuardRefusal(sender, command, label)?.let {
+                Msg.error(sender, it)
                 return true
             }
             return executor.onCommand(sender, command, label, args)
