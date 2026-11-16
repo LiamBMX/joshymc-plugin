@@ -54,6 +54,13 @@ class LifestealInfoCommand(private val plugin: Joshymc) {
         command(sender, "/lifesteal progress", "grace period, End unlock and season countdowns")
         command(sender, "/lifesteal pvp", "PvP, heart stealing, combat tag and combat logging rules")
         if (plugin.lifestealRankedQueueManager.commandVisibleTo(sender)) command(sender, "/ranked", "Ranked Team Wars")
+        // Issue #1578: the coin systems only run where this server's economy is Lifesteal's.
+        if (plugin.lifestealBankManager.economyIsLifesteal) {
+            command(sender, "/bank", "keep coins in your Protected Bank, safe from PvP")
+            command(sender, "/bounty", "put coins on a player's head")
+            command(sender, "/quests", "Daily and Weekly quests")
+        }
+        command(sender, "/achievements", "your achievements and rewards")
         // Issue #1387: this is the Hearts information the Lifesteal tutorial's fourth objective opens.
         player?.let { plugin.tutorialSignal(it, com.liam.joshymc.tutorial.TutorialSignal.HeartsInfoOpened) }
     }

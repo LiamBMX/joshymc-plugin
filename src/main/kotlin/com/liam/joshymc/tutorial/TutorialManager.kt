@@ -112,6 +112,7 @@ class TutorialManager(private val plugin: Joshymc) : Listener {
                 plugin.logger.warning("[Tutorial] $FILE_NAME is missing from the jar.")
             }
         }
+        repairUnreadableFile(file)
         val loaded = YamlConfiguration.loadConfiguration(file)
         plugin.getResource(FILE_NAME)?.use { stream ->
             loaded.setDefaults(YamlConfiguration.loadConfiguration(InputStreamReader(stream, Charsets.UTF_8)))
@@ -121,6 +122,29 @@ class TutorialManager(private val plugin: Joshymc) : Listener {
         earnAmount = loaded.getDouble("settings.earn-amount", 100.0).takeIf { it.isFinite() && it > 0.0 } ?: 100.0
         actionBarTicks = loaded.getInt("settings.action-bar-interval-seconds", 2).coerceIn(1, 10) * 20L
         joinDelayTicks = loaded.getInt("settings.join-delay-seconds", 3).coerceIn(0, 30) * 20L + 1L
+    }
+
+    /**
+     * Issue #1578: the file shipped before this fix had `continue:"..."` lines (no space after the
+     * colon), which YAML can't read at all, so every saved copy is unreadable and the tutorial showed
+     * no texts. A saved file that doesn't parse is kept as a backup and replaced by the bundled one.
+     */
+    private fun repairUnreadableFile(file: java.io.File) {
+        if (!file.exists()) return
+        try {
+            YamlConfiguration().loadFromString(file.readText(Charsets.UTF_8))
+            return
+        } catch (e: Exception) {
+            // unreadable: fall through
+        }
+        val backup = java.io.File(file.parentFile, "$FILE_NAME.broken-${System.currentTimeMillis()}")
+        try {
+            java.nio.file.Files.move(file.toPath(), backup.toPath())
+            plugin.saveResource(FILE_NAME, false)
+            plugin.logger.warning("[Tutorial] $FILE_NAME couldn't be read as YAML; it was moved to ${backup.name} and replaced by the bundled file.")
+        } catch (e: Exception) {
+            plugin.logger.log(Level.WARNING, "[Tutorial] $FILE_NAME couldn't be read as YAML and couldn't be replaced; the bundled texts are used.", e)
+        }
     }
 
     fun enabled(gamemode: ServerGamemode): Boolean =
@@ -452,7 +476,8 @@ class TutorialManager(private val plugin: Joshymc) : Listener {
      * Whether an objective can be passed with the [Continue] button instead of being done: only
      * when it was already done before (a Starter Kit claimed earlier, a claim already owned) or the
      * system it teaches can't be used here (no Starter Kit in this gamemode, /rtp not available,
-     * quests or teams switched off), so a step can never become impossible.
+     * quests, teams, the bank or the launch progression unavailable), so a step can never become
+     * impossible.
      */
     private fun canContinue(player: Player, session: Session, step: TutorialStep): Boolean = try {
         when (step) {
@@ -469,6 +494,10 @@ class TutorialManager(private val plugin: Joshymc) : Listener {
             TutorialStep.QUESTS -> !plugin.isFeatureEnabled("quests") || !commandUsable(player, "quests", null)
             TutorialStep.HEARTS -> !plugin.lifestealHeartManager.hosted
             TutorialStep.TEAMS -> plugin.lifestealTeamManager.unavailableReason() != null
+            TutorialStep.BANK -> plugin.lifestealBankManager.unavailableReason() != null ||
+                !player.hasPermission(com.liam.joshymc.lifesteal.bank.LifestealBankCommand.USE_PERMISSION)
+            TutorialStep.PROGRESS -> !plugin.lifestealProgressionManager.hosted ||
+                !player.hasPermission(com.liam.joshymc.lifesteal.progression.LifestealProgressionManager.PROGRESS_PERMISSION)
             TutorialStep.WALK, TutorialStep.EARN, TutorialStep.COMBAT, TutorialStep.DISCORD -> false
         }
     } catch (e: Exception) {
@@ -612,6 +641,50 @@ class TutorialManager(private val plugin: Joshymc) : Listener {
         values["invite_seconds"] = (settings?.teams?.inviteExpirationSeconds ?: 60).toString()
         values["friendly_fire"] = if (settings?.teams?.friendlyFire == true) "on" else "off (teammates can't hurt each other)"
         values["grace_hours"] = (settings?.progression?.gracePeriodHours ?: 24).toString()
+        // Issue #1578: withdrawal eligibility, coin stealing and Ranked, as configured right now.
+        val rankedHours = settings?.progression?.rankedTeamWarsUnlockAfterHours ?: 72
+        values["withdraw_rule"] = withdrawRule(settings?.heartItems)
+        values["coin_loss"] = coinLossRule()
+        values["ranked_hours"] = rankedHours.toString()
+        values["ranked_status"] = rankedStatusText(rankedHours)
+    }
+
+    private fun withdrawRule(items: com.liam.joshymc.lifesteal.LifestealSettings.HeartItems?): String {
+        if (items == null) return "Heart withdrawing is paused right now."
+        if (!items.withdrawEnabled) return "Heart withdrawing is turned off right now."
+        val e = items.withdrawEligibility
+        val needs = mutableListOf<String>()
+        if (e.enabled && e.minimumPlaytimeMinutes > 0) needs += "${duration(e.minimumPlaytimeMinutes)} of active Lifesteal playtime"
+        if (e.enabled && e.minimumHoursSinceFirstJoin > 0) needs += "${e.minimumHoursSinceFirstJoin}h since your first Lifesteal join"
+        return if (needs.isEmpty()) "Anyone can withdraw a heart." else "You can withdraw once you have ${needs.joinToString(" and ")}."
+    }
+
+    private fun duration(minutes: Int): String = when {
+        minutes % 60 == 0 -> "${minutes / 60}h"
+        minutes > 60 -> "${minutes / 60}h ${minutes % 60}m"
+        else -> "${minutes}m"
+    }
+
+    private fun coinLossRule(): String {
+        val bank = plugin.lifestealBankManager
+        val coins = bank.coinSettings
+        if (!bank.stealing || coins == null) return "PvP kills don't steal coins right now"
+        val percent = coins.walletLossBps / 100.0
+        val shown = if (percent == Math.floor(percent)) percent.toLong().toString() else String.format(java.util.Locale.US, "%.2f", percent)
+        return "dying to a player loses $shown% of your wallet to the killer; coins in your bank are safe"
+    }
+
+    private fun rankedStatusText(unlockHours: Int): String {
+        val openToPlayers = plugin.lifestealRankedQueueManager.playerAccess
+        return when (plugin.lifestealProgressionManager.rankedStatus()) {
+            com.liam.joshymc.lifesteal.progression.ProgressionRules.RankedStatus.AVAILABLE ->
+                if (openToPlayers) "open now: use /ranked with your team" else "not open to players yet"
+            com.liam.joshymc.lifesteal.progression.ProgressionRules.RankedStatus.UNLOCKED_UNAVAILABLE ->
+                "unlocked by the schedule; it opens once staff turn it on"
+            com.liam.joshymc.lifesteal.progression.ProgressionRules.RankedStatus.LOCKED ->
+                if (openToPlayers) "locked until ${unlockHours}h after the season launch"
+                else "locked: it unlocks ${unlockHours}h after the season launch and opens once staff turn it on"
+        }
     }
 
     private fun stepIs(session: Session, step: TutorialStep) = TutorialRules.stepAt(session.gamemode, session.step) == step
