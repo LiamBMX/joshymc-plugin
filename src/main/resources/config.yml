@@ -1388,6 +1388,15 @@ welcome:
     - "&7Type &6/claim wand &7to protect your builds"
     - "&7Type &6/kit &7to get starter items"
     - ""
+  # Shown instead of `motd` to players in a Lifesteal world (issue #1578): /shop, /claim and the
+  # Starter Kit don't exist on Lifesteal, so it only names commands that work there.
+  motd-lifesteal:
+    - ""
+    - "&c&lWelcome to JoshyMC Lifesteal!"
+    - "&7Type &6/lifesteal info &7to see your hearts and the rules"
+    - "&7Type &6/team &7to team up and &6/bank &7to protect your coins"
+    - "&7Type &6/tutorial &7to start or resume the tutorial"
+    - ""
 
 # Voting — reward players for voting
 #

@@ -18,6 +18,10 @@ enum class TutorialStep(val id: String) {
     HEARTS("hearts"),
     TEAMS("teams"),
     COMBAT("combat"),
+    /** Lifesteal (issue #1578): the Protected Bank (`/bank`), coin stealing and bounties. */
+    BANK("bank"),
+    /** Lifesteal (issue #1578): `/lifesteal progress` (grace, Ranked, the End), quests and achievements. */
+    PROGRESS("progress"),
     DISCORD("discord");
 }
 
@@ -44,6 +48,8 @@ sealed class TutorialSignal {
     data object HeartsInfoOpened : TutorialSignal()
     data object TeamsMenuOpened : TutorialSignal()
     data object CombatInfoOpened : TutorialSignal()
+    data object BankMenuOpened : TutorialSignal()
+    data object ProgressInfoOpened : TutorialSignal()
     data object DiscordInfoShown : TutorialSignal()
 }
 
@@ -56,9 +62,14 @@ object TutorialRules {
         TutorialStep.EARN, TutorialStep.QUESTS, TutorialStep.DISCORD,
     )
 
+    /**
+     * Issue #1578: no Starter Kit or `/rtp` step. `/rtp` is SURVIVAL-scoped and not shared on the
+     * dedicated Lifesteal server, and Lifesteal ships no Starter Kit, so both could only ever be
+     * passed with [Continue]. They are replaced by objectives every Lifesteal player can do.
+     */
     val LIFESTEAL_STEPS: List<TutorialStep> = listOf(
-        TutorialStep.WALK, TutorialStep.STARTER_KIT, TutorialStep.RTP, TutorialStep.HEARTS,
-        TutorialStep.TEAMS, TutorialStep.COMBAT, TutorialStep.DISCORD,
+        TutorialStep.WALK, TutorialStep.HEARTS, TutorialStep.TEAMS, TutorialStep.COMBAT,
+        TutorialStep.BANK, TutorialStep.PROGRESS, TutorialStep.DISCORD,
     )
 
     fun stepsFor(gamemode: ServerGamemode): List<TutorialStep> = when (gamemode) {
@@ -131,6 +142,8 @@ object TutorialRules {
             TutorialStep.HEARTS -> done(signal is TutorialSignal.HeartsInfoOpened, progress)
             TutorialStep.TEAMS -> done(signal is TutorialSignal.TeamsMenuOpened, progress)
             TutorialStep.COMBAT -> done(signal is TutorialSignal.CombatInfoOpened, progress)
+            TutorialStep.BANK -> done(signal is TutorialSignal.BankMenuOpened, progress)
+            TutorialStep.PROGRESS -> done(signal is TutorialSignal.ProgressInfoOpened, progress)
             TutorialStep.DISCORD -> done(signal is TutorialSignal.DiscordInfoShown, progress)
         }
     }

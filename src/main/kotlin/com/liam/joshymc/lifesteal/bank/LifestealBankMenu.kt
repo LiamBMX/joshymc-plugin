@@ -129,6 +129,8 @@ class LifestealBankMenu(private val plugin: Joshymc, private val manager: Lifest
         )))
         gui.setItem(L.MAIN_CLOSE_SLOT, GuiStyle.close()) { p, _ -> p.closeInventory() }
         plugin.guiManager.open(player, gui)
+        // Issue #1578: the Lifesteal tutorial's Bank objective.
+        plugin.tutorialSignal(player, com.liam.joshymc.tutorial.TutorialSignal.BankMenuOpened)
     }
 
     private fun amountButtons(gui: CustomGui, direction: BankRules.Direction, slots: List<Int>, sourceCents: Long, open: Boolean) {

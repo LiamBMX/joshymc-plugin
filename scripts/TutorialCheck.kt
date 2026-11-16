@@ -61,10 +61,14 @@ private fun rules() {
     check(
         "lifesteal order",
         TutorialRules.stepsFor(L) == listOf(
-            TutorialStep.WALK, TutorialStep.STARTER_KIT, TutorialStep.RTP, TutorialStep.HEARTS,
-            TutorialStep.TEAMS, TutorialStep.COMBAT, TutorialStep.DISCORD,
+            TutorialStep.WALK, TutorialStep.HEARTS, TutorialStep.TEAMS, TutorialStep.COMBAT,
+            TutorialStep.BANK, TutorialStep.PROGRESS, TutorialStep.DISCORD,
         )
     )
+    // Issue #1578: /rtp is Survival-only and Lifesteal ships no Starter Kit.
+    check("lifesteal has no rtp step", TutorialStep.RTP !in TutorialRules.stepsFor(L))
+    check("lifesteal has no starter kit step", TutorialStep.STARTER_KIT !in TutorialRules.stepsFor(L))
+    check("survival has no lifesteal-only steps", TutorialRules.stepsFor(S).none { it == TutorialStep.BANK || it == TutorialStep.PROGRESS })
     check("step out of range", TutorialRules.stepAt(S, 7) == null && TutorialRules.stepAt(S, -1) == null)
 
     // ── First join / resume ────────────────────────────────
@@ -89,11 +93,15 @@ private fun rules() {
     check("teams menu counts", applies(TutorialStep.TEAMS, TutorialSignal.TeamsMenuOpened).completed)
     check("combat info counts", applies(TutorialStep.COMBAT, TutorialSignal.CombatInfoOpened).completed)
     check("discord counts", applies(TutorialStep.DISCORD, TutorialSignal.DiscordInfoShown).completed)
+    check("bank menu counts", applies(TutorialStep.BANK, TutorialSignal.BankMenuOpened).completed)
+    check("progress info counts", applies(TutorialStep.PROGRESS, TutorialSignal.ProgressInfoOpened).completed)
+    check("bank menu doesn't count on the progress step", !applies(TutorialStep.PROGRESS, TutorialSignal.BankMenuOpened).changed)
     check("discord doesn't count on the hearts step", !applies(TutorialStep.HEARTS, TutorialSignal.DiscordInfoShown).changed)
     val allSignals = listOf(
         TutorialSignal.StarterKitClaimed, TutorialSignal.RandomTeleported, TutorialSignal.ClaimCreated, TutorialSignal.Earned(500.0),
         TutorialSignal.DailyQuestsOpened, TutorialSignal.WeeklyQuestsOpened, TutorialSignal.HeartsInfoOpened,
         TutorialSignal.TeamsMenuOpened, TutorialSignal.CombatInfoOpened, TutorialSignal.DiscordInfoShown,
+        TutorialSignal.BankMenuOpened, TutorialSignal.ProgressInfoOpened,
     )
     check("no signal completes walking (teleports and commands never walk)", allSignals.none { applies(TutorialStep.WALK, it).changed })
     for (step in TutorialStep.entries.filter { it != TutorialStep.WALK }) {
@@ -272,6 +280,20 @@ private fun wiring() {
             check("${gm.id}.${step.id} texts", Regex("""(?m)^${gm.id}:\n(?:.*\n)*?  ${Regex.escape(step.id)}:\n    action-bar: .+\n    lines:\n""").containsMatchIn(yml))
         }
     }
+    // Issue #1578: the file must parse (a `key:"value"` with no space made it unreadable).
+    // SnakeYAML is what Bukkit's YamlConfiguration parses with (Bukkit's classes need Java 25 here).
+    fun parseYaml(text: String): Map<*, *>? = try { org.yaml.snakeyaml.Yaml().load<Any?>(text) as? Map<*, *> } catch (e: Exception) { null }
+    fun at(root: Map<*, *>?, path: String): Any? = path.split('.').fold(root as Any?) { node, key -> (node as? Map<*, *>)?.get(key) }
+    val parsed = parseYaml(yml)
+    check("tutorial-walkthrough.yml parses", parsed != null)
+    for (gm in ServerGamemode.entries) {
+        for (step in TutorialRules.stepsFor(gm)) {
+            check("${gm.id}.${step.id} loads", (at(parsed, "${gm.id}.${step.id}.lines") as? List<*>)?.isNotEmpty() == true && at(parsed, "${gm.id}.${step.id}.objective") is String)
+        }
+    }
+    for (path in listOf("survival.starter-kit", "survival.rtp", "survival.claim", "survival.quests", "lifesteal.teams", "lifesteal.bank", "lifesteal.progress")) {
+        check("$path.continue loads", at(parsed, "$path.continue") is String)
+    }
     check("survival reward 50000", Regex("""(?m)^  survival:\n    enabled: true\n    reward: 50000$""").containsMatchIn(yml))
     check("lifesteal reward 25000", Regex("""(?m)^  lifesteal:\n    enabled: true\n    reward: 25000$""").containsMatchIn(yml))
     check("walk distance 10", yml.contains("\n  walk-distance: 10\n"))
@@ -287,6 +309,20 @@ private fun wiring() {
     check("hearts hook", source("lifesteal/LifestealInfoCommand.kt").contains("TutorialSignal.HeartsInfoOpened"))
     check("combat info hook", source("lifesteal/LifestealPvpInfoCommand.kt").contains("TutorialSignal.CombatInfoOpened"))
     check("teams hook", source("lifesteal/teams/LifestealTeamMenu.kt").contains("TutorialSignal.TeamsMenuOpened"))
+    check("bank hook after the menu opened", Regex("""guiManager\.open\(player, gui\)\n\s*//[^\n]*\n\s*plugin\.tutorialSignal\(player, [\w.]*TutorialSignal\.BankMenuOpened\)""").containsMatchIn(source("lifesteal/bank/LifestealBankMenu.kt")))
+    check("progress hook after the screen", Regex("""showProgress\(sender\)[\s\S]{0,200}TutorialSignal\.ProgressInfoOpened""").containsMatchIn(source("lifesteal/progression/LifestealProgressCommand.kt")))
+    // Issue #1578: every command the Lifesteal texts tell players to type works on a dedicated Lifesteal server.
+    val lifestealTexts = yml.substringAfter("\nlifesteal:\n")
+    for (cmd in Regex("""&f(/[a-z]+)""").findAll(lifestealTexts).map { it.groupValues[1].removePrefix("/") }.toSet()) {
+        val scope = GamemodeAssignments.COMMANDS[cmd]
+        check("lifesteal text /$cmd isn't Survival-only", cmd == "lifesteal" || (scope != null && scope != GamemodeScope.SURVIVAL) || cmd in com.liam.joshymc.gamemode.LifestealSharedCommands.SHARED)
+    }
+    check("lifesteal texts never mention /rtp or /kits", !lifestealTexts.contains("/rtp") && !lifestealTexts.contains("/kit"))
+    val config = File("src/main/resources/config.yml").readText()
+    val lifestealMotd = config.substringAfter("\n  motd-lifesteal:\n").substringBefore("\n\n")
+    check("lifesteal motd exists", config.contains("\n  motd-lifesteal:\n"))
+    check("lifesteal motd has no Survival-only commands", listOf("/shop", "/claim", "/kit", "/rtp").none { lifestealMotd.contains(it) })
+    check("welcome listener picks the lifesteal motd", source("listener/WelcomeListener.kt").contains("welcome.motd-lifesteal"))
     check("economy never pays the tutorial except through the store", !source("tutorial/TutorialManager.kt").contains("economyManager.setBalance"))
     // Every sell path reports the money it paid.
     for (path in listOf("listener/SellWandListener.kt", "manager/ServerShopManager.kt", "manager/MarketManager.kt", "command/SellCommand.kt")) {

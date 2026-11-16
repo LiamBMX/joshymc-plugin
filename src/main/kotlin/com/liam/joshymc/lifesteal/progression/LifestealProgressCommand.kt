@@ -33,6 +33,12 @@ class LifestealProgressCommand(private val plugin: Joshymc) {
 
     fun progress(sender: CommandSender) {
         if (!sender.hasPermission(LifestealProgressionManager.PROGRESS_PERMISSION)) return Msg.noPermission(sender)
+        showProgress(sender)
+        // Issue #1578: the Lifesteal tutorial's progress objective (after the screen was printed).
+        (sender as? Player)?.let { plugin.tutorialSignal(it, com.liam.joshymc.tutorial.TutorialSignal.ProgressInfoOpened) }
+    }
+
+    private fun showProgress(sender: CommandSender) {
         val p = progression.progress()
         val zone = zoneOf(sender)
         sender.sendMessage(Component.text("Lifesteal Progress", NamedTextColor.GOLD, TextDecoration.BOLD))

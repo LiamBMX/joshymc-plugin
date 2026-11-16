@@ -31,6 +31,15 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         "&7Type &6/kit &7to get starter items",
         ""
     )
+    // Issue #1578: Lifesteal has no /shop, /claim or Starter Kit, so its players get their own lines.
+    private var lifestealMotdLines: List<String> = listOf(
+        "",
+        "&c&lWelcome to JoshyMC Lifesteal!",
+        "&7Type &6/lifesteal info &7to see your hearts and the rules",
+        "&7Type &6/team &7to team up and &6/bank &7to protect your coins",
+        "&7Type &6/tutorial &7to start or resume the tutorial",
+        ""
+    )
 
     companion object {
         private const val WELCOME_WINDOW_MS = 30_000L
@@ -110,6 +119,7 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         joinFormat = config.getString("welcome.join-format", joinFormat) ?: joinFormat
         leaveFormat = config.getString("welcome.leave-format", leaveFormat) ?: leaveFormat
         motdLines = config.getStringList("welcome.motd").ifEmpty { motdLines }
+        lifestealMotdLines = config.getStringList("welcome.motd-lifesteal").ifEmpty { lifestealMotdLines }
     }
 
     // ── Events ──────────────────────────────────────────
@@ -198,7 +208,8 @@ class WelcomeListener(private val plugin: Joshymc) : Listener {
         }
 
         // Send MOTD lines to the player (first join or returning)
-        for (line in motdLines) {
+        val inLifesteal = plugin.gamemodeLockManager.gamemodeOf(player.world) == com.liam.joshymc.gamemode.ServerGamemode.LIFESTEAL
+        for (line in if (inLifesteal) lifestealMotdLines else motdLines) {
             plugin.commsManager.sendRaw(player, plugin.commsManager.parseLegacy(line))
         }
     }

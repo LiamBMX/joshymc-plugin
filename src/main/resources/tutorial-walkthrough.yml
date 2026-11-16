@@ -10,12 +10,17 @@
 # Lifesteal facts (read from lifesteal.yml / config.yml at the time the message is sent):
 #                      {hearts_start} {hearts_max} {hearts_min} {same_victim_minutes} {tag_seconds}
 #                      {team_max} {invite_seconds} {friendly_fire} {grace_hours}
+#                      {withdraw_rule} (who may use /withdrawheart), {coin_loss} (PvP coin stealing),
+#                      {ranked_hours} (Ranked unlock, hours after launch), {ranked_status} (Ranked right now)
 #
 # Per objective: `action-bar` (short, shown above the hotbar), `lines` (chat, sent once when the
 # objective begins or resumes), `objective`, and optional `continue`: the prompt next to a
 # [Continue] button, shown only when the objective was already done earlier (Starter Kit claimed
 # before, a claim already owned) or the feature can't be used here. The server re-checks that
 # before continuing, so the button can't be used to skip a real objective.
+#
+# Lifesteal (issue #1578): walk, hearts, teams, combat, bank, season progress, Discord. There is no
+# /rtp (Survival only) or Starter Kit objective on Lifesteal.
 
 settings:
   survival:
@@ -75,14 +80,14 @@ survival:
       - "&eLet's get your starting equipment!"
       - "&7Type &f/kits&7, select &fStarter Kit&7, and claim it."
     objective: "Claim your Starter Kit."
-    continue:"&7Already claimed your Starter Kit (or can't claim one)? Click to continue."
+    continue: "&7Already claimed your Starter Kit (or can't claim one)? Click to continue."
   rtp:
     action-bar: "Explore the world with /rtp"
     lines:
       - "&eTime to find your own spot!"
       - "&7Use &f/rtp &7to teleport to a random wilderness location. Stand still for the 3 second warmup."
     objective: "Use /rtp."
-    continue:"&7Random teleport isn't available to you here. Click to continue."
+    continue: "&7Random teleport isn't available to you here. Click to continue."
   claim:
     action-bar: "Protect your land with /claim wand"
     lines:
@@ -90,7 +95,7 @@ survival:
       - "&7Type &f/claim wand &7to get the claim tool, then &fright-click &7one corner block and &fright-click &7the opposite corner."
       - "&7Claims use claim blocks (you earn more by playing). See &f/claim blocks &7and &f/claim help&7."
     objective: "Create your first land claim."
-    continue:"&7You already own a claim. Click to use it for this objective."
+    continue: "&7You already own a claim. Click to use it for this objective."
   earn:
     action-bar: "Earn Money: {earned} / {earn}"
     lines:
@@ -105,7 +110,7 @@ survival:
       - "&7Type &f/quests&7, open &fDaily Quests&7, go back to the main menu, then open &fWeekly Quests&7."
       - "&7You don't need to finish any quest."
     objective: "Open both Daily and Weekly Quests."
-    continue:"&7Quests aren't available right now. Click to continue."
+    continue: "&7Quests aren't available right now. Click to continue."
   discord:
     action-bar: "Check out our Discord with /discord"
     lines:
@@ -119,30 +124,16 @@ lifesteal:
     action-bar: "Walk {walk} blocks from where you are"
     lines:
       - "&eWelcome to &cJoshyMC Lifesteal&e, {player}!"
-      - "&7Lifesteal is competitive: permanent hearts, survival, teams and PvP. This tutorial shows you how it works."
+      - "&7Lifesteal is competitive: permanent hearts, teams, PvP, coins and ranked team fights. This tutorial shows you how it works."
       - "&7First, walk about &f{walk} blocks &7in any direction."
     objective: "Walk {walk} blocks."
-  starter-kit:
-    action-bar: "Claim your Starter Kit using /kits"
-    lines:
-      - "&eLet's get your starting equipment!"
-      - "&7Type &f/kits&7, select &fStarter Kit&7, and claim it."
-    objective: "Claim your Lifesteal Starter Kit."
-    continue:"&7Already claimed it, or there's no Starter Kit here yet? Click to continue."
-  rtp:
-    action-bar: "Explore the world with /rtp"
-    lines:
-      - "&eTime to explore!"
-      - "&7Use &f/rtp &7to teleport to a random location."
-    objective: "Use /rtp."
-    continue:"&7Random teleport isn't available on Lifesteal yet. Click to continue."
   hearts:
     action-bar: "Check your hearts with /lifesteal info"
     lines:
       - "&cHearts are everything here."
       - "&7You start with &f{hearts_start} &7permanent hearts, can have at most &f{hearts_max}&7, and never drop below &f{hearts_min}&7: you can't lose your final heart, and there is no elimination or revival."
       - "&7Killing a player steals 1 heart (none from a player at {hearts_min}; killing the same player again within {same_victim_minutes} min steals nothing)."
-      - "&7Turn a heart into an item with &f/withdrawheart &7and right-click it to redeem."
+      - "&7Turn a heart into a tradeable Heart item with &f/withdrawheart &7and right-click it to redeem. {withdraw_rule}"
       - "&7Type &f/lifesteal info &7to see your hearts."
     objective: "Open /lifesteal info."
   teams:
@@ -153,7 +144,7 @@ lifesteal:
       - "&7Teammate damage: &f{friendly_fire}&7. Playing solo is fine too."
       - "&7Type &f/team &7to open the Teams menu."
     objective: "Open the Teams menu."
-    continue:"&7Teams aren't available right now. Click to continue."
+    continue: "&7Teams aren't available right now. Click to continue."
   combat:
     action-bar: "Read the PvP rules with /lifesteal pvp"
     lines:
@@ -161,6 +152,26 @@ lifesteal:
       - "&7Hitting or being hit by a player tags you for &f{tag_seconds}s&7. Don't log out while tagged."
       - "&7Type &f/lifesteal pvp &7for PvP, heart stealing, combat logging and protection rules."
     objective: "Open /lifesteal pvp."
+  bank:
+    action-bar: "Open your Protected Bank with /bank"
+    lines:
+      - "&6Protect your coins."
+      - "&7Coins in your wallet are at risk: {coin_loss}."
+      - "&7Move coins into your &fProtected Bank &7with &f/bank &7to keep them safe."
+      - "&7Want someone gone? Add coins to their bounty with &f/bounty&7; whoever kills them collects it."
+      - "&7Type &f/bank &7to open your bank."
+    objective: "Open /bank."
+    continue: "&7The bank isn't available here. Click to continue."
+  progress:
+    action-bar: "See the season timeline with /lifesteal progress"
+    lines:
+      - "&eThe season opens up step by step."
+      - "&7After launch there is a &f{grace_hours}h &7grace period with no PvP and no heart stealing. The End opens later."
+      - "&7Ranked Team Wars: &f{ranked_status}&7."
+      - "&7Earn rewards with Daily and Weekly quests in &f/quests &7and track your achievements in &f/achievements&7."
+      - "&7Type &f/lifesteal progress &7to see the season timeline."
+    objective: "Open /lifesteal progress."
+    continue: "&7Season progress isn't available here. Click to continue."
   discord:
     action-bar: "Check out our Discord with /discord"
     lines:

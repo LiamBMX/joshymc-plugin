@@ -12,7 +12,7 @@ Code: `src/main/kotlin/com/liam/joshymc/tutorial/`
 | `TutorialStore.kt` | Bukkit-free SQLite store: progress per (UUID, gamemode), the reward entitlement, `installed_at` |
 | `TutorialManager.kt` | Sessions, listeners (join, quit, world change, walking), chat instructions, action bar, completion celebration, reward payout, `/tutorial` actions |
 | `command/TutorialCommand.kt` | `/tutorial` (NETWORK scope) |
-| `lifesteal/LifestealPvpInfoCommand.kt` | `/lifesteal pvp` (alias `rules`): read-only PvP / combat rules, added for Lifesteal objective 6 |
+| `lifesteal/LifestealPvpInfoCommand.kt` | `/lifesteal pvp` (alias `rules`): read-only PvP / combat rules, added for Lifesteal objective 4 (the combat rules) |
 | `resources/tutorial-walkthrough.yml` | All settings and texts (missing keys fall back to the bundled file) |
 
 ## Player experience
@@ -59,11 +59,11 @@ are conditional on the expected state and step, so duplicate events never advanc
 | # | Objective | Detected by |
 |---|---|---|
 | 1 | Walk 10 blocks | Same as Survival. |
-| 2 | Claim the Lifesteal Starter Kit | Same callback; only kits whose kits.yml `gamemode` is `lifesteal`, so Survival items can never be handed out. |
-| 3 | `/rtp` | Same callback. `/rtp` is SURVIVAL-scoped, so on a dedicated Lifesteal server it is refused; see "Continue" below. |
-| 4 | Hearts | `/lifesteal info` (issue #1369, the existing read-only hearts screen) after it printed. Texts come from the live `lifesteal.yml` limits: start 10, max 20, min 1 by default, no elimination/revival, 1 heart per kill, same-victim cooldown, `/withdrawheart`. |
-| 5 | Teams menu | `LifestealTeamMenu.open` once the menu is open. Solo players complete it; no team is required or changed. Texts use the live `teams.max-size` (5), invite expiry (60s) and friendly-fire setting. |
-| 6 | Combat rules | `/lifesteal pvp` (new, read only): PvP state (grace period from the progression service), heart stealing/loss, the 1-heart minimum, killer at max gains nothing, same-victim cooldown, the combat tag duration (`combat.tag-duration-seconds`), combat-log NPC (`combat-logging.leave-npc`, never moves hearts) and team friendly fire, all read from the running services. |
+| 2 | Hearts | `/lifesteal info` (issue #1369, the existing read-only hearts screen) after it printed. Texts come from the live `lifesteal.yml` limits: start 10, max 20, min 1 by default, no elimination/revival, 1 heart per kill, same-victim cooldown, `/withdrawheart` and its eligibility (`heart-items.withdraw-eligibility`, 2h active playtime + 24h since the first Lifesteal join by default). |
+| 3 | Teams menu | `LifestealTeamMenu.open` once the menu is open. Solo players complete it; no team is required or changed. Texts use the live `teams.max-size` (5), invite expiry (60s) and friendly-fire setting. |
+| 4 | Combat rules | `/lifesteal pvp` (read only): PvP state (grace period from the progression service), heart stealing/loss, the 1-heart minimum, killer at max gains nothing, same-victim cooldown, the combat tag duration (`combat.tag-duration-seconds`), combat-log NPC (`combat-logging.leave-npc`, never moves hearts) and team friendly fire, all read from the running services. |
+| 5 | Bank | `LifestealBankMenu.openMain` once the Protected Bank is open (issue #1578). Texts: the live PvP coin loss (`pvp-coins.wallet-loss-percent`, or "no coin stealing" when off) and `/bounty`. Nothing is deposited. |
+| 6 | Season progress | `/lifesteal progress` after it printed (issue #1578). Texts: the grace period hours, Ranked Team Wars status right now (locked until +72h, unlocked but not opened by staff, or open) and `/quests` + `/achievements`. |
 | 7 | `/discord` | Same as Survival. |
 
 ### Continue (objectives that can't be done)
@@ -78,6 +78,15 @@ server side), when an objective was already done earlier or the feature can't be
 - Claim: the player already owns a claim in a world of this gamemode, or `/claim` can't be used.
 - Quests: the `quests` feature is off or `/quests` can't be used.
 - Teams: Lifesteal teams are unavailable (`unavailableReason`).
+- Bank: the bank is unavailable here (`LifestealBankManager.unavailableReason`, e.g. a server whose
+  economy isn't Lifesteal's) or `joshymc.lifesteal.bank.use` is denied.
+- Season progress: the progression isn't hosted here or `joshymc.lifesteal.progress` is denied.
+
+Issue #1578: the Lifesteal tutorial used to have Starter Kit and `/rtp` objectives. `/rtp` is
+SURVIVAL-scoped and not a shared command on the dedicated Lifesteal server, and Lifesteal ships no
+Starter Kit, so both could only be passed with Continue. They were replaced by the Bank and Season
+progress objectives; the steps are stored by index, so a player mid-tutorial simply continues with
+whatever objective is now at their step.
 
 Walking, earning, combat rules and Discord have no Continue.
 
@@ -189,8 +198,9 @@ players earning it later, gamemode-separate rewards; and the wiring of every cal
 - Daily then Weekly (and the reverse) complete objective 6; Event Quests don't.
 - Completion: title, sound, "Reward Received: $50,000 Money", balance +50,000; `/tutorial restart`
   and completing again: "already claimed", balance unchanged.
-- Lifesteal server: tutorial starts on first Lifesteal join; RTP shows Continue; `/lifesteal info`,
-  `/team`, `/lifesteal pvp`, `/discord` complete 4-7; reward $25,000 into the Lifesteal server's
+- Lifesteal server: tutorial starts on first Lifesteal join and the join MOTD is
+  `welcome.motd-lifesteal`; `/lifesteal info`, `/team`, `/lifesteal pvp`, `/bank`,
+  `/lifesteal progress`, `/discord` complete 2-7; reward $25,000 into the Lifesteal server's
   balance.
 - Transfer Survival ↔ Lifesteal mid-tutorial: each server resumes its own progress.
 - Bedrock (Geyser): action bar and chat readable; Continue usable by typing `/tutorial continue`.
@@ -201,6 +211,9 @@ players earning it later, gamemode-separate rewards; and the wiring of every cal
   first join; the GUI is `/tutorial guide`. `tutorial.yml` is unchanged.
 - **Kits / claims / quests**: no behaviour changed; each only gained a success callback after its
   existing success path. `SaleManager.recordSale(s)` gained an optional `earned` argument.
-- **Lifesteal**: no Money commands exist there yet (`/balance` is Survival-scoped), so the $25,000
-  lands in the Lifesteal server's own `economy` balance for when they arrive. There is no Lifesteal
-  Starter Kit or RTP by default, so those objectives offer Continue until they exist.
+- **Lifesteal**: the $25,000 lands in the Lifesteal server's own `economy` balance (the wallet;
+  `/balance` is a shared command there since issue #1573).
+- **Unreadable file (issue #1578)**: the bundled `tutorial-walkthrough.yml` used to contain
+  `continue:"..."` lines (no space after the colon), which YAML can't parse, so the whole file was
+  unreadable and the tutorial showed no texts. A saved copy that doesn't parse is now moved to
+  `tutorial-walkthrough.yml.broken-<time>` and replaced by the bundled file on load.
