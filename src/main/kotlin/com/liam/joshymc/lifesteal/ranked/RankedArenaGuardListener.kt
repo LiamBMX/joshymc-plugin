@@ -54,6 +54,7 @@ import org.bukkit.event.player.PlayerBucketFillEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.event.world.PortalCreateEvent
 import org.bukkit.event.world.StructureGrowEvent
 import org.bukkit.projectiles.BlockProjectileSource
 import java.util.UUID
@@ -267,6 +268,18 @@ class RankedArenaGuardListener(private val plugin: Joshymc) : Listener {
     fun onEntityTeleport(event: EntityTeleportEvent) {
         if (event.entity is Player) return
         if (arrivalRefused(event.from, event.to)) event.isCancelled = true
+    }
+
+    /**
+     * Issue #1566 (audit #1546 RNK-01/02): no portal forms in an arena in use, whoever lights the
+     * frame (participants included) and including the exit portal vanilla generates for travel
+     * from another dimension.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    fun onPortalCreate(event: PortalCreateEvent) {
+        if (zones().isEmpty()) return
+        val world = event.world.name
+        if (event.blocks.any { RankedArenaGuard.zoneAt(zones(), world, it.x, it.y, it.z) != null }) event.isCancelled = true
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)

@@ -964,6 +964,7 @@ after `CombatTeleportGuard` allows it.
 | Pets following an outsider, endermen/shulkers hopping in, mobs sent through portals | non-player entities can't teleport or portal into an arena in use from outside |
 | Outsiders could use a participant (leads, name tags) or any entity inside the arena | refused |
 | A spectator who left the arena's world stayed registered (restricted everywhere) | spectating ends on world change |
+| Issue #1566 (audit #1546 RNK-01/02): nether/End portal travel fires `PlayerPortalEvent`, which `onTeleport` never sees, so a participant could leave through a portal and an outsider could arrive by one | `onPortal` refuses every portal trip for a participant and any portal arrival in an arena in use that refuses the player; `onPortalCreate` (guard) refuses any portal forming in an arena in use, including participant-lit frames and vanilla's generated exit portal |
 
 ### Relocation rules (`RankedArenaAccess.relocation`)
 
