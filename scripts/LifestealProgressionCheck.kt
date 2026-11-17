@@ -56,6 +56,7 @@ fun main() {
     settings()
     timestamps()
     rules()
+    lockedMessages()
     hearts()
     adminDecisions()
     store()
@@ -143,6 +144,24 @@ private fun timestamps() {
     check("remaining: seconds", ProgressionRules.formatRemaining(45_000) == "45s")
     check("remaining never negative", ProgressionRules.formatRemaining(-5) == "0s")
     check("season ids", ProgressionRules.validSeasonId("season-1") && !ProgressionRules.validSeasonId("Season 1") && !ProgressionRules.validSeasonId(""))
+}
+
+// ── Ranked lock message (issue #1593) ───────────────────────
+
+private fun lockedMessages() {
+    val none = ProgressionRules.rankedLockedMessage(ProgressionRules.evaluate(null, SCHEDULE, LAUNCH, emptySet()))
+    check("lock message, no launch: after the season launches", "after the season launches" in none && "/lifesteal progress" in none)
+    check("lock message, pre-launch: counts down to the unlock", ProgressionRules.rankedLockedMessage(at(-H)) == "Ranked Team Wars unlock in 3d 1h. /lifesteal progress shows the schedule.")
+    check("lock message, grace: configured unlock time", ProgressionRules.rankedLockedMessage(at(2 * H)) == "Ranked Team Wars unlock in 2d 22h. /lifesteal progress shows the schedule.")
+    val custom = ProgressionRules.evaluate(SEASON, ProgressionRules.Schedule(24, 120, 168), LAUNCH + 2 * H, emptySet())
+    check("lock message follows ranked-team-wars-unlock-after-hours, never a fixed day", ProgressionRules.rankedLockedMessage(custom).contains("4d 22h"))
+    check("lock message never names a fixed day", listOf(at(-H), at(2 * H), custom).none { "Day" in ProgressionRules.rankedLockedMessage(it) })
+    val unlocked = ProgressionRules.rankedLockedMessage(at(80 * H))
+    check("lock message once unlocked: unavailable, not 'not unlocked'", "unavailable right now" in unlocked && "unlock" !in unlocked)
+    val unknown = ProgressionRules.Progress(Phase.UNKNOWN, LAUNCH, SEASON, SCHEDULE, emptySet())
+    check("lock message, unknown state: says the schedule couldn't be checked", "couldn't be checked" in ProgressionRules.rankedLockedMessage(unknown))
+    val queue = source("lifesteal/ranked/queue/LifestealRankedQueueManager.kt")
+    check("queue uses the schedule-aware lock message", queue.contains("ProgressionRules.rankedLockedMessage(") && !queue.contains("Day 3 ("))
 }
 
 // ── Rules (deterministic clocks) ─────────────────────────────

@@ -52,6 +52,17 @@ object KitCatalog {
 
     fun visibleIn(entry: Entry, current: ServerGamemode): Boolean = gamemodeOf(entry.gamemode) == current
 
+    /**
+     * Issue #1593: what `/kit <name>` says when [entry] exists but belongs to another gamemode than
+     * [current] (instead of "not found"), or null when it isn't another gamemode's kit (it is
+     * visible here, or its kits.yml gamemode is invalid so it is shown nowhere).
+     */
+    fun otherGamemodeMessage(entry: Entry, current: ServerGamemode): String? {
+        val owner = gamemodeOf(entry.gamemode) ?: return null
+        if (owner == current) return null
+        return "Kit '${entry.name}' is a ${owner.displayName} kit and is unavailable on ${current.displayName}. Use /kit to see the kits here."
+    }
+
     fun normalizeOrder(order: List<String>): List<String> =
         order.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
 
