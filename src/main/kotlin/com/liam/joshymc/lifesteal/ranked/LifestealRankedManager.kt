@@ -226,6 +226,17 @@ class LifestealRankedManager(private val plugin: Joshymc) {
 
     fun hasPendingRestore(uuid: UUID): Boolean = pendingRestore.contains(uuid)
 
+    /**
+     * Issue #1583: [uuid]'s inventory is going to be *set* from a ranked snapshot later: they are
+     * held by a match, or their PENDING snapshot isn't applied yet (a restore that failed on a
+     * database error or an unreadable row and waits for the next respawn/rejoin/staff restore).
+     * Nothing may be delivered into it (the restore would wipe it while the delivery counts as done)
+     * or redeemed out of it (the restore would hand the item back).
+     */
+    fun inventoryReplacedLater(uuid: UUID): Boolean = holds(uuid) || hasPendingRestore(uuid)
+
+    fun inventoryReplacedLater(player: Player): Boolean = inventoryReplacedLater(player.uniqueId)
+
     val anyMatch: Boolean get() = matches.isNotEmpty()
 
     fun openMatches(): List<Match> = matches.values.toList()

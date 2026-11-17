@@ -322,7 +322,8 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         if (plugin.eventManager.isInEventWorld(player)) return
         // Same for a Ranked Team Wars match (issue #1361): its inventory is replaced by the pre-match
         // snapshot afterwards, which would overwrite anything delivered meanwhile.
-        if (plugin.lifestealRankedManager.holds(player)) return
+        // Issue #1583: also while that snapshot waits to be applied (a failed restore is retried later).
+        if (plugin.lifestealRankedManager.inventoryReplacedLater(player)) return
         val probe = buildUnit(kind, snapshot.param)
             ?: return markFailed(snapshot, "the reward no longer exists on this server (${snapshot.describe()})")
         if (!canFitOne(player, probe)) {

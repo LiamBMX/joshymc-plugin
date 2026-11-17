@@ -737,7 +737,8 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         !loaded.containsKey(player.uniqueId) -> HeartMessages.NOT_LOADED
         // Issue #1361: the match inventory is replaced by the pre-match snapshot afterwards, so a Heart
         // item redeemed or withdrawn inside a match would come back (or vanish) with it.
-        plugin.lifestealRankedManager.holds(player) -> HeartMessages.RANKED_MATCH
+        // Issue #1583: also while the pre-match snapshot still waits to be applied.
+        plugin.lifestealRankedManager.inventoryReplacedLater(player) -> HeartMessages.RANKED_MATCH
         else -> null
     }
 

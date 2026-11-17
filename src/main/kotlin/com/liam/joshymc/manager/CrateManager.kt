@@ -2100,6 +2100,9 @@ class CrateManager(private val plugin: Joshymc) : Listener {
     fun deliverPendingRewards(player: Player) {
         // Held until they leave the event: its inventory is wiped on exit (issue #1529).
         if (plugin.eventManager.isInEventWorld(player)) return
+        // Issue #1583: held too while a ranked snapshot will replace the inventory (in a match, or
+        // its restore not applied yet), which would wipe the reward after it counted as delivered.
+        if (runCatching { plugin.lifestealRankedManager.inventoryReplacedLater(player) }.getOrDefault(true)) return
         val inFlight = inFlightRewards[player.uniqueId]
         val rows = pendingStore.rowsOf(player.uniqueId.toString(), CratePendingStore.Status.PENDING)
         for (row in rows) {
