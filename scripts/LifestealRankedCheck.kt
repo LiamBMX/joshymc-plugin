@@ -1316,10 +1316,15 @@ private fun wiring() {
     check("respawn goes to the return location, then restores", listener.contains("event.respawnLocation = it") && listener.contains("ranked.restoreIfPending(event.player, \"respawned\")"))
     check("rejoin restores", manager.contains("restoreIfPending(player, \"rejoined\")"))
     check("item drops, pickups and containers blocked while held", listener.contains("fun onDrop(event: PlayerDropItemEvent)") && listener.contains("fun onPickup(event: EntityPickupItemEvent)") && listener.contains("fun onOpen(event: InventoryOpenEvent)"))
-    check("Heart items can't be redeemed or withdrawn in a match", heartManager.contains("plugin.lifestealRankedManager.holds(player) -> HeartMessages.RANKED_MATCH"))
+    // Issue #1583: "held or a PENDING snapshot not applied yet" is one rule, used by every give/redeem path below.
+    check("#1583: inventoryReplacedLater = held or a pending restore",
+        manager.contains("fun inventoryReplacedLater(uuid: UUID): Boolean = holds(uuid) || hasPendingRestore(uuid)"))
+    check("Heart items can't be redeemed or withdrawn in a match or before its restore", heartManager.contains("plugin.lifestealRankedManager.inventoryReplacedLater(player) -> HeartMessages.RANKED_MATCH"))
     for (v in listOf("CreditVoucherListener", "RankVoucherListener", "PhysicalVoucherListener", "ChatTagVoucherListener", "FlyVoucherListener")) {
-        check("$v refuses inside a ranked match", source("listener/$v.kt").contains("if (plugin.lifestealRankedManager.holds(event.player)) return"))
+        check("$v refuses inside a ranked match and before its restore", source("listener/$v.kt").contains("if (plugin.lifestealRankedManager.inventoryReplacedLater(event.player)) return"))
     }
+    check("#1583: held crate rewards wait until the ranked restore is applied",
+        source("manager/CrateManager.kt").contains("plugin.lifestealRankedManager.inventoryReplacedLater(player) }.getOrDefault(true)) return"))
     // Issue #1377: a projectile fired in a match is never a second copy of the snapshot's item.
     val pickup = RankedMatchRules::projectilePickup
     check("#1377: ordinary arrows are untouched", pickup(null, null, false) == RankedMatchRules.ProjectilePickup.ALLOW && pickup(null, "rtw-000000000001", true) == RankedMatchRules.ProjectilePickup.ALLOW)
@@ -1329,7 +1334,7 @@ private fun wiring() {
     check("#1377: after the match it is removed (the owner got it back from the snapshot)", pickup("rtw-000000000001", null, false) == RankedMatchRules.ProjectilePickup.REMOVE && pickup("rtw-000000000001", "rtw-000000000001", false) == RankedMatchRules.ProjectilePickup.REMOVE)
     check("#1377: arrows/tridents fired while held are tagged with their match", listener.contains("fun onLaunch(event: ProjectileLaunchEvent)") && listener.contains("arrow.persistentDataContainer.set(firedInKey, PersistentDataType.STRING, match.id)"))
     check("#1377: arrow pickups go through the rule", listener.contains("fun onPickupArrow(event: PlayerPickupArrowEvent)") && listener.contains("RankedMatchRules.projectilePickup(") && listener.contains("arrow.remove()"))
-    check("store deliveries wait until the match is over", fulfillment.contains("if (plugin.lifestealRankedManager.holds(player)) return"))
+    check("store deliveries wait until the match is over and its restore applied", fulfillment.contains("if (plugin.lifestealRankedManager.inventoryReplacedLater(player)) return"))
 
     // Combat, teleports, transfers.
     check("ranked fights never combat-tag (no combat-log NPC dropping real gear)", combatListener.contains("if (plugin.lifestealRankedManager.isMatchFight(attacker, victim)) return"))

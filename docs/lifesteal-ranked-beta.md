@@ -1090,3 +1090,25 @@ changes nothing, because it is refused before anything is handed to the team wor
   snapshot, so attribution is unaffected.
 - Lifesteal teams have no rename, officer promotion/demotion or team-switch command, so there is
   nothing else to lock (switching teams = leave + accept, and both are covered).
+
+## O. Deliveries and redemptions before a pending restore (issue #1583)
+
+A ranked restore **sets** the inventory from the snapshot. Until issue #1583 the give/redeem paths
+only waited while a player was *held* by a match. A player whose PENDING snapshot couldn't be
+applied yet (a database error on `beginRestore`, or a snapshot that can't be read; both leave it
+PENDING for the next respawn, rejoin or `/lifesteal admin ranked restore`) plays on, unheld, with
+their match inventory. During that time:
+
+- store/event/quest/achievement/Advent item deliveries (`PurchaseFulfillmentManager`) and held crate
+  rewards (`CrateManager.deliverPendingRewards`) went into that inventory and counted as delivered,
+  then the later restore wiped them;
+- Credit/Rank/Physical/Chat Tag/Fly vouchers could be redeemed and the restore handed the voucher
+  back; a withdrawn Heart item was wiped by the restore (the heart already gone).
+
+All of these now use `lifestealRankedManager.inventoryReplacedLater(player)` (= held **or** a PENDING
+restore). Deliveries simply stay pending and go through on the next sweep/join once the restore is
+applied. Nothing is reset or discarded: the snapshot stays PENDING and visible to staff
+(console error, `/lifesteal admin diag player`), as before. The Lifesteal kit
+claim, the bank and transfers already refused a pending restore.
+
+Checks: `./gradlew -I scripts/lifesteal-ranked-check.init.gradle.kts lifestealRankedCheck`.
