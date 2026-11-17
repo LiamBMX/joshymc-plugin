@@ -174,7 +174,7 @@ Short version of the existing steps; each line points to where the pass criteria
 
 | # | Test | Where |
 |---|---|---|
-| 1 | First startup: clean log, `version joshymc` = `1.0.677`, `/jgamemode info` shows Lifesteal and `lifesteal.yml` valid, then stop and start again just as clean | release guide 1.8 step 6, S1 |
+| 1 | First startup: clean log, `version joshymc` = `1.0.677`, `/jgamemode info` shows Lifesteal and `lifesteal.yml` valid, then stop and start again just as clean | release guide 1.8 step 7, S1 |
 | 2 | Player join: starting hearts, resource pack loads (Java + one Bedrock), `/lifesteal info` | S2; [lifesteal-beta.md](lifesteal-beta.md) E1, E2 |
 | 3 | Permanent hearts: withdraw/redeem a Heart item, copies refused, 1-heart minimum, 20-heart maximum | S4; E7–E9 |
 | 4 | PvP and heart transfers: grace first, then kill, same-victim cooldown | S4, S5; E5–E8 |

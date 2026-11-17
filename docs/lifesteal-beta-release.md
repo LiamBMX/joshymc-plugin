@@ -26,6 +26,10 @@ planned maintenance windows. It changes no gameplay, config default or database 
   `1.0-SNAPSHOT`; it is never deployed (section 1.4).
 - **One deploy per maintenance window.** Merged PRs don't go live one by one (section 6).
 - **Backups before every deploy, with the server stopped** (section 1.7).
+- **A jar change always means a full stop and start.** `/joshymc reload` re-reads config files
+  only; it never loads a new jar, re-runs startup recovery or database migrations, and is never a
+  substitute for the restart in 1.8 (or a way to "test" a deploy). Plugin managers such as
+  PlugMan are never used on JoshyMC.
 - **Don't change gameplay to make a test pass.** Change only the config keys the test names, and
   write every change in the session log.
 - **Privacy.** Bug reports and logs posted anywhere shared use Minecraft names and UUIDs only;
@@ -166,12 +170,26 @@ SQLite files are mid-write; JoshyMC checkpoints and closes the database on a cle
 1. Staging gets the RC first and passes sections 2–4. Production never gets a jar staging hasn't run.
 2. In the planned window: announce (time, expected length, "your items and hearts are safe") at
    least once in advance and again a few minutes before.
-3. Stop production normally and take the backup (1.7).
-4. Remove the old JoshyMC jar from `plugins/` (keep it in the backup), copy in the verified
+3. **Drain Ranked** (skip if `ranked-team-wars.enabled` is false) so no match is cut off by the stop:
+   1. about 15 minutes before the stop, set `lifesteal.yml > ranked-team-wars.matchmaking.enabled:
+      false` and `/joshymc reload` (no new queues or challenges; see section 6);
+   2. end what is still waiting: `/lifesteal admin ranked queue`, then
+      `cancelqueue <entry|team> confirm` / `cancelproposal <proposal> confirm` (memory only, never
+      inventories or hearts);
+   3. let running matches finish. If one hasn't ended by the stop time, cancel it deliberately with
+      `/lifesteal admin ranked cancel <match> confirm` (no winner, no Elo, everyone restored; hearts
+      already moved in it stay) rather than leaving it to the shutdown;
+   4. `/lifesteal admin ranked list` shows no open match and `/lifesteal admin ranked restores` is
+      empty. A row there is settled first ([lifesteal-ranked-beta.md](lifesteal-ranked-beta.md)
+      section L), never carried into the deploy.
+
+   Set `matchmaking.enabled` back to the RC record's value in step 6 (config), not before the stop.
+4. Stop production normally and take the backup (1.7).
+5. Remove the old JoshyMC jar from `plugins/` (keep it in the backup), copy in the verified
    `joshymc-1.0.N.jar`. Change no other plugin in the same window unless that change is in the RC
    record and was on staging too.
-5. Apply only the config changes listed in the RC record.
-6. Start. Watch the console until "Done". Then the post-deploy checks:
+6. Apply only the config changes listed in the RC record.
+7. Start. Watch the console until "Done". Then the post-deploy checks:
    - Paper's version command shows `1.0.N` (1.4);
    - `/jgamemode info` shows Lifesteal as the server gamemode and `lifesteal.yml` valid;
    - no `SEVERE`/stack trace from JoshyMC during startup (search `logs/latest.log`);
@@ -180,7 +198,7 @@ SQLite files are mid-write; JoshyMC checkpoints and closes the database on a cle
      inventory as before; the resource pack loads;
    - `/bounty admin check` reports escrow consistent; `/lifesteal admin ranked restores` empty;
      `/event inventory list` shows nothing in REVIEW.
-7. Open the server. Record the time and any finding in the RC record.
+8. Open the server. Record the time and any finding in the RC record.
 
 If any post-deploy check fails and it isn't clearly cosmetic, roll back (section 7) **before**
 players join, while no new data has been written.
@@ -206,7 +224,7 @@ Record PASS / FAIL / NOT RUN and evidence per step in the session log.
 
 | # | Area | What to do | Reuse |
 |---|---|---|---|
-| S1 | Initial startup | Fresh staging `data.db`. Start, read the whole startup log for JoshyMC `SEVERE`/stack traces. `/jgamemode info`. Stop and start again: the second start must be just as clean (migrations that run twice are a common restart bug). | 1.8 step 6 |
+| S1 | Initial startup | Fresh staging `data.db`. Start, read the whole startup log for JoshyMC `SEVERE`/stack traces. `/jgamemode info`. Stop and start again: the second start must be just as clean (migrations that run twice are a common restart bug). | 1.8 step 7 |
 | S2 | New player joining | An account that has never joined: starting hearts, tutorial, `/lifesteal info`, Starter Kit, resource pack. | [lifesteal-beta.md](lifesteal-beta.md) E1, E2 |
 | S3 | Existing player reconnecting | Join, change inventory and hearts, quit, rejoin; then again after a restart. | E11 |
 | S4 | Hearts | Kill, same-victim cooldown, 1-heart minimum, 20-heart maximum, withdraw/redeem, copies refused. | E7–E9; matrix HT-* for detail |
@@ -398,7 +416,22 @@ Turning a system off never deletes its stored data.
 
 ## 7. Rollback
 
-Two ways back, in order of preference. **Never assume the old jar understands the new database.**
+Two ways back, in order of preference. **Never assume the old jar understands the new database**,
+and never treat a jar downgrade as undoing the new jar's database changes: tables, columns,
+triggers and rewritten rows stay in `data.db` after the old jar is back.
+
+### 7.0 Preserve the evidence first
+
+Before any rollback or restore, while the bad build's state still exists:
+
+1. Collect the evidence list from
+   [lifesteal-staff-recovery.md](lifesteal-staff-recovery.md) ("Evidence to preserve") for every
+   open report, including the ids (match, serial, snapshot, incident) and command outputs.
+2. Copy `logs/latest.log` (and the rotated `logs/*.log.gz` since the deploy) out of the server
+   directory: the next start rotates it.
+3. After the clean stop, the backup of the **current** state (7.2 step 2 / 7.3 step 1) is the
+   evidence copy of the database; keep it private and unchanged, and note its path in the P0/P1
+   issue.
 
 ### 7.1 Decide which rollback is possible
 
@@ -422,10 +455,11 @@ git diff v1.0.<good>..v1.0.<bad> -- src/main/kotlin | grep -E '^\+.*(CREATE TABL
 
 1. Announce, stop production normally (players' data is saved by the clean stop).
 2. Take a backup of the **current** state (1.7): this is the newest player data, keep it.
+   On a **copy** of it, `PRAGMA integrity_check;` must print `ok`; anything else means 7.3.
 3. Swap the jar back to the last good release jar (checksum-verified, 1.4). Put back the old RC's
    config files only for keys the bad release added *and* the old jar would misread; otherwise
    leave config alone.
-4. Start, run the post-deploy checks (1.8 step 6) against the old version number.
+4. Start, run the post-deploy checks (1.8 step 7) against the old version number.
 5. Record it and open a P0/P1 issue for whatever forced the rollback.
 
 Player data written while the bad build ran stays (unless 7.1 said it can't be read).
