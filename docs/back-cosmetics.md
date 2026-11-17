@@ -2,7 +2,7 @@
 
 ## What it is
 
-**Eagle Wings** (`eagle_wings`, Survival only) is a chest item. Underneath it is a plain
+**Eagle Wings** (`eagle_wings`, Survival and Lifesteal since issue #1591) is a chest item. Underneath it is a plain
 vanilla **Netherite Chestplate**:
 
 - vanilla armor, toughness, knockback resistance and durability
@@ -21,8 +21,8 @@ and detached in game. The scale is now 0.65 and the plate rests on the back.
 The worn armor layer (`equipment/eagle_wings.json`) is a leather harness with a gold eagle
 crest, which the wings hang from.
 
-To get one, staff run `/joshymc give eagle_wings [amount] [player]` (`joshymc.give`). It is
-refused where Survival is locked away.
+To get one, staff run `/joshymc give eagle_wings [amount] [player]` (`joshymc.give`). It has
+no gamemode scope, so it can be given (and drawn) on Survival and on Lifesteal.
 
 ## Equip and unequip
 
@@ -88,9 +88,10 @@ The wings are hidden from everyone while the wearer:
 - is vanished, in Mod Mode, invisible, in spectator or dead
 - is combat-tagged (`back-cosmetics.hide-in-combat`, default true), so the wings never block
   anyone's view in a fight
+- is held by a Lifesteal Ranked match or spectating one (always, whatever `hide-in-combat`
+  says: ranked hits never combat-tag, so the combat rule alone wouldn't cover a ranked fight)
 - is in the event world
 - is not standing or sneaking (gliding, swimming, sleeping, riptide)
-- is in a world that isn't a Survival world
 
 ## Gameplay safety
 
@@ -99,6 +100,37 @@ wearer's hitbox, reach or movement.
 
 The item is an ordinary chestplate. Combat, anticheat, vanish, ranked, hearts, Elo and
 inventory snapshots/restores only ever see a Netherite Chestplate.
+
+## Survival and Lifesteal (issue #1591)
+
+Eagle Wings used to be Survival only. It is now shared, because nothing about it is a
+gameplay advantage:
+
+- the item is stat-for-stat a vanilla Netherite Chestplate (no extra armor, toughness or
+  attributes, no gliding, no enchantments, not unbreakable), which Lifesteal players can
+  already craft
+- the wings are a display entity: no hitbox, no collision, not attackable, never a passenger
+- they are hidden while combat-tagged and while in or watching a Ranked match, so they never
+  block anyone's view in a fight
+
+Ranked safety: snapshots and restores serialize the chest slot like any other item (the
+display is never in an inventory); ranked entry/integrity checks see a Netherite Chestplate;
+held players' wings are removed before the arena fight, so no display follows anyone into an
+arena in use; combat hitboxes are untouched.
+
+The scale and mount point from issue #1571 are unchanged.
+
+### Still Survival only
+
+These scoped items do more than look different, so they stay Survival only:
+
+| Item | Why |
+|---|---|
+| Bat Wings, Christmas Tree Elytra | Elytras: flight (gliding) |
+| Viking, Krampus and Snowman sets | Unbreakable Netherite armor: armor stats and infinite durability |
+| Peppermint Pickaxe | A working Netherite pickaxe (a tool, not a cosmetic) |
+
+Every other custom item already has no gamemode scope.
 
 ## Fallbacks
 

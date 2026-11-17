@@ -15,7 +15,9 @@ import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.inventory.meta.ItemMeta
 
 // ── Eagle Wings ─────────────────────────────────────────────────────────────
-// Survival-only back cosmetic (issue #1516). A plain vanilla Netherite Chestplate
+// Back cosmetic (issue #1516), shared by Survival and Lifesteal since issue #1591: the
+// item is stat-for-stat a vanilla Netherite Chestplate and the wings are a display entity
+// with no hitbox, hidden in combat and in Ranked matches. A plain vanilla Netherite Chestplate
 // underneath: vanilla armor, toughness, knockback resistance and durability, normal
 // enchants and repair, no gliding and no abilities. While it is worn, BackCosmeticManager
 // draws the big 3D wings (resourcepack/art/items/eagle_wings.py, about 2 blocks across)
@@ -36,7 +38,10 @@ class EagleWings : CustomItem(), BackCosmeticItem {
         usage = "Wear in the chest slot to show the wings.",
     )
 
-    override val gamemodeScope = GamemodeScope.SURVIVAL
+    // Issue #1591: no gamemode scope. Nothing about the item differs from a vanilla Netherite
+    // Chestplate (no extra stats, no gliding, not unbreakable), so it is safe in Lifesteal;
+    // BackCosmeticRules keeps the wings hidden while combat-tagged or in a Ranked match.
+    override val gamemodeScope: GamemodeScope? = null
 
     override val backModel: NamespacedKey get() = NamespacedKey(Joshymc.instance, id)
 

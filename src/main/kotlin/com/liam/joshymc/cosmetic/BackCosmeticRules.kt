@@ -64,6 +64,7 @@ object BackCosmeticRules {
         VANISHED("vanished"),
         MOD_MODE("in Mod Mode"),
         COMBAT("combat-tagged"),
+        RANKED("in or watching a Ranked match"),
         EVENT_WORLD("in the event world"),
         POSE("gliding, swimming, sleeping or riptiding"),
     }
@@ -77,13 +78,19 @@ object BackCosmeticRules {
         val vanished: Boolean = false,
         val modMode: Boolean = false,
         val combatTagged: Boolean = false,
+        /**
+         * Issue #1591: held by a Lifesteal Ranked match or spectating one. Ranked hits never
+         * combat-tag, so without this the wings would show in the middle of a ranked fight.
+         */
+        val inRanked: Boolean = false,
         val inEventWorld: Boolean = false,
         val pose: String = "STANDING",
     )
 
     /**
      * Hidden whenever drawing it could reveal someone who shouldn't be seen (vanish, Mod Mode,
-     * invisibility, spectators), block anyone's view in a fight (combat tag, hosted events),
+     * invisibility, spectators), block anyone's view in a fight (combat tag, Ranked matches
+     * whatever `hide-in-combat` says, hosted events),
      * or float wrongly (any pose but standing/sneaking). The first matching reason wins.
      */
     fun hidden(settings: Settings, wearer: Wearer): Hidden? = when {
@@ -95,6 +102,7 @@ object BackCosmeticRules {
         wearer.modMode -> Hidden.MOD_MODE
         wearer.invisible -> Hidden.INVISIBLE
         settings.hideInCombat && wearer.combatTagged -> Hidden.COMBAT
+        wearer.inRanked -> Hidden.RANKED
         wearer.inEventWorld -> Hidden.EVENT_WORLD
         wearer.pose !in VISIBLE_POSES -> Hidden.POSE
         else -> null
