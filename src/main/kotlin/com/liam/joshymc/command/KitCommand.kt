@@ -3,8 +3,6 @@ package com.liam.joshymc.command
 import com.liam.joshymc.Joshymc
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.util.Msg
-import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -27,11 +25,8 @@ class KitCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
         // /kit <name> — claim directly
         if (args.isNotEmpty()) {
             val name = args[0].lowercase()
-            // Only kits of the sender's current gamemode resolve (issue #1379).
-            if (plugin.kitManager.getKitFor(sender, name) == null) {
-                plugin.commsManager.send(sender, Component.text("Kit '$name' not found.", NamedTextColor.RED))
-                return true
-            }
+            // Only kits of the sender's current gamemode resolve (issue #1379); claimKit refuses the
+            // rest, and says so when the kit belongs to the other gamemode (issue #1593).
             plugin.kitManager.claimKit(sender, name)
             return true
         }

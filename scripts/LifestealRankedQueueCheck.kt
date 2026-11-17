@@ -538,7 +538,7 @@ private fun wiring() {
     check("reload and shutdown cancel every pending entry (never resumed)", manager.contains("cancelAll(\"ranked queues were reset by a server reload\")") && manager.contains("cancelAll(\"the server is shutting down\")"))
     check("one matchmaking task, replaced on refresh", manager.contains("task?.cancel()") && manager.split("runTaskTimer(").size == 2)
     check("registers the ranked system with the progression (Day 3 unlock = AVAILABLE)", manager.contains("progression.rankedTeamWarsSystem = LifestealProgressionManager.RankedTeamWarsSystem { systemReady }"))
-    check("queueing needs the season unlock", manager.contains("if (!plugin.lifestealProgressionManager.canEnterRankedQueue(now)) return LOCKED_MESSAGE"))
+    check("queueing needs the season unlock", manager.contains("if (!plugin.lifestealProgressionManager.canEnterRankedQueue(now)) return lockedMessage(now)"))
     check("disconnects end the entry (quit handled through the ranked listener)", rankedListener.contains("plugin.lifestealRankedQueueManager.onQuit(event.player)"))
     check("no Player references kept", queueSources.none { Regex("""(Map|Set|List)<[^>]*\bPlayer\b""").containsMatchIn(it) })
 

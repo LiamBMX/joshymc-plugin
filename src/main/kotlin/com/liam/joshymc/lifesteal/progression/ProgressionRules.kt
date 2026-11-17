@@ -179,6 +179,22 @@ object ProgressionRules {
         else -> RankedStatus.AVAILABLE
     }
 
+    /**
+     * Issue #1593: why the ranked queue is closed by the season schedule, for players. Uses the
+     * configured unlock time (`ranked-team-wars-unlock-after-hours`) instead of a fixed day, and
+     * never says "not unlocked" once the schedule has unlocked it.
+     */
+    fun rankedLockedMessage(progress: Progress): String {
+        if (progress.phase == Phase.UNKNOWN) return "Ranked Team Wars are unavailable right now: the season schedule couldn't be checked. Please try again later."
+        if (progress.rankedUnlocked) return "Ranked Team Wars are unavailable right now. Please try again later."
+        val remaining = progress.remaining(Milestone.RANKED_UNLOCKED)
+        return when {
+            !progress.launched && remaining == null -> "Ranked Team Wars unlock after the season launches. /lifesteal progress shows the schedule."
+            remaining == null -> "Ranked Team Wars haven't unlocked for this season yet. /lifesteal progress shows when they open."
+            else -> "Ranked Team Wars unlock in ${formatRemaining(remaining)}. /lifesteal progress shows the schedule."
+        }
+    }
+
     // ── Announcements ───────────────────────────────────────
 
     /**

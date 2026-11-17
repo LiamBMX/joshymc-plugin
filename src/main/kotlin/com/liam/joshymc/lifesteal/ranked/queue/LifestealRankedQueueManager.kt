@@ -204,9 +204,13 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
         if (!s.enabled) return "Ranked matchmaking is turned off right now."
         if (!tablesReady || !ranked.active) return "Ranked Team Wars are unavailable right now. Please try again later."
         teams.unavailableReason()?.let { return it }
-        if (!plugin.lifestealProgressionManager.canEnterRankedQueue(now)) return LOCKED_MESSAGE
+        if (!plugin.lifestealProgressionManager.canEnterRankedQueue(now)) return lockedMessage(now)
         return null
     }
+
+    /** Issue #1593: the schedule lock in the configured unlock time, not a fixed "Day 3". */
+    private fun lockedMessage(now: Long): String =
+        com.liam.joshymc.lifesteal.progression.ProgressionRules.rankedLockedMessage(plugin.lifestealProgressionManager.progress(now))
 
     fun playerProblem(player: Player, now: Long = System.currentTimeMillis()): String? = unavailableReason(now) ?: when {
         !player.hasPermission(PERMISSION_USE) -> "You don't have permission to play Ranked Team Wars."
@@ -872,7 +876,6 @@ class LifestealRankedQueueManager(private val plugin: Joshymc) {
         const val STALE = "That ranked request is no longer valid (it was answered, replaced or expired)."
         /** Issue #1369: shown while `ranked-team-wars.enabled` is false. */
         const val CLOSED_MESSAGE = "Ranked Team Wars aren't open yet. Staff will announce when they start."
-        const val LOCKED_MESSAGE = "Ranked Team Wars haven't unlocked for this season yet; they open on Day 3 (/lifesteal progress shows when)."
         private val PREFIX: Component = Component.text("[Ranked] ", NamedTextColor.GOLD)
 
         fun text(content: String, color: NamedTextColor): Component = Component.text(content, color)

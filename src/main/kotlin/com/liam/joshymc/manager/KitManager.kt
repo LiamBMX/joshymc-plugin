@@ -476,7 +476,9 @@ class KitManager(private val plugin: Joshymc) {
         // Revalidated on every claim (GUI clicks included): only kits of the player's current gamemode.
         val kit = getKitFor(player, name)
         if (kit == null) {
-            plugin.commsManager.send(player, Component.text("Kit '$name' not found.", NamedTextColor.RED))
+            // Issue #1593: another gamemode's kit says so instead of "not found". Disabled Lifesteal kits stay hidden.
+            val elsewhere = kits[name]?.takeIf { it.available }?.let { KitCatalog.otherGamemodeMessage(it.entry, gamemodeOf(player)) }
+            plugin.commsManager.send(player, Component.text(elsewhere ?: "Kit '$name' not found.", NamedTextColor.RED))
             return false
         }
 

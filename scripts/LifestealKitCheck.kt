@@ -156,6 +156,15 @@ fun main() {
     check("no rank file: possible rank kits fail closed", LifestealRankRules.kitDecision(null, emptySet(), "supply", possibleRankKit = true) == KitDecision.UNVERIFIED)
     check("explicit starter category is never a rank kit", KitCatalog.categoryOf(Entry("lifesteal_starter", "lifesteal", "starter"), listOf("lifesteal_starter")) == Category.STARTER)
 
+    // ── Other gamemode's kits (issue #1593) ─────────────
+    val survivalKit = Entry("vip", null, null)
+    val lifestealKit = Entry("lifesteal_starter", "lifesteal", "starter")
+    check("Survival kit on Lifesteal: says where it belongs",
+        KitCatalog.otherGamemodeMessage(survivalKit, ServerGamemode.LIFESTEAL) == "Kit 'vip' is a Survival kit and is unavailable on Lifesteal. Use /kit to see the kits here.")
+    check("Lifesteal kit on Survival: says where it belongs", KitCatalog.otherGamemodeMessage(lifestealKit, ServerGamemode.SURVIVAL)?.contains("is a Lifesteal kit and is unavailable on Survival") == true)
+    check("a kit of the current gamemode has no such message", KitCatalog.otherGamemodeMessage(lifestealKit, ServerGamemode.LIFESTEAL) == null)
+    check("a kit with an invalid gamemode stays 'not found'", KitCatalog.otherGamemodeMessage(Entry("odd", "skyblock", null), ServerGamemode.LIFESTEAL) == null)
+
     // ── Claim ordering (source) ─────────────────────────
     val manager = File("src/main/kotlin/com/liam/joshymc/manager/KitManager.kt").readText()
     val claim = manager.substringAfter("private fun claimLifestealKit(").substringBefore("private fun cooldownMessage(")
@@ -172,6 +181,9 @@ fun main() {
         listOf("hasPendingRestore", "isSpectator", "inventories.unsettled", "isInEventWorld", "isTagged", "holds(player)").all { it in claim })
     check("one-time kits ignore the cooldown bypass in the menu too",
         manager.substringAfter("fun getCooldownRemaining(").substringBefore("hasBypass(player, name)").contains("kit.isOneTime"))
+    val notFound = manager.substringAfter("fun claimKit(").substringBefore("if (!canUse(player, kit))")
+    check("claim: other gamemode's kit is named, disabled kits stay hidden", notFound.contains("KitCatalog.otherGamemodeMessage(") && notFound.contains("takeIf { it.available }"))
+    check("/kit <name> lets claimKit word the refusal", !File("src/main/kotlin/com/liam/joshymc/command/KitCommand.kt").readText().contains("not found"))
     check("Survival kits are never one-time", manager.contains("val isOneTime: Boolean get() = isLifesteal && oneTime"))
 
     println("Lifesteal kit checks passed ($checks checks).")
