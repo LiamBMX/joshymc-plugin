@@ -91,6 +91,9 @@ fun main() {
     check("combat tag hides", BackCosmeticRules.hidden(on, Wearer(combatTagged = true)) == Hidden.COMBAT)
     check("combat tag shows when hide-in-combat is off",
         BackCosmeticRules.hidden(Settings(hideInCombat = false), Wearer(combatTagged = true)) == null)
+    check("ranked match hides", BackCosmeticRules.hidden(on, Wearer(inRanked = true)) == Hidden.RANKED)
+    check("ranked match hides even with hide-in-combat off (ranked hits never combat-tag)",
+        BackCosmeticRules.hidden(Settings(hideInCombat = false), Wearer(inRanked = true)) == Hidden.RANKED)
     check("event world hides", BackCosmeticRules.hidden(on, Wearer(inEventWorld = true)) == Hidden.EVENT_WORLD)
     for (pose in listOf("FALL_FLYING", "SWIMMING", "SLEEPING", "SPIN_ATTACK", "DYING")) {
         check("$pose hides", BackCosmeticRules.hidden(on, Wearer(pose = pose)) == Hidden.POSE)
@@ -139,7 +142,17 @@ fun main() {
         joshymc.contains("safe(\"backCosmeticManager.stop\")") && joshymc.contains("safe(\"backCosmeticManager.start\")"))
     check("eagle wings registered", File("$root/manager/ItemManager.kt").readText().contains("register(EagleWings())"))
     val wings = File("$root/item/impl/EagleWings.kt").readText()
-    check("eagle wings are Survival scoped", wings.contains("gamemodeScope = GamemodeScope.SURVIVAL"))
+    // Issue #1591: shared by Survival and Lifesteal (stat-for-stat a vanilla Netherite Chestplate).
+    check("eagle wings are shared (no gamemode scope)", wings.contains("override val gamemodeScope: GamemodeScope? = null"))
+    check("eagle wings stay a plain Netherite Chestplate",
+        wings.contains("Material.NETHERITE_CHESTPLATE") && !wings.contains("addAttributeModifier") &&
+            !wings.contains("glider") && !wings.contains("addEnchant"))
+    check("manager hides the wings for ranked participants and spectators",
+        manager.contains("lifestealRankedManager.holds(player.uniqueId)") && manager.contains("lifestealRankedManager.isSpectator(player.uniqueId)"))
+    // Items with gameplay beyond looks stay Survival only (issue #1591 exclusions).
+    for (file in listOf("BatWings", "ChristmasTreeElytra", "VikingSet", "KrampusSet", "SnowmanSet", "PeppermintPickaxe")) {
+        check("$file stays Survival scoped", File("$root/item/impl/$file.kt").readText().contains("gamemodeScope = GamemodeScope.SURVIVAL"))
+    }
     check("eagle wings are not unbreakable", !wings.contains("isUnbreakable"))
     val art = File("resourcepack/art/items/eagle_wings.py").readText()
     val scale = Regex("""BACK_SCALE = ([0-9.]+)""").find(art)?.groupValues?.get(1)?.toDouble()

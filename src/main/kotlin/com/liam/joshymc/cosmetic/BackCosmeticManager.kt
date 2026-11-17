@@ -46,6 +46,7 @@ import java.util.UUID
  * - **Purely visual**: no hitbox (display entities can't be hit or collided with), hidden by
  *   default and shown only to Java viewers whose JoshyMC pack loaded and who can see the wearer.
  *   Hidden while the wearer is vanished, in Mod Mode, invisible, spectating, dead, combat-tagged,
+ *   held by or watching a Ranked match,
  *   in the event world, or not standing/sneaking ([BackCosmeticRules.hidden]).
  * - Scoped items only draw in their own gamemode's worlds.
  */
@@ -168,6 +169,9 @@ class BackCosmeticManager(private val plugin: Joshymc) : Listener {
             vanished = player.getMetadata("vanished").any { it.asBoolean() },
             modMode = runCatching { plugin.modModeManager.isModMode(player) }.getOrDefault(false),
             combatTagged = runCatching { plugin.combatManager.isTagged(player) }.getOrDefault(false),
+            inRanked = runCatching {
+                plugin.lifestealRankedManager.holds(player.uniqueId) || plugin.lifestealRankedManager.isSpectator(player.uniqueId)
+            }.getOrDefault(false),
             inEventWorld = runCatching { plugin.eventManager.isInEventWorld(player) }.getOrDefault(false),
             pose = player.pose.name,
         )
