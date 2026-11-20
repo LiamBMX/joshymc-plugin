@@ -95,7 +95,7 @@ commands:
     aliases: [randomtp, wild]
   afk:
     description: Toggle AFK status
-    usage: /afk
+    usage: /afk [setspawn]
   kit:
     description: Open kit GUI or claim a kit
     usage: /kit [name]
@@ -872,6 +872,9 @@ permissions:
   joshymc.afk:
     description: Allows toggling AFK
     default: true
+  joshymc.afk.setspawn:
+    description: Set the AFK spawn
+    default: op
   joshymc.kit:
     description: Allows using kits
     default: true

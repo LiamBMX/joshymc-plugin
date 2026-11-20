@@ -1,6 +1,11 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.afk.AfkSpawn
+import com.liam.joshymc.afk.AfkSpawnRules
+import com.liam.joshymc.afk.AfkSpawnStore
+import com.liam.joshymc.recovery.SafeSpots
+import com.liam.joshymc.teleport.CombatTeleportGuard
 import com.liam.joshymc.util.giveItemSafely
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
@@ -30,6 +35,9 @@ class AFKManager(private val plugin: Joshymc) {
     private val afkPlayers = ConcurrentHashMap.newKeySet<UUID>()
     private val preAfkLocations = ConcurrentHashMap<UUID, Location>()
     private val teleporting = ConcurrentHashMap.newKeySet<UUID>()
+    /** Players waiting for the AFK spawn's chunk before they go AFK (issue #1596). */
+    private val entering = ConcurrentHashMap.newKeySet<UUID>()
+    private val spawnStore = AfkSpawnStore(plugin.databaseManager)
 
     /**
      * AFK reward item. Resolution order at give time:
@@ -92,6 +100,8 @@ class AFKManager(private val plugin: Joshymc) {
             else -> interval
         }
         rewardIntervalTicks = rewardIntervalSeconds * 20
+
+        spawnStore.createTables()
 
         // Create AFK void world if it doesn't exist
         ensureAfkWorld()
@@ -291,26 +301,111 @@ class AFKManager(private val plugin: Joshymc) {
         afkPlayers.clear()
         preAfkLocations.clear()
         teleporting.clear()
+        entering.clear()
         nextRewardTime.clear()
         afkStartTime.clear()
     }
 
-    fun toggleAfk(player: Player): Boolean {
-        return if (isAfk(player)) {
-            setAfk(player, false)
-            false
-        } else {
-            setAfk(player, true)
-            true
+    fun toggleAfk(player: Player) {
+        if (isAfk(player)) setAfk(player, false) else enterAfk(player)
+    }
+
+    // ── AFK spawn (issue #1596) ─────────────────────────────
+
+    /** The AFK spawn for the gamemode of [world] (each gamemode has its own row). */
+    fun spawnFor(world: World): AfkSpawn? = spawnStore.load(plugin.gamemodeLockManager.gamemodeOf(world))
+
+    /**
+     * Saves [player]'s exact position as the AFK spawn for the gamemode they're in. Returns the
+     * saved spawn, or null after telling them why the spot was refused.
+     */
+    fun setSpawnHere(player: Player): AfkSpawn? {
+        if (isAfk(player) || player.uniqueId in entering) {
+            plugin.commsManager.send(player, Component.text(AfkSpawnRules.MSG_SET_WHILE_AFK, NamedTextColor.RED), CommunicationsManager.Category.AFK)
+            return null
+        }
+        val loc = player.location
+        val problem = SafeSpots.problem(loc)
+        if (problem != null) {
+            plugin.commsManager.send(player, Component.text(AfkSpawnRules.MSG_SET_UNSAFE + problem + ".", NamedTextColor.RED), CommunicationsManager.Category.AFK)
+            return null
+        }
+        val spawn = AfkSpawn(
+            plugin.gamemodeLockManager.gamemodeOf(player.world), player.world.name,
+            loc.x, loc.y, loc.z, loc.yaw, loc.pitch,
+        )
+        spawnStore.save(spawn, player.uniqueId, player.name, System.currentTimeMillis())
+        return spawn
+    }
+
+    /**
+     * `/afk` on (issue #1596): refuses combat-tagged and ranked players, then teleports to this
+     * gamemode's AFK spawn once its chunk is loaded and the spot is still safe. With no usable
+     * spawn the player goes AFK where they stand and is told why; they're never sent anywhere else.
+     */
+    fun enterAfk(player: Player) {
+        if (isAfk(player) || !entering.add(player.uniqueId)) return
+        CombatTeleportGuard.problem(plugin, player)?.let { problem ->
+            entering.remove(player.uniqueId)
+            plugin.commsManager.send(player, Component.text(problem, NamedTextColor.RED), CommunicationsManager.Category.AFK)
+            return
+        }
+        val spawn = spawnFor(player.world)
+        val world = spawn?.let { Bukkit.getWorld(it.world) }
+        when (AfkSpawnRules.destination(spawn, world != null)) {
+            AfkSpawnRules.Destination.NOT_SET -> { afkInPlace(player, AfkSpawnRules.MSG_NOT_SET); return }
+            AfkSpawnRules.Destination.WORLD_MISSING, AfkSpawnRules.Destination.INVALID -> {
+                plugin.logger.warning("[AFK] AFK spawn for ${spawn?.gamemode?.id} is unusable (world '${spawn?.world}' missing or bad coordinates); players stay in place.")
+                afkInPlace(player, AfkSpawnRules.MSG_UNAVAILABLE)
+                return
+            }
+            AfkSpawnRules.Destination.TELEPORT -> {}
+        }
+        val target = Location(world!!, spawn!!.x, spawn.y, spawn.z, spawn.yaw, spawn.pitch)
+        // Never generate terrain: the spawn was set where a staff member stood.
+        world.getChunkAtAsync(target.blockX shr 4, target.blockZ shr 4, false).whenComplete { chunk, error ->
+            plugin.server.scheduler.runTask(plugin, Runnable {
+                if (!entering.contains(player.uniqueId)) return@Runnable
+                if (!player.isOnline || isAfk(player)) { entering.remove(player.uniqueId); return@Runnable }
+                CombatTeleportGuard.problem(plugin, player)?.let { problem ->
+                    entering.remove(player.uniqueId)
+                    plugin.commsManager.send(player, Component.text(problem, NamedTextColor.RED), CommunicationsManager.Category.AFK)
+                    return@Runnable
+                }
+                val problem = when {
+                    error != null || chunk == null -> "chunk not available"
+                    Bukkit.getWorld(world.uid) == null -> "world not loaded"
+                    else -> SafeSpots.problem(target)
+                }
+                if (problem != null) {
+                    plugin.logger.warning("[AFK] AFK spawn for ${spawn.gamemode.id} at ${spawn.world} ${target.blockX},${target.blockY},${target.blockZ} is unsafe ($problem); ${player.name} stays in place.")
+                    afkInPlace(player, AfkSpawnRules.MSG_UNAVAILABLE)
+                    return@Runnable
+                }
+                entering.remove(player.uniqueId)
+                setAfk(player, true, target)
+            })
         }
     }
 
-    fun setAfk(player: Player, afk: Boolean) {
+    private fun afkInPlace(player: Player, message: String) {
+        entering.remove(player.uniqueId)
+        setAfk(player, true, null)
+        plugin.commsManager.send(player, Component.text(message, NamedTextColor.YELLOW), CommunicationsManager.Category.AFK)
+    }
+
+    /**
+     * Turns AFK on or off. On: [destination] is where the player is moved (already checked by
+     * [enterAfk]); null keeps them where they are and stores no return spot.
+     */
+    fun setAfk(player: Player, afk: Boolean, destination: Location? = null) {
         if (afk) {
             afkPlayers.add(player.uniqueId)
-            val loc = player.location.clone()
-            preAfkLocations[player.uniqueId] = loc
-            persistPreAfkLocation(player.uniqueId, loc)
+            if (destination != null) {
+                val loc = player.location.clone()
+                preAfkLocations[player.uniqueId] = loc
+                persistPreAfkLocation(player.uniqueId, loc)
+            }
             afkStartTime[player.uniqueId] = System.currentTimeMillis()
             nextRewardTime[player.uniqueId] = System.currentTimeMillis() + (rewardIntervalSeconds * 1000)
 
@@ -320,18 +415,19 @@ class AFKManager(private val plugin: Joshymc) {
                     .append(player.displayName())
             )
 
-            // Teleport to AFK world
-            val afkWorld = Bukkit.getWorld(worldName)
-            if (afkWorld != null) {
+            // Teleport to the AFK spawn (issue #1596: only a configured, checked destination)
+            if (destination != null) {
                 teleporting.add(player.uniqueId)
-                val spawnLoc = Location(afkWorld, 0.5, 65.0, 0.5, 0f, 0f)
-                PvpTeleportGuard.forced { player.teleport(spawnLoc) }
+                val moved = PvpTeleportGuard.forced { player.teleport(destination) }
+                if (!moved) {
+                    // Another plugin refused the teleport: nothing to send them back from.
+                    preAfkLocations.remove(player.uniqueId)
+                    clearPersistedPreAfkLocation(player.uniqueId)
+                }
                 // Remove teleport flag after a tick
                 plugin.server.scheduler.runTaskLater(plugin, Runnable {
                     teleporting.remove(player.uniqueId)
                 }, 3L)
-            } else {
-                plugin.logger.warning("[AFK] World '$worldName' not found — skipping teleportation.")
             }
 
             // Apply permanent Blindness so the AFK area is just darkness with
@@ -406,6 +502,7 @@ class AFKManager(private val plugin: Joshymc) {
     fun isTeleporting(player: Player): Boolean = teleporting.contains(player.uniqueId)
 
     fun handleQuit(player: Player) {
+        entering.remove(player.uniqueId)
         if (isAfk(player)) {
             // Teleport back before quit data is saved so they rejoin at their original location
             val prev = preAfkLocations.remove(player.uniqueId)
@@ -433,8 +530,13 @@ class AFKManager(private val plugin: Joshymc) {
     fun handleJoin(player: Player) {
         val inAfkWorld = player.world.name == worldName
         val saved = loadPersistedPreAfkLocation(player.uniqueId)
+        // Issue #1596: the AFK spawn may be outside the AFK world; a player still standing on it
+        // with a stored return spot (server crashed mid-AFK) is rescued the same way.
+        val atAfkSpawn = saved != null && spawnFor(player.world)?.let {
+            it.world == player.world.name && player.location.distanceSquared(Location(player.world, it.x, it.y, it.z)) < 9.0
+        } == true
 
-        if (inAfkWorld) {
+        if (inAfkWorld || atAfkSpawn) {
             val target = saved ?: fallbackSpawnLocation()
             if (target != null) {
                 // Defer one tick so the join is fully processed before teleport
