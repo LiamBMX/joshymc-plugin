@@ -18,7 +18,10 @@ import com.liam.joshymc.gamemode.LifestealSharedCommands.Guard
 import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.gamemode.SurvivalSelfPerks
 import com.liam.joshymc.lifesteal.ranked.RankedMatchRules
+import com.liam.joshymc.gamemode.LifestealSharedCommands.LifestealShopRules
+import com.liam.joshymc.lifesteal.ranked.RankedIntegrity
 import com.liam.joshymc.lifesteal.ranks.LifestealRankRules
+import com.liam.joshymc.staff.StaffRank
 import org.yaml.snakeyaml.Yaml
 import java.io.File
 import java.io.InputStreamReader
@@ -48,11 +51,17 @@ private val DEDICATED_LIFESTEAL = setOf(LIFESTEAL)
 private val MIXED = setOf(SURVIVAL, LIFESTEAL)
 private val SURVIVAL_ONLY = setOf(SURVIVAL)
 
-/** The gate's decision ([com.liam.joshymc.gamemode.GamemodeLockManager.canUse]) for a JoshyMC command. */
-private fun canUse(name: String, current: ServerGamemode, hosted: Set<ServerGamemode>, locked: Set<ServerGamemode>): Boolean {
+/**
+ * The gate's decision ([com.liam.joshymc.gamemode.GamemodeLockManager.canUse]) for a JoshyMC command.
+ * [visible] = the sender holds the issue #1599 staff share's `visibleWith` node (staff); false = a regular player.
+ */
+private fun canUse(name: String, current: ServerGamemode, hosted: Set<ServerGamemode>, locked: Set<ServerGamemode>, visible: Boolean = true): Boolean {
     val scope = GamemodeAssignments.COMMANDS[name] ?: return true
     if (GamemodeIsolation.allowed(scope, current, locked)) return true
-    return scope == GamemodeScope.SURVIVAL && LifestealSharedCommands.sharedHere(name, current, hosted)
+    if (scope != GamemodeScope.SURVIVAL) return false
+    if (LifestealSharedCommands.sharedHere(name, current, hosted)) return true
+    if (!LifestealSharedCommands.adminSharedHere(name, current, hosted)) return false
+    return LifestealSharedCommands.ADMIN_SHARED[name]?.visibleWith == null || visible
 }
 
 fun main() {
@@ -65,6 +74,7 @@ fun main() {
         ((body as? Map<*, *>)?.get("aliases") as? List<*>)?.forEach { aliasOwner[it.toString().lowercase()] = name.lowercase() }
     }
     val shared = LifestealSharedCommands.SHARED.keys
+    val adminShared = LifestealSharedCommands.ADMIN_SHARED.keys
     val blacklist = LifestealSharedCommands.BLACKLIST.keys
     val dedicatedLocks = DedicatedServer.isolatedGamemodes(LIFESTEAL, emptyList())
 
@@ -90,7 +100,7 @@ fun main() {
     // ── A. Dedicated Lifesteal: shared commands work while Survival stays locked ──
     for ((name, scope) in GamemodeAssignments.COMMANDS) {
         val onLifesteal = canUse(name, LIFESTEAL, DEDICATED_LIFESTEAL, dedicatedLocks)
-        val expected = scope != GamemodeScope.SURVIVAL || name in shared
+        val expected = scope != GamemodeScope.SURVIVAL || name in shared || name in adminShared
         check("/$name on dedicated Lifesteal = ${if (expected) "works" else "refused"}", onLifesteal == expected)
         // Survival is still locked there: the plain isolation rule is unchanged.
         if (scope == GamemodeScope.SURVIVAL) check("/$name: Survival is still locked", !GamemodeIsolation.allowed(scope, LIFESTEAL, dedicatedLocks))
@@ -188,16 +198,136 @@ fun main() {
         if (scope == GamemodeScope.NETWORK) check("NETWORK /$name works on dedicated Lifesteal", canUse(name, LIFESTEAL, DEDICATED_LIFESTEAL, dedicatedLocks))
     }
     for (name in GamemodeAssignments.UNASSIGNED.keys) check("unassigned /$name still works", canUse(name, LIFESTEAL, DEDICATED_LIFESTEAL, dedicatedLocks))
-    // Staff commands stay restricted where they were (eco, invsee keep their scope and permissions).
-    check("/eco is not shared", "eco" !in shared && !canUse("eco", LIFESTEAL, DEDICATED_LIFESTEAL, dedicatedLocks))
-    check("/phome (staff) is not shared", "phome" !in shared)
+    // Staff commands keep their scope; /eco is a staff share (issue #1599), never a player share.
+    check("/eco is not a player share", "eco" !in shared && "eco" in adminShared)
+    check("/phome (staff) is not shared", "phome" !in shared && "phome" !in adminShared)
     val commandManager = source("manager/CommandManager.kt")
     for (name in shared) {
         val permission = (commands[name] as? Map<*, *>)?.get("permission")
-        check("/$name keeps a permission check", permission != null || "\"$name\" to \"joshymc." in commandManager || name in setOf("home", "sethome", "delhome", "worth"))
+        check("/$name keeps a permission check", permission != null || "\"$name\" to \"joshymc." in commandManager || name in setOf("home", "sethome", "delhome", "worth", "rtp", "shop"))
     }
     check("god keeps its permission", "\"god\" to \"joshymc.god\"" in commandManager)
     check("fly keeps its permission", "\"fly\" to \"joshymc.fly\"" in commandManager)
+
+    // ── E. Issue #1599: staff commands and approved player utilities ──
+    check("the player utilities are shared and guarded", listOf("warp", "rtp", "shop").all { LifestealSharedCommands.guardOf(it) == Guard.COMPETITIVE })
+    for (name in listOf("shop", "sell", "balance", "baltop", "warp", "rtp")) {
+        check("approved /$name works for players on dedicated Lifesteal", canUse(name, LIFESTEAL, DEDICATED_LIFESTEAL, dedicatedLocks, visible = false))
+    }
+    for (name in adminShared) {
+        check("staff /$name exists in plugin.yml", name in names)
+        check("staff /$name keeps its SURVIVAL scope", GamemodeAssignments.COMMANDS[name] == GamemodeScope.SURVIVAL)
+        check("staff /$name is not blacklisted or a player share", name !in blacklist && name !in shared)
+        check("staff /$name stays refused in a mixed server's Lifesteal worlds", !canUse(name, LIFESTEAL, MIXED, setOf(SURVIVAL)))
+        check("staff /$name not shared for Survival senders", !LifestealSharedCommands.adminSharedHere(name, SURVIVAL, DEDICATED_LIFESTEAL))
+        check("staff /$name unchanged on Survival", canUse(name, SURVIVAL, SURVIVAL_ONLY, setOf(SURVIVAL)))
+    }
+    check("the issue's staff commands are shared",
+        listOf("setwarp", "delwarp", "editwarp", "eco", "crate", "crateeditor", "event", "enderchest", "voucher").all { it in adminShared })
+    check("restricted commands stay restricted", listOf("fly", "god", "heal", "feed", "repair", "back", "claim", "unclaim", "subclaim", "pv",
+        "market", "stock", "invest", "coinflip", "casino", "tokens", "credits", "cshop", "flytime", "pwarp", "phome", "top", "resource")
+        .all { it !in shared && it !in adminShared })
+    for (name in listOf("claim", "pv", "market", "coinflip", "flytime", "back", "fly", "repair")) {
+        check("/$name still refused on dedicated Lifesteal", !canUse(name, LIFESTEAL, DEDICATED_LIFESTEAL, dedicatedLocks))
+    }
+    check("/event hidden from players on Lifesteal", !canUse("event", LIFESTEAL, DEDICATED_LIFESTEAL, dedicatedLocks, visible = false))
+    check("/enderchest hidden from players on Lifesteal", !canUse("enderchest", LIFESTEAL, DEDICATED_LIFESTEAL, dedicatedLocks, visible = false))
+    check("/event visible with joshymc.event.inventory.recover", LifestealSharedCommands.ADMIN_SHARED["event"]?.visibleWith == "joshymc.event.inventory.recover")
+    check("/enderchest visible with joshymc.enderchest.others", LifestealSharedCommands.ADMIN_SHARED["enderchest"]?.visibleWith == "joshymc.enderchest.others")
+
+    fun inv(cmd: String, vararg a: String, me: String = "Staff") = LifestealSharedCommands.adminInvocation(cmd, a.toList(), me)
+    fun tab(cmd: String, vararg a: String, me: String = "Staff") = LifestealSharedCommands.adminInvocation(cmd, a.toList(), me, typing = true)
+    check("/event inventory runs", inv("event", "inventory", "list") && inv("event", "inv", "info", "x") && inv("event", "INVENTORY"))
+    check("/event menu, start, join and the rest stay Survival", !inv("event") && !inv("event", "start", "spleef") && !inv("event", "join") &&
+        !inv("event", "setworld") && !inv("event", "rewards", "retry"))
+    check("/event tab offers only inventory", tab("event", "in") && tab("event", "") && !tab("event", "st") && tab("event", "inventory", "li"))
+    check("/enderchest <other> runs", inv("enderchest", "Bob"))
+    check("self /enderchest stays Survival", !inv("enderchest") && !inv("enderchest", "Staff", me = "Staff") && !inv("enderchest", "staff", me = "Staff"))
+    check("/enderchest <player> clear stays Survival", !inv("enderchest", "Bob", "clear") && !tab("enderchest", "Bob", "c"))
+    check("/voucher give chattag runs", inv("voucher", "give", "Bob", "chattag_haunted") && inv("voucher", "give", "Bob", "CHATTAG_x", "3"))
+    check("fly vouchers stay Survival", !inv("voucher", "give", "Bob", "fly:1h") && !inv("voucher", "give", "Bob", "fly", "1h") &&
+        !tab("voucher", "give", "Bob", "fly"))
+    check("other vouchers stay Survival", !inv("voucher", "give", "Bob", "money1k") && !inv("voucher", "give", "Bob", "chattag_") &&
+        !inv("voucher", "give", "Bob") && !inv("voucher", "create", "x", "10", "c", "cmd") && !inv("voucher", "setcommand", "x") &&
+        !inv("voucher") && !inv("voucher", "list") && !inv("voucher", "delete", "x"))
+    check("/voucher tag debug runs, tag delete doesn't", inv("voucher", "tag", "debug", "haunted") && !inv("voucher", "tag", "delete", "haunted"))
+    check("/voucher tab offers give/tag and chattag ids", tab("voucher", "") && tab("voucher", "g") && !tab("voucher", "c") &&
+        tab("voucher", "give", "Bob", "chattag_a") && tab("voucher", "give", "Bob", "ch") && tab("voucher", "give", "B"))
+    for (name in listOf("setwarp", "delwarp", "editwarp", "eco", "crate", "crateeditor")) check("/$name runs in every form", inv(name, "x", "y"))
+
+    check("/eco needs Owner", LifestealSharedCommands.minimumRank("eco", listOf("give")) == StaffRank.OWNER &&
+        LifestealSharedCommands.minimumRank("eco", listOf("set")) == StaffRank.OWNER)
+    for (name in listOf("setwarp", "delwarp", "editwarp", "crateeditor")) {
+        check("/$name needs Admin+", LifestealSharedCommands.minimumRank(name, emptyList()) == StaffRank.ADMIN)
+    }
+    for (sub in listOf("setlocation", "removelocation", "locations", "givekey", "force", "models", "rotate", "display", "monthly", "rewards", "diagnose", "inspect")) {
+        check("/crate $sub needs Admin+", LifestealSharedCommands.minimumRank("crate", listOf(sub)) == StaffRank.ADMIN)
+    }
+    for (sub in listOf("menu", "browse", "help", "list", "preview")) {
+        check("/crate $sub stays a player subcommand", LifestealSharedCommands.minimumRank("crate", listOf(sub)) == null)
+    }
+    check("/crate (browser) has no floor", LifestealSharedCommands.minimumRank("crate", emptyList()) == null)
+    check("recovery tools keep only their nodes", listOf("event", "enderchest", "voucher").all { LifestealSharedCommands.minimumRank(it, listOf("x")) == null })
+    fun floor(f: StaffRank?, console: Boolean, player: Boolean, rank: StaffRank?) = LifestealSharedCommands.staffFloorRefusal(f, console, player, rank, "eco")
+    check("console passes every floor", floor(StaffRank.OWNER, true, false, null) == null)
+    check("Owner passes the Owner floor", floor(StaffRank.OWNER, false, true, StaffRank.OWNER) == null)
+    check("Head Manager and Admin don't pass the Owner floor",
+        floor(StaffRank.OWNER, false, true, StaffRank.HEAD_MANAGER) != null && floor(StaffRank.OWNER, false, true, StaffRank.ADMIN) != null)
+    check("Admin and above pass the Admin floor", StaffRank.entries.filter { it >= StaffRank.ADMIN }.all { floor(StaffRank.ADMIN, false, true, it) == null })
+    check("below Admin is refused", StaffRank.entries.filter { it < StaffRank.ADMIN }.all { floor(StaffRank.ADMIN, false, true, it) != null })
+    check("players without a staff rank (donor/Lifesteal ranks) are refused", floor(StaffRank.ADMIN, false, true, null) != null)
+    check("command blocks never pass a floor", floor(StaffRank.ADMIN, false, false, null) != null)
+    check("no floor = nothing refused", floor(null, false, true, null) == null)
+
+    check("item grants are refused on a held participant",
+        RankedIntegrity.staffActionRefusal(RankedIntegrity.StaffAction.ITEM_GRANTS, "T", true, false, false) != null)
+    check("item grants wait for a pending restore",
+        RankedIntegrity.staffActionRefusal(RankedIntegrity.StaffAction.ITEM_GRANTS, "T", false, true, false) != null)
+
+    for (m in listOf("END_CRYSTAL", "RESPAWN_ANCHOR", "OBSIDIAN", "GLOWSTONE", "ENDER_PEARL", "GOLDEN_APPLE", "ENCHANTED_GOLDEN_APPLE",
+        "TOTEM_OF_UNDYING", "EXPERIENCE_BOTTLE", "TNT", "DIAMOND_SWORD", "DIAMOND_CHESTPLATE", "NETHERITE_HELMET", "DIAMOND_AXE", "SHIELD",
+        "CHORUS_FRUIT", "COBWEB")) {
+        check("shop: $m not sold on Lifesteal", LifestealShopRules.blocked(m, "MATERIAL"))
+    }
+    check("shop: potions and spawners not sold on Lifesteal", LifestealShopRules.blocked("SPLASH_POTION", "POTION") && LifestealShopRules.blocked("SPAWNER", "SPAWNER"))
+    for (m in listOf("WHITE_CONCRETE", "REDSTONE", "HOPPER", "LANTERN", "END_STONE", "QUARTZ", "DIAMOND_PICKAXE", "SHULKER_BOX", "BLAZE_ROD")) {
+        check("shop: $m still sold on Lifesteal", !LifestealShopRules.blocked(m, "MATERIAL"))
+    }
+    @Suppress("UNCHECKED_CAST")
+    val shopCategories = resource("shop.yml")["categories"] as Map<String, Map<String, Any?>>
+    @Suppress("UNCHECKED_CAST")
+    fun entries(category: Map<String, Any?>): List<Pair<String, String>> = (category["items"] as Map<String, Map<String, Any?>>).map { (k, v) ->
+        (v["material"] as? String ?: k) to (if (v["effect"] != null) "POTION" else if (v["spawner"] != null) "SPAWNER" else "MATERIAL")
+    }
+    check("shop: the bundled catalog still sells plenty on Lifesteal",
+        shopCategories.values.flatMap { entries(it) }.count { (m, k) -> !LifestealShopRules.blocked(m, k) } > 50)
+    check("shop: the bundled PvP & Gear page keeps only the pickaxe on Lifesteal",
+        entries(shopCategories["pvp_gear"]!!).filterNot { (m, k) -> LifestealShopRules.blocked(m, k) }.map { it.first }.toSet() == setOf("DIAMOND_PICKAXE"))
+
+    check("the gate checks staff-share forms and floors before the executor",
+        gate.indexOf("manager.adminShareRefusal(sender, command, label, args.toList())") in 0 until gate.indexOf("executor.onCommand(sender, command, label, args)"))
+    check("tab completion is filtered to the shared forms", "manager.filterAdminShareTab(" in gate)
+    check("staff shares need their visibility node", "ADMIN_SHARED[command.name.lowercase()]?.visibleWith" in lockManager)
+    check("the floor reads the staff rank", "plugin.staffRankManager.rankOf(p)" in lockManager)
+    check("only the console passes as console",
+        "sender is org.bukkit.command.ConsoleCommandSender || sender is org.bukkit.command.RemoteConsoleCommandSender" in lockManager)
+    check("Lifesteal /enderchest <player> is read-only", "openReadOnly(sender, online)" in essentials && "ENDERCHEST_VIEW" in essentials)
+    val shop = source("manager/ServerShopManager.kt")
+    check("the shop hides blocked items and re-checks at the buy", "visibleCategories(player)" in shop && "blockedFor(player, shopItem)" in shop &&
+        "plugin.gamemodeLockManager.competitiveState(player)" in shop)
+    val warp = source("command/WarpCommand.kt")
+    check("Lifesteal warps keep the combat checks and add a safe-spot check", "TeleportChecks.checkAndApply(sender, plugin)" in warp &&
+        "SafeSpots.problem(location)" in warp && "getChunkAtAsync(location.blockX shr 4, location.blockZ shr 4, false)" in warp &&
+        "CombatTeleportGuard.blocks(plugin, player)" in warp)
+    check("Lifesteal /setwarp refuses unsafe spots", "SafeSpots.problem(sender.location)" in source("command/SetWarpCommand.kt"))
+    val rtp = source("command/RtpCommand.kt")
+    check("/rtp keeps its combat and End checks", "TeleportChecks.checkAndApply(sender, plugin)" in rtp &&
+        "CombatTeleportGuard.blocks(plugin, player)" in rtp && "joshymc.rtp.end" in rtp)
+    check("/crate givekey and chat-tag vouchers wait for ranked", "StaffAction.ITEM_GRANTS" in source("command/CrateCommand.kt") &&
+        "StaffAction.ITEM_GRANTS" in source("command/VoucherCommand.kt"))
+    check("/eco take|set stay operator/console only",
+        "sender is ConsoleCommandSender || sender is RemoteConsoleCommandSender || (sender is Player && sender.isOp)" in source("command/AdminBalanceCommand.kt"))
+    check("crate subcommands keep their own nodes", "givekey" in source("crate/CratePermissions.kt") && "CratePermissions" in source("command/CrateCommand.kt"))
 
     println("Lifesteal shared command checks passed ($checks checks).")
 }

@@ -39,6 +39,14 @@ class SetWarpCommand(private val plugin: Joshymc) : CommandExecutor {
             return true
         }
 
+        // Issue #1599: Lifesteal warps must be somewhere a player can stand (warps there re-check it too).
+        if (plugin.gamemodeLockManager.gamemodeOf(sender) == com.liam.joshymc.gamemode.ServerGamemode.LIFESTEAL) {
+            com.liam.joshymc.recovery.SafeSpots.problem(sender.location)?.let { problem ->
+                plugin.commsManager.send(sender, Component.text("You can't set a warp here: $problem.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+                return true
+            }
+        }
+
         plugin.warpManager.setWarp(name, sender.uniqueId.toString(), sender.location)
         plugin.commsManager.send(sender, Component.text("Server warp '$name' created.", NamedTextColor.GREEN), CommunicationsManager.Category.WARP)
         return true

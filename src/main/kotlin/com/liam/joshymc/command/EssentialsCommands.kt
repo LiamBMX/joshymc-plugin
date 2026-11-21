@@ -728,6 +728,13 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
         if (args.isNotEmpty() && sender.hasPermission("joshymc.enderchest.others")) {
             val online = Bukkit.getPlayer(args[0])
+            // Issue #1599: on Lifesteal staff only inspect: a read-only copy, so nothing can be taken out
+            // of (or put into) a player's Ender Chest, e.g. one held by a ranked match.
+            if (online != null && online != sender &&
+                plugin.gamemodeLockManager.gamemodeOf(sender) == com.liam.joshymc.gamemode.ServerGamemode.LIFESTEAL) {
+                openReadOnly(sender, online)
+                return true
+            }
             if (online != null) {
                 plugin.enderChestManager.open(sender, online)
                 return true
@@ -743,6 +750,21 @@ class EnderchestCommand(private val plugin: Joshymc) : CommandExecutor, TabCompl
 
         plugin.enderChestManager.open(sender, sender)
         return true
+    }
+
+    /** A copy of [target]'s 54-slot Ender Chest in a click-proof GUI (vanilla slots + JoshyMC's extra storage). */
+    private fun openReadOnly(viewer: Player, target: Player) {
+        val gui = com.liam.joshymc.gui.CustomGui(
+            Component.text("EC: ${target.name} (view)", NamedTextColor.DARK_PURPLE)
+                .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false),
+            54
+        )
+        target.enderChest.contents.forEachIndexed { i, item -> if (item != null && i < 27) gui.inventory.setItem(i, item.clone()) }
+        for ((slot, item) in plugin.enderChestManager.snapshotExtra(target.uniqueId)) {
+            if (slot in 0 until com.liam.joshymc.manager.EnderChestManager.EXTRA_SLOTS) gui.inventory.setItem(27 + slot, item.clone())
+        }
+        plugin.guiManager.open(viewer, gui)
+        plugin.adminManager.logAction(viewer, "ENDERCHEST_VIEW", target)
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {

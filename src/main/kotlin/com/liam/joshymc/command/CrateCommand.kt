@@ -368,6 +368,9 @@ class CrateCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter 
 
         var given = 0
         for (target in targets) {
+            // Issue #1599: a ranked match's inventory restore would replace keys given mid-match.
+            if (plugin.gamemodeLockManager.gamemodeOf(target) == com.liam.joshymc.gamemode.ServerGamemode.LIFESTEAL &&
+                plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.ITEM_GRANTS)) continue
             if (plugin.crateManager.giveKey(target, crateType, amount)) {
                 given++
                 com.liam.joshymc.staff.AdminAudit.log(plugin, sender, "CRATE_KEY_GIVE", target.uniqueId, target.name, "crate=$crateType amount=$amount")
