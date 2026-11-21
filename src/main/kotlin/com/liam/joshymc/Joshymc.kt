@@ -358,6 +358,13 @@ class Joshymc : JavaPlugin() {
     /** Issue #1424: the Christmas Advent Calendar (both gamemodes, each where its economy lives). */
     lateinit var adventCalendarManager: com.liam.joshymc.advent.AdventCalendarManager
         private set
+    /** Issue #1602: inventory Lootboxes (10 levels, 5-of-27 pick), both gamemodes. */
+    lateinit var lootboxManager: com.liam.joshymc.lootbox.LootboxManager
+        private set
+    private var lootboxesStarted = false
+    /** The Lootbox manager once it has started (feature `lootboxes`), else null. */
+    fun lootboxManagerOrNull(): com.liam.joshymc.lootbox.LootboxManager? =
+        if (::lootboxManager.isInitialized && lootboxesStarted) lootboxManager else null
     lateinit var stuckRecoveryManager: com.liam.joshymc.recovery.StuckRecoveryManager
         private set
     lateinit var networkIdentityManager: com.liam.joshymc.network.NetworkIdentityManager
@@ -693,6 +700,7 @@ class Joshymc : JavaPlugin() {
         flyVoucherManager = com.liam.joshymc.flight.FlyVoucherManager(this)
         purchaseFulfillmentManager = com.liam.joshymc.manager.PurchaseFulfillmentManager(this)
         adventCalendarManager = com.liam.joshymc.advent.AdventCalendarManager(this)
+        lootboxManager = com.liam.joshymc.lootbox.LootboxManager(this)
         eventManager = com.liam.joshymc.manager.EventManager(this)
         resurgeManager = com.liam.joshymc.manager.ResurgeManager(this)
         boosterManager = BoosterManager(this)
@@ -823,6 +831,11 @@ class Joshymc : JavaPlugin() {
         purchaseFulfillmentManager.start()
         // After the purchase queue it hands every reward to (and crates/chat tags it validates against).
         adventCalendarManager.start()
+        // After every factory its rewards come from (items, crates, chat tags, vouchers) and the purchase queue it gives through.
+        if (isFeatureEnabled("lootboxes")) {
+            lootboxManager.start()
+            lootboxesStarted = true
+        }
         hideStaffManager.start()
         endManager.start()
         chatManager.start()
@@ -908,6 +921,8 @@ class Joshymc : JavaPlugin() {
         shutdown.step("voteManager.stop", { ::voteManager.isInitialized }) { voteManager.stop() }
         // Every claim is one synchronous transaction, so this only stops the retry sweep and the join listener.
         shutdown.step("adventCalendarManager.stop", { ::adventCalendarManager.isInitialized }) { adventCalendarManager.stop() }
+        // Ends animations and closes Lootbox screens; committed prizes stay owed in the database.
+        shutdown.step("lootboxManager.stop", { ::lootboxManager.isInitialized && lootboxesStarted }) { lootboxManager.stop() }
         shutdown.step("purchaseFulfillmentManager.stop", { ::purchaseFulfillmentManager.isInitialized }) { purchaseFulfillmentManager.stop() }
         shutdown.step("candyShopManager.stop", { ::candyShopManager.isInitialized }) { candyShopManager.stop() }
         shutdown.step("eventShopManager.stop", { ::eventShopManager.isInitialized }) { eventShopManager.stop() }
@@ -1169,6 +1184,8 @@ class Joshymc : JavaPlugin() {
         safe("lifestealBankManager.refresh") { lifestealBankManager.refresh() }
         // Rereads advent-calendar.yml, then queues waiting rewards a new placeholder mapping makes deliverable.
         safe("adventCalendarManager.reload") { adventCalendarManager.reload() }
+        // Rereads lootboxes.yml after the item, crate and chat tag reloads it validates against.
+        safe("lootboxManager.restartAfterPluginReload") { lootboxManagerOrNull()?.restartAfterPluginReload() }
         safe("beaconPotionManager.start") { beaconPotionManager.start() }
 
         // 8. Restart Discord

@@ -45,6 +45,8 @@ features:
   bedrock-pack: true
   # Issue #1516: large 3D back cosmetics (Eagle Wings). Settings in back-cosmetics below.
   back-cosmetics: true
+  # Issue #1602: inventory Lootboxes (/lootbox). Levels, rewards and timing live in lootboxes.yml.
+  lootboxes: true
 
 # Back cosmetics (issue #1516): while a player wears an item like the Eagle Wings in the chest
 # slot, its big 3D model follows them as a non-persistent display (never saved, no hitbox).

@@ -1,0 +1,215 @@
+# JoshyMC Lootboxes (issue #1602). Full guide: docs/lootboxes.md
+#
+# A Lootbox is an inventory item. Right-click it, pick 5 of the 27 mystery slots, confirm, and
+# win 5 prizes drawn from that level's rewards below. The picked slots are only choices: they
+# never change what can be won.
+#
+# Drawing: each of the 5 prizes is an independent weighted draw WITH replacement:
+#   chance of a reward = its weight / the total weight of the rewards the player can win here.
+# The same reward can come up more than once, unless it has `unique: true` (then at most once
+# per opening; after it's drawn it leaves the pool for that opening's remaining draws).
+#
+# This file ships with NO live rewards: every level starts empty, so nothing can be opened or
+# given until the Owner adds rewards. Level 1 carries disabled examples of every reward type
+# (enabled: false). Copy one, set enabled: true and your own values, then /lootbox reload.
+# A mistake in a level closes only that level (reported in the log and /lootbox list);
+# nothing is ever guessed or swapped for another item.
+
+# false = nobody can open or be given Lootboxes. Openings already confirmed are still delivered.
+enabled: true
+
+gui:
+  # {level} = 1-10, {name} = the level's name. '&' colour codes.
+  selection-title: "&8Level {level} Lootbox"
+  opening-title: "&8Opening Level {level} Lootbox..."
+  summary-title: "&8Level {level} Lootbox Rewards"
+  # The 27 identical mystery slots, and how a picked one looks.
+  mystery-material: ENDER_CHEST
+  selected-material: LIME_STAINED_GLASS_PANE
+  filler-material: BLACK_STAINED_GLASS_PANE
+  rolling-filler-material: GRAY_STAINED_GLASS_PANE
+  # Lights up above and below a reel when it stops.
+  stopped-material: LIME_STAINED_GLASS_PANE
+
+# Rolling animation, in server ticks (20 = 1 second). Purely visual: the prizes are decided and
+# saved the moment the player confirms, before anything rolls.
+animation:
+  # Time between preview changes at the start (fast) and right before a reel stops (slow).
+  start-interval-ticks: 2
+  end-interval-ticks: 8
+  # The first reel stops after this; each next reel this much later.
+  first-stop-ticks: 40
+  stagger-ticks: 12
+  # Pause after the last reel before the reward summary opens.
+  summary-delay-ticks: 30
+
+# Vanilla sounds (Bukkit Sound names). Set one to false to turn it off.
+sounds:
+  open: { sound: BLOCK_CHEST_OPEN, volume: 0.7, pitch: 1.0 }
+  select: { sound: UI_BUTTON_CLICK, volume: 0.6, pitch: 1.4 }
+  deselect: { sound: UI_BUTTON_CLICK, volume: 0.6, pitch: 0.8 }
+  denied: { sound: BLOCK_NOTE_BLOCK_BASS, volume: 0.7, pitch: 0.6 }
+  confirm: { sound: BLOCK_ENDER_CHEST_OPEN, volume: 0.8, pitch: 1.2 }
+  roll: { sound: BLOCK_NOTE_BLOCK_HAT, volume: 0.4, pitch: 1.6 }
+  reel-stop: { sound: BLOCK_NOTE_BLOCK_PLING, volume: 0.8, pitch: 1.4 }
+  finish: { sound: ENTITY_PLAYER_LEVELUP, volume: 0.8, pitch: 1.2 }
+  claim: { sound: ENTITY_EXPERIENCE_ORB_PICKUP, volume: 0.8, pitch: 1.0 }
+
+# Optional message overrides ('&' colour codes; {level}, {name}, {gamemode}, {reward}, {id}).
+# Every message and its default is listed in docs/lootboxes.md. Example:
+messages:
+  opened: "&aYou opened a {name}&a!"
+
+# Every level: name, description (item lore), material, optional item-model (namespace:path,
+# for when the art exists), glint, enabled, gamemodes it opens in (survival, lifesteal) and its
+# own rewards. Each reward needs: type, weight, and the fields its type needs:
+#
+#   type: item              material, amount (1-2304), optional enchantments / custom-enchantments
+#   type: custom-item       item (a /joshymc give id), amount
+#   type: item-base64       item-base64 (exact item snapshot, like crates.yml), amount
+#   type: crate-key         crate (crates.yml id), amount
+#   type: chat-tag-voucher  tag (voucher chat tag id), amount (1-64)
+#   type: chat-tag          tag (voucher chat tag id): unlocked on the player's account, no item
+#   type: coins / credits   amount (this server's own balances; only where that gamemode's economy lives)
+#   type: command           commands (run once from console; {player} and {uuid} are filled in)
+#
+# Optional on every reward: name ('&' codes, shown in the menus and chat), preview (material shown
+# while rolling / in the summary), permission (only players with it can win it), gamemodes (a
+# subset of the level's), unique (true = at most once per opening), enabled (default true).
+levels:
+  1:
+    name: "&fLevel 1 Lootbox"
+    description: ["&7A mystery box of Level 1 rewards."]
+    material: CHEST
+    glint: false
+    enabled: true
+    gamemodes: [survival, lifesteal]
+    rewards:
+      # ── Disabled examples of every reward type (not live). ──
+      example_item:
+        enabled: false
+        type: item
+        name: "&bDiamonds"
+        material: DIAMOND
+        amount: 3
+        weight: 10
+      example_enchanted_item:
+        enabled: false
+        type: item
+        name: "&bEnchanted Pickaxe"
+        material: DIAMOND_PICKAXE
+        amount: 1
+        enchantments: { efficiency: 3, unbreaking: 2 }
+        weight: 5
+      example_custom_item:
+        enabled: false
+        type: custom-item
+        name: "&eToken"
+        item: token
+        amount: 1
+        weight: 5
+        gamemodes: [survival]
+      example_snapshot:
+        enabled: false
+        type: item-base64
+        name: "&dExact item"
+        item-base64: "PASTE_THE_ITEM_BASE64_HERE"
+        amount: 1
+        weight: 1
+      example_crate_key:
+        enabled: false
+        type: crate-key
+        name: "&6Crate Key"
+        crate: vote
+        amount: 1
+        weight: 3
+      example_chat_tag:
+        enabled: false
+        type: chat-tag
+        name: "&f[JoshyMC] Chat Tag"
+        tag: joshymc
+        weight: 1
+        unique: true
+      example_chat_tag_voucher:
+        enabled: false
+        type: chat-tag-voucher
+        name: "&fChat Tag Voucher"
+        tag: joshymc
+        amount: 1
+        weight: 1
+      example_coins:
+        enabled: false
+        type: coins
+        name: "&6Coins"
+        amount: 100
+        weight: 20
+        preview: GOLD_INGOT
+      example_credits:
+        enabled: false
+        type: credits
+        name: "&bCredits"
+        amount: 10
+        weight: 2
+        permission: joshymc.lootbox.example
+      example_command:
+        enabled: false
+        type: command
+        name: "&aServer reward"
+        commands: ["say {player} won a Lootbox command reward"]
+        weight: 1
+        preview: PAPER
+  2:
+    name: "&fLevel 2 Lootbox"
+    description: ["&7A mystery box of Level 2 rewards."]
+    material: CHEST
+    gamemodes: [survival, lifesteal]
+    rewards: {}
+  3:
+    name: "&aLevel 3 Lootbox"
+    description: ["&7A mystery box of Level 3 rewards."]
+    material: CHEST
+    gamemodes: [survival, lifesteal]
+    rewards: {}
+  4:
+    name: "&aLevel 4 Lootbox"
+    description: ["&7A mystery box of Level 4 rewards."]
+    material: CHEST
+    gamemodes: [survival, lifesteal]
+    rewards: {}
+  5:
+    name: "&9Level 5 Lootbox"
+    description: ["&7A mystery box of Level 5 rewards."]
+    material: CHEST
+    gamemodes: [survival, lifesteal]
+    rewards: {}
+  6:
+    name: "&9Level 6 Lootbox"
+    description: ["&7A mystery box of Level 6 rewards."]
+    material: CHEST
+    gamemodes: [survival, lifesteal]
+    rewards: {}
+  7:
+    name: "&5Level 7 Lootbox"
+    description: ["&7A mystery box of Level 7 rewards."]
+    material: CHEST
+    gamemodes: [survival, lifesteal]
+    rewards: {}
+  8:
+    name: "&5Level 8 Lootbox"
+    description: ["&7A mystery box of Level 8 rewards."]
+    material: CHEST
+    gamemodes: [survival, lifesteal]
+    rewards: {}
+  9:
+    name: "&6Level 9 Lootbox"
+    description: ["&7A mystery box of Level 9 rewards."]
+    material: CHEST
+    gamemodes: [survival, lifesteal]
+    rewards: {}
+  10:
+    name: "&6&lLevel 10 Lootbox"
+    description: ["&7A mystery box of Level 10 rewards."]
+    material: CHEST
+    glint: true
+    gamemodes: [survival, lifesteal]
+    rewards: {}
