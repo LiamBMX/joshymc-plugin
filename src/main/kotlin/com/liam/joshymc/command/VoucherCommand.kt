@@ -553,6 +553,9 @@ class VoucherCommand(private val plugin: Joshymc) : CommandExecutor, TabComplete
             Msg.error(sender, "No Chat Tag voucher found with id $CHAT_TAG_VOUCHER_PREFIX$tagId.")
             return
         }
+        // Issue #1599: a ranked match's inventory restore would replace a voucher given mid-match.
+        if (plugin.gamemodeLockManager.gamemodeOf(target) == ServerGamemode.LIFESTEAL &&
+            plugin.lifestealRankedManager.refusesStaffAction(sender, target, com.liam.joshymc.lifesteal.ranked.RankedIntegrity.StaffAction.ITEM_GRANTS)) return
 
         plugin.chatTagVoucherManager.give(target, tag.id, amount)
         AdminAudit.log(plugin, sender, "VOUCHER_GIVE", target.uniqueId, target.name, "voucher=chattag_${tag.id} amount=$amount")

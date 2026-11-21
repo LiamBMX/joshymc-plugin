@@ -51,14 +51,68 @@ Already working on Lifesteal before this change (NETWORK or unassigned): `/msg`,
 | Commands | Reason |
 |---|---|
 | `/fly`, `/repair` (`/fix`), `/back` | the issue's blacklist (see below) |
-| `/shop` | `shop.yml` sells PvP supplies (Ender Pearls, Golden Apples, End Crystals, Obsidian) and custom spawners for coins: unsafe for Lifesteal combat balance until a Lifesteal catalog is approved |
 | `/invest`, `/stock`, `/market` | coins in stocks are a second, fee-free bank outside the Protected Bank's rules; `/market` is off on a dedicated Lifesteal server |
 | `/orders`, `/order` | the `orders` feature never starts on a dedicated Lifesteal server |
 | `/tokens`, `/credits`, `/creditspay`, `/cshop`, `/sellwand` | Survival currencies, Credit Shop rank packages and a Survival custom item |
-| `/pv`, `/enderchest`, `/trash`, `/hat`, `/craft`, `/anvil`, `/smithing`, `/stonecutter`, `/condense`, `/nightvision` | Survival rank perks; remote storage is an undecided Lifesteal design (team progression keeps its Storage category off) |
-| `/warp`, `/pwarp`, `/rtp`, `/top`, `/resource` | `/warp` holds Survival warps (e.g. the PvP world); `/rtp` picks worlds by the Survival layout; `/top` is an escape |
-| `/eco`, `/phome`, `/setwarp`, `/delwarp`, `/editwarp`, `/crateeditor`, `/customenchant` | staff/admin only |
+| `/pv`, self `/enderchest`, `/trash`, `/hat`, `/craft`, `/anvil`, `/smithing`, `/stonecutter`, `/condense`, `/nightvision` | Survival rank perks; remote storage is an undecided Lifesteal design (team progression keeps its Storage category off). Staff `/enderchest <player>` is shared since issue #1599 (read-only) |
+| `/pwarp`, `/top`, `/resource` | player warps are Survival's; `/top` is an escape; the resource world doesn't run on Lifesteal |
+| `/phome`, `/customenchant`, the rest of `/event`, `/voucher` and `/enderchest` | staff tools Lifesteal doesn't need yet (Survival homes, Survival gear, hosted events, Credit Shop packages, Fly Vouchers) |
 | everything else SURVIVAL | depends on Survival systems (claims, crates, cosmetics, gambling, events, quests, milestones, ...) |
+
+## Issue #1599: staff commands and approved player utilities
+
+### Player utilities (in `SHARED`, competitive guard)
+
+| Command | Notes |
+|---|---|
+| `/warp` (`/warps`) | this server's own warps (set by Lifesteal staff). `TeleportChecks` (frozen, combat tag incl. ranked hold via `CombatTeleportGuard`, cooldown); on Lifesteal the destination chunk is loaded off the main thread without generating terrain, then the combat check and `SafeSpots` run again before the teleport. The End progression lock and ranked arena access refuse the teleport event itself |
+| `/rtp` (`/wild`, `/randomtp`) | unchanged executor: `TeleportChecks`, the 3 s warmup re-checks the combat tag every tick, its own safe-spot search, never in/into the End without `joshymc.rtp.end` (and the End lock still refuses before the End milestone) |
+| `/shop` | the server shop **minus competitive PvP supplies in Lifesteal worlds** (`LifestealSharedCommands.LifestealShopRules`): no potions, spawners, weapons, armor, shields, bows/tridents/maces, End Crystals, Respawn Anchors, Obsidian/Crying Obsidian, Glowstone, Ender Pearls, Chorus Fruit, Golden Apples, Totems, XP bottles, TNT, arrows, rockets, cobwebs, wind charges, Elytra, enchanted books, diamonds/netherite. Hidden from the menu (empty categories too) and refused again at the buy click, together with the combat/ranked guard, since a shop screen can stay open into a fight. Applies to whatever the live shop.yml contains |
+
+`/sell`, `/balance` and `/baltop` were already shared (issue #1573) and are unchanged.
+
+### Staff commands (`ADMIN_SHARED`)
+
+They keep their SURVIVAL scope (Survival and mixed servers unchanged) and **every check of their own
+executor still runs** (permission nodes, `CratePermissions`, staff protection, ranked refusals,
+`AdminAudit`). On a dedicated Lifesteal server the gate adds: only the listed forms run (anything else:
+"On Lifesteal only ... is available"), tab completion offers only those forms, and some need a staff
+rank (`staffRankManager.rankOf`: explicitly granted staff LuckPerms groups, ops = Owner; donor and
+Lifesteal ranks never count). The console always passes; command blocks never pass a rank floor.
+
+| Command | Forms on Lifesteal | Permission (unchanged) | Staff rank floor |
+|---|---|---|---|
+| `/setwarp`, `/delwarp`, `/editwarp` | all | `joshymc.setwarp` / `.delwarp` / `.editwarp` (op) | Admin+ |
+| `/eco` | all (`give`; `take/remove/set/reset` stay op/console only) | `joshymc.eco` (op) | Owner |
+| `/crate` | all; players keep `menu/browse/help/list/preview` and the browser | each admin subcommand's own `CratePermissions` node | Admin+ for every admin subcommand |
+| `/crateeditor` | all | `joshymc.crateeditor` (op), re-checked per click | Admin+ |
+| `/event` | only `inventory list\|info\|apply\|resolve` (listed only for holders of `joshymc.event.inventory.recover`) | `joshymc.event.inventory.recover` (op) | none |
+| `/enderchest` | only `<other player>`, opened as a **read-only copy** (audited `ENDERCHEST_VIEW`); self-use and `clear` stay Survival (listed only for holders of `joshymc.enderchest.others`) | `joshymc.enderchest` + `.others` (op) | none |
+| `/voucher` | only `give <player> chattag_<id> [amount]` and `tag debug <id> [player]`; Fly Vouchers, Credit Shop packages and every editing subcommand stay Survival | `joshymc.vouchers` (op) | none |
+
+Lifesteal `/setwarp` refuses a spot a player can't safely stand on. `/crate givekey` and chat-tag
+`/voucher give` skip a player held by a ranked match or waiting for its inventory restore
+(`RankedIntegrity.StaffAction.ITEM_GRANTS`), since the restore would replace the item.
+
+Data stays the Lifesteal server's own: warps, balances, crates.yml, `crate_*` tables, Ender Chests and
+event snapshots are read from this server's config and data.db; nothing is copied from Survival.
+Lifesteal's crates (Supply, Warrior, Soul, Relic, Victory, Heartless, Event) are created with
+`/crateeditor` and placed with `/crate setlocation`, like on Survival.
+
+### Retesting on the Lifesteal server
+
+1. As a regular player: `/shop` (no PvP & Gear items except the pickaxe, no crystals/pearls/obsidian),
+   `/sell`, `/bal`, `/baltop`, `/warp`, `/rtp` work; while combat-tagged `/warp`, `/rtp`, `/shop` are
+   refused; `/fly`, `/back`, `/repair`, `/claim`, `/pv`, `/eco`, `/setwarp`, `/event`, `/enderchest` are
+   refused/not tab-completed; `/crate` opens the browser only.
+2. As an Admin (staff group mapped in `staff-ranks.groups`, with the nodes): `/setwarp test` at a safe
+   spot, `/warp test`, `/editwarp test`, `/delwarp test`; `/crate setlocation <type>`, `/crate display`,
+   `/crateeditor`, `/crate givekey <type> <player>`, `/crate rewards review`.
+3. As a Jr Admin or lower with the same nodes: the commands above say they need the Admin rank.
+4. As the Owner (or console): `/eco give <player> 100`; as an Admin with `joshymc.eco`: refused.
+5. Recovery: `/event inventory list`, `/enderchest <player>` (items can't be moved), `/voucher give
+   <player> chattag_<id>`; `/voucher give <player> fly:1h` and `/event start` are refused.
+6. On the Survival server everything behaves as before.
 
 ## The command blacklist
 
@@ -95,4 +149,6 @@ Neither is applied automatically; live configs aren't touched.
 `./gradlew -I scripts/lifesteal-shared-command-check.init.gradle.kts lifestealSharedCommandCheck`
 (dedicated/mixed/Survival scenarios for every command and alias, the blacklist, purchased-rank
 nodes, the combat/ranked guard, the gate wiring, regression of NETWORK/Lifesteal/unassigned
-commands). Live testing on a Lifesteal server is still to be done.
+commands, and since issue #1599 the staff shares: forms, tab filtering, rank floors, visibility, the
+Lifesteal shop filter against the bundled shop.yml, warp/rtp wiring). Live testing on a Lifesteal
+server is still to be done.

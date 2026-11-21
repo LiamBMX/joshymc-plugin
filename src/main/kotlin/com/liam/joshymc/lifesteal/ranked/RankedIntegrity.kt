@@ -115,13 +115,15 @@ object RankedIntegrity {
         HEARTS("hearts", "/lifesteal hearts"),
         /** Issue #1537: `/lifesteal hearts give` (new Heart items in the participant's inventory). */
         HEART_ITEMS("heartitems", "/lifesteal hearts give"),
+        /** Issue #1599: staff item grants on Lifesteal (`/voucher give ... chattag_*`, `/crate givekey`). */
+        ITEM_GRANTS("itemgrants", "/voucher give and /crate givekey"),
         ;
 
         /**
          * Teleports and delegated commands also wait for a pending inventory restore (the restore
          * moves them back); so do Heart item grants, since the restore replaces the inventory.
          */
-        val coversPendingRestore: Boolean get() = this == TELEPORT || this == TELEPORT_HERE || this == SUDO || this == HEART_ITEMS
+        val coversPendingRestore: Boolean get() = this == TELEPORT || this == TELEPORT_HERE || this == SUDO || this == HEART_ITEMS || this == ITEM_GRANTS
     }
 
     /**

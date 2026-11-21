@@ -4,11 +4,15 @@ import com.liam.joshymc.Joshymc
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.manager.CommunicationsManager
 import com.liam.joshymc.util.Msg
+import com.liam.joshymc.gamemode.ServerGamemode
+import com.liam.joshymc.recovery.SafeSpots
+import com.liam.joshymc.teleport.CombatTeleportGuard
 import com.liam.joshymc.util.PvpTeleportGuard
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.Sound
 import org.bukkit.command.Command
@@ -57,6 +61,10 @@ class WarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
             val entry = PvpTeleportGuard.isEntryWarp(plugin, sender, name, location)
             if (!entry && PvpTeleportGuard.blocks(plugin, sender, location)) return true
             if (TeleportChecks.checkAndApply(sender, plugin)) return true
+            if (onLifesteal(sender)) {
+                lifestealWarp(sender, name, location)
+                return true
+            }
             if (entry) PvpTeleportGuard.forced { sender.teleport(location) } else sender.teleport(location)
             plugin.commsManager.send(sender, Component.text("Teleported to warp '$name'.", NamedTextColor.GREEN), CommunicationsManager.Category.WARP)
             return true
@@ -119,6 +127,10 @@ class WarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
                 }
 
                 p.closeInventory()
+                if (onLifesteal(p)) {
+                    lifestealWarp(p, warpName, location)
+                    return@setItem
+                }
                 if (entry) PvpTeleportGuard.forced { p.teleport(location) } else p.teleport(location)
                 p.playSound(p.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.7f, 1.0f)
                 plugin.commsManager.send(p, Component.text("Teleported to warp '$warpName'.", NamedTextColor.GREEN), CommunicationsManager.Category.WARP)
@@ -127,6 +139,40 @@ class WarpCommand(private val plugin: Joshymc) : CommandExecutor, TabCompleter {
 
         plugin.guiManager.open(player, gui)
         player.playSound(player.location, Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f)
+    }
+
+    private fun onLifesteal(player: Player): Boolean =
+        plugin.gamemodeLockManager.gamemodeOf(player) == ServerGamemode.LIFESTEAL
+
+    /**
+     * Issue #1599: a warp on Lifesteal loads its chunk off the main thread (never generating
+     * terrain), re-checks the combat tag / ranked hold and that the spot is safe to stand on, then
+     * teleports. The End progression lock and ranked arena access still judge the teleport itself.
+     */
+    private fun lifestealWarp(player: Player, name: String, location: Location) {
+        val world = location.world
+        if (world == null) {
+            plugin.commsManager.send(player, Component.text("That warp's world isn't loaded.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+            return
+        }
+        world.getChunkAtAsync(location.blockX shr 4, location.blockZ shr 4, false).whenComplete { chunk, error ->
+            plugin.server.scheduler.runTask(plugin, Runnable {
+                if (!player.isOnline) return@Runnable
+                if (CombatTeleportGuard.blocks(plugin, player)) return@Runnable
+                val problem = when {
+                    error != null || chunk == null -> "chunk not available"
+                    else -> SafeSpots.problem(location)
+                }
+                if (problem != null) {
+                    plugin.logger.warning("[Warps] Warp '$name' at ${world.name} ${location.blockX},${location.blockY},${location.blockZ} is unsafe ($problem); ${player.name} was not moved.")
+                    plugin.commsManager.send(player, Component.text("Warp '$name' isn't safe to teleport to right now.", NamedTextColor.RED), CommunicationsManager.Category.WARP)
+                    return@Runnable
+                }
+                if (!player.teleport(location)) return@Runnable
+                player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.7f, 1.0f)
+                plugin.commsManager.send(player, Component.text("Teleported to warp '$name'.", NamedTextColor.GREEN), CommunicationsManager.Category.WARP)
+            })
+        }
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {

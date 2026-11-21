@@ -172,7 +172,46 @@ class GamemodeLockManager(private val plugin: Joshymc) {
     fun isSharedHere(sender: CommandSender, command: Command): Boolean {
         if (command !is PluginCommand || command.plugin !== plugin) return false
         if (scopeOf(command) != GamemodeScope.SURVIVAL) return false
-        return LifestealSharedCommands.sharedHere(command.name, gamemodeOf(sender), plugin.networkIdentityManager.hostedGamemodes)
+        val current = gamemodeOf(sender)
+        val hosted = plugin.networkIdentityManager.hostedGamemodes
+        if (LifestealSharedCommands.sharedHere(command.name, current, hosted)) return true
+        // Issue #1599: staff commands, only for senders holding the node that makes them visible there.
+        if (!LifestealSharedCommands.adminSharedHere(command.name, current, hosted)) return false
+        val node = LifestealSharedCommands.ADMIN_SHARED[command.name.lowercase()]?.visibleWith ?: return true
+        return sender.hasPermission(node)
+    }
+
+    /** Whether [command] runs for [sender] only because it is an issue #1599 staff share (so its arguments are checked). */
+    fun isAdminShareHere(sender: CommandSender, command: Command): Boolean {
+        val scope = scopeOf(command) ?: return false
+        if (isAllowed(scope, sender)) return false
+        if (command !is PluginCommand || command.plugin !== plugin || scope != GamemodeScope.SURVIVAL) return false
+        return LifestealSharedCommands.adminSharedHere(command.name, gamemodeOf(sender), plugin.networkIdentityManager.hostedGamemodes)
+    }
+
+    /**
+     * Issue #1599: why an [LifestealSharedCommands.ADMIN_SHARED] command may not run with [args] for
+     * [sender] on Lifesteal (a form Lifesteal doesn't share, or below the staff-rank floor), or null.
+     * Every check of the command's own executor (permission nodes, staff protection, ranked
+     * refusals, audit) still runs after this.
+     */
+    fun adminShareRefusal(sender: CommandSender, command: Command, label: String, args: List<String>): String? {
+        if (!isAdminShareHere(sender, command)) return null
+        if (!LifestealSharedCommands.adminInvocation(command.name, args, (sender as? Player)?.name)) {
+            return LifestealSharedCommands.adminFormMessage(command.name)
+        }
+        val floor = LifestealSharedCommands.minimumRank(command.name, args) ?: return null
+        val isConsole = sender is org.bukkit.command.ConsoleCommandSender || sender is org.bukkit.command.RemoteConsoleCommandSender
+        val rank = (sender as? Player)?.let { p -> try { plugin.staffRankManager.rankOf(p) } catch (_: Exception) { null } }
+        return LifestealSharedCommands.staffFloorRefusal(floor, isConsole, sender is Player, rank, label.lowercase().substringAfter(':'))
+    }
+
+    /** Tab suggestions for an issue #1599 staff share: only the forms Lifesteal runs. */
+    fun filterAdminShareTab(sender: CommandSender, command: Command, args: Array<out String>, suggestions: List<String>?): List<String>? {
+        if (suggestions == null || !isAdminShareHere(sender, command)) return suggestions
+        val before = args.dropLast(1)
+        val name = (sender as? Player)?.name
+        return suggestions.filter { LifestealSharedCommands.adminInvocation(command.name, before + it, name, typing = true) }
     }
 
     /**
@@ -184,15 +223,18 @@ class GamemodeLockManager(private val plugin: Joshymc) {
         val player = sender as? Player ?: return null
         if (isAllowed(scopeOf(command) ?: return null, sender) || !isSharedHere(sender, command)) return null
         val guard = LifestealSharedCommands.guardOf(command.name) ?: return null
-        val state = LifestealSharedCommands.CompetitiveState(
+        return LifestealSharedCommands.competitiveRefusal(guard, competitiveState(player), label.lowercase().substringAfter(':'))
+    }
+
+    /** The live combat/ranked state the competitive guard reads (a check that can't run counts as true). */
+    fun competitiveState(player: Player): LifestealSharedCommands.CompetitiveState =
+        LifestealSharedCommands.CompetitiveState(
             combatTagged = safe { plugin.combatManager.isTagged(player) },
             ranked = safe {
                 val ranked = plugin.lifestealRankedManager
                 ranked.holds(player) || ranked.isSpectator(player.uniqueId) || ranked.hasPendingRestore(player.uniqueId)
             },
         )
-        return LifestealSharedCommands.competitiveRefusal(guard, state, label.lowercase().substringAfter(':'))
-    }
 
     /** A check that throws (manager not started) refuses rather than letting the command through. */
     private inline fun safe(check: () -> Boolean): Boolean = try { check() } catch (_: Exception) { true }
@@ -290,13 +332,17 @@ class GamemodeLockManager(private val plugin: Joshymc) {
                 Msg.error(sender, it)
                 return true
             }
+            manager.adminShareRefusal(sender, command, label, args.toList())?.let {
+                Msg.error(sender, it)
+                return true
+            }
             return executor.onCommand(sender, command, label, args)
         }
 
         override fun onTabComplete(sender: CommandSender, command: Command, label: String, args: Array<out String>): List<String>? {
             if (!manager.canUse(sender, command)) return emptyList()
             val delegate = completer ?: executor as? TabCompleter ?: return null
-            return delegate.onTabComplete(sender, command, label, args)
+            return manager.filterAdminShareTab(sender, command, args, delegate.onTabComplete(sender, command, label, args))
         }
 
         companion object {

@@ -1,6 +1,8 @@
 package com.liam.joshymc.manager
 
 import com.liam.joshymc.Joshymc
+import com.liam.joshymc.gamemode.LifestealSharedCommands
+import com.liam.joshymc.gamemode.ServerGamemode
 import com.liam.joshymc.gui.CustomGui
 import com.liam.joshymc.item.impl.CRAFTING_MATERIAL_IDS
 import com.liam.joshymc.listener.CustomArmorListener
@@ -283,10 +285,26 @@ class ServerShopManager(private val plugin: Joshymc) {
     private data class MenuButton(val name: String, val icon: Material, val itemCount: Int, val onClick: (Player) -> Unit)
 
     /** Category buttons are driven entirely by shop.yml, including the Spawners category. */
-    private fun buildMenuButtons(): List<MenuButton> {
-        return categories.map { category ->
+    private fun buildMenuButtons(player: Player): List<MenuButton> {
+        return visibleCategories(player).map { category ->
             MenuButton(category.name, category.icon, category.items.size) { p -> openCategory(p, category.id, 0) }
         }
+    }
+
+    /**
+     * Issue #1599: in Lifesteal worlds the shop never sells competitive PvP supplies
+     * ([LifestealSharedCommands.LifestealShopRules]); this is the one place that decides it.
+     */
+    private fun inLifesteal(player: Player): Boolean =
+        plugin.gamemodeLockManager.gamemodeOf(player.world) == ServerGamemode.LIFESTEAL
+
+    private fun blockedFor(player: Player, item: ShopItem): Boolean =
+        inLifesteal(player) && LifestealSharedCommands.LifestealShopRules.blocked(item.material.name, item.kind.name)
+
+    /** The categories [player] may browse, with only the items they may buy; empty categories are left out. */
+    private fun visibleCategories(player: Player): List<ShopCategory> {
+        if (!inLifesteal(player)) return categories.toList()
+        return categories.map { c -> c.copy(items = c.items.filterNot { blockedFor(player, it) }) }.filter { it.items.isNotEmpty() }
     }
 
     fun openMainMenu(player: Player) {
@@ -298,7 +316,7 @@ class ServerShopManager(private val plugin: Joshymc) {
         gui.fill(FILLER.clone())
         gui.border(BORDER.clone())
 
-        val buttons = buildMenuButtons()
+        val buttons = buildMenuButtons(player)
 
         // Place category icons in the middle area (row 1, columns 1-7)
         val availableSlots = mutableListOf<Int>()
@@ -341,7 +359,7 @@ class ServerShopManager(private val plugin: Joshymc) {
     // ── Category Page ───────────────────────────────────────────────────
 
     fun openCategory(player: Player, categoryId: String, page: Int) {
-        val category = getCategory(categoryId)
+        val category = visibleCategories(player).find { it.id == categoryId }
         if (category == null) {
             plugin.logger.warning("[Shop] Tried to open unknown or disabled shop category '$categoryId'")
             plugin.commsManager.send(player, Component.text("That shop category is unavailable.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
@@ -947,6 +965,17 @@ class ServerShopManager(private val plugin: Joshymc) {
     // ── Buy Logic ───────────────────────────────────────────────────────
 
     private fun buyItem(player: Player, shopItem: ShopItem, amount: Int): Boolean {
+        // Issue #1599: re-checked at the click, since a shop screen can stay open into a fight.
+        if (inLifesteal(player)) {
+            val refusal = if (blockedFor(player, shopItem)) LifestealSharedCommands.LifestealShopRules.BLOCKED_MESSAGE
+                else LifestealSharedCommands.competitiveRefusal(LifestealSharedCommands.Guard.COMPETITIVE, plugin.gamemodeLockManager.competitiveState(player), "shop")
+            if (refusal != null) {
+                plugin.commsManager.send(player, Component.text(refusal, NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
+                player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                player.closeInventory()
+                return false
+            }
+        }
         if (shopItem.buyPrice <= 0 || !ShopBuyAmounts.isValidPurchase(amount)) {
             plugin.commsManager.send(player, Component.text("Invalid purchase amount.", NamedTextColor.RED), CommunicationsManager.Category.ECONOMY)
             player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)

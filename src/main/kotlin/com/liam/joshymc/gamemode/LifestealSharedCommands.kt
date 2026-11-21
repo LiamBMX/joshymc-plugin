@@ -51,7 +51,121 @@ object LifestealSharedCommands {
         "home" to Guard.COMPETITIVE,
         "sethome" to Guard.COMPETITIVE,
         "delhome" to Guard.NONE,
+        // Issue #1599 (Owner-approved player utilities).
+        // Server warps are this server's own `warps` table, set by Lifesteal staff; the teleport goes
+        // through TeleportChecks + CombatTeleportGuard, and on Lifesteal also a safe-spot check on the
+        // async-loaded destination (WarpCommand). The End lock and ranked arena access refuse the
+        // PlayerTeleportEvent itself.
+        "warp" to Guard.COMPETITIVE,
+        // Random teleport: TeleportChecks, CombatTeleportGuard on every warmup tick, its own safe-spot
+        // search; the End stays behind `joshymc.rtp.end` and the progression End lock.
+        "rtp" to Guard.COMPETITIVE,
+        // The server shop, minus competitive PvP supplies in Lifesteal worlds (LifestealShopRules).
+        "shop" to Guard.COMPETITIVE,
     )
+
+    /**
+     * Issue #1599: SURVIVAL-scoped **staff** commands that also run on a dedicated Lifesteal server,
+     * for the parts of them Lifesteal needs. Like [SHARED] they keep their SURVIVAL scope (mixed
+     * servers and Survival are unchanged) and use only this server's own data (its own `warps`,
+     * `economy`, `crate_*` tables and crates.yml). On Lifesteal:
+     *
+     *  - Only the invocations [adminInvocation] allows run (e.g. `/event inventory ...`, not the rest
+     *    of `/event`); anything else gets the normal "only available on Survival" refusal.
+     *  - [visibleWith] (if set) must be held for the command to be listed, tab-completed or run there,
+     *    so ordinary players never see a staff command they can't use.
+     *  - [minimumRank] is a staff-rank floor on top of the command's own permission checks (which
+     *    all still run in the executor): console always passes, ops count as Owner.
+     */
+    data class AdminShare(
+        /** Permission node needed to see/use the command on Lifesteal; null = the command's own permission only. */
+        val visibleWith: String?,
+        /** Short description of what is allowed on Lifesteal (docs, refusal text). */
+        val allowed: String,
+    )
+
+    val ADMIN_SHARED: Map<String, AdminShare> = linkedMapOf(
+        "setwarp" to AdminShare(null, "/setwarp <name>"),
+        "delwarp" to AdminShare(null, "/delwarp <name>"),
+        "editwarp" to AdminShare(null, "/editwarp <name>"),
+        "eco" to AdminShare(null, "/eco give|take|remove|set|reset"),
+        // Players keep the crate browser/preview (crates themselves open by clicking the block); every
+        // admin subcommand keeps its CratePermissions node and needs an Admin+ staff rank here.
+        "crate" to AdminShare(null, "/crate (browser, preview) and the admin subcommands"),
+        "crateeditor" to AdminShare(null, "/crateeditor"),
+        "event" to AdminShare("joshymc.event.inventory.recover", "/event inventory list|info|apply|resolve"),
+        "enderchest" to AdminShare("joshymc.enderchest.others", "/enderchest <player> (read-only inspection)"),
+        "voucher" to AdminShare(null, "/voucher give <player> chattag_<id> [amount], /voucher tag debug"),
+    )
+
+    /** First arguments of `/crate` every player may use (mirrors `CratePermissions.PLAYER_SUBCOMMANDS`). */
+    private val CRATE_PLAYER_SUBCOMMANDS = setOf("menu", "browse", "help", "list", "preview")
+
+    const val CHAT_TAG_VOUCHER_PREFIX = "chattag_"
+
+    /**
+     * Whether `/<command> <args>` is one of the invocations [ADMIN_SHARED] lets through on Lifesteal.
+     * [senderName] is the sender's own name (self-service `/enderchest` stays Survival only).
+     * [typing] = tab completion of a partial line (the last argument is still being typed), where
+     * an incomplete-but-valid prefix is fine; for execution the line must be a whole allowed form.
+     */
+    fun adminInvocation(command: String, args: List<String>, senderName: String?, typing: Boolean = false): Boolean {
+        val a = args.map { it.lowercase() }
+        return when (command.lowercase()) {
+            "setwarp", "delwarp", "editwarp", "eco", "crate", "crateeditor" -> true
+            "event" -> a.firstOrNull() in setOf("inventory", "inv") || (typing && a.size == 1 && "inventory".startsWith(a[0]))
+            "enderchest" -> when {
+                typing -> a.size == 1
+                else -> a.size == 1 && a[0].isNotBlank() && !a[0].equals(senderName, ignoreCase = true)
+            }
+            "voucher" -> when (a.firstOrNull()) {
+                "give" -> if (typing) a.size < 3 || a[2].startsWith(CHAT_TAG_VOUCHER_PREFIX) || CHAT_TAG_VOUCHER_PREFIX.startsWith(a[2])
+                    else a.size >= 3 && a[2].startsWith(CHAT_TAG_VOUCHER_PREFIX) && a[2].length > CHAT_TAG_VOUCHER_PREFIX.length
+                "tag" -> if (typing) a.size < 2 || "debug".startsWith(a[1]) || a[1] == "debug" else a.size >= 3 && a[1] == "debug"
+                else -> typing && a.size == 1 && ("give".startsWith(a[0]) || "tag".startsWith(a[0]))
+            }
+            else -> false
+        }
+    }
+
+    /** The staff-rank floor for an allowed [ADMIN_SHARED] invocation on Lifesteal, or null for none. */
+    fun minimumRank(command: String, args: List<String>): com.liam.joshymc.staff.StaffRank? = when (command.lowercase()) {
+        // Issue #1599 section 6: economy administration is the Owner's alone.
+        "eco" -> com.liam.joshymc.staff.StaffRank.OWNER
+        // Admin+: warps and crate management.
+        "setwarp", "delwarp", "editwarp", "crateeditor" -> com.liam.joshymc.staff.StaffRank.ADMIN
+        "crate" -> args.firstOrNull()?.lowercase()?.let { if (it in CRATE_PLAYER_SUBCOMMANDS) null else com.liam.joshymc.staff.StaffRank.ADMIN }
+        // Recovery tools keep only their own nodes ("other staff: only their existing tools").
+        else -> null
+    }
+
+    /** Null = allowed. Console always passes; other non-player senders (command blocks) never pass a floor. */
+    fun staffFloorRefusal(
+        floor: com.liam.joshymc.staff.StaffRank?,
+        isConsole: Boolean,
+        isPlayer: Boolean,
+        rank: com.liam.joshymc.staff.StaffRank?,
+        label: String,
+    ): String? = when {
+        floor == null || isConsole -> null
+        !isPlayer -> "/$label can only be run by staff or the console on Lifesteal."
+        rank == null || rank < floor -> "On Lifesteal, /$label needs the ${floor.displayName} staff rank or higher."
+        else -> null
+    }
+
+    /** Whether [command] is an [ADMIN_SHARED] staff command on a server hosting only Lifesteal, for a sender in [current]. */
+    fun adminSharedHere(command: String, current: ServerGamemode, hosted: Set<ServerGamemode>): Boolean =
+        command.lowercase() in ADMIN_SHARED &&
+            command.lowercase() !in BLACKLIST &&
+            current == ServerGamemode.LIFESTEAL &&
+            hosted == setOf(ServerGamemode.LIFESTEAL)
+
+    /** The refusal for an [ADMIN_SHARED] command used in a form Lifesteal doesn't share. */
+    fun adminFormMessage(command: String): String {
+        val share = ADMIN_SHARED[command.lowercase()]
+        return if (share == null) "That command is only available on Survival."
+        else "On Lifesteal only ${share.allowed} is available; the rest is Survival only."
+    }
 
     /**
      * The Lifesteal command blacklist from issue #1573, as JoshyMC command names, with how each
@@ -82,6 +196,34 @@ object LifestealSharedCommands {
             command.lowercase() !in BLACKLIST &&
             current == ServerGamemode.LIFESTEAL &&
             hosted == setOf(ServerGamemode.LIFESTEAL)
+
+    /**
+     * Issue #1599: the server shop in Lifesteal worlds. Coins buy nothing that decides PvP fights:
+     * no potions, no custom spawners, no weapons/armor/shields, and none of [COMPETITIVE_MATERIALS]
+     * (crystal/anchor PvP, pearls and chorus escapes, gapples, totems, XP for Mending, TNT). Applies
+     * to the live shop.yml too, whatever the Owner adds to it. Material names keep it Bukkit-free.
+     */
+    object LifestealShopRules {
+        val COMPETITIVE_MATERIALS: Set<String> = setOf(
+            "END_CRYSTAL", "RESPAWN_ANCHOR", "OBSIDIAN", "CRYING_OBSIDIAN", "GLOWSTONE",
+            "ENDER_PEARL", "CHORUS_FRUIT", "GOLDEN_APPLE", "ENCHANTED_GOLDEN_APPLE", "TOTEM_OF_UNDYING",
+            "EXPERIENCE_BOTTLE", "TNT", "TNT_MINECART", "ARROW", "SPECTRAL_ARROW", "TIPPED_ARROW",
+            "FIREWORK_ROCKET", "COBWEB", "WIND_CHARGE", "ELYTRA", "BOW", "CROSSBOW", "TRIDENT", "MACE",
+            "SHIELD", "POTION", "SPLASH_POTION", "LINGERING_POTION", "SPAWNER", "TRIAL_SPAWNER",
+            "ENCHANTED_BOOK", "NETHERITE_INGOT", "NETHERITE_SCRAP", "ANCIENT_DEBRIS", "NETHERITE_UPGRADE_SMITHING_TEMPLATE",
+            "DIAMOND", "DIAMOND_BLOCK", "SUSPICIOUS_STEW", "GOLDEN_CARROT",
+        )
+
+        private val GEAR_SUFFIXES = listOf("_HELMET", "_CHESTPLATE", "_LEGGINGS", "_BOOTS", "_SWORD", "_AXE", "_SPEAR")
+
+        /** Whether a shop entry is refused in Lifesteal. [kind] is the entry kind name (MATERIAL, POTION, SPAWNER). */
+        fun blocked(material: String, kind: String): Boolean {
+            val m = material.uppercase()
+            return kind != "MATERIAL" || m in COMPETITIVE_MATERIALS || GEAR_SUFFIXES.any { m.endsWith(it) }
+        }
+
+        const val BLOCKED_MESSAGE = "That item isn't sold on Lifesteal."
+    }
 
     fun guardOf(command: String): Guard? = SHARED[command.lowercase()]
 
