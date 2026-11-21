@@ -32,6 +32,7 @@ import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockDispenseEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.block.CrafterCraftEvent
+import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.inventory.FurnaceBurnEvent
 import org.bukkit.event.inventory.PrepareItemCraftEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
@@ -115,6 +116,7 @@ class LootboxManager(private val plugin: Joshymc) : Listener {
     fun reload(): List<String> {
         if (!started) return emptyList()
         loadSettings()
+        Bukkit.getOnlinePlayers().forEach { refreshLooks(it) }
         return problems
     }
 
@@ -131,7 +133,10 @@ class LootboxManager(private val plugin: Joshymc) : Listener {
         sweepTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { sweep() }, SWEEP_INTERVAL_TICKS, SWEEP_INTERVAL_TICKS)
         loadSettings()
         // Prizes of an animation the reload cut short are owed already; hand them over now.
-        Bukkit.getOnlinePlayers().forEach { deliverPending(it) }
+        Bukkit.getOnlinePlayers().forEach {
+            refreshLooks(it)
+            deliverPending(it)
+        }
         return problems
     }
 
@@ -266,6 +271,33 @@ class LootboxManager(private val plugin: Joshymc) : Listener {
             pdc.set(signatureKey, PersistentDataType.STRING, signature(level))
         }
         return stack
+    }
+
+    /**
+     * Issue #1603: gives an authentic Lootbox the item model its level has now (boxes made before the
+     * art existed have none). Only the model changes: level, version, signature, amount, name, lore
+     * and every other component stay as they are, so the box stays valid and stacks with new ones.
+     * Forged boxes ([levelOf] null) and levels with no model configured are left alone. True when
+     * [stack] was changed.
+     */
+    fun refreshLook(stack: ItemStack?): Boolean {
+        val level = levelOf(stack) ?: return false
+        val model = settings?.level(level)?.itemModel?.let { NamespacedKey.fromString(it) } ?: return false
+        val meta = stack!!.itemMeta
+        if (meta.hasItemModel() && meta.itemModel == model) return false
+        meta.setItemModel(model)
+        stack.itemMeta = meta
+        return true
+    }
+
+    /** [refreshLook] on every slot of an online player's inventory and ender chest. */
+    fun refreshLooks(player: Player) {
+        for (inventory in listOf(player.inventory, player.enderChest)) {
+            for (slot in 0 until inventory.size) {
+                val stack = inventory.getItem(slot) ?: continue
+                if (refreshLook(stack)) inventory.setItem(slot, stack)
+            }
+        }
     }
 
     /** True for anything that claims to be a Lootbox (signed or not): it must never act like its vanilla material. */
@@ -830,6 +862,11 @@ class LootboxManager(private val plugin: Joshymc) : Listener {
         // One opening per click: the main hand wins when both hands hold a Lootbox.
         if (event.hand == EquipmentSlot.OFF_HAND && looksLikeLootbox(player.inventory.itemInMainHand)) return
         val level = levelOf(item)
+        if (level != null) {
+            val hand = event.hand ?: EquipmentSlot.HAND
+            val held = player.inventory.getItem(hand)
+            if (refreshLook(held)) player.inventory.setItem(hand, held)
+        }
         if (level == null) {
             send(player, legacy(settings?.message("invalid-item") ?: "&cThat Lootbox isn't valid."))
             plugin.logger.warning("[Lootbox] ${player.name} (${player.uniqueId}) used a Lootbox whose signature doesn't verify.")
@@ -882,7 +919,18 @@ class LootboxManager(private val plugin: Joshymc) : Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     fun onJoin(event: PlayerJoinEvent) {
         val player = event.player
-        Bukkit.getScheduler().runTaskLater(plugin, Runnable { if (player.isOnline) deliverPending(player) }, JOIN_DELAY_TICKS)
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            if (!player.isOnline) return@Runnable
+            refreshLooks(player)
+            deliverPending(player)
+        }, JOIN_DELAY_TICKS)
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPickup(event: EntityPickupItemEvent) {
+        if (event.entity !is Player) return
+        val stack = event.item.itemStack
+        if (refreshLook(stack)) event.item.itemStack = stack
     }
 
     @EventHandler

@@ -58,6 +58,26 @@ A Lootbox never acts as its material: right-click never places or uses it (eithe
 placing, entity use (e.g. chests on donkeys), eating, crafting / crafter use, furnace fuel and
 dispensers are cancelled. Left-clicks and moving it around the inventory are untouched.
 
+### Look (issue #1603)
+
+Each level has its own animated Lucky Block in the bundled resource pack, item model
+`joshymc:lootbox_level_<n>` (art: `resourcepack/art/items/lootbox_level_<n>.py` on the shared
+`_lootbox.py`): a cube with a raised, glowing question mark on four sides and the top, in a metal
+frame that gets more ornate with the level (inner lip from 2, rail rivets from 3, corner gems from
+4, gem-set rail bands from 7, crystal crown and a looping rainbow at 10). Colours: 1 stone gray,
+2 emerald, 3 cyan, 4 sapphire, 5 amethyst, 6 neon pink, 7 crimson, 8 inferno orange, 9 gold,
+10 prismatic rainbow. The animation is plain texture animation (`.png.mcmeta`, 16 frames of 2
+ticks), so it runs on the client in slots, hands and on the ground with nothing ticking on the
+server.
+
+The model is written onto a box when it's made (`levels.<n>.item-model`). Boxes made before the
+model existed, or before `item-model` was changed, are brought up to date when they're met:
+the player's inventory and ender chest a moment after joining and after `/lootbox reload` /
+`/joshymc reload`, a box being picked up, and a box being right-clicked. Only boxes whose
+signature verifies are touched, and only their item model changes (level, version, signature,
+amount, name, lore stay), so refreshed and new boxes stack. Offline players, containers and
+other inventories aren't scanned; those boxes update when a player picks them up or uses them.
+
 ## GUI layout (54 slots each)
 
 **1. Selection — "Level X Lootbox"**
@@ -193,7 +213,7 @@ levels:
     name: "&aLevel 3 Lootbox"
     description: ["&7A mystery box of Level 3 rewards."]
     material: CHEST
-    item-model: "joshymc:lootbox_3"   # optional, once the art exists
+    item-model: "joshymc:lootbox_level_3"   # the bundled Lucky Block (missing key = this; none = plain material)
     glint: false
     enabled: true
     gamemodes: [survival, lifesteal]
@@ -256,5 +276,6 @@ the player's eligible pool and never hint at the prizes.
   have no account-unlock store, so they aren't a reward type; grant them through a `command`
   reward (e.g. LuckPerms) if wanted. A `command` reward is the Owner's responsibility (at most once,
   not rolled back).
-- No custom Lootbox textures or models yet: `item-model` is ready for them.
+- Bedrock players see the plain material: the Lucky Blocks aren't in the Geyser mappings, since
+  Lootboxes aren't registered custom items.
 - There is no in-game reward editor; copy `item-base64` snapshots from crates.yml (`/crateeditor`).

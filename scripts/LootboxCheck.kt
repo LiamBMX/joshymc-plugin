@@ -105,6 +105,20 @@ fun main() {
         check("level $n opens in both gamemodes", level.gamemodes == setOf(ServerGamemode.SURVIVAL, ServerGamemode.LIFESTEAL))
         check("level $n ships no live rewards", level.activeRewards.isEmpty())
         check("level $n can't be opened until rewards are added", LootboxConfig.levelProblem(settings, n)?.contains("no enabled rewards") == true)
+        check("level $n uses its Lucky Block model", level.itemModel == "joshymc:lootbox_level_$n" && level.itemModel == LootboxConfig.defaultItemModel(n))
+        check("level $n model ships in the resource pack", File("resourcepack/art/items/lootbox_level_$n.py").isFile)
+    }
+    // Issue #1603: a file written before the art existed (no item-model key) still gets the model; `none` turns it off.
+    run {
+        val noKeys = parse(BUNDLED.lines().filterNot { it.trimStart().startsWith("item-model:") }.joinToString("\n"))
+        check("missing item-model keys parse: ${noKeys.problems}", noKeys.problems.isEmpty())
+        check("missing item-model = the bundled model", (1..10).all { checkNotNull(noKeys.settings).level(it)?.itemModel == "joshymc:lootbox_level_$it" })
+        val off = parse(BUNDLED.replace("item-model: \"joshymc:lootbox_level_3\"", "item-model: none"))
+        check("item-model none = no model", checkNotNull(off.settings).level(3)?.itemModel == null && off.settings!!.level(4)?.itemModel != null)
+        val custom = parse(BUNDLED.replace("item-model: \"joshymc:lootbox_level_3\"", "item-model: \"Joshymc:Custom/Box\""))
+        check("custom item-model kept (lower case)", checkNotNull(custom.settings).level(3)?.itemModel == "joshymc:custom/box")
+        val bad = parse(BUNDLED.replace("item-model: \"joshymc:lootbox_level_3\"", "item-model: \"no colon\""))
+        check("malformed item-model is a problem", bad.problems.any { it.startsWith("levels.3:") && it.contains("item-model") })
     }
     val examples = checkNotNull(settings.level(1)).rewards
     check("level 1 has disabled examples of every reward type", examples.map { it.type }.toSet() == LootboxRewardType.entries.toSet())

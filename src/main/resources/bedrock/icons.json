@@ -747,6 +747,56 @@
       "icon": "joshymc/link_pop_red.png",
       "sha1": "077671138c18d85d44d07c00b26806e9f979274f"
     },
+    "joshymc:lootbox_level_1": {
+      "bedrock_name": "lootbox_level_1",
+      "icon": "joshymc/lootbox_level_1.png",
+      "sha1": "9cccb2610aec5f81602a25454d7cbcdc1c372d75"
+    },
+    "joshymc:lootbox_level_10": {
+      "bedrock_name": "lootbox_level_10",
+      "icon": "joshymc/lootbox_level_10.png",
+      "sha1": "3c3edc0a33db9c317cbb9bafb1c347af313da289"
+    },
+    "joshymc:lootbox_level_2": {
+      "bedrock_name": "lootbox_level_2",
+      "icon": "joshymc/lootbox_level_2.png",
+      "sha1": "bad393db9ba7b1412d2d01b87910751b686e3d82"
+    },
+    "joshymc:lootbox_level_3": {
+      "bedrock_name": "lootbox_level_3",
+      "icon": "joshymc/lootbox_level_3.png",
+      "sha1": "678ea518220972bf8b6a3d59920497e97a5852b4"
+    },
+    "joshymc:lootbox_level_4": {
+      "bedrock_name": "lootbox_level_4",
+      "icon": "joshymc/lootbox_level_4.png",
+      "sha1": "113397663569338b953972519326809875017d36"
+    },
+    "joshymc:lootbox_level_5": {
+      "bedrock_name": "lootbox_level_5",
+      "icon": "joshymc/lootbox_level_5.png",
+      "sha1": "69a4374e883dfeccb144e04cd7078b0f7dd771d9"
+    },
+    "joshymc:lootbox_level_6": {
+      "bedrock_name": "lootbox_level_6",
+      "icon": "joshymc/lootbox_level_6.png",
+      "sha1": "2ec3bc120d180785029f58b07674b54540595d26"
+    },
+    "joshymc:lootbox_level_7": {
+      "bedrock_name": "lootbox_level_7",
+      "icon": "joshymc/lootbox_level_7.png",
+      "sha1": "71f289973da6a86199520e114818a90484df4ab8"
+    },
+    "joshymc:lootbox_level_8": {
+      "bedrock_name": "lootbox_level_8",
+      "icon": "joshymc/lootbox_level_8.png",
+      "sha1": "3f60fe7201e13426216418fffa81aa5e0017536b"
+    },
+    "joshymc:lootbox_level_9": {
+      "bedrock_name": "lootbox_level_9",
+      "icon": "joshymc/lootbox_level_9.png",
+      "sha1": "7d54ff1270a0eeeb5addab4502c4fbc32bd9dcec"
+    },
     "joshymc:lumberjacks_legacy": {
       "bedrock_name": "lumberjacks_legacy",
       "icon": "joshymc/lumberjacks_legacy.png",
