@@ -40,6 +40,8 @@ object PurchaseRewards {
         RANK_VOUCHER("rankvoucher", Delivery.ITEM, "rankvoucher <tier> <quantity>"),
         MONEY_VOUCHER("moneyvoucher", Delivery.ITEM, "moneyvoucher <voucher-id> <quantity>"),
         CHAT_TAG_VOUCHER("chattagvoucher", Delivery.ITEM, "chattagvoucher <tag-id> <quantity>"),
+        /** Issue #1602: a signed Lootbox item of one level (1-10). */
+        LOOTBOX("lootbox", Delivery.ITEM, "lootbox <level> <quantity>"),
         RANK("rank", Delivery.RANK, "rank <tier>"),
         LIFESTEAL_RANK("lsrank", Delivery.LIFESTEAL_RANK, "lsrank <lifesteal-rank>");
 
@@ -73,6 +75,8 @@ object PurchaseRewards {
          * pointed at the Survival server is rejected and recorded, never granted there.
          */
         fun lifestealRankPurchasable(id: String): Boolean = false
+        /** Issue #1602: a Lootbox level that is set up on this server (lootboxes.yml). */
+        fun lootboxLevelUsable(level: Int): Boolean = false
     }
 
     sealed class Result<out T> {
@@ -150,6 +154,14 @@ object PurchaseRewards {
             val id = a[0].lowercase(Locale.ROOT)
             if (!catalog.chatTagVoucherExists(id)) Result.Error("Unknown chat tag voucher '${a[0]}'.")
             else quantity(a[1]).map { Spec(kind, id, it) }
+        }
+        Kind.LOOTBOX -> {
+            val level = a[0].toIntOrNull()
+            when {
+                level == null || level !in 1..10 -> Result.Error("Lootbox level must be a whole number from 1 to 10.")
+                !catalog.lootboxLevelUsable(level) -> Result.Error("Level $level Lootboxes aren't set up on this server (lootboxes.yml).")
+                else -> quantity(a[1]).map { Spec(kind, level.toString(), it) }
+            }
         }
         Kind.RANK -> {
             val tier = DonorTiers.normalize(a[0])

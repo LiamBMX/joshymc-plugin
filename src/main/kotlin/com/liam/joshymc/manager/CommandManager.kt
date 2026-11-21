@@ -169,6 +169,12 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
+        // Issue #1602: inventory Lootboxes (help for players; give/list/reload/recovery for staff).
+        plugin.getCommand("lootbox")?.let {
+            val cmd = com.liam.joshymc.lootbox.LootboxCommand(plugin)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+        }
         // Issue #1339: free [JoshyMC] Chat Tag Voucher, once per player (Survival only).
         plugin.getCommand("freetag")?.let {
             val cmd = com.liam.joshymc.command.FreeTagCommand(plugin)

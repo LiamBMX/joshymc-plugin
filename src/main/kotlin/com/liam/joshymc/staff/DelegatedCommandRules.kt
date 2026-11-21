@@ -112,6 +112,9 @@ object DelegatedCommandRules {
     val PLAYER_SUBCOMMANDS_ONLY: Map<String, Set<String>> = mapOf(
         "crate" to com.liam.joshymc.crate.CratePermissions.PLAYER_SUBCOMMANDS,
         "crates" to com.liam.joshymc.crate.CratePermissions.PLAYER_SUBCOMMANDS,
+        // Issue #1602: only /lootbox help is a player subcommand; give, list, reload and admin are staff.
+        "lootbox" to setOf("help"),
+        "lootboxes" to setOf("help"),
     )
 
     /** The command's base label: no slash, no `plugin:` namespace, lower case. */

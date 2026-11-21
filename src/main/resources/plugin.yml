@@ -207,6 +207,11 @@ commands:
     usage: /advent
     aliases: [adventcalendar, christmas]
     permission: joshymc.advent.use
+  lootbox:
+    description: Lootboxes
+    usage: /lootbox help
+    aliases: [lootboxes]
+    permission: joshymc.lootbox.use
   freetag:
     description: Claim your free [JoshyMC] chat tag voucher (once per player, Survival only)
     usage: /freetag
@@ -1027,6 +1032,21 @@ permissions:
     default: op
   joshymc.advent.admin.recover:
     description: /advent admin reissue, grantfree, revokefree
+    default: op
+  joshymc.lootbox.use:
+    description: Open Lootboxes
+    default: true
+  joshymc.lootbox.admin:
+    description: /lootbox list, admin pending|inspect
+    default: op
+  joshymc.lootbox.give:
+    description: /lootbox give, giveall
+    default: op
+  joshymc.lootbox.reload:
+    description: /lootbox reload
+    default: op
+  joshymc.lootbox.recovery:
+    description: /lootbox admin review, resolve
     default: op
   joshymc.freetag.use:
     description: Use /freetag to claim the free [JoshyMC] chat tag voucher (once per player, Survival only)

@@ -61,6 +61,10 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
             val rank = ranks.settings?.rank(id) ?: return false
             return ranks.settings?.enabled == true && rank.enabled && rank.acquisition.store
         }
+        override fun lootboxLevelUsable(level: Int): Boolean {
+            val lootboxes = plugin.lootboxManagerOrNull() ?: return false
+            return lootboxes.levelProblem(level) == null
+        }
     }
 
     /** What this server can deliver, for systems that validate their own reward lists up front (Lifesteal achievements, issue #1429). */
@@ -474,6 +478,8 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         Kind.RANK_VOUCHER -> plugin.rankVoucherManager.createVoucherStack(param)
         Kind.MONEY_VOUCHER -> plugin.physicalVoucherManager.createVoucherStack(param, 1)
         Kind.CHAT_TAG_VOUCHER -> plugin.chatTagVoucherManager.createVoucherStack(param)
+        // Issue #1602: built by the Lootbox manager (signed, stackable). Null while that level is unusable.
+        Kind.LOOTBOX -> param.toIntOrNull()?.let { plugin.lootboxManagerOrNull()?.createItem(it, 1) }
         else -> null
     }
 
@@ -494,6 +500,7 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         Kind.RANK_VOUCHER -> "${DonorTiers.displayName(param)} Rank Voucher"
         Kind.MONEY_VOUCHER -> "$param voucher"
         Kind.CHAT_TAG_VOUCHER -> "$param Chat Tag Voucher"
+        Kind.LOOTBOX -> "Level $param Lootbox"
         Kind.RANK -> "${DonorTiers.displayName(param)} rank"
         Kind.LIFESTEAL_RANK -> "${plugin.lifestealRanksOrNull()?.settings?.rank(param)?.displayName ?: param} rank (Lifesteal)"
     }
@@ -515,6 +522,7 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         row.source.startsWith(ACHIEVEMENT_SOURCE_PREFIX) -> "achievement reward"
         row.source.startsWith(QUEST_SOURCE_PREFIX) -> "quest reward"
         row.source.startsWith(ADVENT_SOURCE_PREFIX) -> "Advent Calendar reward"
+        row.source.startsWith(LOOTBOX_SOURCE_PREFIX) -> "Lootbox delivery"
         else -> "store purchase"
     }
 
@@ -618,6 +626,8 @@ class PurchaseFulfillmentManager(private val plugin: Joshymc) : Listener {
         const val QUEST_SOURCE_PREFIX = "lsquest:"
         /** `source` of rows queued by Advent Calendar claims (issue #1424). */
         const val ADVENT_SOURCE_PREFIX = "advent:"
+        /** `source` of rows queued by `/lootbox give|giveall` (issue #1602). */
+        const val LOOTBOX_SOURCE_PREFIX = "lootbox:"
         private const val JOIN_DELAY_TICKS = 100L
         private const val STARTUP_SWEEP_DELAY_TICKS = 200L
         private const val SWEEP_INTERVAL_TICKS = 20L * 60

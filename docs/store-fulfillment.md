@@ -28,6 +28,7 @@ purchase fulfill <recipient> <type> <args...> [reference]
 | `rankvoucher` | `<tier> <quantity>` | Queued, delivered on join |
 | `moneyvoucher` | `<physical-voucher-id> <quantity>` | Queued, delivered on join |
 | `chattagvoucher` | `<tag-id> <quantity>` | Queued, delivered on join |
+| `lootbox` | `<level 1-10> <quantity>` | Queued, delivered on join (the level must be ready in lootboxes.yml, see `docs/lootboxes.md`) |
 | `rank` | `<tier>` (donor tiers only: scout … pioneer) | Queued, granted on join |
 | `lsrank` | `<lifesteal-rank>` (Lifesteal server only; a rank in `lifesteal-ranks.yml` with `acquisition.store: true`) | Granted online or offline once LuckPerms saved the group (issue #1428, `docs/lifesteal-ranks.md`) |
 

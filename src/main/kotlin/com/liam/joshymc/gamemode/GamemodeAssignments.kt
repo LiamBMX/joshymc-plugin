@@ -41,6 +41,9 @@ object GamemodeAssignments {
         // The Christmas Advent Calendar (issue #1424): separate calendars and claims per gamemode,
         // picked from where the player is; each only runs where that gamemode's economy lives.
         "advent",
+        // Inventory Lootboxes (issue #1602): one system per server, each level lists the gamemodes it opens in
+        // and every reward its own; Coins/Credits only where that gamemode's economy lives.
+        "lootbox",
         // Softlock recovery (issue #1241) is server infrastructure, not gameplay.
         "unstuck",
         // Cross-server transfers (issue #1331) move players between gamemodes, so they work on all of them.
