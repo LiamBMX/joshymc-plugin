@@ -134,6 +134,16 @@ object LootboxConfig {
 
     private val ID = Regex("^[a-z0-9_-]{1,48}$")
     private val ITEM_MODEL = Regex("^[a-z0-9_.-]+:[a-z0-9_./-]+$")
+
+    /** `item-model` value that turns the bundled look off (the box shows its plain material). */
+    const val NO_ITEM_MODEL = "none"
+
+    /**
+     * Issue #1603: the bundled resource pack's animated Lucky Block for [level]
+     * (`resourcepack/art/items/lootbox_level_<n>.py`). Used when a level has no `item-model` key,
+     * so files written before the art existed get it too.
+     */
+    fun defaultItemModel(level: Int): String = "joshymc:lootbox_level_$level"
     private val PERMISSION = Regex("^[A-Za-z0-9_.*-]{1,128}$")
 
     data class Result(val settings: LootboxSettings?, val problems: List<String>)
@@ -255,8 +265,10 @@ object LootboxConfig {
         val name = r.string("$base.name", "&6Level $level Lootbox")
         val description = r.stringList("$base.description", listOf("&7A mystery box of Level $level rewards."))
         val material = r.material("$base.material", "CHEST", resolver, item = true)
-        val itemModel = r.optionalString("$base.item-model")?.lowercase(Locale.ROOT)?.also {
-            if (!ITEM_MODEL.matches(it)) problems += "item-model '$it' must look like namespace:path."
+        // Missing key = the bundled Lucky Block for this level; `none` (or blank) = no model.
+        val itemModel = if (source.get("$base.item-model") == null) defaultItemModel(level)
+        else r.optionalString("$base.item-model")?.lowercase(Locale.ROOT)?.takeUnless { it == NO_ITEM_MODEL }?.also {
+            if (!ITEM_MODEL.matches(it)) problems += "item-model '$it' must look like namespace:path (or none)."
         }
         val glint = r.bool("$base.glint", false)
         val enabled = r.bool("$base.enabled", true)

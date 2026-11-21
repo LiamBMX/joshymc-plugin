@@ -60,9 +60,10 @@ sounds:
 messages:
   opened: "&aYou opened a {name}&a!"
 
-# Every level: name, description (item lore), material, optional item-model (namespace:path,
-# for when the art exists), glint, enabled, gamemodes it opens in (survival, lifesteal) and its
-# own rewards. Each reward needs: type, weight, and the fields its type needs:
+# Every level: name, description (item lore), material, item-model (the resource pack look,
+# namespace:path; each level ships with its own animated Lucky Block joshymc:lootbox_level_<n>,
+# which a level without the key also gets; `none` = the plain material), glint, enabled,
+# gamemodes it opens in (survival, lifesteal) and its own rewards. Each reward needs: type, weight, and the fields its type needs:
 #
 #   type: item              material, amount (1-2304), optional enchantments / custom-enchantments
 #   type: custom-item       item (a /joshymc give id), amount
@@ -81,6 +82,7 @@ levels:
     name: "&fLevel 1 Lootbox"
     description: ["&7A mystery box of Level 1 rewards."]
     material: CHEST
+    item-model: "joshymc:lootbox_level_1"
     glint: false
     enabled: true
     gamemodes: [survival, lifesteal]
@@ -162,54 +164,63 @@ levels:
     name: "&fLevel 2 Lootbox"
     description: ["&7A mystery box of Level 2 rewards."]
     material: CHEST
+    item-model: "joshymc:lootbox_level_2"
     gamemodes: [survival, lifesteal]
     rewards: {}
   3:
     name: "&aLevel 3 Lootbox"
     description: ["&7A mystery box of Level 3 rewards."]
     material: CHEST
+    item-model: "joshymc:lootbox_level_3"
     gamemodes: [survival, lifesteal]
     rewards: {}
   4:
     name: "&aLevel 4 Lootbox"
     description: ["&7A mystery box of Level 4 rewards."]
     material: CHEST
+    item-model: "joshymc:lootbox_level_4"
     gamemodes: [survival, lifesteal]
     rewards: {}
   5:
     name: "&9Level 5 Lootbox"
     description: ["&7A mystery box of Level 5 rewards."]
     material: CHEST
+    item-model: "joshymc:lootbox_level_5"
     gamemodes: [survival, lifesteal]
     rewards: {}
   6:
     name: "&9Level 6 Lootbox"
     description: ["&7A mystery box of Level 6 rewards."]
     material: CHEST
+    item-model: "joshymc:lootbox_level_6"
     gamemodes: [survival, lifesteal]
     rewards: {}
   7:
     name: "&5Level 7 Lootbox"
     description: ["&7A mystery box of Level 7 rewards."]
     material: CHEST
+    item-model: "joshymc:lootbox_level_7"
     gamemodes: [survival, lifesteal]
     rewards: {}
   8:
     name: "&5Level 8 Lootbox"
     description: ["&7A mystery box of Level 8 rewards."]
     material: CHEST
+    item-model: "joshymc:lootbox_level_8"
     gamemodes: [survival, lifesteal]
     rewards: {}
   9:
     name: "&6Level 9 Lootbox"
     description: ["&7A mystery box of Level 9 rewards."]
     material: CHEST
+    item-model: "joshymc:lootbox_level_9"
     gamemodes: [survival, lifesteal]
     rewards: {}
   10:
     name: "&6&lLevel 10 Lootbox"
     description: ["&7A mystery box of Level 10 rewards."]
     material: CHEST
+    item-model: "joshymc:lootbox_level_10"
     glint: true
     gamemodes: [survival, lifesteal]
     rewards: {}
