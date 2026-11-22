@@ -236,6 +236,20 @@ class GamemodeLockManager(private val plugin: Joshymc) {
             },
         )
 
+    /**
+     * Issue #1609: re-checks the combat/ranked guard at a click of a shared economy screen (Buy
+     * Orders, Auction House, Overflow). True = refused: the player is told and the screen closed.
+     * Players outside Lifesteal worlds are never refused here.
+     */
+    fun refusesSharedAction(player: Player, label: String): Boolean {
+        val inLifesteal = gamemodeOf(player.world) == ServerGamemode.LIFESTEAL
+        if (!inLifesteal) return false
+        val refusal = LifestealSharedCommands.clickRefusal(true, competitiveState(player), label) ?: return false
+        player.closeInventory()
+        plugin.commsManager.send(player, Component.text(refusal, NamedTextColor.RED))
+        return true
+    }
+
     /** A check that throws (manager not started) refuses rather than letting the command through. */
     private inline fun safe(check: () -> Boolean): Boolean = try { check() } catch (_: Exception) { true }
 

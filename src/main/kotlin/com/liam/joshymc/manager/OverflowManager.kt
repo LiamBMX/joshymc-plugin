@@ -391,6 +391,8 @@ class OverflowManager(private val plugin: Joshymc) : Listener {
             plugin.commsManager.send(player, Component.text("You can't withdraw from /overflow in the event world.", NamedTextColor.RED))
             return false
         }
+        // Issue #1609: on Lifesteal, no withdrawals in combat or around a ranked match.
+        if (plugin.gamemodeLockManager.refusesSharedAction(player, "overflow")) return false
         return true
     }
 

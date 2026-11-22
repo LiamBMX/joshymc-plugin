@@ -57,6 +57,10 @@ class ServerShopManager(private val plugin: Joshymc) {
     // item carries both a "buy" and a "sell" price.
     private val categories = mutableListOf<ShopCategory>()
 
+    /** The catalog file [categories] were loaded from (shop.yml, or lifesteal-shop.yml, issue #1609). */
+    @Volatile var catalogFile: String = LifestealSharedCommands.LifestealShopCatalog.DEFAULT_FILE
+        private set
+
     private val FILLER = ItemStack(Material.BLACK_STAINED_GLASS_PANE).apply {
         editMeta { it.displayName(Component.empty()) }
     }
@@ -71,9 +75,27 @@ class ServerShopManager(private val plugin: Joshymc) {
     fun start() {
         categories.clear()
 
-        mergeMissingCategoriesFromDefaults("shop.yml")
-        removeObsoleteCategories("shop.yml", "spawners")
-        loadCategoriesInto(categories, "shop.yml")
+        // Issue #1609: a dedicated Lifesteal server may have its own catalog in lifesteal-shop.yml.
+        // It is the Owner's file: nothing bundled is merged into it and nothing is created for it.
+        val catalog = LifestealSharedCommands.LifestealShopCatalog.catalogFile(
+            plugin.networkIdentityManager.hostedGamemodes,
+            plugin.configFile(LifestealSharedCommands.LifestealShopCatalog.FILE).exists(),
+        )
+        catalogFile = catalog
+        if (catalog == LifestealSharedCommands.LifestealShopCatalog.FILE) {
+            val file = plugin.configFile(catalog)
+            val config = YamlConfiguration.loadConfiguration(file)
+            if (com.liam.joshymc.util.ConfigUtil.looksLikeParseFailure(file, config)) {
+                plugin.logger.severe("[Shop] $catalog failed to load (invalid YAML): the Lifesteal shop has no items until it is fixed. shop.yml is NOT used instead.")
+            } else {
+                loadCategoriesInto(categories, catalog)
+            }
+            plugin.logger.info("[Shop] Using the Lifesteal catalog $catalog.")
+        } else {
+            mergeMissingCategoriesFromDefaults("shop.yml")
+            removeObsoleteCategories("shop.yml", "spawners")
+            loadCategoriesInto(categories, "shop.yml")
+        }
 
         // sell-prices.yml is no longer read here (issue #1416): SellPriceManager owns it, and its
         // `categories:` block is organizational only, so it can't supply a second sell price.

@@ -358,5 +358,53 @@ fun main() {
         "CrateEditorAudit.Reason.HEART_ITEM" in editor &&
         editor.indexOf("heartItemProblem(held)") < editor.indexOf("pendingActions[p.uniqueId] = PendingCrateAction.AddReward"))
 
+    // ── G. Issue #1609 phase 2: economy ──
+    for (name in listOf("shop", "sell", "worth", "balance", "baltop", "pay", "ah", "orders", "order", "overflow")) {
+        check("economy /$name works for players on dedicated Lifesteal", canUse(name, LIFESTEAL, DEDICATED_LIFESTEAL, dedicatedLocks, visible = false))
+        check("economy /$name stays refused in a mixed server's Lifesteal worlds", !canUse(name, LIFESTEAL, MIXED, setOf(SURVIVAL)))
+    }
+    check("/buyorders is /orders", aliasOwner["buyorders"] == "orders")
+    for (name in listOf("orders", "order")) {
+        check("/$name is guarded in combat and ranked", LifestealSharedCommands.guardOf(name) == Guard.COMPETITIVE)
+        check("/$name keeps joshymc.orders", "\"$name\" to \"joshymc.orders\"" in commandManager)
+    }
+    check("/eco stays an Owner-only staff share", "eco" !in shared && LifestealSharedCommands.minimumRank("eco", listOf("give")) == StaffRank.OWNER)
+    check("/bank stays Lifesteal's own", GamemodeAssignments.COMMANDS["bank"] == GamemodeScope.LIFESTEAL &&
+        canUse("bank", LIFESTEAL, DEDICATED_LIFESTEAL, dedicatedLocks, visible = false))
+    check("click guard: nothing outside Lifesteal", LifestealSharedCommands.clickRefusal(false, CompetitiveState(true, true), "orders") == null)
+    check("click guard: free players pass", LifestealSharedCommands.clickRefusal(true, free, "orders") == null)
+    check("click guard: combat refused", LifestealSharedCommands.clickRefusal(true, tagged, "ah")!!.contains("combat"))
+    check("click guard: ranked refused", LifestealSharedCommands.clickRefusal(true, ranked, "overflow")!!.contains("Ranked"))
+    val catalog = LifestealSharedCommands.LifestealShopCatalog
+    check("Lifesteal catalog used on dedicated Lifesteal when present", catalog.catalogFile(DEDICATED_LIFESTEAL, true) == "lifesteal-shop.yml")
+    check("no Lifesteal catalog = shop.yml", catalog.catalogFile(DEDICATED_LIFESTEAL, false) == "shop.yml")
+    check("Survival and mixed servers keep shop.yml", catalog.catalogFile(SURVIVAL_ONLY, true) == "shop.yml" && catalog.catalogFile(MIXED, true) == "shop.yml")
+    check("no lifesteal-shop.yml is bundled (no invented prices)",
+        Thread.currentThread().contextClassLoader.getResource("lifesteal-shop.yml") == null)
+    check("the shop never merges bundled categories into the Lifesteal catalog",
+        shop.substringAfter("if (catalog == LifestealSharedCommands.LifestealShopCatalog.FILE) {").substringBefore("        } else {\n            mergeMissingCategoriesFromDefaults").let {
+            "mergeMissingCategoriesFromDefaults" !in it && "saveResource" !in it && "loadCategoriesInto(categories, catalog)" in it
+        })
+    val lockGuard = lockManager.substringAfter("fun refusesSharedAction(").substringBefore("\n    }\n")
+    check("the click guard only checks Lifesteal worlds and reads the live state",
+        "gamemodeOf(player.world) == ServerGamemode.LIFESTEAL" in lockGuard && "competitiveState(player)" in lockGuard)
+    val orders = source("manager/OrderManager.kt")
+    for (fn in listOf("private fun executeCreateOrder(", "fun executeFulfill(", "fun claimPendingDeliveries(")) {
+        check("orders: $fn re-checks the guard first",
+            orders.substringAfter(fn).substringBefore("\n    fun ").lines().take(4).any { "refusesSharedAction(" in it })
+    }
+    check("orders: escrow is still withdrawn before the order row", orders.substringAfter("private fun executeCreateOrder(").let {
+        it.indexOf("economyManager.withdraw(player.uniqueId, escrow)") in 0 until it.indexOf("INSERT INTO buy_orders")
+    })
+    check("orders: fills are a conditional update", "WHERE id = ? AND remaining_qty >= ? AND expires_at > ?" in orders)
+    check("orders: expired orders are still refunded", "fun checkExpired()" in orders)
+    check("orders: filled items still go to Orders Overflow", "overflowManager.storeItems" in orders)
+    val ah = source("manager/AuctionManager.kt")
+    for (fn in listOf("fun listItem(", "fun buyItem(", "fun cancelListing(", "fun claimExpired(", "fun listBidItem(", "fun placeBid(", "fun cancelBidListing(")) {
+        check("ah: $fn re-checks the guard first", ah.substringAfter(fn).lines().take(4).any { "refusesSharedAction(player, \"ah\")" in it })
+    }
+    check("overflow: withdrawals re-check the guard",
+        "refusesSharedAction(player, \"overflow\")" in source("manager/OverflowManager.kt").substringAfter("private fun canWithdraw("))
+
     println("Lifesteal shared command checks passed ($checks checks).")
 }

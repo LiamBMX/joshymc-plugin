@@ -73,7 +73,37 @@ object LifestealSharedCommands {
         "tag" to Guard.NONE,
         "chatcolor" to Guard.NONE,
         "killeffect" to Guard.NONE,
+        // Issue #1609 (Phase 2 economy). Buy Orders: this server's own `buy_orders` table and wallet.
+        // Escrow is taken in the create transaction, partial fills, expiration refunds and offline
+        // delivery (into /overflow, issue #1233) are unchanged. Creating an order or selling into one
+        // moves coins/items, so it is refused in combat (escrow can't shield coins from PvP coin
+        // stealing) and around ranked matches, at the command and again at every click ([clickRefusal]).
+        "orders" to Guard.COMPETITIVE,
+        "order" to Guard.COMPETITIVE,
     )
+
+    /**
+     * Issue #1609: the [Guard.COMPETITIVE] check again at a GUI click or chat prompt of a shared
+     * economy screen (Buy Orders, Auction House, Overflow), since a screen can stay open into a fight
+     * or a ranked match. Only players standing in a Lifesteal world are checked, so Survival is
+     * unchanged. Null = allowed.
+     */
+    fun clickRefusal(inLifesteal: Boolean, state: CompetitiveState, label: String): String? =
+        if (!inLifesteal) null else competitiveRefusal(Guard.COMPETITIVE, state, label)
+
+    /**
+     * Issue #1609: a dedicated Lifesteal server may keep its own shop catalog in [FILE] (same format
+     * as shop.yml). It is used only when the Owner created it on a server hosting nothing but
+     * Lifesteal; nothing is bundled or merged into it, so no item, category or price is invented.
+     * Without it the server's own shop.yml is used, as before. Either way [LifestealShopRules] applies.
+     */
+    object LifestealShopCatalog {
+        const val FILE = "lifesteal-shop.yml"
+        const val DEFAULT_FILE = "shop.yml"
+
+        fun catalogFile(hosted: Set<ServerGamemode>, lifestealFileExists: Boolean): String =
+            if (hosted == setOf(ServerGamemode.LIFESTEAL) && lifestealFileExists) FILE else DEFAULT_FILE
+    }
 
     /**
      * Issue #1599: SURVIVAL-scoped **staff** commands that also run on a dedicated Lifesteal server,

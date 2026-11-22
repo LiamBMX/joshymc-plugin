@@ -537,6 +537,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     }
 
     fun claimPendingDeliveries(player: Player) {
+        // Issue #1609: on Lifesteal, re-checked at the click (combat tag, ranked match).
+        if (plugin.gamemodeLockManager.refusesSharedAction(player, "orders")) return
         // The event inventory is temporary: pending items must never be handed out into it.
         if (plugin.eventManager.isInEventWorld(player)) {
             plugin.commsManager.send(player, Component.text("You can't claim pending items in the event world. Use /spawn to leave first.", NamedTextColor.RED))
@@ -918,6 +920,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     }
 
     private fun executeCreateOrder(player: Player, item: ItemStack, quantity: Int, pricePerItem: Double, escrow: Double) {
+        // Issue #1609: on Lifesteal, re-checked at the click (combat tag, ranked match).
+        if (plugin.gamemodeLockManager.refusesSharedAction(player, "orders")) return
         if (getPlayerActiveOrderCount(player.uniqueId) >= getActiveOrderLimit(player)) {
             plugin.commsManager.send(player, Component.text("You have reached your active Buy Order limit.", NamedTextColor.RED))
             return
@@ -1077,6 +1081,8 @@ class OrderManager(private val plugin: Joshymc) : Listener {
     }
 
     fun executeFulfill(seller: Player, orderId: Int, requestedQty: Int) {
+        // Issue #1609: on Lifesteal, re-checked at the click (combat tag, ranked match).
+        if (plugin.gamemodeLockManager.refusesSharedAction(seller, "orders")) return
         if (plugin.modModeManager.denyEconomyIfRestricted(seller)) return
         val now = System.currentTimeMillis()
         val order = plugin.databaseManager.queryFirst(
