@@ -114,6 +114,80 @@ Lifesteal's crates (Supply, Warrior, Soul, Relic, Victory, Heartless, Event) are
    <player> chattag_<id>`; `/voucher give <player> fly:1h` and `/event start` are refused.
 6. On the Survival server everything behaves as before.
 
+## Issue #1601 phase 1: cosmetics and crates
+
+### How cosmetic ownership is stored (checked before changing access)
+
+| Cosmetic | Owned through | Equipped choice stored in |
+|---|---|---|
+| Chat tags (`/tag`, `/tags`) | the tag's own permission node, or a `chat_tag_unlocks` row (redeemed Chat Tag Voucher) | `player_tags` |
+| Chat colors (`/chatcolor`) | `joshymc.chatcolor` / `joshymc.chatcolor.special` | `chat_colors` |
+| Kill effects (`/killeffect`) | `joshymc.killeffect.<effect>` | `player_kill_effects` |
+| Nicknames (`/nick`) | `joshymc.nick` (+ `.others`, `.realname`, `.bypassfilter`, `.noprefix`; already NETWORK, unchanged) | `nicknames` |
+
+All tables are in **this server's own** `data.db`; Survival and Lifesteal share nothing. So:
+
+- Permission-based ownership (every chat color, every kill effect, permission chat tags) follows the
+  player to Lifesteal **if** LuckPerms grants that node there (global, or `server=lifesteal`).
+- Chat tags unlocked by redeeming a voucher **on Survival** are rows in Survival's database and are
+  not visible on Lifesteal. Nothing copies them: a sync needs an explicit, Owner-approved mechanism
+  (see Owner decisions). Vouchers redeemed on Lifesteal unlock there and persist across
+  reconnects/restarts like on Survival.
+- The equipped tag/color/effect is per server (a player picks them again on Lifesteal once).
+
+### What changed
+
+- `/tag` (`/tags`, `/chattag`), `/chatcolor` (`/cc`), `/killeffect` (`/ke`) are in `SHARED` with no
+  competitive guard: they only choose among the player's own unlocked cosmetics. Same permissions
+  as before (`joshymc.tag`, `joshymc.chatcolor`, `joshymc.killeffect` + the per-cosmetic nodes),
+  same SURVIVAL scope, so mixed servers and Survival are unchanged. Typed during a ranked match they
+  are still refused by the ranked command rule. `/cosmetics` (the hub with trails, glow, gadgets,
+  etc.) and other unselected cosmetics stay Survival only.
+- **Kill effects are cosmetic only.** Firework Pop spawned a real firework with effects, whose
+  explosion damages everything within a few blocks (also on Survival). Its firework is now tagged
+  before it spawns, never saved with the chunk, and its damage is cancelled at LOWEST in every
+  gamemode. All other effects are particles, sounds and `strikeLightningEffect` (no damage).
+- **Crates never grant permanent hearts.** A crate reward that is a Lifesteal Heart item, or a
+  shulker box/bundle holding one, makes the crate refuse to open before a key is used
+  (`crateProblem`), and `/crateeditor` refuses to add one (audited `CRATE_EDITOR_REWARD_ADD`
+  REJECTED `heart_item`). Before, a snapshot of a Heart item would hand out copies of one serial.
+- Crate models: the bundled `crates.custom-models.gamemodes` is now `[survival, lifesteal]`. An
+  existing config.yml keeps its list, so **the live Lifesteal server needs `lifesteal` added by
+  hand** (then `/crate models refresh`).
+
+Already working before this change (kept, regression-checked): chat tag and chat color rendering in
+Lifesteal chat (CommunicationsManager reads them in every gamemode), Chat Tag Voucher redemption
+(refused while a ranked snapshot is pending), kill effects playing on Lifesteal kills, `/nick`
+(NETWORK), crate opening/keys/recovery, `/crate` + `/crateeditor` staff access (issue #1599).
+
+### Tracking
+
+| Feature | Before | After | Permission | Live testing required |
+|---|---|---|---|---|
+| `/tag`, `/tags` | refused ("Survival only") | works | `joshymc.tag` + per-tag node or unlock | yes |
+| `/chatcolor` | refused | works | `joshymc.chatcolor`, `.special` | yes |
+| `/killeffect` | refused | works | `joshymc.killeffect` + `joshymc.killeffect.<id>` | yes |
+| `/nick` | working (NETWORK) | unchanged | `joshymc.nick*` | yes |
+| Cosmetic display (tags/colors in chat) | working | unchanged | as above | yes |
+| Kill effect playback | working, Firework Pop dealt damage | cosmetic only, all gamemodes | as above | yes |
+| Chat Tag Vouchers | working | unchanged | `/voucher give` staff share (#1599) | yes |
+| Legacy cosmetics | permission-based carry over via LuckPerms; Survival DB unlocks don't | unchanged (Owner decision) | — | yes |
+| `/crate`, `/crateeditor`, recovery | working (#1599) | unchanged | `CratePermissions` nodes, Admin+ | yes |
+| Crate rewards | Heart items could be added | refused | — | yes |
+| Custom crate models | Survival worlds only (default) | bundled default includes Lifesteal; live config edit needed | `joshymc.crate.display` | yes |
+| Supply/Warrior/Soul/Relic/Victory/Heartless/Event crates | not configured | not configured (Owner content) | — | yes |
+
+### Owner decisions / configuration still needed
+
+1. **The seven Lifesteal crates' contents.** Create them on the Lifesteal server with
+   `/crateeditor` (ids e.g. `supply`, `warrior`, `soul`, `relic`, `victory`, `heartless`, `event`):
+   rewards, weights, key items and prices are the Owner's; nothing was invented. Models for them
+   need art (a separate request) or reuse an existing pack model with `/crate models set`.
+2. **Survival voucher-unlocked chat tags on Lifesteal:** keep them per server (current), or approve
+   a one-time export/import of `chat_tag_unlocks` (insert-or-ignore, so no duplicate grants).
+3. LuckPerms: grant the cosmetic nodes players should keep on Lifesteal (e.g.
+   `lp group <rank> permission set joshymc.killeffect.<id> true server=lifesteal`, or globally).
+
 ## The command blacklist
 
 | Command | How it is enforced on Lifesteal |

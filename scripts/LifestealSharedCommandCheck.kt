@@ -329,5 +329,34 @@ fun main() {
         "sender is ConsoleCommandSender || sender is RemoteConsoleCommandSender || (sender is Player && sender.isOp)" in source("command/AdminBalanceCommand.kt"))
     check("crate subcommands keep their own nodes", "givekey" in source("crate/CratePermissions.kt") && "CratePermissions" in source("command/CrateCommand.kt"))
 
+    // ── F. Issue #1601 phase 1: cosmetics and crates ──
+    for (name in listOf("tag", "chatcolor", "killeffect")) {
+        check("cosmetic /$name is shared without a competitive guard", LifestealSharedCommands.guardOf(name) == Guard.NONE)
+        check("cosmetic /$name works on dedicated Lifesteal", canUse(name, LIFESTEAL, DEDICATED_LIFESTEAL, dedicatedLocks, visible = false))
+        check("cosmetic /$name stays refused in a mixed server's Lifesteal worlds", !canUse(name, LIFESTEAL, MIXED, setOf(SURVIVAL)))
+        check("cosmetic /$name keeps its SURVIVAL scope", GamemodeAssignments.COMMANDS[name] == GamemodeScope.SURVIVAL)
+        check("cosmetic /$name keeps its permission", "\"$name\" to \"joshymc.$name\"" in commandManager)
+    }
+    check("/nick stays NETWORK", GamemodeAssignments.COMMANDS["nick"] == GamemodeScope.NETWORK)
+    check("unselected cosmetics stay Survival only", listOf("cosmetics", "signitem", "skull", "freetag").all { it !in shared && it !in adminShared })
+    val killEffects = source("manager/KillEffectManager.kt")
+    check("kill effects still need their own permission", "killer.hasPermission(effect.permission)" in killEffects)
+    check("the Firework Pop firework is tagged before it spawns", "world.spawn(center, Firework::class.java)" in killEffects &&
+        "cosmeticFireworkKey, PersistentDataType.BYTE" in killEffects && "fw.isPersistent = false" in killEffects)
+    check("the Firework Pop explosion deals no damage", "fun onCosmeticFireworkDamage(event: EntityDamageByEntityEvent)" in killEffects &&
+        "@EventHandler(priority = EventPriority.LOWEST)\n    fun onCosmeticFireworkDamage" in killEffects)
+    check("no other kill effect spawns entities", Regex("""world\.spawn(Entity)?\(""").findAll(killEffects).count() == 1)
+    check("lightning stays an effect only", "strikeLightning(" !in killEffects)
+    check("chat tag vouchers still wait for ranked", "inventoryReplacedLater(event.player)" in source("listener/ChatTagVoucherListener.kt"))
+    val crates = source("manager/CrateManager.kt")
+    check("crates refuse Heart item rewards before a key is used",
+        "rewardTemplate(reward)?.let { heartItemProblem(it) }" in crates.substringAfter("private fun crateProblem(").substringBefore("\n    }\n"))
+    check("Heart items are found in shulker boxes and bundles", "lifestealHeartManager.items" in crates &&
+        "org.bukkit.block.ShulkerBox" in crates && "BundleMeta" in crates)
+    val editor = source("command/CrateEditorCommand.kt")
+    check("the crate editor refuses Heart items and audits it", "plugin.crateManager.heartItemProblem(held)" in editor &&
+        "CrateEditorAudit.Reason.HEART_ITEM" in editor &&
+        editor.indexOf("heartItemProblem(held)") < editor.indexOf("pendingActions[p.uniqueId] = PendingCrateAction.AddReward"))
+
     println("Lifesteal shared command checks passed ($checks checks).")
 }
