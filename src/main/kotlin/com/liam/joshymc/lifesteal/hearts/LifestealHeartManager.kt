@@ -221,8 +221,34 @@ class LifestealHeartManager(private val plugin: Joshymc) {
      */
     fun sync(player: Player) {
         syncHearts(player)
+        refreshItemLooks(player)
         // Issue #1457: a world change, respawn or join starts or ends a playtime stretch.
         if (player.isOnline) samplePlaytime(player, System.currentTimeMillis())
+    }
+
+    /**
+     * Issue #1607: Heart items made before the heart texture (or before an `item-model` change) get the
+     * current look. Online players only, in Lifesteal worlds, in their own inventory and ender chest.
+     * Only the item model changes ([HeartItem.refreshLook]); nothing is created, removed or moved.
+     * Players held by a Ranked match or waiting for a ranked restore are skipped: their inventory is
+     * the match's and will be replaced, and the next join/world change/respawn refreshes it.
+     */
+    private fun refreshItemLooks(player: Player) {
+        if (!player.isOnline || !active || !isLifesteal(player)) return
+        val ranked = plugin.lifestealRankedManager
+        if (ranked.holds(player) || ranked.hasPendingRestore(player.uniqueId)) return
+        val look = itemSettings
+        var changed = 0
+        for (inventory in listOf(player.inventory, player.enderChest)) {
+            for (slot in 0 until inventory.size) {
+                val stack = inventory.getItem(slot) ?: continue
+                if (items.refreshLook(stack, look)) {
+                    inventory.setItem(slot, stack)
+                    changed++
+                }
+            }
+        }
+        if (changed > 0) plugin.logger.info("[Hearts] Updated the look of $changed Heart item(s) held by ${player.name}.")
     }
 
     private fun syncHearts(player: Player) {

@@ -184,8 +184,11 @@ data class LifestealSettings(
         val redeemEnabled: Boolean = true,
         /** `&` colour codes. Only new items use it; existing items are identified by their serial. */
         val displayName: String = "&c&lHeart",
-        /** Optional item model (`namespace:path`) for a resource-pack look, or null for the plain item. */
-        val itemModel: String? = null,
+        /**
+         * Item model (`namespace:path`) for the resource-pack look, or null for the plain Nether Star.
+         * Issue #1607: defaults to the bundled heart texture; `none` in lifesteal.yml turns it off.
+         */
+        val itemModel: String? = DEFAULT_ITEM_MODEL,
         val glint: Boolean = true,
         /** Minimum time between two withdrawals or two redemptions by one player. */
         val actionCooldownMillis: Int = 500,
@@ -194,7 +197,14 @@ data class LifestealSettings(
         val withdrawEligibility: WithdrawEligibility = WithdrawEligibility(),
         /** `heart-items.alt-transfer-review` (issue #1457). */
         val altTransferReview: AltTransferReview = AltTransferReview(),
-    )
+    ) {
+        companion object {
+            /** The heart texture bundled in the JoshyMC resource pack (issue #1607). */
+            const val DEFAULT_ITEM_MODEL = "joshymc:lifesteal_heart"
+            /** `heart-items.item-model` value that keeps the plain Nether Star look. */
+            const val NO_ITEM_MODEL = "none"
+        }
+    }
 
     /**
      * Who may make tradeable Heart items (issue #1457, alt-account heart farming): a player needs
@@ -572,13 +582,16 @@ object LifestealConfigParser {
         val withdraw = bool("withdraw-enabled", d.withdrawEnabled)
         val redeem = bool("redeem-enabled", d.redeemEnabled)
         val name = text("heart-items.display-name", d.displayName)
+        // Issue #1607: missing or empty = the bundled heart texture, "none" = the plain Nether Star.
         val model = when (val raw = get("heart-items.item-model")) {
-            null -> null
-            is String -> raw.trim().ifEmpty { null }?.let {
-                if (ITEM_MODEL.matches(it)) it
-                else { problems += Problem(true, "heart-items.item-model '$it' is not a namespace:path item model (or leave it empty)."); null }
+            null -> d.itemModel
+            is String -> when (val value = raw.trim()) {
+                "" -> d.itemModel
+                LifestealSettings.HeartItems.NO_ITEM_MODEL -> null
+                else -> if (ITEM_MODEL.matches(value)) value
+                else { problems += Problem(true, "heart-items.item-model '$value' is not a namespace:path item model (or empty, or none)."); null }
             }
-            else -> { problems += Problem(true, "heart-items.item-model must be text (namespace:path) or empty."); null }
+            else -> { problems += Problem(true, "heart-items.item-model must be text (namespace:path, empty or none)."); null }
         }
         val glint = bool("glint", d.glint)
         val cooldown = when (val raw = get("heart-items.action-cooldown-millis")) {
