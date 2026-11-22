@@ -96,6 +96,7 @@ fun main() {
     heartItemWiring()
     heartItemCombat()
     heartItemConsumers()
+    stackableHeartItems()
     altFarmingSettings()
     altFarmingRules()
     altFarmingStore()
@@ -106,6 +107,146 @@ fun main() {
     environmentalWiring()
     remediation1537()
     println("OK: $checks Lifesteal heart checks passed.")
+}
+
+// ── Stackable Heart items (issue #1606) ─────────────────────
+
+private fun stackableHeartItems() {
+    check("1 -> one item", HeartRules.stackSizes(1) == listOf(1))
+    check("16 -> one stack of 16", HeartRules.stackSizes(16) == listOf(16))
+    check("64 -> one stack of 64", HeartRules.stackSizes(64) == listOf(64))
+    check("128 -> two stacks of 64", HeartRules.stackSizes(128) == listOf(64, 64))
+    check("130 -> 64, 64, 2", HeartRules.stackSizes(130) == listOf(64, 64, 2))
+    check("0 and negatives -> nothing", HeartRules.stackSizes(0).isEmpty() && HeartRules.stackSizes(-5).isEmpty())
+    check("cap = a full inventory of stacks", HeartRules.MAX_STACKABLE_ITEM_GRANT == 36 * 64 && HeartRules.stackSizes(HeartRules.MAX_STACKABLE_ITEM_GRANT).size == 36)
+    check("amount parsing refuses signs and junk", HeartRules.parseAmount("-1") == null && HeartRules.parseAmount("1.5") == null && HeartRules.parseAmount("abc") == null && HeartRules.parseAmount("64") == 64)
+
+    val dir = Files.createTempDirectory("joshymc-heart-stacks").toFile()
+    try {
+        val alice = UUID.randomUUID()
+        val bob = UUID.randomUUID()
+        var batch = ""
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            store.ensure(alice, 10, T0)
+            store.ensure(bob, 10, T0)
+            check("stack grant of 0 refused", store.grantStack(alice, serial(), 0, "console", "Console", T0) is HeartStore.StackGrantResult.Invalid)
+            check("stack grant above the cap refused", store.grantStack(alice, serial(), HeartRules.MAX_STACKABLE_ITEM_GRANT + 1, "console", "Console", T0) is HeartStore.StackGrantResult.Invalid)
+            check("stack grant needs a record", store.grantStack(UUID.randomUUID(), serial(), 1, "console", "Console", T0) == HeartStore.StackGrantResult.NoRecord)
+            batch = serial()
+            val g = store.grantStack(alice, batch, 3, "console", "Console", T0)
+            check("stack grant commits", g is HeartStore.StackGrantResult.Granted && g.quantity == 3 && g.serial == batch)
+            check("give changes no hearts", store.load(alice)!!.hearts == 10)
+            val row = store.loadItem(batch)!!
+            check("one batch row with the quantity", row.stackable && row.quantity == 3 && row.redeemedCount == 0 && row.remaining == 3 &&
+                row.status == HeartStore.ItemStatus.ISSUED && row.source == HeartStore.ItemSource.ADMIN)
+            check("stack grant audited with quantity and serial", store.audit(alice).any { it.operation == "ADMIN_GRANT_ITEM" && it.itemQuantity == 3 && it.itemSerial == batch && it.previous == 10 && it.next == 10 })
+            check("a batch serial on a single item is refused", store.redeem(alice, batch, LIMITS, T0) == HeartStore.RedeemResult.UnknownItem && store.load(alice)!!.hearts == 10)
+            val single = serial().also { store.withdraw(bob, it, LIMITS, T0) }
+            check("a single item's serial on a batch item is refused", store.redeem(bob, single, LIMITS, T0, stackable = true) == HeartStore.RedeemResult.UnknownItem)
+
+            val r1 = store.redeem(alice, batch, LIMITS, T0, stackable = true)
+            check("one redemption adds exactly one heart", r1 is HeartStore.RedeemResult.Redeemed && r1.after == 11 && store.load(alice)!!.hearts == 11)
+            check("batch counts one redeemed, stays ISSUED", store.loadItem(batch)!!.let { it.redeemedCount == 1 && it.remaining == 2 && it.status == HeartStore.ItemStatus.ISSUED })
+            // Part of the stack traded: another player redeems one too.
+            check("another holder redeems one", store.redeem(bob, batch, LIMITS, T0, stackable = true) is HeartStore.RedeemResult.Redeemed)
+            store.adminChange(alice, AdminOp.SET, 20, LIMITS, "console", "Console", T0)
+            check("at the maximum: refused, nothing used", store.redeem(alice, batch, LIMITS, T0, stackable = true) is HeartStore.RedeemResult.AtMaximum &&
+                store.loadItem(batch)!!.remaining == 1 && store.load(alice)!!.hearts == 20)
+            store.adminChange(alice, AdminOp.SET, 10, LIMITS, "console", "Console", T0)
+        }
+        withDb(dir) { db ->
+            val store = HeartStore(db)
+            store.createTables()
+            check("batch persists across restarts", store.loadItem(batch)!!.let { it.stackable && it.quantity == 3 && it.redeemedCount == 2 })
+            check("last item redeems after restart", store.redeem(alice, batch, LIMITS, T0, stackable = true) is HeartStore.RedeemResult.Redeemed)
+            check("exhausted batch is REDEEMED", store.loadItem(batch)!!.let { it.status == HeartStore.ItemStatus.REDEEMED && it.redeemedCount == 3 && it.remaining == 0 })
+            check("copies past the quantity make no hearts", store.redeem(alice, batch, LIMITS, T0, stackable = true) is HeartStore.RedeemResult.AlreadyRedeemed && store.load(alice)!!.hearts == 11)
+            check("each batch redemption deduped by index",
+                db.queryFirst("SELECT COUNT(*) AS n FROM lifesteal_heart_transactions WHERE dedupe_key LIKE ?", "redeem:$batch:%") { it.getInt("n") } == 3)
+
+            // Void stops the rest of a batch.
+            val voided = serial()
+            store.grantStack(alice, voided, 5, "console", "Console", T0)
+            store.redeem(alice, voided, LIMITS, T0, stackable = true)
+            check("batch refund refused (no heart was taken)", store.voidItem(voided, true, LIMITS, "console", "Console", T0) is HeartStore.VoidResult.Refused)
+            check("batch void", store.voidItem(voided, false, LIMITS, "console", "Console", T0) is HeartStore.VoidResult.Voided &&
+                store.audit(alice).any { it.operation == "ITEM_VOID" && it.itemQuantity == 4 && it.itemSerial == voided })
+            check("voided batch can't be redeemed", store.redeem(alice, voided, LIMITS, T0, stackable = true) == HeartStore.RedeemResult.Voided)
+
+            // Concurrent redemptions of a copied stack never exceed the quantity.
+            val raced = serial()
+            val racers = List(4) { UUID.randomUUID().also { store.ensure(it, 1, T0) } }
+            store.grantStack(racers[0], raced, 10, "console", "Console", T0)
+            val redeemed = AtomicInteger()
+            val pool = Executors.newFixedThreadPool(8)
+            repeat(40) { i ->
+                pool.execute {
+                    val r = runCatching { store.redeem(racers[i % 4], raced, LIMITS, T0, stackable = true) }.getOrNull()
+                    if (r is HeartStore.RedeemResult.Redeemed) redeemed.incrementAndGet()
+                }
+            }
+            pool.shutdown()
+            pool.awaitTermination(60, TimeUnit.SECONDS)
+            check("40 tries on a batch of 10 redeem exactly 10", redeemed.get() == 10 && racers.sumOf { store.load(it)!!.hearts!! - 1 } == 10 &&
+                store.loadItem(raced)!!.let { it.redeemedCount == 10 && it.status == HeartStore.ItemStatus.REDEEMED })
+        }
+    } finally {
+        dir.deleteRecursively()
+    }
+
+    // Older item tables (issue #1344, no batch columns) are migrated in place; old items keep working.
+    val legacyDir = Files.createTempDirectory("joshymc-heart-stacks-legacy").toFile()
+    try {
+        val p = UUID.randomUUID()
+        val old = serial()
+        withDb(legacyDir) { db ->
+            db.createTable(
+                "CREATE TABLE lifesteal_heart_items (serial TEXT PRIMARY KEY, status TEXT NOT NULL, source TEXT NOT NULL, issued_to TEXT NOT NULL, " +
+                    "issued_by TEXT, issue_transaction TEXT NOT NULL, issued_at INTEGER NOT NULL, closed_by TEXT, close_transaction TEXT, closed_at INTEGER)"
+            )
+            db.execute(
+                "INSERT INTO lifesteal_heart_items (serial, status, source, issued_to, issued_by, issue_transaction, issued_at) VALUES (?, 'ISSUED', 'WITHDRAW', ?, ?, 'tx-old', ?)",
+                old, p.toString(), p.toString(), T0
+            )
+            val store = HeartStore(db)
+            store.createTables()
+            store.ensure(p, 5, T0)
+            check("old row reads as a single item", store.loadItem(old)!!.let { !it.stackable && it.quantity == 1 && it.redeemedCount == 0 })
+            check("old item still redeems once", store.redeem(p, old, LIMITS, T0) is HeartStore.RedeemResult.Redeemed &&
+                store.redeem(p, old, LIMITS, T0) is HeartStore.RedeemResult.AlreadyRedeemed && store.load(p)!!.hearts == 6)
+        }
+    } finally {
+        legacyDir.deleteRecursively()
+    }
+
+    // Wiring.
+    val item = source("lifesteal/hearts/HeartItem.kt")
+    check("stackable items carry their own format version", "STACKABLE_FORMAT_VERSION = 2" in item && "meta.setMaxStackSize(MAX_STACK)" in item)
+    check("stackable stacks are read up to 64", "if (stack.amount !in 1..MAX_STACK) return Read.Malformed" in item)
+    val manager = source("lifesteal/hearts/LifestealHeartManager.kt")
+    val grant = manager.substringAfter("fun grantStackableItems(").substringBefore("fun outstandingItems(")
+    check("stack grant checks every stack has an empty slot before committing", grant.indexOf("emptySlots.size < stacks.size") in 0 until grant.indexOf("store.grantStack("))
+    check("stack grant never drops items", "dropItem" !in grant)
+    check("stack grant never changes hearts or health", listOf("apply(", "adminChange", "loaded[", "MAX_HEALTH").none { it in grant })
+    check("stack grant notifies the recipient", "HeartMessages.STACK_RECEIVED" in grant)
+    val redeem = manager.substringAfter("fun redeem(player: Player, hand: EquipmentSlot)").substringBefore("private fun reviewRecorded(")
+    check("redemption passes the item's format", "stackable = heart.stackable" in redeem)
+    check("redemption takes one item from a stack", "oneLess(inventory.getItem(hand))" in manager && "amount -= 1" in manager)
+    val cmd = source("lifesteal/hearts/LifestealHeartsCommand.kt")
+    val give = cmd.substringAfter("fun giveStackable(").substringBefore("fun completeStackable(")
+    check("/hearts give: permission first", give.indexOf("hasPermission(GIVE_PERMISSION)") in 0 until give.indexOf("guard("))
+    check("/hearts give: amount validated, then guard, then grant",
+        give.indexOf("MAX_STACKABLE_ITEM_GRANT") in 0 until give.indexOf("guard(sender, HeartAdminRules.Operation.GIVE") &&
+            give.indexOf("guard(sender, HeartAdminRules.Operation.GIVE") < give.indexOf("grantStackableItems("))
+    check("/hearts give: audited after Granted", give.indexOf("is HeartStore.StackGrantResult.Granted") in 0 until give.indexOf("Operation.GIVE.auditAction"))
+    check("/hearts is a Lifesteal command", com.liam.joshymc.gamemode.GamemodeAssignments.COMMANDS["hearts"] == com.liam.joshymc.gamemode.GamemodeScope.LIFESTEAL)
+    val commands = source("manager/CommandManager.kt")
+    check("/hearts only registered where Lifesteal is hosted", "unregisterCommand(\"hearts\")" in commands && "plugin.getCommand(\"hearts\")" in commands)
+    check("/hearts is a staff command for delegation", "hearts" in com.liam.joshymc.staff.DelegatedCommandRules.PRIVILEGED)
+    val pluginYml = File("src/main/resources/plugin.yml").readText()
+    check("/hearts needs the give permission", pluginYml.contains("  hearts:\n    description: Give stackable Heart items (Lifesteal staff)\n    usage: /hearts give <player> <amount>\n    permission: joshymc.lifesteal.hearts.give\n"))
 }
 
 // ── Heart items (issue #1344) ────────────────────────────────

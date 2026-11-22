@@ -7,18 +7,23 @@ import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.*
-import org.bukkit.entity.EntityType
 import org.bukkit.entity.Firework
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.ItemStack
+import org.bukkit.persistence.PersistentDataType
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 class KillEffectManager(private val plugin: Joshymc) : Listener {
+
+    /** Marks the Firework Pop kill effect's firework so its explosion deals no damage (issue #1601). */
+    private val cosmeticFireworkKey = NamespacedKey(plugin, "cosmetic_firework")
 
     data class KillEffect(
         val id: String,
@@ -174,6 +179,17 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
         playEffect(effectId, event.entity.location)
     }
 
+    /**
+     * Issue #1601: kill effects are cosmetic only. The Firework Pop explosion hurts nothing
+     * (players, mobs, item frames, armor stands), in every gamemode, so it can't decide a fight,
+     * finish off a nearby player or touch a ranked match.
+     */
+    @EventHandler(priority = EventPriority.LOWEST)
+    fun onCosmeticFireworkDamage(event: EntityDamageByEntityEvent) {
+        val firework = event.damager as? Firework ?: return
+        if (firework.persistentDataContainer.has(cosmeticFireworkKey, PersistentDataType.BYTE)) event.isCancelled = true
+    }
+
     // ── GUI ───────────────────────────────────────────────
 
     fun openEffectMenu(player: Player) {
@@ -298,18 +314,24 @@ class KillEffectManager(private val plugin: Joshymc) : Listener {
                 data = Particle.DustOptions(Color.RED, 1.5f), ticks = 5)
 
             "firework_pop" -> {
-                val fw = world.spawnEntity(center, EntityType.FIREWORK_ROCKET) as Firework
-                val fwMeta = fw.fireworkMeta
-                fwMeta.addEffect(
-                    FireworkEffect.builder()
-                        .with(FireworkEffect.Type.BALL_LARGE)
-                        .withColor(Color.RED, Color.ORANGE, Color.YELLOW)
-                        .withFade(Color.WHITE)
-                        .flicker(true)
-                        .build()
-                )
-                fwMeta.power = 0
-                fw.fireworkMeta = fwMeta
+                // Issue #1601: a firework with effects explodes for real damage around it, so the
+                // cosmetic one is tagged before it exists and its damage is cancelled
+                // ([onCosmeticFireworkDamage]); it never persists with the chunk.
+                val fw = world.spawn(center, Firework::class.java) { fw ->
+                    fw.persistentDataContainer.set(cosmeticFireworkKey, PersistentDataType.BYTE, 1)
+                    fw.isPersistent = false
+                    val fwMeta = fw.fireworkMeta
+                    fwMeta.addEffect(
+                        FireworkEffect.builder()
+                            .with(FireworkEffect.Type.BALL_LARGE)
+                            .withColor(Color.RED, Color.ORANGE, Color.YELLOW)
+                            .withFade(Color.WHITE)
+                            .flicker(true)
+                            .build()
+                    )
+                    fwMeta.power = 0
+                    fw.fireworkMeta = fwMeta
+                }
                 fw.detonate()
             }
 

@@ -301,6 +301,23 @@ object HeartRules {
     /** The most Heart items one admin grant creates (one inventory's worth of single items). */
     const val MAX_ADMIN_ITEM_GRANT = 36
 
+    /** Issue #1606: the largest stack of stackable Heart items. */
+    const val HEART_ITEM_MAX_STACK = 64
+
+    /** Issue #1606: the most stackable Heart items one `/hearts give` creates (a full inventory of stacks of 64). */
+    const val MAX_STACKABLE_ITEM_GRANT = 36 * HEART_ITEM_MAX_STACK
+
+    /**
+     * Issue #1606: how [amount] stackable Heart items split into stacks of at most [maxStack]
+     * (64 -> [64], 128 -> [64, 64], 70 -> [64, 6]). Empty for amounts below 1.
+     */
+    fun stackSizes(amount: Int, maxStack: Int = HEART_ITEM_MAX_STACK): List<Int> {
+        if (amount < 1 || maxStack < 1) return emptyList()
+        val full = amount / maxStack
+        val rest = amount % maxStack
+        return List(full) { maxStack } + listOfNotNull(rest.takeIf { it > 0 })
+    }
+
     sealed interface WithdrawDecision {
         data class Withdraw(val after: Int) : WithdrawDecision
         /** Withdrawing would take the player below the minimum (their final heart). */

@@ -184,6 +184,7 @@ who withdrew it), and moving an item never changes anyone's hearts.
     copies) and items stay valid across restarts, renames, look changes and plugin updates.
 - **Never stacks:** each serial is unique, and the item's max stack size is 1. Anything that
   claims to be a stack of hearts is refused. One redemption = one item = one heart.
+  The exception is staff-given stackable items (`/hearts give`, issue #1606, below).
 - Not registered in the ItemManager, so `/joshymc give` can't make serial-less hearts. Staff use
   `/lifesteal hearts give` (below).
 - Heart items are never crafting ingredients (a Nether Star is part of the beacon recipe), and
@@ -289,6 +290,42 @@ is created and the player is told.
 
 `give` makes real, recorded items (source ADMIN) without changing anyone's hearts. It needs
 that many free slots, and the grant is one transaction with one ADMIN_GRANT audit row (quantity).
+
+### Stackable Heart items: `/hearts give` (issue #1606)
+
+```
+/hearts give <player> <amount>               # joshymc.lifesteal.hearts.give (op), online Lifesteal player, 1-2304; console works
+```
+
+- Gives physical items only. The target's permanent hearts and max health never change, and no
+  transfer happens. Same permission, staff protection (never yourself, never equal or higher
+  staff), ranked hold and `HEART_GIVE` AdminAudit row (`stackable=true`, staff member, target
+  UUID, amount, serial, transaction, time) as `/lifesteal hearts give`. The target is told
+  how many they got.
+- **One grant = one batch.** All items of a grant share one serial (format version 2, max stack
+  64), so they are identical and stack like any item. 64 = one stack, 128 = two stacks of 64, 70 =
+  64 + 6. They keep stacking after moving them, storing them in chests and restarts (the data
+  lives in the item's persistent data). Items from **different** grants have different serials,
+  so they don't merge with each other.
+- The batch is one `lifesteal_heart_items` row with `stackable = 1`, `quantity` and
+  `redeemed_count`. Older single items are rows with `stackable = 0`, `quantity = 1`, and the
+  columns are added in place on startup.
+- **All or nothing, never dropped:** the target needs one empty storage slot per stack (a fresh
+  serial can't merge into a stack they already hold). If they don't have enough room, nothing is
+  given and staff are told how many slots are missing. The items are built before the grant is
+  committed and placed in the same tick, then the player's data is saved (same failed-save report
+  as every Heart item grant).
+- **Redemption** works like single items, one at a time: right-click takes **one** item from the
+  stack after the commit, and the rest of the stack stays. Each redemption is a conditional
+  `redeemed_count + 1` on the batch row (dedupe key `redeem:<serial>:<n>`), so a batch adds at most
+  `quantity` hearts however often it is copied. The row becomes REDEEMED with its last item;
+  after that, copies are refused as already redeemed (CRITICAL AntiDupe alert). The maximum heart
+  limit, cooldowns and every other redemption rule are unchanged. A batch serial on a single item
+  (or the reverse) is refused as forged.
+- Limitation: a copy of a batch can use up part of the batch before the real holder does, so the
+  real holder's last items are then refused. No extra hearts are ever made.
+- `items`, `item` and `void` work on batches too: they show issued/redeemed/remaining, and `void`
+  voids every item of the batch not yet redeemed (no refund, since staff items took no heart).
 
 ### Consistency, and what isn't atomic
 

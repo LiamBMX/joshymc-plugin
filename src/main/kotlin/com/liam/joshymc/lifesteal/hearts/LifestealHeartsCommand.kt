@@ -215,6 +215,65 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         }
     }
 
+    /**
+     * Issue #1606: `/hearts give <player> <amount>` ([args] = `give <player> <amount>`), stackable
+     * Heart items for an online Lifesteal player. Same permission ([GIVE_PERMISSION]), staff
+     * protection, ranked hold and audit as `/lifesteal hearts give`; only the items differ (one
+     * stackable batch instead of single items). Never changes anyone's hearts or max health.
+     */
+    fun giveStackable(sender: CommandSender, args: List<String>) {
+        if (!sender.hasPermission(GIVE_PERMISSION)) {
+            Msg.noPermission(sender)
+            return
+        }
+        if (!ready(sender)) return
+        if (args.size != 3 || !args[0].equals("give", ignoreCase = true)) {
+            Msg.usage(sender, STACK_GIVE_USAGE)
+            return
+        }
+        val target = plugin.playerResolver.online(args[1])
+        if (target == null) {
+            Msg.error(sender, "${args[1]} isn't online. Heart items can only be given to online players.")
+            return
+        }
+        val amount = HeartRules.parseAmount(args[2])
+        if (amount == null || amount < 1 || amount > HeartRules.MAX_STACKABLE_ITEM_GRANT) {
+            Msg.error(sender, "The amount must be a whole number from 1 to ${HeartRules.MAX_STACKABLE_ITEM_GRANT}.")
+            return
+        }
+        // Issue #1537 (G-1): no self-grants, no grants to equal/higher staff, none during ranked.
+        if (!guard(sender, HeartAdminRules.Operation.GIVE, target.uniqueId, target.name)) return
+        val actor = (sender as? Player)?.uniqueId?.toString() ?: "console"
+        val result = try {
+            plugin.lifestealHeartManager.grantStackableItems(target, amount, actor, sender.name)
+        } catch (e: Exception) {
+            plugin.logger.severe("[Hearts] ${sender.name}: giving ${target.name} $amount stackable Heart item(s) failed and was rolled back: ${e.message}")
+            Msg.error(sender, "The grant couldn't be saved, so no Heart items were made.")
+            return
+        }
+        when (result) {
+            is HeartStore.StackGrantResult.Granted -> {
+                AdminAudit.log(plugin, sender, HeartAdminRules.Operation.GIVE.auditAction, target.uniqueId, target.name,
+                    HeartAdminRules.details(HeartAdminRules.Operation.GIVE, result.transactionId, serial = result.serial, itemCount = result.quantity) + " stackable=true")
+                val stacks = HeartRules.stackSizes(amount)
+                Msg.success(sender, "Gave ${target.name} $amount stackable Heart item(s) in ${stacks.size} stack(s). Their hearts didn't change.")
+            }
+            is HeartStore.StackGrantResult.Invalid -> Msg.error(sender, result.reason)
+            HeartStore.StackGrantResult.NoRecord -> Msg.error(sender, "${target.name} has no hearts yet (they haven't played Lifesteal here).")
+        }
+    }
+
+    /** Tab completion for `/hearts` ([args] = everything after `/hearts`). */
+    fun completeStackable(sender: CommandSender, args: List<String>): List<String> {
+        if (!sender.hasPermission(GIVE_PERMISSION) || !plugin.lifestealHeartManager.hosted) return emptyList()
+        return when (args.size) {
+            1 -> listOf("give").filter { it.startsWith(args[0].lowercase()) }
+            2 -> if (args[0].equals("give", ignoreCase = true)) plugin.server.onlinePlayers.map { it.name }.filter { it.startsWith(args[1], ignoreCase = true) } else emptyList()
+            3 -> if (args[0].equals("give", ignoreCase = true)) listOf("1", "16", "64", "128").filter { it.startsWith(args[2]) } else emptyList()
+            else -> emptyList()
+        }
+    }
+
     /** `items <player>`: Heart items issued to a player that were never redeemed or voided. */
     private fun items(sender: CommandSender, args: List<String>) {
         if (!ready(sender)) return
@@ -242,9 +301,11 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         val format = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(java.time.ZoneId.systemDefault())
         for (row in rows) {
             val source = if (row.source == HeartStore.ItemSource.ADMIN) "staff grant" else "withdrawn"
+            // Issue #1606: a stackable batch shows how many of its items are still unredeemed.
+            val batch = if (row.stackable) " (stack: ${row.remaining}/${row.quantity} left)" else ""
             sender.sendMessage(
                 Component.text(" ${row.serial}", NamedTextColor.WHITE)
-                    .append(Component.text(" $source ${format.format(java.time.Instant.ofEpochMilli(row.issuedAt))}", NamedTextColor.GRAY))
+                    .append(Component.text(" $source ${format.format(java.time.Instant.ofEpochMilli(row.issuedAt))}$batch", NamedTextColor.GRAY))
             )
         }
     }
@@ -521,6 +582,7 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         line("Status", row.status?.name?.lowercase() ?: "unreadable")
         line("Owner", "${name(row.issuedTo)} (${row.issuedTo})")
         line("Source", if (row.source == HeartStore.ItemSource.ADMIN) "staff grant by ${actor(row.issuedBy)}" else "withdrawn by the owner")
+        if (row.stackable) line("Stackable batch", "${row.quantity} issued, ${row.redeemedCount} redeemed, ${row.remaining} still redeemable (void voids the rest)")
         line("Issued", "${time(row.issuedAt)} (transaction ${row.issueTransaction})")
         if (row.closedAt != null) line("Closed", "${time(row.closedAt)} by ${actor(row.closedBy)} (transaction ${row.closeTransaction ?: "?"})")
         if (row.status == HeartStore.ItemStatus.ISSUED) {
@@ -562,6 +624,8 @@ class LifestealHeartsCommand(private val plugin: Joshymc) {
         const val USAGE = "/lifesteal hearts <get|set|add|remove> <player> [amount] | items <player> | item <serial> | recent [status] [page] | void <serial> [refund] | reviews [player]"
         const val RECENT_USAGE = "/lifesteal hearts recent [issued|redeemed|voided|all] [page]"
         const val GIVE_USAGE = "/lifesteal hearts give <player> <amount>"
+        /** Issue #1606: stackable Heart items. */
+        const val STACK_GIVE_USAGE = "/hearts give <player> <amount>"
         /** Heart transfer monitoring (issue #1508): flags, details, review status and staff notifications. */
         const val MONITOR_PERMISSION = HeartTransferMonitor.PERMISSION
         const val MONITOR_USAGE = "/lifesteal hearts monitor [open|all|<player>|<id> [reviewed|dismissed|open [note]]]"

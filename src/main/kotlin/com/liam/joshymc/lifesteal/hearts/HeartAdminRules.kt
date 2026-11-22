@@ -61,7 +61,7 @@ object HeartAdminRules {
         before?.let { "before=$it" },
         after?.let { "after=$it" },
         "clamped=true".takeIf { clamped },
-        itemCount?.let { "items=${it.coerceIn(0, HeartRules.MAX_ADMIN_ITEM_GRANT)}" },
+        itemCount?.let { "items=${it.coerceIn(0, HeartRules.MAX_STACKABLE_ITEM_GRANT)}" },
         serial?.let { HeartRules.parseSerial(it) }?.let { "serial=$it" },
         "result=$result",
         transactionId?.let { "tx=$it" },

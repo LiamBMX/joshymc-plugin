@@ -24,7 +24,10 @@ import java.util.UUID
  * - `lifesteal_heart_items` (issue #1344): every physical Heart item ever made, by serial. An item
  *   is only real while its row is ISSUED; redeeming moves it to REDEEMED in the same transaction
  *   that adds the heart, so a copied item (creative clone, dupe glitch, inventory rollback) finds
- *   its serial already used, and a hand-made item finds no row at all.
+ *   its serial already used, and a hand-made item finds no row at all. Issue #1606: a row with
+ *   `stackable = 1` is a batch of `quantity` identical stackable items sharing one serial;
+ *   each redemption raises `redeemed_count` conditionally and the row becomes REDEEMED with the
+ *   last one, so a batch is redeemed at most `quantity` times however often it is copied.
  * - `lifesteal_heart_playtime` (issue #1457): active Lifesteal playtime per player UUID, only ever
  *   raised by [addPlaytime], for the withdrawal eligibility rule.
  * - `lifesteal_heart_transfer_reviews` (issue #1457): one row per withdrawn Heart item redeemed by
@@ -82,7 +85,16 @@ class HeartStore(private val db: SqliteDatabase) {
         val closedBy: String?,
         val closeTransaction: String?,
         val closedAt: Long?,
-    )
+        /** Issue #1606: a batch of stackable items sharing this serial. */
+        val stackable: Boolean = false,
+        /** Items issued under this serial (1 for single items). */
+        val quantity: Int = 1,
+        /** How many of them were redeemed. */
+        val redeemedCount: Int = 0,
+    ) {
+        /** Items of this serial that can still be redeemed (0 once it isn't ISSUED). */
+        val remaining: Int get() = if (status == ItemStatus.ISSUED) (quantity - redeemedCount).coerceAtLeast(0) else 0
+    }
 
     /** Thrown inside a transaction to roll it back when a row changed underneath it. */
     class StaleWriteException(message: String) : RuntimeException(message)
@@ -161,10 +173,19 @@ class HeartStore(private val db: SqliteDatabase) {
                 issued_at INTEGER NOT NULL,
                 closed_by TEXT,
                 close_transaction TEXT,
-                closed_at INTEGER
+                closed_at INTEGER,
+                stackable INTEGER NOT NULL DEFAULT 0,
+                quantity INTEGER NOT NULL DEFAULT 1,
+                redeemed_count INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent()
         )
+        // Issue #1606: stackable batches. Older rows are single items (stackable 0, quantity 1), which
+        // is exactly what the defaults say; their redemption keeps working by status alone.
+        val itemColumns = db.query("PRAGMA table_info(lifesteal_heart_items)") { it.getString("name") }.toSet()
+        if ("stackable" !in itemColumns) db.execute("ALTER TABLE lifesteal_heart_items ADD COLUMN stackable INTEGER NOT NULL DEFAULT 0")
+        if ("quantity" !in itemColumns) db.execute("ALTER TABLE lifesteal_heart_items ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1")
+        if ("redeemed_count" !in itemColumns) db.execute("ALTER TABLE lifesteal_heart_items ADD COLUMN redeemed_count INTEGER NOT NULL DEFAULT 0")
         db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_heart_items_owner ON lifesteal_heart_items (issued_to, status)")
         // Issue #1537: `/lifesteal hearts recent` pages by issue time (index only).
         db.createTable("CREATE INDEX IF NOT EXISTS idx_lifesteal_heart_items_issued ON lifesteal_heart_items (status, issued_at)")
@@ -620,6 +641,7 @@ class HeartStore(private val db: SqliteDatabase) {
     fun redeem(
         uuid: UUID, serial: String, limits: HeartRules.Limits, now: Long, transactionId: String = UUID.randomUUID().toString(),
         reviewTransfers: Boolean = false,
+        stackable: Boolean = false,
     ): RedeemResult {
         var result: RedeemResult? = null
         db.transaction {
@@ -628,6 +650,8 @@ class HeartStore(private val db: SqliteDatabase) {
             val stored = record?.hearts
             val refusal: Pair<String, RedeemResult>? = when {
                 item == null -> "UNKNOWN_SERIAL" to RedeemResult.UnknownItem
+                // Issue #1606: a single item's serial on a batch item (or the other way round) was made by hand.
+                item.stackable != stackable -> "FORMAT_MISMATCH" to RedeemResult.UnknownItem
                 item.status == ItemStatus.REDEEMED -> "ALREADY_REDEEMED" to RedeemResult.AlreadyRedeemed(item.closedBy, item.closedAt)
                 item.status != ItemStatus.ISSUED -> "VOIDED" to RedeemResult.Voided
                 record == null -> "no heart record" to RedeemResult.Unavailable("no heart record")
@@ -643,12 +667,24 @@ class HeartStore(private val db: SqliteDatabase) {
                 return@transaction
             }
             val after = (HeartRules.redeem(stored!!, limits) as HeartRules.RedeemDecision.Redeem).after
-            insertTransaction(transactionId, "redeem:$serial", "REDEEM", "REDEEMED", null, uuid, uuid.toString(), now)
-            closeItem(serial, ItemStatus.REDEEMED, uuid.toString(), transactionId, now)
-            writeHearts(record!!, after, transactionId, now)
-            insertAudit(transactionId, uuid, "REDEEM", stored, after, uuid.toString(), "redeemed 1 heart issued to ${item!!.issuedTo}", now, 1, serial)
+            if (item!!.stackable) {
+                // Issue #1606: one item of the batch; the dedupe key names which one, so each is redeemed once.
+                val index = item.redeemedCount + 1
+                insertTransaction(transactionId, "redeem:$serial:$index", "REDEEM", "REDEEMED", null, uuid, uuid.toString(), now)
+                redeemOneOfBatch(item, uuid.toString(), transactionId, now)
+                writeHearts(record!!, after, transactionId, now)
+                insertAudit(
+                    transactionId, uuid, "REDEEM", stored, after, uuid.toString(),
+                    "redeemed 1 heart ($index of ${item.quantity}, stackable) issued to ${item.issuedTo}", now, 1, serial
+                )
+            } else {
+                insertTransaction(transactionId, "redeem:$serial", "REDEEM", "REDEEMED", null, uuid, uuid.toString(), now)
+                closeItem(serial, ItemStatus.REDEEMED, uuid.toString(), transactionId, now)
+                writeHearts(record!!, after, transactionId, now)
+                insertAudit(transactionId, uuid, "REDEEM", stored, after, uuid.toString(), "redeemed 1 heart issued to ${item.issuedTo}", now, 1, serial)
+            }
             var review: TransferReview? = null
-            if (reviewTransfers && item.source == ItemSource.WITHDRAW && item.issuedTo != uuid) {
+            if (reviewTransfers && !item.stackable && item.source == ItemSource.WITHDRAW && item.issuedTo != uuid) {
                 // A failed lookup is "no evidence", never a reason to refuse or roll back the redemption.
                 val shared = runCatching { sharedConnection(item.issuedTo, uuid) }.getOrDefault(false)
                 if (shared) {
@@ -699,6 +735,47 @@ class HeartStore(private val db: SqliteDatabase) {
                 "$actorName: give ${serials.size} Heart item(s)", now, serials.size, serials.first()
             )
             result = GrantResult.Granted(transactionId, serials, record.hearts)
+        }
+        return result!!
+    }
+
+    sealed interface StackGrantResult {
+        data class Granted(val transactionId: String, val serial: String, val quantity: Int, val hearts: Int?) : StackGrantResult
+        data class Invalid(val reason: String) : StackGrantResult
+        data object NoRecord : StackGrantResult
+    }
+
+    /**
+     * Issue #1606 (`/hearts give`): one batch of [quantity] stackable Heart items under [serial],
+     * issued to [uuid] as ADMIN items in one transaction with one ADMIN_GRANT transaction row and one
+     * ADMIN_GRANT_ITEM audit row (quantity = how many). The player's own hearts don't change.
+     */
+    fun grantStack(
+        uuid: UUID, serial: String, quantity: Int, actor: String, actorName: String, now: Long,
+        transactionId: String = UUID.randomUUID().toString(),
+    ): StackGrantResult {
+        if (quantity < 1 || quantity > HeartRules.MAX_STACKABLE_ITEM_GRANT) {
+            return StackGrantResult.Invalid("The amount must be between 1 and ${HeartRules.MAX_STACKABLE_ITEM_GRANT}.")
+        }
+        require(HeartRules.parseSerial(serial) == serial) { "not a Heart item serial: $serial" }
+        var result: StackGrantResult? = null
+        db.transaction {
+            val record = load(uuid)
+            if (record == null) {
+                result = StackGrantResult.NoRecord
+                return@transaction
+            }
+            insertTransaction(transactionId, "admin-grant:$transactionId", "ADMIN_GRANT", "GRANTED", null, uuid, actor, now)
+            db.execute(
+                "INSERT INTO lifesteal_heart_items (serial, status, source, issued_to, issued_by, issue_transaction, issued_at, stackable, quantity, redeemed_count) " +
+                    "VALUES (?, 'ISSUED', ?, ?, ?, ?, ?, 1, ?, 0)",
+                serial, ItemSource.ADMIN.name, uuid.toString(), actor, transactionId, now, quantity
+            )
+            insertAudit(
+                transactionId, uuid, "ADMIN_GRANT_ITEM", record.hearts, record.hearts, actor,
+                "$actorName: give $quantity stackable Heart item(s)", now, quantity, serial
+            )
+            result = StackGrantResult.Granted(transactionId, serial, quantity, record.hearts)
         }
         return result!!
     }
@@ -757,7 +834,11 @@ class HeartStore(private val db: SqliteDatabase) {
             }
             insertTransaction(transactionId, "void:$canonical", "ADMIN_VOID", if (refund) "VOIDED_REFUNDED" else "VOIDED", null, item.issuedTo, actor, now)
             closeItem(canonical, ItemStatus.VOIDED, actor, transactionId, now)
-            insertAudit(transactionId, item.issuedTo, "ITEM_VOID", null, null, actor, "$actorName: void Heart item", now, 1, canonical)
+            insertAudit(
+                transactionId, item.issuedTo, "ITEM_VOID", null, null, actor,
+                if (item.stackable) "$actorName: void ${item.remaining} unredeemed stackable Heart item(s)" else "$actorName: void Heart item",
+                now, if (item.stackable) item.remaining else 1, canonical
+            )
             val refunded = record
             if (refunded != null && after != null) {
                 writeHearts(refunded, after, transactionId, now)
@@ -786,6 +867,25 @@ class HeartStore(private val db: SqliteDatabase) {
         if (updated != 1) throw StaleWriteException("Heart item $serial was no longer outstanding during transaction $transactionId")
     }
 
+    /**
+     * Issue #1606: one item of an ISSUED batch redeemed, conditionally on the count read in this
+     * transaction; the row becomes REDEEMED (closed by [by]) with its last item. A row that changed
+     * or ran out throws and rolls back.
+     */
+    private fun redeemOneOfBatch(item: ItemRow, by: String, transactionId: String, now: Long) {
+        val last = item.redeemedCount + 1 >= item.quantity
+        val updated = if (last) db.executeUpdate(
+            "UPDATE lifesteal_heart_items SET redeemed_count = redeemed_count + 1, status = 'REDEEMED', closed_by = ?, close_transaction = ?, closed_at = ? " +
+                "WHERE serial = ? AND status = 'ISSUED' AND stackable = 1 AND redeemed_count = ? AND redeemed_count < quantity",
+            by, transactionId, now, item.serial, item.redeemedCount
+        ) else db.executeUpdate(
+            "UPDATE lifesteal_heart_items SET redeemed_count = redeemed_count + 1 " +
+                "WHERE serial = ? AND status = 'ISSUED' AND stackable = 1 AND redeemed_count = ? AND redeemed_count + 1 < quantity",
+            item.serial, item.redeemedCount
+        )
+        if (updated != 1) throw StaleWriteException("Heart item batch ${item.serial} changed during transaction $transactionId")
+    }
+
     private fun itemRow(rs: ResultSet): ItemRow = ItemRow(
         serial = rs.getString("serial"),
         status = runCatching { ItemStatus.valueOf(rs.getString("status")) }.getOrNull(),
@@ -797,6 +897,9 @@ class HeartStore(private val db: SqliteDatabase) {
         closedBy = rs.getString("closed_by"),
         closeTransaction = rs.getString("close_transaction"),
         closedAt = rs.getLong("closed_at").takeUnless { rs.wasNull() },
+        stackable = rs.getInt("stackable") == 1,
+        quantity = rs.getInt("quantity"),
+        redeemedCount = rs.getInt("redeemed_count"),
     )
 
     private fun writeHearts(record: Record, hearts: Int, transactionId: String, now: Long) {

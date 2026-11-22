@@ -1154,6 +1154,8 @@ class CrateManager(private val plugin: Joshymc) : Listener {
             // Issue #1529: a voucher template that can't be re-signed (forged, malformed, or an
             // unsigned legacy one while those are refused) would hand out a dead voucher.
             rewardTemplate(reward)?.let { plugin.voucherTemplateProblem(it) }?.let { return "reward #$index (${reward.displayName}) $it" }
+            // Issue #1601: crates never grant permanent hearts.
+            rewardTemplate(reward)?.let { heartItemProblem(it) }?.let { return "reward #$index (${reward.displayName}) $it" }
         }
         if (crate.mode == CrateMode.SELECT_3 && crate.rewards.size < 3) {
             return "Select 3 mode needs at least 3 rewards (has ${crate.rewards.size})"
@@ -2470,6 +2472,25 @@ class CrateManager(private val plugin: Joshymc) : Listener {
      * ([CustomEnchantManager.enchantProblems]), or a crates.yml `custom-enchantments` entry
      * that couldn't be applied. Such a crate is refused before any key is used.
      */
+    /**
+     * Issue #1601: why [item] can't be a crate reward because it is, or holds, a Lifesteal Heart
+     * item, or null. Crates must never grant permanent hearts: a snapshot of a Heart item would
+     * hand out copies of one serial, and the first copy redeemed would add a heart. Shulker box
+     * and bundle contents are checked too.
+     */
+    fun heartItemProblem(item: ItemStack): String? {
+        val hearts = plugin.lifestealHeartManager.items
+        if (hearts.isHeart(item)) return "is a Lifesteal Heart item (crates can't grant hearts)"
+        val meta = item.itemMeta ?: return null
+        val inner: List<ItemStack?> = when {
+            meta is org.bukkit.inventory.meta.BlockStateMeta && meta.hasBlockState() ->
+                (meta.blockState as? org.bukkit.block.ShulkerBox)?.inventory?.contents?.toList() ?: emptyList()
+            meta is org.bukkit.inventory.meta.BundleMeta -> meta.items
+            else -> emptyList()
+        }
+        return if (inner.any { it != null && hearts.isHeart(it) }) "holds a Lifesteal Heart item (crates can't grant hearts)" else null
+    }
+
     private fun rewardEnchantProblem(reward: CrateReward): String? {
         val item = rewardTemplate(reward) ?: return null // undecodable snapshots are reported separately
         plugin.customEnchantManager.enchantProblems(item).firstOrNull()?.let { return "has an invalid custom enchant: $it" }
