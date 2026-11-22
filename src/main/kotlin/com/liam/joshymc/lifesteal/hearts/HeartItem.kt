@@ -98,6 +98,23 @@ class HeartItem(private val plugin: Joshymc) {
 
     fun isHeart(stack: ItemStack?): Boolean = read(stack) != Read.NotHeart
 
+    /**
+     * Issue #1607: gives an existing Heart item the configured item model (the look only). Only items
+     * [read] accepts as a Heart are touched, and only the item model changes: the amount, name, lore
+     * and every persistent data key (serial included) stay exactly as they are. Returns true when
+     * [stack] was changed.
+     */
+    fun refreshLook(stack: ItemStack?, look: LifestealSettings.HeartItems): Boolean {
+        if (stack == null || read(stack) !is Read.Heart) return false
+        val wanted = look.itemModel?.let { NamespacedKey.fromString(it) }
+        val meta = stack.itemMeta ?: return false
+        val current = if (meta.hasItemModel()) meta.itemModel else null
+        if (current == wanted) return false
+        meta.setItemModel(wanted)
+        stack.itemMeta = meta
+        return true
+    }
+
     companion object {
         const val ITEM_ID = "lifesteal_heart"
         const val FORMAT_VERSION = 1

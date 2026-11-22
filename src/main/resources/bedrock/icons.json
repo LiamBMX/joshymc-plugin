@@ -717,6 +717,11 @@
       "icon": "joshymc/levitation_egg.png",
       "sha1": "285f4be176fb8325f00ee0f6efe5d673d818d39e"
     },
+    "joshymc:lifesteal_heart": {
+      "bedrock_name": "lifesteal_heart",
+      "icon": "joshymc/lifesteal_heart.png",
+      "sha1": "872260b68c6618f3195a4cdba70af61042e2b71f"
+    },
     "joshymc:lightning_egg": {
       "bedrock_name": "lightning_egg",
       "icon": "joshymc/lightning_egg.png",

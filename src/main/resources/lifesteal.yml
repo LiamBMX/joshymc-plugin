@@ -287,9 +287,11 @@ heart-items:
   redeem-enabled: true
   # Name of newly made Heart items (& colour codes).
   display-name: "&c&lHeart"
-  # Optional resource pack item model (namespace:path) for Java players. Empty = the plain Nether
-  # Star, which is also what Bedrock players see.
-  item-model: ""
+  # Resource pack item model (namespace:path) for Java players. Empty = the bundled Minecraft-style
+  # heart (joshymc:lifesteal_heart); none = the plain Nether Star, which is also what Bedrock
+  # players and players without the pack see. Heart items already in online players' inventories
+  # and ender chests are updated to this look in Lifesteal worlds (join, world change, respawn).
+  item-model: "joshymc:lifesteal_heart"
   # Enchantment glint on Heart items.
   glint: true
   # Safeguard against click and command spam: minimum milliseconds between two withdrawals or two

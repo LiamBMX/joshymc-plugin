@@ -159,7 +159,16 @@ who withdrew it), and moving an item never changes anyone's hearts.
 ### The item
 
 - A **Nether Star** named "Heart" (`heart-items.display-name`), with simple lore, an optional
-  glint and an optional resource-pack item model (`heart-items.item-model`, blank by default).
+  glint and a resource-pack item model (`heart-items.item-model`).
+- **Look (issue #1607):** by default the item model is `joshymc:lifesteal_heart`, a flat 32x32
+  Minecraft-style red heart (art module `resourcepack/art/items/lifesteal_heart.py`). An empty
+  value also means that texture; `none` keeps the plain Nether Star. Players without the pack
+  (and Bedrock players) see the Nether Star. The model is decoration only: identity is still the
+  serial below. Heart items made earlier get the current model when an online player's
+  inventory and ender chest are checked in a Lifesteal world (join, world change, respawn,
+  `/joshymc reload`); only the `item_model` component changes (amount, name, lore and all
+  persistent data stay), and players held by a Ranked match or waiting for a ranked restore are
+  skipped until their next check. Offline inventories and containers are never touched.
 - **Identity is server-side.** The item's persistent data holds `joshymc:custom_item_id =
   lifesteal_heart`, a format version and a **serial** (a random UUID). The serial is written to
   `lifesteal_heart_items` in the same transaction that took the heart. Redemption only accepts a
