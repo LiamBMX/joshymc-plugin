@@ -676,9 +676,10 @@ crates:
   # Works best on a chest / trapped chest / ender chest crate block; use scale for full blocks.
   custom-models:
     enabled: true
-    # Gamemodes (gamemode-lock worlds) where models show. Survival only for now; add
-    # "lifesteal" here once Lifesteal has crates.
-    gamemodes: [survival]
+    # Gamemodes (gamemode-lock worlds) where models show. Issue #1601: Lifesteal has crates
+    # too. An existing config.yml keeps its own list (missing keys are the only ones filled in),
+    # so a Lifesteal server set up before this needs "lifesteal" added here by hand.
+    gamemodes: [survival, lifesteal]
     models:
       # Keyed by crate id from crates.yml (not the display name).
       #   enabled   false = this crate keeps the vanilla look

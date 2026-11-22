@@ -133,7 +133,7 @@ fun main() {
     // ── Bundled config ──────────────────────────────────
     val config = File("src/main/resources/config.yml").readText()
     val section = config.substringAfter("  custom-models:\n").substringBefore("\n\n")
-    check("bundled config has the section", "enabled: true" in section && "gamemodes: [survival]" in section)
+    check("bundled config has the section", "enabled: true" in section && "gamemodes: [survival, lifesteal]" in section)
     // crate id -> item model path (the redesign models, #1447 and #1454, are named <id>_chest)
     val bundled = linkedMapOf(
         "cabin" to "cabin_chest", "homestead" to "homestead_chest", "campfire" to "campfire_chest",

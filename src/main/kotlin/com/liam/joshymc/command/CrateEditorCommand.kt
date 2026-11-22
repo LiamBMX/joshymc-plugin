@@ -395,6 +395,15 @@ class CrateEditorCommand(private val plugin: Joshymc) : CommandExecutor, Listene
                 p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
                 return@setItem
             }
+            // Issue #1601: crates never grant permanent hearts (Heart items, or containers holding one).
+            val heartProblem = plugin.crateManager.heartItemProblem(held)
+            if (heartProblem != null) {
+                audit(p, CrateEditorAudit.Operation.REWARD_ADD, crateId, CrateEditorAudit.Result.REJECTED, CrateEditorAudit.Reason.HEART_ITEM,
+                    itemRef(null, held, held.type, held.amount, null, held.type.name.lowercase(), null))
+                plugin.commsManager.send(p, Component.text("Can't add that item: it $heartProblem.", NamedTextColor.RED))
+                p.playSound(p.location, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f)
+                return@setItem
+            }
             // Store a clean copy of the item
             val rewardItem = held.clone().apply { amount = held.amount }
             pendingActions[p.uniqueId] = PendingCrateAction.AddReward(crateId, rewardItem)

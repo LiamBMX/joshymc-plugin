@@ -62,6 +62,17 @@ object LifestealSharedCommands {
         "rtp" to Guard.COMPETITIVE,
         // The server shop, minus competitive PvP supplies in Lifesteal worlds (LifestealShopRules).
         "shop" to Guard.COMPETITIVE,
+        // Issue #1601 phase 1 (cosmetics). Each only picks which of the player's own unlocked
+        // cosmetics is equipped, stored in this server's own tables (`player_tags`/
+        // `chat_tag_unlocks`, `chat_colors`, `player_kill_effects`); ownership is still the per-tag
+        // permission or unlock, `joshymc.chatcolor[.special]` and `joshymc.killeffect.<id>`. Chat
+        // tags and colours already render on Lifesteal (CommunicationsManager) and Chat Tag Vouchers
+        // already redeem there; kill effects are particles/sounds only (Firework Pop deals no damage).
+        // No coins, items or movement, so no competitive guard (the ranked listener still refuses
+        // them typed during a match).
+        "tag" to Guard.NONE,
+        "chatcolor" to Guard.NONE,
+        "killeffect" to Guard.NONE,
     )
 
     /**

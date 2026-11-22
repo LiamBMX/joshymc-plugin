@@ -52,6 +52,8 @@ object CrateEditorAudit {
         DUPLICATE_ID("duplicate_id"),
         NEEDS_THREE_REWARDS("needs_three_rewards"),
         INVALID_INPUT("invalid_input"),
+        /** Issue #1601: the item is, or holds, a Lifesteal Heart item. */
+        HEART_ITEM("heart_item"),
     }
 
     /** What the row says about one reward; never the item data itself. */
