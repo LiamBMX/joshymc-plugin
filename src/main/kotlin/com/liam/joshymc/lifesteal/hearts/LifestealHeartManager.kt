@@ -12,6 +12,7 @@ import com.liam.joshymc.lifesteal.ranked.RankedHeartSummary
 import com.liam.joshymc.lifesteal.ranked.RankedMatchRules
 import com.liam.joshymc.manager.AntiDupeManager
 import org.bukkit.inventory.EquipmentSlot
+import org.bukkit.inventory.ItemStack
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.TextReplacementConfig
 import net.kyori.adventure.text.format.NamedTextColor
@@ -904,14 +905,15 @@ class LifestealHeartManager(private val plugin: Joshymc) {
      */
     fun redeem(player: Player, hand: EquipmentSlot) {
         val uuid = player.uniqueId
-        val serial = when (val read = items.read(player.inventory.getItem(hand))) {
+        val heart = when (val read = items.read(player.inventory.getItem(hand))) {
             HeartItem.Read.NotHeart -> return
             is HeartItem.Read.Malformed -> {
                 plugin.logger.warning("[Hearts] ${player.name} tried to redeem a broken Heart item (${read.reason}).")
                 return send(player, HeartMessages.INVALID_ITEM)
             }
-            is HeartItem.Read.Heart -> read.serial
+            is HeartItem.Read.Heart -> read
         }
+        val serial = heart.serial
         val tick = Bukkit.getCurrentTick()
         if (lastRedeemTick.put(uuid, tick) == tick) return
         val settings = itemSettings
@@ -927,7 +929,7 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         if (!busy.add(uuid)) return
         try {
             val result = try {
-                store.redeem(uuid, serial, limits, now, reviewTransfers = settings.altTransferReview.enabled)
+                store.redeem(uuid, serial, limits, now, reviewTransfers = settings.altTransferReview.enabled, stackable = heart.stackable)
             } catch (e: Exception) {
                 plugin.logger.severe("[Hearts] Redeeming Heart item $serial for ${player.name} failed and was rolled back; nothing changed: ${e.message}")
                 return send(player, settings.messages.redeemFailed)
@@ -981,17 +983,25 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         staffLog("HEART_TRANSFER_REVIEW", player.uniqueId, player.name, "serial=${review.serial} issuer_uuid=${review.issuer} evidence=${review.evidence}")
     }
 
-    /** Takes exactly the redeemed item: the one in [hand], or wherever that serial is now (it can't have moved within the tick). */
+    /** Takes exactly the redeemed item: one from the stack in [hand], or wherever that serial is now (issue #1606: the rest of a stack stays). */
     private fun removeRedeemed(player: Player, hand: EquipmentSlot, serial: String) {
         val inventory = player.inventory
-        if (items.read(inventory.getItem(hand)) == HeartItem.Read.Heart(serial)) {
-            inventory.setItem(hand, null)
+        if (heldSerial(inventory.getItem(hand)) == serial) {
+            inventory.setItem(hand, oneLess(inventory.getItem(hand)))
         } else {
-            val slot = inventory.contents.indexOfFirst { items.read(it) == HeartItem.Read.Heart(serial) }
-            if (slot >= 0) inventory.setItem(slot, null)
+            val slot = inventory.contents.indexOfFirst { heldSerial(it) == serial }
+            if (slot >= 0) inventory.setItem(slot, oneLess(inventory.getItem(slot)))
             else plugin.logger.warning("[Hearts] Heart item $serial was redeemed by ${player.name} but had already left their inventory; that copy is now worthless.")
         }
         player.updateInventory()
+    }
+
+    private fun heldSerial(stack: ItemStack?): String? = (items.read(stack) as? HeartItem.Read.Heart)?.serial
+
+    /** [stack] with one item fewer, or null when it was the last one. */
+    private fun oneLess(stack: ItemStack?): ItemStack? {
+        if (stack == null || stack.amount <= 1) return null
+        return stack.clone().apply { amount -= 1 }
     }
 
     /** `/lifesteal hearts give`: staff-made, recorded Heart items for an online Lifesteal player. */
@@ -1007,6 +1017,42 @@ class LifestealHeartManager(private val plugin: Joshymc) {
         if (result is HeartStore.GrantResult.Granted) {
             deliver(target, result.serials, itemSettings, "staff grant ${result.transactionId}", result.transactionId, HeartStore.ItemSource.ADMIN)
             plugin.logger.info("[Hearts] $actorName gave ${target.name} $amount Heart item(s) (transaction ${result.transactionId}).")
+        }
+        return result
+    }
+
+    /**
+     * Issue #1606 (`/hearts give`): [amount] stackable Heart items for an online Lifesteal player, as
+     * one batch (one serial) split into stacks of up to [HeartItem.MAX_STACK]. All or nothing: the
+     * inventory must have an empty storage slot for every stack (a fresh serial never matches a stack
+     * they already hold), checked in the same tick before the grant is committed, and nothing is
+     * ever dropped. The player's own hearts and max health are untouched.
+     */
+    fun grantStackableItems(target: Player, amount: Int, actor: String, actorName: String): HeartStore.StackGrantResult {
+        if (amount < 1 || amount > HeartRules.MAX_STACKABLE_ITEM_GRANT) {
+            return HeartStore.StackGrantResult.Invalid("The amount must be between 1 and ${HeartRules.MAX_STACKABLE_ITEM_GRANT}.")
+        }
+        itemProblem(target)?.let { return HeartStore.StackGrantResult.Invalid("${target.name} can't receive Heart items right now (they must be online and loaded in Lifesteal).") }
+        val stacks = HeartRules.stackSizes(amount)
+        val inventory = target.inventory
+        val emptySlots = inventory.storageContents.indices.filter { inventory.storageContents[it].let { stack -> stack == null || stack.type.isAir } }
+        if (emptySlots.size < stacks.size) {
+            return HeartStore.StackGrantResult.Invalid(
+                "${target.name} needs ${stacks.size} empty inventory slot(s) for $amount Heart item(s) but has ${emptySlots.size}; nothing was given."
+            )
+        }
+        val settings = itemSettings
+        val serial = UUID.randomUUID().toString()
+        // Built before the commit, so a look that can't be built changes nothing.
+        val built = stacks.map { items.createStack(serial, settings, it) }
+        val result = store.grantStack(target.uniqueId, serial, amount, actor, actorName, System.currentTimeMillis())
+        if (result is HeartStore.StackGrantResult.Granted) {
+            // Same tick as the space check, so every slot is still empty.
+            built.forEachIndexed { i, stack -> inventory.setItem(emptySlots[i], stack) }
+            target.updateInventory()
+            if (savePlayer(target) == HeartAdminRules.SaveOutcome.FAILED) saveFailed(target, listOf(serial), result.transactionId, HeartStore.ItemSource.ADMIN)
+            plugin.logger.info("[Hearts] $actorName gave ${target.name} (${target.uniqueId}) $amount stackable Heart item(s), batch $serial (transaction ${result.transactionId}).")
+            send(target, HeartMessages.STACK_RECEIVED, mapOf("{amount}" to amount.toString()))
         }
         return result
     }

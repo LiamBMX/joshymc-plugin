@@ -187,6 +187,17 @@ class CommandManager(private val plugin: Joshymc) {
             it.setExecutor(cmd)
             it.tabCompleter = cmd
         }
+        // Issue #1606: staff-given stackable Heart items (/hearts give). Lifesteal only: released on
+        // servers that don't host Lifesteal, so another plugin's /hearts keeps the name there.
+        if (plugin.lifestealHeartManager.hosted) {
+            plugin.getCommand("hearts")?.let {
+                val cmd = com.liam.joshymc.lifesteal.hearts.HeartsCommand(plugin)
+                it.setExecutor(cmd)
+                it.tabCompleter = cmd
+            }
+        } else {
+            unregisterCommand("hearts")
+        }
         // Issue #1363: Ranked Team Wars matchmaking (/ranked). Lifesteal only: released on servers
         // that don't host Lifesteal, so Survival never has the command (another plugin may own it there).
         if (plugin.lifestealRankedQueueManager.hosted) {

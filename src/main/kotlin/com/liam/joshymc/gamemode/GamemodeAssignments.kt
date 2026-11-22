@@ -104,6 +104,8 @@ object GamemodeAssignments {
         // Heart withdrawal into a physical Heart item (issue #1344). Its executor also refuses
         // anywhere the heart system doesn't run: a LIFESTEAL scope only blocks while Lifesteal is locked.
         "withdrawheart",
+        // Staff-given stackable Heart items (issue #1606). Also only registered where Lifesteal is hosted.
+        "hearts",
         // Ranked Team Wars queues and team challenges (issue #1363). Also only registered where
         // Lifesteal is hosted (released elsewhere), and refused outside Lifesteal worlds.
         "ranked",
