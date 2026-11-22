@@ -424,6 +424,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
     // ---- Core methods ----
 
     fun listItem(player: Player, price: Double, currency: Currency = Currency.MONEY) {
+        // Issue #1609: on Lifesteal, re-checked at the click (combat tag, ranked match).
+        if (plugin.gamemodeLockManager.refusesSharedAction(player, "ah")) return
         if (plugin.modModeManager.denyEconomyIfRestricted(player)) return
         val held = player.inventory.itemInMainHand
         if (held.type == Material.AIR) {
@@ -471,6 +473,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
     }
 
     fun buyItem(player: Player, listingId: Int) {
+        // Issue #1609: on Lifesteal, re-checked at the click (combat tag, ranked match).
+        if (plugin.gamemodeLockManager.refusesSharedAction(player, "ah")) return
         // Read the listing first for validation
         val listing = plugin.databaseManager.queryFirst(
             "SELECT * FROM auction_listings WHERE id = ? AND expires_at > ?",
@@ -578,6 +582,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
     }
 
     fun cancelListing(player: Player, listingId: Int) {
+        // Issue #1609: on Lifesteal, re-checked at the click (combat tag, ranked match).
+        if (plugin.gamemodeLockManager.refusesSharedAction(player, "ah")) return
         val listing = plugin.databaseManager.queryFirst(
             "SELECT * FROM auction_listings WHERE id = ? AND seller_uuid = ?",
             listingId, player.uniqueId.toString()
@@ -627,6 +633,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
     }
 
     fun claimExpired(player: Player, expiredId: Int) {
+        // Issue #1609: on Lifesteal, re-checked at the click (combat tag, ranked match).
+        if (plugin.gamemodeLockManager.refusesSharedAction(player, "ah")) return
         val expired = plugin.databaseManager.queryFirst(
             "SELECT * FROM auction_expired WHERE id = ? AND owner_uuid = ?",
             expiredId, player.uniqueId.toString()
@@ -654,6 +662,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
     }
 
     fun listBidItem(player: Player, startingPrice: Double, durationMs: Long = bidDurationHours * 3_600_000L) {
+        // Issue #1609: on Lifesteal, re-checked at the click (combat tag, ranked match).
+        if (plugin.gamemodeLockManager.refusesSharedAction(player, "ah")) return
         if (plugin.modModeManager.denyEconomyIfRestricted(player)) return
         val held = player.inventory.itemInMainHand
         if (held.type == Material.AIR) {
@@ -702,6 +712,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
     }
 
     fun placeBid(player: Player, listingId: Int, amount: Double) {
+        // Issue #1609: on Lifesteal, re-checked at the click (combat tag, ranked match).
+        if (plugin.gamemodeLockManager.refusesSharedAction(player, "ah")) return
         val listing = plugin.databaseManager.queryFirst(
             "SELECT * FROM auction_bid_listings WHERE id = ? AND expires_at > ?",
             listingId, System.currentTimeMillis()
@@ -794,6 +806,8 @@ class AuctionManager(private val plugin: Joshymc) : Listener {
     }
 
     fun cancelBidListing(player: Player, listingId: Int) {
+        // Issue #1609: on Lifesteal, re-checked at the click (combat tag, ranked match).
+        if (plugin.gamemodeLockManager.refusesSharedAction(player, "ah")) return
         val listing = plugin.databaseManager.queryFirst(
             "SELECT * FROM auction_bid_listings WHERE id = ? AND seller_uuid = ?",
             listingId, player.uniqueId.toString()

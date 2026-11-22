@@ -188,6 +188,27 @@ Lifesteal chat (CommunicationsManager reads them in every gamemode), Chat Tag Vo
 3. LuckPerms: grant the cosmetic nodes players should keep on Lifesteal (e.g.
    `lp group <rank> permission set joshymc.killeffect.<id> true server=lifesteal`, or globally).
 
+## Issue #1609 phase 2: economy
+
+Every economy command of the issue now runs for players on a dedicated Lifesteal server, all on that
+server's own data (its own data.db `economy`, `buy_orders`, `auction_*`, `overflow_items` tables,
+its own sell-prices.yml and shop catalog), so Survival and Lifesteal money never mix. Mixed servers
+and Survival are unchanged.
+
+| Command | Status on dedicated Lifesteal |
+|---|---|
+| `/shop` | shared since #1599 (PvP supplies filtered). **New**: an optional `lifesteal-shop.yml` (same format as shop.yml, in the data folder or `config/`) replaces shop.yml there, with its own items, categories and prices. It is never bundled, created or backfilled, so nothing is invented; without it shop.yml is used as before. An invalid file leaves the shop empty (logged severe) rather than falling back |
+| `/sell`, `/worth`, `/balance`, `/baltop`, `/pay` | shared since #1573, unchanged |
+| `/ah` | shared since #1573. **New**: listing, buying, bidding, cancelling and claiming re-check the combat/ranked guard at the click |
+| `/orders` (`/buyorders`), `/order` | **New** (`Guard.COMPETITIVE`, permission `joshymc.orders` as before). The existing Buy Orders: escrow withdrawn up front, partial fills by conditional update, items into Orders Overflow (also offline), refunds on cancel/expiry. Creating, selling into an order and claiming pending items re-check the guard at the click |
+| `/overflow` | shared since #1573. **New**: withdrawals re-check the guard at the click |
+| `/eco` | staff share since #1599: Owner rank only (console always) |
+| `/bank` | Lifesteal's own command (#1427), unchanged |
+
+The click re-check is `GamemodeLockManager.refusesSharedAction` (Bukkit-free rule
+`LifestealSharedCommands.clickRefusal`): only for players in a Lifesteal world, refused while
+combat-tagged or held by / spectating / awaiting a restore of a ranked match, screen closed.
+
 ## The command blacklist
 
 | Command | How it is enforced on Lifesteal |
