@@ -54,4 +54,6 @@ object HeartMessages {
     const val INVALID_ITEM = "&cThis Heart item isn't valid and can't be redeemed."
     const val ALREADY_REDEEMED = "&cThis Heart item has already been redeemed."
     const val VOIDED_ITEM = "&cThis Heart item was voided by staff and can't be redeemed."
+    // Issue #1606: staff-given stackable Heart items (/hearts give).
+    const val STACK_RECEIVED = "&aYou received &f{amount} &aHeart item(s). &7Right-click to redeem one at a time."
 }

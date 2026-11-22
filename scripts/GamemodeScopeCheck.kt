@@ -75,9 +75,9 @@ fun main() {
     check("keys are lower-case plugin.yml names", table.keys.all { it == it.lowercase() && !it.startsWith("/") })
     // Issue #1344: /withdrawheart is the first Lifesteal command; issue #1363 adds /ranked, issue #1405 /ac,
     // issue #1427 /bank, issue #1428 /lsranks, issue #1429 /profile, /stats, /achievements and /lstop,
-    // issue #1430 /friend and /channel.
+    // issue #1430 /friend and /channel, issue #1606 /hearts.
     check("only the Lifesteal commands are assigned to Lifesteal", table.filterValues { it == GamemodeScope.LIFESTEAL }.keys ==
-        setOf("withdrawheart", "ranked", "ac", "bank", "lsranks", "profile", "stats", "achievements", "lstop", "friend", "channel"))
+        setOf("withdrawheart", "hearts", "ranked", "ac", "bank", "lsranks", "profile", "stats", "achievements", "lstop", "friend", "channel"))
 
     // Scopes set by earlier issues are unchanged.
     check("jgamemode NETWORK", scopeOf("jgamemode") == NETWORK)

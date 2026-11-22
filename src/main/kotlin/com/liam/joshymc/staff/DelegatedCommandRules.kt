@@ -78,7 +78,7 @@ object DelegatedCommandRules {
         "crateeditor", "createkit", "editkit", "deletekit", "setwarp", "delwarp", "editwarp", "setspawn",
         "dimension", "phome", "holo", "hologram", "spawndecor", "leaderboard", "arena", "chatgame",
         "announce", "broadcast", "bc", "stafftag", "staffchat", "sc", "sj", "hidestaff", "vanish", "v",
-        "modmode", "staffmode", "jmc-violation",
+        "modmode", "staffmode", "jmc-violation", "hearts",
     )
 
     /** Commands whose whole purpose is to move what the user owns to someone else (or destroy it). */
